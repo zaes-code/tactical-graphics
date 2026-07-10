@@ -16,8 +16,8 @@
  * ```
  *
  * `renderTacticalGraphic()` turns that into the rendered geometry (GeoJSON in,
- * GeoJSON out). Nothing here knows about OpenLayers, MapLibre, or Cesium —
- * feed the output to whichever renderer you use.
+ * GeoJSON out). Nothing here knows about any specific map renderer — feed the
+ * output to whichever renderer you use.
  */
 
 import {Feature, FeatureCollection, GeoJsonProperties} from 'geojson';
@@ -229,7 +229,7 @@ export function renderTacticalGraphic(feature: Feature, overrides?: Partial<Grap
 
 /**
  * Flattens a render into a FeatureCollection, ready to hand to any GeoJSON
- * consumer (MapLibre `addSource`, Leaflet `L.geoJSON`, `ol/format/GeoJSON`).
+ * consumer (e.g. `ol/format/GeoJSON`).
  *
  * Filter on `properties.role` to style each part, and omit `handles` unless
  * you're building an editor.

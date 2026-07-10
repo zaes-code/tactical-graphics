@@ -2,7 +2,7 @@
 
 Render **MIL-STD-2525E tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
-Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, Cesium, Leaflet, or anything else that reads GeoJSON.
+Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers or anything else that reads GeoJSON.
 
 This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in metres.
 
@@ -122,23 +122,6 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 `toFeatureCollection()` flattens a render into a `FeatureCollection` you can hand straight to a map. It returns the `graphic` and `label` features by default; ask for `handle` too when you're building an editor.
 
-### MapLibre
-
-```ts
-import {renderTacticalGraphic, toFeatureCollection} from '@zaes/tactical-graphics';
-
-const data = toFeatureCollection(renderTacticalGraphic(feature));
-
-map.addSource('tg', {type: 'geojson', data});
-map.addLayer({
-    id: 'tg-lines',
-    type: 'line',
-    source: 'tg',
-    filter: ['==', ['get', 'role'], 'graphic'],
-    paint: {'line-width': 4, 'line-color': '#0000c8'},
-});
-```
-
 ### OpenLayers
 
 `renderTacticalGraphic` emits EPSG:4326, so reproject on read:
@@ -153,11 +136,9 @@ const features = new GeoJSON().readFeatures(
 source.addFeatures(features);
 ```
 
-### Leaflet
+### Any GeoJSON renderer
 
-```ts
-L.geoJSON(toFeatureCollection(renderTacticalGraphic(feature))).addTo(map);
-```
+The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON can consume it — filter on `properties.role` (`graphic` / `label` / `handle`) to style each part. OpenLayers is the reference implementation because that is where the full MIL-STD-2525E styling lives; other renderers show the correct geometry but style it themselves.
 
 ### Drawing the label text
 
@@ -395,7 +376,7 @@ src/components/                # Demo app — not published.
 
 The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-The library itself is renderer-agnostic — it emits GeoJSON, so you can draw it with MapLibre, Cesium, Leaflet, or anything else that reads GeoJSON (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E styling lives; matching that styling pixel-for-pixel on other engines is a per-renderer effort left to consumers.
+The library itself is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E styling lives; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
 
 ---
 
@@ -433,9 +414,10 @@ reposition, and modify it.
 
 ## Roadmap
 
-- Migrate the OpenLayers renderer to read styling from `properties.tacticalGraphic`, so MapLibre and Cesium get styling for free.
-- Map graphics to their SIDC codes (`GRAPHIC_TO_SIDC` is partial and best-effort today).
 - Complete the remaining graphics from FM 1-02.2.
+- Map graphics to their SIDC codes (`GRAPHIC_TO_SIDC` is partial and best-effort today).
+- Migrate the OpenLayers renderer to read styling from `properties.tacticalGraphic`, so styling becomes portable data rather than renderer-specific code.
+- A Cesium 2D/3D view is planned once the OpenLayers graphics are complete.
 
 ---
 
