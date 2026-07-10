@@ -66,7 +66,6 @@ export type {
 export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth} from './graphics/RangeFan';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
-export {GRAPHIC_TO_SIDC, getSIDC} from './core/sidc';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';

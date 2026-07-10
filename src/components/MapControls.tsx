@@ -35,7 +35,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
 import {getDisplayName, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
-import {getSIDC} from '@zaes/tactical-graphics';
 
 interface Props {
     onDrawTacticalGraphics(): void;
@@ -54,7 +53,6 @@ interface GraphicOption {
     label: string;
     value: TacticalGraphicName;
     category: string;
-    sidc?: string;
     isNew?: boolean;
 }
 
@@ -123,7 +121,6 @@ const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
         label: getDisplayName(val),
         value: val,
         category: GRAPHIC_CATEGORIES[val] ?? 'Other',
-        sidc: getSIDC(val),
         isNew: NEW_GRAPHICS.has(val),
     }))
     .sort((a, b) => {
@@ -163,8 +160,7 @@ const MapControls: React.FC<Props> = ({
         if (!q) return visibleOptions;
         return visibleOptions.filter(o =>
             o.label.toLowerCase().includes(q) ||
-            o.category.toLowerCase().includes(q) ||
-            (o.sidc && o.sidc.toLowerCase().includes(q))
+            o.category.toLowerCase().includes(q)
         );
     }, [search, visibleOptions]);
 
@@ -388,16 +384,6 @@ const MapControls: React.FC<Props> = ({
                                             NEW
                                         </Typography>
                                     )}
-                                    {opt.sidc && !opt.isNew && (
-                                        <Typography sx={{
-                                            fontSize: '0.6rem',
-                                            color: 'text.disabled',
-                                            fontFamily: 'monospace',
-                                            flexShrink: 0,
-                                        }}>
-                                            {opt.sidc.substring(0, 6)}
-                                        </Typography>
-                                    )}
                                 </Box>
                             );
                         })}
@@ -455,15 +441,6 @@ const MapControls: React.FC<Props> = ({
                                         '& .MuiChip-icon': {color: 'text.secondary'},
                                     }}
                                 />
-                            )}
-                            {selected.sidc && (
-                                <Chip label={`SIDC: ${selected.sidc}`} size="small" sx={{
-                                    fontSize: '0.6rem', height: 18, fontFamily: 'monospace',
-                                    backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#0d2818' : '#dafbe1',
-                                    color: 'primary.main',
-                                    border: 1,
-                                    borderColor: 'primary.dark',
-                                }}/>
                             )}
                         </Box>
                     </Box>

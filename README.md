@@ -415,7 +415,6 @@ reposition, and modify it.
 ## Roadmap
 
 - Complete the remaining graphics from FM 1-02.2.
-- Map graphics to their SIDC codes (`GRAPHIC_TO_SIDC` is partial and best-effort today).
 - A Cesium 2D/3D view is planned once the OpenLayers graphics are complete. The OpenLayers style functions already read their amplifiers (label, hostility, status, DTGs) from `properties.tacticalGraphic`, but the styling *logic* is still OpenLayers-specific code — a second renderer would first need that logic expressed as portable, renderer-agnostic data.
 
 ---
