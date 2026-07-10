@@ -39,3 +39,7 @@ yarn-error.log*
 # docs/FM_1-02.2.txt stays tracked: it is greppable and the ai/ docs cite it.
 docs/*.pdf
 docs/*.xlsx
+
+# Python bytecode (from scripts/*.py)
+__pycache__/
+*.pyc
