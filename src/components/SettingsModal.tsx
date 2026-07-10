@@ -7,9 +7,6 @@ import {
     Divider,
     IconButton,
     InputAdornment,
-    MenuItem,
-    Select,
-    SelectChangeEvent,
     Switch,
     TextField,
     Typography,
@@ -17,13 +14,10 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
-import {MapLibrary} from './mapLibrary';
 
 interface SettingsModalProps {
     open: boolean;
     onClose: () => void;
-    engine: MapLibrary;
-    onEngineChange: (engine: MapLibrary) => void;
     defaultLabelSize: number;
     onLabelSizeChange: (size: number) => void;
     darkMode: boolean;
@@ -33,17 +27,11 @@ interface SettingsModalProps {
 const SettingsModal: React.FC<SettingsModalProps> = ({
     open,
     onClose,
-    engine,
-    onEngineChange,
     defaultLabelSize,
     onLabelSizeChange,
     darkMode,
     onToggleDarkMode,
 }) => {
-    const handleEngineChange = (e: SelectChangeEvent<MapLibrary>) => {
-        onEngineChange(e.target.value as MapLibrary);
-    };
-
     const handleLabelSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const v = parseFloat(e.target.value);
         if (!isNaN(v) && v > 0) onLabelSizeChange(v);
@@ -90,28 +78,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         />
                         <DarkModeIcon sx={{fontSize: 16, color: darkMode ? 'primary.main' : 'text.disabled'}}/>
                     </Box>
-                </Box>
-
-                {/*<Divider/>*/}
-
-                {/* Engine */}
-                <Box sx={rowSx}>
-                    <Typography sx={{fontSize: '0.8rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 120}}>
-                        Engine
-                    </Typography>
-                    <Select
-                        value={engine}
-                        onChange={handleEngineChange}
-                        size="small"
-                        variant="outlined"
-                        sx={{fontSize: '0.8rem', minWidth: 160, height: 36}}
-                    >
-                        {Object.values(MapLibrary).map(val => (
-                            <MenuItem key={val} value={val} sx={{fontSize: '0.8rem'}}>
-                                {val.charAt(0).toUpperCase() + val.slice(1)}
-                            </MenuItem>
-                        ))}
-                    </Select>
                 </Box>
 
                 {/* Default label size */}

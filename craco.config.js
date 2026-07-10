@@ -48,11 +48,6 @@ const LIBRARY_ENTRY = path.resolve(__dirname, 'src/tacticalgraphics/index.ts');
 const LIBRARY_NAME = '@zaes/tactical-graphics';
 
 module.exports = {
-    plugins: [
-        {
-            plugin: require('craco-cesium')(),
-        },
-    ],
     webpack: {
         alias: {
             [LIBRARY_NAME]: LIBRARY_ENTRY,
