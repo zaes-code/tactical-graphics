@@ -39,6 +39,12 @@ yarn-error.log*
 # docs/FM_1-02.2.txt stays tracked: it is greppable and the ai/ docs cite it.
 docs/*.pdf
 docs/*.xlsx
+# ...but track the progress trackers on Bitbucket (they feed the README graphics
+# table). They are stripped from the public GitHub mirror by publish-github.sh.
+!docs/*Progress*.xlsx
+# Never track Excel's lock/owner files ("~$name.xlsx"), which appear while a
+# workbook is open. Must come after the negation above.
+docs/~$*
 
 # Python bytecode (from scripts/*.py)
 __pycache__/
