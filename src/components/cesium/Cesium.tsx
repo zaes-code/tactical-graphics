@@ -1,5 +1,5 @@
 // src/MapComponent.jsx
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Viewer} from 'resium';
 import {SceneMode} from "cesium";
 import DrawTool from "./DrawTool";
@@ -16,6 +16,15 @@ const CesiumMap = () => {
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
     const selectedShape = useRef<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
     const modeRef = useRef(interactionMode);
+
+    // Keyless OSM base layer. Cesium's default Viewer imagery comes from Cesium
+    // Ion and needs an access token; without one the globe renders blank. An OSM
+    // layer needs no token, so the demo works out of the box. baseLayerPicker is
+    // disabled below because it, too, pulls its layer list from Ion.
+    const osmBaseLayer = useMemo(
+        () => new Cesium.ImageryLayer(new Cesium.OpenStreetMapImageryProvider({url: 'https://tile.openstreetmap.org/'})),
+        [],
+    );
 
     const setSelectedShape = (value: TacticalGraphicName) => {
         selectedShape.current = value;
@@ -52,7 +61,8 @@ const CesiumMap = () => {
                     ref={viewerRef}
                     animation={false}
                     timeline={false}
-                    baseLayerPicker={true} // Allows user to select different base layers
+                    baseLayer={osmBaseLayer} // keyless OSM imagery (no Cesium Ion token needed)
+                    baseLayerPicker={false} // picker needs Ion; disabled so no token is required
                     geocoder={false} // Disables the search bar
                     navigationHelpButton={false}
                     sceneModePicker={true} // Allows user to toggle between 2D, 3D, and Columbus View

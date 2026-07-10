@@ -3,6 +3,7 @@ import '../styles/map.css';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibre from './maplibre/MapLibre';
 import CesiumMap from './cesium/Cesium';
+import LeafletMap from './leaflet/Leaflet';
 import {MapLibrary} from './mapLibrary';
 import {AppBar, Box, IconButton, Toolbar, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
@@ -48,6 +49,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             case MapLibrary.OPENLAYERS: return <OpenLayersMap darkMode={darkMode}/>;
             case MapLibrary.MAPLIBRE:   return <MapLibre/>;
             case MapLibrary.CESIUM:     return <CesiumMap/>;
+            case MapLibrary.LEAFLET:    return <LeafletMap/>;
             default:                    return <OpenLayersMap darkMode={darkMode}/>;
         }
     };

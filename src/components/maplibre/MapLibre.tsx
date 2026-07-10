@@ -37,7 +37,20 @@ export default function MapLibreWrapper() {
 
         const map = new maplibregl.Map({
             container: mapContainer.current,
-            style: `https://api.maptiler.com/maps/streets/style.json?key=${process.env.REACT_APP_MAPTILER_KEY}`,
+            // Keyless OSM raster basemap so the demo works with no API key. Swap
+            // in a vector style + your own key (MapTiler, etc.) for production.
+            style: {
+                version: 8,
+                sources: {
+                    osm: {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors',
+                    },
+                },
+                layers: [{id: 'osm', type: 'raster', source: 'osm'}],
+            },
             center: [-80, 25],
             zoom: 5,
         });
