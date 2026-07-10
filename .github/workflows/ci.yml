@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    name: typecheck · test · build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `npm ci` installs devDependencies too, which the demo app needs to
+      # typecheck. It does not download Playwright browsers — the browser
+      # driver (`npm run drive`) needs a running dev server and is not part
+      # of CI.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test -- --watchAll=false
+        env:
+          CI: true
+
+      - name: Build library
+        run: npm run build
+
+      # Guards the layering rule: the published library must never import the
+      # sample app, and must not depend on any map library.
+      # Matches only module specifiers in import/export statements — an earlier
+      # version matched the bare word "components/" and tripped on a comment.
+      - name: Library stays map-agnostic
+        run: |
+          if grep -rnE "from ['\"](ol($|[/'\"])|[^'\"]*components/)" src/tacticalgraphics --include='*.ts' | grep -v '\.test\.ts'; then
+            echo "::error::src/tacticalgraphics must not import OpenLayers or the sample app"
+            exit 1
+          fi
+          echo "OK — library imports nothing from the sample app"
+
+      # The sample app must reach the library through its published entry point,
+      # so it exercises the same surface a consumer gets. A deep import here means
+      # something is missing from src/tacticalgraphics/index.ts — export it rather
+      # than reaching past the barrel.
+      - name: Sample app imports the library via its public entry point
+        run: |
+          if grep -rn "from ['\"][^'\"]*tacticalgraphics/" src/components src/utils --include='*.ts' --include='*.tsx'; then
+            echo "::error::Import from '@zaes/tactical-graphics', not a deep path into src/tacticalgraphics/"
+            exit 1
+          fi
+          echo "OK — sample app uses the barrel"
+
+      - name: Package contents
+        run: npm pack --dry-run

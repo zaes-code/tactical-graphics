@@ -1,0 +1,13 @@
+# Normalise line endings so a Windows checkout and a Linux CI runner agree.
+# `.prettierrc.json` sets endOfLine: lf, so LF is the committed form.
+* text=auto eol=lf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.xlsx binary
+*.ico binary
+
+# Generated — collapse in diffs and exclude from language stats.
+package-lock.json linguist-generated=true -diff

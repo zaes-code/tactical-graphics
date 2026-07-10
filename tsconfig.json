@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    // The sample app imports the library through its published entry point, not
+    // through deep paths, so it exercises exactly the surface a consumer gets.
+    // This alias resolves that name to local source — no publish loop.
+    //
+    // TypeScript honours `paths`; webpack and Jest do not. Their equivalents
+    // (`webpack.alias` and `jest.moduleNameMapper`) live in craco.config.js and
+    // must be kept in sync with this.
+    "baseUrl": ".",
+    "paths": {
+      "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"]
+    }
+  },
+  "include": ["src"]
+}
