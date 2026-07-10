@@ -14,8 +14,8 @@
  * });
  * ```
  *
- * The output is GeoJSON in EPSG:4326 — render it with OpenLayers, MapLibre,
- * Cesium, Leaflet, or anything else that reads GeoJSON.
+ * The output is GeoJSON in EPSG:4326 — render it with OpenLayers or anything
+ * else that reads GeoJSON.
  */
 
 // ── The entry point ─────────────────────────────────────────────────────────
