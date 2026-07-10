@@ -107,7 +107,7 @@ export function drawProvenSamples(manager: TacticalGraphicsManager): SampleSweep
                 throw new Error('unclassified controller');
             }
             manager.graphicControllers.push(handler);
-            source.addFeature(titleFeature([cx, cy + CELL_METRES * 0.42], getDisplayName(name)));
+            source.addFeature(titleFeature([cx, cy + CELL_METRES * 0.46], getDisplayName(name)));
             drawn++;
         } catch (e) {
             // Roll back this graphic's partial features so a thrower leaves no debris.
@@ -178,16 +178,38 @@ const polygonFeature = (ring: Coordinate[], id: string, name: TacticalGraphicNam
 const pointFeature = (coord: Coordinate, id: string, name: TacticalGraphicName) =>
     stamp(new Feature(new Point(coord)), id, name);
 
-/** A non-interactive caption above each sample so you can tell which is which. */
+/**
+ * Word-wraps a caption onto short lines so it stays within its cell instead of
+ * bleeding into neighbours. Truncates to `maxLines` with an ellipsis.
+ */
+function wrapLabel(text: string, maxChars = 16, maxLines = 3): string {
+    const lines: string[] = [];
+    let cur = '';
+    for (const word of text.split(' ')) {
+        if (!cur) cur = word;
+        else if ((cur + ' ' + word).length <= maxChars) cur += ' ' + word;
+        else { lines.push(cur); cur = word; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) return lines.slice(0, maxLines).join('\n') + '…';
+    return lines.join('\n');
+}
+
+/**
+ * A non-interactive caption above each sample so you can tell which is which.
+ * Wrapped and bottom-anchored at the top of the cell so multi-line names grow
+ * up into the gap between rows rather than over the graphic or its neighbours.
+ */
 function titleFeature(coord: Coordinate, text: string): Feature {
     const f = new Feature(new Point(coord));
     f.set('sampleTitle', true);
     f.setStyle(new Style({
         text: new Text({
-            text,
-            font: '11px sans-serif',
+            text: wrapLabel(text),
+            font: '10px sans-serif',
+            textBaseline: 'bottom',
             fill: new Fill({color: '#555'}),
-            stroke: new Stroke({color: 'rgba(255,255,255,0.85)', width: 3}),
+            stroke: new Stroke({color: 'rgba(255,255,255,0.9)', width: 3}),
             overflow: true,
         }),
     }));
