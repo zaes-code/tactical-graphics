@@ -7,6 +7,7 @@ import MapControls from '../MapControls';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
+import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
 import {setDarkModeFlag} from '../../settings';
@@ -83,6 +84,24 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
         setInteractionMode(InteractionType.view);
     };
 
+    const drawSamples = () => {
+        const mgr = tacticalGraphicManager.current;
+        if (!mgr) return;
+        setInteractionMode(InteractionType.view);
+        const {drawn, failed} = drawProvenSamples(mgr);
+        if (failed.length) {
+            // eslint-disable-next-line no-console
+            console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
+        }
+    };
+
+    const clearAll = () => {
+        const mgr = tacticalGraphicManager.current;
+        if (!mgr) return;
+        clearAllGraphics(mgr);
+        setInteractionMode(InteractionType.view);
+    };
+
     return (
         <>
             <div ref={mapRef} className="map-container"/>
@@ -96,6 +115,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
                 onToggleInteraction={setInteractionMode}
                 onShapeChange={setSelectedShape}
                 onReset={resetMap}
+                onDrawSamples={drawSamples}
+                onClearAll={clearAll}
                 interactionMode={interactionMode}
                 isRotating={modeRef.current === InteractionType.rotate}
                 isResizing={modeRef.current === InteractionType.resize}
