@@ -108,7 +108,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
     const defaultProperties = {
         echelon: TacticalGraphicEchelon.brigade,
         identifier: '',
-        labels: {label: '', hostility: TacticalGraphicHostility.friend}
+        labels: {label: '', hostility: TacticalGraphicHostility.unknown}
     };
     const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
@@ -148,9 +148,11 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                         // label is required on the type; default to '' so it never renders as "undefined"
                         label: fields.identifier1 ? (graphicLabels.label ?? '') : '',
                         // hostility is always kept — it drives stroke/fill color even when not shown.
-                        // Defaulted so the MUI Select never starts undefined and then flips from
-                        // uncontrolled to controlled once the user picks a value.
-                        hostility: graphicLabels.hostility ?? TacticalGraphicHostility.friend,
+                        // Default to `unknown` (renders as the neutral default line color, i.e. black)
+                        // so editing any other property on a graphic that never specified a hostility
+                        // doesn't silently turn it Friendly blue. `unknown` also keeps the MUI Select
+                        // controlled from first render instead of flipping uncontrolled→controlled.
+                        hostility: graphicLabels.hostility ?? TacticalGraphicHostility.unknown,
                     };
                     if (fields.identifier2) {
                         filteredLabels.countryCode = graphicLabels.countryCode ?? '';
