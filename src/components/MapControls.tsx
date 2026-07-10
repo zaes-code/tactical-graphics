@@ -30,6 +30,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import GridViewIcon from '@mui/icons-material/GridView';
 import CloseIcon from '@mui/icons-material/Close';
 
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
@@ -40,6 +41,8 @@ interface Props {
     onDrawTacticalGraphics(): void;
     onShapeChange(name: TacticalGraphicName): void;
     onReset(): void;
+    onDrawSamples(): void;
+    onClearAll(): void;
     interactionMode: InteractionType;
     isRotating: boolean;
     isResizing: boolean;
@@ -134,6 +137,8 @@ const MapControls: React.FC<Props> = ({
     onDrawTacticalGraphics,
     onShapeChange,
     onReset,
+    onDrawSamples,
+    onClearAll,
     interactionMode,
     onToggleInteraction,
     defaultShape,
@@ -528,6 +533,51 @@ const MapControls: React.FC<Props> = ({
                             </ToggleButton>
                         </Tooltip>
                     </ToggleButtonGroup>
+                </Box>
+
+                <Divider/>
+
+                {/* Sample gallery — draws one of every proven graphic for a visual sweep */}
+                <Box>
+                    <Typography sx={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: 'text.secondary',
+                        mb: 0.5,
+                    }}>
+                        Sample Gallery
+                    </Typography>
+                    <Box sx={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 0.75}}>
+                        <Box
+                            component="button"
+                            onClick={onDrawSamples}
+                            sx={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
+                                py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
+                                backgroundColor: 'action.hover', color: 'text.primary',
+                                fontSize: '0.72rem', fontWeight: 600,
+                                '&:hover': {backgroundColor: 'primary.main', color: '#fff'},
+                            }}
+                        >
+                            <GridViewIcon sx={{fontSize: 15}}/>
+                            Draw all samples
+                        </Box>
+                        <Box
+                            component="button"
+                            onClick={onClearAll}
+                            sx={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
+                                backgroundColor: 'transparent', color: 'text.secondary',
+                                fontSize: '0.72rem', fontWeight: 600,
+                                '&:hover': {backgroundColor: 'error.main', color: '#fff', borderColor: 'error.main'},
+                            }}
+                        >
+                            Clear all
+                        </Box>
+                    </Box>
                 </Box>
             </Box>
         </Paper>
