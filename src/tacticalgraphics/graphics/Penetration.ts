@@ -1,0 +1,24 @@
+import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
+import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
+import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
+import geometryService from "../core/GeometryService";
+
+export class Penetration extends TacticalGraphicsBase<PointGraphicOptions> {
+    name: string = TacticalGraphicName.Penetration;
+    type: string = 'Point';
+
+    generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        return geometryService.getPenetrationArrowGraphic(base.geometry.coordinates, opts.size);
+    }
+
+    generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        let topArrow = geometryService.getBypassArrow(base.geometry.coordinates, -opts.size);
+
+        return this.asMultiPointFeature([topArrow.geometry.coordinates[1][2], topArrow.geometry.coordinates[0][1], base.geometry.coordinates[0],]);
+    }
+
+    generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature([base.geometry.coordinates[0]]);
+    }
+
+}

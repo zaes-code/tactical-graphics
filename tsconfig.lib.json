@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "es2019",
+    "lib": ["es2019"],
+    "moduleResolution": "node",
+    "rootDir": "src/tacticalgraphics",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": ["src/tacticalgraphics/**/*.ts"],
+  "exclude": [
+    "src/tacticalgraphics/**/*.test.ts",
+    // Disabled graphic (commented out of both registries) whose only import,
+    // utils/svgToGeoJson, pulls in `ol/geom` — it would drag OpenLayers into
+    // the map-agnostic package. Port it to pure GeoJSON before re-enabling.
+    "src/tacticalgraphics/graphics/SearchArea.ts"
+  ]
+}
