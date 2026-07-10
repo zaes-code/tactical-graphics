@@ -1,10 +1,6 @@
 import React, {useState} from 'react';
 import '../styles/map.css';
 import OpenLayersMap from './openlayers/OpenLayers';
-import MapLibre from './maplibre/MapLibre';
-import CesiumMap from './cesium/Cesium';
-import LeafletMap from './leaflet/Leaflet';
-import {MapLibrary} from './mapLibrary';
 import {AppBar, Box, IconButton, Toolbar, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -16,14 +12,9 @@ interface MapRenderingProps {
     onToggleDarkMode: () => void;
 }
 
-const LS_ENGINE    = 'tg_engine';
 const LS_LABELSIZE = 'tg_defaultLabelSize';
 
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
-    const [mapState, setMapState] = useState<MapLibrary>(() => {
-        const stored = localStorage.getItem(LS_ENGINE);
-        return (Object.values(MapLibrary).includes(stored as MapLibrary) ? stored : MapLibrary.OPENLAYERS) as MapLibrary;
-    });
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [defaultLabelSize, setDefaultLabelSizeState] = useState(() => {
         const stored = localStorage.getItem(LS_LABELSIZE);
@@ -33,25 +24,10 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         return valid;
     });
 
-    const handleEngineChange = (engine: MapLibrary) => {
-        setMapState(engine);
-        localStorage.setItem(LS_ENGINE, engine);
-    };
-
     const handleLabelSizeChange = (size: number) => {
         setDefaultLabelSizeState(size);
         setDefaultLabelSize(size);
         localStorage.setItem(LS_LABELSIZE, String(size));
-    };
-
-    const renderMap = () => {
-        switch (mapState) {
-            case MapLibrary.OPENLAYERS: return <OpenLayersMap darkMode={darkMode}/>;
-            case MapLibrary.MAPLIBRE:   return <MapLibre/>;
-            case MapLibrary.CESIUM:     return <CesiumMap/>;
-            case MapLibrary.LEAFLET:    return <LeafletMap/>;
-            default:                    return <OpenLayersMap darkMode={darkMode}/>;
-        }
     };
 
     return (
@@ -108,14 +84,12 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             </AppBar>
 
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
-                {renderMap()}
+                <OpenLayersMap darkMode={darkMode}/>
             </Box>
 
             <SettingsModal
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
-                engine={mapState}
-                onEngineChange={handleEngineChange}
                 defaultLabelSize={defaultLabelSize}
                 onLabelSizeChange={handleLabelSizeChange}
                 darkMode={darkMode}
