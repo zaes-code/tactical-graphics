@@ -181,6 +181,10 @@ Sizes (`radius`, `size`) are in **metres**, and range-fan band ranges are in **k
 
 The graphics below are **fully implemented and verified** — each can be drawn, labelled, rotated, resized, repositioned, and modified, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
 
+![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
+
+*One sample of every graphic in the table below, drawn in a single sweep by the demo app's **Draw all samples** button.*
+
 (`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished. The table lists only the verified set.)
 
 | Graphic | Category |
