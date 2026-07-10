@@ -393,9 +393,9 @@ npx tsc --noEmit     # typecheck (the main correctness gate)
 npm run lint         # eslint --fix
 ```
 
-Contributor documentation lives in [`ai/`](./ai): `context.md` (architecture),
-`conventions.md` (the patterns to follow), and `decisions.md` (why things are the
-way they are). Read those before adding a graphic.
+The generators in `src/tacticalgraphics/graphics/` are the reference for new
+shapes, and the OpenLayers demo under `src/components/openlayers/` shows how a
+renderer consumes them. See **Adding a graphic** below for the steps.
 
 ---
 
