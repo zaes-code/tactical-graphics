@@ -390,16 +390,12 @@ src/tacticalgraphics/          # The library. Pure GeoJSON, map-agnostic.
   graphics/                    #   one generator class per graphic family
 
 src/components/                # Demo app — not published.
-  openlayers/                  #   the reference renderer (styling, draw/edit)
-  maplibre/  cesium/  leaflet/ #   the same library rendered four ways
+  openlayers/                  #   the renderer: styling, draw/edit, dialog
 ```
 
-The demo application renders through **OpenLayers, MapLibre, Cesium, and Leaflet** — switch engines in the settings menu. OpenLayers is the reference (full styling, draw/edit, rotate/resize/modify, Feature Properties dialog); the other three demonstrate the same GeoJSON output on a different map stack. All use a keyless OpenStreetMap basemap, so the app runs with no API keys. Start it with `npm start`.
+The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-> **Status:** the OpenLayers renderer in `src/components/openlayers/` predates the
-> `properties.tacticalGraphic` API and still carries its own styling and label
-> state. It is being migrated to read amplifiers from feature properties. The
-> published library — geometry generation — is unaffected.
+The library itself is renderer-agnostic — it emits GeoJSON, so you can draw it with MapLibre, Cesium, Leaflet, or anything else that reads GeoJSON (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E styling lives; matching that styling pixel-for-pixel on other engines is a per-renderer effort left to consumers.
 
 ---
 

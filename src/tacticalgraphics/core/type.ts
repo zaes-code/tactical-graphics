@@ -819,5 +819,6 @@ export interface TacticalGraphicConfig {
     type: GeoJsonTypes;
 }
 
-// `MapLibrary` moved to `src/components/mapLibrary.ts`. It names the sample
-// app's renderers, which is not the library's concern.
+// A `MapLibrary` enum once lived here naming the sample app's renderers; it was
+// never the library's concern and has been removed. The library emits GeoJSON
+// and has no opinion about which map renders it.
