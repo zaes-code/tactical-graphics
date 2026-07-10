@@ -36,6 +36,14 @@ const check = (label, ok, detail = '') => {
     if (!ok) failures++;
 };
 
+/**
+ * Stroke-color predicates for the hostility-default guard. A graphic drawn
+ * without a hostility must render in the neutral default (black) and must never
+ * flip to Friendly blue — `getColorByHostility(friend)` is `rgba(0,0,255,1)`.
+ */
+const isBlue = c => typeof c === 'string' && c.replace(/\s+/g, ' ').includes('0, 0, 255');
+const isBlack = c => typeof c === 'string' && (c === '#000000' || c.replace(/\s+/g, ' ').includes('0, 0, 0'));
+
 /** Reads the rendering source's features, projected down to plain JSON. */
 const readFeatures = page =>
     page.evaluate(() => {
@@ -70,6 +78,7 @@ const readRenderedStyle = (page, graphicName) =>
             count: styles.length,
             texts: styles.map(s => s.getText?.()?.getText?.()).filter(t => typeof t === 'string'),
             dashes: styles.map(s => s.getStroke?.()?.getLineDash?.()).filter(Boolean),
+            strokeColors: styles.map(s => s.getStroke?.()?.getColor?.()).filter(Boolean),
         };
     }, graphicName);
 
@@ -168,6 +177,11 @@ const main = async () => {
     const beforeLabel = await readRenderedStyle(page, 'PhaseLine');
     check('style function runs and renders text', (beforeLabel?.texts.length ?? 0) > 0, JSON.stringify(beforeLabel?.texts));
     check('unnamed phase line renders the doctrinal "PL"', beforeLabel?.texts.some(t => t.trim() === 'PL'), JSON.stringify(beforeLabel?.texts));
+    check(
+        'unset hostility renders a black stroke (not Friendly blue)',
+        (beforeLabel?.strokeColors.length ?? 0) > 0 && beforeLabel.strokeColors.every(isBlack) && !beforeLabel.strokeColors.some(isBlue),
+        JSON.stringify(beforeLabel?.strokeColors),
+    );
 
     // ── 2. Rename it — the writeGraphicProperties -> changed() path ──────────
     console.log('\n2. Rename via Feature Properties');
@@ -195,6 +209,13 @@ const main = async () => {
         'style function now renders "PL ALPHA"',
         afterLabel?.texts.some(t => t.includes('ALPHA')),
         JSON.stringify(afterLabel?.texts),
+    );
+    // Regression guard: editing a property on a graphic that never set a hostility
+    // must not silently recolor it Friendly blue (dialog used to default to Friend).
+    check(
+        'renaming an unset-hostility graphic keeps its black stroke',
+        (afterLabel?.strokeColors.length ?? 0) > 0 && afterLabel.strokeColors.every(isBlack) && !afterLabel.strokeColors.some(isBlue),
+        JSON.stringify(afterLabel?.strokeColors),
     );
 
     // ── 3. Status -> planned must dash the stroke ───────────────────────────
