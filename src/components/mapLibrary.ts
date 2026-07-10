@@ -10,4 +10,5 @@ export enum MapLibrary {
     OPENLAYERS = 'openlayers',
     MAPLIBRE = 'maplibre',
     CESIUM = 'cesium',
+    LEAFLET = 'leaflet',
 }
