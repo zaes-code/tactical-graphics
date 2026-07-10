@@ -4715,18 +4715,30 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
     }
 };
 
-function withOpacity(rgba: string, alpha: number): string {
-    const match = rgba.match(
+function withOpacity(color: string, alpha: number): string {
+    // rgb()/rgba()
+    const rgb = color.match(
         /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)/,
     );
-
-    if (!match) {
-        console.warn('Invalid RGBA color:', rgba);
-        return rgba;
+    if (rgb) {
+        const [, r, g, b] = rgb;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
-    const [, r, g, b] = match;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    // #rgb / #rgba / #rrggbb / #rrggbbaa — the default line color is hex, so
+    // hatch/fill helpers that tint it must handle this form too.
+    const hex = color.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hex) {
+        let h = hex[1];
+        if (h.length <= 4) h = h.split('').map(c => c + c).join(''); // #rgb(a) → #rrggbb(aa)
+        const r = parseInt(h.slice(0, 2), 16);
+        const g = parseInt(h.slice(2, 4), 16);
+        const b = parseInt(h.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    console.warn('Unrecognized color for withOpacity:', color);
+    return color;
 }
 
 export function createDiagonalHatchPattern(
