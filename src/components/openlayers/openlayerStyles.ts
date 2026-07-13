@@ -7,7 +7,7 @@ import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, Multi
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService} from '@zaes-code/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -16,7 +16,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     TacticalGraphicStatus,
-} from '@zaes/tactical-graphics';
+} from '@zaes-code/tactical-graphics';
 import one_way_arrow from './assets/route_direction_one_way.svg';
 import alternating_arrow from './assets/route_direction_alternating.svg';
 import two_way_arrow from './assets/route_direction_two_way.svg';

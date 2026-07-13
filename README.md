@@ -13,7 +13,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 ## Install
 
 ```bash
-npm install @zaes/tactical-graphics
+npm install @zaes-code/tactical-graphics
 ```
 
 The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
@@ -23,7 +23,7 @@ The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
 ## Quick start
 
 ```ts
-import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {renderTacticalGraphic, TacticalGraphicName} from '@zaes-code/tactical-graphics';
 
 const {graphic, labels, handles} = renderTacticalGraphic({
     type: 'Feature',
@@ -109,7 +109,7 @@ renderTacticalGraphic({
 Discover what's available at runtime:
 
 ```ts
-import {listTacticalGraphicNames, GRAPHIC_CATEGORIES, getDisplayName} from '@zaes/tactical-graphics';
+import {listTacticalGraphicNames, GRAPHIC_CATEGORIES, getDisplayName} from '@zaes-code/tactical-graphics';
 
 listTacticalGraphicNames();                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
 GRAPHIC_CATEGORIES['PhaseLine'];                // → 'Lines'
@@ -145,7 +145,7 @@ The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON
 `labels` gives you **anchor points**, not rendered text — you own the typography. Read the text from the properties, or from `getLabel()` for graphics whose abbreviation is fixed by doctrine:
 
 ```ts
-import {getLabel} from '@zaes/tactical-graphics';
+import {getLabel} from '@zaes-code/tactical-graphics';
 
 getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
 getLabel('FinalProtectiveFire'); // → 'FPF'

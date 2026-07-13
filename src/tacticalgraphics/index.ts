@@ -1,11 +1,11 @@
 /**
- * @zaes/tactical-graphics — MIL-STD-2525E tactical graphics as plain GeoJSON.
+ * @zaes-code/tactical-graphics — MIL-STD-2525E tactical graphics as plain GeoJSON.
  *
  * Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON
  * feature's properties, then render it:
  *
  * ```ts
- * import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
+ * import {renderTacticalGraphic, TacticalGraphicName} from '@zaes-code/tactical-graphics';
  *
  * const {graphic, labels} = renderTacticalGraphic({
  *     type: 'Feature',

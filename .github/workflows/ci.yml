@@ -59,7 +59,7 @@ jobs:
       - name: Sample app imports the library via its public entry point
         run: |
           if grep -rn "from ['\"][^'\"]*tacticalgraphics/" src/components src/utils --include='*.ts' --include='*.tsx'; then
-            echo "::error::Import from '@zaes/tactical-graphics', not a deep path into src/tacticalgraphics/"
+            echo "::error::Import from '@zaes-code/tactical-graphics', not a deep path into src/tacticalgraphics/"
             exit 1
           fi
           echo "OK — sample app uses the barrel"

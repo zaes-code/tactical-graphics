@@ -1,5 +1,5 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,

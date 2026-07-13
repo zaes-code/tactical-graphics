@@ -1,11 +1,11 @@
 import {Stroke, Style} from "ol/style";
 import {MultiLineString, MultiPoint} from "ol/geom";
-import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {RangeFanOptions, TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import openlayersAdapter from "../openlayersAdapter";
 import {getDefaultLineColor, getRangeFanLabelStyleFn, LINE_WIDTH} from "../openlayerStyles";
-import {resolveBandAzimuths, resolveBands} from '@zaes/tactical-graphics';
+import {resolveBandAzimuths, resolveBands} from '@zaes-code/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
 /**
