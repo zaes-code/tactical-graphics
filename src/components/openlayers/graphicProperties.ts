@@ -17,8 +17,8 @@
 
 import type {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
-import {TACTICAL_GRAPHIC_KEY} from '@zaes/tactical-graphics';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
 export {TACTICAL_GRAPHIC_KEY};

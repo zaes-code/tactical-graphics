@@ -6,7 +6,7 @@
  * 300-line switch statement.
  */
 
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {CircularAreaGraphicBase, MissionTaskGraphicBase} from './graphics/MissionTaskGraphicBase';

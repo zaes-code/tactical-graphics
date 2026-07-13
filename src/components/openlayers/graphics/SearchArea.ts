@@ -6,7 +6,7 @@ import {MultiLineString, MultiPoint, Point} from "ol/geom";
 import {_scaleAndRotateCoordinates} from "../../../utils/scaleAndRotateCoordinates";
 import openlayersAdapter from "../openlayersAdapter";
 
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
 
 export class SearchArea implements SearchAreaGraphic {
     base: Feature<Point> = new Feature<Point>();

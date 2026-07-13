@@ -7,7 +7,7 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
     TacticalGraphicStatus
-} from '@zaes/tactical-graphics';
+} from '@zaes-code/tactical-graphics';
 import {MissionTaskGraphic} from "../components/openlayers/controllers/MissionTaskController";
 
 export interface LabelableGraphic {
@@ -26,7 +26,7 @@ export interface LabelableGraphic {
  * `properties.tacticalGraphic` schema) and re-exported here so existing
  * OpenLayers-side imports keep working.
  */
-export type {RangeFanConfig} from '@zaes/tactical-graphics';
+export type {RangeFanConfig} from '@zaes-code/tactical-graphics';
 
 export interface GraphicLabels {
     label: string;
