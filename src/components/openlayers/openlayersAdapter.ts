@@ -6,10 +6,10 @@ import {StyleFunction} from "ol/style/Style";
 import GeoJSON from "ol/format/GeoJSON";
 import {toLonLat} from "ol/proj";
 import * as turf from "@turf/turf";
-import {TacticalGraphicsRegistry} from '@zaes/tactical-graphics';
-import {GraphicOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicsRegistry} from '@zaes-code/tactical-graphics';
+import {GraphicOptions, TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import Feature from "ol/Feature";
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService} from '@zaes-code/tactical-graphics';
 import {getController} from "./controllerRegistry";
 
 export type TacticalGraphicShape = GeoJsonGeometryTypes | 'Circle';

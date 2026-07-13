@@ -4,7 +4,7 @@ import {MultiPoint, Point, Polygon} from 'ol/geom';
 import {createBaseFeature, createHandleFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes-code/tactical-graphics';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {writeGraphicProperties} from '../graphicProperties';
 
