@@ -28,7 +28,6 @@ yarn-debug.log*
 yarn-error.log*
 
 .idea
-**/.claude
 
 # playwright driver screenshots
 /.playwright-out
@@ -36,7 +35,7 @@ yarn-error.log*
 # Reference material and internal trackers — kept locally, not redistributed.
 # FM 1-02.2 is a US Government work (public domain in the US), but the PDF is
 # 10.5 MB and that status does not travel internationally. The extracted
-# docs/FM_1-02.2.txt stays tracked: it is greppable and the ai/ docs cite it.
+# docs/FM_1-02.2.txt stays tracked: it is greppable and the internal docs cite it.
 docs/*.pdf
 docs/*.xlsx
 # ...but track the progress trackers on Bitbucket (they feed the README graphics
