@@ -4,8 +4,8 @@
  * amplifiers through the Feature Properties dialog, and asserts on what the
  * OpenLayers features actually hold.
  *
- * This exists to guard the properties migration (see ai/decisions.md, "Style
- * functions read amplifiers off the feature"). Its assertions are deliberately
+ * This exists to guard the properties migration — style functions must read
+ * amplifiers off the feature. Its assertions are deliberately
  * NOT pixel comparisons — they read `properties.tacticalGraphic` off the live
  * features and evaluate the style functions, which is what the migration
  * changed. A screenshot alone would have missed the `feature.set()` /
