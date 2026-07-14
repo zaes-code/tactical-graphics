@@ -6,7 +6,7 @@ labels: bug
 ---
 
 **Which layer?**
-<!-- The library (`@zaes-code/tactical-graphics`, geometry only) or the sample app
+<!-- The library (`@zaes/tactical-graphics`, geometry only) or the sample app
      (drawing/editing/styling)? If you aren't sure, say what you called. -->
 
 - [ ] Library — `renderTacticalGraphic()` output is wrong
@@ -30,6 +30,6 @@ renderTacticalGraphic({
 <!-- What you got. Paste the GeoJSON, or a screenshot for rendering issues. -->
 
 **Environment**
-- `@zaes-code/tactical-graphics` version:
+- `@zaes/tactical-graphics` version:
 - Renderer (OpenLayers / MapLibre / Cesium / other) and version:
 - Node / browser:

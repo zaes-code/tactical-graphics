@@ -1,5 +1,5 @@
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     createBaseFeature,

@@ -18,7 +18,7 @@ import {
 import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
-import {getLabel, TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 // Mission-task graphics that lock to a 100px-diameter minimum and use the
 // ratio-locked label style. Adding a name here gives it the block-family

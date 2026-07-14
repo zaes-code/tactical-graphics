@@ -2,7 +2,7 @@ import Feature from 'ol/Feature';
 import {LineString} from 'ol/geom';
 import Style from 'ol/style/Style';
 import {readGraphicLabels, TACTICAL_GRAPHIC_KEY, writeGraphicProperties} from './graphicProperties';
-import {TacticalGraphicName, TacticalGraphicStatus} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName, TacticalGraphicStatus} from '@zaes/tactical-graphics';
 import {coordinatedFireLineStyle, defaultLineStyle, phaseLineStyleFunc} from './openlayerStyles';
 
 /** A 3857 line long enough that the style functions emit their labels. */

@@ -45,7 +45,7 @@ const path = require('path');
 // same entry point a consumer gets. TypeScript resolves this via `paths` in
 // tsconfig.json; webpack and Jest need their own mapping. Keep all three in sync.
 const LIBRARY_ENTRY = path.resolve(__dirname, 'src/tacticalgraphics/index.ts');
-const LIBRARY_NAME = '@zaes-code/tactical-graphics';
+const LIBRARY_NAME = '@zaes/tactical-graphics';
 
 module.exports = {
     webpack: {
