@@ -6,7 +6,7 @@ import {_scaleAndRotateCoordinates} from '../../../utils/scaleAndRotateCoordinat
 import {StyleFunction} from 'ol/style/Style';
 import {SecurityOperationGraphic} from "../controllers/SecurityOperationsController";
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 
 export class SecurityOperationGraphicBase implements SecurityOperationGraphic {

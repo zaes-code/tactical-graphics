@@ -25,7 +25,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {writeGraphicProperties} from "../graphicProperties";

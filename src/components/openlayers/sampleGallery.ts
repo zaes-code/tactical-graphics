@@ -18,7 +18,7 @@ import {Feature} from 'ol';
 import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {TacticalGraphicName, getDisplayName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName, getDisplayName} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';

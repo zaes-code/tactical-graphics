@@ -8,7 +8,7 @@ import {
 } from "../openlayerStyles";
 import {MultiPoint} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
-import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {writeGraphicProperties} from "../graphicProperties";
 
