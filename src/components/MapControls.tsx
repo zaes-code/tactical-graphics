@@ -34,8 +34,8 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import CloseIcon from '@mui/icons-material/Close';
 
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
-import {getDisplayName, TacticalGraphicName} from '@zaes-code/tactical-graphics';
-import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes-code/tactical-graphics';
+import {getDisplayName, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 
 interface Props {
     onDrawTacticalGraphics(): void;

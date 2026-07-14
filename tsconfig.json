@@ -25,7 +25,7 @@
     // must be kept in sync with this.
     "baseUrl": ".",
     "paths": {
-      "@zaes-code/tactical-graphics": ["src/tacticalgraphics/index.ts"]
+      "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"]
     }
   },
   "include": ["src"]

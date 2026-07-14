@@ -1,5 +1,5 @@
 {
-  "name": "@zaes-code/tactical-graphics",
+  "name": "@zaes/tactical-graphics",
   "version": "1.0.0",
   "description": "MIL-STD-2525E tactical graphics as plain GeoJSON. Renders axis-of-advance arrows, phase lines, mission tasks, and range fans for OpenLayers or any GeoJSON consumer.",
   "keywords": [

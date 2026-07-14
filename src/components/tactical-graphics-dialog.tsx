@@ -35,7 +35,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     TacticalGraphicStatus
-} from '@zaes-code/tactical-graphics';
+} from '@zaes/tactical-graphics';
 import {getGraphicFields} from "./openlayers/graphicFieldRegistry";
 
 /**

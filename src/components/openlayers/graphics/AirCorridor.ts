@@ -4,7 +4,7 @@ import {
 
 import {MovementGraphicBase} from './MovementGraphicBase';
 import openlayersAdapter from "../openlayersAdapter";
-import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 
 export class AirCorridor extends MovementGraphicBase {
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {

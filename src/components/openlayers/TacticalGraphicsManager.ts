@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName} from '@zaes-code/tactical-graphics';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {Coordinate} from "ol/coordinate";
 
 export enum InteractionType {
