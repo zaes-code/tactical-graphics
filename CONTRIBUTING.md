@@ -36,15 +36,9 @@ npm run drive        # terminal 2 — Playwright drives the real app
 
 `npm run drive` draws graphics, edits them through the Feature Properties dialog, and asserts on the live OpenLayers features. Screenshots land in `.playwright-out/`.
 
-## Read these first
+## Rules that will bite you
 
-The `ai/` directory is the project's real documentation, and it is far more specific than this file:
-
-- [`ai/context.md`](ai/context.md) — architecture and a dated changelog of what each graphic does
-- [`ai/conventions.md`](ai/conventions.md) — the patterns you must follow
-- [`ai/decisions.md`](ai/decisions.md) — why each non-obvious choice was made, with the bug that motivated it
-
-A few rules that will bite you if you skip them:
+These are the conventions the codebase depends on. Skipping them produces graphics that look right at one zoom level and wrong at every other:
 
 - **Never use turf or `GeometryService` inside an OpenLayers `StyleFunction`.** Style functions receive projected EPSG:3857 metres; turf expects geographic degrees. Use plain Euclidean vector math.
 - **Zoom-invariant gaps and offsets belong in the style function**, computed from the live `resolution`. A metric offset baked into the GeoJSON will not stay a constant number of screen pixels.
