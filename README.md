@@ -1,6 +1,6 @@
 # Tactical Graphics
 
-Render **MIL-STD-2525E tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
+Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers or anything else that reads GeoJSON.
 
@@ -138,7 +138,7 @@ source.addFeatures(features);
 
 ### Any GeoJSON renderer
 
-The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON can consume it — filter on `properties.role` (`graphic` / `label` / `handle`) to style each part. OpenLayers is the reference implementation because that is where the full MIL-STD-2525E styling lives; other renderers show the correct geometry but style it themselves.
+The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON can consume it — filter on `properties.role` (`graphic` / `label` / `handle`) to style each part. OpenLayers is the reference implementation because that is where the full MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry but style it themselves.
 
 ### Drawing the label text
 
@@ -380,7 +380,7 @@ src/components/                # Demo app — not published.
 
 The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-The library itself is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E styling lives; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
+The library itself is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E / FM 1-02.2 styling lives; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
 
 ---
 

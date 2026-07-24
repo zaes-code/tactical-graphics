@@ -1,6 +1,6 @@
 ---
 name: Missing tactical graphic
-about: Request a MIL-STD-2525E graphic the library doesn't render yet
+about: Request a MIL-STD-2525E / FM 1-02.2 graphic the library doesn't render yet
 title: 'Graphic: '
 labels: graphic
 ---

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping build out MIL-STD-2525E coverage.
+Thanks for helping build out MIL-STD-2525E / FM 1-02.2 coverage.
 
 ## The two layers
 

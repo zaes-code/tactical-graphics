@@ -66,7 +66,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                                 textTransform: 'none',
                             }}
                         >
-                            MIL-STD-2525E
+                            MIL-STD-2525E &middot; FM 1-02.2
                         </Typography>
                     </Typography>
 
