@@ -1,5 +1,5 @@
 /**
- * @zaes/tactical-graphics — MIL-STD-2525E tactical graphics as plain GeoJSON.
+ * @zaes/tactical-graphics — MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJSON.
  *
  * Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON
  * feature's properties, then render it:
