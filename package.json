@@ -50,6 +50,7 @@
     "build:demo": "craco build",
     "test": "craco test",
     "drive": "node scripts/drive-app.mjs",
+    "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "prepublishOnly": "npm run typecheck && npm run build"
