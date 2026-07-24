@@ -9,6 +9,26 @@ import openlayersAdapter from "../openlayersAdapter";
 import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 
+/**
+ * Screen-pixel sizes at scale 1. Every one is multiplied by the map resolution,
+ * which is what keeps the graphic a constant size on screen as you zoom.
+ */
+const CENTER_PADDING_PX = 75;
+const ARROW_LENGTH_PX = 75;
+const ARROW_DEPTH_PX = 20;
+const ARROW_HEAD_LENGTH_PX = 10;
+const ARROW_HEAD_DEGREE = 60;
+
+/**
+ * Smallest resize factor.
+ *
+ * Each line runs from `centerPadding` out to `2 * arrowLength * scale`. With
+ * `centerPadding` pinned, a scale of 0.5 collapses that run to nothing and
+ * anything below folds the line back through the 2525E symbol. The floor leaves
+ * a quarter of the padding as visible line.
+ */
+const MIN_SCALE = (CENTER_PADDING_PX * 1.25) / (2 * ARROW_LENGTH_PX);
+
 export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     primaryLabel: string;
     base: Feature<Point> = new Feature<Point>();
@@ -30,7 +50,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.rotation = 0;
         this.scale = 1;
         this.resolution = resolution;
-        this.centerPadding = 75 * this.resolution;
+        this.centerPadding = CENTER_PADDING_PX * this.resolution;
 
         this.leftLabelFeature.set('drawingResolution', resolution);
         this.rightLabelFeature.set('drawingResolution', resolution);
@@ -59,16 +79,31 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.base = base;
         this.updateFeatures();
     };
-    scaleCoordinates = (coordinates: Coordinate[]) => {
-        return coordinates.map(coord => {
-            return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), this.scale, this.rotation);
-        });
+    /**
+     * Rotates a generator-local offset into place around the base point.
+     *
+     * Deliberately passes scale 1: resize must NOT be applied to finished
+     * coordinates, or it drags the inner ends of the lines and the labels
+     * outward with everything else. See `updateFeatures`.
+     */
+    placeCoordinates = (coordinates: Coordinate[]) => {
+        return coordinates.map(coord => this.placeCoordinate(coord));
+    }
+    placeCoordinate = (coord: Coordinate) => {
+        return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), 1, this.rotation);
     }
     updateFeatures = () => {
-        let arrowLength = 75 * this.resolution;
-        let arrowDepth = 20 * this.resolution
-        let arrowHeadLength = this.resolution * 10;
-        let arrowHeadDegree = 60;
+        // Resize lengthens the arrows outward and moves nothing else, so `scale`
+        // is spent on the arrow's length rather than on the coordinates the
+        // generator returns. `centerPadding` — the gap between the 2525E symbol
+        // and where the lines begin — is left unscaled, which pins both the inner
+        // end of each line and the labels (placed at `centerPadding / 1.5`).
+        // `arrowDepth` and `arrowHeadLength` are unscaled too: the arrowheads
+        // move, they don't grow.
+        let arrowLength = ARROW_LENGTH_PX * this.resolution * this.scale;
+        let arrowDepth = ARROW_DEPTH_PX * this.resolution
+        let arrowHeadLength = ARROW_HEAD_LENGTH_PX * this.resolution;
+        let arrowHeadDegree = ARROW_HEAD_DEGREE;
 
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
@@ -78,27 +113,34 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         if (!tacticalGraphic) return;
 
         let {graphic, handles, labels} = tacticalGraphic;
-        let scaledGraphicCoordinates = (graphic as MultiLineString).getCoordinates().map(this.scaleCoordinates);
-        (graphic as MultiLineString).setCoordinates(scaledGraphicCoordinates);
+        let placedGraphicCoordinates = (graphic as MultiLineString).getCoordinates().map(this.placeCoordinates);
+        (graphic as MultiLineString).setCoordinates(placedGraphicCoordinates);
 
-        let scaledHandleCoordinates = (handles as MultiPoint).getCoordinates().map(coord => {
-            return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), this.scale, this.rotation);
-        });
-        (handles as MultiPoint).setCoordinates(scaledHandleCoordinates);
+        let placedHandleCoordinates = this.placeCoordinates((handles as MultiPoint).getCoordinates());
+        (handles as MultiPoint).setCoordinates(placedHandleCoordinates);
 
-        let scaledLabelPoints = (labels as MultiPoint).getCoordinates().map(coord => {
-            return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), this.scale, this.rotation);
-        });
+        let placedLabelPoints = this.placeCoordinates((labels as MultiPoint).getCoordinates());
         this.graphic.setGeometry(graphic);
         this.handles.setGeometry(handles);
-        this.leftLabelFeature.setGeometry(new Point(scaledLabelPoints[0]));
-        this.rightLabelFeature.setGeometry(new Point(scaledLabelPoints[1]));
+        this.leftLabelFeature.setGeometry(new Point(placedLabelPoints[0]));
+        this.rightLabelFeature.setGeometry(new Point(placedLabelPoints[1]));
 
     };
 
-    // handle resolution changes
-    updateCenterPadding(resolution: number) {
-        this.centerPadding = 75 * resolution;
+    /**
+     * Re-anchor to a new map resolution, i.e. a zoom change.
+     *
+     * Every size in this class is a screen-pixel constant multiplied by the
+     * resolution, so the whole graphic holds a constant on-screen size only if
+     * they are all recomputed together. This used to refresh `centerPadding`
+     * alone and leave `this.resolution` at whatever it was when the graphic was
+     * drawn, so `arrowLength` / `arrowDepth` / `arrowHeadLength` kept spending
+     * the draw-time resolution: the gap to the 2525E symbol held its pixel size
+     * while the arrows grew and shrank with the zoom.
+     */
+    updateResolution(resolution: number) {
+        this.resolution = resolution;
+        this.centerPadding = CENTER_PADDING_PX * resolution;
         this.updateFeatures();
     }
 
@@ -116,7 +158,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     };
 
     setScale = (scale: number) => {
-        this.scale = scale;
+        this.scale = Math.max(MIN_SCALE, scale);
         this.updateFeatures();
     };
 
