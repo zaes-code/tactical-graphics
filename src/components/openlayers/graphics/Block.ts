@@ -13,7 +13,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic} from "../controllers/LineGraphicController";
+import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
 
 // Graphics that lock the perpendicular size to a fixed fraction of the base length
 // so the user can only rotate and resize, not change the aspect ratio. The value
@@ -42,6 +42,8 @@ export class Block implements LineGraphic {
 
     features: Feature[] = [];
     symbolId: string = '';
+    /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
+    hidesStartHandle?: boolean;
     private ratioLock: number | undefined;
     // Minimum base-length in screen pixels at the drawing zoom — forces the
     // graphic to render at a recognisable size from the moment the user starts
@@ -93,7 +95,7 @@ export class Block implements LineGraphic {
 
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
-        this.handles.setGeometry(new MultiPoint(handleCoords.slice(1, handleCoords.length)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
     };
 

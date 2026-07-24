@@ -1,7 +1,7 @@
 import {Feature} from "ol";
 import {LineString, MultiPoint} from "ol/geom";
 import {Coordinate} from "ol/coordinate";
-import {LineGraphic} from "../controllers/LineGraphicController";
+import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
 import {
     coordinatedFireLineStyle,
     createBaseFeature,
@@ -36,6 +36,8 @@ export class LineGraphicBase implements LineGraphic {
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
     symbolId: string = '';
     graphicName: TacticalGraphicName;
+    /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
+    hidesStartHandle?: boolean;
     graphicLabel: GraphicLabels = {label: ''};
     resolution: number | undefined;
 
@@ -194,7 +196,7 @@ export class LineGraphicBase implements LineGraphic {
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphics.setGeometry(graphic);
-        this.handles.setGeometry(handles as MultiPoint);
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
     };
 
     setLabel = (labels: GraphicLabels): void => {

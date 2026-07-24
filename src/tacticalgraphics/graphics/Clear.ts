@@ -11,10 +11,23 @@ export class Clear extends TacticalGraphicsBase<PointGraphicOptions> {
         return geometryService.getClearGraphic(base.geometry.coordinates, opts.size);
     }
 
+    /**
+     * `[offset, p0, p1]` — the order the rest of the block family uses, where
+     * element 0 is the width handle the OpenLayers holder splits off and the
+     * remaining two are the base segment's own endpoints.
+     *
+     * This used to emit `[offset, offsetRailEnd, p0]`: `getBypassArrow` returns
+     * `[offsetBase, arrowhead…]`, so `coordinates[0][1]` is the far end of the
+     * *parallel rail*, sitting a half-width off the segment rather than on it.
+     * Once the p0 handle was dropped for one-segment graphics that stray point
+     * was the only handle left, floating beside the graphic.
+     */
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
         let topArrow = geometryService.getBypassArrow(base.geometry.coordinates, -opts.size);
 
-        return this.asMultiPointFeature([topArrow.geometry.coordinates[1][2], topArrow.geometry.coordinates[0][1], base.geometry.coordinates[0],]);
+        const coords = base.geometry.coordinates;
+
+        return this.asMultiPointFeature([topArrow.geometry.coordinates[1][2], coords[0], coords[coords.length - 1]]);
     }
 
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {

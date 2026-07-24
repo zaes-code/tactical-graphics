@@ -60,6 +60,10 @@ export interface TacticalGraphicHandler {
     handleResize(deltaSize: number): void;
 
     setOffset?(offset: number): void;
+
+    // Multiplier applied to the width-handle drag distance before it reaches
+    // setOffset. Omitted means the shared default (see handleOffset).
+    offsetScale?: number;
 }
 
 /**

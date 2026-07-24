@@ -451,6 +451,31 @@ export class MobileDefense extends MovementGraphicBase {
         return this.asMultiLineStringFeature([topArc, bottomArc, arrowHead, ...triangles]);
     }
 
+    /**
+     * `[p1]` — the far end of the ellipse's major axis, and nothing else.
+     *
+     * p1 lands on the centre-line in the gap between the arrowhead and the end
+     * of the bottom arc, across the shape from the "MD" label. The p0 dot is
+     * deliberately omitted: it would sit underneath that label, so it read as
+     * clutter rather than as something grabbable.
+     *
+     * One point is enough. Nothing indexes into the handle set — the manager
+     * only needs a feature under the cursor to start a drag, and
+     * `LineGraphicController` rotates/resizes/translates the whole base
+     * feature, anchored on `getCenter()` (= p0), never on a handle coordinate.
+     *
+     * The inherited `MovementGraphicBase` version is wrong for this graphic: it
+     * returns an arrow tip extended *past* p1 (outside the ellipse) plus a
+     * perpendicular width handle. MobileDefense has no width to drag — the
+     * ellipse is derived entirely from p0 and p1, with `minorR = majorR × 0.4` —
+     * so emitting fewer than three points tells the OpenLayers holder there is
+     * no offset handle to show.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const baseCoords = base.geometry.coordinates;
+        return this.asMultiPointFeature([baseCoords[baseCoords.length - 1]]);
+    }
+
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         // coords[0] = p0 vertex anchor for the "MD" label (rendered horizontally).
         // coords[1] = p1, included so downstream style code that expects two points

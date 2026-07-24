@@ -55,7 +55,10 @@ export class TacticalGraphicsManager {
     modify: Modify | undefined = undefined;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
+    /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
     private dblClickZoom: DoubleClickZoom | undefined = undefined;
+    /** Tears down the listener armed to put DoubleClickZoom back. */
+    private unlistenDblClickZoomRestore: (() => void) | undefined = undefined;
 
     // add layer and pointer interactions to an openlayers map reference.
     constructor(map: Map) {
@@ -276,18 +279,42 @@ export class TacticalGraphicsManager {
         }
     }
 
+    /**
+     * Squared distance from `point` to the segment `a`→`b`. Coordinates are
+     * EPSG:3857 metres, so plain Euclidean math is correct here — no turf.
+     */
+    private distanceToSegmentSq(point: Coordinate, a: Coordinate, b: Coordinate): number {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const lengthSq = dx * dx + dy * dy;
+        // Degenerate segment (duplicate vertices) — fall back to the endpoint.
+        const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSq));
+        const projX = a[0] + t * dx;
+        const projY = a[1] + t * dy;
+        return Math.pow(point[0] - projX, 2) + Math.pow(point[1] - projY, 2);
+    }
+
     // update the width of a graphic
     handleOffset(evt: MapBrowserEvent): void {
         if (!this.activeController) return;
         let coords = <number[][]>this.activeController.getBaseGeometry();
-        if (!coords) return;
-        const lastSegment = [
-            coords[coords.length - 2],
-            coords[coords.length - 1]
-        ];
+        if (!coords || coords.length < 2) return;
 
-        const dx = lastSegment[1][0] - lastSegment[0][0];
-        const dy = lastSegment[1][1] - lastSegment[0][1];
+        // Measure against the segment the cursor is nearest to, not always the
+        // last one. For a two-point base (block, relief in place, retrograde)
+        // there is only one segment, so this picks the same one as before.
+        let segment = [coords[0], coords[1]];
+        let nearestDistanceSq = Infinity;
+        for (let i = 0; i < coords.length - 1; i++) {
+            const distanceSq = this.distanceToSegmentSq(evt.coordinate, coords[i], coords[i + 1]);
+            if (distanceSq < nearestDistanceSq) {
+                nearestDistanceSq = distanceSq;
+                segment = [coords[i], coords[i + 1]];
+            }
+        }
+
+        const dx = segment[1][0] - segment[0][0];
+        const dy = segment[1][1] - segment[0][1];
         const lineAngle = Math.atan2(dy, dx);
 
         const widthAxis = [
@@ -296,15 +323,18 @@ export class TacticalGraphicsManager {
         ];
 
         const toMouse = [
-            evt.coordinate[0] - lastSegment[0][0],
-            evt.coordinate[1] - lastSegment[0][1]
+            evt.coordinate[0] - segment[0][0],
+            evt.coordinate[1] - segment[0][1]
         ];
 
         const perpendicularDistance =
             toMouse[0] * widthAxis[0] +
             toMouse[1] * widthAxis[1];
 
-        const scaleFactor = .5; // Adjust this to control sensitivity
+        // Sensitivity. The default halves the drag distance, which suits graphics
+        // whose offset spans the full width; a graphic whose offset is measured
+        // from the centre-line (a radius) overrides it to track the cursor 1:1.
+        const scaleFactor = this.activeController.offsetScale ?? .5;
         const baseWidth = Math.abs(perpendicularDistance) * scaleFactor;
         this.activeController.setOffset?.(baseWidth);
     }
@@ -349,16 +379,70 @@ export class TacticalGraphicsManager {
         return feature instanceof Feature ? feature : undefined;
     };
 
+    /**
+     * Take double-click zoom off the map for the duration of a draw. Idempotent:
+     * a second call while it is already suspended is a no-op, and it cancels any
+     * restore armed by the previous draw so that one can't fire mid-draw.
+     */
+    private suspendDoubleClickZoom = () => {
+        this.unlistenDblClickZoomRestore?.();
+        this.unlistenDblClickZoomRestore = undefined;
+        if (this.dblClickZoom) return;
+
+        this.dblClickZoom = this.map.getInteractions().getArray()
+            .find((i): i is DoubleClickZoom => i instanceof DoubleClickZoom);
+        if (this.dblClickZoom) this.map.removeInteraction(this.dblClickZoom);
+    };
+
+    /**
+     * Put double-click zoom back — but not until the browser has finished
+     * delivering the double-click that ended the draw.
+     *
+     * Only a free-form LineString finishes *on* its `dblclick`, with `Draw` still
+     * installed to swallow it. A fixed-vertex draw (`maxPoints`, e.g. the
+     * retrograde family) finishes on the *second click* of that double-click, and
+     * a Point draw (mission tasks such as AreaDefense) on the *first* — so by the
+     * time the trailing `dblclick` is dispatched, `Draw` has already been removed
+     * and nothing absorbs it. Restoring on a 0 ms timer landed DoubleClickZoom
+     * back inside that window, which is exactly why those graphics zoomed the map
+     * on the click that drew them while plain lines did not.
+     *
+     * Waiting for the next press sidesteps the timing entirely. `detail` is the
+     * consecutive-click count, so `> 1` means the press is the second half of the
+     * double-click still being waited out; we keep waiting. A genuine later
+     * double-click re-arms the zoom on its own first press, in time for its
+     * `dblclick`. `mousedown` rather than OL's `pointerdown` because `detail` is
+     * spec'd on MouseEvent and reliably populated there.
+     *
+     * `lastDrawEndedAt` covers the rest. A Point draw (screen / guard / cover)
+     * ends on its *first* click, so a user who clicks to place the symbol and
+     * then double-clicks out of habit is making a fresh press — which would
+     * otherwise re-arm the zoom in time for its own `dblclick`. Holding off until
+     * that guard expires reuses the same drawend + 1 s window the properties
+     * dialog already ignores stray clicks in.
+     */
+    private resumeDoubleClickZoomOnNextClick = () => {
+        const zoom = this.dblClickZoom;
+        if (!zoom || this.unlistenDblClickZoomRestore) return;
+
+        const viewport = this.map.getViewport();
+        const onMouseDown = (e: MouseEvent) => {
+            if (e.detail > 1 || Date.now() < this.lastDrawEndedAt) return;
+            this.unlistenDblClickZoomRestore?.();
+            this.unlistenDblClickZoomRestore = undefined;
+            this.dblClickZoom = undefined;
+            this.map.addInteraction(zoom);
+        };
+        viewport.addEventListener('mousedown', onMouseDown);
+        this.unlistenDblClickZoomRestore = () => viewport.removeEventListener('mousedown', onMouseDown);
+    };
+
     private stopDrawing = (tacticalGraphicHandler: TacticalGraphicHandler, cancelled: boolean) => {
         if (this.escKeyHandler) {
             document.removeEventListener('keydown', this.escKeyHandler);
             this.escKeyHandler = undefined;
         }
-        if (this.dblClickZoom) {
-            const dblClickZoom = this.dblClickZoom;
-            this.dblClickZoom = undefined;
-            setTimeout(() => this.map.addInteraction(dblClickZoom), 0);
-        }
+        this.resumeDoubleClickZoomOnNextClick();
         if (cancelled) {
             tacticalGraphicHandler.getFeatures().forEach(f => this.renderingVectorSource.removeFeature(f));
         }
@@ -383,9 +467,7 @@ export class TacticalGraphicsManager {
         this.map.getView().on('change:resolution', tacticalGraphicHandler.onResolutionChangeFunc);
 
         // Disable double-click zoom so finishing a draw with double-click doesn't zoom the map
-        this.dblClickZoom = this.map.getInteractions().getArray()
-            .find((i): i is DoubleClickZoom => i instanceof DoubleClickZoom);
-        if (this.dblClickZoom) this.map.removeInteraction(this.dblClickZoom);
+        this.suspendDoubleClickZoom();
 
         this.draw = new Draw({
             source: drawingVectorSource,

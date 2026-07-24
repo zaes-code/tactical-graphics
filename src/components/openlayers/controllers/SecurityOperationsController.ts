@@ -18,7 +18,7 @@ export interface SecurityOperationGraphic extends TacticalGraphic {
 
     setScale(scale: number): void;
 
-    updateCenterPadding(resolution: number): void;
+    updateResolution(resolution: number): void;
 }
 
 export class SecurityOperationsController implements TacticalGraphicHandler {
@@ -112,7 +112,7 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
 
     onResolutionChangeFunc = (event: ObjectEvent) => {
         const resolution = event.target.getResolution() || 1;
-        this.graphic.updateCenterPadding(resolution);
+        this.graphic.updateResolution(resolution);
     };
 
     setBaseFeature(base: Feature<Point>): void {

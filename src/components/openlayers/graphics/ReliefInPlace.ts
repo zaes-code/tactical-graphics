@@ -10,7 +10,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from 'ol/geom';
 import LineString from 'ol/geom/LineString';
-import {LineGraphic} from '../controllers/LineGraphicController';
+import {LineGraphic, visiblePathHandles} from '../controllers/LineGraphicController';
 
 export class ReliefInPlace implements LineGraphic {
     rotation: number = 0;
@@ -25,6 +25,8 @@ export class ReliefInPlace implements LineGraphic {
 
     features: Feature[] = [];
     symbolId: string = '';
+    /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
+    hidesStartHandle?: boolean;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         this.name = name;
@@ -43,7 +45,7 @@ export class ReliefInPlace implements LineGraphic {
         this.graphic.setGeometry(graphic);
         const handleCoords = (handles as MultiPoint).getCoordinates();
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
-        this.handles.setGeometry(new MultiPoint(handleCoords.slice(1)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
     };
 
     getBaseGraphicFeature = (): Feature<LineString> => this.base;

@@ -26,8 +26,19 @@ export class AirCorridor extends TacticalGraphicsBase<MovementGraphicOptions> {
         )
     }
 
+    /**
+     * `[...vertices, ...tangentPoints]`.
+     *
+     * The vertices come first so a consumer that only wants the drawn path can
+     * take the first `base.coordinates.length` points and ignore the rest. The
+     * tangent points are where the corridor rails meet each circle — dragging
+     * one of those is how the user changes the corridor width, so they are
+     * emitted at the same radius the rails are drawn at.
+     */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates);
+        const baseCoords = base.geometry.coordinates;
+        const tangentPoints = this.getMovementGeometry(baseCoords, opts?.radius || 20).flat();
+        return this.asMultiPointFeature([...baseCoords, ...tangentPoints]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {

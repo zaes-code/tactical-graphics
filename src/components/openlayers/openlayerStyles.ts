@@ -230,21 +230,52 @@ export const createFeature = () => {
     return feature;
 };
 
-const ACP_RADIUS_PX = 12; // 👈 match your rendered circle size
-const ACP_DIAMETER_PX = ACP_RADIUS_PX * 0.95;
+/**
+ * Renders the AM (width) amplifier. The value is stored as bare metres — the
+ * dialog's Width input accepts digits only — so the unit and the thousands
+ * separators are presentation, added here. Anything non-numeric (free text
+ * typed before this was a number, or an imported value) is shown verbatim.
+ */
+function formatWidthAmplifier(value: string): string {
+    const metres = Number(value);
+    return value.trim() !== '' && Number.isFinite(metres) ? `${metres.toLocaleString('en-US')} M` : value;
+}
+
+/** Assumed circle radius when the real one is unknown. */
+const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
+/** Share of the circle's diameter the label may span. */
+const ACP_TEXT_FRACTION = 0.8;
 const PADDING = 4;
 
-function getFittedScale(
+/**
+ * Scale for an "ACP n" label.
+ *
+ * Two competing sizes, and the larger wins:
+ *
+ * - the **floor** — fitted to a fixed assumed circle and capped at the
+ *   zoom-anchored scale. This is what the label used to do unconditionally, and
+ *   it keeps a narrow corridor labelled instead of letting the text collapse to
+ *   nothing when its circle is only a few pixels across.
+ * - the **grown** size — fitted to the circle's real rendered radius and capped
+ *   at the size-proportional scale, so a wide corridor gets a big label.
+ *
+ * Pass `circleRadiusPx` / `proportionalScale` only when the feature stamps
+ * `graphicSize`; without them the floor applies alone, i.e. the old behaviour.
+ */
+function getAcpLabelScale(
     text: string,
     font: string,
-    baseScale: number,
+    zoomScale: number,
+    circleRadiusPx?: number,
+    proportionalScale?: number,
 ): number {
     const textWidthAt1 = getTextWidth(text, font, 1);
-    const radiusPx = ACP_DIAMETER_PX * baseScale;
-    const diameterPx = radiusPx * 2.5;
-    const maxWidth = diameterPx - PADDING;
-    const fitScale = maxWidth / textWidthAt1;
-    return Math.min(baseScale, fitScale);
+    const floor = Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - PADDING) / textWidthAt1);
+
+    if (circleRadiusPx === undefined || proportionalScale === undefined) return floor;
+
+    const circleMaxWidth = Math.max(0, circleRadiusPx * 2 * ACP_TEXT_FRACTION - PADDING);
+    return Math.max(floor, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
 }
 
 export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): StyleFunction {
@@ -259,6 +290,14 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         const label = getFullLabel(name, graphicLabel.label ?? '');
         const baseScale = featureLabelScale(feature, resolution);
 
+        // The ACP labels track the circle rather than the zoom. `graphicSize` is
+        // the corridor radius in map units, so dividing by the resolution gives
+        // the circle's rendered pixel radius; `featureGraphicLabelScale` grows
+        // the text from the same number, and the fit below keeps it inside.
+        const graphicSize = feature.get('graphicSize') as number | undefined;
+        const circleRadiusPx = graphicSize && graphicSize > 0 ? graphicSize / resolution : undefined;
+        const acpScale = featureGraphicLabelScale(feature, resolution);
+
         // 🟡 Pull hostility color dynamically
         const color = feature.get('hostilityColor') || getDefaultLineColor();
 
@@ -266,7 +305,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         const infoLines: string[] = [];
         const corridorName = graphicLabel.label?.trim();
         if (corridorName)               infoLines.push(`NAME:       ${corridorName}`);
-        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${graphicLabel.width}`);
+        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${formatWidthAmplifier(graphicLabel.width)}`);
         if (graphicLabel.minAltitude)   infoLines.push(`MIN ALT:    ${graphicLabel.minAltitude}`);
         if (graphicLabel.maxAltitude)   infoLines.push(`MAX ALT:    ${graphicLabel.maxAltitude}`);
         if (graphicLabel.startDate)     infoLines.push(`DTG START:  ${graphicLabel.startDate}`);
@@ -299,7 +338,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         for (let i = 0; i < coords.length - 1; i++) {
 
             const labelText = `ACP ${i + 1}`;
-            const fittedScale = getFittedScale(labelText, fontStyle, baseScale);
+            const fittedScale = getAcpLabelScale(labelText, fontStyle, baseScale, circleRadiusPx, acpScale);
 
             const [x0, y0] = coords[i];
             const [x1, y1] = coords[i + 1];
@@ -338,7 +377,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
             );
         }
         // add the last node in the corridor
-        const fittedScale = getFittedScale(`ACP ${coords.length}`, fontStyle, baseScale);
+        const fittedScale = getAcpLabelScale(`ACP ${coords.length}`, fontStyle, baseScale, circleRadiusPx, acpScale);
         styles.push(
             new Style({
                 geometry: new Point(coords[coords.length - 1]),
@@ -886,8 +925,10 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                 }),
             })];
         }
-        // MobileDefense always shows "MD" at the p0 vertex — horizontal regardless
-        // of the graphic's rotation. User label is ignored.
+        // MobileDefense always shows "MD" at the p0 vertex — the tail of the
+        // ellipse, in the gap the two arcs leave open on that side — horizontal
+        // regardless of the graphic's rotation. Doctrinally the amplifier sits at
+        // the start of the graphic, not in its middle. User label is ignored.
         if (name === TacticalGraphicName.MobileDefense) {
             const geom = f.getGeometry() as MultiPoint;
             if (!geom) return [];
@@ -4235,8 +4276,25 @@ function getOffset(distance: number, rotation: number): [number, number] {
 }
 
 export function getSecurityOperationLabelStyle(textLabel: string, rotation: number = 0, position: 'left' | 'right' = 'left'): StyleFunction {
-    return (feature, resolution) => {
+    // Takes neither `feature` nor `resolution`: the label's size no longer
+    // depends on the zoom, and it carries no amplifiers to read off the feature.
+    return () => {
         const orientation = position === 'left' ? 1 : -1;
+
+        // Constant on-screen size, deliberately NOT `featureLabelScale`.
+        //
+        // That helper returns `sizeFactor × (drawingResolution / resolution)`,
+        // which holds a label at a constant size in *map* units — so it doubles
+        // on screen every time you zoom in a level. Right for a label that
+        // belongs to geometry drawn in map units; wrong here, because every size
+        // in `SecurityOperationGraphicBase` is a pixel constant × the resolution
+        // and the whole graphic holds its on-screen size across a zoom. A label
+        // that grew while its arrows stayed put was the odd one out.
+        //
+        // This is exactly what `featureLabelScale` yields at the moment the
+        // graphic is drawn (`resolution === drawingResolution`), so the label
+        // keeps the size it has always had — it just stops growing from there.
+        const labelScale = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
 
         const [offsetX, offsetY] = getOffset(0.5 * orientation, rotation);
         return new Style({
@@ -4246,7 +4304,7 @@ export function getSecurityOperationLabelStyle(textLabel: string, rotation: numb
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
                 textBaseline: 'middle',
-                scale: featureLabelScale(feature, resolution),
+                scale: labelScale,
                 offsetX,
                 offsetY,
                 stroke: haloStroke,

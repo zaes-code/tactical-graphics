@@ -15,6 +15,54 @@ export interface LineGraphic extends TacticalGraphic {
     setSymbolId(symbolId: string): void;
 
     setOffset?(offset: number): void;
+
+    offsetScale?: number;
+
+    /**
+     * Drop the handle on p0. Set by `LineGraphicController` for graphics fixed at
+     * two vertices; see `visiblePathHandles`.
+     */
+    hidesStartHandle?: boolean;
+}
+
+/**
+ * Two handles within a millimetre of each other are the same point. Coordinates
+ * here are EPSG:3857 metres, and the only error to absorb is the generator's
+ * 3857 → 4326 → 3857 round trip, which lands far inside that.
+ */
+const SAME_POINT_EPSILON_M = 1e-3;
+
+/**
+ * The path handles a one-segment graphic should actually show — every one except
+ * the handle sitting on p0.
+ *
+ * A graphic fixed at two vertices *is* a single segment, so a handle on each end
+ * is redundant: either one rotates and resizes the whole thing about the other.
+ * p0 is additionally where most of these graphics stack their label or symbol,
+ * so its dot lands underneath the text and reads as clutter rather than as
+ * something grabbable.
+ *
+ * **Matches on position, not on index.** The obvious implementation — drop the
+ * first path handle — is wrong, because generators do not agree on an order:
+ * `Breach` and `Penetration` emit `[end, p0]`, and `Disrupt` emits three arrow
+ * handles before its two endpoints. Only "is this handle at p0" is stable across
+ * all of them, and it also leaves a generator's extra shape handles alone, which
+ * dropping by index would eat.
+ *
+ * Safe because nothing indexes into a line graphic's handle set:
+ * `toggleHandleFeatures` only flips `hidden` on the whole feature, and
+ * `handleRotate` / `handleResize` / `handleTranslate` transform `graphic.base`
+ * wholesale — `handleResize` anchored on `getCenter()`, which is base
+ * `coords[0]` = p0 and stays the anchor whether or not it is drawn.
+ *
+ * Never returns an empty set: a generator whose handles all sit on p0 keeps
+ * them, so the graphic cannot end up with nothing to grab.
+ */
+export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate | undefined, hidesStartHandle?: boolean): Coordinate[] {
+    if (!hidesStartHandle || !startCoord) return coords;
+
+    const kept = coords.filter(c => Math.hypot(c[0] - startCoord[0], c[1] - startCoord[1]) > SAME_POINT_EPSILON_M);
+    return kept.length > 0 ? kept : coords;
 }
 
 /*
@@ -37,6 +85,11 @@ export class LineGraphicController implements TacticalGraphicHandler {
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
             this.graphic.base.set('base', false);
+        }
+
+        // Two vertices is one segment: show only the handle on the far end.
+        if (this.maxPoints === 2) {
+            this.graphic.hidesStartHandle = true;
         }
 
         const features = this.graphic?.getFeatures?.();
@@ -79,6 +132,11 @@ export class LineGraphicController implements TacticalGraphicHandler {
 
     setOffset(offset: number): void {
         this.graphic.setOffset?.(offset);
+    }
+
+    // Surfaced from the graphic so the manager can read it off the controller.
+    get offsetScale(): number | undefined {
+        return this.graphic.offsetScale;
     }
 
     areCoordsEqual(coord1: Coordinate, coord2: Coordinate): boolean {

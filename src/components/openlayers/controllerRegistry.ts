@@ -39,6 +39,18 @@ const polygonRect = (name: TacticalGraphicName, res: number) =>
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new MovementGraphicBase(name, 20 * res, res), maxPts || undefined);
 
+// MobileDefense has no vertices worth editing: its ellipse is fully defined by
+// its two endpoints, and rotate / resize / move already reshape it from them.
+// Clearing `base` on the base feature drops it from the Modify interaction's
+// feature set (getRenderedFeaturesByProp('base')), so the "Modify vertices" mode
+// has nothing to show — no dashed axis line across the ellipse — while every
+// other edit mode still works. Draw and the sample gallery are unchanged.
+const mobileDefense = (name: TacticalGraphicName, res: number) => {
+    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * res, res));
+    controller.graphic.base.set('base', false);
+    return controller;
+};
+
 const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined);
 
@@ -276,7 +288,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Pursuit]:            missionTask,
     [TacticalGraphicName.Envelopment]:        movement(),
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
-    [TacticalGraphicName.MobileDefense]:      movement(),
+    [TacticalGraphicName.MobileDefense]:      mobileDefense,
     [TacticalGraphicName.Infiltration]:       movement(),
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
