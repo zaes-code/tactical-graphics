@@ -13,7 +13,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic} from "../controllers/LineGraphicController";
+import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
@@ -32,7 +32,15 @@ export class MovementGraphicBase implements LineGraphic {
     features: Feature[] = [];
     symbolId: string = '';
     graphicName: TacticalGraphicName;
+    /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
+    hidesStartHandle?: boolean;
     resolution: number;
+    /**
+     * Whether the generator emits a width handle. Starts true so the feature is
+     * registered as it always was; `updateGeometry` corrects it on the first
+     * render from the number of handle points the generator returned.
+     */
+    protected hasOffsetHandle: boolean = true;
 
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
         this.offset = offset;
@@ -105,8 +113,17 @@ export class MovementGraphicBase implements LineGraphic {
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
         this.graphic.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(handleCoords.slice(0, 2)));
-        this.offsetHandle.setGeometry(new Point(handleCoords[2]));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, 2), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+
+        // A generator that emits fewer than three handle points is declaring that
+        // the graphic has no width to drag — its shape follows entirely from its
+        // two endpoints (MobileDefense, which emits just the far one). Leave the
+        // offset handle without a geometry and drop it from getFeatures(), so it
+        // neither renders nor resolves to this controller on a pointer-down.
+        this.hasOffsetHandle = handleCoords.length > 2;
+        if (this.hasOffsetHandle) {
+            this.offsetHandle.setGeometry(new Point(handleCoords[2]));
+        }
 
         this.labels.setGeometry(labels);
     };
@@ -133,6 +150,7 @@ export class MovementGraphicBase implements LineGraphic {
     }
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.labels, this.handles, this.base, this.offsetHandle];
+        const features = [this.graphic, this.labels, this.handles, this.base];
+        return this.hasOffsetHandle ? [...features, this.offsetHandle] : features;
     }
 }

@@ -42,7 +42,7 @@ const {graphic, labels, handles} = renderTacticalGraphic({
 });
 ```
 
-`graphic` is a `MultiLineString` — the drawn symbol. `labels` is a `MultiPoint` of anchor points for text. `handles` is a `MultiPoint` of vertices an editor can expose as drag handles.
+`graphic` is a `MultiLineString` — the drawn symbol. `labels` is a `MultiPoint` of anchor points for text. `handles` is a `MultiPoint` of grab points an editor can expose as drag handles — usually the drawn vertices, plus shape or width points for the graphics that have them. A generator may also leave a vertex out when a handle there would be redundant or would sit under the symbol's own label.
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
 

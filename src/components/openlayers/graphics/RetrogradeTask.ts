@@ -9,7 +9,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic} from "../controllers/LineGraphicController";
+import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
 
 
 export class RetrogradeTask implements LineGraphic {
@@ -25,6 +25,8 @@ export class RetrogradeTask implements LineGraphic {
 
     features: Feature[] = [];
     symbolId: string = '';
+    /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
+    hidesStartHandle?: boolean;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         this.name = name;
@@ -49,7 +51,7 @@ export class RetrogradeTask implements LineGraphic {
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
-        this.handles.setGeometry(new MultiPoint(handleCoords.slice(1, handleCoords.length)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
     };
 
