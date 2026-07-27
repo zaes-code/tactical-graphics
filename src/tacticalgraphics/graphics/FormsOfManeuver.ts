@@ -516,6 +516,22 @@ export class InfiltrationLane extends MovementGraphicBase {
     /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
     protected tipOverhang: number = 0;
 
+    /**
+     * `[p0, p1, railEnd]` — the width handle sits on the end of the left rail,
+     * i.e. on the graphic, rather than the inherited point a further `radius`
+     * out into empty space.
+     *
+     * The handle is now one radius off the centre line instead of two, so the
+     * renderer has to halve its drag sensitivity to compensate — see
+     * `OFFSET_SCALE` in the OpenLayers `MovementGraphicBase`.
+     */
+    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const baseCoords = base.geometry.coordinates;
+        const leftRail = geometryService.computeParallelLineString(baseCoords, radius);
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftRail[leftRail.length - 1]]);
+    }
+
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
         const baseCoords = base.geometry.coordinates;
@@ -548,6 +564,17 @@ export class Infiltration extends MovementGraphicBase {
 
     /** `computeArrowheadPoints` puts the point on the last vertex already. */
     protected tipOverhang: number = 0;
+
+    /**
+     * `[p0, tip]` — no width handle, matching `DirectionOfSupportingAttack`,
+     * which this graphic is the single-line twin of. `radius` sizes nothing but
+     * the arrowhead, so the inherited third point had nothing to drag and simply
+     * floated off the side of the line.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const baseCoords = base.geometry.coordinates;
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+    }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
