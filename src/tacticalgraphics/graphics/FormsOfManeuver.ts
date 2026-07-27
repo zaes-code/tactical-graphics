@@ -18,7 +18,7 @@ class SolidManeuverArrow extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
@@ -173,7 +173,7 @@ export class FrontalAttack extends SolidManeuverArrow {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
 
@@ -190,7 +190,7 @@ export class FrontalAttack extends SolidManeuverArrow {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
@@ -208,7 +208,7 @@ export class TurningMovement extends SolidManeuverArrow {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
@@ -228,7 +228,7 @@ export class TurningMovement extends SolidManeuverArrow {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
@@ -335,6 +335,24 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
 export class Envelopment extends MovementGraphicBase {
     name: string = TacticalGraphicName.Envelopment;
 
+    /** The head is tangent to the end of the arc, so its point is already on the last vertex. */
+    protected tipOverhang: number = 0;
+
+    /**
+     * `[p0, tip]` — no width handle.
+     *
+     * `radius` sizes nothing but the arrowhead here; the shape follows entirely
+     * from the two endpoints (the arc's radius is half their separation), so a
+     * width handle has nothing meaningful to drag and only adds a third dot
+     * beside the head. Emitting fewer than three points is how a generator says
+     * "no width" — see `MovementGraphicBase.updateGeometry` in the OpenLayers
+     * sample, which drops the offset handle entirely when it sees two.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const baseCoords = base.geometry.coordinates;
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+    }
+
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
         const baseCoords = base.geometry.coordinates;
@@ -376,6 +394,9 @@ export class Envelopment extends MovementGraphicBase {
 // each pointing outward (away from the ellipse center).
 export class MobileDefense extends MovementGraphicBase {
     name: string = TacticalGraphicName.MobileDefense;
+
+    /** The ellipse is defined by its two endpoints; nothing is drawn past p1. */
+    protected tipOverhang: number = 0;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
@@ -492,6 +513,9 @@ export class MobileDefense extends MovementGraphicBase {
 export class InfiltrationLane extends MovementGraphicBase {
     name: string = TacticalGraphicName.InfiltrationLane;
 
+    /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
+    protected tipOverhang: number = 0;
+
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
         const baseCoords = base.geometry.coordinates;
@@ -521,6 +545,9 @@ export class InfiltrationLane extends MovementGraphicBase {
 
 export class Infiltration extends MovementGraphicBase {
     name: string = TacticalGraphicName.Infiltration;
+
+    /** `computeArrowheadPoints` puts the point on the last vertex already. */
+    protected tipOverhang: number = 0;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;

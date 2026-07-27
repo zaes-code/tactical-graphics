@@ -106,7 +106,6 @@ export class MovementGraphicBase implements LineGraphic {
             this.base,
             {radius: this.offset, size: this.resolution}
         );
-        console.log(JSON.stringify(tacticalGraphic));
         if (!tacticalGraphic) return;
 
         let {graphic, handles, labels} = tacticalGraphic;
