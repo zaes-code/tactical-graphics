@@ -293,10 +293,15 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // [edge, center, lineStart] — edge handle at the east end of the
-        // semicircle (drives rotate/resize per MissionTask convention),
-        // center handle for translate, plus an edit handle at the beginning
-        // of the horizontal "P" line (local (−2.4r, +r)).
+        // [edge, lineStart] — edge handle at the east end of the semicircle,
+        // plus an edit handle at the beginning of the horizontal "P" line
+        // (local (−2.4r, +r)). Both sit on the graphic's outline.
+        //
+        // The MissionTask convention's centre handle is deliberately absent: it
+        // rendered in the middle of empty space inside the hook, and it is not
+        // load-bearing — `handleCircleDrag` picks its operation from the global
+        // interaction mode and does its angle/scale maths against the base
+        // point, never against the handle the user grabbed.
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
@@ -311,7 +316,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         bearing = ((bearing % 360) + 360) % 360;
         const lineStart = turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
 
-        return this.asMultiPointFeature([edge, center, lineStart]);
+        return this.asMultiPointFeature([edge, lineStart]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
@@ -644,12 +649,21 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // Match the MissionTask convention: [edge, center]. Edge handle lives at
-        // the upper arc endpoint (planar 60° + rotation) and drives rotate/resize;
-        // center handle is used for translation.
+        // [arcEnd, arrowTip] — both on the graphic's own outline: the upper arc
+        // endpoint (planar 60° + rotation) and the point of the arrow that
+        // emerges from the bulge (planar 0°, distance 2r, matching
+        // `generateGraphics`).
+        //
+        // The MissionTask convention's centre handle is deliberately absent: it
+        // rendered in the hollow of the arc with nothing under it, and it is not
+        // load-bearing — `handleCircleDrag` picks its operation from the global
+        // interaction mode and does its angle/scale maths against the base
+        // point, never against the handle the user grabbed.
         const center = base.geometry.coordinates;
-        const endPoint = geometryService.createCircularArc(center, opts.rotation, opts.size, 60, 61, 1)[0];
-        return this.asMultiPointFeature([endPoint, center]);
+        const r = Math.max(opts.size, 1);
+        const arcEnd = geometryService.createCircularArc(center, opts.rotation, r, 60, 61, 1)[0];
+        const arrowTip = geometryService.createCircularArc(center, opts.rotation, 2 * r, 0, 1, 1)[0];
+        return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {

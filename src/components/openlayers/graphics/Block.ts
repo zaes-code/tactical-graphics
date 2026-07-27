@@ -37,6 +37,8 @@ const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle is the end of the front line, drawn at 3 × size (`frontHalf`).
     [TacticalGraphicName.Penetration]: 1 / 3,
+    // Handle is an arrowhead wing, `size × sin 45°` off the base line.
+    [TacticalGraphicName.Exploitation]: Math.SQRT2,
 };
 
 
