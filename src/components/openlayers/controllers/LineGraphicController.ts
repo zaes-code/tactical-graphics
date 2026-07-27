@@ -7,6 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -65,6 +66,28 @@ export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate 
     return kept.length > 0 ? kept : coords;
 }
 
+/**
+ * Fixed-vertex graphics that deliberately keep doing nothing on an edit-mode
+ * drag, and so are excluded from `editStretches` below. User's list.
+ *
+ * `MobileDefense` is listed for the record only — its factory builds the
+ * controller without `maxPoints`, so it never qualifies anyway.
+ */
+const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ReliefInPlace,
+    TacticalGraphicName.MobileDefense,
+    TacticalGraphicName.Clear,
+    TacticalGraphicName.TacticalDisrupt,
+    TacticalGraphicName.TacticalFix,
+    TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.Breach,
+    TacticalGraphicName.Bypass,
+    TacticalGraphicName.Canalize,
+    TacticalGraphicName.AttackByFire,
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Neutralize,
+]);
+
 /*
 * Controller class for managing linestring-like graphics.
 * maxPoints is used to control how many vertices are allowed to be drawn in openlayers.
@@ -77,14 +100,26 @@ export class LineGraphicController implements TacticalGraphicHandler {
     onPointerMove?: Function | undefined;
     symbolId: string = '';
     maxPoints: number | undefined;
+    /**
+     * Edit ("modify vertices") mode drags this graphic exactly the way resize
+     * does — stretch along the current bearing, anchored on p0.
+     *
+     * A fixed-vertex graphic has no vertices to modify: `base` is cleared below,
+     * so OpenLayers' `Modify` is handed nothing and an edit-mode drag used to
+     * fall through to the map and pan it. Stretching is the only meaningful
+     * edit left, so edit mode borrows the resize path (see
+     * `TacticalGraphicsManager.handleLineStringDrag`).
+     */
+    editStretches: boolean = false;
 
-    constructor(graphic: LineGraphic, maxPoints?: number) {
+    constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
         this.graphic = graphic;
         this.maxPoints = maxPoints;
 
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
             this.graphic.base.set('base', false);
+            this.editStretches = !!name && !NO_EDIT_STRETCH.has(name);
         }
 
         // Two vertices is one segment: show only the handle on the far end.

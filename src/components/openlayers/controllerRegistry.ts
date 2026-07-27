@@ -37,7 +37,7 @@ const polygonRect = (name: TacticalGraphicName, res: number) =>
     new RectangularAreaGraphicController(new AreaGraphicBase(name, res, res));
 
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new MovementGraphicBase(name, 20 * res, res), maxPts || undefined);
+    new LineGraphicController(new MovementGraphicBase(name, 20 * res, res), maxPts || undefined, name);
 
 // MobileDefense has no vertices worth editing: its ellipse is fully defined by
 // its two endpoints, and rotate / resize / move already reshape it from them.
@@ -52,16 +52,16 @@ const mobileDefense = (name: TacticalGraphicName, res: number) => {
 };
 
 const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined);
+    new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
 
 const block = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new Block(name, res * 20, res), 2);
+    new LineGraphicController(new Block(name, res * 20, res), 2, name);
 
 const retrograde = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new RetrogradeTask(name, res * 20, res), 2);
+    new LineGraphicController(new RetrogradeTask(name, res * 20, res), 2, name);
 
 const reliefInPlace = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new ReliefInPlace(name, res * 20, res), 2);
+    new LineGraphicController(new ReliefInPlace(name, res * 20, res), 2, name);
 
 const corridor = (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new AirCorridor(name, res * 20, res));
