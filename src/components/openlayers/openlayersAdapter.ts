@@ -64,6 +64,11 @@ export interface TacticalGraphicHandler {
     // Multiplier applied to the width-handle drag distance before it reaches
     // setOffset. Omitted means the shared default (see handleOffset).
     offsetScale?: number;
+
+    // Whether an edit ("modify vertices") drag should stretch this graphic the
+    // way a resize drag does. Set for fixed-vertex graphics, which have no
+    // vertices for OpenLayers' Modify to offer. See LineGraphicController.
+    editStretches?: boolean;
 }
 
 /**

@@ -161,6 +161,11 @@ export class TacticalGraphicsManager {
 
         this.lastPointerPosition = evt.coordinate;
 
+        // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
+        // feature has `base` cleared), so an edit-mode drag would fall through
+        // to the map and pan it. Claim the drag and stretch the graphic instead.
+        if (this.isModifying()) return !!this.activeController.editStretches;
+
         return this.isRotating() || this.isTranslating() || this.isResizing();
     };
 
@@ -252,6 +257,11 @@ export class TacticalGraphicsManager {
             case InteractionType.rotate:
                 this.handleRotateForLineAndPolygon(evt, this.activeController);
                 break;
+            // Edit mode borrows the resize path wholesale for fixed-vertex
+            // graphics — width handle included, so the two modes behave
+            // identically. `handleDownEvent` only claims an edit-mode drag when
+            // the controller opted in, so nothing else can reach this case.
+            case InteractionType.modify:
             case InteractionType.resize:
                 if (!this.activeFeature) return;
 
