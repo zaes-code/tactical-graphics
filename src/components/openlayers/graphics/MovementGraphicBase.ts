@@ -19,9 +19,24 @@ import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {writeGraphicProperties} from "../graphicProperties";
 
+/**
+ * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
+ * `TacticalGraphicsManager.handleOffset` sets `offset = perpendicularDistance ×
+ * offsetScale`, so the factor must be the reciprocal of however many `offset`s
+ * out the generator draws the handle — otherwise it runs away from the cursor.
+ * The 0.5 default suits a handle drawn at two offsets out, which is where the
+ * inherited `leftArrowHeadBase` sits.
+ */
+const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
+    // Handle sits on the rail itself, one radius off the centre line.
+    [TacticalGraphicName.InfiltrationLane]: 1,
+};
+
 export class MovementGraphicBase implements LineGraphic {
     offset: number;
     graphicLabels: GraphicLabels = {label: ''};
+    /** @see LineGraphic.offsetScale — read off the controller by the manager. */
+    offsetScale?: number;
 
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphic: Feature = createFeature();
@@ -46,6 +61,7 @@ export class MovementGraphicBase implements LineGraphic {
         this.offset = offset;
         this.graphicName = name;
         this.resolution = resolution;
+        this.offsetScale = OFFSET_SCALE[name];
 
         if (resolution > 0) {
             this.labels.set('drawingResolution', resolution);
