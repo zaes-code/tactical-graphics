@@ -35,6 +35,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
 
+        // The manager drops back to `view` by itself when a draw finishes or is
+        // cancelled. Mirror that into React state, or the draw button keeps
+        // reading "Drawing…" long after the draw is over.
+        tacticalGraphicManager.current.onInteractionModeChange = setInteractionMode;
+
         // Test hook for scripts/drive-app.mjs, which drives the draw/edit flow in a
         // real browser and asserts on feature properties. Stripped from production
         // builds. Nothing in the app may read this.
