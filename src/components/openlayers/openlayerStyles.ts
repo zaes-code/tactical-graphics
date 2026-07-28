@@ -106,6 +106,37 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
     return featureLabelScale(feature, resolution);
 }
 
+/**
+ * Whether to add the OpenStreetMap basemap layers. Set `REACT_APP_BASEMAP=off`
+ * at build time to leave them out entirely.
+ *
+ * The published demo builds with it off. `new OSM()` points at
+ * tile.openstreetmap.org, and the OSM Foundation's Tile Usage Policy does not
+ * cover a public demo site — it is for development and low-traffic use. Leaving
+ * the layers out means the hosted page issues no tile requests at all, which is
+ * also what the README's hero image shows: for a graphics library the map is
+ * scenery, the symbols are the subject.
+ *
+ * Local `npm start` keeps the basemap, because geographic context is useful
+ * while drawing. The dark/light toggle in `OpenLayers.tsx` already bails out
+ * when the layers are absent, so nothing else needs to know.
+ */
+const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
+
+const createBasemapLayers = () => BASEMAP_ENABLED ? [
+    new TileLayer({
+        properties: {name: 'darkBaseMap'},
+        source: new OSM({wrapX: false}),
+        visible: true,
+    }),
+    new TileLayer({
+        properties: {name: 'lightBaseMap'},
+        source: new OSM({wrapX: false}),
+        className: '-',
+        visible: false,
+    }),
+] : [];
+
 export const createMap = (target: HTMLElement) => {
     let controls = defaults({zoom: false}).extend([
         new ScaleLine({
@@ -116,17 +147,7 @@ export const createMap = (target: HTMLElement) => {
         controls: controls,
         target: target,
         layers: [
-            new TileLayer({
-                properties: {name: 'darkBaseMap'},
-                source: new OSM({wrapX: false}),
-                visible: true,
-            }),
-            new TileLayer({
-                properties: {name: 'lightBaseMap'},
-                source: new OSM({wrapX: false}),
-                className: '-',
-                visible: false,
-            }),
+            ...createBasemapLayers(),
         ],
         view: new View({
             center: centerCoordinates,
