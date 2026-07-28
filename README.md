@@ -6,6 +6,8 @@ Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's
 
 This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in metres.
 
+**[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
+
 **160 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ---
@@ -183,7 +185,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*Drawn in a single sweep by the demo app's **Draw all samples** button. The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
+*Drawn in a single sweep by the demo app's **Draw all samples** button — press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/). The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
 
 (`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
 
