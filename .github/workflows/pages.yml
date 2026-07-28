@@ -1,0 +1,73 @@
+name: Deploy demo to GitHub Pages
+
+# The demo is a static CRA build with no backend, so Pages can serve it as-is.
+#
+# Runs only on the public GitHub mirror. `publish-github.sh` force-rewrites
+# `develop` on every publish, which is fine here for two reasons: a push (even a
+# forced one) triggers this workflow, and `deploy-pages` publishes an *artifact*
+# rather than committing a `gh-pages` branch, so there is no branch for the
+# rewrite to clobber.
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+# Pages needs these; `id-token` is what deploy-pages uses to prove the artifact
+# came from this workflow run.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a publish that lands mid-deploy queue rather than cancel: a half-deployed
+# site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # devDependencies are required: the demo builds through craco, and the
+      # craco alias is what points `@zaes/tactical-graphics` at local source.
+      - run: npm ci
+
+      - name: Build
+        env:
+          # This is a project site, served from /tactical-graphics/, so the
+          # bundle's asset URLs need that prefix. Deliberately NOT set via
+          # package.json's `homepage` field: CRA would read it, but npm uses the
+          # same field for the package's homepage link on npmjs.com, and one
+          # value cannot be correct for both.
+          PUBLIC_URL: /tactical-graphics
+          # No OpenStreetMap tile requests from the hosted page — see
+          # BASEMAP_ENABLED in openlayerStyles.ts.
+          REACT_APP_BASEMAP: 'off'
+          # CRA turns warnings into errors when CI is set, which would fail the
+          # build on lint noise that `npm run lint` only warns about.
+          CI: ''
+        run: npm run build:demo
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
