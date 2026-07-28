@@ -1,4 +1,5 @@
 import {Stroke, Style} from "ol/style";
+import {Coordinate} from "ol/coordinate";
 import {MultiLineString, MultiPoint} from "ol/geom";
 import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
@@ -24,6 +25,16 @@ import {writeGraphicProperties} from "../graphicProperties";
  * Wired through MissionTaskController via the `rangeFan` factory in
  * controllerRegistry.
  */
+/** `RangeFanBand.range` is kilometres; `size` and turf distances are metres. */
+const KM_TO_M = 1000;
+
+/**
+ * Minimum gap between two rings when one is dragged towards the other, as a
+ * fraction of the outermost band's range — proportional so the rings stay
+ * visibly apart whatever size the fan is.
+ */
+const BAND_SEPARATION_FRACTION = 0.02;
+
 export class RangeFanGraphicBase extends MissionTaskGraphicBase {
     graphicLabels: GraphicLabels = {label: ''};
 
@@ -72,7 +83,10 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphic.setGeometry(graphic as MultiLineString);
-        this.handles.setGeometry(handles as MultiPoint);
+        // Same split as every other circle graphic: the centre becomes the grey
+        // inert dot, and what stays on `handles` is one draggable rim per band,
+        // in sorted band order — which is what `setBandRange` indexes into.
+        this.publishHandles(handles as MultiPoint);
         this.label.setGeometry(labels);
         // Stamp the drawn size on every feature in the group so the dialog
         // can read it no matter which one the user clicked (the visible
@@ -115,4 +129,74 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // Stamping fires a `change` event on each feature, which re-renders them.
         writeGraphicProperties(this.getFeatures(), this.name, labels);
     };
+
+    /**
+     * Drags band `bandIndex`'s ring to `coordinate`. `bandIndex` counts in the
+     * **sorted** band order, matching the rim handles `generateHandles` emits.
+     *
+     * The new range is the *geodesic* distance from the centre in kilometres —
+     * `RangeFanBand.range` is km and the generator spends it through
+     * `turf.destination`, so measuring the same way is what makes the ring land
+     * under the cursor at any latitude. Measuring in EPSG:3857 map units would
+     * only agree near the equator.
+     *
+     * **Clamped between its neighbours**, which is what keeps an inner ring from
+     * expanding past the outer one. Neighbour clamping rather than a bare
+     * "not past the outermost" rule, because `resolveBands` re-sorts on every
+     * render: if a ring could cross its neighbour, the sorted index the drag is
+     * holding would start pointing at a different band halfway through the
+     * gesture.
+     */
+    setBandRange = (bandIndex: number, coordinate: Coordinate): void => {
+        const center = this.base.getGeometry();
+        if (!center) return;
+
+        const km = openlayersAdapter.getTurfDistance(
+            openlayersAdapter.coordinateToTurfPoint(center.getCoordinates()),
+            openlayersAdapter.coordinateToTurfPoint(coordinate),
+        );
+        if (!Number.isFinite(km) || km <= 0) return;
+
+        const configBands = this.graphicLabels?.rangeFan?.bands;
+        const sorted = resolveBands(this.currentOptions());
+        if (bandIndex < 0 || bandIndex >= sorted.length) return;
+
+        // Keep rings visibly apart, proportional to the fan so the gap holds up
+        // at any size.
+        const gapKm = sorted[sorted.length - 1].range * BAND_SEPARATION_FRACTION;
+        const min = bandIndex === 0 ? gapKm : sorted[bandIndex - 1].range + gapKm;
+        const max = bandIndex === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[bandIndex + 1].range - gapKm;
+        const clamped = Math.min(Math.max(km, min), Math.max(min, max));
+
+        // No user-entered bands: the fan is rendering `resolveBands`' fallback
+        // single band derived from `size`, so drive `size` and leave the
+        // amplifiers alone rather than inventing a band the user never typed.
+        if (!configBands || configBands.length === 0) {
+            this.size = clamped * KM_TO_M;
+            this.updateGeometry();
+            return;
+        }
+
+        // `resolveBands` sorts a copy of the array but keeps the band objects,
+        // so the sorted entry is identity-equal to one of the user's rows.
+        const target = configBands.indexOf(sorted[bandIndex]);
+        if (target < 0) return;
+
+        const nextBands = configBands.map((band, i) => (i === target ? {...band, range: clamped} : band));
+        this.setLabel({
+            ...this.graphicLabels,
+            rangeFan: {...this.graphicLabels.rangeFan, bands: nextBands},
+        });
+    };
+
+    /** The option bag `updateGeometry` builds, reused by the band-drag clamp. */
+    private currentOptions(): RangeFanOptions {
+        const rangeFan = this.graphicLabels?.rangeFan;
+        return {
+            size: this.size,
+            rotation: this.rotation,
+            bands: rangeFan?.bands,
+            centerAzimuthDeg: rangeFan?.centerAzimuthDeg,
+        };
+    }
 }

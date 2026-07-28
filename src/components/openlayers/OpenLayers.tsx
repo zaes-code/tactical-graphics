@@ -8,7 +8,7 @@ import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
 import {setDarkModeFlag} from '../../settings';
 
@@ -34,6 +34,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
         const olMap = createMap(mapRef.current);
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
+
+        // The manager drops back to `view` by itself when a draw finishes or is
+        // cancelled. Mirror that into React state, or the draw button keeps
+        // reading "Drawing…" long after the draw is over.
+        tacticalGraphicManager.current.onInteractionModeChange = setInteractionMode;
 
         // Test hook for scripts/drive-app.mjs, which drives the draw/edit flow in a
         // real browser and asserts on feature properties. Stripped from production
@@ -84,11 +89,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
         setInteractionMode(InteractionType.view);
     };
 
-    const drawSamples = () => {
+    const drawSamples = (hostility?: TacticalGraphicHostility) => {
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
         setInteractionMode(InteractionType.view);
-        const {drawn, failed} = drawProvenSamples(mgr);
+        const {drawn, failed} = drawProvenSamples(mgr, hostility);
         if (failed.length) {
             // eslint-disable-next-line no-console
             console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);

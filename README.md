@@ -6,7 +6,9 @@ Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's
 
 This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in metres.
 
-**171 graphics** are implemented and verified today, across 13 categories — see [Supported graphics](#supported-graphics) for the full catalog.
+**[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
+
+**160 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ---
 
@@ -183,9 +185,9 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*One sample of every graphic in the table below, drawn in a single sweep by the demo app's **Draw all samples** button.*
+*Drawn in a single sweep by the demo app's **Draw all samples** button — press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/). The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
 
-(`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished. The table lists only the verified set.)
+(`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
 
 | Graphic | Category |
 |---|---|
@@ -315,17 +317,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Exploitation | Offense Operations Planning |
 | Movement To Contact | Offense Operations Planning |
 | Pursuit | Offense Operations Planning |
-| Block | Tactical Mission Tasks |
-| Breach | Tactical Mission Tasks |
-| Bypass | Tactical Mission Tasks |
-| Canalize | Tactical Mission Tasks |
-| Clear | Tactical Mission Tasks |
-| Contain | Tactical Mission Tasks |
-| Control | Tactical Mission Tasks |
-| Disengage | Tactical Mission Tasks |
-| Disrupt | Tactical Mission Tasks |
-| Fix | Tactical Mission Tasks |
-| Isolate | Tactical Mission Tasks |
 | Artillery Target Intelligence Zone, Circular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Irregular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Rectangular | Target Acquisition Control Measures |
@@ -360,6 +351,88 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Target Area, Circular | Target Control Measures |
 | Target Area, Irregular | Target Control Measures |
 | Target Area, Rectangular | Target Control Measures |
+
+---
+
+## Upcoming graphics
+
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against FM 1-02.2, **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
+
+| Graphic | Category |
+|---|---|
+| Limited Access Area | Areas |
+| Abatis | Mobility and Countermobility Control Measures |
+| Alternate Supply Route | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Alternating Traffic Route | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
+| Assault Crossing | Mobility and Countermobility Control Measures |
+| Block | Mobility and Countermobility Control Measures |
+| Bridge | Mobility and Countermobility Control Measures |
+| Disrupt | Mobility and Countermobility Control Measures |
+| Double Apron Fence | Mobility and Countermobility Control Measures |
+| Double Fence | Mobility and Countermobility Control Measures |
+| Double Strand Concertina | Mobility and Countermobility Control Measures |
+| Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
+| Ferry Crossing | Mobility and Countermobility Control Measures |
+| Fix | Mobility and Countermobility Control Measures |
+| Ford, Difficult | Mobility and Countermobility Control Measures |
+| Ford, Easy | Mobility and Countermobility Control Measures |
+| Gap | Mobility and Countermobility Control Measures |
+| Halted Convoy | Mobility and Countermobility Control Measures |
+| High Wire Fence | Mobility and Countermobility Control Measures |
+| Low Wire Fence | Mobility and Countermobility Control Measures |
+| Main Supply Route | Mobility and Countermobility Control Measures |
+| Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Moving Convoy | Mobility and Countermobility Control Measures |
+| Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Free Area | Mobility and Countermobility Control Measures |
+| Obstacle Group | Mobility and Countermobility Control Measures |
+| Obstacle Line | Mobility and Countermobility Control Measures |
+| Obstacle Restricted Area | Mobility and Countermobility Control Measures |
+| Obstacle Zone | Mobility and Countermobility Control Measures |
+| One-Way Traffic Route | Mobility and Countermobility Control Measures |
+| Passage Lane | Mobility and Countermobility Control Measures |
+| Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
+| Route | Mobility and Countermobility Control Measures |
+| Single Concertina | Mobility and Countermobility Control Measures |
+| Single Fence | Mobility and Countermobility Control Measures |
+| Triple Strand Concertina | Mobility and Countermobility Control Measures |
+| Turn | Mobility and Countermobility Control Measures |
+| Unspecified | Mobility and Countermobility Control Measures |
+| Attack By Fire | Tactical Mission Tasks |
+| Block | Tactical Mission Tasks |
+| Breach | Tactical Mission Tasks |
+| Bypass | Tactical Mission Tasks |
+| Canalize | Tactical Mission Tasks |
+| Clear | Tactical Mission Tasks |
+| Contain | Tactical Mission Tasks |
+| Control | Tactical Mission Tasks |
+| Destroy | Tactical Mission Tasks |
+| Disengage | Tactical Mission Tasks |
+| Disrupt | Tactical Mission Tasks |
+| Exfiltrate | Tactical Mission Tasks |
+| Fix | Tactical Mission Tasks |
+| Follow And Assume | Tactical Mission Tasks |
+| Follow And Support | Tactical Mission Tasks |
+| Interdict | Tactical Mission Tasks |
+| Isolate | Tactical Mission Tasks |
+| Neutralize | Tactical Mission Tasks |
+| Occupy | Tactical Mission Tasks |
+| Retain | Tactical Mission Tasks |
+| Secure | Tactical Mission Tasks |
+| Seize | Tactical Mission Tasks |
+| Support By Fire | Tactical Mission Tasks |
+| Suppress | Tactical Mission Tasks |
+| Turn | Tactical Mission Tasks |
 
 ---
 

@@ -85,10 +85,10 @@ const readRenderedStyle = (page, graphicName) =>
 const selectGraphic = async (page, displayName) => {
     await page.getByPlaceholder('Filter graphics').fill(displayName);
     await page.getByText(displayName, {exact: true}).first().click();
-    // The draw button's label sticks at "Drawing…" after drawend — MapControls
-    // derives it from `interactionMode`, which OpenLayers.tsx never resets to
-    // `view`. Its handler restarts the draw for the newly selected shape either
-    // way, so match on both labels rather than on "Add Graphic" alone.
+    // Match on both labels. The button now returns to "Add Graphic" after a
+    // draw ends, but it legitimately reads "Drawing…" mid-draw, and its handler
+    // restarts the draw for the newly selected shape either way — so matching
+    // both keeps this working whichever state the previous step left it in.
     await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
 };
 
