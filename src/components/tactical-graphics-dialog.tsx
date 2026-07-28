@@ -437,7 +437,12 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                         const fields = getGraphicFields(selectedFeature.get('graphicName') as TacticalGraphicName);
                         return (
                             <>
-                                {!fields.identifier1 &&  !fields.identifier2 && !fields.dtg1 && !fields.dtg2 && !fields.width && !fields.altitude1 && !fields.altitude2 && !fields.grids && !fields.weapon && !fields.rangeFan &&(
+                                {/* Every flag, or the message contradicts a control rendered right below it.
+                                    `hostility` and `status` were missing here while almost no graphic set
+                                    them; now that hostility follows FM 1-02.2 Field N and is on for every
+                                    control measure, leaving them out would print "no editable fields"
+                                    above a hostility dropdown on most of the catalog. */}
+                                {!fields.identifier1 && !fields.identifier2 && !fields.dtg1 && !fields.dtg2 && !fields.hostility && !fields.status && !fields.echelon && !fields.direction && !fields.width && !fields.altitude1 && !fields.altitude2 && !fields.grids && !fields.weapon && !fields.rangeFan && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <InputLabel>No editable fields for this graphic type.</InputLabel>
                                     </Box>
