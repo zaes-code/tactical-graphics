@@ -439,7 +439,12 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     text: new Text({
                         text: labelText,
                         font: fontStyle,
-                        fill: new Fill({color}),
+                        // Black, not `color`. FM 1-02.2 colours the *lines* of a
+                        // control measure by standard identity — the circle
+                        // stroke above — while text amplifiers stay black. See
+                        // table 5-3's enemy boundary in colour: red line, black
+                        // T/AS and B labels.
+                        fill: new Fill({color: getLabelFillColor()}),
                         scale: fittedScale,
                         stroke: haloStroke,
                         textAlign: 'center',
@@ -460,7 +465,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                 text: new Text({
                     text: `ACP ${coords.length}`,
                     font: fontStyle,
-                    fill: new Fill({color}),
+                    fill: new Fill({color: getLabelFillColor()}),
                     scale: fittedScale,
                     stroke: haloStroke,
                     textAlign: 'center',
@@ -5085,7 +5090,10 @@ export function encirclementGraphicStyle(feature: FeatureLike, resolution: numbe
                         text: new Text({
                             text: 'ENY',
                             font: fontStyle,
-                            fill: new Fill({color: getColorByHostility(TacticalGraphicHostility.unknown)}),
+                            // Was getColorByHostility(unknown), which resolves to
+                            // the same #000000 by a confusing route. ENY is an
+                            // amplifier, and amplifiers are black.
+                            fill: new Fill({color: getLabelFillColor()}),
                             placement: 'point',
                             scale: featureLabelScale(feature, resolution),
                         }),
@@ -5210,7 +5218,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
                 text: new Text({
                     text: 'UXO',
                     font: fontStyle,
-                    fill: new Fill({color: color}),
+                    fill: new Fill({color: getLabelFillColor()}),
                     stroke: haloStroke,
                     placement: 'point',
                     scale: featureLabelScale(feature, resolution),
