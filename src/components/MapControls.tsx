@@ -13,7 +13,9 @@ import {
     FormGroup,
     IconButton,
     InputAdornment,
+    MenuItem,
     Paper,
+    Select,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
@@ -34,14 +36,15 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import CloseIcon from '@mui/icons-material/Close';
 
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
-import {getDisplayName, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 
 interface Props {
     onDrawTacticalGraphics(): void;
     onShapeChange(name: TacticalGraphicName): void;
     onReset(): void;
-    onDrawSamples(): void;
+    /** Hostility applied to every sample that accepts one; undefined = leave default. */
+    onDrawSamples(hostility?: TacticalGraphicHostility): void;
     onClearAll(): void;
     interactionMode: InteractionType;
     isRotating: boolean;
@@ -143,6 +146,10 @@ const MapControls: React.FC<Props> = ({
     onToggleInteraction,
     defaultShape,
 }) => {
+    // Hostility applied to the sample sweep. '' = leave every sample at its
+    // default, which is the normal gallery view.
+    const [sampleHostility, setSampleHostility] = useState<TacticalGraphicHostility | ''>('');
+
     const [selected, setSelected] = useState<GraphicOption | null>(
         ALL_OPTIONS.find(o => o.value === defaultShape) ?? null
     );
@@ -527,7 +534,7 @@ const MapControls: React.FC<Props> = ({
                                 <OpenWithIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
                         </Tooltip>
-                        <Tooltip title="Modify vertices">
+                        <Tooltip title="Edit">
                             <ToggleButton value="modify" sx={{py: 0.75}}>
                                 <EditIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
@@ -549,10 +556,26 @@ const MapControls: React.FC<Props> = ({
                     }}>
                         Sample Gallery
                     </Typography>
+                    {/* Draw the whole catalogue at one hostility — a one-click check
+                        that hostility rendering works everywhere it should. Graphics
+                        without the field are drawn unchanged. */}
+                    <Select
+                        value={sampleHostility}
+                        onChange={e => setSampleHostility(e.target.value as TacticalGraphicHostility | '')}
+                        displayEmpty
+                        size="small"
+                        fullWidth
+                        sx={{mb: 0.75, fontSize: '0.72rem'}}
+                    >
+                        <MenuItem value="" sx={{fontSize: '0.72rem'}}>Default hostility</MenuItem>
+                        {Object.values(TacticalGraphicHostility).map(h => (
+                            <MenuItem key={h} value={h} sx={{fontSize: '0.72rem'}}>{h}</MenuItem>
+                        ))}
+                    </Select>
                     <Box sx={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 0.75}}>
                         <Box
                             component="button"
-                            onClick={onDrawSamples}
+                            onClick={() => onDrawSamples(sampleHostility || undefined)}
                             sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
                                 py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',

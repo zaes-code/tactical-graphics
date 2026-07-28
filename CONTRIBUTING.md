@@ -18,6 +18,17 @@ npm install
 npm start            # demo app at http://localhost:3000
 ```
 
+## Branching
+
+`develop` is the trunk and the default branch — branch off it and target it with your pull request. `master` carries tagged releases only, merged from `develop` at release time; nothing lands on it directly.
+
+```bash
+git switch develop && git pull
+git switch -c feature/short-description   # feature/ · fix/ · chore/ · docs/
+```
+
+Both branches are protected: no direct pushes, no deletions. Everything arrives by pull request.
+
 ## Before you open a PR
 
 ```bash

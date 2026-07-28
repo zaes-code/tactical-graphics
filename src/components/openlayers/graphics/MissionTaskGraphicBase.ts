@@ -1,10 +1,12 @@
 import {Coordinate} from "ol/coordinate";
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
+import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
 import {Feature} from "ol";
 import {
     baseDefenseZoneLabelStyleFn,
     createFeature,
     createHandleFeature,
+    createInertHandleFeature,
     featureLabelScale,
     fightingPositionStyleFunc,
     fontStyle,
@@ -42,6 +44,8 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     symbolId: string = '';
 
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
+    /** The centre dot — visual anchor only. @see publishHandles */
+    centerHandle: Feature<MultiPoint> = <Feature<MultiPoint>>createInertHandleFeature();
     graphic: Feature = createFeature();
     label: Feature = new Feature();
     name: TacticalGraphicName;
@@ -201,7 +205,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphic.setGeometry(graphic);
-        this.handles.setGeometry(handles as MultiPoint);
+        this.publishHandles(handles as MultiPoint);
         this.label.setGeometry(labels);
 
         // Stamp the current radius on the label feature so size-tracking
@@ -222,8 +226,48 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
     };
 
+    /**
+     * Splits the generator's handle set into the draggable ones and the centre,
+     * which is published on a separate grey `inert` feature that
+     * `TacticalGraphicsManager.handleDownEvent` refuses to start a drag from.
+     *
+     * The centre is worse than useless as a drag origin: `handleResize` scales by
+     * `distanceToCentre(cursor) / distanceToCentre(lastPointer)`, and both are
+     * ~0 there, so a nudge on the centre dot used to blow `size` up by twenty
+     * orders of magnitude.
+     *
+     * **Matches on position, not index** — the same rule as `visiblePathHandles`.
+     * Generators do not agree on an order: the MissionTask convention is
+     * `[edge, center]` but the range fans emit `[center, rim]`. "Is this handle
+     * on the base point" is the only stable test, and it costs nothing to be
+     * right for a generator that emits no centre handle at all (Ambush, Pursuit).
+     *
+     * Never leaves the draggable set empty: a generator whose handles all sit on
+     * the centre keeps them, so the graphic cannot end up with nothing to grab.
+     */
+    protected publishHandles(handles: MultiPoint): void {
+        const coords = handles.getCoordinates();
+        const center = this.base.getGeometry()?.getCoordinates();
+        if (!center) {
+            this.handles.setGeometry(handles);
+            this.centerHandle.setGeometry(new MultiPoint([]));
+            return;
+        }
+
+        const onCenter = (c: number[]) => Math.hypot(c[0] - center[0], c[1] - center[1]) <= SAME_POINT_EPSILON_M;
+        const draggable = coords.filter(c => !onCenter(c));
+        if (draggable.length === 0) {
+            this.handles.setGeometry(new MultiPoint(coords));
+            this.centerHandle.setGeometry(new MultiPoint([]));
+            return;
+        }
+
+        this.handles.setGeometry(new MultiPoint(draggable));
+        this.centerHandle.setGeometry(new MultiPoint(coords.filter(onCenter)));
+    }
+
     getFeatures(): Feature[] {
-        return [this.graphic, this.label, this.handles];
+        return [this.graphic, this.label, this.handles, this.centerHandle];
     }
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
@@ -290,7 +334,7 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
             });
         }
 
-        writeGraphicProperties([this.graphic, this.label, this.handles], name, this.graphicLabels);
+        writeGraphicProperties([this.graphic, this.label, this.handles, this.centerHandle], name, this.graphicLabels);
     }
 
     setLabel = (labels: GraphicLabels) => {

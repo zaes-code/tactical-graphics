@@ -106,6 +106,36 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
     return featureLabelScale(feature, resolution);
 }
 
+/**
+ * Whether to add the OpenStreetMap basemap layers. On everywhere, including the
+ * hosted demo; set `REACT_APP_BASEMAP=off` at build time to leave them out.
+ *
+ * `new OSM()` points at tile.openstreetmap.org, so the OSM Foundation's Tile
+ * Usage Policy applies: it permits *modest* use, and requires that the
+ * attribution stay visible. A niche library demo is modest use — but if traffic
+ * ever stops being modest, that is the moment to move to a provider rather than
+ * lean harder on donated tiles. The escape hatch is this flag plus a swap of the
+ * `source` below; `decisions.md` lists the alternatives that were compared.
+ *
+ * The dark/light toggle in `OpenLayers.tsx` bails out when the layers are
+ * absent, so the off path needs nothing else.
+ */
+const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
+
+const createBasemapLayers = () => BASEMAP_ENABLED ? [
+    new TileLayer({
+        properties: {name: 'darkBaseMap'},
+        source: new OSM({wrapX: false}),
+        visible: true,
+    }),
+    new TileLayer({
+        properties: {name: 'lightBaseMap'},
+        source: new OSM({wrapX: false}),
+        className: '-',
+        visible: false,
+    }),
+] : [];
+
 export const createMap = (target: HTMLElement) => {
     let controls = defaults({zoom: false}).extend([
         new ScaleLine({
@@ -116,17 +146,7 @@ export const createMap = (target: HTMLElement) => {
         controls: controls,
         target: target,
         layers: [
-            new TileLayer({
-                properties: {name: 'darkBaseMap'},
-                source: new OSM({wrapX: false}),
-                visible: true,
-            }),
-            new TileLayer({
-                properties: {name: 'lightBaseMap'},
-                source: new OSM({wrapX: false}),
-                className: '-',
-                visible: false,
-            }),
+            ...createBasemapLayers(),
         ],
         view: new View({
             center: centerCoordinates,
@@ -184,13 +204,17 @@ export const createHandleFeature = () => {
 
         if (isHidden) return new Style({});
 
-        const hostility = feature.get('hostility');
-        const color = hostility ? getColorByHostility(hostility) : 'rgba(255,0,0,1)';
+        // Always red, never the hostility colour. A handle is a piece of editor
+        // chrome, not part of the symbol: it says "you can drag this", and that
+        // meaning must not change with the graphic's affiliation. Tinting them
+        // also made a hostile graphic's handles the same red as its own strokes,
+        // so they stopped reading as handles at all. Grey stays reserved for
+        // `createInertHandleFeature` — see it for why the colours must not blur.
         return new Style({
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: setOpacity(color, .8),
+                    color: setOpacity('rgba(255,0,0,1)', .8),
                 }),
             }),
         });
@@ -208,24 +232,72 @@ export const createOffsetHandleFeature = () => {
     return feature;
 };
 
+/**
+ * A handle that is there to read, not to grab — grey rather than red, and
+ * refused by `TacticalGraphicsManager.handleDownEvent` via its `inert` flag.
+ *
+ * Grey means "this can never be dragged", so it must not be used for a handle
+ * that is merely idle in the current mode; that would teach the colour to mean
+ * nothing. Deliberately ignores hostility: a hostile graphic's live handles take
+ * the hostility colour, and an inert one has to stay visually apart from them.
+ */
+export const createInertHandleFeature = () => {
+    let feature = new Feature();
+
+    feature.setStyle((feature) => {
+        if (feature.get('hidden')) return new Style({});
+        return new Style({
+            image: new CircleStyle({
+                radius: 5,
+                fill: new Fill({color: 'rgba(130,130,130,0.8)'}),
+            }),
+        });
+    });
+    // `handle` so it hides and shows with the rest of the handle set.
+    feature.set('handle', true);
+    feature.set('hidden', true);
+    feature.set('inert', true);
+
+    return feature;
+};
+
+/**
+ * The default style for a graphic feature — used by every holder that does not
+ * install a dedicated style function of its own.
+ *
+ * **Reads the hostility off the feature.** It used to hardcode
+ * `getDefaultLineColor()`, which meant changing a graphic's hostility recoloured
+ * nothing for anything on this style: all the circle graphics (base defense
+ * zone, the circular kill boxes and fire areas), bridge, and every other
+ * movement graphic without a bespoke style. Only the graphics with their own
+ * style function ever honoured it.
+ *
+ * `hostilityColor` is what the properties dialog stamps; `hostility` is the raw
+ * enum, kept as a fallback for features coloured by some other path.
+ */
 export const createFeature = () => {
     let feature = new Feature();
 
-    feature.setStyle(() => new Style({
-        fill: new Fill({
-            color: 'rgba(0, 120, 255, 0.2)',
-        }),
-        stroke: new Stroke({
-            color: getDefaultLineColor(),
-            width: LINE_WIDTH,
-        }),
-        image: new CircleStyle({
-            radius: 5,
+    feature.setStyle((feature) => {
+        const hostility = feature.get('hostility');
+        const color = feature.get('hostilityColor')
+            || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
+        return new Style({
             fill: new Fill({
-                color: 'rgba(255, 0, 0, 0.8)',
+                color: 'rgba(0, 120, 255, 0.2)',
             }),
-        }),
-    }));
+            stroke: new Stroke({
+                color,
+                width: LINE_WIDTH,
+            }),
+            image: new CircleStyle({
+                radius: 5,
+                fill: new Fill({
+                    color: 'rgba(255, 0, 0, 0.8)',
+                }),
+            }),
+        });
+    });
 
     return feature;
 };
@@ -367,7 +439,12 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     text: new Text({
                         text: labelText,
                         font: fontStyle,
-                        fill: new Fill({color}),
+                        // Black, not `color`. FM 1-02.2 colours the *lines* of a
+                        // control measure by standard identity — the circle
+                        // stroke above — while text amplifiers stay black. See
+                        // table 5-3's enemy boundary in colour: red line, black
+                        // T/AS and B labels.
+                        fill: new Fill({color: getLabelFillColor()}),
                         scale: fittedScale,
                         stroke: haloStroke,
                         textAlign: 'center',
@@ -388,7 +465,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                 text: new Text({
                     text: `ACP ${coords.length}`,
                     font: fontStyle,
-                    fill: new Fill({color}),
+                    fill: new Fill({color: getLabelFillColor()}),
                     scale: fittedScale,
                     stroke: haloStroke,
                     textAlign: 'center',
@@ -5013,7 +5090,10 @@ export function encirclementGraphicStyle(feature: FeatureLike, resolution: numbe
                         text: new Text({
                             text: 'ENY',
                             font: fontStyle,
-                            fill: new Fill({color: getColorByHostility(TacticalGraphicHostility.unknown)}),
+                            // Was getColorByHostility(unknown), which resolves to
+                            // the same #000000 by a confusing route. ENY is an
+                            // amplifier, and amplifiers are black.
+                            fill: new Fill({color: getLabelFillColor()}),
                             placement: 'point',
                             scale: featureLabelScale(feature, resolution),
                         }),
@@ -5138,7 +5218,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
                 text: new Text({
                     text: 'UXO',
                     font: fontStyle,
-                    fill: new Fill({color: color}),
+                    fill: new Fill({color: getLabelFillColor()}),
                     stroke: haloStroke,
                     placement: 'point',
                     scale: featureLabelScale(feature, resolution),
