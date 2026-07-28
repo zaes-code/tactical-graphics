@@ -109,13 +109,18 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
         });
     }
 
+    /**
+     * `[center, ...one rim per band]` — every ring gets its own handle, sitting
+     * on that ring along the reference bearing, so each band's range can be
+     * dragged independently. Rims follow the **sorted** band order
+     * (`resolveBands`), which is the order the renderer's handle index maps to.
+     */
     generateHandles(base: Feature<Point>, opts?: RangeFanOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
         const refAz = opts?.centerAzimuthDeg ?? rotationToAzimuth(opts?.rotation ?? 0);
-        const outerRadiusM = bands[bands.length - 1].range * KM_TO_M;
-        const rim = pointAtAzimuth(center, refAz, outerRadiusM);
-        return this.asMultiPointFeature([center, rim]);
+        const rims = bands.map(band => pointAtAzimuth(center, refAz, band.range * KM_TO_M));
+        return this.asMultiPointFeature([center, ...rims]);
     }
 
     /**
@@ -213,13 +218,18 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
         });
     }
 
+    /**
+     * `[center, ...one handle per band]` — each band's handle sits on its own arc
+     * along the *global* centre bearing (the same anchor the band's mid-label
+     * uses), so every band's range can be dragged independently. Handles follow
+     * the **sorted** band order from `resolveBands`.
+     */
     generateHandles(base: Feature<Point>, opts?: RangeFanOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
         const centerAz = resolveCenterAzimuth(opts);
-        const outerRadiusM = bands[bands.length - 1].range * KM_TO_M;
-        const tip = pointAtAzimuth(center, centerAz, outerRadiusM);
-        return this.asMultiPointFeature([center, tip]);
+        const rims = bands.map(band => pointAtAzimuth(center, centerAz, band.range * KM_TO_M));
+        return this.asMultiPointFeature([center, ...rims]);
     }
 
     /**
