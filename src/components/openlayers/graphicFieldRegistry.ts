@@ -11,7 +11,7 @@
  * every TacticalGraphicName is covered at compile time.
  */
 
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 // ── Public type ───────────────────────────────────────────────────────────────
 
@@ -57,7 +57,6 @@ function f(
     identifier2: boolean,
     dtg1: boolean,
     dtg2: boolean,
-    hostility: boolean,
     status: boolean,
     extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
@@ -66,7 +65,9 @@ function f(
         identifier2,
         dtg1,
         dtg2,
-        hostility,
+        // Not a per-graphic choice — see supportsHostility(). getGraphicFields
+        // overwrites this; the value here is only a placeholder for the type.
+        hostility: false,
         status,
         echelon: false,
         direction: false,
@@ -83,32 +84,32 @@ function f(
 // ── Named profiles ────────────────────────────────────────────────────────────
 
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
-const SHAPE_ONLY = f(false, false, false, false, false, false);
-const SHAPE_AND_DTG = f(false, false, true, true, false, false);
+const SHAPE_ONLY = f(false, false, false, false, false);
+const SHAPE_AND_DTG = f(false, false, true, true, false);
 /** Generic line: identifier + start/end date at both ends. */
-const GENERIC_LINE = f(true, false, false, false, false, true);
-const FIRE_SUPPORT_LINE = f(true, false, true, true, false, true);
+const GENERIC_LINE = f(true, false, false, false, true);
+const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
-const PHASE_LINE = f(true, false, false, false, true, false);
+const PHASE_LINE = f(true, false, false, false, false);
 /** Boundary: dual identifier with country codes + echelon. */
-const BOUNDARY = f(true, true, false, false, true, true, {echelon: true});
+const BOUNDARY = f(true, true, false, false, true, {echelon: true});
 /** Route control measure: identifier + direction selector. */
-const ROUTE = f(true, false, false, false, false, true, {direction: true});
+const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
-const NAME_FIELD_ONLY = f(true, false, false, false, false, false);
-const AREA_SIMPLE = f(true, false, false, false, false, true);
-const FIRE_SUPPORT_AREA = f(true, false, true, true, false, true);
+const NAME_FIELD_ONLY = f(true, false, false, false, false);
+const AREA_SIMPLE = f(true, false, false, false, true);
+const FIRE_SUPPORT_AREA = f(true, false, true, true, true);
 
 /** Air corridor: identifier + dates (operationally time-bounded). */
-const AIR_CORRIDOR = f(true, false, true, true, false, false,
+const AIR_CORRIDOR = f(true, false, true, true, false,
     {width: true, altitude1: true, altitude2: true});
 /**
  * Airspace coordination area / engagement zone: identifier + dates + altitude.
  * FM 1-02.2 Table 5-23 template lists T, X, X1, W, W1 only — no second
  * identifier (Field AS is not specified for engagement zones or ACAs).
  */
-const AIRSPACE_COORDINATION_AREA = f(true, false, true, true, false, true,
+const AIRSPACE_COORDINATION_AREA = f(true, false, true, true, true,
     {width: false, altitude1: true, altitude2: true});
 
 /**
@@ -116,10 +117,10 @@ const AIRSPACE_COORDINATION_AREA = f(true, false, true, true, false, true,
  * FM Table 5-9 construct examples show T (name) and W/W1 (dates).
  * FM Table 5-12 note (retrograde): "W and W1 are optional amplifiers."
  */
-const MOVEMENT_ARROW = f(true, false, true, true, false, false);
+const MOVEMENT_ARROW = f(true, false, true, true, false);
 
 /** Movement symbol with identifier only (no dates): crossing sites, convoys, etc. */
-const MOV = f(true, false, false, false, false, false);
+const MOV = f(true, false, false, false, false);
 
 /**
  * Tactical mission task (Chapter 6).
@@ -131,10 +132,10 @@ const MISSION_TASK = SHAPE_ONLY;
  * Target acquisition area (Table 5-26).
  * FM template: T (identifier), AM (width/range), W, W1 (dates).
  */
-const TARGET_ACQUISITION_AREA = f(true, false, true, true, false, false);
+const TARGET_ACQUISITION_AREA = f(true, false, true, true, false);
 
 /** Area with echelon modifier (BattlePosition, StrongPoint). */
-const ECH = f(true, false, false, false, false, true, {echelon: true});
+const ECH = f(true, false, false, false, true, {echelon: true});
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 
@@ -155,15 +156,15 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.LimitOfAdvance]: GENERIC_LINE,
     [TacticalGraphicName.LineOfDeparture]: GENERIC_LINE,
     [TacticalGraphicName.LineOfDepartureOrLineOfContact]: GENERIC_LINE,
-    [TacticalGraphicName.ProbableLineOfDeployment]: f(true, false, false, false, false, false),
+    [TacticalGraphicName.ProbableLineOfDeployment]: f(true, false, false, false, false),
     [TacticalGraphicName.IdentificationFriendOrFoeOff]: SHAPE_ONLY,
     [TacticalGraphicName.IdentificationFriendOrFoeOn]: SHAPE_ONLY,
     [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE,
-    [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, false, true),
+    [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, true),
     [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE,
-    [TacticalGraphicName.IntelligenceCoordinationLine]: f(true, false, true, true, false, true),
-    [TacticalGraphicName.CoordinatedFireLine]: f(true, false, true, true, false, true),
-    [TacticalGraphicName.EngineerWorkLine]: f(true, true, false, false, false, true),
+    [TacticalGraphicName.IntelligenceCoordinationLine]: f(true, false, true, true, true),
+    [TacticalGraphicName.CoordinatedFireLine]: f(true, false, true, true, true),
+    [TacticalGraphicName.EngineerWorkLine]: f(true, true, false, false, true),
     [TacticalGraphicName.MunitionFlightPath]: SHAPE_AND_DTG,
 
     // ── Boundary ────────────────────────────────────────────────────────────
@@ -187,11 +188,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // endregion
 
     // ── Simple line graphics ────────────────────────────────────────────────
-    [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true, true),
+    [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: GENERIC_LINE,
     // Table 5-9 (direction of attack): T + W/W1 per FM construct examples.
     [TacticalGraphicName.DirectionOfMainAttack]: MOVEMENT_ARROW,
-    [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true, true),
+    [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
     [TacticalGraphicName.DirectionOfMainAttackFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.AviationDirectionOfAttack]: MOVEMENT_ARROW,
     // Mobility symbols (Table 5-16): identifier only, no hostility.
@@ -201,14 +202,14 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Passage lane (Table 5-16): FM example shows a DTG ("at 0600 Zulu 12 FEB 2007").
     [TacticalGraphicName.PassageLane]: MOVEMENT_ARROW,
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.FinalProtectiveFire]: f(true, true, false, false, false, false, {weapon: true}),
+    [TacticalGraphicName.FinalProtectiveFire]: f(true, true, false, false, false, {weapon: true}),
     [TacticalGraphicName.LinearSmokeTarget]: NAME_FIELD_ONLY,
     [TacticalGraphicName.MovingConvoy]: MOV,
     [TacticalGraphicName.HaltedConvoy]: MOV,
 
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
-    [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false, false),
+    [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
@@ -220,9 +221,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: MOV,
     // Mobility / water crossing (Table 5-16): identifier only.
-    [TacticalGraphicName.Bridge]: f(false, false, false, false, false, false),
-    [TacticalGraphicName.Gap]: f(true, false, true, false, false, false),
-    [TacticalGraphicName.AssaultCrossing]:  f(false, false, true, false, false, false),
+    [TacticalGraphicName.Bridge]: f(false, false, false, false, false),
+    [TacticalGraphicName.Gap]: f(true, false, true, false, false),
+    [TacticalGraphicName.AssaultCrossing]:  f(false, false, true, false, false),
     [TacticalGraphicName.FordEasy]: MOV,
     [TacticalGraphicName.FordDifficult]: MOV,
     [TacticalGraphicName.InfiltrationLane]: MOV,
@@ -276,7 +277,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Contain]: MISSION_TASK,
     [TacticalGraphicName.Occupy]: MISSION_TASK,
     // Area defense is a Chapter 5 defensive planning symbol (Table 5-12): keep identifier.
-    [TacticalGraphicName.AreaDefense]: f(false, false, false, false, false, false),
+    [TacticalGraphicName.AreaDefense]: f(false, false, false, false, false),
 
     // ── Forms of maneuver (no user label) ────────────────────────────────────
     [TacticalGraphicName.MovementToContact]: SHAPE_ONLY,
@@ -293,8 +294,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // The rangeFan flag turns on a custom editor in the dialog (bands list
     // with per-band range / altitude / label, plus left/right azimuth for
     // the sector). All other field flags stay off.
-    [TacticalGraphicName.WeaponSensorRangeFanCircular]: f(false, false, false, false, false, false, {rangeFan: true}),
-    [TacticalGraphicName.WeaponSensorRangeFanSector]: f(false, false, false, false, false, false, {rangeFan: true}),
+    [TacticalGraphicName.WeaponSensorRangeFanCircular]: f(false, false, false, false, false, {rangeFan: true}),
+    [TacticalGraphicName.WeaponSensorRangeFanSector]: f(false, false, false, false, false, {rangeFan: true}),
 
     // ── Polygon area control measures ─────────────────────────────────────────
     [TacticalGraphicName.ObjectiveArea]: AREA_SIMPLE,
@@ -319,7 +320,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
     [TacticalGraphicName.Airfield]: AREA_SIMPLE,
     [TacticalGraphicName.BattlePosition]: ECH,
-    [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, false, {echelon: true}),
+    [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
     [TacticalGraphicName.FreeFireAreaIrregular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.FreeFireAreaRectangular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.FreeFireAreaCircular]: FIRE_SUPPORT_AREA,
@@ -357,9 +358,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.PurpleKillBoxRectangular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.PurpleKillBoxCircular]: TARGET_ACQUISITION_AREA,
     // Table 5-25 (fire support / target areas): all variants should match.
-    [TacticalGraphicName.FireSupportAreaIrregular]: f(true, false, true, true, false, false),
-    [TacticalGraphicName.FireSupportAreaRectangular]: f(true, false, true, true, false, false),
-    [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false, false),
+    [TacticalGraphicName.FireSupportAreaIrregular]: f(true, false, true, true, false),
+    [TacticalGraphicName.FireSupportAreaRectangular]: f(true, false, true, true, false),
+    [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.TargetAreaRectangular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
@@ -374,13 +375,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.HighAltitudeMissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
     [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]: AIRSPACE_COORDINATION_AREA,
     [TacticalGraphicName.WeaponsFreeZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, false, true,
+    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
-    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, false, true,
+    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
-    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, false, true,
+    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
-    [TacticalGraphicName.Encirclement]: f(true, false, false, false, true, false),
+    [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
     [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
     [TacticalGraphicName.AirheadLine]: NAME_FIELD_ONLY,
@@ -389,8 +390,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleFreeArea]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleRestrictedArea]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false, false),
-    [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, false, true),
+    [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false),
+    [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, true),
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
 
     // ── Field fortification ────────────────────────────────────────────────
@@ -401,8 +402,35 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BaseDefenseZone]: SHAPE_ONLY,
 };
 
+// ── Hostility is derived, not declared ────────────────────────────────────────
+
+/**
+ * Whether a graphic may carry a hostility — FM 1-02.2 amplifier **Field N**.
+ *
+ * Deliberately not an argument to `f()`, because it is not a per-graphic
+ * judgement call. Chapter 5 defines exactly four control-measure composition
+ * templates — boundary (figure 5-6), area (5-7), point (5-8) and line (5-9) —
+ * and **every one carries Field N**, drawn at two positions on three of the
+ * four, satisfying para 5-3: "Hostile graphic control measures use red. If red
+ * is not available, they are drawn in black with the abbreviation 'ENY' placed
+ * on the graphic in at least two places."
+ *
+ * Tactical mission tasks are the only exemption, and it is stated twice:
+ * "Tactical mission task symbols ... do not use modifiers or amplifiers"
+ * (para 1-14) and "they do not have modifiers" (para 6-2). They are Chapter 6,
+ * so none of the four Chapter 5 templates reaches them.
+ *
+ * Deriving this from the category beats repeating a boolean 198 times: a graphic
+ * added later inherits the correct answer instead of whatever was copied from
+ * the profile above it.
+ */
+export function supportsHostility(name: TacticalGraphicName): boolean {
+    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
+}
+
 // ── Public accessor ───────────────────────────────────────────────────────────
 
 export function getGraphicFields(name: TacticalGraphicName): GraphicFieldSet {
-    return GRAPHIC_FIELDS[name] ?? f(true, false, false, false, false, false);
+    const base = GRAPHIC_FIELDS[name] ?? f(true, false, false, false, false);
+    return {...base, hostility: supportsHostility(name)};
 }
