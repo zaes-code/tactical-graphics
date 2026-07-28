@@ -7,21 +7,45 @@ import * as turf from "@turf/turf";
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
 
+    /**
+     * How far past the end of the arrow *body* the arrowhead's point sits, as a
+     * multiple of `radius`. `getExtendedPoint` overshoots by 1.5 × radius, which
+     * is what every solid-head arrow in this family draws.
+     *
+     * The body is built on the user's line minus this overhang (see
+     * {@link arrowCenterline}) so the point lands exactly on the user's own last
+     * vertex. That vertex is the only thing a renderer's vertex-editing tool can
+     * grab, so a head drawn past it leaves the tip handle floating over nothing.
+     *
+     * Graphics whose head already lands on the last vertex, or that have no head
+     * at all, override this to 0.
+     */
+    protected tipOverhang: number = 1.5;
+
+    /**
+     * The centre line the arrow body is built from: the user's line with the
+     * arrowhead's overhang taken off the far end.
+     */
+    protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
+        return geometryService.trimLineEnd(base.geometry.coordinates, radius * this.tipOverhang);
+    }
+
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         let radius: number = opts?.radius || 20;
         let baseCoords = base.geometry.coordinates;
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
+        const centerline = this.arrowCenterline(base, radius);
+        const leftArrowBase: Position[] = geometryService.computeParallelLineString(centerline, radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-        return this.asMultiPointFeature([baseCoords[0], arrowTipCoord, leftArrowHeadBase]);
+        // [p0, tip, width]. The tip handle is the user's own last vertex — the
+        // arrowhead points *at* it — so a vertex-editing tool can pick it up and
+        // it tracks the cursor exactly.
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftArrowHeadBase]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.5, radius));
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(centerline[0], centerline[1], 0.5, radius));
     }
 }
 
@@ -30,7 +54,7 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
@@ -101,7 +125,7 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         // coords[0..1]: text label position (near tail, same as AviationAxisOfAdvance)
         const textCoords = geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius);
         // coords[2]: actual twist intercept (midpoint of the last centerline segment)
@@ -118,7 +142,7 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
@@ -147,7 +171,7 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius));
     }
 }
@@ -157,7 +181,7 @@ export class AxisOfAttack extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
 
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
@@ -196,14 +220,17 @@ export class AxisOfAttack extends MovementGraphicBase {
 }
 
 /**
- * Emits a 2-point label span lying along the last base segment, ending at the
- * final base vertex (= arrow tip anchor). The style function uses this span
- * for rotation + scale and places the right-aligned "name DTG" label just
- * behind the arrowhead.
+ * Emits a 2-point label span lying along the last segment of the arrow's centre
+ * line, ending where the body does. The style function uses this span for
+ * rotation + scale and places the right-aligned "name DTG" label just behind the
+ * arrowhead.
+ *
+ * Takes the centre line rather than the base feature: the body stops short of
+ * the user's last vertex by the arrowhead's overhang, and a label anchored on
+ * the raw vertex would sit inside the head.
  */
-export function labelSpanNearArrowhead(base: Feature<LineString>, opts?: MovementGraphicOptions): Position[] {
-    const radius = opts?.radius || 20;
-    const baseCoords = base.geometry.coordinates;
+export function labelSpanNearArrowhead(centerline: Position[], radius: number): Position[] {
+    const baseCoords = centerline;
     const last = baseCoords[baseCoords.length - 1];
     const secondToLast = baseCoords[baseCoords.length - 2];
     const segLen = turf.distance(secondToLast, last, {units: 'meters'});
@@ -221,7 +248,7 @@ export class MainAttack extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
 
         const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
         const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
@@ -230,16 +257,25 @@ export class MainAttack extends MovementGraphicBase {
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(labelSpanNearArrowhead(base, opts));
+        const radius = opts?.radius || 20;
+        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
 }
 
 export class MainAttackFeint extends MovementGraphicBase {
     name: string = TacticalGraphicName.MainAxisOfAdvanceFeint;
 
+    /**
+     * The dashed chevron's apex, not the solid arrowhead, is the furthest-forward
+     * element — `computeFeintOutline` puts it at 2.25 × radius. Trimming by that
+     * much lands the apex on the user's last vertex, which is where the tip
+     * handle sits.
+     */
+    protected tipOverhang: number = 2.25;
+
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
 
         const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
         const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
@@ -298,25 +334,9 @@ export class MainAttackFeint extends MovementGraphicBase {
         return {dashes: dashed.geometry.coordinates, tip: feintTip};
     }
 
-    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
-            leftArrowBase[leftArrowBase.length - 1],
-            leftArrowBase[leftArrowBase.length - 2],
-            radius,
-        );
-
-        // Tip handle = feint chevron apex instead of the solid arrow tip.
-        const {tip: feintTip} = this.computeFeintOutline(baseCoords, radius);
-
-        return this.asMultiPointFeature([baseCoords[0], feintTip, leftArrowHeadBase]);
-    }
-
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(labelSpanNearArrowhead(base, opts));
+        const radius = opts?.radius || 20;
+        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
 }
 
@@ -325,7 +345,7 @@ export class SupportingAttack extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
 
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
@@ -355,7 +375,8 @@ export class SupportingAttack extends MovementGraphicBase {
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(labelSpanNearArrowhead(base, opts));
+        const radius = opts?.radius || 20;
+        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
 }
 
@@ -364,7 +385,7 @@ export class Counterattack extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
 
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
@@ -395,7 +416,7 @@ export class Counterattack extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const secondToLast = baseCoords[baseCoords.length - 2];
         const lastPoint = baseCoords[baseCoords.length - 1];
         // Label sits at midpoint of the last body segment (not in the arrowhead).

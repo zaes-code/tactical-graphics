@@ -15,6 +15,9 @@ export interface MissionTaskGraphic extends TacticalGraphic {
     rotation: number;
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
+
+    /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
+    setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
 
 export class MissionTaskController implements TacticalGraphicHandler {
@@ -22,6 +25,15 @@ export class MissionTaskController implements TacticalGraphicHandler {
     geomHandleType: TacticalGraphicShape = 'Circle';
     symbolId: string = '';
     graphic: MissionTaskGraphic;
+    /**
+     * Edit ("modify vertices") mode resizes this graphic, identical to resize
+     * mode. A circle graphic keeps its base point out of the rendering source,
+     * so OpenLayers' `Modify` never sees it and an edit drag would otherwise
+     * pan the map. Set by the factories in `controllerRegistry.ts`; the range
+     * fans deliberately leave it false — their radius comes from band
+     * amplifiers, not from `size`, so resizing them is its own problem.
+     */
+    editStretches: boolean = false;
     private currentMouseCoord: Coordinate = [0, 0];
     private center: Coordinate = [0, 0];
     private rotationAngleDeg: number = 0;
@@ -31,6 +43,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
      */
     constructor(graphic: MissionTaskGraphic) {
         this.graphic = graphic;
+        if (graphic.setBandRange) {
+            this.handleBandResize = (bandIndex, coordinate) => graphic.setBandRange!(bandIndex, coordinate);
+        }
         const features = this.graphic?.getFeatures?.();
         if (!Array.isArray(features)) return;
 
@@ -42,6 +57,14 @@ export class MissionTaskController implements TacticalGraphicHandler {
     getCenter() {
         return this.graphic.base.getGeometry()!.getCoordinates();
     }
+
+    /**
+     * Assigned in the constructor **only** when the graphic implements
+     * `setBandRange`. The manager reads "present" as "this graphic's handles are
+     * not interchangeable" and skips the uniform resize entirely, so declaring
+     * it unconditionally would route every circle graphic into a no-op.
+     */
+    handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
 
     getFeatures(): Feature<Geometry>[] {
         return this.graphic.getFeatures();

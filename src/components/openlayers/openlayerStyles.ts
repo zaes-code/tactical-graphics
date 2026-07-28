@@ -208,6 +208,35 @@ export const createOffsetHandleFeature = () => {
     return feature;
 };
 
+/**
+ * A handle that is there to read, not to grab — grey rather than red, and
+ * refused by `TacticalGraphicsManager.handleDownEvent` via its `inert` flag.
+ *
+ * Grey means "this can never be dragged", so it must not be used for a handle
+ * that is merely idle in the current mode; that would teach the colour to mean
+ * nothing. Deliberately ignores hostility: a hostile graphic's live handles take
+ * the hostility colour, and an inert one has to stay visually apart from them.
+ */
+export const createInertHandleFeature = () => {
+    let feature = new Feature();
+
+    feature.setStyle((feature) => {
+        if (feature.get('hidden')) return new Style({});
+        return new Style({
+            image: new CircleStyle({
+                radius: 5,
+                fill: new Fill({color: 'rgba(130,130,130,0.8)'}),
+            }),
+        });
+    });
+    // `handle` so it hides and shows with the rest of the handle set.
+    feature.set('handle', true);
+    feature.set('hidden', true);
+    feature.set('inert', true);
+
+    return feature;
+};
+
 export const createFeature = () => {
     let feature = new Feature();
 
