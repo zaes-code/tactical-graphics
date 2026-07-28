@@ -106,6 +106,19 @@
     ]
   },
   "overrides": {
-    "lodash": "4.18.1"
+    "lodash": "4.18.1",
+    "websocket-driver": "0.7.5",
+    "shell-quote": "1.9.0",
+    "fast-uri": "3.1.4",
+    "postcss-svgo": {
+      "svgo": "2.8.3"
+    },
+    "js-yaml": "4.3.0",
+    "svgo": {
+      "js-yaml": "3.15.0"
+    },
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "3.15.0"
+    }
   }
 }
