@@ -22,6 +22,15 @@ export class MissionTaskController implements TacticalGraphicHandler {
     geomHandleType: TacticalGraphicShape = 'Circle';
     symbolId: string = '';
     graphic: MissionTaskGraphic;
+    /**
+     * Edit ("modify vertices") mode resizes this graphic, identical to resize
+     * mode. A circle graphic keeps its base point out of the rendering source,
+     * so OpenLayers' `Modify` never sees it and an edit drag would otherwise
+     * pan the map. Set by the factories in `controllerRegistry.ts`; the range
+     * fans deliberately leave it false — their radius comes from band
+     * amplifiers, not from `size`, so resizing them is its own problem.
+     */
+    editStretches: boolean = false;
     private currentMouseCoord: Coordinate = [0, 0];
     private center: Coordinate = [0, 0];
     private rotationAngleDeg: number = 0;
