@@ -28,6 +28,19 @@ const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalDisrupt]: 0.3,
 };
 
+/**
+ * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
+ * `TacticalGraphicsManager.handleOffset` sets `offset = perpendicularDistance ×
+ * offsetScale`, so the factor must be the reciprocal of however many `size`s out
+ * the generator draws the handle — otherwise it runs away from the cursor.
+ */
+const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
+    // Handle is the end of the front line, drawn at 3 × size (`frontHalf`).
+    [TacticalGraphicName.Penetration]: 1 / 3,
+    // Handle is an arrowhead wing, `size × sin 45°` off the base line.
+    [TacticalGraphicName.Exploitation]: Math.SQRT2,
+};
+
 
 export class Block implements LineGraphic {
     rotation: number = 0;
@@ -44,6 +57,8 @@ export class Block implements LineGraphic {
     symbolId: string = '';
     /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
     hidesStartHandle?: boolean;
+    /** @see LineGraphic.offsetScale — read off the controller by the manager. */
+    offsetScale?: number;
     private ratioLock: number | undefined;
     // Minimum base-length in screen pixels at the drawing zoom — forces the
     // graphic to render at a recognisable size from the moment the user starts
@@ -54,6 +69,7 @@ export class Block implements LineGraphic {
         this.name = name;
         this.size = size;
         this.ratioLock = RATIO_LOCK[name];
+        this.offsetScale = OFFSET_SCALE[name];
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
         }

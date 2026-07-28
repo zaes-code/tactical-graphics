@@ -1436,6 +1436,33 @@ class GeometryService {
         return extended.geometry.coordinates as Position;
     }
 
+    /**
+     * The line with `distanceMeters` taken off its far end.
+     *
+     * Intermediate vertices survive; the new end point is interpolated along
+     * whichever segment the cut lands in, so a multi-segment line keeps its
+     * shape. The measurement is geodesic, matching `getExtendedPoint` — build a
+     * body on `trimLineEnd(coords, radius * 1.5)` and its arrowhead lands
+     * exactly on the untrimmed last vertex at any latitude.
+     *
+     * Never eats more than half the line and never returns fewer than two
+     * positions, so a graphic stays drawable while the user is still dragging it
+     * out: the trim eases in from nothing instead of snapping once the line
+     * clears the arrowhead's length.
+     */
+    trimLineEnd(coords: Position[], distanceMeters: number): Position[] {
+        if (coords.length < 2 || distanceMeters <= 0) return coords;
+
+        const line = turf.lineString(coords);
+        const total = turf.length(line, {units: 'meters'});
+        if (total <= 0) return coords;
+
+        const trim = Math.min(distanceMeters, total / 2);
+        const sliced = turf.lineSliceAlong(line, 0, total - trim, {units: 'meters'});
+        const trimmed = sliced.geometry.coordinates as Position[];
+        return trimmed.length >= 2 ? trimmed : coords;
+    }
+
     getMidpoint(coord1: Coordinate, coord2: Coordinate): Coordinate {
         const midX = (coord1[0] + coord2[0]) / 2;
         const midY = (coord1[1] + coord2[1]) / 2;
