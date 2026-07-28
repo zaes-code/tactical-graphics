@@ -15,6 +15,9 @@ export interface MissionTaskGraphic extends TacticalGraphic {
     rotation: number;
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
+
+    /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
+    setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
 
 export class MissionTaskController implements TacticalGraphicHandler {
@@ -40,6 +43,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
      */
     constructor(graphic: MissionTaskGraphic) {
         this.graphic = graphic;
+        if (graphic.setBandRange) {
+            this.handleBandResize = (bandIndex, coordinate) => graphic.setBandRange!(bandIndex, coordinate);
+        }
         const features = this.graphic?.getFeatures?.();
         if (!Array.isArray(features)) return;
 
@@ -51,6 +57,14 @@ export class MissionTaskController implements TacticalGraphicHandler {
     getCenter() {
         return this.graphic.base.getGeometry()!.getCoordinates();
     }
+
+    /**
+     * Assigned in the constructor **only** when the graphic implements
+     * `setBandRange`. The manager reads "present" as "this graphic's handles are
+     * not interchangeable" and skips the uniform resize entirely, so declaring
+     * it unconditionally would route every circle graphic into a no-op.
+     */
+    handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
 
     getFeatures(): Feature<Geometry>[] {
         return this.graphic.getFeatures();

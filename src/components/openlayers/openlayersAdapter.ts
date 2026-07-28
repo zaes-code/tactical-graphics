@@ -4,6 +4,7 @@ import {DrawEvent, GeometryFunction,} from 'ol/interaction/Draw';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from "ol/style/Style";
 import GeoJSON from "ol/format/GeoJSON";
+import {Coordinate} from 'ol/coordinate';
 import {toLonLat} from "ol/proj";
 import * as turf from "@turf/turf";
 import {TacticalGraphicsRegistry} from '@zaes/tactical-graphics';
@@ -69,6 +70,11 @@ export interface TacticalGraphicHandler {
     // way a resize drag does. Set for fixed-vertex graphics, which have no
     // vertices for OpenLayers' Modify to offer. See LineGraphicController.
     editStretches?: boolean;
+
+    // Drags the dimension owned by handle `bandIndex` to `coordinate`, for
+    // graphics whose handles each mean something different (the range fans, one
+    // rim per band). Present means "do this instead of a uniform resize".
+    handleBandResize?(bandIndex: number, coordinate: Coordinate): void;
 }
 
 /**

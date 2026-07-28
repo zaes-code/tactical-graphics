@@ -10,7 +10,7 @@ import {DrawEvent} from "ol/interaction/Draw";
 import Collection from "ol/Collection";
 import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
-import {Point, Polygon} from "ol/geom";
+import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {Coordinate} from "ol/coordinate";
@@ -62,6 +62,13 @@ export class TacticalGraphicsManager {
     modify: Modify | undefined = undefined;
     /** @see handleResize — latched at pointer-down, for the whole gesture. */
     private resizeOriginNearCenter: boolean = false;
+    /**
+     * Which vertex of a MultiPoint handle feature the gesture started on, or -1.
+     * Latched at pointer-down: a graphic whose handles each mean something
+     * different (the range fans, one rim per band) needs to know *which* dot was
+     * grabbed, and the feature alone cannot say.
+     */
+    private activeHandleIndex: number = -1;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -155,17 +162,26 @@ export class TacticalGraphicsManager {
     // set the state of the manager based on what feature is clicked
     // return true if the rotate, translate or resize mode is enabled to proceed with the Drag event.
     handleDownEvent = (evt: MapBrowserEvent): boolean => {
-        const featureLike = this.map?.forEachFeatureAtPixel(evt.pixel, function (feature) {
-            return feature;
+        // Collect everything under the pointer rather than taking the topmost.
+        // A label's text is hit-testable and covers a lot of ground — measured,
+        // the range fans' per-band label feature wins at *every* one of their rim
+        // handles — so "topmost" would hand the drag to a feature the user was
+        // not aiming at. A handle is the interactive affordance; it wins.
+        const hits: Feature[] = [];
+        this.map?.forEachFeatureAtPixel(evt.pixel, feature => {
+            const asFeature = this.asFeature(feature);
+            if (asFeature) hits.push(asFeature);
         });
-        if (!featureLike) return false;
+        if (hits.length === 0) return false;
 
-        let feature = this.asFeature(featureLike);
-        if (!feature) return false;
+        const liveHandle = hits.find(f => f.get('handle') && !f.get('inert'));
+        // Grey handles are visual anchors, not drag origins — but only once no
+        // live handle is in play, so an inert dot overlapping a real one cannot
+        // veto it. Bail before latching any state so a later drag cannot pick up
+        // a stale controller.
+        if (!liveHandle && hits.some(f => f.get('inert'))) return false;
 
-        // Grey handles are visual anchors, not drag origins. Bail before
-        // latching any state so a later drag cannot pick up a stale controller.
-        if (feature.get('inert')) return false;
+        let feature = liveHandle ?? hits[0];
 
         this.activeFeature = feature;
 
@@ -182,6 +198,8 @@ export class TacticalGraphicsManager {
         const resolution = this.map.getView().getResolution() ?? 1;
         this.resizeOriginNearCenter =
             Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
+        // Only a handle set carries per-vertex meaning; anything else is -1.
+        this.activeHandleIndex = feature.get('handle') ? this.nearestVertexIndex(feature, evt.coordinate) : -1;
 
         this.lastPointerPosition = evt.coordinate;
 
@@ -264,8 +282,15 @@ export class TacticalGraphicsManager {
             // when the controller opted in, so nothing else reaches this case.
             case InteractionType.modify:
             case InteractionType.resize:
-                // Calculate distance to center for scaling
-                this.handleResize(evt);
+                // A graphic whose handles each drive a different dimension (the
+                // range fans, one rim per band) takes the grabbed handle's index
+                // and the raw cursor; everything else scales uniformly.
+                if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
+                    this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
+                } else {
+                    // Calculate distance to center for scaling
+                    this.handleResize(evt);
+                }
                 this.lastPointerPosition = evt.coordinate;
                 break;
         }
@@ -323,6 +348,27 @@ export class TacticalGraphicsManager {
 
         const scaleFactor = currentDistance / lastDistance;
         this.activeController.handleResize(scaleFactor);
+    }
+
+    /**
+     * Index of the MultiPoint vertex nearest `coordinate`, or -1 when the
+     * feature is not a MultiPoint. Coordinates are EPSG:3857 metres, so plain
+     * Euclidean math is correct here — no turf.
+     */
+    private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
+        const geometry = feature.getGeometry();
+        if (!(geometry instanceof MultiPoint)) return -1;
+
+        let best = -1;
+        let bestDistanceSq = Infinity;
+        geometry.getCoordinates().forEach((vertex, index) => {
+            const distanceSq = Math.pow(vertex[0] - coordinate[0], 2) + Math.pow(vertex[1] - coordinate[1], 2);
+            if (distanceSq < bestDistanceSq) {
+                bestDistanceSq = distanceSq;
+                best = index;
+            }
+        });
+        return best;
     }
 
     /**
