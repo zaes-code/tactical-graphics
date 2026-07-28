@@ -204,13 +204,17 @@ export const createHandleFeature = () => {
 
         if (isHidden) return new Style({});
 
-        const hostility = feature.get('hostility');
-        const color = hostility ? getColorByHostility(hostility) : 'rgba(255,0,0,1)';
+        // Always red, never the hostility colour. A handle is a piece of editor
+        // chrome, not part of the symbol: it says "you can drag this", and that
+        // meaning must not change with the graphic's affiliation. Tinting them
+        // also made a hostile graphic's handles the same red as its own strokes,
+        // so they stopped reading as handles at all. Grey stays reserved for
+        // `createInertHandleFeature` — see it for why the colours must not blur.
         return new Style({
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: setOpacity(color, .8),
+                    color: setOpacity('rgba(255,0,0,1)', .8),
                 }),
             }),
         });
@@ -257,24 +261,43 @@ export const createInertHandleFeature = () => {
     return feature;
 };
 
+/**
+ * The default style for a graphic feature — used by every holder that does not
+ * install a dedicated style function of its own.
+ *
+ * **Reads the hostility off the feature.** It used to hardcode
+ * `getDefaultLineColor()`, which meant changing a graphic's hostility recoloured
+ * nothing for anything on this style: all the circle graphics (base defense
+ * zone, the circular kill boxes and fire areas), bridge, and every other
+ * movement graphic without a bespoke style. Only the graphics with their own
+ * style function ever honoured it.
+ *
+ * `hostilityColor` is what the properties dialog stamps; `hostility` is the raw
+ * enum, kept as a fallback for features coloured by some other path.
+ */
 export const createFeature = () => {
     let feature = new Feature();
 
-    feature.setStyle(() => new Style({
-        fill: new Fill({
-            color: 'rgba(0, 120, 255, 0.2)',
-        }),
-        stroke: new Stroke({
-            color: getDefaultLineColor(),
-            width: LINE_WIDTH,
-        }),
-        image: new CircleStyle({
-            radius: 5,
+    feature.setStyle((feature) => {
+        const hostility = feature.get('hostility');
+        const color = feature.get('hostilityColor')
+            || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
+        return new Style({
             fill: new Fill({
-                color: 'rgba(255, 0, 0, 0.8)',
+                color: 'rgba(0, 120, 255, 0.2)',
             }),
-        }),
-    }));
+            stroke: new Stroke({
+                color,
+                width: LINE_WIDTH,
+            }),
+            image: new CircleStyle({
+                radius: 5,
+                fill: new Fill({
+                    color: 'rgba(255, 0, 0, 0.8)',
+                }),
+            }),
+        });
+    });
 
     return feature;
 };
