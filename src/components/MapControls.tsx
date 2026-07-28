@@ -527,7 +527,7 @@ const MapControls: React.FC<Props> = ({
                                 <OpenWithIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
                         </Tooltip>
-                        <Tooltip title="Modify vertices">
+                        <Tooltip title="Edit">
                             <ToggleButton value="modify" sx={{py: 0.75}}>
                                 <EditIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
