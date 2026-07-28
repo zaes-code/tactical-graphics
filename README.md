@@ -183,7 +183,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*Drawn in a single sweep by the demo app's **Draw all samples** button. The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below.*
+*Drawn in a single sweep by the demo app's **Draw all samples** button. The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
 
 (`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
 
@@ -354,10 +354,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ## Upcoming graphics
 
-Names below are recognised by `TacticalGraphicName` and are being worked towards, but are **not yet verified** — their shape, labels and edit handles have not been signed off against FM 1-02.2. Some are already selectable in the demo app; treat anything here as work in progress rather than capability.
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against FM 1-02.2, **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
 
 | Graphic | Category |
 |---|---|
+| Limited Access Area | Areas |
 | Abatis | Mobility and Countermobility Control Measures |
 | Alternate Supply Route | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
@@ -406,10 +407,22 @@ Names below are recognised by `TacticalGraphicName` and are being worked towards
 | Turn | Mobility and Countermobility Control Measures |
 | Unspecified | Mobility and Countermobility Control Measures |
 | Attack By Fire | Tactical Mission Tasks |
+| Block | Tactical Mission Tasks |
+| Breach | Tactical Mission Tasks |
+| Bypass | Tactical Mission Tasks |
+| Canalize | Tactical Mission Tasks |
+| Clear | Tactical Mission Tasks |
+| Contain | Tactical Mission Tasks |
+| Control | Tactical Mission Tasks |
+| Destroy | Tactical Mission Tasks |
+| Disengage | Tactical Mission Tasks |
+| Disrupt | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
+| Fix | Tactical Mission Tasks |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
+| Isolate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
