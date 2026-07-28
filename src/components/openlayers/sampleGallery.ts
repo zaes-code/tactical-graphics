@@ -13,14 +13,37 @@
  *
  * A generator that throws (a genuinely broken graphic) is caught and reported,
  * not fatal — the rest of the sweep still renders.
+ *
+ * ── Layout ──────────────────────────────────────────────────────────────────
+ *
+ * Samples are grouped under a heading per `TacticalGraphicCategory`, and every
+ * sample gets a cell sized to what it actually renders rather than a uniform
+ * grid square. That matters because the kinds are no longer the same size:
+ * line graphics are drawn LINE_SCALE× longer than area graphics so an arrow's
+ * shaft, head and amplifiers are all legible, while polygons, rectangles and
+ * circles keep the size they always had.
+ *
+ * Cells come from a measuring pass (`measureSamples`) that generates each
+ * graphic off-map and reads the union extent of its features. Packing those
+ * measured boxes is what guarantees no two samples overlap — a fixed grid
+ * cannot, because a graphic's rendered extent runs well past the geometry the
+ * sweep hands it (arrowheads, corridor rails, offset amplifiers).
  */
 import {Feature} from 'ol';
 import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
+import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {TacticalGraphicHostility, TacticalGraphicName, getDisplayName} from '@zaes/tactical-graphics';
+import {
+    GRAPHIC_CATEGORIES,
+    TacticalGraphicCategory,
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getDisplayName,
+} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
+import {TacticalGraphicHandler} from './openlayersAdapter';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {MissionTaskController} from './controllers/MissionTaskController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
@@ -32,16 +55,93 @@ import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
-/** EPSG:3857 metres of a single grid cell. Uniform, so the grid reads evenly. */
-const CELL_METRES = 90_000;
-/** Half-extent a sample occupies inside its cell (≈68% of the cell width). */
-const HALF = CELL_METRES * 0.34;
-/** Fraction of the viewport the whole grid should fill after framing. */
-const FILL = 0.85;
+/** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
+export const HALF = 30_600;
+/**
+ * How much longer a line graphic is drawn than an area graphic. Arrows, axes and
+ * corridors carry their meaning along their length — at parity with the areas
+ * they collapse into an unreadable smudge.
+ */
+export const LINE_SCALE = 3;
+export const LINE_HALF = HALF * LINE_SCALE;
+
+/**
+ * Spacing, in screen pixels at the resolution the samples are generated at.
+ * GAP is the clearance around every sample — the guarantee against touching
+ * neighbours; TITLE and HEADING are the bands reserved for a caption and for a
+ * category banner.
+ */
+const GAP_PX = 10;
+const TITLE_PX = 18;
+// Tall enough for the banner itself plus the two-line caption of the row that
+// opens the block — they share this band, banner at the top, caption at the
+// bottom, and any less makes them collide.
+const HEADING_PX = 36;
+const CATEGORY_GAP_PX = 12;
+
+/**
+ * The same four, for the nominal pass that picks the generating resolution —
+ * expressed as fractions of an area sample so they carry no pixel term. See
+ * generatingResolution for why that matters.
+ */
+const GAP_M = HALF * 0.35;
+const TITLE_M = HALF * 0.6;
+const HEADING_M = HALF * 0.9;
+const CATEGORY_GAP_M = HALF * 0.3;
+
+/** Fraction of the viewport the whole layout should fill. */
+const FILL = 0.92;
+
+/**
+ * The controls panel floats over the map's left edge (MapControls: left 12,
+ * width 300), so the sweep is framed clear of it — otherwise the leftmost
+ * column of samples renders underneath the panel and cannot be seen.
+ */
+const CONTROL_PANEL_PX = 326;
+/** Breathing room on the other three sides when framing. */
+const VIEW_PADDING_PX = 14;
+
+/** A measured box wider than this is a wrapped or degenerate geometry, not a big graphic. */
+const SANE_METRES = 4_000_000;
 
 export interface SampleSweepResult {
     drawn: number;
     failed: {name: TacticalGraphicName; error: string}[];
+}
+
+/** A sample's rendered extent, relative to the centre it was generated at. */
+interface Box {
+    dx0: number;
+    dy0: number;
+    dx1: number;
+    dy1: number;
+}
+
+const boxWidth = (b: Box) => b.dx1 - b.dx0;
+const boxHeight = (b: Box) => b.dy1 - b.dy0;
+
+/** Where one sample ends up: the centre to generate it at, and its caption anchor. */
+interface Placement {
+    name: TacticalGraphicName;
+    cx: number;
+    cy: number;
+    titleY: number;
+}
+
+interface Heading {
+    category: TacticalGraphicCategory;
+    x: number;
+    y: number;
+}
+
+interface Layout {
+    placements: Placement[];
+    headings: Heading[];
+    /** Resolution the samples were measured at — generate at this, or the boxes lie. */
+    resolution: number;
+    /** Full span of the packed layout, centred on (0, 0). */
+    width: number;
+    height: number;
 }
 
 /**
@@ -49,9 +149,14 @@ export interface SampleSweepResult {
  * dialog uses: through the holder's `setLabel` when it has one — geometry can
  * depend on hostility, as Encirclement's does — and straight onto the features
  * otherwise. `hostilityColor` is what the style functions read.
+ *
+ * Graphics that do not take the field are left completely untouched: FM 1-02.2
+ * gives no amplifier fields to the Chapter 6 tactical mission tasks, so a swept
+ * mission task must render exactly as it does with no hostility selected.
+ * Exported for the test that pins that down.
  */
-function applyHostility(
-    handler: ReturnType<typeof getController>,
+export function applyHostility(
+    handler: TacticalGraphicHandler,
     name: TacticalGraphicName,
     hostility: TacticalGraphicHostility,
 ): void {
@@ -76,8 +181,8 @@ export function clearAllGraphics(manager: TacticalGraphicsManager): void {
 }
 
 /**
- * Clears the map, draws a sample of every proven graphic in a grid, and frames
- * the view around it. Returns which graphics rendered and which threw.
+ * Clears the map, draws a sample of every proven graphic grouped by category,
+ * and frames the view around it. Returns which graphics rendered and which threw.
  *
  * `hostility`, when given, is applied to every sample that doctrinally accepts
  * one — which makes the sweep a one-click check of hostility rendering across
@@ -95,31 +200,22 @@ export function drawProvenSamples(
     const view = manager.map.getView();
     const [w, h] = manager.map.getSize() ?? [1600, 900];
 
-    const n = PROVEN_GRAPHICS.length;
-    const cols = Math.max(1, Math.ceil(Math.sqrt((n * w) / h)));
-    const rows = Math.ceil(n / cols);
-    const gridW = cols * CELL_METRES;
-    const gridH = rows * CELL_METRES;
+    const layout = solveLayout(groupByCategory(PROVEN_GRAPHICS), w, h);
 
-    // Frame the grid before drawing, so every handler is constructed at (and
-    // stamps) the resolution the samples are actually viewed at — keeps label
-    // scaling ≈ 1 instead of shrinking when we'd otherwise zoom out to fit.
-    const resolution = Math.max(gridW / w, gridH / h) / FILL;
+    // Frame before drawing, so every handler is constructed at — and stamps —
+    // the generating resolution the layout was measured at. Then widen to
+    // whatever shows the whole thing. Handlers read the view's resolution when
+    // they are built, so the order matters: measure-resolution first, fit second.
     view.setCenter([0, 0]);
-    view.setResolution(resolution);
+    view.setResolution(layout.resolution);
 
-    const originX = -gridW / 2;
-    const originY = gridH / 2;
     const failed: SampleSweepResult['failed'] = [];
     let drawn = 0;
 
-    PROVEN_GRAPHICS.forEach((name, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const cx = originX + (col + 0.5) * CELL_METRES;
-        const cy = originY - (row + 0.5) * CELL_METRES;
+    layout.headings.forEach(({category, x, y}) => source.addFeature(headingFeature([x, y], category)));
 
-        const handler = getController(name, resolution);
+    layout.placements.forEach(({name, cx, cy, titleY}) => {
+        const handler = getController(name, layout.resolution);
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
         handler.getFeatures().forEach(f => {
@@ -129,24 +225,10 @@ export function drawProvenSamples(
         source.addFeatures(handler.getFeatures());
 
         try {
-            if (handler instanceof MissionTaskController) {
-                handler.graphic.updateGeom({size: HALF, center: [cx, cy], rotation: 0});
-            } else if (handler instanceof SecurityOperationsController) {
-                handler.setBaseFeature(pointFeature([cx, cy], symbolId, name));
-            } else if (handler instanceof PolygonGraphicController) {
-                const ring = handler instanceof RectangularAreaGraphicController
-                    ? rectRing(cx, cy)
-                    : pentagonRing(cx, cy);
-                handler.setBaseFeature(polygonFeature(ring, symbolId, name));
-            } else if (handler instanceof LineGraphicController) {
-                const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-                handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts), symbolId, name));
-            } else {
-                throw new Error('unclassified controller');
-            }
+            applyBaseGeometry(handler, name, cx, cy, symbolId);
             if (hostility) applyHostility(handler, name, hostility);
             manager.graphicControllers.push(handler);
-            source.addFeature(titleFeature([cx, cy + CELL_METRES * 0.46], getDisplayName(name)));
+            source.addFeature(titleFeature([cx, titleY], getDisplayName(name)));
             drawn++;
         } catch (e) {
             // Roll back this graphic's partial features so a thrower leaves no debris.
@@ -157,6 +239,16 @@ export function drawProvenSamples(
         }
     });
 
+    // Everything is generated; now show all of it. Padding keeps the layout clear
+    // of the controls panel, which floats over the map's left edge and would
+    // otherwise swallow a whole column of samples.
+    if (layout.width && layout.height) {
+        view.fit([-layout.width / 2, -layout.height / 2, layout.width / 2, layout.height / 2], {
+            size: manager.map.getSize(),
+            padding: [VIEW_PADDING_PX, VIEW_PADDING_PX, VIEW_PADDING_PX, CONTROL_PANEL_PX],
+        });
+    }
+
     if (failed.length) {
         // eslint-disable-next-line no-console
         console.warn(`[sample sweep] ${drawn} drawn, ${failed.length} failed:`,
@@ -165,15 +257,315 @@ export function drawProvenSamples(
     return {drawn, failed};
 }
 
+// ── layout ──────────────────────────────────────────────────────────────────
+
+/** Proven graphics bucketed by category, in category-enum order, each bucket in sweep order. */
+export function groupByCategory(names: TacticalGraphicName[]): [TacticalGraphicCategory, TacticalGraphicName[]][] {
+    const buckets = new Map<TacticalGraphicCategory, TacticalGraphicName[]>();
+    names.forEach(name => {
+        const category = GRAPHIC_CATEGORIES[name];
+        const bucket = buckets.get(category);
+        if (bucket) bucket.push(name);
+        else buckets.set(category, [name]);
+    });
+    return (Object.values(TacticalGraphicCategory) as TacticalGraphicCategory[])
+        .filter(c => buckets.has(c))
+        .map(c => [c, buckets.get(c)!]);
+}
+
+/**
+ * Lays the sweep out in two passes, which is what keeps it stable.
+ *
+ * A sample's extent depends on the resolution it is generated at — decorations
+ * are sized in `n * resolution` (`new MovementGraphicBase(name, 20 * res, res)`)
+ * — so choosing the resolution *from* the measured extents is a feedback loop.
+ * With ~12 rows and 13 headings each costing fixed pixels, that loop's gain
+ * exceeds 1 and it runs away: measured boxes grow, the grid grows, the
+ * resolution grows, and by the fourth pass samples sit past ±85° latitude where
+ * the generators emit wrapped, world-spanning geometry.
+ *
+ * So the generating resolution comes from a nominal pass that uses only base
+ * geometry and metric spacing — no pixel term, hence no feedback. Samples are
+ * then measured and packed at exactly that resolution, which is what makes the
+ * packing describe what renders. Framing the view is a separate, one-shot
+ * decision: `fitResolution` shows the whole layout, and zooming out from the
+ * generating resolution shrinks geometry, decorations and zoom-anchored labels
+ * together, so nothing is distorted by the difference.
+ */
+function solveLayout(groups: [TacticalGraphicCategory, TacticalGraphicName[]][], mapW: number, mapH: number): Layout {
+    // Only the area the panel does not cover is worth laying out into.
+    const w = Math.max(mapW - CONTROL_PANEL_PX - VIEW_PADDING_PX, 200);
+    const h = Math.max(mapH - 2 * VIEW_PADDING_PX, 200);
+    const resolution = generatingResolution(groups, w, h);
+
+    const boxes = new Map<TacticalGraphicName, Box>();
+    groups.forEach(([, names]) => names.forEach(name => {
+        const box = measureSample(name, resolution);
+        if (box) boxes.set(name, sane(box, name));
+    }));
+
+    const packed = packBest(groups, boxes, w / h, {
+        gap: GAP_PX * resolution,
+        title: TITLE_PX * resolution,
+        heading: HEADING_PX * resolution,
+        categoryGap: CATEGORY_GAP_PX * resolution,
+    });
+    if (!packed) return {placements: [], headings: [], resolution, width: 0, height: 0};
+
+    return {...packed.layout, resolution, width: packed.width, height: packed.height};
+}
+
+/**
+ * The resolution samples are generated at: whatever makes a layout of their base
+ * geometry fill the viewport. Uses nominal boxes and metric spacing only, so the
+ * answer cannot depend on itself.
+ */
+function generatingResolution(groups: [TacticalGraphicCategory, TacticalGraphicName[]][], w: number, h: number): number {
+    const boxes = new Map<TacticalGraphicName, Box>();
+    groups.forEach(([, names]) => names.forEach(name => boxes.set(name, nominalBox(name))));
+
+    const packed = packBest(groups, boxes, w / h, {
+        gap: GAP_M,
+        title: TITLE_M,
+        heading: HEADING_M,
+        categoryGap: CATEGORY_GAP_M,
+    });
+    if (!packed) return HALF / 20;
+    return Math.max(packed.width / w, packed.height / h) / FILL;
+}
+
+/**
+ * The span a graphic's base geometry occupies, before any decoration — enough to
+ * size the nominal pass. Line graphics run LINE_SCALE× longer; everything else
+ * is drawn inside the area square.
+ */
+function nominalBox(name: TacticalGraphicName): Box {
+    const isLine = getController(name, HALF / 20) instanceof LineGraphicController;
+    const halfW = isLine ? LINE_HALF : HALF;
+    const halfH = isLine ? LINE_HALF * 0.3 : HALF;
+    return {dx0: -halfW, dx1: halfW, dy0: -halfH, dy1: halfH};
+}
+
+/**
+ * Guards the packer against a graphic whose generator emitted wrapped or
+ * degenerate coordinates: one box spanning a quarter of the globe would push
+ * every other sample out of the viewport. Falls back to the nominal size and
+ * says so, rather than laying out around the garbage.
+ */
+function sane(box: Box, name: TacticalGraphicName): Box {
+    if (boxWidth(box) <= SANE_METRES && boxHeight(box) <= SANE_METRES) return box;
+    // eslint-disable-next-line no-console
+    console.warn(`[sample sweep] ${name} measured ${Math.round(boxWidth(box) / 1000)}×${Math.round(boxHeight(box) / 1000)}km — using its nominal size`);
+    return nominalBox(name);
+}
+
+/**
+ * Picks the layout that best matches the viewport's shape, over two knobs: the
+ * width of a category block, and how many blocks stand side by side.
+ *
+ * One block per full-width row cannot get wider than the biggest category and
+ * cannot get shorter than one row per category — with 13 categories that pins
+ * the aspect near 1.1 whatever else changes, and a 1.6-shaped viewport then
+ * fits by height and wastes a third of its width. Standing the blocks in
+ * columns, newspaper-style, is what lets the aspect reach the window.
+ */
+function packBest(
+    groups: [TacticalGraphicCategory, TacticalGraphicName[]][],
+    boxes: Map<TacticalGraphicName, Box>,
+    targetAspect: number,
+    spacing: Spacing,
+): {layout: {placements: Placement[]; headings: Heading[]}; width: number; height: number} | null {
+    const widths = Array.from(boxes.values(), b => boxWidth(b) + spacing.gap);
+    if (!widths.length) return null;
+    const widest = Math.max(...widths);
+    const totalWidth = widths.reduce((a, b) => a + b, 0);
+
+    let best = null;
+    let bestError = Infinity;
+    for (let step = 1; step <= 24; step++) {
+        const column = widest + ((totalWidth - widest) * step) / 24 / 3;
+        const blocks = groups
+            .map(([category, names]) => layoutBlock(category, names.filter(n => boxes.has(n)), boxes, column, spacing))
+            .filter((b): b is Block => b !== null);
+        if (!blocks.length) continue;
+
+        for (let columns = 1; columns <= 5; columns++) {
+            const packed = assembleColumns(blocks, columns, spacing);
+            if (!packed.width || !packed.height) continue;
+            const error = Math.abs(Math.log((packed.width / packed.height) / targetAspect));
+            if (error < bestError) {
+                bestError = error;
+                best = packed;
+            }
+        }
+    }
+    return best;
+}
+
+interface Spacing {
+    gap: number;
+    title: number;
+    heading: number;
+    categoryGap: number;
+}
+
+/** One category's samples, packed into rows, in the block's own top-left coordinates. */
+interface Block {
+    category: TacticalGraphicCategory;
+    cells: {name: TacticalGraphicName; left: number; top: number; box: Box}[];
+    width: number;
+    height: number;
+}
+
+/** Shelf-packs one category's boxes into rows no wider than `column`, under its heading. */
+function layoutBlock(
+    category: TacticalGraphicCategory,
+    names: TacticalGraphicName[],
+    boxes: Map<TacticalGraphicName, Box>,
+    column: number,
+    {gap, title, heading}: Spacing,
+): Block | null {
+    if (!names.length) return null;
+
+    const cells: Block['cells'] = [];
+    let x = 0;
+    let y = heading;
+    let rowHeight = 0;
+    let width = 0;
+
+    names.forEach(name => {
+        const box = boxes.get(name)!;
+        const cellW = boxWidth(box) + gap;
+        const cellH = boxHeight(box) + gap + title;
+        if (x > 0 && x + cellW > column) {
+            y += rowHeight;
+            x = 0;
+            rowHeight = 0;
+        }
+        cells.push({name, left: x, top: y, box});
+        x += cellW;
+        rowHeight = Math.max(rowHeight, cellH);
+        width = Math.max(width, x);
+    });
+
+    return {category, cells, width, height: y + rowHeight};
+}
+
+/**
+ * Stands the category blocks in `columns` columns, each block going to whichever
+ * column is currently shortest — which keeps the columns level without
+ * reordering the categories. Coordinates come out centred on (0, 0) with y up,
+ * ready to hand straight to the generators.
+ */
+function assembleColumns(
+    blocks: Block[],
+    columns: number,
+    {gap, title, heading, categoryGap}: Spacing,
+): {layout: {placements: Placement[]; headings: Heading[]}; width: number; height: number} {
+    const columnWidth = Math.max(...blocks.map(b => b.width));
+    const heights = new Array(columns).fill(0);
+    const placed: {block: Block; left: number; top: number}[] = [];
+
+    blocks.forEach(block => {
+        let shortest = 0;
+        for (let c = 1; c < columns; c++) if (heights[c] < heights[shortest]) shortest = c;
+        placed.push({block, left: shortest * (columnWidth + categoryGap), top: heights[shortest]});
+        heights[shortest] += block.height + categoryGap;
+    });
+
+    const width = columns * columnWidth + (columns - 1) * categoryGap;
+    const height = Math.max(...heights) - categoryGap;
+    const originX = -width / 2;
+    const originY = height / 2;
+
+    return {
+        width,
+        height,
+        layout: {
+            // A cell is [gap/2 | title | box | gap/2]; the box is centred across the
+            // cell's width and hangs from its top, so captions never collide with the
+            // sample above them.
+            placements: placed.flatMap(({block, left, top}) => block.cells.map(({name, left: cl, top: ct, box}) => {
+                const cellW = boxWidth(box) + gap;
+                const boxLeft = originX + left + cl + (cellW - boxWidth(box)) / 2;
+                const boxTop = originY - top - ct - title;
+                return {
+                    name,
+                    cx: boxLeft - box.dx0,
+                    cy: boxTop - box.dy1,
+                    titleY: boxTop + title * 0.12,
+                };
+            })),
+            headings: placed.map(({block, left, top}) => ({
+                category: block.category,
+                x: originX + left,
+                y: originY - top - heading * 0.06,
+            })),
+        },
+    };
+}
+
+/**
+ * Generates a sample off-map purely to read its extent. Nothing here is added to
+ * a source or to the manager, so the handler is garbage once measured.
+ *
+ * Returns null for a graphic whose generator throws — the draw pass will hit the
+ * same failure and is what reports it.
+ */
+export function measureSample(name: TacticalGraphicName, resolution: number): Box | null {
+    const handler = getController(name, resolution);
+    const symbolId = 'measure';
+    handler.setSymbolId(symbolId);
+    try {
+        applyBaseGeometry(handler, name, 0, 0, symbolId);
+    } catch {
+        return null;
+    }
+
+    const extent: Extent = createEmpty();
+    handler.getFeatures().forEach(f => {
+        const geometry = f.getGeometry();
+        if (geometry) extend(extent, geometry.getExtent());
+    });
+    if (isEmpty(extent)) return null;
+    return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
+}
+
+/** Feeds a handler the base geometry its controller expects, centred on (cx, cy). */
+export function applyBaseGeometry(
+    handler: TacticalGraphicHandler,
+    name: TacticalGraphicName,
+    cx: number,
+    cy: number,
+    symbolId: string,
+): void {
+    if (handler instanceof MissionTaskController) {
+        handler.graphic.updateGeom({size: HALF, center: [cx, cy], rotation: 0});
+    } else if (handler instanceof SecurityOperationsController) {
+        handler.setBaseFeature(pointFeature([cx, cy], symbolId, name));
+    } else if (handler instanceof PolygonGraphicController) {
+        const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy) : pentagonRing(cx, cy);
+        handler.setBaseFeature(polygonFeature(ring, symbolId, name));
+    } else if (handler instanceof LineGraphicController) {
+        const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
+        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts), symbolId, name));
+    } else {
+        throw new Error('unclassified controller');
+    }
+}
+
 // ── geometry synthesis ──────────────────────────────────────────────────────
 
-/** Line vertices centred in a cell: 2 points → 1 segment; 3+ → a shallow 2-segment V. */
+/**
+ * Line vertices centred on (cx, cy): 2 points → 1 segment; 3+ → a shallow
+ * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
+ */
 function lineCoords(cx: number, cy: number, pts: number): Coordinate[] {
-    if (pts <= 2) return [[cx - HALF, cy], [cx + HALF, cy]];
+    if (pts <= 2) return [[cx - LINE_HALF, cy], [cx + LINE_HALF, cy]];
     return [
-        [cx - HALF, cy + HALF * 0.2],
-        [cx, cy - HALF * 0.2],
-        [cx + HALF, cy + HALF * 0.2],
+        [cx - LINE_HALF, cy + LINE_HALF * 0.2],
+        [cx, cy - LINE_HALF * 0.2],
+        [cx + LINE_HALF, cy + LINE_HALF * 0.2],
     ];
 }
 
@@ -221,7 +613,7 @@ const pointFeature = (coord: Coordinate, id: string, name: TacticalGraphicName) 
  * Word-wraps a caption onto short lines so it stays within its cell instead of
  * bleeding into neighbours. Truncates to `maxLines` with an ellipsis.
  */
-function wrapLabel(text: string, maxChars = 16, maxLines = 3): string {
+function wrapLabel(text: string, maxChars = 14, maxLines = 2): string {
     const lines: string[] = [];
     let cur = '';
     for (const word of text.split(' ')) {
@@ -245,10 +637,28 @@ function titleFeature(coord: Coordinate, text: string): Feature {
     f.setStyle(new Style({
         text: new Text({
             text: wrapLabel(text),
-            font: '10px sans-serif',
+            font: '9px sans-serif',
             textBaseline: 'bottom',
             fill: new Fill({color: '#555'}),
             stroke: new Stroke({color: 'rgba(255,255,255,0.9)', width: 3}),
+            overflow: true,
+        }),
+    }));
+    return f;
+}
+
+/** The banner that opens each category block, left-aligned above its first row. */
+function headingFeature(coord: Coordinate, category: TacticalGraphicCategory): Feature {
+    const f = new Feature(new Point(coord));
+    f.set('sampleTitle', true);
+    f.setStyle(new Style({
+        text: new Text({
+            text: category.toUpperCase(),
+            font: 'bold 13px sans-serif',
+            textAlign: 'left',
+            textBaseline: 'top',
+            fill: new Fill({color: '#1b5e20'}),
+            stroke: new Stroke({color: 'rgba(255,255,255,0.9)', width: 4}),
             overflow: true,
         }),
     }));

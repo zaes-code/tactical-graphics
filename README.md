@@ -185,7 +185,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*Drawn in a single sweep by the demo app's **Draw all samples** button — press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/). The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
+*Drawn in a single sweep by the demo app's **Draw all samples** button, grouped by category — press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/). The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
 
 (`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
 
