@@ -14,19 +14,29 @@ export class Penetration extends TacticalGraphicsBase<PointGraphicOptions> {
     /**
      * `[offset, p0, p1]` — the order the rest of the block family uses, where
      * element 0 is the width handle the OpenLayers holder splits off and the
-     * remaining two are the base segment's own endpoints.
+     * remaining two are the base segment's own endpoints. p0 is dropped by the
+     * one-segment rule, so what renders is the arrow tip plus the width handle.
      *
-     * This used to emit `[offset, offsetRailEnd, p0]`: `getBypassArrow` returns
-     * `[offsetBase, arrowheadCoords]`, so `coordinates[0][1]` is the far end of
-     * the *parallel rail*, sitting a half-width off the segment rather than on
-     * it. Once the p0 handle was dropped for one-segment graphics that stray
-     * point was the only handle left, floating beside the graphic.
+     * The width handle is the end of the front line, which `getPenetrationArrowGraphic`
+     * draws at `3 × size` perpendicular to the base — so it lands *on* the
+     * graphic and grabbing that line's end is what changes its length. It used
+     * to be `getBypassArrow(...).coordinates[1][2]`, a point on an unrelated
+     * borrowed arrowhead that floated near the front line without touching it.
+     *
+     * Being three `size`s out means the renderer has to scale the drag down by
+     * the same factor — see `OFFSET_SCALE` in the OpenLayers `Block` holder.
+     *
+     * (An earlier revision emitted `[offset, offsetRailEnd, p0]`, which left p0
+     * as the only surviving path handle once the one-segment rule landed.)
      */
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        let topArrow = geometryService.getBypassArrow(base.geometry.coordinates, -opts.size);
         const coords = base.geometry.coordinates;
+        const last = coords[coords.length - 1];
+        const secondToLast = coords[coords.length - 2];
+        // Negative to match the side the front line's first point is drawn on.
+        const frontLineEnd = geometryService.getPerpendicularPoint(last, secondToLast, -3 * opts.size);
 
-        return this.asMultiPointFeature([topArrow.geometry.coordinates[1][2], coords[0], coords[coords.length - 1]]);
+        return this.asMultiPointFeature([frontLineEnd, coords[0], last]);
     }
 
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {

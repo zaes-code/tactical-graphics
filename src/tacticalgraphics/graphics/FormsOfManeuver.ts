@@ -18,7 +18,7 @@ class SolidManeuverArrow extends MovementGraphicBase {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        let baseCoords = this.arrowCenterline(base, radius);
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
@@ -173,7 +173,7 @@ export class FrontalAttack extends SolidManeuverArrow {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
 
@@ -190,7 +190,7 @@ export class FrontalAttack extends SolidManeuverArrow {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
@@ -208,7 +208,7 @@ export class TurningMovement extends SolidManeuverArrow {
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
@@ -228,7 +228,7 @@ export class TurningMovement extends SolidManeuverArrow {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
+        const baseCoords = this.arrowCenterline(base, radius);
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
@@ -293,10 +293,15 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // [edge, center, lineStart] — edge handle at the east end of the
-        // semicircle (drives rotate/resize per MissionTask convention),
-        // center handle for translate, plus an edit handle at the beginning
-        // of the horizontal "P" line (local (−2.4r, +r)).
+        // [edge, lineStart] — edge handle at the east end of the semicircle,
+        // plus an edit handle at the beginning of the horizontal "P" line
+        // (local (−2.4r, +r)). Both sit on the graphic's outline.
+        //
+        // The MissionTask convention's centre handle is deliberately absent: it
+        // rendered in the middle of empty space inside the hook, and it is not
+        // load-bearing — `handleCircleDrag` picks its operation from the global
+        // interaction mode and does its angle/scale maths against the base
+        // point, never against the handle the user grabbed.
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
@@ -311,7 +316,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         bearing = ((bearing % 360) + 360) % 360;
         const lineStart = turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
 
-        return this.asMultiPointFeature([edge, center, lineStart]);
+        return this.asMultiPointFeature([edge, lineStart]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
@@ -334,6 +339,24 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
 
 export class Envelopment extends MovementGraphicBase {
     name: string = TacticalGraphicName.Envelopment;
+
+    /** The head is tangent to the end of the arc, so its point is already on the last vertex. */
+    protected tipOverhang: number = 0;
+
+    /**
+     * `[p0, tip]` — no width handle.
+     *
+     * `radius` sizes nothing but the arrowhead here; the shape follows entirely
+     * from the two endpoints (the arc's radius is half their separation), so a
+     * width handle has nothing meaningful to drag and only adds a third dot
+     * beside the head. Emitting fewer than three points is how a generator says
+     * "no width" — see `MovementGraphicBase.updateGeometry` in the OpenLayers
+     * sample, which drops the offset handle entirely when it sees two.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const baseCoords = base.geometry.coordinates;
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+    }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
@@ -376,6 +399,9 @@ export class Envelopment extends MovementGraphicBase {
 // each pointing outward (away from the ellipse center).
 export class MobileDefense extends MovementGraphicBase {
     name: string = TacticalGraphicName.MobileDefense;
+
+    /** The ellipse is defined by its two endpoints; nothing is drawn past p1. */
+    protected tipOverhang: number = 0;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius = opts?.radius || 20;
@@ -492,6 +518,25 @@ export class MobileDefense extends MovementGraphicBase {
 export class InfiltrationLane extends MovementGraphicBase {
     name: string = TacticalGraphicName.InfiltrationLane;
 
+    /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
+    protected tipOverhang: number = 0;
+
+    /**
+     * `[p0, p1, railEnd]` — the width handle sits on the end of the left rail,
+     * i.e. on the graphic, rather than the inherited point a further `radius`
+     * out into empty space.
+     *
+     * The handle is now one radius off the centre line instead of two, so the
+     * renderer has to halve its drag sensitivity to compensate — see
+     * `OFFSET_SCALE` in the OpenLayers `MovementGraphicBase`.
+     */
+    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const baseCoords = base.geometry.coordinates;
+        const leftRail = geometryService.computeParallelLineString(baseCoords, radius);
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftRail[leftRail.length - 1]]);
+    }
+
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
         const baseCoords = base.geometry.coordinates;
@@ -521,6 +566,20 @@ export class InfiltrationLane extends MovementGraphicBase {
 
 export class Infiltration extends MovementGraphicBase {
     name: string = TacticalGraphicName.Infiltration;
+
+    /** `computeArrowheadPoints` puts the point on the last vertex already. */
+    protected tipOverhang: number = 0;
+
+    /**
+     * `[p0, tip]` — no width handle, matching `DirectionOfSupportingAttack`,
+     * which this graphic is the single-line twin of. `radius` sizes nothing but
+     * the arrowhead, so the inherited third point had nothing to drag and simply
+     * floated off the side of the line.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const baseCoords = base.geometry.coordinates;
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+    }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
@@ -590,12 +649,21 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // Match the MissionTask convention: [edge, center]. Edge handle lives at
-        // the upper arc endpoint (planar 60° + rotation) and drives rotate/resize;
-        // center handle is used for translation.
+        // [arcEnd, arrowTip] — both on the graphic's own outline: the upper arc
+        // endpoint (planar 60° + rotation) and the point of the arrow that
+        // emerges from the bulge (planar 0°, distance 2r, matching
+        // `generateGraphics`).
+        //
+        // The MissionTask convention's centre handle is deliberately absent: it
+        // rendered in the hollow of the arc with nothing under it, and it is not
+        // load-bearing — `handleCircleDrag` picks its operation from the global
+        // interaction mode and does its angle/scale maths against the base
+        // point, never against the handle the user grabbed.
         const center = base.geometry.coordinates;
-        const endPoint = geometryService.createCircularArc(center, opts.rotation, opts.size, 60, 61, 1)[0];
-        return this.asMultiPointFeature([endPoint, center]);
+        const r = Math.max(opts.size, 1);
+        const arcEnd = geometryService.createCircularArc(center, opts.rotation, r, 60, 61, 1)[0];
+        const arrowTip = geometryService.createCircularArc(center, opts.rotation, 2 * r, 0, 1, 1)[0];
+        return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {

@@ -10,7 +10,7 @@ import {DrawEvent} from "ol/interaction/Draw";
 import Collection from "ol/Collection";
 import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
-import {Point, Polygon} from "ol/geom";
+import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {Coordinate} from "ol/coordinate";
@@ -31,6 +31,13 @@ export enum InteractionType {
 *  - Calculating the offset value for rotating, resizing, and repositioning a tactical graphic
 *  - Adding a modify interaction for polygon/linestring like graphics to add or reposition existing vertices
 * */
+
+/**
+ * How far from a graphic's centre a resize drag has to start, in screen pixels,
+ * before its scale ratio means anything. @see TacticalGraphicsManager.handleResize
+ */
+const MIN_RESIZE_ORIGIN_PX = 8;
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -53,6 +60,15 @@ export class TacticalGraphicsManager {
     map: Map;
     draw: Draw | undefined = undefined;
     modify: Modify | undefined = undefined;
+    /** @see handleResize — latched at pointer-down, for the whole gesture. */
+    private resizeOriginNearCenter: boolean = false;
+    /**
+     * Which vertex of a MultiPoint handle feature the gesture started on, or -1.
+     * Latched at pointer-down: a graphic whose handles each mean something
+     * different (the range fans, one rim per band) needs to know *which* dot was
+     * grabbed, and the feature alone cannot say.
+     */
+    private activeHandleIndex: number = -1;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -73,10 +89,24 @@ export class TacticalGraphicsManager {
         return [InteractionType.rotate, InteractionType.resize, InteractionType.modify, InteractionType.translate];
     };
 
+    /**
+     * Notified whenever the mode changes, including the changes the manager
+     * makes on its own — `stopDrawing` drops back to `view` when a draw finishes
+     * or is cancelled. Without this the host's own copy of the mode silently
+     * diverges: the demo's draw button stayed on "Drawing…" forever, because it
+     * renders from React state that nothing was telling.
+     *
+     * Safe to point straight at a React setter: the host sets the mode on the
+     * manager, the manager echoes the same value back, and React bails on an
+     * unchanged value rather than looping.
+     */
+    onInteractionModeChange?: (mode: InteractionType) => void;
+
     setInteractionMode = (newMode: InteractionType) => {
         this.currentMode = newMode;
         this.toggleHandleFeatures();
         this.toggleModifyInteraction();
+        this.onInteractionModeChange?.(newMode);
     };
 
     // display the markers for letting a user drag/resize/modify/rotate a tactical graphic.
@@ -146,20 +176,51 @@ export class TacticalGraphicsManager {
     // set the state of the manager based on what feature is clicked
     // return true if the rotate, translate or resize mode is enabled to proceed with the Drag event.
     handleDownEvent = (evt: MapBrowserEvent): boolean => {
-        const featureLike = this.map?.forEachFeatureAtPixel(evt.pixel, function (feature) {
-            return feature;
+        // Collect everything under the pointer rather than taking the topmost.
+        // A label's text is hit-testable and covers a lot of ground — measured,
+        // the range fans' per-band label feature wins at *every* one of their rim
+        // handles — so "topmost" would hand the drag to a feature the user was
+        // not aiming at. A handle is the interactive affordance; it wins.
+        const hits: Feature[] = [];
+        this.map?.forEachFeatureAtPixel(evt.pixel, feature => {
+            const asFeature = this.asFeature(feature);
+            if (asFeature) hits.push(asFeature);
         });
-        if (!featureLike) return false;
+        if (hits.length === 0) return false;
 
-        let feature = this.asFeature(featureLike);
-        if (!feature) return false;
+        const liveHandle = hits.find(f => f.get('handle') && !f.get('inert'));
+        // Grey handles are visual anchors, not drag origins — but only once no
+        // live handle is in play, so an inert dot overlapping a real one cannot
+        // veto it. Bail before latching any state so a later drag cannot pick up
+        // a stale controller.
+        if (!liveHandle && hits.some(f => f.get('inert'))) return false;
+
+        let feature = liveHandle ?? hits[0];
+
         this.activeFeature = feature;
 
         // check if any controller owns the feature;
         this.activeController = this.getFeatureController(feature);
         if (!this.activeController) return false;
 
+        // Latch whether this gesture started too near the centre to carry a
+        // scale ratio. It has to be decided once, at pointer-down: the drag
+        // handlers advance `lastPointerPosition` on every event, so a per-event
+        // check would skip only the first move and then scale off a 10-pixel
+        // baseline — measured, a 12× jump from a drag that should do nothing.
+        const resizeOrigin = this.activeController.getCenter();
+        const resolution = this.map.getView().getResolution() ?? 1;
+        this.resizeOriginNearCenter =
+            Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
+        // Only a handle set carries per-vertex meaning; anything else is -1.
+        this.activeHandleIndex = feature.get('handle') ? this.nearestVertexIndex(feature, evt.coordinate) : -1;
+
         this.lastPointerPosition = evt.coordinate;
+
+        // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
+        // feature has `base` cleared), so an edit-mode drag would fall through
+        // to the map and pan it. Claim the drag and stretch the graphic instead.
+        if (this.isModifying()) return !!this.activeController.editStretches;
 
         return this.isRotating() || this.isTranslating() || this.isResizing();
     };
@@ -228,9 +289,22 @@ export class TacticalGraphicsManager {
                 this.activeController.handleRotate(deltaDeg);
                 this.lastPointerPosition = evt.coordinate;
                 break;
+            // A circle graphic keeps its base point out of the rendering source,
+            // so Modify never sees it and an edit-mode drag would pan the map.
+            // Edit borrows resize wholesale — the only meaningful edit on a
+            // circle is its radius. `handleDownEvent` only claims an edit drag
+            // when the controller opted in, so nothing else reaches this case.
+            case InteractionType.modify:
             case InteractionType.resize:
-                // Calculate distance to center for scaling
-                this.handleResize(evt);
+                // A graphic whose handles each drive a different dimension (the
+                // range fans, one rim per band) takes the grabbed handle's index
+                // and the raw cursor; everything else scales uniformly.
+                if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
+                    this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
+                } else {
+                    // Calculate distance to center for scaling
+                    this.handleResize(evt);
+                }
                 this.lastPointerPosition = evt.coordinate;
                 break;
         }
@@ -252,6 +326,11 @@ export class TacticalGraphicsManager {
             case InteractionType.rotate:
                 this.handleRotateForLineAndPolygon(evt, this.activeController);
                 break;
+            // Edit mode borrows the resize path wholesale for fixed-vertex
+            // graphics — width handle included, so the two modes behave
+            // identically. `handleDownEvent` only claims an edit-mode drag when
+            // the controller opted in, so nothing else can reach this case.
+            case InteractionType.modify:
             case InteractionType.resize:
                 if (!this.activeFeature) return;
 
@@ -273,10 +352,37 @@ export class TacticalGraphicsManager {
         const lastDistance = Math.sqrt(
             Math.pow(this.lastPointerPosition[0] - center[0], 2) + Math.pow(this.lastPointerPosition[1] - center[1], 2),
         );
-        if (lastDistance > 0) {
-            const scaleFactor = currentDistance / lastDistance;
-            this.activeController.handleResize(scaleFactor);
-        }
+
+        // A drag that starts at or near the centre carries no usable scale
+        // ratio: `currentDistance / lastDistance` diverges as `lastDistance`
+        // approaches zero. A `> 0` guard is not enough — measured, a nudge a few
+        // pixels off a circle's centre grew `size` by twenty orders of
+        // magnitude. The centre is not a resize origin; ignore the gesture.
+        if (this.resizeOriginNearCenter || lastDistance <= 0) return;
+
+        const scaleFactor = currentDistance / lastDistance;
+        this.activeController.handleResize(scaleFactor);
+    }
+
+    /**
+     * Index of the MultiPoint vertex nearest `coordinate`, or -1 when the
+     * feature is not a MultiPoint. Coordinates are EPSG:3857 metres, so plain
+     * Euclidean math is correct here — no turf.
+     */
+    private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
+        const geometry = feature.getGeometry();
+        if (!(geometry instanceof MultiPoint)) return -1;
+
+        let best = -1;
+        let bestDistanceSq = Infinity;
+        geometry.getCoordinates().forEach((vertex, index) => {
+            const distanceSq = Math.pow(vertex[0] - coordinate[0], 2) + Math.pow(vertex[1] - coordinate[1], 2);
+            if (distanceSq < bestDistanceSq) {
+                bestDistanceSq = distanceSq;
+                best = index;
+            }
+        });
+        return best;
     }
 
     /**
