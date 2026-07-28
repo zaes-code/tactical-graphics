@@ -31,7 +31,7 @@ export interface LineGraphic extends TacticalGraphic {
  * here are EPSG:3857 metres, and the only error to absorb is the generator's
  * 3857 → 4326 → 3857 round trip, which lands far inside that.
  */
-const SAME_POINT_EPSILON_M = 1e-3;
+export const SAME_POINT_EPSILON_M = 1e-3;
 
 /**
  * The path handles a one-segment graphic should actually show — every one except
