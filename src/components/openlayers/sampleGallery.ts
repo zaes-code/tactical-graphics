@@ -18,7 +18,7 @@ import {Feature} from 'ol';
 import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {TacticalGraphicName, getDisplayName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, getDisplayName} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
@@ -27,6 +27,10 @@ import {SecurityOperationsController} from './controllers/SecurityOperationsCont
 import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {PROVEN_GRAPHICS} from './provenGraphics';
+import {supportsHostility} from './graphicFieldRegistry';
+import {writeGraphicProperties} from './graphicProperties';
+import {getColorByHostility} from './openlayerStyles';
+import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
 /** EPSG:3857 metres of a single grid cell. Uniform, so the grid reads evenly. */
 const CELL_METRES = 90_000;
@@ -40,6 +44,31 @@ export interface SampleSweepResult {
     failed: {name: TacticalGraphicName; error: string}[];
 }
 
+/**
+ * Stamps a hostility on a freshly drawn sample, by the same route the properties
+ * dialog uses: through the holder's `setLabel` when it has one — geometry can
+ * depend on hostility, as Encirclement's does — and straight onto the features
+ * otherwise. `hostilityColor` is what the style functions read.
+ */
+function applyHostility(
+    handler: ReturnType<typeof getController>,
+    name: TacticalGraphicName,
+    hostility: TacticalGraphicHostility,
+): void {
+    if (!supportsHostility(name)) return;
+
+    const labels: GraphicLabels = {label: '', hostility};
+    const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
+    if (holder.setLabel) holder.setLabel(labels);
+    else writeGraphicProperties(handler.getFeatures(), name, labels);
+
+    const color = getColorByHostility(hostility);
+    handler.getFeatures().forEach(f => {
+        f.set('hostility', hostility);
+        f.set('hostilityColor', color);
+    });
+}
+
 /** Removes every rendered graphic and its controllers. */
 export function clearAllGraphics(manager: TacticalGraphicsManager): void {
     manager.renderingVectorSource.clear();
@@ -49,8 +78,17 @@ export function clearAllGraphics(manager: TacticalGraphicsManager): void {
 /**
  * Clears the map, draws a sample of every proven graphic in a grid, and frames
  * the view around it. Returns which graphics rendered and which threw.
+ *
+ * `hostility`, when given, is applied to every sample that doctrinally accepts
+ * one — which makes the sweep a one-click check of hostility rendering across
+ * the whole catalogue. Graphics without the field (the Chapter 6 tactical
+ * mission tasks) are skipped rather than coloured, so the sweep shows what a
+ * user could actually produce.
  */
-export function drawProvenSamples(manager: TacticalGraphicsManager): SampleSweepResult {
+export function drawProvenSamples(
+    manager: TacticalGraphicsManager,
+    hostility?: TacticalGraphicHostility,
+): SampleSweepResult {
     clearAllGraphics(manager);
 
     const source = manager.renderingVectorSource;
@@ -106,6 +144,7 @@ export function drawProvenSamples(manager: TacticalGraphicsManager): SampleSweep
             } else {
                 throw new Error('unclassified controller');
             }
+            if (hostility) applyHostility(handler, name, hostility);
             manager.graphicControllers.push(handler);
             source.addFeature(titleFeature([cx, cy + CELL_METRES * 0.46], getDisplayName(name)));
             drawn++;
