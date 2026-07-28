@@ -107,19 +107,18 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
 }
 
 /**
- * Whether to add the OpenStreetMap basemap layers. Set `REACT_APP_BASEMAP=off`
- * at build time to leave them out entirely.
+ * Whether to add the OpenStreetMap basemap layers. On everywhere, including the
+ * hosted demo; set `REACT_APP_BASEMAP=off` at build time to leave them out.
  *
- * The published demo builds with it off. `new OSM()` points at
- * tile.openstreetmap.org, and the OSM Foundation's Tile Usage Policy does not
- * cover a public demo site — it is for development and low-traffic use. Leaving
- * the layers out means the hosted page issues no tile requests at all, which is
- * also what the README's hero image shows: for a graphics library the map is
- * scenery, the symbols are the subject.
+ * `new OSM()` points at tile.openstreetmap.org, so the OSM Foundation's Tile
+ * Usage Policy applies: it permits *modest* use, and requires that the
+ * attribution stay visible. A niche library demo is modest use — but if traffic
+ * ever stops being modest, that is the moment to move to a provider rather than
+ * lean harder on donated tiles. The escape hatch is this flag plus a swap of the
+ * `source` below; `decisions.md` lists the alternatives that were compared.
  *
- * Local `npm start` keeps the basemap, because geographic context is useful
- * while drawing. The dark/light toggle in `OpenLayers.tsx` already bails out
- * when the layers are absent, so nothing else needs to know.
+ * The dark/light toggle in `OpenLayers.tsx` bails out when the layers are
+ * absent, so the off path needs nothing else.
  */
 const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
 

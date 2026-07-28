@@ -49,9 +49,6 @@ jobs:
           # same field for the package's homepage link on npmjs.com, and one
           # value cannot be correct for both.
           PUBLIC_URL: /tactical-graphics
-          # No OpenStreetMap tile requests from the hosted page — see
-          # BASEMAP_ENABLED in openlayerStyles.ts.
-          REACT_APP_BASEMAP: 'off'
           # CRA turns warnings into errors when CI is set, which would fail the
           # build on lint noise that `npm run lint` only warns about.
           CI: ''
