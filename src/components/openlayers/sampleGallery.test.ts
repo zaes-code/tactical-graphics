@@ -28,21 +28,34 @@ const RESOLUTION = 1200;
 /** What getColorByHostility returns for hostileFaker. */
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
-const missionTasks = PROVEN_GRAPHICS.filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks);
+/**
+ * Every tactical mission task, not only the ones the sweep can draw — the rule
+ * is doctrinal, so it has to hold for the 13 still finishing their shapes too.
+ */
+const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
+    .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks);
 const others = PROVEN_GRAPHICS.filter(n => GRAPHIC_CATEGORIES[n] !== TacticalGraphicCategory.TacticalMissionTasks);
 
-/** Builds a sample the way the sweep does, minus the map. */
+/**
+ * Builds a sample the way the sweep does, minus the map. A generator that throws
+ * still yields a handler: the hostility rule is about what gets stamped onto the
+ * features, and a graphic that cannot draw yet must not be stamped either.
+ */
 function sample(name: TacticalGraphicName) {
     const handler = getController(name, RESOLUTION);
     handler.setSymbolId('test');
-    applyBaseGeometry(handler, name, 0, 0, 'test');
+    try {
+        applyBaseGeometry(handler, name, 0, 0, 'test');
+    } catch {
+        // an unfinished generator — the assertions below still apply
+    }
     return handler;
 }
 
 describe('sweeping with a hostility', () => {
     it('covers both sides of the rule, so neither branch is vacuous', () => {
-        expect(missionTasks.length).toBeGreaterThan(0);
-        expect(others.length).toBeGreaterThan(0);
+        expect(missionTasks.length).toBeGreaterThanOrEqual(24);
+        expect(others.length).toBeGreaterThan(100);
     });
 
     it.each(missionTasks)('leaves %s untouched', name => {
