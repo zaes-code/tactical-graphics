@@ -67,9 +67,8 @@ const corridor = (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new AirCorridor(name, res * 20, res));
 
 // Circle graphics resize on an edit-mode drag, identically to resize mode — see
-// MissionTaskController.editStretches. The range fans are pointedly left out:
-// their outer radius comes from the band amplifiers rather than from `size`, so
-// dragging their rim changes a number nothing draws. That needs its own fix.
+// MissionTaskController.editStretches. The range fans join them now that each
+// of their rings carries its own handle and a drag writes that band's range.
 const missionTask = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new MissionTaskGraphicBase(name, res, res));
     controller.editStretches = true;
@@ -82,8 +81,11 @@ const circularArea = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-const rangeFan = (name: TacticalGraphicName, res: number) =>
-    new MissionTaskController(new RangeFanGraphicBase(name, res, res));
+const rangeFan = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new RangeFanGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
 
 const securityOp = (name: TacticalGraphicName, res: number) =>
     new SecurityOperationsController(new SecurityOperationGraphicBase(name, res));
