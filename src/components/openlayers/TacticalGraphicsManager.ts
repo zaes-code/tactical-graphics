@@ -89,10 +89,24 @@ export class TacticalGraphicsManager {
         return [InteractionType.rotate, InteractionType.resize, InteractionType.modify, InteractionType.translate];
     };
 
+    /**
+     * Notified whenever the mode changes, including the changes the manager
+     * makes on its own — `stopDrawing` drops back to `view` when a draw finishes
+     * or is cancelled. Without this the host's own copy of the mode silently
+     * diverges: the demo's draw button stayed on "Drawing…" forever, because it
+     * renders from React state that nothing was telling.
+     *
+     * Safe to point straight at a React setter: the host sets the mode on the
+     * manager, the manager echoes the same value back, and React bails on an
+     * unchanged value rather than looping.
+     */
+    onInteractionModeChange?: (mode: InteractionType) => void;
+
     setInteractionMode = (newMode: InteractionType) => {
         this.currentMode = newMode;
         this.toggleHandleFeatures();
         this.toggleModifyInteraction();
+        this.onInteractionModeChange?.(newMode);
     };
 
     // display the markers for letting a user drag/resize/modify/rotate a tactical graphic.
