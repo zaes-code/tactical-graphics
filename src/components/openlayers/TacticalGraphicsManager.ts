@@ -31,6 +31,13 @@ export enum InteractionType {
 *  - Calculating the offset value for rotating, resizing, and repositioning a tactical graphic
 *  - Adding a modify interaction for polygon/linestring like graphics to add or reposition existing vertices
 * */
+
+/**
+ * How far from a graphic's centre a resize drag has to start, in screen pixels,
+ * before its scale ratio means anything. @see TacticalGraphicsManager.handleResize
+ */
+const MIN_RESIZE_ORIGIN_PX = 8;
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -53,6 +60,8 @@ export class TacticalGraphicsManager {
     map: Map;
     draw: Draw | undefined = undefined;
     modify: Modify | undefined = undefined;
+    /** @see handleResize — latched at pointer-down, for the whole gesture. */
+    private resizeOriginNearCenter: boolean = false;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -153,11 +162,26 @@ export class TacticalGraphicsManager {
 
         let feature = this.asFeature(featureLike);
         if (!feature) return false;
+
+        // Grey handles are visual anchors, not drag origins. Bail before
+        // latching any state so a later drag cannot pick up a stale controller.
+        if (feature.get('inert')) return false;
+
         this.activeFeature = feature;
 
         // check if any controller owns the feature;
         this.activeController = this.getFeatureController(feature);
         if (!this.activeController) return false;
+
+        // Latch whether this gesture started too near the centre to carry a
+        // scale ratio. It has to be decided once, at pointer-down: the drag
+        // handlers advance `lastPointerPosition` on every event, so a per-event
+        // check would skip only the first move and then scale off a 10-pixel
+        // baseline — measured, a 12× jump from a drag that should do nothing.
+        const resizeOrigin = this.activeController.getCenter();
+        const resolution = this.map.getView().getResolution() ?? 1;
+        this.resizeOriginNearCenter =
+            Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
 
         this.lastPointerPosition = evt.coordinate;
 
@@ -233,6 +257,12 @@ export class TacticalGraphicsManager {
                 this.activeController.handleRotate(deltaDeg);
                 this.lastPointerPosition = evt.coordinate;
                 break;
+            // A circle graphic keeps its base point out of the rendering source,
+            // so Modify never sees it and an edit-mode drag would pan the map.
+            // Edit borrows resize wholesale — the only meaningful edit on a
+            // circle is its radius. `handleDownEvent` only claims an edit drag
+            // when the controller opted in, so nothing else reaches this case.
+            case InteractionType.modify:
             case InteractionType.resize:
                 // Calculate distance to center for scaling
                 this.handleResize(evt);
@@ -283,10 +313,16 @@ export class TacticalGraphicsManager {
         const lastDistance = Math.sqrt(
             Math.pow(this.lastPointerPosition[0] - center[0], 2) + Math.pow(this.lastPointerPosition[1] - center[1], 2),
         );
-        if (lastDistance > 0) {
-            const scaleFactor = currentDistance / lastDistance;
-            this.activeController.handleResize(scaleFactor);
-        }
+
+        // A drag that starts at or near the centre carries no usable scale
+        // ratio: `currentDistance / lastDistance` diverges as `lastDistance`
+        // approaches zero. A `> 0` guard is not enough — measured, a nudge a few
+        // pixels off a circle's centre grew `size` by twenty orders of
+        // magnitude. The centre is not a resize origin; ignore the gesture.
+        if (this.resizeOriginNearCenter || lastDistance <= 0) return;
+
+        const scaleFactor = currentDistance / lastDistance;
+        this.activeController.handleResize(scaleFactor);
     }
 
     /**
