@@ -358,7 +358,6 @@ Names below are recognised by `TacticalGraphicName` and are being worked towards
 
 | Graphic | Category |
 |---|---|
-| - | Mobility and Countermobility Control Measures |
 | Abatis | Mobility and Countermobility Control Measures |
 | Alternate Supply Route | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
@@ -406,7 +405,6 @@ Names below are recognised by `TacticalGraphicName` and are being worked towards
 | Triple Strand Concertina | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Unspecified | Mobility and Countermobility Control Measures |
-| - | Observation Post Control Measures |
 | Attack By Fire | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Follow And Assume | Tactical Mission Tasks |
