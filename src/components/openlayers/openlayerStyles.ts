@@ -17,9 +17,11 @@ import {
     TacticalGraphicName,
     TacticalGraphicStatus,
 } from '@zaes/tactical-graphics';
-import one_way_arrow from './assets/route_direction_one_way.svg';
-import alternating_arrow from './assets/route_direction_alternating.svg';
-import two_way_arrow from './assets/route_direction_two_way.svg';
+import {
+    ALTERNATING_ARROW as alternating_arrow,
+    ONE_WAY_ARROW as one_way_arrow,
+    TWO_WAY_ARROW as two_way_arrow,
+} from './assets/routeDirectionIcons';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
@@ -28,8 +30,28 @@ import {BASE_FONT_SIZE_PX, getDefaultLabelSize, isDarkMode} from '../../settings
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
-const canvas = document.createElement('canvas');
-const textMeasureCtx = canvas.getContext('2d')!;
+/**
+ * Scratch canvas for measuring text, created on first use rather than at module
+ * load. This module is published as `@zaes/tactical-graphics/openlayers`, and a
+ * top-level `document.createElement` makes it unimportable anywhere without a
+ * DOM — a Next.js server render, a Node script, a jest suite in the `node`
+ * environment. Every caller runs inside a StyleFunction, which by then has a
+ * document; the fallback only matters if one is ever called without one, and
+ * returning 0 widths beats throwing during import.
+ */
+let textMeasureCtx: CanvasRenderingContext2D | null = null;
+const NO_MEASURE: Pick<CanvasRenderingContext2D, 'font' | 'measureText'> = {
+    font: '',
+    measureText: () => ({width: 0}) as TextMetrics,
+};
+
+function measureCtx(): Pick<CanvasRenderingContext2D, 'font' | 'measureText'> {
+    if (textMeasureCtx) return textMeasureCtx;
+    if (typeof document === 'undefined') return NO_MEASURE;
+    textMeasureCtx = document.createElement('canvas').getContext('2d');
+    return textMeasureCtx ?? NO_MEASURE;
+}
+
 const centerCoordinates = [0, 0];
 const TEXT_RESOLUTION_FALLBACK = 3000; // used as fallback when drawingResolution is not stored
 export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
@@ -4123,8 +4145,9 @@ export function airspaceCoordinationAreaStyle(
         if (allLines.length === 0) return [];
 
         // ── Measure widest line at scale = 1 ─────────────────────────────────
-        textMeasureCtx.font = fontStyle;
-        const maxLineWidth = Math.max(...allLines.map(l => l ? textMeasureCtx.measureText(l).width : 0));
+        const ctx = measureCtx();
+        ctx.font = fontStyle;
+        const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
 
         // ── Fit-to-polygon scale cap ──────────────────────────────────────────
         // Use the shorter bounding-box dimension so the block stays inside the
@@ -5291,8 +5314,9 @@ export function createAirCoordinatingAreaLabelStyle(
     // Measure the widest line so we can shift the left-aligned block to center it.
     // offsetX moves the anchor to the left edge of the block; the block then
     // extends rightward by maxLineWidth*scale, keeping it centered overall.
-    textMeasureCtx.font = fontStyle;
-    const maxLineWidth = Math.max(...allLines.map(l => l ? textMeasureCtx.measureText(l).width : 0));
+    const ctx = measureCtx();
+    ctx.font = fontStyle;
+    const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
     const offsetX = -(maxLineWidth * scale) / 2;
 
     return [new Style({
@@ -5336,7 +5360,8 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
 }
 
 export function getTextWidth(text: string, font: string, scale: number): number {
-    textMeasureCtx.font = font; // e.g. "bold 12px sans-serif"
-    const metrics = textMeasureCtx.measureText(text);
+    const ctx = measureCtx();
+    ctx.font = font; // e.g. "bold 12px sans-serif"
+    const metrics = ctx.measureText(text);
     return metrics.width * scale;
 }
