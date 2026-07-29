@@ -20,6 +20,20 @@ npm install @zaes/tactical-graphics
 
 The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
 
+Two entry points ship, and you can use either on its own:
+
+| Import | What it gives you | Needs |
+|---|---|---|
+| `@zaes/tactical-graphics` | The geometry. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
+| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` (and `milsymbol`) as peers |
+
+```bash
+npm install ol milsymbol   # only if you want the OpenLayers entry point
+```
+
+Both are peer dependencies and both are optional, so installing the package for
+its geometry alone pulls in neither.
+
 ---
 
 ## Quick start
@@ -124,8 +138,40 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 `toFeatureCollection()` flattens a render into a `FeatureCollection` you can hand straight to a map. It returns the `graphic` and `label` features by default; ask for `handle` too when you're building an editor.
 
-### OpenLayers
+### OpenLayers — styled, drawable, editable
 
+`@zaes/tactical-graphics/openlayers` is the renderer the demo uses. It carries
+the doctrinal styling — standard identity colours, dashed planned status,
+echelon glyphs, amplifier placement — plus draw and edit interactions:
+
+```ts
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
+
+const manager = new TacticalGraphicsManager(map, source);
+manager.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+```
+
+Or drive one graphic yourself, without the manager:
+
+```ts
+import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+
+const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution());
+handler.setBaseFeature(drawnFeature);          // your LineString / Polygon / Point
+source.addFeatures(handler.getFeatures());     // graphic + labels + handles
+writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
+    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
+});
+```
+
+Set amplifiers through `writeGraphicProperties`, never `feature.set` —
+`ol/Object.set` fires `propertychange` without calling `changed()`, so the map
+can keep drawing the old label.
+
+### OpenLayers — geometry only
+
+If you would rather keep your own styling, skip the subpath entirely.
 `renderTacticalGraphic` emits EPSG:4326, so reproject on read:
 
 ```ts
@@ -447,13 +493,15 @@ src/tacticalgraphics/          # The library. Pure GeoJSON, map-agnostic.
   core/TacticalGraphicsRegistry.ts
   graphics/                    #   one generator class per graphic family
 
-src/components/                # Demo app — not published.
-  openlayers/                  #   the renderer: styling, draw/edit, dialog
+src/components/
+  openlayers/                  # Published as @zaes/tactical-graphics/openlayers:
+                               #   styling, the 4326→3857 adapter, draw/edit
+  MapControls.tsx, …           # The React demo — not published.
 ```
 
 The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-The library itself is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)). The demo standardises on OpenLayers because that is where the full MIL-STD-2525E / FM 1-02.2 styling lives; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
+The geometry layer is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)) — and it never imports `ol`, which the build asserts. The OpenLayers styling ships beside it as an optional entry point; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
 
 ---
 
