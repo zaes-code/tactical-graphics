@@ -550,6 +550,14 @@ reposition, and modify it.
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [TurfJS](https://turfjs.org/) — the geospatial math underneath
 
+## Contributors
+
+- **Edwin Sanchez** — maintainer
+- **Eric Marks**
+- **Navie Huynh** — past contributor
+
+Commit-level credit lives in the [contributors graph](https://github.com/zaes-code/tactical-graphics/graphs/contributors).
+
 ## License
 
 MIT
