@@ -1,0 +1,51 @@
+{
+  // Builds the OpenLayers renderer published as
+  // `@zaes/tactical-graphics/openlayers`. Separate from tsconfig.lib.json
+  // because this half is allowed to import `ol` — the root entry point never
+  // may, or the geometry stops being portable.
+  //
+  // rootDir is `src` rather than the openlayers folder: the layer legitimately
+  // reaches src/settings.ts and four src/utils modules, and tsc requires a
+  // rootDir that contains every input.
+  "compilerOptions": {
+    "target": "es2019",
+    // `dom` on top of the library config: style functions measure text on a
+    // canvas and the manager touches the map's viewport.
+    "lib": ["es2019", "dom"],
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false,
+    // The layer imports the root entry point by package name. Point that at the
+    // built types so the emitted .d.ts references `@zaes/tactical-graphics`
+    // rather than a relative path out of the package.
+    "baseUrl": ".",
+    "paths": {
+      "@zaes/tactical-graphics": ["dist/types/index.d.ts"]
+    }
+  },
+  "include": [
+    "src/components/openlayers/**/*.ts",
+    "src/settings.ts",
+    "src/utils/graphicLinkRegistry.ts",
+    "src/utils/isEmpty.ts",
+    "src/utils/scaleAndRotateCoordinates.ts",
+    "src/utils/svgToGeoJson.ts"
+  ],
+  "exclude": [
+    "src/components/openlayers/**/*.test.ts",
+    // Demo-only: the sample sweep and the tracker-generated list it draws.
+    "src/components/openlayers/sampleGallery.ts",
+    "src/components/openlayers/provenGraphics.ts",
+    // Disabled graphic, commented out of both registries.
+    "src/components/openlayers/graphics/SearchArea.ts",
+    "src/components/openlayers/controllers/SearchAreaController.ts"
+  ]
+}
