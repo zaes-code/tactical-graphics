@@ -93,19 +93,32 @@ export function getLabelBackgroundFill(): string {
 const haloStroke = new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
 
 /**
+ * Readability clamp on the zoom multiplier of `featureLabelScale`. Same range as
+ * `getLineLabelScale`: without the cap a graphic drawn from high altitude grows its
+ * label without bound as the user zooms in past the drawing zoom; without the floor
+ * the label shrinks to nothing zoomed out.
+ */
+const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
+const MAX_LABEL_ZOOM_MULTIPLIER = 1.5;
+
+function labelZoomMultiplier(drawRes: number | undefined, resolution: number): number {
+    const zoom = drawRes && drawRes > 0 ? drawRes / resolution : Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution);
+    return Math.min(MAX_LABEL_ZOOM_MULTIPLIER, Math.max(MIN_LABEL_ZOOM_MULTIPLIER, zoom));
+}
+
+/**
  * Unified label scale for all graphics.
  * - Uses drawingResolution stored on the feature (set at creation time) to anchor the
  *   label size: at drawing zoom the text is exactly defaultLabelSize px; when zoomed
  *   out (higher resolution) the label shrinks proportionally.
  * - Falls back to a sqrt curve when drawingResolution is not available.
+ * - Either way the zoom multiplier is clamped to [0.3, 1.5] of defaultLabelSize so the
+ *   label stays readable at every altitude instead of tracking the world scale forever.
  */
 export function featureLabelScale(feature: FeatureLike, resolution: number): number {
     const drawRes = feature.get('drawingResolution') as number | undefined;
     const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    if (drawRes && drawRes > 0) {
-        return sizeFactor * (drawRes / resolution);
-    }
-    return sizeFactor * Math.max(0.3, Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution));
+    return sizeFactor * labelZoomMultiplier(drawRes, resolution);
 }
 
 /**
@@ -547,7 +560,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
 
     const scale = feature
         ? featureLabelScale(feature, resolution) * scaleMultiplier
-        : (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * Math.max(0.3, Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution)) * scaleMultiplier;
+        : (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * labelZoomMultiplier(undefined, resolution) * scaleMultiplier;
 
     return new Style({
         geometry: new Point(labelPoint), // dummy point
