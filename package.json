@@ -1,6 +1,6 @@
 {
   "name": "@zaes/tactical-graphics",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJSON. Renders axis-of-advance arrows, phase lines, mission tasks, and range fans for OpenLayers or any GeoJSON consumer.",
   "keywords": [
     "mil-std-2525",
@@ -31,6 +31,11 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./openlayers": {
+      "types": "./dist/ol/types/components/openlayers/index.d.ts",
+      "import": "./dist/ol/esm/components/openlayers/index.js",
+      "require": "./dist/ol/cjs/components/openlayers/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -58,6 +63,18 @@
   "dependencies": {
     "@turf/turf": "^7.2.0",
     "@types/geojson": "^7946.0.16"
+  },
+  "peerDependencies": {
+    "milsymbol": ">=3",
+    "ol": ">=9"
+  },
+  "peerDependenciesMeta": {
+    "milsymbol": {
+      "optional": true
+    },
+    "ol": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",

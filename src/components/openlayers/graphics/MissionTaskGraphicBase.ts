@@ -98,7 +98,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const lines = geom.getCoordinates();
-                const color = getDefaultLineColor();
+                const color = feature.get('hostilityColor') || getDefaultLineColor();
                 const stroke = new Stroke({color, width: LINE_WIDTH});
 
                 const styles: Style[] = [];
@@ -137,7 +137,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const rawLines = geom.getCoordinates();
-                const defaultColor = getDefaultLineColor();
+                const defaultColor = feature.get('hostilityColor') || getDefaultLineColor();
 
                 const GAP = 30 * resolution;
                 const perpShift = (
