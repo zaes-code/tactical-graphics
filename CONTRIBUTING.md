@@ -29,6 +29,24 @@ git switch -c feature/short-description   # feature/ · fix/ · chore/ · docs/
 
 Both branches are protected: no direct pushes, no deletions. Everything arrives by pull request.
 
+## Getting credit for your work
+
+Your commits are the record, so make sure they carry your name. Set your identity once per machine, before your first commit:
+
+```bash
+git config user.name  "Your Name"
+git config user.email "you@zaes.com"
+```
+
+Use the **same address everywhere** — one person committing under two addresses becomes two contributors, and neither shows the full picture.
+
+For your work to appear under your profile on GitHub, add that address to your GitHub account and verify it (Settings → Emails). GitHub matches commits to profiles by author email and by nothing else; an unverified address shows a grey silhouette instead of you. Verifying is retroactive — every commit you have already made links up at once. Adding an address does not make it public; only setting it as your public profile email does that.
+
+Two more things that quietly cost people credit:
+
+- **Nobody should re-commit your diff.** `git cherry-pick` and `git rebase` preserve authorship; re-applying your changes by hand does not. If a maintainer has to commit on your behalf, they should pass `--author="Your Name <you@zaes.com>"`.
+- **Merge commits made through a web UI are authored by the merger**, sometimes under a synthesised address. Your own commits are unaffected, and the release mirror normalises the rest.
+
 ## Before you open a PR
 
 ```bash

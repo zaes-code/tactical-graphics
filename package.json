@@ -14,6 +14,12 @@
     "gis",
     "turf"
   ],
+  "author": "ZAES",
+  "contributors": [
+    "Edwin Sanchez <edwin.sanchez@zaes.com>",
+    "Eric Marks <eric.marks@zaes.com>",
+    "Navie Huynh"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
