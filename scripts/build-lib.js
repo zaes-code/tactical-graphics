@@ -1,12 +1,24 @@
 #!/usr/bin/env node
 /**
- * Builds the publishable library from `src/tacticalgraphics` into `dist/`:
+ * Builds both published entry points.
  *
- *   dist/cjs/    CommonJS   (package.json "main")
- *   dist/esm/    ES modules (package.json "module" / "exports".import)
- *   dist/types/  .d.ts      (package.json "types")
+ * The root package — map-agnostic geometry, from `src/tacticalgraphics`:
  *
- * The demo app under `src/components` is not built or published.
+ *   dist/cjs/       CommonJS   (package.json "main")
+ *   dist/esm/       ES modules (package.json "module" / "exports".import)
+ *   dist/types/     .d.ts      (package.json "types")
+ *
+ * `@zaes/tactical-graphics/openlayers` — the OpenLayers renderer, from
+ * `src/components/openlayers` plus the handful of `src/utils` modules and
+ * `src/settings.ts` it reaches:
+ *
+ *   dist/ol/cjs/    dist/ol/esm/    dist/ol/types/
+ *
+ * Order matters: the OpenLayers half imports the root by package name, and
+ * tsconfig.ol.json points that at `dist/types`, so the root must be built first.
+ *
+ * The React demo (`src/components/MapControls.tsx`, `OpenLayers.tsx`, the sample
+ * gallery) is not built or published.
  */
 const {execFileSync} = require('child_process');
 const fs = require('fs');
@@ -38,6 +50,22 @@ fs.writeFileSync(path.join(dist, 'esm', 'package.json'), JSON.stringify({type: '
 
 console.log('Adding .js extensions to ESM relative imports');
 addEsmExtensions(path.join(dist, 'esm'));
+
+// ── The OpenLayers entry point ────────────────────────────────────────────────
+
+const ol = path.join(dist, 'ol');
+
+console.log('\nBuilding the OpenLayers renderer (CommonJS + declarations)');
+run('-p', 'tsconfig.ol.json', '--module', 'commonjs', '--outDir', 'dist/ol/cjs', '--declarationDir', 'dist/ol/types');
+
+console.log('Building the OpenLayers renderer (ES modules)');
+run('-p', 'tsconfig.ol.json', '--module', 'esnext', '--outDir', 'dist/ol/esm', '--declaration', 'false', '--declarationMap', 'false');
+
+console.log('Marking dist/ol/esm as ESM');
+fs.writeFileSync(path.join(ol, 'esm', 'package.json'), JSON.stringify({type: 'module'}, null, 2) + '\n');
+
+console.log('Adding .js extensions to ESM relative imports');
+addEsmExtensions(path.join(ol, 'esm'));
 
 /**
  * TypeScript emits relative specifiers exactly as written in the source —
@@ -141,3 +169,17 @@ for (const dir of ['cjs', 'esm', 'types']) {
     const entry = path.join(dist, dir, dir === 'types' ? 'index.d.ts' : 'index.js');
     console.log(`  ${fs.existsSync(entry) ? 'OK  ' : 'MISS'} dist/${dir}/${path.basename(entry)}`);
 }
+for (const dir of ['cjs', 'esm', 'types']) {
+    const entry = path.join(ol, dir, 'components', 'openlayers', dir === 'types' ? 'index.d.ts' : 'index.js');
+    console.log(`  ${fs.existsSync(entry) ? 'OK  ' : 'MISS'} dist/ol/${dir}/components/openlayers/${path.basename(entry)}`);
+}
+
+// The published root must never import `ol` — that is the whole point of the
+// split. Assert it rather than trusting tsconfig.lib.json's include list.
+const leaked = [...walk(path.join(dist, 'cjs')), ...walk(path.join(dist, 'esm'))].filter(
+    f => f.endsWith('.js') && /(?:from|require\()\s*['"]ol[/'"]/.test(fs.readFileSync(f, 'utf8')),
+);
+if (leaked.length) {
+    throw new Error(`OpenLayers leaked into the map-agnostic entry point:\n  ${leaked.map(f => path.relative(dist, f)).join('\n  ')}`);
+}
+console.log('  verified: the root entry point imports no OpenLayers');
