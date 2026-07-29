@@ -424,8 +424,17 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
  * added later inherits the correct answer instead of whatever was copied from
  * the profile above it.
  */
+/**
+ * Graphics that draw both standard identities at once, so selecting one is
+ * meaningless. Line of contact is the whole set: FM 1-02.2's line control
+ * measure table prints it as two opposed waves — the enemy side red, the
+ * friendly side black — and the generator does exactly that, unconditionally.
+ * A hostility here has nothing to change.
+ */
+const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
-    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
+    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks && !BOTH_IDENTITIES_AT_ONCE.has(name);
 }
 
 // ── Public accessor ───────────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
  */
 const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
     .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks);
-const others = PROVEN_GRAPHICS.filter(n => GRAPHIC_CATEGORIES[n] !== TacticalGraphicCategory.TacticalMissionTasks);
+const others = PROVEN_GRAPHICS.filter(supportsHostility);
 
 /**
  * Builds a sample the way the sweep does, minus the map. A generator that throws
@@ -80,9 +80,71 @@ describe('sweeping with a hostility', () => {
         expect(stamped.length).toBeGreaterThan(0);
     });
 
-    it('skips exactly the tactical mission tasks', () => {
+    it('skips the tactical mission tasks', () => {
         expect(missionTasks.every(n => !supportsHostility(n))).toBe(true);
-        expect(others.every(n => supportsHostility(n))).toBe(true);
+    });
+
+    it('skips line of contact, which draws both identities at once', () => {
+        // Its enemy-side wave is already red and its friendly-side wave black,
+        // per FM 1-02.2's line control measure table, so there is nothing for a
+        // hostility selection to change.
+        expect(supportsHostility(TacticalGraphicName.LineOfContact)).toBe(false);
+        expect(others).not.toContain(TacticalGraphicName.LineOfContact);
+    });
+});
+
+/**
+ * The seven graphics whose style functions used to hardcode black and ignore the
+ * stamped hostility colour. FM 1-02.2 para 5-3 puts every hostile control
+ * measure's line work in red, inner detail included — the airfield's crossed
+ * runways and the fields-of-fire rectangle are part of the symbol, not
+ * amplifiers. Text amplifiers stay black and are excluded below.
+ */
+const FIXED = [
+    TacticalGraphicName.MovementToContact,
+    TacticalGraphicName.Pursuit,
+    TacticalGraphicName.MobileDefense,
+    TacticalGraphicName.Airfield,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.Infiltration,
+    TacticalGraphicName.FieldsOfFire,
+];
+
+const BLACKS = ['#000000', 'black', 'rgba(0,0,0,1)', '#000'];
+const normalise = (c: unknown) => String(c).replace(/\s/g, '').toLowerCase();
+
+/** Every stroke and fill colour a handler renders, ignoring text amplifiers. */
+function strokeColours(handler: ReturnType<typeof getController>): string[] {
+    const found: string[] = [];
+    handler.getFeatures().forEach(f => {
+        const style = f.getStyle();
+        const result = typeof style === 'function' ? style(f, RESOLUTION) : style;
+        const list = Array.isArray(result) ? result : result ? [result] : [];
+        list.forEach(s => {
+            if (s.getText?.()?.getText?.()) return; // an amplifier — black by rule
+            const stroke = s.getStroke?.()?.getColor?.();
+            const fill = s.getFill?.()?.getColor?.();
+            if (stroke) found.push(normalise(stroke));
+            if (fill) found.push(normalise(fill));
+        });
+    });
+    return found;
+}
+
+describe('hostile line work is red, inner detail included', () => {
+    it.each(FIXED)('%s paints no black once hostile', name => {
+        const handler = sample(name);
+        applyHostility(handler, name, TacticalGraphicHostility.hostileFaker);
+
+        const colours = strokeColours(handler);
+        expect(colours.length).toBeGreaterThan(0);
+        expect(colours).toContain(normalise(HOSTILE_RED));
+        expect(colours.filter(c => BLACKS.includes(c))).toEqual([]);
+    });
+
+    it.each(FIXED)('%s is still black with no hostility', name => {
+        const colours = strokeColours(sample(name));
+        expect(colours).not.toContain(normalise(HOSTILE_RED));
     });
 });
 

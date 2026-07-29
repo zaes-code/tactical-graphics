@@ -795,7 +795,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
         const geom = feature.getGeometry() as MultiLineString;
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
@@ -842,8 +842,9 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 // stroked line (arcs, arrow shaft, arrow head).
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
     return (feature) => {
-        const lineStroke = new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH});
-        const fill = new Fill({color: getDefaultLineColor()});
+        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const lineStroke = new Stroke({color, width: LINE_WIDTH});
+        const fill = new Fill({color});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -863,7 +864,7 @@ export function mobileDefenseGraphicStyleFunc(): StyleFunction {
 
 export function envelopmentGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -3283,15 +3284,16 @@ function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
 
         const coords0 = (f.getGeometry() as MultiLineString).getCoordinates()[0];
 
-        // Black filled "rectangle" on the center of the LEFT leg (P0→P1).
-        // Rendered as a thick butt-cap stroke so the ends are square.
+        // Filled "rectangle" on the center of the LEFT leg (P0→P1), rendered as
+        // a thick butt-cap stroke so the ends are square. It is part of the
+        // symbol, so it takes the same standard identity colour as the legs.
         if (coords0.length >= 2) {
             const startPoint = getPointAlongSegment(coords0[0], coords0[1], 0.2);
             const endPoint = getPointAlongSegment(coords0[0], coords0[1], 0.7);
             styles.push(new Style({
                 geometry: new LineString([startPoint, endPoint]),
                 stroke: new Stroke({
-                    color: 'black',
+                    color,
                     width: 12,
                     lineCap: 'butt',
                 }),
@@ -4034,8 +4036,11 @@ export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFun
         let {geometry} = svgToOpenLayersGeometry(svg, (f.getGeometry() as Point).getCoordinates());
         styles.push(new Style({
             geometry: geometry,
+            // The crossed runways are the symbol's own line work, not an
+            // amplifier, so they take the standard identity colour with the
+            // area outline — FM 1-02.2 para 5-3.
             stroke: new Stroke({
-                color: getDefaultLineColor(),
+                color: f.get('hostilityColor') || getDefaultLineColor(),
                 width: LINE_WIDTH,
             }),
         }));
