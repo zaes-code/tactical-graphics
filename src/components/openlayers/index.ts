@@ -54,6 +54,7 @@ export {AirCorridor} from './graphics/AirCorridor';
 export {AreaGraphicBase} from './graphics/AreaGraphicBase';
 export {Block} from './graphics/Block';
 export {Boundary} from './graphics/Boundary';
+export {Exfiltrate} from './graphics/Exfiltrate';
 export {LineGraphicBase} from './graphics/LineGraphicBase';
 export {CircularAreaGraphicBase, MissionTaskGraphicBase} from './graphics/MissionTaskGraphicBase';
 export {MovementGraphicBase} from './graphics/MovementGraphicBase';
