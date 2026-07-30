@@ -10,6 +10,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 
 export class RetrogradeTask implements LineGraphic {
@@ -19,7 +20,7 @@ export class RetrogradeTask implements LineGraphic {
 
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphic: Feature = createFeature();
-    labels: Feature = new Feature<MultiPoint>();
+    labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     handles: Feature = <Feature<MultiPoint>>createHandleFeature();
     offsetHandle: Feature = <Feature<Point>>createOffsetHandleFeature();
 
@@ -75,6 +76,12 @@ export class RetrogradeTask implements LineGraphic {
     setOffset(offset: number) {
         this.size = offset;
         this.updateGeometry();
+        // `size` here is the width the user dragged, not a construction-time constant,
+        // so it has to be saved. Persisted as `radius` — the schema's name for an
+        // offset-style scalar — to keep it distinct from a generator `size` default.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            radius: this.size,
+        });
     }
 
     getFeatures(): Feature[] {

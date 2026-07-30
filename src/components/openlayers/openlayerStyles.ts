@@ -23,7 +23,7 @@ import {
     TWO_WAY_ARROW as two_way_arrow,
 } from './assets/routeDirectionIcons';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
-import {readGraphicLabels} from './graphicProperties';
+import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize, isDarkMode} from '../../settings';
@@ -268,7 +268,7 @@ export const createBaseFeature = () => {
 
     feature.set('base', true);
     feature.set('hidden', true);
-    return feature;
+    return assignRole(feature, 'base');
 };
 
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
@@ -298,7 +298,7 @@ export const createHandleFeature = () => {
     feature.set('handle', true);
     feature.set('hidden', true);
 
-    return feature;
+    return assignRole(feature, 'handle');
 };
 
 // used to adjust the width of graphics such as Movement graphics (adjusting the road size)
@@ -334,7 +334,7 @@ export const createInertHandleFeature = () => {
     feature.set('hidden', true);
     feature.set('inert', true);
 
-    return feature;
+    return assignRole(feature, 'handle');
 };
 
 /**
@@ -375,7 +375,7 @@ export const createFeature = () => {
         });
     });
 
-    return feature;
+    return assignRole(feature, 'graphic');
 };
 
 /**
