@@ -2,7 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import 'ol/ol.css';
 import '../../styles/map.css';
 
-import {createMap} from './openlayerStyles';
+import {createMap, getColorByHostility} from './openlayerStyles';
 import MapControls from '../MapControls';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
@@ -70,8 +70,17 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
             darkTileLayer.setVisible(false);
             lightTileLayer.setVisible(true);
         }
-        // Invalidate per-feature style cache so StyleFunctions re-evaluate with new mode
-        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => f.changed());
+        // `hostilityColor` caches a *resolved* colour, so a feature drawn in one mode would
+        // keep that mode's colour forever. Re-derive it before invalidating, or the sweep
+        // below faithfully re-renders the stale value.
+        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
+            const hostility = f.get('hostility');
+            if (hostility && f.get('hostilityColor')) {
+                f.set('hostilityColor', getColorByHostility(hostility));
+            }
+            // Invalidate per-feature style cache so StyleFunctions re-evaluate with new mode
+            f.changed();
+        });
     }, [map, darkMode]);
 
     const handleDrawTacticalGraphic = () => {
