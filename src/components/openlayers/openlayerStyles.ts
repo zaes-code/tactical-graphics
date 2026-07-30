@@ -271,6 +271,27 @@ export const createBaseFeature = () => {
     return assignRole(feature, 'base');
 };
 
+/**
+ * Base feature for a point-anchored graphic — the centre it is generated around.
+ *
+ * Two things it must get right, and a plain `new Feature()` gets neither:
+ *
+ * - **A style function.** A feature with no style falls through to OpenLayers' own
+ *   default, which paints a dot — and that default cannot consult `hidden`, so the
+ *   centre showed in every mode. `createBaseFeature`'s style returns an empty `Style`
+ *   while hidden, which is what makes the flag mean anything.
+ * - **`base` cleared.** That flag means "has vertices the Modify interaction may drag".
+ *   A point-anchored graphic has none — it is reshaped by rotate / resize / translate —
+ *   so leaving it set would put a draggable vertex on the centre. Same reasoning as
+ *   `mobileDefense` in `controllerRegistry.ts`. `role` still marks it as the base.
+ */
+export const createCenterBaseFeature = (): Feature<Point> => {
+    const feature = createBaseFeature() as Feature<Point>;
+    feature.setGeometry(new Point([]));
+    feature.set('base', false);
+    return feature;
+};
+
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
 export const createHandleFeature = () => {
     let feature = new Feature();
@@ -309,23 +330,35 @@ export const createOffsetHandleFeature = () => {
 };
 
 /**
- * A handle that is there to read, not to grab — grey rather than red, and
- * refused by `TacticalGraphicsManager.handleDownEvent` via its `inert` flag.
+ * The centre dot on a point-anchored graphic.
  *
- * Grey means "this can never be dragged", so it must not be used for a handle
- * that is merely idle in the current mode; that would teach the colour to mean
- * nothing. Deliberately ignores hostility: a hostile graphic's live handles take
- * the hostility colour, and an inert one has to stay visually apart from them.
+ * **Grey means "you cannot drag this right now", and it has to stay honest.** The
+ * centre is refused as a drag origin for resize (the scale ratio divides by
+ * distance-to-centre, which is ~0 there) and for rotate (a point on the axis carries
+ * no angle) — but it *is* the natural grab point for a move, so
+ * `TacticalGraphicsManager.handleDownEvent` accepts it in translate mode. This style
+ * follows that: red like every other live handle while a move is possible, grey
+ * otherwise. A grey dot that silently accepted a drag would teach the colour to mean
+ * nothing, which is the trap this comment used to warn about when the centre was
+ * genuinely never draggable.
+ *
+ * Deliberately ignores hostility either way: a hostile graphic's line work is red, and
+ * editor chrome has to stay readable as chrome.
  */
 export const createInertHandleFeature = () => {
     let feature = new Feature();
 
     feature.setStyle((feature) => {
         if (feature.get('hidden')) return new Style({});
+        const grabbable = feature.get('grabbable');
         return new Style({
             image: new CircleStyle({
                 radius: 5,
-                fill: new Fill({color: byMode('rgba(130,130,130,0.8)', 'rgba(109,109,109,0.8)')}),
+                fill: new Fill({
+                    color: grabbable
+                        ? setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8)
+                        : byMode('rgba(130,130,130,0.8)', 'rgba(109,109,109,0.8)'),
+                }),
             }),
         });
     });
