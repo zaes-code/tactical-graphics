@@ -39,6 +39,13 @@ const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
     TacticalGraphicName.Secure,
 ]);
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+/**
+ * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
+ * arrowhead edge, as a fraction of that arrow's half-length `r`. Expressed against
+ * the graphic rather than the screen so the two stay locked together at every zoom
+ * — see the note in the constructor.
+ */
+const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {Fill, Stroke, Style} from "ol/style";
 import {getDefaultLineColor, LINE_WIDTH} from "../openlayerStyles";
@@ -84,12 +91,23 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc());
         }
-        // MovementToContact: shift the zigzag "contact" side arrows outward
-        // by 30px (zoom-invariant) so they don't touch the big arrow's
-        // arrowhead edge. B→A (upperPath[1]→upperPath[0]) is the upper
-        // edge — its CCW perpendicular points outward; I→A
-        // (lowerPath[2]→lowerPath[3]) is the lower edge — its CW
-        // perpendicular points outward.
+        // MovementToContact: shift the zigzag "contact" side arrows outward so
+        // they don't touch the big arrow's arrowhead edge. B→A
+        // (upperPath[1]→upperPath[0]) is the upper edge — its CCW perpendicular
+        // points outward; I→A (lowerPath[2]→lowerPath[3]) is the lower edge —
+        // its CW perpendicular points outward.
+        //
+        // The offset is a fraction of the arrow's own half-length, NOT the
+        // `n * resolution` screen-pixel form used elsewhere in this file. Both are
+        // "zoom-invariant", but in different frames, and here the pixel form was
+        // the wrong one: the arrow is baked in metres, so a constant *screen*
+        // offset slid the side arrows toward the arrowhead on zoom-in and away
+        // from it on zoom-out. Deriving it from the geometry locks it to the
+        // graphic under zoom and resize alike.
+        //
+        // `n * resolution` is right for things that must stay a fixed size on
+        // screen — text gaps, label padding. It is wrong for anything that must
+        // hold station against the geometry around it.
         //   MultiLineString layout (see MovementToContact.generateGraphics):
         //     [0] upperPath, [1] lowerPath,
         //     [2] upper zigzag line, [3] upper zigzag arrowhead,
@@ -141,13 +159,30 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             });
         }
         if (name === TacticalGraphicName.MovementToContact) {
-            this.graphic.setStyle((feature, resolution) => {
+            // `_resolution` is deliberately unused: everything this style draws is
+            // proportional to the graphic, so nothing here may depend on the zoom.
+            // Reaching for it again is the bug this function used to have.
+            this.graphic.setStyle((feature, _resolution) => {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const rawLines = geom.getCoordinates();
                 const defaultColor = feature.get('hostilityColor') || getDefaultLineColor();
 
-                const GAP = 30 * resolution;
+                // Recover the arrow's half-length `r` from the geometry. The tip A
+                // sits at local(+r, 0) and the two tail-fin tips E/F at
+                // local(-r, ±0.5r), so A and the E–F midpoint are exactly 2r apart
+                // — no stamped `graphicSize` needed, and it follows a resize for
+                // free. Plain Euclidean math: these are projected EPSG:3857 metres,
+                // so turf must not be used here.
+                const A = rawLines[0]?.[0];
+                const E = rawLines[0]?.[3];
+                const F = rawLines[1]?.[0];
+                let GAP = 0;
+                if (A && E && F) {
+                    const midEF = [(E[0] + F[0]) / 2, (E[1] + F[1]) / 2];
+                    const r = Math.hypot(A[0] - midEF[0], A[1] - midEF[1]) / 2;
+                    GAP = SIDE_ARROW_GAP_RATIO * r;
+                }
                 const perpShift = (
                     edgeStart: number[],
                     edgeEnd: number[],
