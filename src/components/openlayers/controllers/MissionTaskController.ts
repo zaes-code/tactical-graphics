@@ -14,6 +14,12 @@ export interface MissionTaskGraphic extends TacticalGraphic {
     base: Feature<Point>;
     size: number;
     rotation: number;
+    /**
+     * The point the graphic is built around. Declared alongside `size` and `rotation`
+     * because the three together are the whole of a point-anchored graphic's editable
+     * state — which is exactly what save/restore has to carry.
+     */
+    center: Coordinate;
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
 
@@ -147,6 +153,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
     setSymbolId(symbolId: string): void {
         this.symbolId = symbolId;
         this.graphic.setSymbolId(symbolId);
+        // Re-key the registry: the constructor registered under the empty string.
+        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
     setBaseFeature(base: Feature<Point>): void {

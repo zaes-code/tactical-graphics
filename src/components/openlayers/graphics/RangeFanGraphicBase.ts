@@ -119,6 +119,10 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
             : resolvedBands;
         this.label.set('rangeFanShape', isSector ? 'sector' : 'circular');
         this.label.set('rangeFanBands', bandsForStyle);
+
+        // Bands ride in the amplifiers already; `size` and `rotation` do not, and a
+        // fan restored without them loses its drawn radius and bearing.
+        this.publishGeometryState();
     };
 
     setLabel = (labels: GraphicLabels) => {
@@ -127,7 +131,9 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // not just the labels restyled.
         this.updateGeometry();
         // Stamping fires a `change` event on each feature, which re-renders them.
-        writeGraphicProperties(this.getFeatures(), this.name, labels);
+        // Carries the geometry inputs through: a bare write here would drop the
+        // `size`/`rotation` `updateGeometry` just published.
+        writeGraphicProperties(this.getFeatures(), this.name, labels, {size: this.size, rotation: this.rotation});
     };
 
     /**

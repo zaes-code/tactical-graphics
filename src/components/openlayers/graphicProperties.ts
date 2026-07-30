@@ -18,6 +18,7 @@
 import type {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
 import {TACTICAL_GRAPHIC_KEY} from '@zaes/tactical-graphics';
+import type {TacticalGraphicProperties, TacticalGraphicRole} from '@zaes/tactical-graphics';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -31,6 +32,38 @@ export {TACTICAL_GRAPHIC_KEY};
 const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
 
 /**
+ * The subset of `TacticalGraphicProperties` that describes *how the shape was built*
+ * rather than what it says. Persisting these is what makes a reloaded graphic
+ * editable rather than merely visible.
+ */
+export type GraphicGeometryState = Pick<TacticalGraphicProperties, 'size' | 'radius' | 'rotation' | 'scale'>;
+
+/** Feature property naming which part of a graphic a feature is. */
+export const ROLE_KEY = 'role' as const;
+
+/**
+ * Tags a feature with its part in the graphic.
+ *
+ * The core library already stamps `role` on the GeoJSON `renderTacticalGraphic`
+ * returns (`TacticalGraphicRole`), but the OpenLayers holders build their features
+ * by hand and never did — leaving no reliable way to tell a base feature from a
+ * label. The `base` boolean is not that way: `mobileDefense` and the point-anchored
+ * holders deliberately clear it to keep themselves out of the Modify interaction,
+ * so it means "vertex-editable", not "is the base".
+ *
+ * Returns the feature so it can wrap a constructor call inline.
+ */
+export function assignRole<T extends Feature>(feature: T, role: TacticalGraphicRole): T {
+    feature.set(ROLE_KEY, role);
+    return feature;
+}
+
+/** Reads the role tag, or `undefined` for a feature that predates the tagging. */
+export function readRole(feature: FeatureLike): TacticalGraphicRole | undefined {
+    return feature.get(ROLE_KEY) as TacticalGraphicRole | undefined;
+}
+
+/**
  * Reads a feature's amplifiers. Never returns undefined, so style functions can
  * use the result without a null check — an unlabelled graphic styles as if the
  * user left every field blank.
@@ -40,8 +73,8 @@ export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
 }
 
 /**
- * Stamps a graphic's name and amplifiers onto every feature it owns, and marks
- * each feature dirty so the map redraws it.
+ * Stamps a graphic's name, amplifiers and geometry inputs onto every feature it
+ * owns, and marks each feature dirty so the map redraws it.
  *
  * The explicit `changed()` is load-bearing. `ol/Object.set` only dispatches
  * `propertychange` and `change:<key>` — it never calls `changed()`, so the
@@ -50,16 +83,41 @@ export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
  * a source, or rendered through any other path, would silently keep its old
  * label. `changed()` restores exactly the behaviour of the `.changed()` calls
  * this function replaced.
+ *
+ * `geometry` carries the *inputs* a holder needs to reproduce its shape — `size`,
+ * `rotation`, `radius`, `scale`. Without it a graphic serialises to the right
+ * picture and the wrong state: the rendered geometry survives, but the numbers
+ * that produced it live only on the holder instance, so a reloaded graphic cannot
+ * be rotated or resized. Only holders whose state the *user* can change need to
+ * pass it — anything derived from the drawing resolution is reproduced for free by
+ * rebuilding through `getController(name, drawingResolution)`.
  */
 export function writeGraphicProperties(
     features: (Feature | undefined)[],
     name: TacticalGraphicName,
     labels: GraphicLabels,
+    geometry?: GraphicGeometryState,
 ): void {
-    const properties = {name, ...labels};
+    const properties = {name, ...labels, ...geometry};
     for (const feature of features) {
         if (!feature) continue;
         feature.set(TACTICAL_GRAPHIC_KEY, properties);
         feature.changed();
     }
+}
+
+/**
+ * Reads back the geometry inputs `writeGraphicProperties` stamped. Returns an empty
+ * object for a feature that carries none, so a caller can spread it unconditionally.
+ */
+export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryState {
+    const bag = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
+    if (!bag) return {};
+    const {size, radius, rotation, scale} = bag;
+    const state: GraphicGeometryState = {};
+    if (size !== undefined) state.size = size;
+    if (radius !== undefined) state.radius = radius;
+    if (rotation !== undefined) state.rotation = rotation;
+    if (scale !== undefined) state.scale = scale;
+    return state;
 }

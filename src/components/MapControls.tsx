@@ -34,6 +34,8 @@ import ClearIcon from '@mui/icons-material/Clear';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import GridViewIcon from '@mui/icons-material/GridView';
 import CloseIcon from '@mui/icons-material/Close';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
 import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
@@ -46,6 +48,10 @@ interface Props {
     /** Hostility applied to every sample that accepts one; undefined = leave default. */
     onDrawSamples(hostility?: TacticalGraphicHostility): void;
     onClearAll(): void;
+    /** Downloads every graphic on the map as a .geojson file. */
+    onExportGeoJson(): void;
+    /** Replaces everything on the map with the graphics in `file`. */
+    onImportGeoJson(file: File): void;
     interactionMode: InteractionType;
     isRotating: boolean;
     isResizing: boolean;
@@ -142,6 +148,8 @@ const MapControls: React.FC<Props> = ({
     onReset,
     onDrawSamples,
     onClearAll,
+    onExportGeoJson,
+    onImportGeoJson,
     interactionMode,
     onToggleInteraction,
     defaultShape,
@@ -157,6 +165,8 @@ const MapControls: React.FC<Props> = ({
     const [filterOpen, setFilterOpen] = useState(false);
     const [enabledCategories, setEnabledCategories] = useState<Set<TacticalGraphicCategory>>(loadEnabledCategories);
     const listRef = useRef<HTMLDivElement>(null);
+    /** The hidden file input the Import button clicks on the user's behalf. */
+    const importInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         localStorage.setItem(LS_CATEGORIES, JSON.stringify(Array.from(enabledCategories)));
@@ -601,6 +611,63 @@ const MapControls: React.FC<Props> = ({
                             Clear all
                         </Box>
                     </Box>
+                </Box>
+
+                {/* Save / load. Deliberately a file rather than localStorage: the point is
+                    to be able to open the GeoJSON and see exactly what persisted. */}
+                <Box>
+                    <Typography sx={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: 'text.secondary',
+                        mb: 0.5,
+                    }}>
+                        Graphics Layer
+                    </Typography>
+                    <Box sx={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75}}>
+                        <Box
+                            component="button"
+                            onClick={onExportGeoJson}
+                            sx={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
+                                py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
+                                backgroundColor: 'action.hover', color: 'text.primary',
+                                fontSize: '0.72rem', fontWeight: 600,
+                                '&:hover': {backgroundColor: 'primary.main', color: '#fff'},
+                            }}
+                        >
+                            <FileDownloadIcon sx={{fontSize: 15}}/>
+                            Export
+                        </Box>
+                        <Box
+                            component="button"
+                            onClick={() => importInputRef.current?.click()}
+                            sx={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
+                                py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
+                                backgroundColor: 'action.hover', color: 'text.primary',
+                                fontSize: '0.72rem', fontWeight: 600,
+                                '&:hover': {backgroundColor: 'primary.main', color: '#fff'},
+                            }}
+                        >
+                            <FileUploadIcon sx={{fontSize: 15}}/>
+                            Import
+                        </Box>
+                    </Box>
+                    <input
+                        ref={importInputRef}
+                        type="file"
+                        accept=".geojson,.json,application/geo+json,application/json"
+                        style={{display: 'none'}}
+                        onChange={e => {
+                            const file = e.target.files?.[0];
+                            // Reset first, or picking the same file twice fires no change event.
+                            e.target.value = '';
+                            if (file) onImportGeoJson(file);
+                        }}
+                    />
                 </Box>
             </Box>
         </Paper>
