@@ -157,11 +157,27 @@ describe('the snapshot', () => {
         expect(snapshot.tacticalGraphicsVersion).toBe(SNAPSHOT_VERSION);
     });
 
-    it('carries the drawing resolution, without which the rebuild is the wrong size', () => {
+    it('files renderer state under `renderer`, apart from the doctrinal bag', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.TacticalBlock);
         const [feature] = serializeTacticalGraphics(from).features;
-        expect(feature.properties?.drawingResolution).toBe(RES);
+
+        expect(feature.properties?.renderer).toEqual({drawingResolution: RES});
+        // The portable bag must not carry viewport quantities.
+        expect(feature.properties?.tacticalGraphic).not.toHaveProperty('drawingResolution');
+        expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
+    });
+
+    it('keeps a security operation scale in `renderer`, not in the graphic', () => {
+        const from = fakeManager();
+        const handler = build(from, TacticalGraphicName.Cover) as SecurityOperationsController;
+        handler.graphic.setScale(1.9);
+
+        const [feature] = serializeTacticalGraphics(from).features;
+        const renderer = feature.properties?.renderer as {drawingResolution: number; scale: number};
+        expect(renderer.drawingResolution).toBe(RES);
+        expect(renderer.scale).toBeCloseTo(1.9, 6);
+        expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
     });
 
     it('writes geographic coordinates, not map metres', () => {
@@ -272,7 +288,8 @@ describe('the drawing resolution is load-bearing, not incidental', () => {
         // Same snapshot, but the saved resolution replaced by the "current view" one —
         // the mistake this field exists to prevent.
         const snapshot = serializeTacticalGraphics(from);
-        snapshot.features[0].properties!.drawingResolution = RES * 4;
+        (snapshot.features[0].properties!.renderer as {drawingResolution: number})
+            .drawingResolution = RES * 4;
 
         const to = fakeManager();
         expect(restoreTacticalGraphics(to, snapshot).restored).toBe(1);
@@ -288,7 +305,7 @@ describe('the drawing resolution is load-bearing, not incidental', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.PhaseLine);
         const snapshot = serializeTacticalGraphics(from);
-        delete snapshot.features[0].properties!.drawingResolution;
+        delete snapshot.features[0].properties!.renderer;
 
         const to = fakeManager();
         const report = restoreTacticalGraphics(to, snapshot);
@@ -327,7 +344,7 @@ describe('a bad record cannot cost the user the good ones', () => {
             features: [{
                 type: 'Feature',
                 geometry: {type: 'Point', coordinates: [0, 0]},
-                properties: {role: 'base', symbolId: 'bad', drawingResolution: RES,
+                properties: {role: 'base', symbolId: 'bad', renderer: {drawingResolution: RES},
                     tacticalGraphic: {name: 'NotARealGraphic'}},
             }],
         });
