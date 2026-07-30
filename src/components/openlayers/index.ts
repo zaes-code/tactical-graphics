@@ -56,9 +56,10 @@ export * from './openlayerStyles';
 export {isDarkMode, setDarkModeFlag} from '../../settings';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
-// the base, carrying the amplifiers and the geometry inputs — and
-// `restoreTacticalGraphics` rebuilds them editable. See persistence.ts for why the
-// drawing resolution has to travel with the snapshot.
+// the base — and `restoreTacticalGraphics` rebuilds them editable. Each record carries
+// two objects: `tacticalGraphic` (the portable description any renderer understands) and
+// `renderer` (this renderer's bookkeeping, chiefly the drawing resolution decoration
+// sizes were derived from). Keep both; see persistence.ts for why.
 export {
     SNAPSHOT_VERSION,
     applyRestoredGeometry,
@@ -69,6 +70,7 @@ export type {
     RestoreFailure,
     RestoreReport,
     SerializeOptions,
+    TacticalGraphicRendererState,
     TacticalGraphicsSnapshot,
 } from './persistence';
 
