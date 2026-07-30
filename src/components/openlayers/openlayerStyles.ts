@@ -23,7 +23,7 @@ import {
     TWO_WAY_ARROW as two_way_arrow,
 } from './assets/routeDirectionIcons';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
-import {readGraphicLabels} from './graphicProperties';
+import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize, isDarkMode} from '../../settings';
@@ -67,21 +67,50 @@ export const LINE_WIDTH = 4;
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
 
+/**
+ * ## The dark-mode palette
+ *
+ * Every colour below has *two* real values now. It used to have one: all four
+ * accessors returned the same string on both branches, and dark mode worked anyway
+ * — by accident. The demo's `invert(95%) hue-rotate(180deg) brightness(85%)
+ * contrast(90%)` filter (`src/styles/map.css`) was landing on the graphics canvas as
+ * well as the basemap, because OL composites consecutive layers that share a
+ * className onto one canvas. That is fixed at source (see
+ * `TacticalGraphicsManager.renderingVectorLayer`), so the colours have to carry
+ * themselves from here on.
+ *
+ * The dark values are the *measured* output of that old filter chain, so the fix is
+ * visually a no-op — with the one exception it exists for. `invert` maps yellow onto
+ * blue and CSS `hue-rotate`'s linear matrix crushes blue's luminance, so pending's
+ * `rgb(255,255,0)` was arriving on screen as `rgb(48,48,13)`, a near-black olive. It
+ * is now the same bright yellow in both modes. See `ai/decisions.md`.
+ */
+
 /** Default stroke/fill color for graphics with no specific hostility color. White in dark mode, black in light. */
 export function getDefaultLineColor(): string {
-    return isDarkMode() ? '#000000' : '#000000';
+    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
 }
 
 /** Text label fill color. */
 export function getLabelFillColor(): string {
-    return isDarkMode() ? '#000000' : '#000000';
+    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
 }
 
 /** Text label halo (outline) color — contrast against the map background. */
 export function getLabelHaloColor(): string {
-    // Use transparent halo for now.
-    return isDarkMode() ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,1)';
-    // return isDarkMode() ? 'rgba(255,255,255,0)' : 'rgba(255,255,255,0)';
+    return isDarkMode() ? 'rgb(23,23,23)' : 'rgba(255,255,255,1)';
+}
+
+/**
+ * Picks between a light-mode and a dark-mode colour.
+ *
+ * For editor chrome and one-off literals that are not affiliation colours and so have
+ * no place in `HOSTILITY_COLORS` — handles, marker dots, the air coordinating area's
+ * own red. Exported so a host styling its own additions can stay in step with the
+ * library's mode.
+ */
+export function byMode(light: string, dark: string): string {
+    return isDarkMode() ? dark : light;
 }
 
 /** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
@@ -89,8 +118,20 @@ export function getLabelBackgroundFill(): string {
     return isDarkMode() ? 'rgba(22, 27, 34, 0.90)' : 'rgba(255, 255, 255, 0.90)';
 }
 
-/* Halo used for the label background. */
-const haloStroke = new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
+/**
+ * Halo used for the label background.
+ *
+ * A function, not a `const`. As a module-level const the halo colour was frozen at
+ * import and could never follow a dark-mode toggle — harmless while both branches of
+ * `getLabelHaloColor` returned white, a silent bug the moment they diverged. Cached
+ * per mode so the ~75 call sites don't allocate a `Stroke` per style call.
+ */
+const haloStrokeCache: Partial<Record<'dark' | 'light', Stroke>> = {};
+
+export function getHaloStroke(): Stroke {
+    const key = isDarkMode() ? 'dark' : 'light';
+    return haloStrokeCache[key] ??= new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
+}
 
 /**
  * Readability clamp on the zoom multiplier of `featureLabelScale`. Same range as
@@ -227,7 +268,7 @@ export const createBaseFeature = () => {
 
     feature.set('base', true);
     feature.set('hidden', true);
-    return feature;
+    return assignRole(feature, 'base');
 };
 
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
@@ -249,7 +290,7 @@ export const createHandleFeature = () => {
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: setOpacity('rgba(255,0,0,1)', .8),
+                    color: setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8),
                 }),
             }),
         });
@@ -257,7 +298,7 @@ export const createHandleFeature = () => {
     feature.set('handle', true);
     feature.set('hidden', true);
 
-    return feature;
+    return assignRole(feature, 'handle');
 };
 
 // used to adjust the width of graphics such as Movement graphics (adjusting the road size)
@@ -284,7 +325,7 @@ export const createInertHandleFeature = () => {
         return new Style({
             image: new CircleStyle({
                 radius: 5,
-                fill: new Fill({color: 'rgba(130,130,130,0.8)'}),
+                fill: new Fill({color: byMode('rgba(130,130,130,0.8)', 'rgba(109,109,109,0.8)')}),
             }),
         });
     });
@@ -293,7 +334,7 @@ export const createInertHandleFeature = () => {
     feature.set('hidden', true);
     feature.set('inert', true);
 
-    return feature;
+    return assignRole(feature, 'handle');
 };
 
 /**
@@ -319,7 +360,7 @@ export const createFeature = () => {
             || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
         return new Style({
             fill: new Fill({
-                color: 'rgba(0, 120, 255, 0.2)',
+                color: byMode('rgba(0, 120, 255, 0.2)', 'rgba(55, 137, 208, 0.2)'),
             }),
             stroke: new Stroke({
                 color,
@@ -328,13 +369,13 @@ export const createFeature = () => {
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: 'rgba(255, 0, 0, 0.8)',
+                    color: byMode('rgba(255, 0, 0, 0.8)', 'rgba(208, 123, 123, 0.8)'),
                 }),
             }),
         });
     });
 
-    return feature;
+    return assignRole(feature, 'graphic');
 };
 
 /**
@@ -433,7 +474,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     text: infoLines.join('\n'),
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     textAlign: 'left',
                     textBaseline: 'bottom',
                     offsetY: -60 * baseScale,
@@ -457,7 +498,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     text: label,
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -481,7 +522,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                         // T/AS and B labels.
                         fill: new Fill({color: getLabelFillColor()}),
                         scale: fittedScale,
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                     }),
@@ -502,7 +543,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
                     scale: fittedScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     textAlign: 'center',
                     textBaseline: 'middle',
                 }),
@@ -572,7 +613,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
             textAlign: 'center',
             textBaseline: 'middle',
             scale,
-            stroke: haloStroke,
+            stroke: getHaloStroke(),
         }),
     });
 }
@@ -588,7 +629,11 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     if (coords.length < 2) return []; // need at least 2 pts
 
     const hostilityColor = feature.get('hostilityColor') || getDefaultLineColor();
-    if (hostilityColor === getColorByHostility(TacticalGraphicHostility.hostileFaker)) {
+    // Test the affiliation, not the colour string. `hostilityColor` is a colour resolved
+    // at stamp time, so once the palette became mode-dependent a string compare would
+    // both miss a feature stamped in the other mode and be one refactor away from
+    // matching some unrelated red.
+    if (feature.get('hostility') === TacticalGraphicHostility.hostileFaker) {
         labelText = `ENY ${labelText}`;
     }
 
@@ -649,7 +694,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textAlign: 'left',
                 textBaseline: 'middle',
                 offsetX: startOutsideRight ? GAP_PX : -GAP_PX - textWidth,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 fill: new Fill({color: getLabelFillColor()}),
                 scale: scale,
             }),
@@ -666,7 +711,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textAlign: 'right',
                 textBaseline: 'middle',
                 offsetX: endOutsideRight ? GAP_PX + textWidth : -GAP_PX,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 fill: new Fill({color: getLabelFillColor()}),
                 scale: scale,
             }),
@@ -718,7 +763,7 @@ function bridgeGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFuncti
                 textBaseline: 'middle',
                 rotation,
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
 
@@ -762,7 +807,7 @@ function bridgeGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFuncti
                     textBaseline: 'middle',
                     rotation: 0,
                     scale: labelScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }));
         }
@@ -807,7 +852,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
                 textBaseline: 'middle',
                 rotation: rotation + Math.PI / 2,
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
         let hostility = f.get('hostility');
@@ -1007,7 +1052,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: 'IN',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1030,7 +1075,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: 'E',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1054,7 +1099,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: 'MD',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation: 0,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1080,7 +1125,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: 'T',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'left',
                     textBaseline: 'middle',
@@ -1106,7 +1151,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: 'A',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'left',
                     textBaseline: 'middle',
@@ -1139,7 +1184,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text,
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'left',
                     textBaseline: 'middle',
@@ -1178,7 +1223,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                         text,
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         rotation: textRotation,
                         textAlign: 'left',
                         textBaseline: 'middle',
@@ -1296,7 +1341,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text,
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign,
                     textBaseline: 'middle',
@@ -1322,7 +1367,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
                     text: catkText,
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     rotation,
                     textAlign: 'left',
                     textBaseline: 'middle',
@@ -1420,7 +1465,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: featureGraphicLabelScale(f, resolution),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         });
         styles.push(textStyle);
@@ -1557,7 +1602,7 @@ function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: st
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: featureLabelScale(f, resolution),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1569,7 +1614,8 @@ function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: st
                 src: iconSrc,
                 rotation: startRotation,
                 scale: 1.2,
-                color: '#000',
+                // Tint, not a literal: a hardcoded black arrow is invisible on a dark basemap.
+                color: getDefaultLineColor(),
             }),
         },
     ));
@@ -1584,7 +1630,7 @@ function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: st
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: featureLabelScale(f, resolution),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1596,7 +1642,8 @@ function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: st
                 src: iconSrc,
                 rotation: endRotation,
                 scale: 1.2,
-                color: '#000',
+                // Tint, not a literal — see the matching arrow above.
+                color: getDefaultLineColor(),
             }),
         },
     ));
@@ -1666,7 +1713,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
                 textAlign: startAlign,
                 textBaseline: 'bottom',
                 scale: startScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1681,7 +1728,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
                 textAlign: endAlign,
                 textBaseline: 'bottom',
                 scale: endScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1698,7 +1745,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
                 textAlign: startAlign,
                 textBaseline: 'top',
                 scale: startScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1713,7 +1760,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
                 textAlign: endAlign,
                 textBaseline: 'top',
                 scale: endScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1764,7 +1811,7 @@ function offensiveLineStyles(f: FeatureLike, resolution: number, label: string) 
                 textAlign: startAlign,
                 textBaseline: 'bottom',
                 scale: startScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1779,7 +1826,7 @@ function offensiveLineStyles(f: FeatureLike, resolution: number, label: string) 
                 textAlign: endAlign,
                 textBaseline: 'bottom',
                 scale: endScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         },
     ));
@@ -1906,7 +1953,7 @@ function buildLinearTargetStyles(
                 textAlign: 'center',
                 textBaseline: 'bottom',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
     }
@@ -1929,7 +1976,7 @@ function buildLinearTargetStyles(
                 textAlign: 'center',
                 textBaseline: 'top',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
     }
@@ -2033,12 +2080,14 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
         const endOffsetSign = reversed ? -1 : 1;
 
         return [
-            // Red top wave
+            // Enemy-side wave. Routed through the palette rather than a literal 'red' so it
+            // tracks the mode alongside its friendly-side partner below; the graphic draws
+            // both identities at once, so the pair has to stay balanced.
             new Style({
                 geometry: new LineString(topCoords),
-                stroke: new Stroke({color: 'red', width: LINE_WIDTH}),
+                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH}),
             }),
-            // Black bottom wave
+            // Friendly-side wave
             new Style({
                 geometry: new LineString(bottomCoords),
                 stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH}),
@@ -2055,7 +2104,7 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     textBaseline: 'middle',
                     scale: startScale,
                     offsetX: startOffsetSign * labelPadPx * startScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }),
             // "LC" label at end (right-aligned to the right of the line end)
@@ -2070,7 +2119,7 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     textBaseline: 'middle',
                     scale: endScale,
                     offsetX: endOffsetSign * labelPadPx * endScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }),
         ];
@@ -2135,7 +2184,7 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         });
         styles.push(textStyle);
@@ -2213,7 +2262,7 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: labelScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }),
             new Style({
@@ -2279,7 +2328,7 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: labelScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }),
         ];
@@ -2340,7 +2389,7 @@ export function breachStyleFunc(label: string): StyleFunction {
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: featureGraphicLabelScale(f, resolution),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         });
         styles.push(textStyle);
@@ -2459,7 +2508,7 @@ export function blockStyleFunc(label: string): StyleFunction {
                 text: label,
                 font: 'bold 24px sans-serif',
                 fill: new Fill({color: getLabelFillColor()}),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 rotation: rotation,
                 textAlign: 'center',
                 textBaseline: 'middle',
@@ -2617,7 +2666,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
                     textAlign: 'center',
                     textBaseline: 'bottom',
                     scale: cflScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -2633,7 +2682,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
                     textAlign: 'center',
                     textBaseline: 'top',
                     scale: cflScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -2695,7 +2744,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
                 textAlign: startGoesRight ? 'left' : 'right',
                 textBaseline: 'bottom',
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
 
@@ -2709,7 +2758,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
                 textAlign: endGoesRight ? 'right' : 'left',
                 textBaseline: 'bottom',
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
 
@@ -2764,7 +2813,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
                     textAlign: 'center',
                     textBaseline: 'bottom',
                     scale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }));
         }
@@ -2781,7 +2830,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
                     textAlign: 'center',
                     textBaseline: 'top',
                     scale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             }));
         }
@@ -2918,7 +2967,7 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: obsScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -3035,7 +3084,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: 'F',
                 font: 'bold 24px sans-serif',
                 fill: new Fill({color: getLabelFillColor()}),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 rotation,
                 textAlign: 'center',
                 textBaseline: 'middle',
@@ -3087,7 +3136,7 @@ export function baseDefenseZoneLabelStyleFn(): StyleFunction {
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         })];
     };
@@ -3197,7 +3246,7 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
                 textAlign: 'center',
                 textBaseline: 'top',
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
 
@@ -3335,7 +3384,7 @@ function addDirectionArrowLabels(
                 textAlign,
                 textBaseline: 'middle',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
     }
@@ -3358,7 +3407,7 @@ function addDirectionArrowLabels(
                 textAlign,
                 textBaseline: 'middle',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
     }
@@ -3376,7 +3425,7 @@ function addDirectionArrowLabels(
                 textAlign,
                 textBaseline: 'top',
                 scale: labelScale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
     }
@@ -3555,7 +3604,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: mfpScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -3586,7 +3635,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
                     textAlign: 'left',
                     textBaseline: 'middle',
                     scale: mfpScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -3731,7 +3780,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: labelScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -3746,7 +3795,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: labelScale,
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                 }),
             },
         ));
@@ -3841,7 +3890,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         padding: [4, 8, 4, 8],
                         textAlign: 'center',
                         textBaseline: 'middle',
@@ -3876,7 +3925,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: 'PAA',
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         scale,
@@ -3896,7 +3945,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                             text: lines.join('\n'),
                             font: fontStyle,
                             fill: new Fill({color: getLabelFillColor()}),
-                            stroke: haloStroke,
+                            stroke: getHaloStroke(),
                             textAlign: 'center',
                             textBaseline: 'middle',
                             scale,
@@ -3929,7 +3978,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         scale,
@@ -3982,7 +4031,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                             text: nameLines.join('\n'),
                             font: fontStyle,
                             fill: new Fill({color: getLabelFillColor()}),
-                            stroke: haloStroke,
+                            stroke: getHaloStroke(),
                             textAlign: 'center',
                             textBaseline: 'middle',
                             scale,
@@ -4036,7 +4085,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                             text: dtgText,
                             font: fontStyle,
                             fill: new Fill({color: getLabelFillColor()}),
-                            stroke: haloStroke,
+                            stroke: getHaloStroke(),
                             textAlign: 'right',
                             textBaseline: 'top',
                             offsetX: -10,
@@ -4063,7 +4112,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: fullLabel.trim(),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         rotation: getRotation(a, b),
@@ -4095,7 +4144,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         scale,
@@ -4126,7 +4175,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         scale,
@@ -4147,7 +4196,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill: new Fill({color: getLabelFillColor()}),
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         padding: [4, 8, 4, 8],
                         textAlign: 'center',
                         textBaseline: 'middle',
@@ -4193,7 +4242,7 @@ export function getAreaLabelStyles(feature: FeatureLike, resolution: number, tex
             offsetY: offsetY,
             fill: new Fill({color: getLabelFillColor()}),
             scale: featureLabelScale(feature, resolution),
-            stroke: haloStroke,
+            stroke: getHaloStroke(),
         }),
     }));
 
@@ -4206,7 +4255,7 @@ export function getAreaLabelStyles(feature: FeatureLike, resolution: number, tex
             fill: new Fill({color: getLabelFillColor()}),
             scale: featureLabelScale(feature, resolution),
             offsetY: 18 + offsetY,
-            stroke: haloStroke,
+            stroke: getHaloStroke(),
         }),
     }));
     return styles;
@@ -4280,7 +4329,7 @@ export function airspaceCoordinationAreaStyle(
                 text: allLines.join('\n'),
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 textAlign: 'left',
                 textBaseline: 'middle',
                 offsetX,
@@ -4304,7 +4353,7 @@ export function getMissionTaskStyleFn(textLabel: string, rotation: number = 0): 
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
                 scale: featureLabelScale(feature, resolution),
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         }));
 
@@ -4340,7 +4389,7 @@ export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFuncti
                 font: 'bold 24px sans-serif',
                 fill: new Fill({color: getLabelFillColor()}),
                 scale,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
                 textAlign: 'center',
                 textBaseline: 'middle',
             }),
@@ -4423,7 +4472,7 @@ export function getRangeFanLabelStyleFn(
                         text: lines.join('\n'),
                         font: fontStyle,
                         fill,
-                        stroke: haloStroke,
+                        stroke: getHaloStroke(),
                         textAlign: 'center',
                         textBaseline: 'middle',
                         scale,
@@ -4443,7 +4492,7 @@ export function getRangeFanLabelStyleFn(
                             text: formatAzimuth(band.resolvedLeftAz),
                             font: fontStyle,
                             fill,
-                            stroke: haloStroke,
+                            stroke: getHaloStroke(),
                             textAlign: 'center',
                             textBaseline: 'middle',
                             scale,
@@ -4457,7 +4506,7 @@ export function getRangeFanLabelStyleFn(
                             text: formatAzimuth(band.resolvedRightAz),
                             font: fontStyle,
                             fill,
-                            stroke: haloStroke,
+                            stroke: getHaloStroke(),
                             textAlign: 'center',
                             textBaseline: 'middle',
                             scale,
@@ -4521,7 +4570,7 @@ export function getSecurityOperationLabelStyle(textLabel: string, rotation: numb
                 scale: labelScale,
                 offsetX,
                 offsetY,
-                stroke: haloStroke,
+                stroke: getHaloStroke(),
             }),
         });
     };
@@ -4969,18 +5018,53 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
     return [outlineStyle, ...echelonStyles];
 }
 
+/**
+ * The four affiliation colours, per mode. See the palette note above
+ * `getDefaultLineColor` for where the dark values come from.
+ *
+ * Most dark values are the measured output of the CSS filter that used to repaint this
+ * layer, so the switch to a real palette left them looking the same. Two are not:
+ *
+ * - `pending`/`suspectJoker` is **identical in both modes**. Yellow is legible on a dark
+ *   basemap as-is, and it is the colour the old filter destroyed — the reason the
+ *   palette exists at all.
+ * - `friend` is a **deliberately re-picked blue**. The filter emitted
+ *   `rgb(173,173,208)`, whose red and green channels are equal and whose blue is only
+ *   35 higher — barely saturated, so it read as grey-lavender rather than blue. This is
+ *   the doctrinal blue lightened to survive a dark background and nudged a little toward
+ *   cyan, which is what stops a high-lightness hue-240 blue reading as violet.
+ *
+ * Keep any future dark value legible against the basemap *and* recognisable as its
+ * doctrinal hue. Reproducing what the old filter happened to emit is not a goal.
+ */
+const HOSTILITY_COLORS = {
+    light: {
+        friend: 'rgba(0, 0, 255, 1)',
+        hostile: 'rgba(255, 0, 0, 1)',
+        neutral: 'rgba(0, 128, 0, 1)',
+        pending: 'rgba(255, 255, 0, 1)',
+    },
+    dark: {
+        friend: 'rgb(92,148,255)',
+        hostile: 'rgb(208,123,123)',
+        neutral: 'rgb(72,160,72)',
+        pending: 'rgba(255, 255, 0, 1)',
+    },
+} as const;
+
 export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
+    const palette = isDarkMode() ? HOSTILITY_COLORS.dark : HOSTILITY_COLORS.light;
     switch (hostility) {
         case TacticalGraphicHostility.friend:
         case TacticalGraphicHostility.assumedFriend:
-            return 'rgba(0, 0, 255, 1)';
+            return palette.friend;
         case TacticalGraphicHostility.hostileFaker:
-            return 'rgba(255, 0, 0, 1)';
+            return palette.hostile;
         case TacticalGraphicHostility.neutral:
-            return 'rgba(0, 128, 0, 1)';
+            return palette.neutral;
         case TacticalGraphicHostility.pending:
         case TacticalGraphicHostility.suspectJoker:
-            return 'rgba(255, 255, 0, 1)';
+            return palette.pending;
         case TacticalGraphicHostility.unknown:
         default:
             return getDefaultLineColor();
@@ -5356,7 +5440,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
                     text: 'UXO',
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
-                    stroke: haloStroke,
+                    stroke: getHaloStroke(),
                     placement: 'point',
                     scale: featureLabelScale(feature, resolution),
                 }),
@@ -5434,7 +5518,7 @@ export function createAirCoordinatingAreaLabelStyle(
             text: allLines.join('\n'),
             font: fontStyle,
             fill: new Fill({color: getLabelFillColor()}),
-            stroke: haloStroke,
+            stroke: getHaloStroke(),
             padding: hasHatchPattern ? [4, 8, 4, 8] : undefined,
             textAlign: 'left',
             textBaseline: 'middle',
@@ -5451,10 +5535,10 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const polygonStyle = new Style({
             fill: new Fill({
-                color: 'rgba(255, 100, 100, 0.4)',
+                color: byMode('rgba(255, 100, 100, 0.4)', 'rgba(190, 84, 84, 0.4)'),
             }),
             stroke: new Stroke({
-                color: 'rgb(255, 50, 50)',
+                color: byMode('rgb(255, 50, 50)', 'rgb(208,104,104)'),
                 width: LINE_WIDTH,
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),

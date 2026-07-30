@@ -49,6 +49,35 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the colour and width constants they share.
 export * from './openlayerStyles';
 
+// Light/dark mode. Every colour accessor above reads this flag, so without it a host
+// got a two-mode palette and no way to choose between the modes. Default is light —
+// call `setDarkModeFlag(true)` when your map background is dark, then invalidate your
+// features (`feature.changed()`) so the style functions re-evaluate.
+export {isDarkMode, setDarkModeFlag} from '../../settings';
+
+// Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
+// the base — and `restoreTacticalGraphics` rebuilds them editable. Each record carries
+// two objects: `tacticalGraphic` (the portable description any renderer understands) and
+// `renderer` (this renderer's bookkeeping, chiefly the drawing resolution decoration
+// sizes were derived from). Keep both; see persistence.ts for why.
+export {
+    SNAPSHOT_VERSION,
+    applyRestoredGeometry,
+    restoreTacticalGraphics,
+    serializeTacticalGraphics,
+} from './persistence';
+export type {
+    RestoreFailure,
+    RestoreReport,
+    SerializeOptions,
+    TacticalGraphicRendererState,
+    TacticalGraphicsSnapshot,
+} from './persistence';
+
+// Feature-property helpers for hosts that build or inspect graphics themselves.
+export {ROLE_KEY, assignRole, readGraphicGeometryState, readRole} from './graphicProperties';
+export type {GraphicGeometryState} from './graphicProperties';
+
 // The feature holders: subclass one to add a graphic without forking the package.
 export {AirCorridor} from './graphics/AirCorridor';
 export {AreaGraphicBase} from './graphics/AreaGraphicBase';
