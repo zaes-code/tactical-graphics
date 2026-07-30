@@ -135,8 +135,13 @@ export class TacticalGraphicsManager {
 
     // display the markers for letting a user drag/resize/modify/rotate a tactical graphic.
     toggleHandleFeatures = (): void => {
+        const visible = this.enableHandleModes().includes(this.currentMode);
         this.getRenderedFeaturesByProp('handle').forEach(feature => {
-            feature.set('hidden', !this.enableHandleModes().includes(this.currentMode));
+            feature.set('hidden', !visible);
+            // The centre dot is grabbable for a move and nothing else — see
+            // `handleDownEvent`. Publish that so its style can colour itself
+            // accordingly rather than claiming "never draggable" in a mode where it is.
+            if (feature.get('inert')) feature.set('grabbable', this.isTranslating());
         });
     };
 
@@ -212,7 +217,14 @@ export class TacticalGraphicsManager {
         });
         if (hits.length === 0) return false;
 
-        const liveHandle = hits.find(f => f.get('handle') && !f.get('inert'));
+        // The centre dot is refused as a drag origin for resize — the scale ratio
+        // divides by distance-to-centre, which is ~0 there — and for rotate, where a
+        // point on the axis carries no angle. A move has neither problem: translate
+        // applies a plain delta, and the centre is the most natural thing to grab to
+        // reposition a circle. So it is a live handle in translate mode only.
+        const centreGrabbable = this.isTranslating();
+        const isLive = (f: Feature) => f.get('handle') && (!f.get('inert') || centreGrabbable);
+        const liveHandle = hits.find(isLive);
         // Grey handles are visual anchors, not drag origins — but only once no
         // live handle is in play, so an inert dot overlapping a real one cannot
         // veto it. Bail before latching any state so a later drag cannot pick up
