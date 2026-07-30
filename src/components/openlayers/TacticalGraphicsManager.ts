@@ -51,6 +51,17 @@ export class TacticalGraphicsManager {
      * than a tactical picture holds needs the frame budget back.
      */
     renderingVectorLayer = new VectorLayer({
+        /**
+         * **Load-bearing — do not remove.** OL's `useContainer`
+         * (`ol/renderer/canvas/Layer.js`) makes consecutive rendered layers that share a
+         * className reuse the *same* canvas element. With the default `ol-layer`, this
+         * layer composited straight into the basemap's canvas, so any CSS filter a host
+         * put on the basemap silently repainted every tactical graphic too. The demo's
+         * dark-mode `invert()` did exactly that: it was what turned black strokes white,
+         * and what crushed pending yellow to a near-black olive. A distinct className is
+         * what keeps the graphics on their own canvas and their own colours.
+         */
+        className: 'tg-graphics',
         source: this.renderingVectorSource,
         updateWhileAnimating: true,
         updateWhileInteracting: true,
