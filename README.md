@@ -363,6 +363,23 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Exploitation | Offense Operations Planning |
 | Movement To Contact | Offense Operations Planning |
 | Pursuit | Offense Operations Planning |
+| Attack By Fire | Tactical Mission Tasks |
+| Block | Tactical Mission Tasks |
+| Breach | Tactical Mission Tasks |
+| Bypass | Tactical Mission Tasks |
+| Canalize | Tactical Mission Tasks |
+| Clear | Tactical Mission Tasks |
+| Contain | Tactical Mission Tasks |
+| Control | Tactical Mission Tasks |
+| Disengage | Tactical Mission Tasks |
+| Disrupt | Tactical Mission Tasks |
+| Exfiltrate | Tactical Mission Tasks |
+| Fix | Tactical Mission Tasks |
+| Isolate | Tactical Mission Tasks |
+| Occupy | Tactical Mission Tasks |
+| Retain | Tactical Mission Tasks |
+| Secure | Tactical Mission Tasks |
+| Support By Fire | Tactical Mission Tasks |
 | Artillery Target Intelligence Zone, Circular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Irregular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Rectangular | Target Acquisition Control Measures |
@@ -454,29 +471,12 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Triple Strand Concertina | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Unspecified | Mobility and Countermobility Control Measures |
-| Attack By Fire | Tactical Mission Tasks |
-| Block | Tactical Mission Tasks |
-| Breach | Tactical Mission Tasks |
-| Bypass | Tactical Mission Tasks |
-| Canalize | Tactical Mission Tasks |
-| Clear | Tactical Mission Tasks |
-| Contain | Tactical Mission Tasks |
-| Control | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
-| Disengage | Tactical Mission Tasks |
-| Disrupt | Tactical Mission Tasks |
-| Exfiltrate | Tactical Mission Tasks |
-| Fix | Tactical Mission Tasks |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
-| Isolate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
-| Occupy | Tactical Mission Tasks |
-| Retain | Tactical Mission Tasks |
-| Secure | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |
-| Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
 
