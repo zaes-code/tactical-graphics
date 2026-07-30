@@ -4,6 +4,34 @@ import * as turf from '@turf/turf';
 
 const EARTH_RADIUS_METERS = 6378137;
 
+/**
+ * Internal proportions of the attack-by-fire / support-by-fire position symbols,
+ * all expressed against the bar's half-height so the whole symbol scales as one
+ * piece. Measured off the FM 1-02.2 table 6-1 constructs — the 89x149 px
+ * attack-by-fire figure (printed page 239) and the 42x101 px support-by-fire
+ * figure (printed page 243):
+ *
+ *   attack by fire   barHalf 42.5   feather 40.3   arrowhead ~22
+ *   support by fire  barHalf 28.5   feather 26.9   arrow spread 16
+ *
+ * @see GeometryService.getFirePositionBracket
+ */
+const FIRE_POSITION_FEATHER_RATIO = 0.95;
+const FIRE_POSITION_ARROWHEAD_RATIO = 0.52;
+/**
+ * The two components of a support-by-fire arrow, measured from the bar it leaves:
+ * how far forward it reaches (as a fraction of the shaft) and how far past the bar
+ * it lands (as a fraction of the bar's half-height).
+ *
+ * Both are half what they first shipped as (1.0 / 0.56 — the arrows reached exactly
+ * as far as the user dragged), on the user's call 2026-07-29. Halving *both* is what
+ * halves the arrow's length without changing the angle it diverges at. The
+ * construct puts an arrow at 0.90 x barHalf; these values give 1.15, so short is
+ * also the more doctrinal direction.
+ */
+const FIRE_POSITION_ARROW_REACH_RATIO = 0.5;
+const FIRE_POSITION_ARROW_SPREAD_RATIO = 0.28;
+
 class GeometryService {
     arrowCenterPadding: number = 120;
 
@@ -1710,28 +1738,94 @@ class GeometryService {
     }
 
     /**
-     * AttackByFire symbol — backward "<" feathers at the start point plus a horizontal
-     * shaft ending in an arrowhead. Ratio between feather size and shaft length is
-     * controlled by the caller (passes `featherSize`).
+     * The "position" bracket shared by the attack-by-fire and support-by-fire
+     * symbols: a bar perpendicular to the shaft, centred on `start`, with a
+     * feather swept back off each end of it.
+     *
+     * Emitted as ONE polyline `[featherTop, barTop, barBottom, featherBottom]`
+     * so a single Stroke draws the whole bracket in lock-step — the bar and its
+     * feathers are one pen line in the doctrinal figure, not three.
+     *
+     * Proportions are measured off the FM 1-02.2 table 6-1 constructs (printed
+     * pages 239 and 243): a feather is `FIRE_POSITION_FEATHER_RATIO` of the
+     * bar's half-height, swept 45° back off the bar. The bar's own size relative
+     * to the shaft is the caller's business — see `FIRE_POSITION_BAR_RATIO` in
+     * `AdditionalMissionTasks.ts`.
+     */
+    getFirePositionBracket(start: Position, bearing: number, barHalf: number): Position[] {
+        const featherLength = barHalf * FIRE_POSITION_FEATHER_RATIO;
+        const barTop = turf.destination(start, barHalf, bearing - 90, {units: 'meters'});
+        const barBottom = turf.destination(start, barHalf, bearing + 90, {units: 'meters'});
+        const featherTop = turf.destination(barTop, featherLength, bearing - 135, {units: 'meters'});
+        const featherBottom = turf.destination(barBottom, featherLength, bearing + 135, {units: 'meters'});
+        return [
+            featherTop.geometry.coordinates,
+            barTop.geometry.coordinates,
+            barBottom.geometry.coordinates,
+            featherBottom.geometry.coordinates,
+        ];
+    }
+
+    /**
+     * AttackByFire symbol — the position bracket at `start` plus one shaft out of
+     * the bar's midpoint ending in an open arrowhead. `barHalf` is the bar's
+     * half-height in metres; every other dimension is derived from it, so the
+     * whole symbol scales uniformly.
      *
      * Returned MultiLineString segments (in order):
-     *   0: upper feather   (featherTop → start)
-     *   1: lower feather   (featherBottom → start)
-     *   2: shaft           (start → end)
-     *   3: arrowhead       (3 points produced by computeArrowheadPoints at end)
+     *   0: position bracket  (feather → bar → feather, 4 points)
+     *   1: shaft             (start → end)
+     *   2: arrowhead         (3 points produced by computeArrowheadPoints at end)
      */
-    getAttackByFireSymbol(base: Position[], featherSize: number): Feature<MultiLineString> {
+    getAttackByFireSymbol(base: Position[], barHalf: number): Feature<MultiLineString> {
         const start = base[0];
         const end = base[base.length - 1];
         const bearing = turf.bearing(start, end);
-        const featherTop = turf.destination(start, featherSize, bearing - 135, {units: 'meters'});
-        const featherBottom = turf.destination(start, featherSize, bearing + 135, {units: 'meters'});
-        const arrowhead = this.computeArrowheadPoints(start, end, featherSize, 45);
+        const arrowhead = this.computeArrowheadPoints(start, end, barHalf * FIRE_POSITION_ARROWHEAD_RATIO, 45);
         return turf.multiLineString([
-            [featherTop.geometry.coordinates, start],
-            [featherBottom.geometry.coordinates, start],
+            this.getFirePositionBracket(start, bearing, barHalf),
             [start, end],
             arrowhead,
+        ]);
+    }
+
+    /**
+     * SupportByFire symbol — the same position bracket, but with two arrows
+     * diverging from the *ends* of the bar instead of one shaft from its middle.
+     * Each arrow reaches `FIRE_POSITION_ARROW_REACH_RATIO` of the way along the
+     * shaft and lands `FIRE_POSITION_ARROW_SPREAD_RATIO` past the bar, so it stops
+     * short of the point the user dragged to — see those constants.
+     *
+     * Returned MultiLineString segments (in order):
+     *   0: position bracket  (feather → bar → feather, 4 points)
+     *   1: upper arrow line  (barTop → upperTip)
+     *   2: upper arrowhead
+     *   3: lower arrow line  (barBottom → lowerTip)
+     *   4: lower arrowhead
+     */
+    getSupportByFireSymbol(base: Position[], barHalf: number): Feature<MultiLineString> {
+        const start = base[0];
+        const end = base[base.length - 1];
+        const bearing = turf.bearing(start, end);
+        const bracket = this.getFirePositionBracket(start, bearing, barHalf);
+        const barTop = bracket[1];
+        const barBottom = bracket[2];
+
+        // Forward reach measured along the shaft, so the arrows shorten and lengthen
+        // with the line the user drew rather than with the bar alone.
+        const shaftLength = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
+        const reach = turf.destination(start, shaftLength * FIRE_POSITION_ARROW_REACH_RATIO, bearing, {units: 'meters'});
+        const tipOffset = barHalf * (1 + FIRE_POSITION_ARROW_SPREAD_RATIO);
+        const upperTip = turf.destination(reach, tipOffset, bearing - 90, {units: 'meters'}).geometry.coordinates;
+        const lowerTip = turf.destination(reach, tipOffset, bearing + 90, {units: 'meters'}).geometry.coordinates;
+        const headLength = barHalf * FIRE_POSITION_ARROWHEAD_RATIO;
+
+        return turf.multiLineString([
+            bracket,
+            [barTop, upperTip],
+            this.computeArrowheadPoints(barTop, upperTip, headLength, 45),
+            [barBottom, lowerTip],
+            this.computeArrowheadPoints(barBottom, lowerTip, headLength, 45),
         ]);
     }
 

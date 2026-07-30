@@ -41,7 +41,20 @@ const MIN_RESIZE_ORIGIN_PX = 8;
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
-    renderingVectorLayer = new VectorLayer({source: this.renderingVectorSource});
+    /**
+     * `updateWhileAnimating` / `updateWhileInteracting` default to `false`, which makes OL
+     * scale the last rendered canvas as a bitmap for the whole zoom and only re-run the
+     * style functions once it settles. Every label is sized by a style function against the
+     * current resolution, so that default shows the label at the wrong size for the whole
+     * gesture and snaps it at the end. Re-batching per frame is the cost of labels that
+     * track the zoom continuously; turn these off again if a host with far more features
+     * than a tactical picture holds needs the frame budget back.
+     */
+    renderingVectorLayer = new VectorLayer({
+        source: this.renderingVectorSource,
+        updateWhileAnimating: true,
+        updateWhileInteracting: true,
+    });
 
     // track the last pointer position for offset calculations
     lastPointerPosition: any;

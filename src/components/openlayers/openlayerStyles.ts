@@ -93,19 +93,32 @@ export function getLabelBackgroundFill(): string {
 const haloStroke = new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
 
 /**
+ * Readability clamp on the zoom multiplier of `featureLabelScale`. Same range as
+ * `getLineLabelScale`: without the cap a graphic drawn from high altitude grows its
+ * label without bound as the user zooms in past the drawing zoom; without the floor
+ * the label shrinks to nothing zoomed out.
+ */
+const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
+const MAX_LABEL_ZOOM_MULTIPLIER = 1.5;
+
+function labelZoomMultiplier(drawRes: number | undefined, resolution: number): number {
+    const zoom = drawRes && drawRes > 0 ? drawRes / resolution : Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution);
+    return Math.min(MAX_LABEL_ZOOM_MULTIPLIER, Math.max(MIN_LABEL_ZOOM_MULTIPLIER, zoom));
+}
+
+/**
  * Unified label scale for all graphics.
  * - Uses drawingResolution stored on the feature (set at creation time) to anchor the
  *   label size: at drawing zoom the text is exactly defaultLabelSize px; when zoomed
  *   out (higher resolution) the label shrinks proportionally.
  * - Falls back to a sqrt curve when drawingResolution is not available.
+ * - Either way the zoom multiplier is clamped to [0.3, 1.5] of defaultLabelSize so the
+ *   label stays readable at every altitude instead of tracking the world scale forever.
  */
 export function featureLabelScale(feature: FeatureLike, resolution: number): number {
     const drawRes = feature.get('drawingResolution') as number | undefined;
     const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    if (drawRes && drawRes > 0) {
-        return sizeFactor * (drawRes / resolution);
-    }
-    return sizeFactor * Math.max(0.3, Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution));
+    return sizeFactor * labelZoomMultiplier(drawRes, resolution);
 }
 
 /**
@@ -547,7 +560,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
 
     const scale = feature
         ? featureLabelScale(feature, resolution) * scaleMultiplier
-        : (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * Math.max(0.3, Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution)) * scaleMultiplier;
+        : (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * labelZoomMultiplier(undefined, resolution) * scaleMultiplier;
 
     return new Style({
         geometry: new Point(labelPoint), // dummy point
@@ -2138,6 +2151,79 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
     };
 }
 
+/**
+ * Exfiltrate — the whole drawn route with a gap in the middle of its FIRST segment
+ * for the "EX" label, plus the arrowhead on the far end.
+ *
+ * Geometry from `Exfiltrate.generateGraphics`: `[0]` is the route, `[1]` the
+ * arrowhead. Only the first segment is split; everything past the first bend
+ * renders as one continuous piece.
+ *
+ * Not `retroGradeTaskStyleFunc`, which this graphic used to share. That one
+ * discards sub-line 0 and rebuilds it from `baseLine[0]`/`baseLine[1]` alone, so
+ * a multi-vertex route would lose every segment after the first — fine for the
+ * cane arrows, which are fixed at two points, wrong here.
+ */
+export function exfiltrateStyleFunc(label: string): StyleFunction {
+    return (f, resolution) => {
+        const geom = f.getGeometry();
+        if (!(geom instanceof MultiLineString)) return [];
+        const lines = geom.getCoordinates();
+        const route = lines[0];
+        if (!route || route.length < 2) return [];
+
+        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        // Everything after the route renders untouched — that is the arrowhead.
+        const outlineSegments: Coordinate[][] = lines.slice(1);
+
+        const p1 = route[0];
+        const p2 = route[1];
+        const dx = p2[0] - p1[0];
+        const dy = p2[1] - p1[1];
+        const segLen = Math.hypot(dx, dy);
+
+        // Gap sized to the rendered glyph plus 4px padding a side. getTextWidth
+        // returns screen pixels, so × resolution once to reach map units.
+        const labelFont = 'bold 24px sans-serif';
+        const labelScale = featureLabelScale(f, resolution);
+        const halfGapPx = getTextWidth(label, labelFont, labelScale) / 2 + 4;
+        const gapRatio = segLen > 0 ? (halfGapPx * resolution) / segLen : 0;
+
+        const midGap: Coordinate = [p1[0] + dx * 0.5, p1[1] + dy * 0.5];
+        if (gapRatio > 0 && gapRatio < 0.5) {
+            const at = (t: number): Coordinate => [p1[0] + dx * t, p1[1] + dy * t];
+            outlineSegments.push([p1, at(0.5 - gapRatio)]);
+            // The far side of the gap runs on through every remaining vertex, so a
+            // bent route stays connected.
+            outlineSegments.push([at(0.5 + gapRatio), ...route.slice(1)]);
+        } else {
+            // Label is wider than the segment holding it — render the route
+            // unbroken rather than opening a gap that swallows the segment.
+            outlineSegments.push(route);
+        }
+
+        return [
+            new Style({
+                geometry: new Point(midGap),
+                text: new Text({
+                    text: label,
+                    font: labelFont,
+                    fill: new Fill({color: getLabelFillColor()}),
+                    rotation: 0,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    scale: labelScale,
+                    stroke: haloStroke,
+                }),
+            }),
+            new Style({
+                geometry: new MultiLineString(outlineSegments),
+                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            }),
+        ];
+    };
+}
+
 // ReliefInPlace: top line + curve + bottom line + arrowhead, with the "RIP"
 // label carved into a gap on the top line near the non-arrow end.
 export function reliefInPlaceStyleFunc(label: string): StyleFunction {
@@ -2394,21 +2480,44 @@ export function blockStyleFunc(label: string): StyleFunction {
 }
 
 /**
- * AttackByFire — backward "<" feathers at the start, shaft, and arrowhead at the end.
- * Geometry comes from `getAttackByFireSymbol` as a MultiLineString:
- *   [0] upper feather, [1] lower feather, [2] shaft, [3] arrowhead.
- * Renders the outline only — no label.
+ * The whole geometry in one hostility-coloured stroke, no label. Both
+ * fire-position symbols are shape-only in FM 1-02.2 table 6-1 — the bracket and
+ * the arrows *are* the symbol, there is no letter to render — and every sub-line
+ * they emit is part of the same pen line, so a single Style keeps the bar, the
+ * feathers and the arrowheads in lock-step at any weight.
+ */
+function firePositionStyles(f: FeatureLike): Style[] {
+    const geom = f.getGeometry();
+    if (!(geom instanceof MultiLineString)) return [];
+    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    return [new Style({
+        geometry: geom,
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+    })];
+}
+
+/**
+ * AttackByFire — the position bracket at the start plus one shaft out of the
+ * bar's midpoint ending in an arrowhead. Geometry comes from
+ * `getAttackByFireSymbol` as a MultiLineString:
+ *   [0] bracket (feather → bar → feather), [1] shaft, [2] arrowhead.
  */
 export function attackByFireStyleFunc(): StyleFunction {
-    return (f) => {
-        const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
-        return [new Style({
-            geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
-        })];
-    };
+    return f => firePositionStyles(f);
+}
+
+/**
+ * SupportByFire — the same position bracket, with two arrows diverging off the
+ * bar's ends instead of one shaft from its middle. Geometry comes from
+ * `getSupportByFireSymbol` as a MultiLineString:
+ *   [0] bracket, [1] upper arrow, [2] upper head, [3] lower arrow, [4] lower head.
+ *
+ * Kept as its own exported function rather than reusing `attackByFireStyleFunc`
+ * so the two can diverge — a hostility or status rule that applies to one of
+ * them should not silently reach the other.
+ */
+export function supportByFireStyleFunc(): StyleFunction {
+    return f => firePositionStyles(f);
 }
 
 export function coordinatedFireLineStyle(name: TacticalGraphicName): StyleFunction {
