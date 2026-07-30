@@ -7,6 +7,7 @@ import {StyleFunction} from 'ol/style/Style';
 import {SecurityOperationGraphic} from "../controllers/SecurityOperationsController";
 import openlayersAdapter from "../openlayersAdapter";
 import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 
 /**
@@ -31,13 +32,20 @@ const MIN_SCALE = (CENTER_PADDING_PX * 1.25) / (2 * ARROW_LENGTH_PX);
 
 export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     primaryLabel: string;
-    base: Feature<Point> = new Feature<Point>();
+    /**
+     * The centre point. Published from `getFeatures()` so it survives a save — it is
+     * the only part of this graphic that cannot be regenerated.
+     *
+     * `base: false` keeps it out of the Modify interaction, which has no vertices to
+     * offer here; see the same note on `MissionTaskGraphicBase.base`.
+     */
+    base: Feature<Point> = assignRole(new Feature<Point>(), 'base');
     centroid: Coordinate = [0, 0];
     rotation: number;
     scale: number;
     resolution: number;
-    leftLabelFeature: Feature<Point> = new Feature<Point>();
-    rightLabelFeature: Feature<Point> = new Feature<Point>();
+    leftLabelFeature: Feature<Point> = assignRole(new Feature<Point>(), 'label');
+    rightLabelFeature: Feature<Point> = assignRole(new Feature<Point>(), 'label');
     graphic: Feature = createFeature();
     symbolId: string = '';
     handles: Feature = createHandleFeature();
@@ -52,9 +60,13 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.resolution = resolution;
         this.centerPadding = CENTER_PADDING_PX * this.resolution;
 
+        this.base.set('base', false);
+        this.base.set('hidden', true);
         this.leftLabelFeature.set('drawingResolution', resolution);
         this.rightLabelFeature.set('drawingResolution', resolution);
         this.graphic.set('drawingResolution', resolution);
+        // The base is the feature a restore starts from, so it carries the resolution.
+        this.base.set('drawingResolution', resolution);
 
         this.leftLabelFeature.setStyle(this.getLabelStyle('left'));
         this.rightLabelFeature.setStyle(this.getLabelStyle('right'));
@@ -63,16 +75,23 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
 
     setSymbolId(symbolId: string) {
         this.symbolId = symbolId;
-        this.graphic.set('symbolId', symbolId);
-
+        // Every feature, not just the graphic. A restore resolves the holder from the
+        // symbolId on the base feature, which used not to carry one at all.
+        this.getFeatures().forEach(f => f.set('symbolId', symbolId));
     }
 
+    /**
+     * Built fresh on each call rather than once in the constructor. The style closes
+     * over `this.rotation`, and the constructor runs when rotation is still 0 — so a
+     * style installed there stayed upright forever no matter how far the graphic was
+     * turned. `updateFeatures` reinstalls them, which is what makes rotation visible.
+     */
     getLabelStyle = (position: 'left' | 'right'): StyleFunction => {
         return getSecurityOperationLabelStyle(this.primaryLabel, this.rotation, position);
     };
 
     getFeatures(): Feature[] {
-        return [this.leftLabelFeature, this.rightLabelFeature, this.graphic, this.handles];
+        return [this.leftLabelFeature, this.rightLabelFeature, this.graphic, this.handles, this.base];
     }
 
     setBaseFeature = (base: Feature<Point>): void => {
@@ -125,6 +144,18 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.leftLabelFeature.setGeometry(new Point(placedLabelPoints[0]));
         this.rightLabelFeature.setGeometry(new Point(placedLabelPoints[1]));
 
+        // Reinstall the label styles so they pick up the current rotation — they close
+        // over it, and the pair installed in the constructor is frozen at 0.
+        this.leftLabelFeature.setStyle(this.getLabelStyle('left'));
+        this.rightLabelFeature.setStyle(this.getLabelStyle('right'));
+
+        // `rotation` is portable geometry, so it goes in the doctrinal bag. `scale` does
+        // not: it is a multiplier on screen-pixel arrow lengths and means nothing without
+        // the drawing resolution it multiplies. Persistence reads it off this holder and
+        // files it under the snapshot's `renderer` object instead.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            rotation: this.rotation,
+        });
     };
 
     /**

@@ -39,14 +39,32 @@ const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
     TacticalGraphicName.Secure,
 ]);
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+/**
+ * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
+ * arrowhead edge, as a fraction of that arrow's half-length `r`. Expressed against
+ * the graphic rather than the screen so the two stay locked together at every zoom
+ * — see the note in the constructor.
+ */
+const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {Fill, Stroke, Style} from "ol/style";
 import {getDefaultLineColor, LINE_WIDTH} from "../openlayerStyles";
-import {writeGraphicProperties} from "../graphicProperties";
+import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
     center: Coordinate = [0, 0];
-    base: Feature<Point> = new Feature<Point>(new Point([]));
+    /**
+     * The centre the graphic is built around, and — since it is now published from
+     * `getFeatures()` — the only part of a mission task that has to survive a save.
+     * Everything else regenerates from it plus `size` / `rotation`.
+     *
+     * `base` is deliberately left **false**. That flag means "has vertices the Modify
+     * interaction may drag" (`getRenderedFeaturesByProp('base')`), which a
+     * point-anchored graphic does not: it is reshaped by rotate / resize / translate.
+     * Same trick as `mobileDefense` in `controllerRegistry.ts`. The `role` tag, not
+     * this flag, is what identifies the feature when serialising.
+     */
+    base: Feature<Point> = assignRole(new Feature<Point>(new Point([])), 'base');
     rotation: number = 0;
     size: number;
     symbolId: string = '';
@@ -55,7 +73,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     /** The centre dot — visual anchor only. @see publishHandles */
     centerHandle: Feature<MultiPoint> = <Feature<MultiPoint>>createInertHandleFeature();
     graphic: Feature = createFeature();
-    label: Feature = new Feature();
+    label: Feature = assignRole(new Feature(), 'label');
     name: TacticalGraphicName;
 
     constructor(
@@ -65,9 +83,14 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     ) {
         this.size = size;
         this.name = name;
+        this.base.set('base', false);
+        this.base.set('hidden', true);
         if (drawingResolution !== undefined) {
             this.label.set('drawingResolution', drawingResolution);
             this.graphic.set('drawingResolution', drawingResolution);
+            // Restoring rebuilds through `getController(name, drawingResolution)`, so the
+            // resolution has to ride on the base feature too — it is the only one saved.
+            this.base.set('drawingResolution', drawingResolution);
         }
         if (name === TacticalGraphicName.AreaDefense) {
             this.graphic.setStyle((feature, resolution) => {
@@ -84,12 +107,23 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc());
         }
-        // MovementToContact: shift the zigzag "contact" side arrows outward
-        // by 30px (zoom-invariant) so they don't touch the big arrow's
-        // arrowhead edge. B→A (upperPath[1]→upperPath[0]) is the upper
-        // edge — its CCW perpendicular points outward; I→A
-        // (lowerPath[2]→lowerPath[3]) is the lower edge — its CW
-        // perpendicular points outward.
+        // MovementToContact: shift the zigzag "contact" side arrows outward so
+        // they don't touch the big arrow's arrowhead edge. B→A
+        // (upperPath[1]→upperPath[0]) is the upper edge — its CCW perpendicular
+        // points outward; I→A (lowerPath[2]→lowerPath[3]) is the lower edge —
+        // its CW perpendicular points outward.
+        //
+        // The offset is a fraction of the arrow's own half-length, NOT the
+        // `n * resolution` screen-pixel form used elsewhere in this file. Both are
+        // "zoom-invariant", but in different frames, and here the pixel form was
+        // the wrong one: the arrow is baked in metres, so a constant *screen*
+        // offset slid the side arrows toward the arrowhead on zoom-in and away
+        // from it on zoom-out. Deriving it from the geometry locks it to the
+        // graphic under zoom and resize alike.
+        //
+        // `n * resolution` is right for things that must stay a fixed size on
+        // screen — text gaps, label padding. It is wrong for anything that must
+        // hold station against the geometry around it.
         //   MultiLineString layout (see MovementToContact.generateGraphics):
         //     [0] upperPath, [1] lowerPath,
         //     [2] upper zigzag line, [3] upper zigzag arrowhead,
@@ -141,13 +175,30 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             });
         }
         if (name === TacticalGraphicName.MovementToContact) {
-            this.graphic.setStyle((feature, resolution) => {
+            // `_resolution` is deliberately unused: everything this style draws is
+            // proportional to the graphic, so nothing here may depend on the zoom.
+            // Reaching for it again is the bug this function used to have.
+            this.graphic.setStyle((feature, _resolution) => {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const rawLines = geom.getCoordinates();
                 const defaultColor = feature.get('hostilityColor') || getDefaultLineColor();
 
-                const GAP = 30 * resolution;
+                // Recover the arrow's half-length `r` from the geometry. The tip A
+                // sits at local(+r, 0) and the two tail-fin tips E/F at
+                // local(-r, ±0.5r), so A and the E–F midpoint are exactly 2r apart
+                // — no stamped `graphicSize` needed, and it follows a resize for
+                // free. Plain Euclidean math: these are projected EPSG:3857 metres,
+                // so turf must not be used here.
+                const A = rawLines[0]?.[0];
+                const E = rawLines[0]?.[3];
+                const F = rawLines[1]?.[0];
+                let GAP = 0;
+                if (A && E && F) {
+                    const midEF = [(E[0] + F[0]) / 2, (E[1] + F[1]) / 2];
+                    const r = Math.hypot(A[0] - midEF[0], A[1] - midEF[1]) / 2;
+                    GAP = SIDE_ARROW_GAP_RATIO * r;
+                }
                 const perpShift = (
                     edgeStart: number[],
                     edgeEnd: number[],
@@ -232,6 +283,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.label.set('polygonMaxX', maxX);
             this.label.set('polygonMaxY', maxY);
         }
+
+        // `size` and `rotation` are the whole of a mission task's editable state; keep
+        // them on the features so a reload gets an editable graphic, not a frozen one.
+        this.publishGeometryState();
     };
 
     /**
@@ -275,7 +330,24 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     }
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.label, this.handles, this.centerHandle];
+        return [this.graphic, this.label, this.handles, this.centerHandle, this.base];
+    }
+
+    /**
+     * Republishes the amplifiers together with the geometry inputs that produced the
+     * current shape, so a saved graphic can be rebuilt rather than merely redrawn.
+     *
+     * Reads the existing bag back rather than taking amplifiers as an argument: the
+     * properties dialog stamps amplifiers straight onto the features
+     * (`tactical-graphics-dialog.tsx`), so a resize that wrote only `{name, size,
+     * rotation}` would silently wipe the hostility the user had just set.
+     */
+    protected publishGeometryState(extra?: GraphicGeometryState): void {
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            size: this.size,
+            rotation: this.rotation,
+            ...extra,
+        });
     }
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
@@ -296,12 +368,27 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
 
     setSymbolId(symbolId: string) {
         this.symbolId = symbolId;
-        this.graphic.set('symbolId', this.symbolId);
-        this.label.set('symbolId', this.symbolId);
+        // Every feature, not just graphic + label. A restore looks the holder up by the
+        // symbolId on whichever feature it happens to hold, and the base feature is the
+        // one it starts from — it used to be the one feature that never carried it.
+        this.getFeatures().forEach(f => f.set('symbolId', this.symbolId));
     }
 
+    /**
+     * Adopts a new centre point.
+     *
+     * Used to be `this.base = base` and nothing else, which left `center` pointing at
+     * the old coordinate: the next rotate or resize — neither passes a centre — would
+     * read the stale `this.center` back out and snap the graphic to where it used to
+     * be. Mission tasks are kept out of the Modify interaction so nothing reached this
+     * in practice, but it is on the public `TacticalGraphicHandler` interface and the
+     * manager calls it by symbolId.
+     */
     setBaseFeature(base: Feature<Point>) {
         this.base = base;
+        const coords = base.getGeometry()?.getCoordinates();
+        if (!coords || coords.length < 2) return;
+        this.updateGeom({center: coords as Coordinate});
     }
 }
 
@@ -342,13 +429,14 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
             });
         }
 
-        writeGraphicProperties([this.graphic, this.label, this.handles, this.centerHandle], name, this.graphicLabels);
+        writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);
     }
 
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
-        writeGraphicProperties(this.getFeatures(), this.name, labels);
+        // Geometry inputs travel with the amplifiers — a bare write drops them.
+        writeGraphicProperties(this.getFeatures(), this.name, labels, {size: this.size, rotation: this.rotation});
     };
 
 

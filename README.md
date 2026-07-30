@@ -184,6 +184,53 @@ const features = new GeoJSON().readFeatures(
 source.addFeatures(features);
 ```
 
+### Saving and restoring a whole map
+
+`serializeTacticalGraphics` writes every graphic the manager holds to GeoJSON, and
+`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols, the
+same objects, ready to rotate, resize and modify:
+
+```ts
+import {
+    serializeTacticalGraphics,
+    restoreTacticalGraphics,
+} from '@zaes/tactical-graphics/openlayers';
+
+const snapshot = serializeTacticalGraphics(manager);   // one feature per graphic
+await db.save(JSON.stringify(snapshot));
+
+// later, in a fresh session
+const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+```
+
+A snapshot holds **one feature per graphic** — the base geometry the user drew. Everything
+else is derived and regenerates on load. Each record carries two objects:
+
+```jsonc
+"properties": {
+    // The portable description of the symbol — what renderTacticalGraphic consumes.
+    // Metres, degrees and text: meaningful to any renderer, in any language.
+    "tacticalGraphic": {"name": "MovementToContact", "size": 30600, "rotation": 45,
+                        "label": "", "hostility": "Pending"},
+
+    // This renderer's bookkeeping. Viewport quantities another renderer cannot act on.
+    "renderer": {"drawingResolution": 1200},
+
+    "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
+}
+```
+
+**Keep the `renderer` object if you transform the GeoJSON on the way to storage.**
+Decoration sizes are derived from `drawingResolution` when a graphic is built, so
+rebuilding at the current view resolution instead of the saved one silently produces the
+wrong proportions. Restore refuses a record without it rather than guessing.
+
+A graphic that fails to restore is reported in `failed` and rolled back on its own, so
+one bad record cannot cost you the rest of the map.
+
+Pass `{includeDerived: true}` to also emit the rendered `graphic` and `label` features
+for consumers that only want to draw the shape. Restore ignores them.
+
 ### Any GeoJSON renderer
 
 The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON can consume it — filter on `properties.role` (`graphic` / `label` / `handle`) to style each part. OpenLayers is the reference implementation because that is where the full MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry but style it themselves.
