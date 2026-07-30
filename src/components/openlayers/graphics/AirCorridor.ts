@@ -7,7 +7,7 @@ import openlayersAdapter from "../openlayersAdapter";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {MultiPoint} from 'ol/geom';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
-import {writeGraphicProperties} from '../graphicProperties';
+import {readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 export class AirCorridor extends MovementGraphicBase {
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
@@ -52,6 +52,13 @@ export class AirCorridor extends MovementGraphicBase {
         this.handles.setGeometry(new MultiPoint(handleCoords.slice(0, vertexCount)));
         this.offsetHandle.setGeometry(new MultiPoint(handleCoords.slice(vertexCount)));
         this.labels.setGeometry(labels);
+
+        // The corridor already mirrors its half-width into the `width` amplifier, so it
+        // is the one offset graphic that would round-trip without this. Published anyway
+        // so restoring never depends on re-parsing a formatted string.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
+            radius: this.offset,
+        });
     };
 
     /**
