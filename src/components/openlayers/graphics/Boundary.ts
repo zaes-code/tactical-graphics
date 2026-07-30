@@ -10,14 +10,14 @@ import {MultiPoint} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import {writeGraphicProperties} from "../graphicProperties";
+import {assignRole, writeGraphicProperties} from "../graphicProperties";
 
 
 export class Boundary implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
-    graphics: Feature = new Feature();
+    graphics: Feature = assignRole(new Feature(), 'graphic');
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
-    labels: Feature = new Feature<MultiPoint>();
+    labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     symbolId: string = '';
     graphicLabel: GraphicLabels = {label: ''};
 
