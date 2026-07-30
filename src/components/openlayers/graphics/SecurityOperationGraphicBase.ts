@@ -1,7 +1,7 @@
 import Feature from 'ol/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {MultiLineString, MultiPoint, Point} from 'ol/geom';
-import {createFeature, createHandleFeature, getSecurityOperationLabelStyle} from '../openlayerStyles';
+import {createCenterBaseFeature, createFeature, createHandleFeature, getSecurityOperationLabelStyle} from '../openlayerStyles';
 import {_scaleAndRotateCoordinates} from '../../../utils/scaleAndRotateCoordinates';
 import {StyleFunction} from 'ol/style/Style';
 import {SecurityOperationGraphic} from "../controllers/SecurityOperationsController";
@@ -39,7 +39,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
      * `base: false` keeps it out of the Modify interaction, which has no vertices to
      * offer here; see the same note on `MissionTaskGraphicBase.base`.
      */
-    base: Feature<Point> = assignRole(new Feature<Point>(), 'base');
+    base: Feature<Point> = createCenterBaseFeature();
     centroid: Coordinate = [0, 0];
     rotation: number;
     scale: number;
@@ -60,8 +60,6 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.resolution = resolution;
         this.centerPadding = CENTER_PADDING_PX * this.resolution;
 
-        this.base.set('base', false);
-        this.base.set('hidden', true);
         this.leftLabelFeature.set('drawingResolution', resolution);
         this.rightLabelFeature.set('drawingResolution', resolution);
         this.graphic.set('drawingResolution', resolution);
