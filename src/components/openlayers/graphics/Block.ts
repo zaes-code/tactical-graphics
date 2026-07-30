@@ -9,7 +9,8 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
-    createOffsetHandleFeature, defaultStyleFunc
+    createOffsetHandleFeature, defaultStyleFunc,
+    supportByFireStyleFunc,
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
@@ -20,7 +21,7 @@ import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicControl
 // is the perpendicular-size / base-length ratio.
 const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.AttackByFire]: 0.4,
-    [TacticalGraphicName.TacticalBlock]: 0.3,
+    [TacticalGraphicName.SupportByFire]: 0.4,
     [TacticalGraphicName.Breach]: 0.3,
     [TacticalGraphicName.Bypass]: 0.3,
     [TacticalGraphicName.Canalize]: 0.3,
@@ -37,8 +38,27 @@ const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle is the end of the front line, drawn at 3 × size (`frontHalf`).
     [TacticalGraphicName.Penetration]: 1 / 3,
+    // Handle is the end of the crossbar, drawn at 1 × size by `getBlockArrow`.
+    [TacticalGraphicName.TacticalBlock]: 1,
     // Handle is an arrowhead wing, `size × sin 45°` off the base line.
     [TacticalGraphicName.Exploitation]: Math.SQRT2,
+};
+
+/**
+ * Per-name override of the perpendicular size the `block` factory hands every
+ * member of the family (20 px at the drawing zoom), in the same screen-pixel unit.
+ *
+ * `TacticalBlock` needs one because it and `Penetration` must look and behave
+ * identically (user's call, 2026-07-29) and their generators spend `size`
+ * differently: `getPenetrationArrowGraphic` draws its front line at ±3 × size —
+ * 120 px across at the default — while `getBlockArrow` draws its crossbar at
+ * ±1 × size, which would be 40 px. 60 px puts block's crossbar at the same 120 px
+ * as penetration's front line on a fresh draw. Raising it here rather than in
+ * `getBlockArrow` is deliberate: that helper also backs Destroy, Neutralize,
+ * Suppress, Interdict, FollowAndAssume and FollowAndSupport, which are unchanged.
+ */
+const DEFAULT_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TacticalBlock]: 60,
 };
 
 
@@ -67,7 +87,10 @@ export class Block implements LineGraphic {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         this.name = name;
-        this.size = size;
+        // `size` arrives as 20 × drawingResolution; an override is expressed in the
+        // same screen pixels, so rescale rather than replace.
+        const sizePx = DEFAULT_SIZE_PX[name];
+        this.size = sizePx !== undefined && drawingResolution ? sizePx * drawingResolution : size;
         this.ratioLock = RATIO_LOCK[name];
         this.offsetScale = OFFSET_SCALE[name];
         if (drawingResolution !== undefined) {
@@ -78,6 +101,8 @@ export class Block implements LineGraphic {
             switch (name) {
                 case TacticalGraphicName.AttackByFire:
                     return attackByFireStyleFunc()(feature, resolution);
+                case TacticalGraphicName.SupportByFire:
+                    return supportByFireStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalBlock:
                 case TacticalGraphicName.Penetration:
                     return blockStyleFunc(getLabel(name))(feature, resolution);
