@@ -9,6 +9,7 @@ import {
     TacticalGraphicStatus
 } from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../components/openlayers/controllers/MissionTaskController";
+import type {SecurityOperationGraphic} from "../components/openlayers/controllers/SecurityOperationsController";
 
 export interface LabelableGraphic {
     setLabel?(labels: GraphicLabels): void;
@@ -49,7 +50,9 @@ export interface GraphicLabels {
     rangeFan?: RangeFanConfig;
 }
 
-export type GraphicObject = (LineGraphic | PolygonGraphic | MissionTaskGraphic) & LabelableGraphic;
+// SecurityOperationGraphic joined the union when its controller started registering;
+// it holds rotation/scale rather than size/rotation/updateGeom, so it is its own arm.
+export type GraphicObject = (LineGraphic | PolygonGraphic | MissionTaskGraphic | SecurityOperationGraphic) & LabelableGraphic;
 
 // WeakMap: runtime live mapping (auto-GC)
 const featureToGraphic = new WeakMap<Feature, GraphicObject>();
@@ -61,6 +64,24 @@ export const GraphicLinkRegistry = {
     /** Associate a feature and its parent graphic */
     register(feature: Feature, graphic: GraphicObject, symbolId: string) {
         featureToGraphic.set(feature, graphic);
+        symbolRegistry.set(symbolId, graphic);
+    },
+
+    /**
+     * (Re-)registers every feature of a graphic under `symbolId`.
+     *
+     * Controllers register in their constructors, which run before the manager assigns
+     * a symbolId — so every graphic used to land in `symbolRegistry` under the empty
+     * string, each one overwriting the last. The feature WeakMap saved it in practice,
+     * because `getFromFeature` is what the dialog uses; `getFromSymbolId` was simply
+     * always wrong. Call this again from `setSymbolId` once the real id is known.
+     *
+     * Clears the placeholder `''` entry so the map does not keep a stale graphic alive.
+     */
+    registerAll(features: Feature[], graphic: GraphicObject, symbolId: string) {
+        features.forEach(feature => featureToGraphic.set(feature, graphic));
+        if (!symbolId) return;
+        if (symbolRegistry.get('') === graphic) symbolRegistry.delete('');
         symbolRegistry.set(symbolId, graphic);
     },
 
