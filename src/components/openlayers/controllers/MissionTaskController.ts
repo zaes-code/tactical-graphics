@@ -8,6 +8,7 @@ import {StyleFunction} from 'ol/style/Style';
 import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
+import {byMode} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     base: Feature<Point>;
@@ -86,8 +87,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
             return new Style({
                 image: new CircleStyle({
                     radius: 6,
-                    fill: new Fill({color: 'rgba(87, 140, 255, 1)'}),
-                    stroke: new Stroke({color: 'white', width: 1.5}),
+                    fill: new Fill({color: byMode('rgba(87, 140, 255, 1)', 'rgb(69,106,185)')}),
+                    stroke: new Stroke({color: byMode('white', 'rgb(23,23,23)'), width: 1.5}),
                 }),
             });
         }

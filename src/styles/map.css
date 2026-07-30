@@ -12,9 +12,15 @@
 }
 
 /* Dark-mode tint: inverts the basemap to approximate a dark tile style.
-   Tactical graphics drawn on top are excluded because they're vector overlays
-   rendered after the tile layer. If a real dark tile source is provided,
-   remove this rule. */
+   If a real dark tile source is provided, remove this rule.
+
+   Tactical graphics are excluded because their layer carries its own className
+   ('tg-graphics', set in TacticalGraphicsManager) and so renders to its own
+   canvas. Being an overlay is NOT what protects them: OL reuses one canvas
+   across consecutive layers that share a className, and while the graphics layer
+   used the default 'ol-layer' this filter repainted every graphic along with the
+   tiles. That accident was the old dark mode — see ai/decisions.md. Don't drop
+   that className, and don't widen this selector past :first-child. */
 .map-container .ol-layer:first-child canvas {
   filter: invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%);
 }
