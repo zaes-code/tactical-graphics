@@ -17,7 +17,7 @@ import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicControl
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
-import {writeGraphicProperties} from "../graphicProperties";
+import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -40,7 +40,7 @@ export class MovementGraphicBase implements LineGraphic {
 
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphic: Feature = createFeature();
-    labels: Feature = new Feature<MultiPoint>();
+    labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     handles: Feature = <Feature<MultiPoint>>createHandleFeature();
     offsetHandle: Feature = <Feature<Point>>createOffsetHandleFeature();
 
@@ -113,7 +113,8 @@ export class MovementGraphicBase implements LineGraphic {
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels);
+        // `radius` travels with the amplifiers — a bare write would drop the offset.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {radius: this.offset});
     };
 
     updateGeometry = () => {
@@ -141,6 +142,14 @@ export class MovementGraphicBase implements LineGraphic {
         }
 
         this.labels.setGeometry(labels);
+
+        // `offset` is the one thing here the user can change that the base geometry does
+        // not describe — the width drag. Everything else rebuilds from the base plus the
+        // drawing resolution. Published after the offset-handle test above so the write
+        // covers the feature set that actually exists.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
+            radius: this.offset,
+        });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {
         return this.base;
@@ -148,10 +157,11 @@ export class MovementGraphicBase implements LineGraphic {
 
     setSymbolId = (symbolId: string) => {
         this.symbolId = symbolId;
-        this.labels.set('symbolId', this.symbolId);
-        this.graphic.set('symbolId', this.symbolId);
-        this.base.set('symbolId', this.symbolId);
-        this.offsetHandle.set('symbolId', this.symbolId);
+        // `handles` was missing, and `getFeatures()` is length-variable (the offset
+        // handle comes and goes), so stamp the live set plus the two that can fall
+        // outside it rather than a hand-written list.
+        [...this.getFeatures(), this.handles, this.offsetHandle]
+            .forEach(f => f.set('symbolId', this.symbolId));
     };
 
     setBaseFeature(base: Feature<LineString>) {
