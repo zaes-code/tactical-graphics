@@ -94,6 +94,7 @@ properties: {
         radius: 300,              // arrow width / circle radius
         size: 1000,               // generic size scalar (point graphics)
         rotation: 45,             // degrees (point graphics)
+        scale: 1,                 // security operations (Cover / Guard / Screen)
     },
 }
 ```
@@ -183,6 +184,39 @@ const features = new GeoJSON().readFeatures(
 );
 source.addFeatures(features);
 ```
+
+### Saving and restoring a whole map
+
+`serializeTacticalGraphics` writes every graphic the manager holds to GeoJSON, and
+`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols, the
+same objects, ready to rotate, resize and modify:
+
+```ts
+import {
+    serializeTacticalGraphics,
+    restoreTacticalGraphics,
+} from '@zaes/tactical-graphics/openlayers';
+
+const snapshot = serializeTacticalGraphics(manager);   // one feature per graphic
+await db.save(JSON.stringify(snapshot));
+
+// later, in a fresh session
+const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+```
+
+A snapshot holds **one feature per graphic** — the base geometry the user drew, plus the
+amplifiers and the geometry inputs. Everything else is derived and regenerates on load.
+A graphic that fails to restore is reported in `failed` and rolled back on its own, so
+one bad record cannot cost you the rest of the map.
+
+Pass `{includeDerived: true}` to also emit the rendered `graphic` and `label` features
+for consumers that only want to draw the shape. Restore ignores them.
+
+One field is easy to overlook and fatal to drop: **`drawingResolution`**. Decoration
+sizes are baked in when a graphic is built, so rebuilding at the current view resolution
+instead of the saved one silently produces the wrong proportions. It travels in the
+snapshot for exactly that reason — keep it if you transform the GeoJSON on the way to
+storage.
 
 ### Any GeoJSON renderer
 

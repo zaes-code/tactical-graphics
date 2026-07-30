@@ -15,6 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {assignRole} from '../graphicProperties';
 
 // Graphics that lock the perpendicular size to a fixed fraction of the base length
 // so the user can only rotate and resize, not change the aspect ratio. The value
@@ -69,7 +70,7 @@ export class Block implements LineGraphic {
 
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphic: Feature = createFeature();
-    labels: Feature = new Feature<MultiPoint>();
+    labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     handles: Feature = <Feature<MultiPoint>>createHandleFeature();
     offsetHandle: Feature = <Feature<Point>>createOffsetHandleFeature();
 
