@@ -4,6 +4,7 @@ import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
 import {Feature} from "ol";
 import {
     baseDefenseZoneLabelStyleFn,
+    createCenterBaseFeature,
     createFeature,
     createHandleFeature,
     createInertHandleFeature,
@@ -64,7 +65,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * Same trick as `mobileDefense` in `controllerRegistry.ts`. The `role` tag, not
      * this flag, is what identifies the feature when serialising.
      */
-    base: Feature<Point> = assignRole(new Feature<Point>(new Point([])), 'base');
+    base: Feature<Point> = createCenterBaseFeature();
     rotation: number = 0;
     size: number;
     symbolId: string = '';
@@ -83,8 +84,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     ) {
         this.size = size;
         this.name = name;
-        this.base.set('base', false);
-        this.base.set('hidden', true);
         if (drawingResolution !== undefined) {
             this.label.set('drawingResolution', drawingResolution);
             this.graphic.set('drawingResolution', drawingResolution);
