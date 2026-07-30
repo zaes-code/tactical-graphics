@@ -29,6 +29,14 @@ const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
     TacticalGraphicName.Isolate,
+    // The other three arc-and-arrowhead circles. Their letters used to render at
+    // the zoom-anchored 16px default while Isolate's "I" tracked its circle, so
+    // four graphics built from the same arcs disagreed about how big a one-letter
+    // label is. Same treatment now: 24px base font, scale from `graphicSize`,
+    // and the 100px-diameter floor.
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
 ]);
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
