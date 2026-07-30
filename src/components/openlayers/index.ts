@@ -49,6 +49,12 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the colour and width constants they share.
 export * from './openlayerStyles';
 
+// Light/dark mode. Every colour accessor above reads this flag, so without it a host
+// got a two-mode palette and no way to choose between the modes. Default is light —
+// call `setDarkModeFlag(true)` when your map background is dark, then invalidate your
+// features (`feature.changed()`) so the style functions re-evaluate.
+export {isDarkMode, setDarkModeFlag} from '../../settings';
+
 // The feature holders: subclass one to add a graphic without forking the package.
 export {AirCorridor} from './graphics/AirCorridor';
 export {AreaGraphicBase} from './graphics/AreaGraphicBase';
