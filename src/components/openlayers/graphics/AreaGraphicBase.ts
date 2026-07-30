@@ -6,13 +6,13 @@ import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
-import {writeGraphicProperties} from '../graphicProperties';
+import {assignRole, writeGraphicProperties} from '../graphicProperties';
 
 export class AreaGraphicBase implements PolygonGraphic {
     // open layers related
     base: Feature<Polygon> = <Feature<Polygon>>createBaseFeature();
-    graphic: Feature = new Feature();
-    labels: Feature = new Feature();
+    graphic: Feature = assignRole(new Feature(), 'graphic');
+    labels: Feature = assignRole(new Feature(), 'label');
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
     symbolId: string = '';
     size: number = 1;

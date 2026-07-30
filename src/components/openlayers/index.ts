@@ -55,6 +55,27 @@ export * from './openlayerStyles';
 // features (`feature.changed()`) so the style functions re-evaluate.
 export {isDarkMode, setDarkModeFlag} from '../../settings';
 
+// Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
+// the base, carrying the amplifiers and the geometry inputs — and
+// `restoreTacticalGraphics` rebuilds them editable. See persistence.ts for why the
+// drawing resolution has to travel with the snapshot.
+export {
+    SNAPSHOT_VERSION,
+    applyRestoredGeometry,
+    restoreTacticalGraphics,
+    serializeTacticalGraphics,
+} from './persistence';
+export type {
+    RestoreFailure,
+    RestoreReport,
+    SerializeOptions,
+    TacticalGraphicsSnapshot,
+} from './persistence';
+
+// Feature-property helpers for hosts that build or inspect graphics themselves.
+export {ROLE_KEY, assignRole, readGraphicGeometryState, readRole} from './graphicProperties';
+export type {GraphicGeometryState} from './graphicProperties';
+
 // The feature holders: subclass one to add a graphic without forking the package.
 export {AirCorridor} from './graphics/AirCorridor';
 export {AreaGraphicBase} from './graphics/AreaGraphicBase';

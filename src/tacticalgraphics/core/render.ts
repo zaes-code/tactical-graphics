@@ -81,6 +81,13 @@ export interface TacticalGraphicProperties {
     radius?: number;
     /** Rotation in degrees, for point-based graphics. */
     rotation?: number;
+    /**
+     * Dimensionless scale factor. No generator reads this — the security-operation
+     * holders (Cover / Guard / Screen) derive their arrow lengths from it, and it is
+     * declared here so a renderer has one place to persist a graphic's geometry
+     * inputs rather than two.
+     */
+    scale?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
 }

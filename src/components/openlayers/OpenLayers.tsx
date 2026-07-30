@@ -8,6 +8,7 @@ import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
+import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
 import {setDarkModeFlag} from '../../settings';
@@ -116,6 +117,45 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
         setInteractionMode(InteractionType.view);
     };
 
+    /**
+     * Writes every graphic on the map to a .geojson file.
+     *
+     * A downloaded file rather than localStorage on purpose: the question this answers
+     * is "what actually persisted?", and that is only answerable if you can open the
+     * thing and read it.
+     */
+    const exportGeoJson = () => {
+        const mgr = tacticalGraphicManager.current;
+        if (!mgr) return;
+        const snapshot = serializeTacticalGraphics(mgr);
+        const blob = new Blob([JSON.stringify(snapshot, null, 2)], {type: 'application/geo+json'});
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'tactical-graphics.geojson';
+        anchor.click();
+        URL.revokeObjectURL(url);
+    };
+
+    /** Replaces everything on the map with the graphics in `file`. */
+    const importGeoJson = async (file: File) => {
+        const mgr = tacticalGraphicManager.current;
+        if (!mgr) return;
+        setInteractionMode(InteractionType.view);
+        try {
+            const snapshot = JSON.parse(await file.text());
+            clearAllGraphics(mgr);
+            const {restored, failed} = restoreTacticalGraphics(mgr, snapshot);
+            if (failed.length) {
+                // eslint-disable-next-line no-console
+                console.warn(`Import: ${restored} restored, ${failed.length} failed.`, failed);
+            }
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Import failed — not readable as a tactical graphics GeoJSON.', e);
+        }
+    };
+
     return (
         <>
             <div ref={mapRef} className="map-container"/>
@@ -131,6 +171,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
                 onReset={resetMap}
                 onDrawSamples={drawSamples}
                 onClearAll={clearAll}
+                onExportGeoJson={exportGeoJson}
+                onImportGeoJson={importGeoJson}
                 interactionMode={interactionMode}
                 isRotating={modeRef.current === InteractionType.rotate}
                 isResizing={modeRef.current === InteractionType.resize}
