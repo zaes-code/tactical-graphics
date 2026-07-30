@@ -94,7 +94,6 @@ properties: {
         radius: 300,              // arrow width / circle radius
         size: 1000,               // generic size scalar (point graphics)
         rotation: 45,             // degrees (point graphics)
-        scale: 1,                 // security operations (Cover / Guard / Screen)
     },
 }
 ```
@@ -204,19 +203,33 @@ await db.save(JSON.stringify(snapshot));
 const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
 ```
 
-A snapshot holds **one feature per graphic** — the base geometry the user drew, plus the
-amplifiers and the geometry inputs. Everything else is derived and regenerates on load.
+A snapshot holds **one feature per graphic** — the base geometry the user drew. Everything
+else is derived and regenerates on load. Each record carries two objects:
+
+```jsonc
+"properties": {
+    // The portable description of the symbol — what renderTacticalGraphic consumes.
+    // Metres, degrees and text: meaningful to any renderer, in any language.
+    "tacticalGraphic": {"name": "MovementToContact", "size": 30600, "rotation": 45,
+                        "label": "", "hostility": "Pending"},
+
+    // This renderer's bookkeeping. Viewport quantities another renderer cannot act on.
+    "renderer": {"drawingResolution": 1200},
+
+    "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
+}
+```
+
+**Keep the `renderer` object if you transform the GeoJSON on the way to storage.**
+Decoration sizes are derived from `drawingResolution` when a graphic is built, so
+rebuilding at the current view resolution instead of the saved one silently produces the
+wrong proportions. Restore refuses a record without it rather than guessing.
+
 A graphic that fails to restore is reported in `failed` and rolled back on its own, so
 one bad record cannot cost you the rest of the map.
 
 Pass `{includeDerived: true}` to also emit the rendered `graphic` and `label` features
 for consumers that only want to draw the shape. Restore ignores them.
-
-One field is easy to overlook and fatal to drop: **`drawingResolution`**. Decoration
-sizes are baked in when a graphic is built, so rebuilding at the current view resolution
-instead of the saved one silently produces the wrong proportions. It travels in the
-snapshot for exactly that reason — keep it if you transform the GeoJSON on the way to
-storage.
 
 ### Any GeoJSON renderer
 

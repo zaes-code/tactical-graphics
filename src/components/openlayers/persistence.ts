@@ -8,25 +8,51 @@
  * geometry plus a handful of inputs. Persisting the derivation rather than the result
  * means a restored graphic is the same object the user drew, not a picture of it —
  * it rotates, resizes and modifies exactly as before. So a snapshot holds **only the
- * base feature**, carrying:
+ * base feature**.
  *
- * - `tacticalGraphic` — the name, the amplifiers, and the geometry inputs
- *   (`size` / `radius` / `rotation` / `scale`)
- * - `symbolId` — preserved, so links between graphics survive a round trip
- * - `drawingResolution` — see below; this one is easy to overlook and fatal to omit
+ * ## Two objects, drawn along one line
+ *
+ * ```jsonc
+ * "properties": {
+ *   "tacticalGraphic": { "name": …, amplifiers…, "size": …, "rotation": … },
+ *   "renderer":        { "drawingResolution": 1200, "scale": 1.7 },
+ *   "role": "base", "symbolId": "…", "graphicName": "…"
+ * }
+ * ```
+ *
+ * `tacticalGraphic` is the **portable description of the symbol** — the same object the
+ * map-agnostic `renderTacticalGraphic` consumes. Everything in it is metres, degrees or
+ * text: meaningful to any renderer, in any language, forever.
+ *
+ * `renderer` is **this renderer's bookkeeping**. Both members are viewport quantities
+ * that a different renderer could not act on:
+ *
+ * - `drawingResolution` — metres per *screen pixel* when the graphic was drawn.
+ * - `scale` — a multiplier applied to screen-pixel arrow lengths by the security
+ *   operation holders. It has no meaning except multiplied by the resolution, which is
+ *   precisely why it belongs beside it rather than in the doctrinal bag.
+ *
+ * The line is: *would this still mean something to a Cesium view, or to a consumer
+ * reading the file in Python?* If yes it is a graphic property; if it only means
+ * something to an OpenLayers session, it is renderer state.
+ *
+ * Grouping them also makes the failure mode honest. As a loose sibling field,
+ * `drawingResolution` was easy to drop while transforming the GeoJSON on the way to a
+ * database, and dropping it does not fail loudly — it silently rebuilds every graphic at
+ * the wrong proportions. One object is one obvious thing to keep, and restore refuses a
+ * record without it rather than guessing.
  *
  * Pass `includeDerived` to additionally emit the rendered `graphic` and `label`
  * features. Restore ignores them; they are there for consumers that only want to draw
  * the shape without this library.
  *
- * ## The drawing resolution is load-bearing
+ * ## Why the drawing resolution matters at all
  *
  * `getController(name, resolution)` bakes that resolution into decoration sizes —
  * `20 * res` arrowheads, `res * 20` block widths, `CENTER_PADDING_PX * res` gaps.
  * Rebuilding with the *current* view resolution instead of the saved one produces a
  * graphic of visibly the wrong proportions, and nothing about it looks like a bug in
- * the loader. It is why the drawing resolution rides in the snapshot rather than being
- * re-read from the map.
+ * the loader.
  *
  * ## Order matters when restoring
  *
@@ -74,6 +100,24 @@ export const SNAPSHOT_VERSION = 1;
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
 
+/**
+ * Renderer bookkeeping that sits *beside* a graphic rather than inside it, because none
+ * of it would mean anything to a different renderer. See the note at the top of the file.
+ */
+export interface TacticalGraphicRendererState {
+    /**
+     * Metres per screen pixel when the graphic was drawn. Required: decoration sizes are
+     * derived from it at construction, so rebuilding without it gets the proportions
+     * wrong rather than failing.
+     */
+    drawingResolution: number;
+    /**
+     * Security operations only (Cover / Guard / Screen). Multiplies screen-pixel arrow
+     * lengths, so it is only interpretable together with `drawingResolution`.
+     */
+    scale?: number;
+}
+
 /** A GeoJSON FeatureCollection plus the version of the layout its properties use. */
 export interface TacticalGraphicsSnapshot extends FeatureCollection {
     tacticalGraphicsVersion: number;
@@ -104,7 +148,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['size', 'radius', 'rotation', 'scale'] as const;
+const GEOMETRY_KEYS = ['size', 'radius', 'rotation'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -150,12 +194,24 @@ function collectProperties(handler: TacticalGraphicHandler): Record<string, unkn
         }
     }
 
+    const renderer: Partial<TacticalGraphicRendererState> = {
+        drawingResolution: findProp<number>(handler, 'drawingResolution'),
+    };
+    // Read live off the holder rather than from a feature: `scale` is renderer state, so
+    // it is deliberately not stamped into the doctrinal bag, and nothing else needs it.
+    if (handler instanceof SecurityOperationsController) {
+        renderer.scale = handler.graphic.getScale();
+    }
+
     return {
         tacticalGraphic: {...bag, name},
+        renderer,
         role: 'base',
-        symbolId: handler.getSymbolId(),
+        // Mirrors `tacticalGraphic.name` for the OL-side dialog, which reads this
+        // property directly. Restore prefers `tacticalGraphic.name`; this is a fallback
+        // that also makes hand-written records easier.
         graphicName: name,
-        drawingResolution: findProp<number>(handler, 'drawingResolution'),
+        symbolId: handler.getSymbolId(),
     };
 }
 
@@ -215,6 +271,7 @@ export function applyRestoredGeometry(
     handler: TacticalGraphicHandler,
     base: Feature,
     state: GraphicGeometryState,
+    renderer?: Partial<TacticalGraphicRendererState>,
 ): void {
     if (handler instanceof MissionTaskController) {
         const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
@@ -230,7 +287,7 @@ export function applyRestoredGeometry(
     if (handler instanceof SecurityOperationsController) {
         handler.setBaseFeature(base as Feature<Point>);
         if (state.rotation !== undefined) handler.graphic.setRotation(state.rotation);
-        if (state.scale !== undefined) handler.graphic.setScale(state.scale);
+        if (renderer?.scale !== undefined) handler.graphic.setScale(renderer.scale);
         const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
         if (coords) handler.milSymbolFeature.setGeometry(new Point(coords));
         // Only `onDrawEndFunc` builds the 2525E symbol, and a restore never draws. It
@@ -297,9 +354,12 @@ export function restoreTacticalGraphics(
         let handler: TacticalGraphicHandler | undefined;
         let added: Feature[] = [];
         try {
-            const drawingResolution = props.drawingResolution as number | undefined;
+            const renderer = (props.renderer ?? {}) as Partial<TacticalGraphicRendererState>;
+            const drawingResolution = renderer.drawingResolution;
             if (!drawingResolution || drawingResolution <= 0) {
-                throw new Error('missing drawingResolution — the graphic would rebuild at the wrong scale');
+                throw new Error(
+                    'missing renderer.drawingResolution — the graphic would rebuild at the wrong scale',
+                );
             }
 
             handler = getController(name, drawingResolution);
@@ -313,7 +373,6 @@ export function restoreTacticalGraphics(
                 size: bag.size as number | undefined,
                 radius: bag.radius as number | undefined,
                 rotation: bag.rotation as number | undefined,
-                scale: bag.scale as number | undefined,
             };
 
             // Seed the base geometry onto the holder's *own* base feature before anything
@@ -342,7 +401,7 @@ export function restoreTacticalGraphics(
             if (holder.setLabel) holder.setLabel(labels);
             else writeGraphicProperties(handler.getFeatures(), name, labels, state);
 
-            applyRestoredGeometry(handler, handler.graphic.base, state);
+            applyRestoredGeometry(handler, handler.graphic.base, state, renderer);
 
             // Re-read: the offset handle only exists once there is geometry.
             added = handler.getFeatures();

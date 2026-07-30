@@ -149,11 +149,12 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.leftLabelFeature.setStyle(this.getLabelStyle('left'));
         this.rightLabelFeature.setStyle(this.getLabelStyle('right'));
 
-        // `rotation` and `scale` are this graphic's entire editable state; the arrow
-        // and padding sizes rebuild from the drawing resolution.
+        // `rotation` is portable geometry, so it goes in the doctrinal bag. `scale` does
+        // not: it is a multiplier on screen-pixel arrow lengths and means nothing without
+        // the drawing resolution it multiplies. Persistence reads it off this holder and
+        // files it under the snapshot's `renderer` object instead.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
             rotation: this.rotation,
-            scale: this.scale,
         });
     };
 
