@@ -15,6 +15,7 @@ import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicB
 // import {SearchArea} from './graphics/SearchArea';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
+import {Exfiltrate} from './graphics/Exfiltrate';
 import {ReliefInPlace} from './graphics/ReliefInPlace';
 import {Block} from './graphics/Block';
 import {Boundary} from './graphics/Boundary';
@@ -59,6 +60,11 @@ const block = (name: TacticalGraphicName, res: number) =>
 
 const retrograde = (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new RetrogradeTask(name, res * 20, res), 2, name);
+
+// No maxPoints: an exfiltration route bends, so the user draws as many vertices as
+// the route needs and every one of them keeps an edit handle.
+const exfiltrate = (name: TacticalGraphicName, res: number) =>
+    new LineGraphicController(new Exfiltrate(name, res * 20, res), undefined, name);
 
 const reliefInPlace = (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new ReliefInPlace(name, res * 20, res), 2, name);
@@ -325,8 +331,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FollowAndAssume]:  block,
     [TacticalGraphicName.FollowAndSupport]: block,
 
-    // ── Exfiltrate (retrograde / cane arrow) ────────────────────────────────
-    [TacticalGraphicName.Exfiltrate]: retrograde,
+    // ── Exfiltrate (multi-vertex route + arrowhead) ─────────────────────────
+    [TacticalGraphicName.Exfiltrate]: exfiltrate,
 
     // ── Additional polygon area control measures ─────────────────────────────
     [TacticalGraphicName.LimitedAccessArea]:           polygon,
