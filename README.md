@@ -214,16 +214,25 @@ else is derived and regenerates on load. Each record carries two objects:
                         "label": "", "hostility": "Pending"},
 
     // This renderer's bookkeeping. Viewport quantities another renderer cannot act on.
-    "renderer": {"drawingResolution": 1200},
+    "renderer": {"drawingResolution": 1200, "scale": 1.7},
 
     "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
 }
 ```
 
+The split is portability. `tacticalGraphic` is metres, degrees and text — meaningful to any
+renderer. `renderer` holds quantities that only mean something to an OpenLayers session:
+
+| | |
+|---|---|
+| `drawingResolution` | metres per **screen pixel** when the graphic was drawn. Always present. |
+| `scale` | security operations only (Cover / Guard / Screen). Multiplies screen-pixel arrow lengths, so it is only interpretable together with the resolution. |
+
 **Keep the `renderer` object if you transform the GeoJSON on the way to storage.**
 Decoration sizes are derived from `drawingResolution` when a graphic is built, so
 rebuilding at the current view resolution instead of the saved one silently produces the
-wrong proportions. Restore refuses a record without it rather than guessing.
+wrong proportions — it does not fail loudly. Restore refuses a record without it rather
+than guessing.
 
 A graphic that fails to restore is reported in `failed` and rolled back on its own, so
 one bad record cannot cost you the rest of the map.
