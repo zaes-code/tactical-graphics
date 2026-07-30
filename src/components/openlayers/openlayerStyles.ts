@@ -5020,11 +5020,22 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
 
 /**
  * The four affiliation colours, per mode. See the palette note above
- * `getDefaultLineColor` for where the dark values come from and why they are not
- * simply the light ones lightened.
+ * `getDefaultLineColor` for where the dark values come from.
  *
- * `pending`/`suspectJoker` is deliberately identical in both modes: yellow is legible
- * on a dark basemap as-is, and it is the one colour the old CSS filter destroyed.
+ * Most dark values are the measured output of the CSS filter that used to repaint this
+ * layer, so the switch to a real palette left them looking the same. Two are not:
+ *
+ * - `pending`/`suspectJoker` is **identical in both modes**. Yellow is legible on a dark
+ *   basemap as-is, and it is the colour the old filter destroyed — the reason the
+ *   palette exists at all.
+ * - `friend` is a **deliberately re-picked blue**. The filter emitted
+ *   `rgb(173,173,208)`, whose red and green channels are equal and whose blue is only
+ *   35 higher — barely saturated, so it read as grey-lavender rather than blue. This is
+ *   the doctrinal blue lightened to survive a dark background and nudged a little toward
+ *   cyan, which is what stops a high-lightness hue-240 blue reading as violet.
+ *
+ * Keep any future dark value legible against the basemap *and* recognisable as its
+ * doctrinal hue. Reproducing what the old filter happened to emit is not a goal.
  */
 const HOSTILITY_COLORS = {
     light: {
@@ -5034,7 +5045,7 @@ const HOSTILITY_COLORS = {
         pending: 'rgba(255, 255, 0, 1)',
     },
     dark: {
-        friend: 'rgb(173,173,208)',
+        friend: 'rgb(92,148,255)',
         hostile: 'rgb(208,123,123)',
         neutral: 'rgb(72,160,72)',
         pending: 'rgba(255, 255, 0, 1)',
