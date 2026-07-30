@@ -84,6 +84,7 @@ const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Bypass,
     TacticalGraphicName.Canalize,
     TacticalGraphicName.AttackByFire,
+    TacticalGraphicName.SupportByFire,
     TacticalGraphicName.Destroy,
     TacticalGraphicName.Neutralize,
 ]);
