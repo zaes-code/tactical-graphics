@@ -22,10 +22,20 @@ import {PROVEN_GRAPHICS} from './provenGraphics';
 import {supportsHostility} from './graphicFieldRegistry';
 import {readGraphicLabels} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
+import {setDarkModeFlag} from '../../settings';
+
+/**
+ * The doctrinal colours below are the light-mode ones, and the palette has had a
+ * second, dark set since the graphics layer stopped being repainted by the demo's
+ * CSS invert filter. Pin the mode rather than lean on the default: these assertions
+ * are about FM 1-02.2, and a later change to what the library defaults to must not
+ * quietly turn them into assertions about a different palette.
+ */
+beforeAll(() => setDarkModeFlag(false));
 
 /** Roughly what the sweep frames at; only the ratios under test depend on it. */
 const RESOLUTION = 1200;
-/** What getColorByHostility returns for hostileFaker. */
+/** What getColorByHostility returns for hostileFaker, in light mode. */
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
 /**
