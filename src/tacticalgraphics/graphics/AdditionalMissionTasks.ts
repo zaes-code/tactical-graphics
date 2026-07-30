@@ -2,13 +2,29 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
+import * as turf from "@turf/turf";
+
+/**
+ * The bar half-height of a fire-position symbol, as a fraction of the shaft the
+ * user drew. Everything else in the symbol is derived from the bar (see the
+ * FIRE_POSITION_* ratios in `GeometryService`), so this is the single knob for
+ * how big the whole thing renders.
+ *
+ * The doctrinal construct draws the bar at 0.76 of its shaft, but the construct's
+ * shaft is a stub pointing at an adjacent objective — at that ratio a symbol
+ * dragged across a map stands two and a half times taller than the line the user
+ * drew. 0.45 keeps the footprint roughly square and comparable to the graphic's
+ * previous size while still reading as the doctrinal shape.
+ */
+const FIRE_POSITION_BAR_RATIO = 0.45;
 
 /**
  * Block-arrow mission task graphic with a configurable name.
  *
- * AttackByFire renders as the standard MIL-STD-2525E AttackByFire symbol —
- * backward "<" feathers at the start plus a shaft ending in an arrowhead.
- * All other names render the plain T-shape block arrow.
+ * AttackByFire and SupportByFire render the doctrinal fire-position symbols — a
+ * bar with two feathers swept back off its ends, plus one arrow out of the bar's
+ * middle (attack) or two diverging off its ends (support). All other names render
+ * the plain T-shape block arrow.
  *
  * Used for: AttackByFire, Destroy, Neutralize, SupportByFire, Suppress,
  *           Interdict, FollowAndAssume, FollowAndSupport.
@@ -22,20 +38,41 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
         this.name = name;
     }
 
-    private isAttackByFire(): boolean {
-        return this.name === TacticalGraphicName.AttackByFire;
+    private isFirePosition(): boolean {
+        return this.name === TacticalGraphicName.AttackByFire
+            || this.name === TacticalGraphicName.SupportByFire;
+    }
+
+    /**
+     * Bar half-height in metres, derived from the drawn line's own length rather
+     * than from `opts.size` — the Fix pattern. `opts.size` is a map-unit value
+     * baked at construction time, so driving the bar off it would let the shaft
+     * grow on resize while the bar stayed put.
+     */
+    private barHalf(base: Feature<LineString>): number {
+        const coords = base.geometry.coordinates;
+        const shaftLength = turf.distance(
+            turf.point(coords[0]),
+            turf.point(coords[coords.length - 1]),
+            {units: 'meters'},
+        );
+        return shaftLength * FIRE_POSITION_BAR_RATIO;
     }
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<LineString | MultiLineString> {
-        if (this.isAttackByFire()) {
-            return geometryService.getAttackByFireSymbol(base.geometry.coordinates, opts.size);
+        if (this.name === TacticalGraphicName.AttackByFire) {
+            return geometryService.getAttackByFireSymbol(base.geometry.coordinates, this.barHalf(base));
+        }
+        if (this.name === TacticalGraphicName.SupportByFire) {
+            return geometryService.getSupportByFireSymbol(base.geometry.coordinates, this.barHalf(base));
         }
         return geometryService.getBlockArrow(base, opts.size);
     }
 
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        if (this.isAttackByFire()) {
-            // [offsetHandle (hidden by openlayers Block class), startHandle, endHandle]
+        if (this.isFirePosition()) {
+            // [offsetHandle (dropped by the openlayers Block holder — the symbol is
+            //  ratio-locked, so there is no width to drag), startHandle, endHandle]
             const coords = base.geometry.coordinates;
             return this.asMultiPointFeature([coords[0], coords[0], coords[coords.length - 1]]);
         }
@@ -44,8 +81,10 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        if (this.isAttackByFire()) {
-            // Anchor at shaft start; the style function offsets the label above the shaft.
+        if (this.isFirePosition()) {
+            // Anchored at the bar's centre. Both fire-position symbols are drawn
+            // shape-only — the style function renders no text — but a library
+            // consumer still gets a sane anchor to hang one off.
             return this.asMultiPointFeature([base.geometry.coordinates[0]]);
         }
         const arrow = geometryService.getBlockArrow(base, opts.size).geometry.coordinates;

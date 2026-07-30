@@ -21,7 +21,7 @@ import {Bypass} from "../graphics/Bypass";
 import {Canalize} from "../graphics/Canalize";
 import {Clear} from "../graphics/Clear";
 import {Disrupt} from "../graphics/Disrupt";
-import {RetrogradeTask} from "../graphics/RetrogradeTask";
+import {Exfiltrate, RetrogradeTask} from "../graphics/RetrogradeTask";
 import {FieldsOfFire} from "../graphics/FieldsOfFire";
 import {ForwardLineOfOwnTroops, LineOfContact} from "../graphics/ForwardLineOfOwnTroops";
 import {Bridge} from "../graphics/Bridge";
@@ -329,8 +329,9 @@ const additionalBlockTasks = [
 ];
 additionalBlockTasks.forEach(name => TacticalGraphicsRegistry.register(new NamedBlockArrow(name)));
 
-// Exfiltrate uses retrograde (cane arrow) geometry
-TacticalGraphicsRegistry.register(new RetrogradeTask(TacticalGraphicName.Exfiltrate));
+// Exfiltrate is a multi-vertex route with an arrowhead and no cane hook — see the
+// class comment for why it is not a RetrogradeTask.
+TacticalGraphicsRegistry.register(new Exfiltrate());
 
 // Area-type graphics (reuse AreaGraphic)
 const additionalAreaGraphics = [
