@@ -77,6 +77,8 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
     setSymbolId(symbolId: string): void {
         this.symbolId = symbolId;
         this.graphic.setSymbolId(symbolId);
+        // Re-key the registry: the constructor registered under the empty string.
+        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
     setBaseFeature(base: Feature<Polygon>): void {

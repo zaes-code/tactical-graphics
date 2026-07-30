@@ -6,6 +6,7 @@ import {DrawEvent} from 'ol/interaction/Draw';
 import {ObjectEvent} from 'ol/Object';
 import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
 import {StyleFunction} from 'ol/style/Style';
+import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 
 export interface SecurityOperationGraphic extends TacticalGraphic {
     base: Feature<Point>;
@@ -45,6 +46,9 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
     setSymbolId(symbolId: string): void {
         this.symbolId = symbolId;
         this.graphic.setSymbolId(symbolId);
+        // This controller never registered at all, so `getFromFeature` returned nothing
+        // for a Cover / Guard / Screen graphic and the dialog could not reach its holder.
+        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
     getBaseGeometry(): number[] {
@@ -66,8 +70,11 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
 
         let center = geom.getCoordinates();
         let newCenter = [center[0] + deltaX, center[1] + deltaY];
-        this.graphic.setBaseFeature(baseFeature);
+        // Move first, then regenerate. The other order regenerated the arrows and labels
+        // around the *previous* centre on every frame, so the graphic trailed the pointer
+        // by one event for the whole drag — and stayed one event behind after it ended.
         geom.setCoordinates(newCenter);
+        this.graphic.setBaseFeature(baseFeature);
         this.milSymbolFeature.setGeometry(new Point(newCenter));
     }
 

@@ -8,11 +8,18 @@ import {StyleFunction} from 'ol/style/Style';
 import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
+import {byMode} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     base: Feature<Point>;
     size: number;
     rotation: number;
+    /**
+     * The point the graphic is built around. Declared alongside `size` and `rotation`
+     * because the three together are the whole of a point-anchored graphic's editable
+     * state — which is exactly what save/restore has to carry.
+     */
+    center: Coordinate;
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
 
@@ -86,8 +93,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
             return new Style({
                 image: new CircleStyle({
                     radius: 6,
-                    fill: new Fill({color: 'rgba(87, 140, 255, 1)'}),
-                    stroke: new Stroke({color: 'white', width: 1.5}),
+                    fill: new Fill({color: byMode('rgba(87, 140, 255, 1)', 'rgb(69,106,185)')}),
+                    stroke: new Stroke({color: byMode('white', 'rgb(23,23,23)'), width: 1.5}),
                 }),
             });
         }
@@ -146,6 +153,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
     setSymbolId(symbolId: string): void {
         this.symbolId = symbolId;
         this.graphic.setSymbolId(symbolId);
+        // Re-key the registry: the constructor registered under the empty string.
+        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
     setBaseFeature(base: Feature<Point>): void {
