@@ -81,6 +81,12 @@ export interface TacticalGraphicProperties {
     radius?: number;
     /** Rotation in degrees, for point-based graphics. */
     rotation?: number;
+    /**
+     * Depth of a bowed graphic's curve, as a signed multiple of `size`. Only
+     * Turn reads it: larger bends the turn more sharply, negative bends it the
+     * other way. Unitless on purpose — it survives a resize.
+     */
+    bend?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
 }
@@ -148,6 +154,7 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         size: props.size,
         radius: props.radius,
         rotation: props.rotation,
+        bend: props.bend,
         width: Number.isFinite(width) ? width : undefined,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,

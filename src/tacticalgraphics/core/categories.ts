@@ -231,8 +231,9 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.TacticalDisrupt]:                          TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Exfiltrate]:                       TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.TacticalFix]:                              TacticalGraphicCategory.TacticalMissionTasks,
-    [TacticalGraphicName.FollowAndAssume]:                  TacticalGraphicCategory.TacticalMissionTasks,
-    [TacticalGraphicName.FollowAndSupport]:                 TacticalGraphicCategory.TacticalMissionTasks,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.FollowAndAssume]:               TacticalGraphicCategory.TacticalMissionTasks,
+    // [TacticalGraphicName.FollowAndSupport]:              TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Interdict]:                        TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Isolate]:                          TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Neutralize]:                       TacticalGraphicCategory.TacticalMissionTasks,

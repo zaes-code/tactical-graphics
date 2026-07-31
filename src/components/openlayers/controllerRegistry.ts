@@ -9,7 +9,7 @@
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
-import {CircularAreaGraphicBase, MissionTaskGraphicBase} from './graphics/MissionTaskGraphicBase';
+import {CircularAreaGraphicBase, MissionTaskGraphicBase, TurnGraphicBase} from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 // import {SearchArea} from './graphics/SearchArea';
@@ -22,7 +22,7 @@ import {Boundary} from './graphics/Boundary';
 import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {MissionTaskController} from './controllers/MissionTaskController';
+import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
@@ -80,6 +80,28 @@ const missionTask = (name: TacticalGraphicName, res: number) => {
     controller.editStretches = true;
     return controller;
 };
+
+// Turn adds a bend handle on top of the mission-task model. `editStretches` is
+// on for the same reason as the circles — an edit-mode drag would otherwise
+// pan the map — and the bend handle rides the manager's per-handle drag hook.
+const turn = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new TurnGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+/**
+ * The crossed mission tasks: one click drops a fixed-size badge. `res * 50` is
+ * `CROSSED_HALF_WIDTH_PX` worth at the placing zoom — which the style function
+ * then divides straight back out, since these render at a constant screen size
+ * whatever the zoom. Passing a sane value anyway keeps the stored geometry
+ * meaningful to a renderer that does not pin it, and matches the floor
+ * `MIN_SIZED_MISSION_TASKS` applies.
+ *
+ * `editStretches` stays off: there is nothing to stretch.
+ */
+const crossedTask = (name: TacticalGraphicName, res: number) =>
+    new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
 
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
@@ -227,7 +249,6 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FerryCrossing]:                    line(2),
     [TacticalGraphicName.PassageLane]:                      line(2),
     [TacticalGraphicName.TacticalFix]:                              line(2),
-    [TacticalGraphicName.TacticalTurn]:                             line(2),
     [TacticalGraphicName.FieldsOfFire]:                     line(3),
 
     // ── Boundary (special line) ────────────────────────────────────────────
@@ -272,6 +293,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Contain]:       missionTask,
     [TacticalGraphicName.Occupy]:        missionTask,
     [TacticalGraphicName.AreaDefense]:   missionTask,
+    // Point-anchored bowed arrow with a draggable bend — see Turn.ts.
+    [TacticalGraphicName.TacticalTurn]:  turn,
 
     // ── Circular area graphics ─────────────────────────────────────────────
     [TacticalGraphicName.FreeFireAreaCircular]:                  circularArea,
@@ -323,13 +346,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Additional mission task block arrows ────────────────────────────────
     [TacticalGraphicName.AttackByFire]:     block,
-    [TacticalGraphicName.Destroy]:          block,
-    [TacticalGraphicName.Neutralize]:       block,
     [TacticalGraphicName.SupportByFire]:    block,
-    [TacticalGraphicName.Suppress]:         block,
-    [TacticalGraphicName.Interdict]:        block,
-    [TacticalGraphicName.FollowAndAssume]:  block,
-    [TacticalGraphicName.FollowAndSupport]: block,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.FollowAndAssume]:  block,
+    // [TacticalGraphicName.FollowAndSupport]: block,
+
+    // ── Crossed-line mission tasks (one click drops a fixed-size badge) ─────
+    [TacticalGraphicName.Destroy]:    crossedTask,
+    [TacticalGraphicName.Interdict]:  crossedTask,
+    [TacticalGraphicName.Neutralize]: crossedTask,
+    [TacticalGraphicName.Suppress]:   crossedTask,
 
     // ── Exfiltrate (multi-vertex route + arrowhead) ─────────────────────────
     [TacticalGraphicName.Exfiltrate]: exfiltrate,

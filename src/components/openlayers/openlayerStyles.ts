@@ -292,6 +292,22 @@ export const createCenterBaseFeature = (): Feature<Point> => {
     return feature;
 };
 
+/**
+ * Draw order within the single rendering layer.
+ *
+ * Everything shares one `VectorLayer`, so without an explicit `zIndex` features
+ * paint in source order — which is the order the holders happened to be added
+ * in. That let a label's background plate, or a graphic's own fill, cover the
+ * handle you were trying to grab: the range-fan band labels sat on their rim
+ * handles, and a large centred label ("BDZ", and the crossed mission tasks'
+ * letters) hid the centre dot.
+ *
+ * **Handles are editor chrome and always paint last.** A handle you cannot see
+ * is a handle you cannot use, and hit-testing follows draw order too, so
+ * lifting them also makes `forEachFeatureAtPixel` reach them first.
+ */
+export const HANDLE_Z_INDEX = 1000;
+
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
 export const createHandleFeature = () => {
     let feature = new Feature();
@@ -308,6 +324,7 @@ export const createHandleFeature = () => {
         // so they stopped reading as handles at all. Grey stays reserved for
         // `createInertHandleFeature` — see it for why the colours must not blur.
         return new Style({
+            zIndex: HANDLE_Z_INDEX,
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
@@ -352,6 +369,7 @@ export const createInertHandleFeature = () => {
         if (feature.get('hidden')) return new Style({});
         const grabbable = feature.get('grabbable');
         return new Style({
+            zIndex: HANDLE_Z_INDEX,
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
@@ -1436,6 +1454,12 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
     return styles;
 }
 
+/**
+ * Downward nudge, in screen pixels per unit of label scale, that puts a capital
+ * letter's *ink* on the line rather than its em box. @see clearStyleFunc
+ */
+const OPTICAL_CENTRE_PX_PER_SCALE = 2.2;
+
 export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFunction {
     return (f, resolution) => {
         const geom = f.getGeometry() as MultiLineString;
@@ -1488,6 +1512,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
         // Normalize to [-π, π)
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
         // 6) build styles for the echelon in the middle
+        const labelScale = featureGraphicLabelScale(f, resolution);
         const textStyle = new Style({
             geometry: new Point(midGap),
             text: new Text({
@@ -1497,7 +1522,16 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
                 rotation: rotation,
                 textAlign: 'center',
                 textBaseline: 'middle',
-                scale: featureGraphicLabelScale(f, resolution),
+                // `textBaseline: 'middle'` centres the font's *em box* on the
+                // anchor, not the capital's ink, so the letter renders high and
+                // the line looks as if it passes below centre. Measured on the
+                // rendered glyph, the error is 2.2 px per unit of label scale
+                // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
+                // artefact, hence proportional. OL applies `offsetY` in raw
+                // screen pixels and does **not** multiply it by `scale`, so the
+                // scale has to be applied here.
+                offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
+                scale: labelScale,
                 stroke: getHaloStroke(),
             }),
         });
@@ -4405,29 +4439,306 @@ export function getMissionTaskStyleFn(textLabel: string, rotation: number = 0): 
 export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFunction {
     return (feature: FeatureLike, resolution: number) => {
         const geom = feature.getGeometry() as Point;
-        const radius = feature.get('graphicSize') as number | undefined;
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        let scale: number;
-        if (radius && radius > 0) {
-            const radiusPx = radius / resolution;
-            const K = 0.3;
-            scale = sizeFactor * K * radiusPx / BASE_FONT_SIZE_PX;
-        } else {
-            scale = featureLabelScale(feature, resolution);
-        }
         return [new Style({
             geometry: geom,
             text: new Text({
                 text: textLabel,
-                font: 'bold 24px sans-serif',
+                font: RATIO_LOCKED_LABEL_FONT,
                 fill: new Fill({color: getLabelFillColor()}),
-                scale,
+                scale: ratioLockedLabelScale(feature, resolution),
                 stroke: getHaloStroke(),
                 textAlign: 'center',
                 textBaseline: 'middle',
             }),
         })];
     };
+}
+
+/**
+ * The font literal every ratio-locked mission-task label renders with. Anything
+ * that measures one of those labels (`getTextWidth`) has to pass this same
+ * string or the measured width won't match the drawn glyph.
+ */
+export const RATIO_LOCKED_LABEL_FONT = 'bold 24px sans-serif';
+
+/**
+ * Label height as a fraction of the graphic's `graphicSize` on screen. Lower
+ * than `GRAPHIC_LABEL_FRACTION` because mission tasks store a radius where the
+ * block family stores a perpendicular size — 0.3 here lines the two families up
+ * at their respective minimums. @see getRatioLockedMissionTaskStyleFn
+ */
+const RATIO_LOCKED_LABEL_FRACTION = 0.3;
+
+/**
+ * Scale of a ratio-locked mission task's label. Exported because the graphic
+ * style functions that open a gap for that label have to size the gap from the
+ * same number the label is drawn at.
+ */
+export function ratioLockedLabelScale(feature: FeatureLike, resolution: number): number {
+    const radius = feature.get('graphicSize') as number | undefined;
+    if (radius && radius > 0) {
+        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+        return sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (radius / resolution) / BASE_FONT_SIZE_PX;
+    }
+    return featureLabelScale(feature, resolution);
+}
+
+/**
+ * Which of the two crossed arms renders hashed, by sub-line index into
+ * `CrossedMissionTask.generateGraphics` output. Absent = both solid.
+ */
+const CROSSED_HASHED_ARM: Partial<Record<TacticalGraphicName, number>> = {
+    // The "/" stroke of the X.
+    [TacticalGraphicName.Suppress]: 0,
+    // The diagonal; the horizontal stays solid.
+    [TacticalGraphicName.Neutralize]: 1,
+};
+
+/** Hash pattern of a doctrinally-broken arm, in screen pixels. */
+const CROSSED_HASH_DASH = [12, 8];
+/**
+ * Clearance in screen pixels between the label's glyph box and the arm ends
+ * that stop short of it. Added *along the arm*, past where the arm leaves the
+ * box — not as padding on the box itself. Padding the box inflates on the
+ * diagonals (a 45° ray exits a box grown by `p` some `p × √2` further out), so
+ * an X would end up with a visibly wider gap than a cross for the same number.
+ */
+const CROSSED_LABEL_CLEARANCE_PX = 7;
+/** Cap height of the label font as a fraction of its declared px size. */
+const CAP_HEIGHT_FRACTION = 0.72;
+
+/**
+ * Screen half-width a crossed mission task always renders at — 100 px across,
+ * at **every** zoom level.
+ *
+ * These are badges, not areas. They mark a point; nothing about them describes
+ * ground extent, so there is no size for the map scale to be right about. The
+ * symbol is therefore pinned to the screen outright rather than merely capped:
+ * it neither grows on zoom-in nor recedes on zoom-out.
+ *
+ * That makes the stored `size` irrelevant to what is drawn — the style function
+ * divides it straight back out. It still matters as the thing `size` and
+ * `resolution` are compared *through*, and as what a non-OpenLayers renderer
+ * would fall back on, so it is still saved.
+ */
+export const CROSSED_HALF_WIDTH_PX = 50;
+
+/**
+ * Label scale for the crossed mission tasks: the ratio-locked family's formula
+ * driven off the fixed half-width, so the letter is the same size as the line
+ * work is — constant. Exported because the graphic style has to reproduce it to
+ * size the gap the letter sits in.
+ */
+export function crossedMissionTaskLabelScale(): number {
+    const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+    return sizeFactor * RATIO_LOCKED_LABEL_FRACTION * CROSSED_HALF_WIDTH_PX / BASE_FONT_SIZE_PX;
+}
+
+/**
+ * The one-letter label of a crossed mission task. Same treatment as
+ * `getRatioLockedMissionTaskStyleFn`, but at a constant screen size.
+ */
+export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    const textLabel = getLabel(name);
+    return (feature: FeatureLike) => [new Style({
+        geometry: feature.getGeometry() as Point,
+        text: new Text({
+            text: textLabel,
+            font: RATIO_LOCKED_LABEL_FONT,
+            fill: new Fill({color: getLabelFillColor()}),
+            scale: crossedMissionTaskLabelScale(),
+            stroke: getHaloStroke(),
+            textAlign: 'center',
+            textBaseline: 'middle',
+        }),
+    })];
+}
+
+/**
+ * Destroy / Interdict / Neutralize / Suppress — two straight lines crossing at
+ * a one-letter label, per FM 1-02.2 table 6-1.
+ *
+ * Sub-line layout, written by `CrossedMissionTask.generateGraphics`:
+ *   `[0]` first arm, `[1]` second arm, `[2…]` arrowheads.
+ * The arms arrive whole, running right through the centre; the gap for the
+ * label is opened here, sized from the glyph that actually renders. Baking it
+ * into the geometry would be a second place to keep in step with the label's
+ * scale formula.
+ *
+ * The whole symbol is also **scaled about its centre onto the screen**, so it
+ * renders `CROSSED_HALF_WIDTH_PX × 2` wide at every zoom level — it neither
+ * grows on zoom-in nor recedes on zoom-out. Nothing about the stored `size`
+ * survives that: the scale factor divides it straight back out. It has to
+ * happen here rather than in the geometry because it is a function of the live
+ * `resolution`, which the generator never sees.
+ *
+ * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
+ */
+export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const label = getLabel(name);
+    const hashedArm = CROSSED_HASHED_ARM[name];
+    return (feature: FeatureLike, resolution: number) => {
+        const geom = feature.getGeometry();
+        if (!(geom instanceof MultiLineString)) return [];
+        const lines = geom.getCoordinates();
+        if (lines.length < 2) return [];
+
+        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const strokeFor = (hashed: boolean) => new Stroke({
+            color,
+            width: LINE_WIDTH,
+            lineDash: hashed ? CROSSED_HASH_DASH : undefined,
+        });
+
+        // The symbol's centre, as stamped by the holder — the same projected
+        // point the label feature is drawn at.
+        //
+        // **Not the arms' midpoint.** The generator walks out from the centre
+        // with `turf.destination`, which is geodesic; Mercator then stretches
+        // the northern end of a diagonal arm more than the southern one, so the
+        // projected midpoint sits a little north of the true centre. That error
+        // is fixed in map units, so on screen it grew on zoom-in — and since the
+        // geometry is scaled about this point while the label is not, the letter
+        // visibly drifted out of its own gap as you zoomed.
+        const stamped = feature.get('graphicCenter') as number[] | undefined;
+        const [a0, a1] = lines[0];
+        const cx = stamped?.[0] ?? (a0[0] + a1[0]) / 2;
+        const cy = stamped?.[1] ?? (a0[1] + a1[1]) / 2;
+
+        // Scale the symbol about its centre so its half-width is always
+        // `CROSSED_HALF_WIDTH_PX` on screen. `k` is the ratio between the
+        // half-width the geometry was built at and the one we want, so the
+        // stored `size` cancels out entirely and the result is the same number
+        // of pixels at every zoom. No clamp: it grows the geometry on zoom-out
+        // just as it shrinks it on zoom-in.
+        const size = feature.get('graphicSize') as number | undefined;
+        const k = size && size > 0 ? (CROSSED_HALF_WIDTH_PX * resolution) / size : 1;
+        const pinned = (p: number[]): Coordinate => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
+
+        // Half-extents of the label's glyph box, in map units. The scale is the
+        // one the label itself uses — constant, like everything else here.
+        const scale = crossedMissionTaskLabelScale();
+        const halfW = (getTextWidth(label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * resolution;
+        const halfH = (24 * scale * CAP_HEIGHT_FRACTION / 2) * resolution;
+        const clearance = CROSSED_LABEL_CLEARANCE_PX * resolution;
+
+        const styles: Style[] = [];
+        for (let i = 0; i < 2; i++) {
+            const start = pinned(lines[i][0]);
+            const end = pinned(lines[i][1]);
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const len = Math.hypot(dx, dy);
+            const stroke = strokeFor(i === hashedArm);
+            if (len === 0) continue;
+            const ux = dx / len;
+            const uy = dy / len;
+            // Where this direction leaves the label's box: whichever of the two
+            // half-extents it reaches first. A near-horizontal arm therefore
+            // clears the glyph's width, a near-vertical one its height. The
+            // clearance is then added *along the arm*, so every arm stops the
+            // same distance from the glyph whatever angle it comes in at.
+            const boxExit = Math.min(
+                Math.abs(ux) > 1e-9 ? halfW / Math.abs(ux) : Infinity,
+                Math.abs(uy) > 1e-9 ? halfH / Math.abs(uy) : Infinity,
+            );
+            const gap = boxExit + clearance;
+            if (!isFinite(gap) || gap * 2 >= len) {
+                styles.push(new Style({geometry: new LineString([start, end]), stroke}));
+                continue;
+            }
+            styles.push(new Style({
+                geometry: new LineString([start, [cx - ux * gap, cy - uy * gap]]),
+                stroke,
+            }));
+            styles.push(new Style({
+                geometry: new LineString([[cx + ux * gap, cy + uy * gap], end]),
+                stroke,
+            }));
+        }
+
+        // Arrowheads are never hashed — FM 1-02.2 draws Interdict's heads solid
+        // even where the arm they sit on is broken.
+        for (let i = 2; i < lines.length; i++) {
+            styles.push(new Style({geometry: new LineString(lines[i].map(pinned)), stroke: strokeFor(false)}));
+        }
+        return styles;
+    };
+}
+
+/**
+ * Turn — the bowed curve and its filled arrowhead. The geometry is a
+ * GeometryCollection (`[MultiLineString, Polygon]`), so one fill + stroke pair
+ * covers both: OpenLayers strokes the sub-lines and fills the arrowhead.
+ * The "T" comes off the separate label feature.
+ */
+export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const label = getLabel(name);
+    return (f, resolution) => {
+        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const stroke = new Stroke({color, width: LINE_WIDTH});
+        const geom = f.getGeometry();
+        if (!(geom instanceof GeometryCollection)) {
+            return new Style({fill: new Fill({color}), stroke});
+        }
+
+        // Half the gap, in map units, from the glyph as it renders right now.
+        // The label's own scale is zoom-clamped to [0.3, 1.5], so a gap baked
+        // in metres drifted against it: wider than the "T" zoomed in, tighter
+        // than it zoomed out. Measuring here is the only way the two agree at
+        // every zoom. @see conventions.md, "a gap follows what it makes room for"
+        const scale = featureLabelScale(f, resolution);
+        const halfGap = (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution;
+
+        const styles: Style[] = [];
+        for (const sub of geom.getGeometries()) {
+            if (sub instanceof Polygon) {
+                // The arrowhead — filled, and never trimmed.
+                styles.push(new Style({geometry: sub, fill: new Fill({color}), stroke}));
+                continue;
+            }
+            if (!(sub instanceof MultiLineString)) {
+                styles.push(new Style({geometry: sub, stroke}));
+                continue;
+            }
+            // `[curveBeforeLabel, curveAfterLabel]`, meeting exactly at the
+            // arc-length midpoint because the holder passes `labelGap: 0` and
+            // does the cutting here instead. Trim each half back from that
+            // shared inner end.
+            const halves = sub.getCoordinates();
+            halves.forEach((half, i) => {
+                const trimmed = i === 0 ? trimFromEnd(half, halfGap) : trimFromEnd(half.slice().reverse(), halfGap).reverse();
+                if (trimmed.length >= 2) styles.push(new Style({geometry: new LineString(trimmed), stroke}));
+            });
+        }
+        return styles;
+    };
+}
+
+/** Padding either side of the "T", in screen pixels. */
+const TURN_LABEL_PAD_PX = 5;
+
+/**
+ * Drops `distance` map units off the far end of a polyline, interpolating the
+ * new last vertex. Euclidean — these are projected EPSG:3857 metres.
+ * Returns fewer than two points when the line is shorter than the trim.
+ */
+function trimFromEnd(coords: number[][], distance: number): Coordinate[] {
+    let remaining = distance;
+    const kept = coords.map(c => [c[0], c[1]] as Coordinate);
+    while (kept.length >= 2) {
+        const last = kept[kept.length - 1];
+        const prev = kept[kept.length - 2];
+        const segment = Math.hypot(last[0] - prev[0], last[1] - prev[1]);
+        if (segment > remaining) {
+            const t = remaining / segment;
+            kept[kept.length - 1] = [last[0] + (prev[0] - last[0]) * t, last[1] + (prev[1] - last[1]) * t];
+            return kept;
+        }
+        remaining -= segment;
+        kept.pop();
+    }
+    return kept;
 }
 
 /**
