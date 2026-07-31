@@ -95,7 +95,11 @@ export {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicB
 // The controllers: they translate pointer events into translate / rotate /
 // resize calls on a holder.
 export {LineGraphicController, SAME_POINT_EPSILON_M} from './controllers/LineGraphicController';
-export {MissionTaskController} from './controllers/MissionTaskController';
+// `PointDropController` is the click-to-place variant — a graphic with no
+// draggable dimension is placed by one click rather than drawn. Exported
+// alongside its base for the same reason the others are: a host registering its
+// own graphic needs to be able to name the controller it routes through.
+export {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 export {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
