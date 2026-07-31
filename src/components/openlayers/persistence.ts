@@ -75,7 +75,7 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {clampTurnBend, TacticalGraphicName} from '@zaes/tactical-graphics';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -85,6 +85,7 @@ import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
+import {TurnGraphicBase} from './graphics/MissionTaskGraphicBase';
 import {
     GraphicGeometryState,
     readGraphicGeometryState,
@@ -148,7 +149,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['size', 'radius', 'rotation'] as const;
+const GEOMETRY_KEYS = ['size', 'radius', 'rotation', 'bend'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -276,6 +277,12 @@ export function applyRestoredGeometry(
     if (handler instanceof MissionTaskController) {
         const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
         if (!coords || coords.length < 2) throw new Error('point-based graphic has no centre coordinate');
+        // `bend` before `updateGeom`: the holder reads it back out when it
+        // regenerates, so setting it afterwards would leave the restored
+        // graphic drawn at the default sharpness until the next edit.
+        if (state.bend !== undefined && handler.graphic instanceof TurnGraphicBase) {
+            handler.graphic.bend = clampTurnBend(state.bend);
+        }
         handler.graphic.updateGeom({
             center: coords as Coordinate,
             size: state.size,
@@ -373,6 +380,7 @@ export function restoreTacticalGraphics(
                 size: bag.size as number | undefined,
                 radius: bag.radius as number | undefined,
                 rotation: bag.rotation as number | undefined,
+                bend: bag.bend as number | undefined,
             };
 
             // Seed the base geometry onto the holder's *own* base feature before anything
