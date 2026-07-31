@@ -8,6 +8,8 @@ import {
     createFeature,
     createHandleFeature,
     createInertHandleFeature,
+    crossedMissionTaskLabelStyleFn,
+    crossedMissionTaskStyleFunc,
     featureLabelScale,
     fightingPositionStyleFunc,
     fontStyle,
@@ -17,15 +19,60 @@ import {
     getRatioLockedMissionTaskStyleFn,
     getTextWidth,
     limitedAccessAreaStyleFunc,
+    turnStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {clampTurnBend, getLabel, TacticalGraphicName, TURN_DEFAULT_BEND} from '@zaes/tactical-graphics';
 
-// Mission-task graphics that lock to a 100px-diameter minimum and use the
-// ratio-locked label style. Adding a name here gives it the block-family
-// label treatment + min-size enforcement.
+/**
+ * Turn's arrowhead length in screen pixels at the drawing zoom. Baked into
+ * metres once, so it neither follows a resize nor stays pinned to the screen.
+ */
+const TURN_ARROWHEAD_PX = 26;
+/**
+ * Turn asks the generator for **no** gap, so its two curve halves meet exactly
+ * at the arc-length midpoint, and `turnStyleFunc` cuts the gap itself from the
+ * glyph as rendered.
+ *
+ * Two earlier attempts were both wrong for the same reason — a gap has to
+ * follow whatever it makes room for. A fraction of `size` left a 16 px letter
+ * in a hole several times its width on a long turn; a flat
+ * `px × drawingResolution` then drifted the other way, because the label's own
+ * scale is zoom-clamped to [0.3, 1.5] while a metric gap is not. Only measuring
+ * at render time tracks it at every zoom.
+ *
+ * The zero is renderer-specific: a consumer that omits `labelGap` still gets
+ * the generator's own `size`-proportional default.
+ */
+const TURN_LABEL_GAP_METRES = 0;
+/** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
+const TURN_TIP_HANDLE = 1;
+
+/**
+ * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing
+ * at a one-letter label. They share one generator (`CrossedMissionTask`) and one
+ * style function, which needs the name to know which arm is hashed and which
+ * ends carry arrowheads.
+ */
+const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+];
+
+/**
+ * Mission-task graphics whose label scales with the graphic rather than with
+ * the zoom — the block-family treatment: 24 px base font, scale off
+ * `graphicSize`.
+ *
+ * **Turn is deliberately absent.** Its "T" has to hold its size while the curve
+ * is resized and stay capped on zoom, which is exactly what the default
+ * `getMissionTaskStyleFn` (`featureLabelScale`, clamped to [0.3, 1.5]) already
+ * does. Adding it here would make the letter track the curve instead.
+ */
 const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
@@ -38,7 +85,28 @@ const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
+    // The crossed-line tasks, for the 24px font. Their scale does not actually
+    // come from here — `crossedMissionTaskLabelStyleFn` overrides this entry
+    // with a constant, because the whole symbol is pinned to a fixed screen
+    // size — but leaving them in keeps the family's font literal in one place.
+    ...CROSSED_MISSION_TASKS,
 ]);
+
+/**
+ * Graphics whose `size` is floored so the symbol is recognisable from the first
+ * cursor move. A superset of the ratio-locked set — Turn takes the floor
+ * without taking the label treatment.
+ */
+const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    ...CROSSED_MISSION_TASKS,
+    TacticalGraphicName.TacticalTurn,
+];
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
 /**
  * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
@@ -105,6 +173,16 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc());
+        }
+        // The crossed-line tasks draw their own arms so the gap for the centre
+        // label can be measured off the glyph, and so one arm can be hashed.
+        if (CROSSED_MISSION_TASKS.includes(name)) {
+            this.graphic.setStyle(crossedMissionTaskStyleFunc(name));
+        }
+        // Turn is a GeometryCollection — stroked curve plus filled arrowhead —
+        // so it needs a fill as well as a stroke, and not the default blue one.
+        if (name === TacticalGraphicName.TacticalTurn) {
+            this.graphic.setStyle(turnStyleFunc(name));
         }
         // MovementToContact: shift the zigzag "contact" side arrows outward so
         // they don't touch the big arrow's arrowhead edge. B→A
@@ -250,13 +328,34 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 getRatioLockedMissionTaskStyleFn(getLabel(name))(feature, resolution)
             );
         }
+        // …but the crossed four cap their symbol at 100 px across, and the
+        // letter has to stop growing with it. Must come after the block above.
+        if (CROSSED_MISSION_TASKS.includes(name)) {
+            this.label.setStyle(crossedMissionTaskLabelStyleFn(name));
+        }
+    }
+
+    /**
+     * Generator options beyond `size` / `rotation`, for subclasses whose shape
+     * takes another input. Split into two so a subclass can say which of them
+     * belong in the saved bag: this one is everything the generator needs,
+     * `persistedGeometryState` only the portable part.
+     * @see TurnGraphicBase
+     */
+    protected generatorOptions(): Record<string, unknown> {
+        return {};
+    }
+
+    /** The subset of `generatorOptions` that a restore has to carry. */
+    protected persistedGeometryState(): GraphicGeometryState {
+        return {};
     }
 
     updateGeometry = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
             this.base,
-            {size: this.size, rotation: this.rotation}
+            {size: this.size, rotation: this.rotation, ...this.generatorOptions()}
         );
         if (!tacticalGraphic) return;
 
@@ -268,8 +367,16 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
 
         // Stamp the current radius on the label feature so size-tracking
         // label styles (e.g. baseDefenseZoneLabelStyleFn) can scale text to
-        // the circle without poking at the graphic feature.
+        // the circle without poking at the label feature.
         this.label.set('graphicSize', this.size);
+        // …and on the graphic, for the styles that have to reproduce the
+        // label's scale to leave room for it (crossedMissionTaskStyleFunc).
+        this.graphic.set('graphicSize', this.size);
+        // The projected centre, for styles that scale the symbol about it. It
+        // cannot be recovered from the geometry: the generator walks out
+        // geodesically and Mercator does not preserve the midpoint.
+        const centre = this.base.getGeometry()?.getCoordinates();
+        if (centre) this.graphic.set('graphicCenter', centre);
 
         // Store the graphic's bounding box on the label feature so edge-anchored
         // label styles (e.g. PositionAreaArtillery's four PAA labels) can compute
@@ -345,14 +452,22 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
             size: this.size,
             rotation: this.rotation,
+            ...this.persistedGeometryState(),
             ...extra,
         });
     }
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
         this.rotation = rotation || this.rotation;
+        // The crossed four are drawn in one fixed orientation — an X turned 45°
+        // is a "+", and Interdict's and Neutralize's horizontal arm is what
+        // distinguishes them from Destroy and Suppress. Zeroing here rather
+        // than refusing the gesture upstream catches every route into rotation
+        // at once: the draw drag (which derives one from the cursor bearing),
+        // `handleRotate`, and a restore carrying an old non-zero value.
+        if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (RATIO_LOCKED_MISSION_TASKS.has(this.name)) {
+        if (MIN_SIZED_MISSION_TASKS.includes(this.name)) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
                 const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
@@ -439,4 +554,84 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
     };
 
 
+}
+
+/**
+ * Turn — the one mission task with a third shape input, `bend`.
+ *
+ * `bend` is how sharp the turn is, a signed multiple of `size`. Being unitless
+ * it survives a resize, which is the point: the user sets the sharpness once
+ * and stretching the curve does not undo it.
+ *
+ * The arrowhead is sized in **flat metres off the drawing resolution**, not as
+ * a fraction of `size`, for the same reason — it holds its size while the curve
+ * is resized, and grows with the world on zoom-in like any baked geometry. The
+ * "T" is the opposite: it uses the default zoom-anchored label scale, capped to
+ * [0.3, 1.5], so it stays legible without ever running away.
+ */
+export class TurnGraphicBase extends MissionTaskGraphicBase {
+    /** @see TURN_DEFAULT_BEND */
+    bend: number = TURN_DEFAULT_BEND;
+    private readonly headSize: number;
+
+    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
+        super(name, size, drawingResolution);
+        this.headSize = TURN_ARROWHEAD_PX * (drawingResolution ?? 1);
+    }
+
+    protected generatorOptions(): Record<string, unknown> {
+        return {bend: this.bend, headSize: this.headSize, labelGap: TURN_LABEL_GAP_METRES};
+    }
+
+    protected persistedGeometryState(): GraphicGeometryState {
+        // `headSize` is deliberately absent: it is derived from
+        // `drawingResolution`, which the renderer bag already carries, so a
+        // restore rebuilds it through `getController(name, res)`. `bend` is
+        // portable — a Cesium view would need it to draw the same curve.
+        return {bend: this.bend};
+    }
+
+    /**
+     * Drags one of Turn's two shape handles.
+     *
+     * Reached through `MissionTaskController.handleBandResize`, the manager's
+     * hook for "this graphic's handles are not interchangeable — hand the
+     * grabbed one the raw cursor". The range fans got there first, hence the
+     * name; the mechanism is general and this is the second user. A resize drag
+     * that starts on the *graphic* rather than on a handle still scales the
+     * whole thing, because the manager only routes here when a handle set was
+     * grabbed (`activeHandleIndex >= 0`).
+     *
+     * Index order is `Turn.generateHandles`' contract — `[bend, arrowTip]`,
+     * the centre having been split off onto the inert feature by
+     * `publishHandles`, which preserves order.
+     */
+    setBandRange(handleIndex: number, coordinate: Coordinate): void {
+        const centre = this.base.getGeometry()?.getCoordinates();
+        if (!centre || this.size <= 0) return;
+        const dx = coordinate[0] - centre[0];
+        const dy = coordinate[1] - centre[1];
+
+        if (handleIndex === TURN_TIP_HANDLE) {
+            // The tip is the far end of the chord, so the cursor gives both of
+            // the chord's inputs directly: how long it is and which way it
+            // points. `bend` is unitless and rides along unchanged.
+            const reach = Math.hypot(dx, dy);
+            if (reach <= 0) return;
+            this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+            this.updateGeom({size: reach});
+            return;
+        }
+
+        // Bend: the cursor's signed perpendicular distance from the chord, over
+        // `size` — so the handle tracks the pointer exactly, and dragging
+        // across the chord flips which way the turn bends. Chord direction from
+        // `rotation` (planar degrees, 0 = east), then the clockwise
+        // perpendicular, the side `bendLine` bows toward.
+        const theta = (this.rotation * Math.PI) / 180;
+        const perpX = Math.sin(theta);
+        const perpY = -Math.cos(theta);
+        this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
+        this.updateGeometry();
+    }
 }

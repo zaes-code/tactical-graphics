@@ -1970,13 +1970,19 @@ class GeometryService {
             (p0[1] + p1[1]) / 2
         ];
 
-        // Bottom arrow stays 25% longer than the default (half-base − size).
-        // Top arrow mirrors bottom around p1 so the three right-end extents
-        // (bottom-right, p1, top-right) are linearly spaced, preserving the
-        // staggered "rise" of the trident.
+        // The trident's two outer prongs are a long/short pair straddling the
+        // middle one, and which side gets which was swapped on 2026-07-31 at
+        // the user's request: the prong on the `-px` side (screen-*upper* for a
+        // left-to-right base, despite the `top`/`bottom` variable names, which
+        // are named for the perpendicular's sign) is now the long one.
+        //
+        // The short prong is 25% longer than the naive half-base − size; the
+        // long one mirrors it around p1, which is what keeps the three
+        // right-end extents linearly spaced and preserves the staggered "rise".
         const ARROW_EXTENSION_FACTOR = 1.25;
-        const bottomArrowLength = Math.max(size * 0.5, (len / 2 - size) * ARROW_EXTENSION_FACTOR);
-        const topArrowLength = len - bottomArrowLength;
+        const shortArrowLength = Math.max(size * 0.5, (len / 2 - size) * ARROW_EXTENSION_FACTOR);
+        const topArrowLength = shortArrowLength;
+        const bottomArrowLength = len - shortArrowLength;
 
         const topEnd = [
             midpoint[0] + ux * topArrowLength,
