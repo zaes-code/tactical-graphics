@@ -55,8 +55,8 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
  * 120 px across at the default — while `getBlockArrow` draws its crossbar at
  * ±1 × size, which would be 40 px. 60 px puts block's crossbar at the same 120 px
  * as penetration's front line on a fresh draw. Raising it here rather than in
- * `getBlockArrow` is deliberate: that helper also backs Destroy, Neutralize,
- * Suppress, Interdict, FollowAndAssume and FollowAndSupport, which are unchanged.
+ * `getBlockArrow` is deliberate: that helper is shared, and was left alone so
+ * the excluded FollowAndAssume / FollowAndSupport come back unchanged.
  */
 const DEFAULT_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalBlock]: 60,
