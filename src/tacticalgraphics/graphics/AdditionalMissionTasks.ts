@@ -26,8 +26,12 @@ const FIRE_POSITION_BAR_RATIO = 0.45;
  * middle (attack) or two diverging off its ends (support). All other names render
  * the plain T-shape block arrow.
  *
- * Used for: AttackByFire, Destroy, Neutralize, SupportByFire, Suppress,
- *           Interdict, FollowAndAssume, FollowAndSupport.
+ * Used for: AttackByFire and SupportByFire. Destroy, Interdict, Neutralize and
+ * Suppress used to route through here too; they are crossed lines in FM 1-02.2,
+ * not block arrows, and now have their own point-anchored generator — see
+ * `CrossedMissionTask`. FollowAndAssume and FollowAndSupport were the last two
+ * users of the plain block-arrow branch and are currently excluded — see
+ * `ai/excluded-graphics.md`. Keep that branch: it is what they come back to.
  */
 export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string;

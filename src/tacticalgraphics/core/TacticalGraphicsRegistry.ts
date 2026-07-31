@@ -51,6 +51,7 @@ import {
 } from "../graphics/FormsOfManeuver";
 import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan";
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
+import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
 export class TacticalGraphicsRegistry {
@@ -319,15 +320,22 @@ TacticalGraphicsRegistry.register(new FortifiedLine());
 // Additional mission task block arrows (same geometry as Block, distinguished by name/label)
 const additionalBlockTasks = [
     TacticalGraphicName.AttackByFire,
-    TacticalGraphicName.Destroy,
-    TacticalGraphicName.Neutralize,
     TacticalGraphicName.SupportByFire,
-    TacticalGraphicName.Suppress,
-    TacticalGraphicName.Interdict,
-    TacticalGraphicName.FollowAndAssume,
-    TacticalGraphicName.FollowAndSupport,
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.FollowAndAssume,
+    // TacticalGraphicName.FollowAndSupport,
 ];
 additionalBlockTasks.forEach(name => TacticalGraphicsRegistry.register(new NamedBlockArrow(name)));
+
+// The four crossed-line mission tasks. They used to render as block arrows,
+// which is not what FM 1-02.2 draws for any of them — see CrossedMissionTask.
+const crossedTasks = [
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+];
+crossedTasks.forEach(name => TacticalGraphicsRegistry.register(new CrossedMissionTask(name)));
 
 // Exfiltrate is a multi-vertex route with an arrowhead and no cane hook — see the
 // class comment for why it is not a RetrogradeTask.
