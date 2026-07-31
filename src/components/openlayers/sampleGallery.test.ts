@@ -64,7 +64,12 @@ function sample(name: TacticalGraphicName) {
 
 describe('sweeping with a hostility', () => {
     it('covers both sides of the rule, so neither branch is vacuous', () => {
-        expect(missionTasks.length).toBeGreaterThanOrEqual(24);
+        // A floor, not a count — it only guards against the `it.each` below
+        // silently iterating nothing. Excluding a graphic legitimately lowers
+        // it (22 since FollowAndAssume / FollowAndSupport came out on
+        // 2026-07-31; see ai/excluded-graphics.md), so move it down when that
+        // happens rather than treating the drop as a failure.
+        expect(missionTasks.length).toBeGreaterThanOrEqual(22);
         expect(others.length).toBeGreaterThan(100);
     });
 

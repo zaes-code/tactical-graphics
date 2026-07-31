@@ -161,3 +161,58 @@ export class MissionTaskController implements TacticalGraphicHandler {
         this.graphic.setBaseFeature(base);
     }
 }
+
+/**
+ * A point-anchored graphic that is **placed, not drawn**: one click on the map
+ * drops it at a fixed size and the draw is over.
+ *
+ * The crossed mission tasks (Destroy / Interdict / Neutralize / Suppress) are
+ * badges — they render at a fixed 100 px, never rotate, and have no dimension
+ * to drag. A `Circle` draw asked the user for a radius and a bearing that were
+ * both then discarded, and left a click-move-click gesture where a click would
+ * do.
+ *
+ * Everything else is inherited: it is still a `MissionTaskController`, so the
+ * sample gallery, `applyRestoredGeometry` and the manager's `Circle` drag
+ * dispatch all keep working unchanged. Only the draw geometry and the two
+ * gestures that no longer mean anything are overridden.
+ */
+export class PointDropController extends MissionTaskController {
+    /** What the Draw interaction builds — a single click, then `drawend`. */
+    type: TacticalGraphicShape = 'Point';
+    /**
+     * …but drags still route through `handleCircleDrag`, which is where a
+     * point-anchored graphic's translate lives. The two shapes are independent:
+     * this one is "what the user draws", the other "how the user edits it".
+     */
+    geomHandleType: TacticalGraphicShape = 'Circle';
+
+    /** The size every instance is dropped at, in map units. */
+    private readonly fixedSize: number;
+
+    constructor(graphic: MissionTaskGraphic, fixedSize: number) {
+        super(graphic);
+        this.fixedSize = fixedSize;
+    }
+
+    private drop(e: DrawEvent): void {
+        const point = e.feature.getGeometry() as Point | undefined;
+        const coordinate = point?.getCoordinates();
+        if (!coordinate || coordinate.length < 2) return;
+        this.graphic.updateGeom({size: this.fixedSize, center: coordinate as Coordinate, rotation: 0});
+    }
+
+    // A Point draw fires both in the same click. Placing on `drawstart` means the
+    // symbol is under the cursor the instant the button goes down rather than on
+    // release; `drawend` repeats it so an abort mid-click cannot leave it half-set.
+    onDrawStartFunc = (e: DrawEvent) => this.drop(e);
+    onDrawEndFunc = (e: DrawEvent) => this.drop(e);
+
+    /** Not resizable: the symbol has one size and the style function caps it. */
+    handleResize(): void {
+    }
+
+    /** Not rotatable: these symbols have a single doctrinal orientation. */
+    handleRotate(): void {
+    }
+}
