@@ -72,7 +72,6 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.TacticalFix:
                     return tacticalFixStyleFunc()(feature, resolution);
                 case TacticalGraphicName.FerryCrossing:
-                case TacticalGraphicName.TacticalTurn:
                     return ferryCrossingStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.DirectionOfMainAttack:
                 case TacticalGraphicName.DirectionOfSupportingAttack:

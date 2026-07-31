@@ -761,13 +761,17 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.Retirement,
         TacticalGraphicName.ForwardPassageOfLines, TacticalGraphicName.RearwardPassageOfLines,
         TacticalGraphicName.FerryCrossing, TacticalGraphicName.PassageLane,
-        TacticalGraphicName.TacticalFix, TacticalGraphicName.TacticalTurn,
-        TacticalGraphicName.AttackByFire, TacticalGraphicName.Destroy, TacticalGraphicName.Neutralize,
-        TacticalGraphicName.SupportByFire, TacticalGraphicName.Suppress, TacticalGraphicName.Interdict,
-        TacticalGraphicName.FollowAndAssume, TacticalGraphicName.FollowAndSupport,
+        TacticalGraphicName.TacticalFix,
+        TacticalGraphicName.AttackByFire, TacticalGraphicName.SupportByFire,
         TacticalGraphicName.Exfiltrate,
         TacticalGraphicName.ReliefInPlace,
     ];
+    // Placed, not drawn: one click drops a fixed-size badge.
+    const onePoint: TacticalGraphicName[] = [
+        TacticalGraphicName.Destroy, TacticalGraphicName.Interdict,
+        TacticalGraphicName.Neutralize, TacticalGraphicName.Suppress,
+    ];
+    if (onePoint.includes(name)) return '1 point (click to place)';
     if (twoPoint.includes(name)) return '2 points';
     if (name === TacticalGraphicName.FieldsOfFire) return '3 points';
     // if (name === TacticalGraphicName.SearchArea) return '3 points';
@@ -786,6 +790,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
         name === TacticalGraphicName.Pursuit ||
         name === TacticalGraphicName.FightingPosition ||
         name === TacticalGraphicName.BaseDefenseZone ||
+        name === TacticalGraphicName.TacticalTurn ||
         name === TacticalGraphicName.WeaponSensorRangeFanSector ||
         name === TacticalGraphicName.WeaponSensorRangeFanCircular// ||
         // name === TacticalGraphicName.TargetReferencePoint ||
