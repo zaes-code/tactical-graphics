@@ -118,11 +118,38 @@ export interface RangeFanOptions extends BaseGraphicOptions {
 }
 
 /**
+ * Options for the Turn tactical mission task.
+ *
+ * `size` is the half-length of the curve's chord; `bend` is what makes the
+ * turn sharper or shallower, and `headSize` keeps the arrowhead out of both —
+ * it is a flat distance rather than a fraction of `size`, so resizing the
+ * curve does not resize the head.
+ */
+export interface TurnOptions extends BaseGraphicOptions {
+    size?: number;
+    rotation?: number;
+    /**
+     * Depth of the bow as a signed multiple of `size`. Larger = sharper turn;
+     * negative bends the other way. Defaults to `TURN_DEFAULT_BEND`.
+     */
+    bend?: number;
+    /** Arrowhead length in **metres**. Defaults to a fraction of `size`. */
+    headSize?: number;
+    /**
+     * Half the gap left in the curve for the "T", in **metres**. Defaults to a
+     * fraction of `size`. Set it from the rendered glyph where the label does
+     * not scale with the graphic. Clamped so a gap can never swallow the curve.
+     */
+    labelGap?: number;
+}
+
+/**
  * Union of all typed option bags.
  * Use the specific interface when you know the graphic type;
  * use this union at the generic adapter boundary.
  */
 export type GraphicOptions =
+    | TurnOptions
     | BaseGraphicOptions
     | MovementOptions
     | CorridorOptions
@@ -456,10 +483,11 @@ export function getLabel(name: TacticalGraphicName) {
             return 'D';
         case TacticalGraphicName.Exfiltrate:
             return 'EX';
-        case TacticalGraphicName.FollowAndAssume:
-            return 'F/A';
-        case TacticalGraphicName.FollowAndSupport:
-            return 'F/S';
+        // Excluded — see ai/excluded-graphics.md
+        // case TacticalGraphicName.FollowAndAssume:
+        //     return 'F/A';
+        // case TacticalGraphicName.FollowAndSupport:
+        //     return 'F/S';
         case TacticalGraphicName.Interdict:
             return 'I';
         case TacticalGraphicName.Neutralize:
@@ -468,6 +496,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'SBF';
         case TacticalGraphicName.Suppress:
             return 'S';
+        case TacticalGraphicName.TacticalTurn:
+            return 'T';
 
         default:
             return '';
@@ -731,8 +761,9 @@ export enum TacticalGraphicName {
     AttackByFire = 'AttackByFire',
     Destroy = 'Destroy',
     Exfiltrate = 'Exfiltrate',
-    FollowAndAssume = 'FollowAndAssume',
-    FollowAndSupport = 'FollowAndSupport',
+    // Excluded — see ai/excluded-graphics.md
+    // FollowAndAssume = 'FollowAndAssume',
+    // FollowAndSupport = 'FollowAndSupport',
     Interdict = 'Interdict',
     Neutralize = 'Neutralize',
     SupportByFire = 'SupportByFire',

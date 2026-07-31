@@ -53,6 +53,7 @@ export type {
     RangeFanBand,
     RangeFanConfig,
     RangeFanOptions,
+    TurnOptions,
     ITacticalGraphic,
     IGraphicGenerator,
 } from './core/type';
@@ -64,6 +65,13 @@ export type {
  * them in `RangeFanGraphicBase`.
  */
 export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth} from './graphics/RangeFan';
+
+/**
+ * Turn's bend limits and the clamp that enforces them. A renderer that lets the
+ * user drag the sharpness has to clamp with the same numbers the generator
+ * does, or the handle drifts off the curve at the extremes.
+ */
+export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend} from './graphics/Turn';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 

@@ -246,8 +246,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.SupportByFire]: MISSION_TASK,
     [TacticalGraphicName.Suppress]: MISSION_TASK,
     [TacticalGraphicName.Interdict]: MISSION_TASK,
-    [TacticalGraphicName.FollowAndAssume]: MISSION_TASK,
-    [TacticalGraphicName.FollowAndSupport]: MISSION_TASK,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.FollowAndAssume]: MISSION_TASK,
+    // [TacticalGraphicName.FollowAndSupport]: MISSION_TASK,
 
     // ── Retrograde / enabling operations (Chapter 5) ─────────────────────────
     // FM Table 5-12 note: "W and W1 are optional amplifiers" for retrograde tasks.
