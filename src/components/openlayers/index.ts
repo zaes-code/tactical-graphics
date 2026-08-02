@@ -49,10 +49,30 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the colour and width constants they share.
 export * from './openlayerStyles';
 
-// Light/dark mode. Every colour accessor above reads this flag, so without it a host
-// got a two-mode palette and no way to choose between the modes. Default is light —
-// call `setDarkModeFlag(true)` when your map background is dark, then invalidate your
-// features (`feature.changed()`) so the style functions re-evaluate.
+// Configuration. Everything re-styleable lives on one all-optional object: label size,
+// line width, and the colours — per-affiliation and the unaffiliated defaults. Omit a
+// field and you get the doctrinal FM 1-02.2 value.
+//
+// The library has **one** palette and it does not follow dark mode: only you know what
+// your basemap looks like, so re-tinting for a dark background is done here rather than
+// guessed at by the library. After changing the config, invalidate your features
+// (`source.forEachFeature(f => f.changed())`) so the style functions re-evaluate.
+export {
+    DARK_MODE_PALETTE,
+    LIGHT_MODE_PALETTE,
+    MAX_LINE_WIDTH,
+    MIN_LINE_WIDTH,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getTacticalGraphicsConfig,
+    paletteForMode,
+    resetTacticalGraphicsConfig,
+    setTacticalGraphicsConfig,
+} from '../../settings';
+export type {TacticalGraphicsConfigOptions} from '../../settings';
+
+// Light/dark mode. This now selects **editor chrome only** — handle dots, the selection
+// fill — which is not part of any symbol. Symbol colours come from the config above.
 export {isDarkMode, setDarkModeFlag} from '../../settings';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
