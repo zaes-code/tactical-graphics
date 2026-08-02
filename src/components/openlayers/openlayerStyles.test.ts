@@ -19,13 +19,16 @@ import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {
     getColorByHostility,
     getDefaultLineColor,
+    getDoctrinalHostilityColor,
     getHaloStroke,
     getLabelBackgroundFill,
     getLabelFillColor,
     getLabelHaloColor,
 } from './openlayerStyles';
 import {
+    MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
     MIN_LINE_WIDTH,
     TacticalGraphicsConfig,
     configureTacticalGraphics,
@@ -160,15 +163,54 @@ describe('config overrides reach the style layer', () => {
     });
 });
 
+describe('getDoctrinalHostilityColor', () => {
+    // The pure "what would this be with no override" answer. A settings panel needs it:
+    // reading `getColorByHostility` to render a control that *edits* the override renders
+    // one frame stale, so clearing an override shows the cleared value back. Both bugs
+    // were caught driving the real app.
+    it('ignores an override that is in force', () => {
+        configureTacticalGraphics({
+            hostilityColors: {[TacticalGraphicHostility.friend]: 'magenta'},
+        });
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('magenta');
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
+    });
+
+    it('resolves aliases the same way the live accessor does', () => {
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.assumedFriend)).toBe('rgba(0, 0, 255, 1)');
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.suspectJoker)).toBe('rgba(255, 255, 0, 1)');
+    });
+
+    it('has no answer for unknown, whose colour is the default line colour', () => {
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.unknown)).toBeUndefined();
+    });
+
+    it('agrees with getColorByHostility whenever there is no override', () => {
+        [
+            TacticalGraphicHostility.friend,
+            TacticalGraphicHostility.assumedFriend,
+            TacticalGraphicHostility.hostileFaker,
+            TacticalGraphicHostility.neutral,
+            TacticalGraphicHostility.pending,
+            TacticalGraphicHostility.suspectJoker,
+        ].forEach(hostility => {
+            expect(getDoctrinalHostilityColor(hostility)).toBe(getColorByHostility(hostility));
+        });
+    });
+});
+
 describe('TacticalGraphicsConfig', () => {
     it('clamps line width into the readable range', () => {
         expect(new TacticalGraphicsConfig({lineWidth: 99}).lineWidth).toBe(MAX_LINE_WIDTH);
         expect(new TacticalGraphicsConfig({lineWidth: 0}).lineWidth).toBe(MIN_LINE_WIDTH);
     });
 
-    it('clamps label size to at least 1px', () => {
-        expect(new TacticalGraphicsConfig({labelSize: 0}).labelSize).toBe(1);
-        expect(new TacticalGraphicsConfig({labelSize: -5}).labelSize).toBe(1);
+    it('clamps label size into the readable range', () => {
+        // Mirrors the line-width clamp above on purpose — the two are surfaced together
+        // in the settings panel and behaved differently before 2026-08-02.
+        expect(new TacticalGraphicsConfig({labelSize: 99}).labelSize).toBe(MAX_LABEL_SIZE);
+        expect(new TacticalGraphicsConfig({labelSize: 0}).labelSize).toBe(MIN_LABEL_SIZE);
+        expect(new TacticalGraphicsConfig({labelSize: -5}).labelSize).toBe(MIN_LABEL_SIZE);
     });
 
     it('leaves every field undefined when constructed empty', () => {

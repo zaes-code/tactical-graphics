@@ -60,7 +60,9 @@ export * from './openlayerStyles';
 export {
     DARK_MODE_PALETTE,
     LIGHT_MODE_PALETTE,
+    MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
     MIN_LINE_WIDTH,
     TacticalGraphicsConfig,
     configureTacticalGraphics,

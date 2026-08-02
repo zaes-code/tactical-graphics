@@ -214,6 +214,11 @@ doctrine, and shifting them for a display setting makes a symbol read
 differently depending on how the app is configured. Pass `hostilityColors`
 yourself if you disagree.
 
+Building your own settings UI? Use `getDoctrinalHostilityColor(hostility)` for
+the swatch, not `getColorByHostility`. The latter reads the live config, so a
+control that edits an override renders one frame stale — clearing an override
+shows you the value you just cleared. The former is a pure function of the enum.
+
 ### OpenLayers — geometry only
 
 If you would rather keep your own styling, skip the subpath entirely.

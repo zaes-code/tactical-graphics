@@ -5405,12 +5405,19 @@ const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphi
     [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
 };
 
-export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
-    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
-    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
-    if (override) return override;
-
-    switch (canonical) {
+/**
+ * The doctrinal FM 1-02.2 colour for an affiliation, **ignoring any config override**.
+ * `undefined` for `unknown`, whose colour is `getDefaultLineColor()` rather than an
+ * affiliation colour of its own.
+ *
+ * Exported because it is a *pure* answer to "what would this be with no override" —
+ * something a settings UI needs and cannot get from `getColorByHostility`, which reads
+ * the live config. Reading the live config to render a control that edits the live
+ * config renders one frame stale: clearing an override re-renders before the host has
+ * republished, so the cleared value is still what comes back.
+ */
+export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility): string | undefined {
+    switch (HOSTILITY_ALIASES[hostility] ?? hostility) {
         case TacticalGraphicHostility.friend:
             return HOSTILITY_COLORS.friend;
         case TacticalGraphicHostility.hostileFaker:
@@ -5419,10 +5426,17 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
             return HOSTILITY_COLORS.neutral;
         case TacticalGraphicHostility.pending:
             return HOSTILITY_COLORS.pending;
-        case TacticalGraphicHostility.unknown:
         default:
-            return getDefaultLineColor();
+            return undefined;
     }
+}
+
+export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
+    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
+    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
+    if (override) return override;
+
+    return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
 };
 
 function withOpacity(color: string, alpha: number): string {
