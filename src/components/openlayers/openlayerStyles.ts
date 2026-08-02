@@ -1726,8 +1726,15 @@ function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: nu
  * arrow-to-identifier gap ≈ 1.0.
  */
 
-/** Traffic arrows are decoration on the route, so they draw thinner than it. */
-const ROUTE_ARROW_WIDTH = 2;
+/**
+ * Traffic arrows are decoration on the route, so they draw thinner than it.
+ *
+ * Half the route's width rather than a fixed 2px, because the route's width is a host
+ * setting now (`lineWidth`, 1–8). A pinned 2 kept the intended look only at the default
+ * 4 — at `lineWidth: 1` the "thinner" decoration came out *thicker* than the line it
+ * decorates. Floors at 1 so it never vanishes, which also stops it from crossing over.
+ */
+const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
 /** Centreline of the arrow row nearest the route. */
 const ROUTE_ARROW_BASE_PX = 14;
 /** Row-to-row pitch for the two-way pair. */
@@ -1803,7 +1810,7 @@ function routeEndStyles(
         const base = at(rowPx, toPx + (fromPx > toPx ? headLenPx : -headLenPx));
         styles.push(new Style({
             geometry: new LineString([at(rowPx, fromPx), at(rowPx, toPx)]),
-            stroke: new Stroke({color, width: ROUTE_ARROW_WIDTH}),
+            stroke: new Stroke({color, width: routeArrowWidth()}),
         }));
         const tip = at(rowPx, toPx);
         const left = offsetAbove(base, a, b, resolution, headHalfPx);
@@ -1926,7 +1933,7 @@ function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: G
         // planned or suspected. The amplifier block above it stays black.
         styles.push(new Style({
             geometry: geom,
-            stroke: new Stroke({color, width: LINE_WIDTH, lineDash: dashStyle(labels)}),
+            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
         }));
 
         return styles;
