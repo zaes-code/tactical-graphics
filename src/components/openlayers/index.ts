@@ -49,32 +49,20 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the colour and width constants they share.
 export * from './openlayerStyles';
 
-// Configuration. Everything re-styleable lives on one all-optional object: label size,
-// line width, and the colours — per-affiliation and the unaffiliated defaults. Omit a
-// field and you get the doctrinal FM 1-02.2 value.
+// Configuration — label size, line width, colours — is **not** re-exported here. It
+// lives in the root entry point (`@zaes/tactical-graphics`), because none of it is
+// specific to OpenLayers: pixel sizes and affiliation colours mean the same thing to any
+// renderer, so a second one inherits them rather than reinventing them.
 //
-// The library has **one** palette and it does not follow dark mode: only you know what
-// your basemap looks like, so re-tinting for a dark background is done here rather than
-// guessed at by the library. After changing the config, invalidate your features
+//   import {configureTacticalGraphics, paletteForMode} from '@zaes/tactical-graphics';
+//
+// Re-exporting would give the same symbols two import paths and two places to document.
+// After changing the config, invalidate your features
 // (`source.forEachFeature(f => f.changed())`) so the style functions re-evaluate.
-export {
-    DARK_MODE_PALETTE,
-    LIGHT_MODE_PALETTE,
-    MAX_LABEL_SIZE,
-    MAX_LINE_WIDTH,
-    MIN_LABEL_SIZE,
-    MIN_LINE_WIDTH,
-    TacticalGraphicsConfig,
-    configureTacticalGraphics,
-    getTacticalGraphicsConfig,
-    paletteForMode,
-    resetTacticalGraphicsConfig,
-    setTacticalGraphicsConfig,
-} from '../../settings';
-export type {TacticalGraphicsConfigOptions} from '../../settings';
 
-// Light/dark mode. This now selects **editor chrome only** — handle dots, the selection
-// fill — which is not part of any symbol. Symbol colours come from the config above.
+// Light/dark mode. Renderer-local, and selects **editor chrome only** — handle dots, the
+// inert-centre grey, the selection fill — which is not part of any symbol. Symbol
+// colours come from the config in the root entry point.
 export {isDarkMode, setDarkModeFlag} from '../../settings';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
