@@ -3,21 +3,7 @@ import './App.css';
 import MapRendering from './components/MapRendering';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from './settings';
-
-/**
- * Tell the library both halves of what a mode change means.
- *
- * `setDarkModeFlag` selects *editor chrome* — handle dots, the selection fill — which
- * is not part of any symbol and so is free to follow the host's mode. Symbol colours
- * are not: the library has one doctrinal palette and never swaps it off a mode flag,
- * so the host sends the colours it wants. `paletteForMode` is the library's ready-made
- * pair; a host with a different basemap passes its own values instead.
- */
-function applyMode(dark: boolean): void {
-    setDarkModeFlag(dark);
-    configureTacticalGraphics(paletteForMode(dark));
-}
+import {setDarkModeFlag} from './settings';
 
 function buildTheme(dark: boolean) {
     return createTheme({
@@ -113,14 +99,18 @@ function App() {
     const [darkMode, setDarkMode] = useState(() => {
         const stored = localStorage.getItem(LS_DARK_MODE);
         const dark = stored !== null ? stored === 'true' : true;
-        applyMode(dark);
+        setDarkModeFlag(dark);
         return dark;
     });
 
+    // Only the *editor chrome* flag lives here — handle dots, the selection fill. Symbol
+    // colours are a config the library never picks off a mode flag, and `MapRendering`
+    // owns publishing that (mode palette plus the user's overrides, in one call). Two
+    // components writing it would each clobber the other's half.
     const handleToggleDarkMode = () => {
         setDarkMode(d => {
             const next = !d;
-            applyMode(next);
+            setDarkModeFlag(next);
             localStorage.setItem(LS_DARK_MODE, String(next));
             return next;
         });
