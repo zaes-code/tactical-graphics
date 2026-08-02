@@ -169,6 +169,51 @@ Set amplifiers through `writeGraphicProperties`, never `feature.set` —
 `ol/Object.set` fires `propertychange` without calling `changed()`, so the map
 can keep drawing the old label.
 
+### Configuring colours and sizes
+
+Everything re-styleable lives on one all-optional config. Omit a field and you
+get the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of
+this:
+
+```ts
+import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
+import {configureTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+
+configureTacticalGraphics({
+    labelSize: 18,                 // px, default 16
+    lineWidth: 3,                  // px, default 4, clamped to [1, 8]
+    hostilityColors: {             // partial — the rest stay doctrinal
+        [TacticalGraphicHostility.friend]: 'rgb(92,148,255)',
+    },
+    defaultLineColor: '#000000',   // unaffiliated line work, and label text with it
+});
+
+source.forEachFeature(f => f.changed());   // repaint what is already drawn
+```
+
+That last line matters: OpenLayers caches its render per feature revision, so a
+config change does not reach features already on the map until something bumps
+their revision.
+
+**There is one palette, and it does not follow dark mode.** The library cannot
+see your basemap, so it never swaps colours off a mode flag — you send what you
+want. `paletteForMode` is a ready-made pair for a plain light/dark map:
+
+```ts
+import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from '@zaes/tactical-graphics/openlayers';
+
+setDarkModeFlag(dark);                             // editor chrome: handles, selection fill
+configureTacticalGraphics(paletteForMode(dark));   // symbol colours
+source.forEachFeature(f => f.changed());
+```
+
+`paletteForMode` changes only the *unaffiliated* neutrals — the default line
+colour, the label text that follows it, and the halo and plate behind that text.
+The four affiliation colours are identical in both modes on purpose: they are
+doctrine, and shifting them for a display setting makes a symbol read
+differently depending on how the app is configured. Pass `hostilityColors`
+yourself if you disagree.
+
 ### OpenLayers — geometry only
 
 If you would rather keep your own styling, skip the subpath entirely.

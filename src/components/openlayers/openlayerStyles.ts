@@ -26,7 +26,17 @@ import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
-import {BASE_FONT_SIZE_PX, getDefaultLabelSize, getDefaultLineWidth, isDarkMode} from '../../settings';
+import {
+    BASE_FONT_SIZE_PX,
+    getDefaultLabelSize,
+    getDefaultLineColorOverride,
+    getDefaultLineWidth,
+    getHostilityColorOverride,
+    getLabelBackgroundFillOverride,
+    getLabelFillColorOverride,
+    getLabelHaloColorOverride,
+    isDarkMode,
+} from '../../settings';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
@@ -69,46 +79,47 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 const HALO_WIDTH = 4;
 
 /**
- * ## The dark-mode palette
+ * ## One palette, and where a host changes it
  *
- * Every colour below has *two* real values now. It used to have one: all four
- * accessors returned the same string on both branches, and dark mode worked anyway
- * — by accident. The demo's `invert(95%) hue-rotate(180deg) brightness(85%)
- * contrast(90%)` filter (`src/styles/map.css`) was landing on the graphics canvas as
- * well as the basemap, because OL composites consecutive layers that share a
- * className onto one canvas. That is fixed at source (see
- * `TacticalGraphicsManager.renderingVectorLayer`), so the colours have to carry
- * themselves from here on.
+ * These colours are the doctrinal FM 1-02.2 ones and they do **not** vary with
+ * `isDarkMode()`. A host that wants different line work on a dark basemap supplies it
+ * through `configureTacticalGraphics` (`src/settings.ts`) — only the host knows what
+ * its own basemap looks like, and a library-side dark palette can only guess. See
+ * `src/App.tsx` for the worked example.
  *
- * The dark values are the *measured* output of that old filter chain, so the fix is
- * visually a no-op — with the one exception it exists for. `invert` maps yellow onto
- * blue and CSS `hue-rotate`'s linear matrix crushes blue's luminance, so pending's
- * `rgb(255,255,0)` was arriving on screen as `rgb(48,48,13)`, a near-black olive. It
- * is now the same bright yellow in both modes. See `ai/decisions.md`.
+ * There used to be a second, dark set of values. They were the *measured output* of a
+ * CSS filter — `invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%)` — that
+ * once landed on the graphics canvas along with the basemap, because OL composites
+ * consecutive layers sharing a className onto one canvas. When that was fixed at
+ * source (see `TacticalGraphicsManager.renderingVectorLayer`) the filter's output was
+ * frozen into literals so the change would look like a no-op. That is not a palette
+ * anyone designed, and re-tinting doctrinal affiliation colours is the host's call
+ * rather than the library's, so the dark set is gone. `ai/decisions.md` has the
+ * history.
  */
 
-/** Default stroke/fill color for graphics with no specific hostility color. White in dark mode, black in light. */
+/** Default stroke/fill colour for graphics with no specific hostility colour. */
 export function getDefaultLineColor(): string {
-    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
+    return getDefaultLineColorOverride() ?? '#000000';
 }
 
-/** Text label fill color. */
+/** Text label fill colour. Follows the default line colour unless overridden on its own. */
 export function getLabelFillColor(): string {
-    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
+    return getLabelFillColorOverride() ?? getDefaultLineColor();
 }
 
-/** Text label halo (outline) color — contrast against the map background. */
+/** Text label halo (outline) colour — contrast against the map background. */
 export function getLabelHaloColor(): string {
-    return isDarkMode() ? 'rgb(23,23,23)' : 'rgba(255,255,255,1)';
+    return getLabelHaloColorOverride() ?? 'rgba(255,255,255,1)';
 }
 
 /**
  * Picks between a light-mode and a dark-mode colour.
  *
- * For editor chrome and one-off literals that are not affiliation colours and so have
- * no place in `HOSTILITY_COLORS` — handles, marker dots, the air coordinating area's
- * own red. Exported so a host styling its own additions can stay in step with the
- * library's mode.
+ * **Editor chrome only** — handle dots, the inert-centre grey, the selection fill.
+ * Chrome is not part of any symbol, so it is free to follow the host's mode; symbol
+ * line work is not, and comes from the config instead. Exported so a host styling its
+ * own chrome can stay in step with the library's.
  */
 export function byMode(light: string, dark: string): string {
     return isDarkMode() ? dark : light;
@@ -116,22 +127,27 @@ export function byMode(light: string, dark: string): string {
 
 /** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
 export function getLabelBackgroundFill(): string {
-    return isDarkMode() ? 'rgba(22, 27, 34, 0.90)' : 'rgba(255, 255, 255, 0.90)';
+    return getLabelBackgroundFillOverride() ?? 'rgba(255, 255, 255, 0.90)';
 }
 
 /**
  * Halo used for the label background.
  *
  * A function, not a `const`. As a module-level const the halo colour was frozen at
- * import and could never follow a dark-mode toggle — harmless while both branches of
- * `getLabelHaloColor` returned white, a silent bug the moment they diverged. Cached
- * per mode so the ~75 call sites don't allocate a `Stroke` per style call.
+ * import and could never follow a later change — harmless while it was always white,
+ * a silent bug the moment a host overrode it. Cached so the ~75 call sites don't
+ * allocate a `Stroke` per style call.
+ *
+ * Keyed on the resolved colour rather than on the mode: the halo now comes from the
+ * config, which a host may change at any time, so the mode flag is no longer a
+ * complete cache key. In practice a host uses one or two halo colours, so the cache
+ * stays tiny. (A plain record, not a `Map` — `Map` is OpenLayers' in this module.)
  */
-const haloStrokeCache: Partial<Record<'dark' | 'light', Stroke>> = {};
+const haloStrokeCache: Record<string, Stroke> = {};
 
 export function getHaloStroke(): Stroke {
-    const key = isDarkMode() ? 'dark' : 'light';
-    return haloStrokeCache[key] ??= new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
+    const color = getLabelHaloColor();
+    return haloStrokeCache[color] ??= new Stroke({color, width: HALO_WIDTH});
 }
 
 /**
@@ -5364,52 +5380,45 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
 }
 
 /**
- * The four affiliation colours, per mode. See the palette note above
- * `getDefaultLineColor` for where the dark values come from.
+ * The four affiliation colours, straight from FM 1-02.2. One set, used in every mode —
+ * see the palette note above `getDefaultLineColor` for why there is no longer a second.
  *
- * Most dark values are the measured output of the CSS filter that used to repaint this
- * layer, so the switch to a real palette left them looking the same. Two are not:
- *
- * - `pending`/`suspectJoker` is **identical in both modes**. Yellow is legible on a dark
- *   basemap as-is, and it is the colour the old filter destroyed — the reason the
- *   palette exists at all.
- * - `friend` is a **deliberately re-picked blue**. The filter emitted
- *   `rgb(173,173,208)`, whose red and green channels are equal and whose blue is only
- *   35 higher — barely saturated, so it read as grey-lavender rather than blue. This is
- *   the doctrinal blue lightened to survive a dark background and nudged a little toward
- *   cyan, which is what stops a high-lightness hue-240 blue reading as violet.
- *
- * Keep any future dark value legible against the basemap *and* recognisable as its
- * doctrinal hue. Reproducing what the old filter happened to emit is not a goal.
+ * A host re-tints these through `configureTacticalGraphics({hostilityColors})` rather
+ * than by editing this table.
  */
 const HOSTILITY_COLORS = {
-    light: {
-        friend: 'rgba(0, 0, 255, 1)',
-        hostile: 'rgba(255, 0, 0, 1)',
-        neutral: 'rgba(0, 128, 0, 1)',
-        pending: 'rgba(255, 255, 0, 1)',
-    },
-    dark: {
-        friend: 'rgb(92,148,255)',
-        hostile: 'rgb(208,123,123)',
-        neutral: 'rgb(72,160,72)',
-        pending: 'rgba(255, 255, 0, 1)',
-    },
+    friend: 'rgba(0, 0, 255, 1)',
+    hostile: 'rgba(255, 0, 0, 1)',
+    neutral: 'rgba(0, 128, 0, 1)',
+    pending: 'rgba(255, 255, 0, 1)',
 } as const;
 
+/**
+ * Affiliations that draw as another one. Doctrine gives assumed-friend the friendly
+ * blue and suspect/joker the pending yellow, so an override on the affiliation a host
+ * actually thinks about (`friend`, `pending`) carries to its alias without their having
+ * to name both. An override on the alias itself still wins, for a host that wants them
+ * distinguishable.
+ */
+const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphicHostility>> = {
+    [TacticalGraphicHostility.assumedFriend]: TacticalGraphicHostility.friend,
+    [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
+};
+
 export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
-    const palette = isDarkMode() ? HOSTILITY_COLORS.dark : HOSTILITY_COLORS.light;
-    switch (hostility) {
+    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
+    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
+    if (override) return override;
+
+    switch (canonical) {
         case TacticalGraphicHostility.friend:
-        case TacticalGraphicHostility.assumedFriend:
-            return palette.friend;
+            return HOSTILITY_COLORS.friend;
         case TacticalGraphicHostility.hostileFaker:
-            return palette.hostile;
+            return HOSTILITY_COLORS.hostile;
         case TacticalGraphicHostility.neutral:
-            return palette.neutral;
+            return HOSTILITY_COLORS.neutral;
         case TacticalGraphicHostility.pending:
-        case TacticalGraphicHostility.suspectJoker:
-            return palette.pending;
+            return HOSTILITY_COLORS.pending;
         case TacticalGraphicHostility.unknown:
         default:
             return getDefaultLineColor();
@@ -5879,11 +5888,14 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
         // Fallback Polygon Style (optional, but good practice)
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const polygonStyle = new Style({
+            // Fixed, not `byMode`: this is the graphic's own line work, and line work
+            // does not change with the host's mode. See the palette note above
+            // `getDefaultLineColor`.
             fill: new Fill({
-                color: byMode('rgba(255, 100, 100, 0.4)', 'rgba(190, 84, 84, 0.4)'),
+                color: 'rgba(255, 100, 100, 0.4)',
             }),
             stroke: new Stroke({
-                color: byMode('rgb(255, 50, 50)', 'rgb(208,104,104)'),
+                color: 'rgb(255, 50, 50)',
                 width: LINE_WIDTH(),
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),

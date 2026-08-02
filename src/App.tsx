@@ -3,7 +3,21 @@ import './App.css';
 import MapRendering from './components/MapRendering';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import {setDarkModeFlag} from './settings';
+import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from './settings';
+
+/**
+ * Tell the library both halves of what a mode change means.
+ *
+ * `setDarkModeFlag` selects *editor chrome* — handle dots, the selection fill — which
+ * is not part of any symbol and so is free to follow the host's mode. Symbol colours
+ * are not: the library has one doctrinal palette and never swaps it off a mode flag,
+ * so the host sends the colours it wants. `paletteForMode` is the library's ready-made
+ * pair; a host with a different basemap passes its own values instead.
+ */
+function applyMode(dark: boolean): void {
+    setDarkModeFlag(dark);
+    configureTacticalGraphics(paletteForMode(dark));
+}
 
 function buildTheme(dark: boolean) {
     return createTheme({
@@ -99,14 +113,14 @@ function App() {
     const [darkMode, setDarkMode] = useState(() => {
         const stored = localStorage.getItem(LS_DARK_MODE);
         const dark = stored !== null ? stored === 'true' : true;
-        setDarkModeFlag(dark);
+        applyMode(dark);
         return dark;
     });
 
     const handleToggleDarkMode = () => {
         setDarkMode(d => {
             const next = !d;
-            setDarkModeFlag(next);
+            applyMode(next);
             localStorage.setItem(LS_DARK_MODE, String(next));
             return next;
         });

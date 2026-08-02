@@ -11,7 +11,7 @@ import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
-import {setDarkModeFlag} from '../../settings';
+import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
@@ -58,8 +58,13 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, lineWidth}) => {
     // Swap tile source when dark mode changes
     useEffect(() => {
         if (!map) return;
-        // Keep singleton in sync with React state so StyleFunctions read the right value
+        // Keep the library singletons in sync with React state so StyleFunctions read the
+        // right values. Two of them, and they cover different ground: the flag selects
+        // editor chrome, while symbol colours come from the config — the library has one
+        // doctrinal palette and never swaps it off a mode flag, so the host sends what it
+        // wants. `paletteForMode` is the library's ready-made pair.
         setDarkModeFlag(darkMode);
+        configureTacticalGraphics(paletteForMode(darkMode));
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
         const darkTileLayer = tileLayers.find(l => l.get('name') === 'darkBaseMap');
