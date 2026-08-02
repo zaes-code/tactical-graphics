@@ -33,6 +33,17 @@ export const MIN_LINE_WIDTH = 1;
 export const MAX_LINE_WIDTH = 8;
 
 /**
+ * Readable bounds for the label-size setting, mirroring the line-width pair so the two
+ * behave identically wherever they are surfaced together.
+ *
+ * Was `Math.max(1, size)` before 2026-08-02 — an upper bound was missing and the lower
+ * one admitted sizes no one can read. A label under 8px is illegible at any zoom, and
+ * over 48px it swamps the graphic it belongs to.
+ */
+export const MIN_LABEL_SIZE = 8;
+export const MAX_LABEL_SIZE = 48;
+
+/**
  * Every knob the library exposes. All optional — an omitted field keeps the default.
  *
  * `hostilityColors` is a partial map, so overriding one affiliation leaves the others
@@ -41,7 +52,7 @@ export const MAX_LINE_WIDTH = 8;
  * what unaffiliated graphics and label text fall back to.
  */
 export interface TacticalGraphicsConfigOptions {
-    /** Base label font size in px. Default 16. Clamped to >= 1. */
+    /** Base label font size in px. Default 16. Clamped to [MIN_LABEL_SIZE, MAX_LABEL_SIZE]. */
     labelSize?: number;
     /** Stroke width in screen px for every graphic's line work. Default 4. Clamped to [MIN_LINE_WIDTH, MAX_LINE_WIDTH]. */
     lineWidth?: number;
@@ -79,7 +90,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     constructor(options: TacticalGraphicsConfigOptions = {}) {
         // Clamp on the way in rather than on read: an out-of-range value typed into a
         // settings panel should be corrected once, not re-corrected on every style call.
-        if (options.labelSize !== undefined) this.labelSize = Math.max(1, options.labelSize);
+        if (options.labelSize !== undefined) this.labelSize = Math.min(MAX_LABEL_SIZE, Math.max(MIN_LABEL_SIZE, options.labelSize));
         if (options.lineWidth !== undefined) this.lineWidth = Math.min(MAX_LINE_WIDTH, Math.max(MIN_LINE_WIDTH, options.lineWidth));
         if (options.hostilityColors !== undefined) this.hostilityColors = Object.freeze({...options.hostilityColors});
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
