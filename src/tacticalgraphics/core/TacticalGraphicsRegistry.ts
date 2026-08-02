@@ -355,8 +355,9 @@ const additionalLineGraphics = [
     TacticalGraphicName.LinearTarget,
     TacticalGraphicName.FinalProtectiveFire,
     TacticalGraphicName.LinearSmokeTarget,
-    TacticalGraphicName.MovingConvoy,
-    TacticalGraphicName.HaltedConvoy,
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.MovingConvoy,
+    // TacticalGraphicName.HaltedConvoy,
 ];
 additionalLineGraphics.forEach(name => TacticalGraphicsRegistry.register(new Phaseline(name)));
 

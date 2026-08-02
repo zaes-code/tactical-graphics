@@ -3,7 +3,6 @@ import './App.css';
 import MapRendering from './components/MapRendering';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import {setDarkModeFlag} from './settings';
 
 function buildTheme(dark: boolean) {
     return createTheme({
@@ -98,15 +97,15 @@ const LS_DARK_MODE = 'tg_darkMode';
 function App() {
     const [darkMode, setDarkMode] = useState(() => {
         const stored = localStorage.getItem(LS_DARK_MODE);
-        const dark = stored !== null ? stored === 'true' : true;
-        setDarkModeFlag(dark);
-        return dark;
+        return stored !== null ? stored === 'true' : true;
     });
 
+    // Nothing to tell the library here. It has no concept of light or dark — it has
+    // colours, and `MapRendering` sends them (mode palette plus the user's overrides) in
+    // one call. This state drives the basemap and the MUI theme only.
     const handleToggleDarkMode = () => {
         setDarkMode(d => {
             const next = !d;
-            setDarkModeFlag(next);
             localStorage.setItem(LS_DARK_MODE, String(next));
             return next;
         });

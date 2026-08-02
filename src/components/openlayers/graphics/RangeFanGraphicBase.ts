@@ -50,7 +50,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         this.graphic.setStyle((feature) => {
             const color = feature.get('hostilityColor') || getDefaultLineColor();
             return new Style({
-                stroke: new Stroke({color, width: LINE_WIDTH}),
+                stroke: new Stroke({color, width: LINE_WIDTH()}),
             });
         });
 
