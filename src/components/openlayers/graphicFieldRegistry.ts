@@ -195,12 +195,15 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
     [TacticalGraphicName.DirectionOfMainAttackFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.AviationDirectionOfAttack]: MOVEMENT_ARROW,
-    // Mobility symbols (Table 5-16): identifier only, no hostility.
-    [TacticalGraphicName.FerryCrossing]: MOV,
+    // Mobility symbols (Table 5-16). The water-crossing set — bridge, ford easy,
+    // ford difficult, ferry crossing, passage lane — carries no name: the FM plates
+    // show the site symbol and a DTG, never an identifier, so the shape plus its
+    // date is the whole amplifier set.
+    [TacticalGraphicName.FerryCrossing]: SHAPE_ONLY,
     [TacticalGraphicName.TacticalFix]: MOV,
     [TacticalGraphicName.TacticalTurn]: MOV,
     // Passage lane (Table 5-16): FM example shows a DTG ("at 0600 Zulu 12 FEB 2007").
-    [TacticalGraphicName.PassageLane]: MOVEMENT_ARROW,
+    [TacticalGraphicName.PassageLane]: SHAPE_AND_DTG,
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
     [TacticalGraphicName.FinalProtectiveFire]: f(true, true, false, false, false, {weapon: true}),
     [TacticalGraphicName.LinearSmokeTarget]: NAME_FIELD_ONLY,
@@ -220,12 +223,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: MOVEMENT_ARROW,
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: MOV,
-    // Mobility / water crossing (Table 5-16): identifier only.
-    [TacticalGraphicName.Bridge]: f(false, false, false, false, false),
+    // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
+    // the crossing-site symbols carry no name.
+    [TacticalGraphicName.Bridge]: SHAPE_ONLY,
     [TacticalGraphicName.Gap]: f(true, false, true, false, false),
     [TacticalGraphicName.AssaultCrossing]:  f(false, false, true, false, false),
-    [TacticalGraphicName.FordEasy]: MOV,
-    [TacticalGraphicName.FordDifficult]: MOV,
+    [TacticalGraphicName.FordEasy]: SHAPE_ONLY,
+    [TacticalGraphicName.FordDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.InfiltrationLane]: MOV,
 
     // ── Tactical mission tasks (Chapter 6) ───────────────────────────────────
