@@ -5,8 +5,13 @@ import {AppBar, Box, IconButton, Toolbar, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
-import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
-import {TacticalGraphicsConfig, TacticalGraphicsConfigOptions, paletteForMode, setTacticalGraphicsConfig} from '../settings';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicsConfig,
+    TacticalGraphicsConfigOptions,
+    paletteForMode,
+    setTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
 
 interface MapRenderingProps {
     darkMode: boolean;

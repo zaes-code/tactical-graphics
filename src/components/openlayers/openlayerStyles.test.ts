@@ -14,7 +14,18 @@
  * colour moves with `isDarkMode()`, and an override reaches every accessor that should
  * honour it.
  */
-import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
+import {
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    TacticalGraphicHostility,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    resetTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
 
 import {
     getColorByHostility,
@@ -25,19 +36,7 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
 } from './openlayerStyles';
-import {
-    MAX_LABEL_SIZE,
-    MAX_LINE_WIDTH,
-    MIN_LABEL_SIZE,
-    MIN_LINE_WIDTH,
-    TacticalGraphicsConfig,
-    configureTacticalGraphics,
-    getDefaultLabelSize,
-    getDefaultLineWidth,
-    isDarkMode,
-    resetTacticalGraphicsConfig,
-    setDarkModeFlag,
-} from '../../settings';
+import {isDarkMode, setDarkModeFlag} from '../../settings';
 
 /** Runs `fn` in the given mode and restores whatever was set before. */
 function inMode<T>(dark: boolean, fn: () => T): T {
@@ -291,11 +290,13 @@ describe('the library default', () => {
         // A fresh module registry, so this reads the declared default rather than
         // whatever the tests above last set.
         jest.isolateModules(() => {
-            const fresh: typeof import('../../settings') = require('../../settings');
-            expect(fresh.isDarkMode()).toBe(false);
-            expect(fresh.getDefaultLabelSize()).toBe(16);
-            expect(fresh.getDefaultLineWidth()).toBe(4);
-            expect(fresh.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
+            const settings: typeof import('../../settings') = require('../../settings');
+            expect(settings.isDarkMode()).toBe(false);
+
+            const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
+            expect(config.getDefaultLabelSize()).toBe(16);
+            expect(config.getDefaultLineWidth()).toBe(4);
+            expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
         });
     });
 });

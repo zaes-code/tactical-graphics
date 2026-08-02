@@ -9,9 +9,9 @@ import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
-import {TacticalGraphicsConfigOptions, setDarkModeFlag} from '../../settings';
+import {setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
