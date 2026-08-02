@@ -83,10 +83,20 @@ export {
 } from '@zaes/tactical-graphics';
 export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
-// Light/dark mode. Renderer-local, and selects **editor chrome only** — handle dots, the
-// inert-centre grey, the selection fill — which is not part of any symbol. Symbol
-// colours come from the config in the root entry point.
-export {isDarkMode, setDarkModeFlag} from '../../settings';
+// Editor-chrome colours, resolved. Handle dots, the inert centre, the selection fill and
+// the draw marker — the affordances this renderer draws so a user can edit a graphic.
+// Each falls back to a built-in default until the host overrides it through the config.
+//
+// There is no `isDarkMode` / `setDarkModeFlag` / `byMode` any more. The library has no
+// concept of light or dark: it has colours, and the host decides them. Send
+// `paletteForMode(dark)` on a mode change and that is the whole of it.
+export {
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getSelectionFillColor,
+} from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
 // the base — and `restoreTacticalGraphics` rebuilds them editable. Each record carries
