@@ -38,11 +38,19 @@ const check = (label, ok, detail = '') => {
 
 /**
  * Stroke-color predicates for the hostility-default guard. A graphic drawn
- * without a hostility must render in the neutral default (black) and must never
- * flip to Friendly blue — `getColorByHostility(friend)` is `rgba(0,0,255,1)`.
+ * without a hostility must render in the neutral default and must never flip to
+ * Friendly blue — `getColorByHostility(friend)` is `rgba(0,0,255,1)`.
+ *
+ * "Neutral default" is two colours, not one: `getDefaultLineColor()` returns
+ * `#000000` in light mode and `rgb(198,198,198)` in dark, and the demo boots
+ * dark. Matching only black failed this check on every run against correct code.
  */
 const isBlue = c => typeof c === 'string' && c.replace(/\s+/g, ' ').includes('0, 0, 255');
-const isBlack = c => typeof c === 'string' && (c === '#000000' || c.replace(/\s+/g, ' ').includes('0, 0, 0'));
+const isNeutral = c =>
+    typeof c === 'string' &&
+    (c === '#000000' || c.replace(/\s+/g, ' ').includes('0, 0, 0') || c.replace(/\s+/g, '').includes('198,198,198'));
+/** Hostile red — `rgba(255, 0, 0, 1)` in light mode, `rgb(208,123,123)` in dark. */
+const isRed = c => typeof c === 'string' && /255,0,0|208,123,123/.test(c.replace(/\s+/g, ''));
 
 /** Reads the rendering source's features, projected down to plain JSON. */
 const readFeatures = page =>
@@ -178,8 +186,8 @@ const main = async () => {
     check('style function runs and renders text', (beforeLabel?.texts.length ?? 0) > 0, JSON.stringify(beforeLabel?.texts));
     check('unnamed phase line renders the doctrinal "PL"', beforeLabel?.texts.some(t => t.trim() === 'PL'), JSON.stringify(beforeLabel?.texts));
     check(
-        'unset hostility renders a black stroke (not Friendly blue)',
-        (beforeLabel?.strokeColors.length ?? 0) > 0 && beforeLabel.strokeColors.every(isBlack) && !beforeLabel.strokeColors.some(isBlue),
+        'unset hostility renders the neutral default stroke (not Friendly blue)',
+        (beforeLabel?.strokeColors.length ?? 0) > 0 && beforeLabel.strokeColors.every(isNeutral) && !beforeLabel.strokeColors.some(isBlue),
         JSON.stringify(beforeLabel?.strokeColors),
     );
 
@@ -213,8 +221,8 @@ const main = async () => {
     // Regression guard: editing a property on a graphic that never set a hostility
     // must not silently recolor it Friendly blue (dialog used to default to Friend).
     check(
-        'renaming an unset-hostility graphic keeps its black stroke',
-        (afterLabel?.strokeColors.length ?? 0) > 0 && afterLabel.strokeColors.every(isBlack) && !afterLabel.strokeColors.some(isBlue),
+        'renaming an unset-hostility graphic keeps its neutral stroke',
+        (afterLabel?.strokeColors.length ?? 0) > 0 && afterLabel.strokeColors.every(isNeutral) && !afterLabel.strokeColors.some(isBlue),
         JSON.stringify(afterLabel?.strokeColors),
     );
 
@@ -253,12 +261,55 @@ const main = async () => {
         (await readRenderedStyle(page, 'PhaseLine'))?.texts.some(t => t.includes('ALPHA')),
     );
 
-    // ── 4. Route direction icons ────────────────────────────────────────────
-    // Guards src/tacticalgraphics/svg/*.svg, which render as ol/style/Icon.
-    console.log('\n4. Route direction renders an arrow icon');
+    // ── 4. Route traffic-direction figure ───────────────────────────────────
+    // FM 1-02.2 Table 5-17 stacks the figure above the route line: arrows for
+    // one-way / two-way, and `←— ALT —→` for alternating. The figure is drawn
+    // geometry (shaft LineString + filled arrowhead Polygon), not an icon
+    // sprite, so this reads the shapes rather than an Icon src.
+    console.log('\n4. Route direction renders the traffic-direction figure');
     await selectGraphic(page, 'route');
     const {mid: routeMid} = await drawLine(page, box, 0.45);
     await page.waitForTimeout(DRAW_END_GUARD_MS);
+
+    /** Style geometry types + texts + dashes for the Route's styled feature. */
+    const readRouteFigure = () =>
+        page.evaluate(() => {
+            const {map, manager} = window.__tacticalGraphics;
+            const resolution = map.getView().getResolution();
+            const feature = manager.renderingVectorSource
+                .getFeatures()
+                .find(f => f.get('graphicName') === 'Route' && typeof f.getStyle() === 'function');
+            if (!feature) return null;
+            const result = feature.getStyle()(feature, resolution);
+            const styles = Array.isArray(result) ? result : result ? [result] : [];
+            return {
+                heads: styles.filter(s => s.getGeometry?.()?.getType?.() === 'Polygon' && s.getFill?.()).length,
+                // The route line is itself a stroked LineString, so shafts are
+                // told apart by their thinner ROUTE_ARROW_WIDTH.
+                shafts: styles.filter(
+                    s => s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.()?.getWidth?.() === 2,
+                ).length,
+                texts: styles.map(s => s.getText?.()?.getText?.()).filter(t => typeof t === 'string'),
+                dashes: styles.map(s => s.getStroke?.()?.getLineDash?.()).filter(Boolean),
+                // Colour of the traffic figure vs. colour of the route line —
+                // the amplifier block is black, only the line answers to hostility.
+                figureColors: [
+                    ...styles
+                        .filter(s => s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.()?.getWidth?.() === 2)
+                        .map(s => s.getStroke().getColor()),
+                    ...styles
+                        .filter(s => s.getGeometry?.()?.getType?.() === 'Polygon' && s.getFill?.())
+                        .map(s => s.getFill().getColor()),
+                ],
+                lineColor:
+                    styles
+                        .filter(s => s.getStroke?.()?.getWidth?.() > 2)
+                        .map(s => s.getStroke().getColor())[0] ?? null,
+            };
+        });
+
+    const general = await readRouteFigure();
+    check('general route draws no traffic arrow', (general?.heads ?? -1) === 0, `${general?.heads} head(s)`);
 
     await openDialogAt(page, routeMid);
     await page.fill('#name-input', 'MSR1');
@@ -267,47 +318,108 @@ const main = async () => {
     await page.waitForTimeout(400);
     await page.screenshot({path: join(SHOTS, '04-route-direction.png')});
 
-    const icons = await page.evaluate(() => {
-        const {map, manager} = window.__tacticalGraphics;
-        const resolution = map.getView().getResolution();
-        const srcs = [];
-        for (const f of manager.renderingVectorSource.getFeatures()) {
-            if (f.get('graphicName') !== 'Route' || typeof f.getStyle() !== 'function') continue;
-            const result = f.getStyle()(f, resolution);
-            for (const s of Array.isArray(result) ? result : [result]) {
-                const src = s?.getImage?.()?.getSrc?.();
-                if (src) srcs.push(src);
-            }
-        }
-        return srcs;
-    });
-    check('route renders arrow icons', icons.length > 0, `${icons.length} icon(s)`);
+    // One arrow per end of the route: a shaft and a solid head each.
+    const oneWay = await readRouteFigure();
+    check('one-way draws one arrowhead per end', oneWay?.heads === 2, `${oneWay?.heads} head(s)`);
+    check('each arrowhead has a shaft', oneWay?.shafts === 2, `${oneWay?.shafts} shaft(s)`);
+    check('identifier survives the direction change', oneWay?.texts.some(t => t.includes('MSR1')), JSON.stringify(oneWay?.texts));
+
+    await openDialogAt(page, routeMid);
+    await chooseSelectOption(page, 'Direction', 'TWO_WAY');
+    await applyAndCloseDialog(page);
+    await page.waitForTimeout(400);
+    const twoWay = await readRouteFigure();
+    check('two-way stacks two opposed arrows per end', twoWay?.heads === 4, `${twoWay?.heads} head(s)`);
+
+    // The one the plate is explicit about: ALT sits *between* two outward arrows.
+    await openDialogAt(page, routeMid);
+    await chooseSelectOption(page, 'Direction', 'ALTERNATING');
+    await chooseSelectOption(page, 'Status', 'planned');
+    await applyAndCloseDialog(page);
+    await page.waitForTimeout(400);
+    await page.screenshot({path: join(SHOTS, '04b-route-alternating.png')});
+    const alternating = await readRouteFigure();
+    check('alternating renders the ALT amplifier', alternating?.texts.filter(t => t === 'ALT').length === 2, JSON.stringify(alternating?.texts));
+    check('ALT is flanked by an arrow on each side', alternating?.heads === 4, `${alternating?.heads} head(s)`);
+    check('planned dashes the route line', (alternating?.dashes.length ?? 0) > 0, JSON.stringify(alternating?.dashes));
     check(
-        'icon resolves to a one-way arrow asset',
-        icons.some(s => /one_way|data:image\/svg/.test(s)),
-        icons[0]?.slice(0, 80),
+        'only the route line dashes — the traffic arrows stay solid',
+        alternating?.dashes.length === 1,
+        `${alternating?.dashes.length} dashed stroke(s)`,
     );
 
-    // The icon is drawn onto a canvas by OL; a broken SVG would fail to decode.
-    const iconsDecode = await page.evaluate(
-        srcs =>
-            Promise.all(
-                srcs.map(
-                    src =>
-                        new Promise(resolve => {
-                            const img = new Image();
-                            img.onload = () => resolve(img.naturalWidth > 0 && img.naturalHeight > 0);
-                            img.onerror = () => resolve(false);
-                            img.src = src;
-                        }),
-                ),
-            ),
-        icons,
+    // The traffic figure is part of the amplifier block, not the control
+    // measure's line work: a hostile route turns red under the arrows, not
+    // through them.
+    await openDialogAt(page, routeMid);
+    await chooseSelectOption(page, 'Hostility', 'Hostile/Faker');
+    await applyAndCloseDialog(page);
+    await page.waitForTimeout(400);
+    const hostile = await readRouteFigure();
+    check('hostile route line takes the hostility colour', isRed(hostile?.lineColor), String(hostile?.lineColor));
+    check(
+        'traffic arrows stay in the label colour on a hostile route',
+        (hostile?.figureColors.length ?? 0) > 0 && hostile.figureColors.every(isNeutral) && !hostile.figureColors.some(isRed),
+        JSON.stringify([...new Set(hostile?.figureColors)]),
     );
-    check('every arrow SVG decodes as an image', iconsDecode.length > 0 && iconsDecode.every(Boolean), JSON.stringify(iconsDecode));
 
-    // ── 5. No console errors ────────────────────────────────────────────────
-    console.log('\n5. Console is clean');
+    // ── 5. Passage lane DTG stays readable at every bearing ─────────────────
+    // The DTG reads across the lane, so its rotation has to be folded back
+    // upright independently. Four bearings, one per quadrant: the south-west one
+    // is the case that broke, because the upright pass corrects by *adding* π and
+    // leaves the angle numerically outside any range test while pointing the
+    // right way. A label turned more than 90° off upright is upside down.
+    console.log('\n5. Passage lane DTG stays readable at every bearing');
+    const readLaneLabelRotation = () =>
+        page.evaluate(() => {
+            const {map, manager} = window.__tacticalGraphics;
+            const resolution = map.getView().getResolution();
+            for (const feature of manager.renderingVectorSource.getFeatures()) {
+                if (typeof feature.getStyle() !== 'function') continue;
+                const result = feature.getStyle()(feature, resolution);
+                const text = (Array.isArray(result) ? result : [result])
+                    .map(s => s?.getText?.())
+                    .find(t => t && t.getText());
+                if (text) return text.getRotation();
+            }
+            return null;
+        });
+
+    const laneCenter = [box.x + box.width * 0.6, box.y + box.height * 0.45];
+    for (const [degrees, quadrant] of [[20, 'east'], [110, 'north'], [200, 'west'], [290, 'south']]) {
+        await page.evaluate(() => window.__tacticalGraphics.manager.renderingVectorSource.clear());
+        await selectGraphic(page, 'passage lane');
+        const radians = (degrees * Math.PI) / 180;
+        // Screen y grows downward, hence the negated sine.
+        const [x1, y1] = [laneCenter[0] - Math.cos(radians) * 60, laneCenter[1] + Math.sin(radians) * 60];
+        const [x2, y2] = [laneCenter[0] + Math.cos(radians) * 180, laneCenter[1] - Math.sin(radians) * 180];
+        await page.mouse.click(x1, y1);
+        await page.mouse.dblclick(x2, y2);
+        await page.waitForTimeout(DRAW_END_GUARD_MS);
+
+        // The dialog opens on the lane's centre line; nudge across it if the
+        // first click lands between the strokes.
+        for (const nudge of [0, -12, 12]) {
+            await page.mouse.click((x1 + x2) / 2 + nudge, (y1 + y2) / 2);
+            await page.waitForTimeout(500);
+            if (await page.locator('#starttime-input').count()) break;
+        }
+        await page.fill('#starttime-input', '2007-02-12T06:00');
+        await applyAndCloseDialog(page);
+        await page.waitForTimeout(300);
+
+        const rotation = await readLaneLabelRotation();
+        const off = rotation === null ? null : Math.round((rotation * 180) / Math.PI);
+        check(
+            `lane drawn ${quadrant}ward renders its DTG upright`,
+            off !== null && Math.abs(off) <= 90,
+            `${off}° off upright`,
+        );
+    }
+    await page.screenshot({path: join(SHOTS, '05-passage-lane-bearing.png')});
+
+    // ── 6. No console errors ────────────────────────────────────────────────
+    console.log('\n6. Console is clean');
     const realErrors = consoleErrors.filter(e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e));
     check('no console/page errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
