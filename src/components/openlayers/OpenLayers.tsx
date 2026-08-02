@@ -11,7 +11,6 @@ import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
-import {setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
@@ -59,11 +58,9 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
     // Swap tile source when dark mode changes
     useEffect(() => {
         if (!map) return;
-        // The editor-chrome flag only — handle dots, the selection fill. Symbol colours
-        // are config, and `MapRendering` is the single writer of that (see
-        // `applyGraphicsConfig` there); publishing it from here too would re-impose the
-        // mode palette over a user's own colour on every toggle.
-        setDarkModeFlag(darkMode);
+        // Nothing to publish to the library: `MapRendering` is the single writer of the
+        // config, chrome colours included. This effect only swaps the basemap layers and
+        // sweeps the drawn features so they re-render.
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
         const darkTileLayer = tileLayers.find(l => l.get('name') === 'darkBaseMap');
