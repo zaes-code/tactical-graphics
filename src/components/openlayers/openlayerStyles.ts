@@ -31,12 +31,16 @@ import {
     getDefaultLabelSize,
     getDefaultLineColorOverride,
     getDefaultLineWidth,
+    getDrawMarkerColorOverride,
+    getDrawMarkerOutlineColorOverride,
+    getHandleColorOverride,
     getHostilityColorOverride,
+    getInertHandleColorOverride,
     getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
+    getSelectionFillColorOverride,
 } from '@zaes/tactical-graphics';
-import {isDarkMode} from '../../settings';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
@@ -114,15 +118,44 @@ export function getLabelHaloColor(): string {
 }
 
 /**
- * Picks between a light-mode and a dark-mode colour.
+ * ## Editor chrome
  *
- * **Editor chrome only** — handle dots, the inert-centre grey, the selection fill.
- * Chrome is not part of any symbol, so it is free to follow the host's mode; symbol
- * line work is not, and comes from the config instead. Exported so a host styling its
- * own chrome can stay in step with the library's.
+ * The affordances a user edits a graphic with — handle dots, the inert centre, the
+ * selection fill, the draw marker. Not part of any symbol: they say "you can drag this",
+ * and that meaning must not shift with a graphic's affiliation. Tinting handles by
+ * hostility made a hostile graphic's handles the same red as its own strokes, so they
+ * stopped reading as handles at all.
+ *
+ * These used to come from `byMode(light, dark)`, a helper that read a `isDarkMode()`
+ * flag. Both are gone: the flag was a boolean whose entire job was choosing between two
+ * hardcoded colour literals, which is what the config already does — better, since it
+ * also lets a host re-theme chrome that was previously not overridable at all. See
+ * `ai/decisions.md`, "The library has no concept of dark mode".
  */
-export function byMode(light: string, dark: string): string {
-    return isDarkMode() ? dark : light;
+
+/** Draggable handle dots. Renderers apply their own opacity on top. */
+export function getHandleColor(): string {
+    return getHandleColorOverride() ?? 'rgba(255,0,0,1)';
+}
+
+/** Handle dots that exist but cannot be dragged in the current mode. */
+export function getInertHandleColor(): string {
+    return getInertHandleColorOverride() ?? 'rgba(130,130,130,0.8)';
+}
+
+/** Fill for a selected or default-styled graphic. */
+export function getSelectionFillColor(): string {
+    return getSelectionFillColorOverride() ?? 'rgba(0, 120, 255, 0.2)';
+}
+
+/** The marker shown while placing a point-anchored graphic. */
+export function getDrawMarkerColor(): string {
+    return getDrawMarkerColorOverride() ?? 'rgba(87, 140, 255, 1)';
+}
+
+/** That marker's outline. */
+export function getDrawMarkerOutlineColor(): string {
+    return getDrawMarkerOutlineColorOverride() ?? 'white';
 }
 
 /** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
@@ -345,7 +378,7 @@ export const createHandleFeature = () => {
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8),
+                    color: setOpacity(getHandleColor(), .8),
                 }),
             }),
         });
@@ -391,8 +424,8 @@ export const createInertHandleFeature = () => {
                 radius: 5,
                 fill: new Fill({
                     color: grabbable
-                        ? setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8)
-                        : byMode('rgba(130,130,130,0.8)', 'rgba(109,109,109,0.8)'),
+                        ? setOpacity(getHandleColor(), .8)
+                        : getInertHandleColor(),
                 }),
             }),
         });
@@ -428,7 +461,7 @@ export const createFeature = () => {
             || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
         return new Style({
             fill: new Fill({
-                color: byMode('rgba(0, 120, 255, 0.2)', 'rgba(55, 137, 208, 0.2)'),
+                color: getSelectionFillColor(),
             }),
             stroke: new Stroke({
                 color,
@@ -437,7 +470,7 @@ export const createFeature = () => {
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: byMode('rgba(255, 0, 0, 0.8)', 'rgba(208, 123, 123, 0.8)'),
+                    color: setOpacity(getHandleColor(), .8),
                 }),
             }),
         });
@@ -5902,9 +5935,8 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
         // Fallback Polygon Style (optional, but good practice)
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const polygonStyle = new Style({
-            // Fixed, not `byMode`: this is the graphic's own line work, and line work
-            // does not change with the host's mode. See the palette note above
-            // `getDefaultLineColor`.
+            // Fixed literals, and not chrome: this is the graphic's own line work. See
+            // the palette note above `getDefaultLineColor`.
             fill: new Fill({
                 color: 'rgba(255, 100, 100, 0.4)',
             }),

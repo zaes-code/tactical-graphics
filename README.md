@@ -204,15 +204,15 @@ want. `paletteForMode` is a ready-made pair for a plain light/dark map:
 
 ```ts
 import {configureTacticalGraphics, paletteForMode} from '@zaes/tactical-graphics';
-import {setDarkModeFlag} from '@zaes/tactical-graphics/openlayers';
 
-configureTacticalGraphics(paletteForMode(dark));   // symbol colours — renderer-agnostic
-setDarkModeFlag(dark);                             // editor chrome: handles, selection fill
+configureTacticalGraphics(paletteForMode(dark));
 source.forEachFeature(f => f.changed());
 ```
 
-The split is the same one the package is built on: symbol colours are the
-library's, editor chrome belongs to the renderer drawing the handles.
+That is the whole of it. The library has no mode flag to keep in step — it has
+colours, and you decide them. `paletteForMode` also carries the editor chrome
+(handle dots, the inert centre, the selection fill, the draw marker), so nothing
+is left behind on the old mode.
 
 `paletteForMode` changes only the *unaffiliated* neutrals — the default line
 colour, the label text that follows it, and the halo and plate behind that text.

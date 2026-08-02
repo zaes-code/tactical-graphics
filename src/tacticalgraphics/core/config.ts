@@ -70,6 +70,24 @@ export interface TacticalGraphicsConfigOptions {
     labelHaloColor?: string;
     /** Solid fill painted behind label text to block pattern fills. Default 90%-opacity white. */
     labelBackgroundFill?: string;
+
+    // ── Editor chrome ────────────────────────────────────────────────────────
+    // Not part of any symbol: these colour the affordances a renderer draws so a user
+    // can edit a graphic. They say "you can drag this", and that meaning must not shift
+    // with a graphic's affiliation — which is why they are their own fields rather than
+    // derived from the palette above. A renderer without a given affordance ignores its
+    // field.
+
+    /** Draggable handle dots. Default opaque red; renderers may apply their own opacity. */
+    handleColor?: string;
+    /** Handle dots that are present but not draggable right now. Default 80%-opacity grey. */
+    inertHandleColor?: string;
+    /** Fill for a selected/default-styled graphic. Default 20%-opacity blue. */
+    selectionFillColor?: string;
+    /** The marker shown while drawing a point-anchored graphic. Default solid blue. */
+    drawMarkerColor?: string;
+    /** That marker's outline, which has to contrast against `drawMarkerColor`. Default white. */
+    drawMarkerOutlineColor?: string;
 }
 
 /**
@@ -90,6 +108,11 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelFillColor?: string;
     readonly labelHaloColor?: string;
     readonly labelBackgroundFill?: string;
+    readonly handleColor?: string;
+    readonly inertHandleColor?: string;
+    readonly selectionFillColor?: string;
+    readonly drawMarkerColor?: string;
+    readonly drawMarkerOutlineColor?: string;
 
     constructor(options: TacticalGraphicsConfigOptions = {}) {
         // Clamp on the way in rather than on read: an out-of-range value typed into a
@@ -101,6 +124,11 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.labelBackgroundFill !== undefined) this.labelBackgroundFill = options.labelBackgroundFill;
+        if (options.handleColor !== undefined) this.handleColor = options.handleColor;
+        if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
+        if (options.selectionFillColor !== undefined) this.selectionFillColor = options.selectionFillColor;
+        if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
+        if (options.drawMarkerOutlineColor !== undefined) this.drawMarkerOutlineColor = options.drawMarkerOutlineColor;
         Object.freeze(this);
     }
 
@@ -122,6 +150,11 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
             labelBackgroundFill: overrides.labelBackgroundFill ?? this.labelBackgroundFill,
+            handleColor: overrides.handleColor ?? this.handleColor,
+            inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
+            selectionFillColor: overrides.selectionFillColor ?? this.selectionFillColor,
+            drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
+            drawMarkerOutlineColor: overrides.drawMarkerOutlineColor ?? this.drawMarkerOutlineColor,
         });
     }
 }
@@ -138,6 +171,11 @@ export const LIGHT_MODE_PALETTE: TacticalGraphicsConfigOptions = {
     labelFillColor: '#000000',
     labelHaloColor: 'rgba(255,255,255,1)',
     labelBackgroundFill: 'rgba(255, 255, 255, 0.90)',
+    handleColor: 'rgba(255,0,0,1)',
+    inertHandleColor: 'rgba(130,130,130,0.8)',
+    selectionFillColor: 'rgba(0, 120, 255, 0.2)',
+    drawMarkerColor: 'rgba(87, 140, 255, 1)',
+    drawMarkerOutlineColor: 'white',
 };
 
 /**
@@ -150,10 +188,10 @@ export const LIGHT_MODE_PALETTE: TacticalGraphicsConfigOptions = {
  * slightly different depending on a display setting. They are saturated enough to carry
  * on either background as-is.
  *
- * What does change is the *unaffiliated* neutrals: the line colour for graphics with no
+ * What does change is the *unaffiliated* neutrals — the line colour for graphics with no
  * affiliation, the label text that follows it, and the halo and background plate behind
- * that text. Those are black-on-white by default and would be invisible on a dark
- * basemap.
+ * that text — and the editor chrome. Those are black-on-white by default and would be
+ * invisible on a dark basemap.
  *
  * This is a starting point, not a mandate — a host with a different basemap is expected
  * to pass its own values, and may add `hostilityColors` if it really wants them
@@ -164,6 +202,11 @@ export const DARK_MODE_PALETTE: TacticalGraphicsConfigOptions = {
     labelFillColor: 'rgb(198,198,198)',
     labelHaloColor: 'rgb(23,23,23)',
     labelBackgroundFill: 'rgba(22, 27, 34, 0.90)',
+    handleColor: 'rgba(208,123,123,1)',
+    inertHandleColor: 'rgba(109,109,109,0.8)',
+    selectionFillColor: 'rgba(55, 137, 208, 0.2)',
+    drawMarkerColor: 'rgb(69,106,185)',
+    drawMarkerOutlineColor: 'rgb(23,23,23)',
 };
 
 /**
@@ -250,4 +293,24 @@ export function getLabelHaloColorOverride(): string | undefined {
 
 export function getLabelBackgroundFillOverride(): string | undefined {
     return _config.labelBackgroundFill;
+}
+
+export function getHandleColorOverride(): string | undefined {
+    return _config.handleColor;
+}
+
+export function getInertHandleColorOverride(): string | undefined {
+    return _config.inertHandleColor;
+}
+
+export function getSelectionFillColorOverride(): string | undefined {
+    return _config.selectionFillColor;
+}
+
+export function getDrawMarkerColorOverride(): string | undefined {
+    return _config.drawMarkerColor;
+}
+
+export function getDrawMarkerOutlineColorOverride(): string | undefined {
+    return _config.drawMarkerOutlineColor;
 }

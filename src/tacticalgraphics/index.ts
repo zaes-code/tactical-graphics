@@ -122,8 +122,13 @@ export type {TacticalGraphicsConfigOptions} from './core/config';
  */
 export {
     getDefaultLineColorOverride,
+    getDrawMarkerColorOverride,
+    getDrawMarkerOutlineColorOverride,
+    getHandleColorOverride,
     getHostilityColorOverride,
+    getInertHandleColorOverride,
     getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
+    getSelectionFillColorOverride,
 } from './core/config';

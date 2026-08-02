@@ -29,9 +29,14 @@ import {
 import {
     getDefaultLineColor,
     getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
     getLabelBackgroundFill,
     getLabelFillColor,
     getLabelHaloColor,
+    getSelectionFillColor,
 } from './openlayers/openlayerStyles';
 
 /**
@@ -358,6 +363,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.labelBackgroundFill}
                 effective={basePalette.labelBackgroundFill ?? getLabelBackgroundFill()}
                 onChange={labelBackgroundFill => onChange({labelBackgroundFill})}
+            />
+
+            <Divider/>
+            <Typography sx={sectionSx}>Editor chrome</Typography>
+            <Typography sx={{...hintSx, mt: -1.5}}>
+                The affordances for editing a graphic. Not part of any symbol, so they never take an affiliation colour.
+            </Typography>
+
+            <ColorSetting
+                label="Handle"
+                hint="Draggable handle dots"
+                value={settings.handleColor}
+                effective={basePalette.handleColor ?? getHandleColor()}
+                onChange={handleColor => onChange({handleColor})}
+            />
+            <ColorSetting
+                label="Inert Handle"
+                hint="Present, but not draggable now"
+                value={settings.inertHandleColor}
+                effective={basePalette.inertHandleColor ?? getInertHandleColor()}
+                onChange={inertHandleColor => onChange({inertHandleColor})}
+            />
+            <ColorSetting
+                label="Selection Fill"
+                hint="Fill for a default-styled graphic"
+                value={settings.selectionFillColor}
+                effective={basePalette.selectionFillColor ?? getSelectionFillColor()}
+                onChange={selectionFillColor => onChange({selectionFillColor})}
+            />
+            <ColorSetting
+                label="Draw Marker"
+                hint="Shown while placing a graphic"
+                value={settings.drawMarkerColor}
+                effective={basePalette.drawMarkerColor ?? getDrawMarkerColor()}
+                onChange={drawMarkerColor => onChange({drawMarkerColor})}
+            />
+            <ColorSetting
+                label="Draw Marker Outline"
+                hint="Contrast against the marker"
+                value={settings.drawMarkerOutlineColor}
+                effective={basePalette.drawMarkerOutlineColor ?? getDrawMarkerOutlineColor()}
+                onChange={drawMarkerOutlineColor => onChange({drawMarkerOutlineColor})}
             />
 
         </DialogContent>
