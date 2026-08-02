@@ -1,139 +1,348 @@
 /**
- * Guards the light/dark palette.
+ * Guards the palette and the config that overrides it.
  *
- * Dark mode used to be an accident: all four colour accessors returned the same string
- * on both branches, and the demo's `invert(95%) hue-rotate(180deg) …` filter repainted
- * the graphics canvas along with the basemap because OpenLayers composites consecutive
- * layers that share a className onto one canvas. That filter mapped yellow onto blue
- * and crushed its luminance, so `pending` arrived on screen as a near-black olive.
+ * There used to be two palettes here, light and dark. The dark one was never designed:
+ * its values were the *measured output* of a CSS filter — `invert(95%)
+ * hue-rotate(180deg) …` — that once repainted the graphics canvas along with the
+ * basemap, because OpenLayers composites consecutive layers sharing a className onto
+ * one canvas. When that was fixed at source the filter's output got frozen into
+ * literals so the change would look like a no-op.
  *
- * The graphics layer now renders its own colours (see
- * `TacticalGraphicsManager.renderingVectorLayer`), which only works while the palette
- * actually carries two values. These tests hold that line — and hold the one colour
- * that must *not* differ between modes.
+ * Re-tinting doctrinal affiliation colours is a host's call, not the library's, so
+ * there is now one palette and a config to override it with. The mode flag that used to
+ * pick between palettes is gone too — the library has no concept of light or dark, only
+ * colours the host decides. These tests hold that: the doctrinal values are what an
+ * unconfigured consumer gets, and an override reaches every accessor that should honour
+ * it, editor chrome included.
  */
-import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
+import {
+    DARK_MODE_PALETTE,
+    LIGHT_MODE_PALETTE,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    TacticalGraphicHostility,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    paletteForMode,
+    resetTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
 
 import {
     getColorByHostility,
     getDefaultLineColor,
+    getDoctrinalHostilityColor,
     getHaloStroke,
+    getLabelBackgroundFill,
     getLabelFillColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
     getLabelHaloColor,
+    getSelectionFillColor,
 } from './openlayerStyles';
-import {isDarkMode, setDarkModeFlag} from '../../settings';
 
-/** Runs `fn` in the given mode and restores whatever was set before. */
-function inMode<T>(dark: boolean, fn: () => T): T {
-    const previous = isDarkMode();
-    setDarkModeFlag(dark);
-    try {
-        return fn();
-    } finally {
-        setDarkModeFlag(previous);
-    }
-}
+// Every test starts from the shipped defaults; the overrides below are global.
+beforeEach(resetTacticalGraphicsConfig);
+afterEach(resetTacticalGraphicsConfig);
 
-const BRIGHT_YELLOW = 'rgba(255, 255, 0, 1)';
-
-describe('the pending/suspect yellow is identical in both modes', () => {
-    // The whole reason the palette exists. Yellow reads on a dark basemap unchanged, and
-    // dimming it here is the exact regression this file was written for.
-    it.each([TacticalGraphicHostility.pending, TacticalGraphicHostility.suspectJoker])(
-        '%s is bright yellow in light mode',
-        hostility => {
-            expect(inMode(false, () => getColorByHostility(hostility))).toBe(BRIGHT_YELLOW);
-        },
-    );
-
-    it.each([TacticalGraphicHostility.pending, TacticalGraphicHostility.suspectJoker])(
-        '%s is the same bright yellow in dark mode',
-        hostility => {
-            expect(inMode(true, () => getColorByHostility(hostility))).toBe(BRIGHT_YELLOW);
-        },
-    );
-});
-
-describe('every other affiliation carries two distinct colours', () => {
-    // Assert they *differ*, not what they are: the dark values are a visual judgement and
-    // may be retuned, but collapsing back to one value silently restores the old bug.
-    const twoToned = [
-        TacticalGraphicHostility.friend,
-        TacticalGraphicHostility.assumedFriend,
-        TacticalGraphicHostility.hostileFaker,
-        TacticalGraphicHostility.neutral,
-        TacticalGraphicHostility.unknown,
-    ];
-
-    it.each(twoToned)('%s differs between modes', hostility => {
-        const light = inMode(false, () => getColorByHostility(hostility));
-        const dark = inMode(true, () => getColorByHostility(hostility));
-        expect(light).not.toBe(dark);
+describe('the doctrinal palette is what an unconfigured consumer gets', () => {
+    it('uses the FM 1-02.2 affiliation colours', () => {
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.neutral)).toBe('rgba(0, 128, 0, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.pending)).toBe('rgba(255, 255, 0, 1)');
     });
 
-    it('keeps the doctrinal FM 1-02.2 colours in light mode', () => {
-        inMode(false, () => {
-            expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
-            expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
-            expect(getColorByHostility(TacticalGraphicHostility.neutral)).toBe('rgba(0, 128, 0, 1)');
-        });
+    it('draws assumed-friend as friendly and suspect/joker as pending', () => {
+        expect(getColorByHostility(TacticalGraphicHostility.assumedFriend))
+            .toBe(getColorByHostility(TacticalGraphicHostility.friend));
+        expect(getColorByHostility(TacticalGraphicHostility.suspectJoker))
+            .toBe(getColorByHostility(TacticalGraphicHostility.pending));
     });
 
-    it('falls back to the default line colour for unknown, in both modes', () => {
-        expect(inMode(false, () => getColorByHostility(TacticalGraphicHostility.unknown)))
-            .toBe(inMode(false, getDefaultLineColor));
-        expect(inMode(true, () => getColorByHostility(TacticalGraphicHostility.unknown)))
-            .toBe(inMode(true, getDefaultLineColor));
-    });
-});
-
-describe('line and label colours invert with the mode', () => {
-    it('draws dark lines on light and light lines on dark', () => {
-        expect(inMode(false, getDefaultLineColor)).toBe('#000000');
-        expect(inMode(true, getDefaultLineColor)).not.toBe('#000000');
+    it('falls back to the default line colour for unknown', () => {
+        expect(getColorByHostility(TacticalGraphicHostility.unknown)).toBe(getDefaultLineColor());
+        expect(getDefaultLineColor()).toBe('#000000');
     });
 
     it('fills label text to match the line colour', () => {
-        expect(inMode(false, getLabelFillColor)).toBe(inMode(false, getDefaultLineColor));
-        expect(inMode(true, getLabelFillColor)).toBe(inMode(true, getDefaultLineColor));
+        expect(getLabelFillColor()).toBe(getDefaultLineColor());
     });
 
     it('contrasts the halo against the text it outlines', () => {
-        expect(inMode(false, getLabelHaloColor)).not.toBe(inMode(false, getLabelFillColor));
-        expect(inMode(true, getLabelHaloColor)).not.toBe(inMode(true, getLabelFillColor));
+        expect(getLabelHaloColor()).not.toBe(getLabelFillColor());
+    });
+});
+
+describe('editor chrome', () => {
+    // Chrome says "you can drag this". It is not part of any symbol, so it must not take
+    // a graphic's affiliation colour — tinting handles by hostility made a hostile
+    // graphic's handles the same red as its own strokes, and they stopped reading as
+    // handles at all. It *is* overridable, which it was not before: these were hardcoded
+    // literals behind a mode flag.
+    it('has built-in defaults with no config', () => {
+        expect(getHandleColor()).toBe('rgba(255,0,0,1)');
+        expect(getInertHandleColor()).toBe('rgba(130,130,130,0.8)');
+        expect(getSelectionFillColor()).toBe('rgba(0, 120, 255, 0.2)');
+        expect(getDrawMarkerColor()).toBe('rgba(87, 140, 255, 1)');
+        expect(getDrawMarkerOutlineColor()).toBe('white');
+    });
+
+    it('is overridable through the config', () => {
+        configureTacticalGraphics({
+            handleColor: '#ff00ff',
+            inertHandleColor: '#404040',
+            selectionFillColor: 'rgba(0,255,0,0.2)',
+            drawMarkerColor: '#123456',
+            drawMarkerOutlineColor: '#654321',
+        });
+        expect(getHandleColor()).toBe('#ff00ff');
+        expect(getInertHandleColor()).toBe('#404040');
+        expect(getSelectionFillColor()).toBe('rgba(0,255,0,0.2)');
+        expect(getDrawMarkerColor()).toBe('#123456');
+        expect(getDrawMarkerOutlineColor()).toBe('#654321');
+    });
+
+    it('does not move when an affiliation colour is re-tinted', () => {
+        configureTacticalGraphics({
+            hostilityColors: {[TacticalGraphicHostility.hostileFaker]: '#ff00ff'},
+        });
+        expect(getHandleColor()).toBe('rgba(255,0,0,1)');
+    });
+});
+
+describe('paletteForMode covers every colour a mode change should move', () => {
+    // The point of folding chrome into the config: a host's mode change is one call. If
+    // a colour is mode-dependent but missing from the palettes, that host silently keeps
+    // the light value on a dark basemap.
+    it('sends the same keys for both modes', () => {
+        expect(Object.keys(DARK_MODE_PALETTE).sort()).toEqual(Object.keys(LIGHT_MODE_PALETTE).sort());
+    });
+
+    it('carries no hostilityColors — affiliation colours are mode-independent', () => {
+        expect(LIGHT_MODE_PALETTE.hostilityColors).toBeUndefined();
+        expect(DARK_MODE_PALETTE.hostilityColors).toBeUndefined();
+    });
+
+    it('restates the built-in defaults in its light half, so going back to light undoes dark', () => {
+        // `configureTacticalGraphics` merges, so an empty light palette would leave the
+        // dark values in force.
+        configureTacticalGraphics(paletteForMode(true));
+        configureTacticalGraphics(paletteForMode(false));
+        expect(getDefaultLineColor()).toBe('#000000');
+        expect(getLabelHaloColor()).toBe('rgba(255,255,255,1)');
+        expect(getHandleColor()).toBe('rgba(255,0,0,1)');
+        expect(getDrawMarkerOutlineColor()).toBe('white');
+    });
+
+    it('moves every base and chrome colour when dark is applied', () => {
+        configureTacticalGraphics(paletteForMode(true));
+        expect(getDefaultLineColor()).toBe('rgb(198,198,198)');
+        expect(getLabelHaloColor()).toBe('rgb(23,23,23)');
+        expect(getHandleColor()).toBe('rgba(208,123,123,1)');
+        expect(getInertHandleColor()).toBe('rgba(109,109,109,0.8)');
+        expect(getSelectionFillColor()).toBe('rgba(55, 137, 208, 0.2)');
+        expect(getDrawMarkerColor()).toBe('rgb(69,106,185)');
+    });
+
+    it('leaves affiliation colours untouched in either mode', () => {
+        configureTacticalGraphics(paletteForMode(true));
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.neutral)).toBe('rgba(0, 128, 0, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.pending)).toBe('rgba(255, 255, 0, 1)');
+    });
+});
+
+describe('config overrides reach the style layer', () => {
+    it('re-tints one affiliation and leaves the others doctrinal', () => {
+        configureTacticalGraphics({
+            hostilityColors: {[TacticalGraphicHostility.friend]: 'rgb(92,148,255)'},
+        });
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgb(92,148,255)');
+        expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
+        expect(getColorByHostility(TacticalGraphicHostility.neutral)).toBe('rgba(0, 128, 0, 1)');
+    });
+
+    it('carries an override to the alias affiliation', () => {
+        // A host overriding `friend` means it for assumed-friend too, without naming both.
+        configureTacticalGraphics({
+            hostilityColors: {[TacticalGraphicHostility.friend]: 'rgb(92,148,255)'},
+        });
+        expect(getColorByHostility(TacticalGraphicHostility.assumedFriend)).toBe('rgb(92,148,255)');
+    });
+
+    it('lets an override on the alias itself win', () => {
+        configureTacticalGraphics({
+            hostilityColors: {
+                [TacticalGraphicHostility.friend]: 'rgb(92,148,255)',
+                [TacticalGraphicHostility.assumedFriend]: 'rgb(150,190,255)',
+            },
+        });
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgb(92,148,255)');
+        expect(getColorByHostility(TacticalGraphicHostility.assumedFriend)).toBe('rgb(150,190,255)');
+    });
+
+    it('moves unknown and label text with defaultLineColor', () => {
+        configureTacticalGraphics({defaultLineColor: 'rgb(198,198,198)'});
+        expect(getDefaultLineColor()).toBe('rgb(198,198,198)');
+        expect(getColorByHostility(TacticalGraphicHostility.unknown)).toBe('rgb(198,198,198)');
+        expect(getLabelFillColor()).toBe('rgb(198,198,198)');
+    });
+
+    it('lets label text be overridden away from the line colour', () => {
+        configureTacticalGraphics({defaultLineColor: 'rgb(198,198,198)', labelFillColor: '#ffffff'});
+        expect(getDefaultLineColor()).toBe('rgb(198,198,198)');
+        expect(getLabelFillColor()).toBe('#ffffff');
+    });
+
+    it('overrides the halo and the label background plate', () => {
+        configureTacticalGraphics({
+            labelHaloColor: 'rgb(23,23,23)',
+            labelBackgroundFill: 'rgba(22, 27, 34, 0.90)',
+        });
+        expect(getLabelHaloColor()).toBe('rgb(23,23,23)');
+        expect(getLabelBackgroundFill()).toBe('rgba(22, 27, 34, 0.90)');
+    });
+});
+
+describe('getDoctrinalHostilityColor', () => {
+    // The pure "what would this be with no override" answer. A settings panel needs it:
+    // reading `getColorByHostility` to render a control that *edits* the override renders
+    // one frame stale, so clearing an override shows the cleared value back. Both bugs
+    // were caught driving the real app.
+    it('ignores an override that is in force', () => {
+        configureTacticalGraphics({
+            hostilityColors: {[TacticalGraphicHostility.friend]: 'magenta'},
+        });
+        expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('magenta');
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
+    });
+
+    it('resolves aliases the same way the live accessor does', () => {
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.assumedFriend)).toBe('rgba(0, 0, 255, 1)');
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.suspectJoker)).toBe('rgba(255, 255, 0, 1)');
+    });
+
+    it('has no answer for unknown, whose colour is the default line colour', () => {
+        expect(getDoctrinalHostilityColor(TacticalGraphicHostility.unknown)).toBeUndefined();
+    });
+
+    it('agrees with getColorByHostility whenever there is no override', () => {
+        [
+            TacticalGraphicHostility.friend,
+            TacticalGraphicHostility.assumedFriend,
+            TacticalGraphicHostility.hostileFaker,
+            TacticalGraphicHostility.neutral,
+            TacticalGraphicHostility.pending,
+            TacticalGraphicHostility.suspectJoker,
+        ].forEach(hostility => {
+            expect(getDoctrinalHostilityColor(hostility)).toBe(getColorByHostility(hostility));
+        });
+    });
+});
+
+describe('TacticalGraphicsConfig', () => {
+    it('clamps line width into the readable range', () => {
+        expect(new TacticalGraphicsConfig({lineWidth: 99}).lineWidth).toBe(MAX_LINE_WIDTH);
+        expect(new TacticalGraphicsConfig({lineWidth: 0}).lineWidth).toBe(MIN_LINE_WIDTH);
+    });
+
+    it('clamps label size into the readable range', () => {
+        // Mirrors the line-width clamp above on purpose — the two are surfaced together
+        // in the settings panel and behaved differently before 2026-08-02.
+        expect(new TacticalGraphicsConfig({labelSize: 99}).labelSize).toBe(MAX_LABEL_SIZE);
+        expect(new TacticalGraphicsConfig({labelSize: 0}).labelSize).toBe(MIN_LABEL_SIZE);
+        expect(new TacticalGraphicsConfig({labelSize: -5}).labelSize).toBe(MIN_LABEL_SIZE);
+    });
+
+    it('leaves every field undefined when constructed empty', () => {
+        const config = new TacticalGraphicsConfig();
+        expect(config.labelSize).toBeUndefined();
+        expect(config.lineWidth).toBeUndefined();
+        expect(config.hostilityColors).toBeUndefined();
+        expect(config.defaultLineColor).toBeUndefined();
+    });
+
+    it('merges hostilityColors key by key in with()', () => {
+        const base = new TacticalGraphicsConfig({
+            hostilityColors: {[TacticalGraphicHostility.friend]: 'blue'},
+        });
+        const merged = base.with({
+            hostilityColors: {[TacticalGraphicHostility.neutral]: 'green'},
+        });
+        expect(merged.hostilityColors?.[TacticalGraphicHostility.friend]).toBe('blue');
+        expect(merged.hostilityColors?.[TacticalGraphicHostility.neutral]).toBe('green');
+    });
+
+    it('treats an undefined field in with() as "leave alone", not "clear"', () => {
+        // What makes `config.with({lineWidth})` safe to call from a settings panel that
+        // only knows about one field.
+        const base = new TacticalGraphicsConfig({lineWidth: 3, defaultLineColor: 'red'});
+        expect(base.with({lineWidth: 5}).defaultLineColor).toBe('red');
+        expect(base.with({defaultLineColor: 'blue'}).lineWidth).toBe(3);
+    });
+
+    it('is frozen, so a held reference cannot be mutated behind the style layer', () => {
+        const config = new TacticalGraphicsConfig({lineWidth: 3});
+        expect(Object.isFrozen(config)).toBe(true);
+    });
+});
+
+describe('the accessors the style layer reads', () => {
+    it('default to the shipped values with no config', () => {
+        expect(getDefaultLabelSize()).toBe(16);
+        expect(getDefaultLineWidth()).toBe(4);
+    });
+
+    it('follow the config once set', () => {
+        configureTacticalGraphics({labelSize: 20, lineWidth: 2});
+        expect(getDefaultLabelSize()).toBe(20);
+        expect(getDefaultLineWidth()).toBe(2);
+    });
+
+    it('clamp through configureTacticalGraphics too', () => {
+        configureTacticalGraphics({lineWidth: 99});
+        expect(getDefaultLineWidth()).toBe(MAX_LINE_WIDTH);
     });
 });
 
 describe('getHaloStroke', () => {
     // It was a module-level `const`, so its colour was frozen at import and could never
-    // follow a toggle — invisible while both branches returned white, a real bug the
-    // moment they diverged. A toggle made *after* import has to be reflected.
-    it('reflects a mode change made after module load', () => {
-        const light = inMode(false, () => getHaloStroke().getColor());
-        const dark = inMode(true, () => getHaloStroke().getColor());
-        expect(light).not.toBe(dark);
+    // follow a change — invisible while it was always white, a real bug the moment a
+    // host overrode it.
+    it('reflects a config change made after module load', () => {
+        const before = getHaloStroke().getColor();
+        configureTacticalGraphics({labelHaloColor: 'rgb(23,23,23)'});
+        expect(getHaloStroke().getColor()).not.toBe(before);
+        expect(getHaloStroke().getColor()).toBe('rgb(23,23,23)');
     });
 
-    it('matches getLabelHaloColor in each mode', () => {
-        expect(inMode(false, () => getHaloStroke().getColor())).toBe(inMode(false, getLabelHaloColor));
-        expect(inMode(true, () => getHaloStroke().getColor())).toBe(inMode(true, getLabelHaloColor));
+    it('matches getLabelHaloColor', () => {
+        expect(getHaloStroke().getColor()).toBe(getLabelHaloColor());
+        configureTacticalGraphics({labelHaloColor: 'rgb(23,23,23)'});
+        expect(getHaloStroke().getColor()).toBe(getLabelHaloColor());
     });
 
-    it('caches one Stroke per mode rather than allocating per call', () => {
-        expect(inMode(true, getHaloStroke)).toBe(inMode(true, getHaloStroke));
-        expect(inMode(false, getHaloStroke)).toBe(inMode(false, getHaloStroke));
+    it('caches one Stroke per colour rather than allocating per call', () => {
+        expect(getHaloStroke()).toBe(getHaloStroke());
     });
 });
 
 describe('the library default', () => {
-    it('is light mode, so an unconfigured consumer gets the doctrinal colours', () => {
-        // `settings.ts` owns this; asserted here because it is the palette's entry point.
-        // The demo overrides it from localStorage during init.
+    it('is an empty config, so an unconfigured consumer gets the doctrinal colours', () => {
         // A fresh module registry, so this reads the declared default rather than
         // whatever the tests above last set.
         jest.isolateModules(() => {
-            const fresh: typeof import('../../settings') = require('../../settings');
-            expect(fresh.isDarkMode()).toBe(false);
+            const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
+            expect(config.getDefaultLabelSize()).toBe(16);
+            expect(config.getDefaultLineWidth()).toBe(4);
+            expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
         });
     });
 });

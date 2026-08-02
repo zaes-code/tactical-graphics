@@ -106,7 +106,37 @@ export class TacticalGraphicsManager {
         let pointerInteraction = this.getPointerInteraction();
         this.map.addInteraction(pointerInteraction);
         this.map.addLayer(this.renderingVectorLayer);
+        this.map.on('pointermove', this.updateHoverCursor);
     }
+
+    /**
+     * Swap in a pointer cursor while hovering something a click or drag would
+     * actually act on, so the affordance is visible before the user commits to
+     * a gesture. Mirrors the same hit-testing a real interaction would do:
+     * any feature in view mode (matching the dialog's click-to-open check),
+     * only a live handle in the modes that drag one.
+     */
+    private updateHoverCursor = (evt: MapBrowserEvent): void => {
+        if (evt.dragging || this.isDrawing()) return;
+        const target = this.map.getTargetElement();
+        if (!target) return;
+
+        const hits: Feature[] = [];
+        this.map.forEachFeatureAtPixel(evt.pixel, feature => {
+            const asFeature = this.asFeature(feature);
+            if (asFeature) hits.push(asFeature);
+        });
+
+        let interactive: boolean;
+        if (this.enableHandleModes().includes(this.currentMode)) {
+            const centreGrabbable = this.isTranslating();
+            interactive = hits.some(f => f.get('handle') && (!f.get('inert') || centreGrabbable));
+        } else {
+            interactive = hits.length > 0;
+        }
+
+        target.style.cursor = interactive ? 'pointer' : '';
+    };
 
     // the interaction modes that display markers on tactical graphics to let the user transform
     enableHandleModes = (): InteractionType[] => {
