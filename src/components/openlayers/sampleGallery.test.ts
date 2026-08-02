@@ -22,7 +22,6 @@ import {PROVEN_GRAPHICS} from './provenGraphics';
 import {supportsHostility} from './graphicFieldRegistry';
 import {readGraphicLabels} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
-import {setDarkModeFlag} from '../../settings';
 
 /**
  * The doctrinal colours below are the light-mode ones, and the palette has had a
@@ -31,7 +30,8 @@ import {setDarkModeFlag} from '../../settings';
  * are about FM 1-02.2, and a later change to what the library defaults to must not
  * quietly turn them into assertions about a different palette.
  */
-beforeAll(() => setDarkModeFlag(false));
+// (No mode to set: the library has one palette, so the doctrinal colours are simply
+// what an unconfigured consumer gets.)
 
 /** Roughly what the sweep frames at; only the ratios under test depend on it. */
 const RESOLUTION = 1200;
