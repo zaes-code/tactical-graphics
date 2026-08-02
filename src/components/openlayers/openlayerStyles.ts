@@ -26,7 +26,7 @@ import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
-import {BASE_FONT_SIZE_PX, getDefaultLabelSize, isDarkMode} from '../../settings';
+import {BASE_FONT_SIZE_PX, getDefaultLabelSize, getDefaultLineWidth, isDarkMode} from '../../settings';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
@@ -57,12 +57,13 @@ const TEXT_RESOLUTION_FALLBACK = 3000; // used as fallback when drawingResolutio
 export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
 
 /**
- * Default stroke width (in screen pixels) for every graphic's lines:
- * phase-lines, area outlines, arrows, and custom-rendered graphics all
- * use this width. Change this single constant to re-weight the whole
- * library.
+ * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
+ * area outlines, arrows, and custom-rendered graphics all use this width.
+ * Backed by the live Settings-panel value (see `settings.ts`) — call it
+ * fresh from inside a style function rather than caching the result, the
+ * same rule as `getDefaultLabelSize()`/`isDarkMode()`.
  */
-export const LINE_WIDTH = 4;
+export const LINE_WIDTH = (): number => getDefaultLineWidth();
 
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
@@ -240,7 +241,7 @@ export const modifyStyle = (color: string) => {
         fill: undefined,
         stroke: new Stroke({
             color: color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: [4, 4],
         }),
     });
@@ -415,7 +416,7 @@ export const createFeature = () => {
             }),
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
             image: new CircleStyle({
                 radius: 5,
@@ -561,7 +562,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     geometry: new Point(coords[i]),
                     stroke: new Stroke({
                         color,
-                        width: LINE_WIDTH,
+                        width: LINE_WIDTH(),
                     }),
                     text: new Text({
                         text: labelText,
@@ -587,7 +588,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                 geometry: new Point(coords[coords.length - 1]),
                 stroke: new Stroke({
                     color,
-                    width: LINE_WIDTH,
+                    width: LINE_WIDTH(),
                 }),
                 text: new Text({
                     text: `ACP ${coords.length}`,
@@ -615,7 +616,7 @@ export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
                 styles.push(
                     new Style({
                         geometry: geom,
-                        stroke: new Stroke({color, width: LINE_WIDTH}),
+                        stroke: new Stroke({color, width: LINE_WIDTH()}),
                         fill: undefined,
                     }),
                 );
@@ -625,7 +626,7 @@ export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
                         geometry: geom,
                         stroke: new Stroke({
                             color: color,
-                            width: LINE_WIDTH,
+                            width: LINE_WIDTH(),
                         }),
                         fill: undefined,
                     }),
@@ -715,7 +716,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     /* ---------- stroke ---------- */
     const lineStroke = new Stroke({
         color: hostilityColor,
-        width: LINE_WIDTH,
+        width: LINE_WIDTH(),
         lineCap: 'butt',
         lineJoin: 'round',
     });
@@ -909,7 +910,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
         let hostility = f.get('hostility');
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
         return styles;
@@ -926,7 +927,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
@@ -974,7 +975,7 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
     return (feature) => {
         const color = feature.get('hostilityColor') || getDefaultLineColor();
-        const lineStroke = new Stroke({color, width: LINE_WIDTH});
+        const lineStroke = new Stroke({color, width: LINE_WIDTH()});
         const fill = new Fill({color});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
@@ -995,7 +996,7 @@ export function mobileDefenseGraphicStyleFunc(): StyleFunction {
 
 export function envelopmentGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -1290,7 +1291,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
             const s = Math.sqrt(tdx * tdx + tdy * tdy) * 0.5;
 
             const color = (f as Feature).get?.('hostilityColor') || getDefaultLineColor();
-            const symbolStroke = new Stroke({ color, width: LINE_WIDTH });
+            const symbolStroke = new Stroke({ color, width: LINE_WIDTH() });
             const symbolFill = new Fill({ color });
 
             // Helper: offset from center by angle and distance
@@ -1539,7 +1540,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -1717,7 +1718,7 @@ function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: st
     // main line
     styles.push(new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     }));
 
     return styles;
@@ -1833,7 +1834,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
     ));
     const outlineStyle = new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     });
     styles.push(outlineStyle);
 
@@ -1899,7 +1900,7 @@ function offensiveLineStyles(f: FeatureLike, resolution: number, label: string) 
     ));
     const outlineStyle = new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     });
     styles.push(outlineStyle);
 
@@ -1988,7 +1989,7 @@ function buildLinearTargetStyles(
         ]),
         stroke: new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: dashStyle(labels),
         }),
     }));
@@ -2152,12 +2153,12 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
             // both identities at once, so the pair has to stay balanced.
             new Style({
                 geometry: new LineString(topCoords),
-                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH()}),
             }),
             // Friendly-side wave
             new Style({
                 geometry: new LineString(bottomCoords),
-                stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH()}),
             }),
             // "LC" label at start (left-aligned to the left of the line start)
             new Style({
@@ -2258,7 +2259,7 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2334,7 +2335,7 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
             }),
             new Style({
                 geometry: new MultiLineString(outlineSegments),
-                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
             }),
         ];
     };
@@ -2356,7 +2357,7 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
         const topArrow = coords[4];
 
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
-        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH});
+        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
 
         const p1 = topLine[0];
         const p2 = topLine[1];
@@ -2463,7 +2464,7 @@ export function breachStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2586,7 +2587,7 @@ export function blockStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2608,7 +2609,7 @@ function firePositionStyles(f: FeatureLike): Style[] {
     const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
     return [new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     })];
 }
 
@@ -2757,7 +2758,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
         if (labels.status && labels.status === TacticalGraphicStatus.planned) {
@@ -2906,7 +2907,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         styles.push(new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         }));
         if (labels.status && labels.status === TacticalGraphicStatus.planned) {
             // Override the line stroke to always be dashed
@@ -3042,7 +3043,7 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
 
@@ -3068,7 +3069,7 @@ function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: Graphic
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         });
@@ -3094,7 +3095,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3170,7 +3171,7 @@ export function defaultStyleFunc(): StyleFunction {
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         });
     };
@@ -3219,7 +3220,7 @@ export function fightingPositionStyleFunc(): StyleFunction {
     return (f) => {
         const color = f.get('hostilityColor') || getDefaultLineColor();
         return new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH}),
+            stroke: new Stroke({color, width: LINE_WIDTH()}),
         });
     };
 }
@@ -3249,7 +3250,7 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
             geometry: geom,
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3354,7 +3355,7 @@ function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: Graphi
             geometry: new LineString(baseCoords),
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3363,7 +3364,7 @@ function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: Graphi
         if (allCoords.length > 1) {
             styles.push(new Style({
                 geometry: new MultiLineString(allCoords.slice(1)),
-                stroke: new Stroke({color, width: LINE_WIDTH}),
+                stroke: new Stroke({color, width: LINE_WIDTH()}),
             }));
         }
 
@@ -3508,7 +3509,7 @@ function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels
         return [new Style({
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         })];
@@ -3526,7 +3527,7 @@ function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
 
         // Thin stroke for the whole MultiLineString (V legs + both arrowheads).
         styles.push(new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH}),
+            stroke: new Stroke({color, width: LINE_WIDTH()}),
         }));
 
         const coords0 = (f.getGeometry() as MultiLineString).getCoordinates()[0];
@@ -3680,7 +3681,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
             geometry: new MultiLineString(outlineSegments),
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         });
 
@@ -3875,7 +3876,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
             geometry: new MultiLineString(outlineSegments),
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         });
@@ -4288,7 +4289,7 @@ export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFun
             // area outline — FM 1-02.2 para 5-3.
             stroke: new Stroke({
                 color: f.get('hostilityColor') || getDefaultLineColor(),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         }));
 
@@ -4586,7 +4587,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
         const color = feature.get('hostilityColor') || getDefaultLineColor();
         const strokeFor = (hashed: boolean) => new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: hashed ? CROSSED_HASH_DASH : undefined,
         });
 
@@ -4676,7 +4677,7 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
     const label = getLabel(name);
     return (f, resolution) => {
         const color = f.get('hostilityColor') || getDefaultLineColor();
-        const stroke = new Stroke({color, width: LINE_WIDTH});
+        const stroke = new Stroke({color, width: LINE_WIDTH()});
         const geom = f.getGeometry();
         if (!(geom instanceof GeometryCollection)) {
             return new Style({fill: new Fill({color}), stroke});
@@ -4926,7 +4927,7 @@ export const createFeatureWithDashedLines = () => {
     const style = new Style({
         stroke: new Stroke({
             color: getDefaultLineColor(),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: [4, 4],
         }),
     });
@@ -4978,7 +4979,7 @@ function generateCrossTiesForPolygon(polygon: Polygon | MultiLineString, resolut
                             geometry: new LineString([tieStart, tieEnd]),
                             stroke: new Stroke({
                                 color: color,
-                                width: LINE_WIDTH,
+                                width: LINE_WIDTH(),
                             }),
                         }),
                     );
@@ -5119,7 +5120,7 @@ function railroadStyleFunction(feature: FeatureLike, resolution: number) {
     // 6) build styles
     const outlineStyle = new Style({
         geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     });
     // Base layers
     styles.push(outlineStyle);
@@ -5193,7 +5194,7 @@ function createEchelonStyles(mid: Coordinate, dx: number, dy: number, resolution
     const lineHalf = lineHalfPx * resolution;
 
     const fillStyle = new Fill({color});
-    const strokeStyle = new Stroke({color, width: LINE_WIDTH});
+    const strokeStyle = new Stroke({color, width: LINE_WIDTH()});
 
     const styles: Style[] = [];
 
@@ -5352,7 +5353,7 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
         geometry: new MultiLineString(outlineSegments),
         stroke: new Stroke({
             color: getColorByHostility(hostility),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined
         }),
     });
@@ -5480,7 +5481,7 @@ export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: nu
         }),
         stroke: new Stroke({
             color: getColorByHostility(hostility),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
         }),
     });
 }
@@ -5503,7 +5504,7 @@ function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFuncti
             fill: hatchPattern ? new Fill({color: hatchPattern}) : undefined,
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),
         });
@@ -5524,7 +5525,7 @@ export function groupOrSeriesOfTargetsGraphicStyle(
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
     const stroke = new Stroke({
         color,
-        width: LINE_WIDTH,
+        width: LINE_WIDTH(),
         lineDash: isPlanned ? [12, 8] : undefined,
     });
 
@@ -5587,7 +5588,7 @@ function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: Featur
         }),
         stroke: new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined,
         }),
     });
@@ -5621,7 +5622,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     return new Style({
         stroke: new Stroke({
             color: color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined,
         }),
     });
@@ -5634,7 +5635,7 @@ export function encirclementGraphicStyle(feature: FeatureLike, resolution: numbe
         new Style({
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         }),
     ];
@@ -5730,7 +5731,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     // Ensure we found two distinct segments
     if (maxIndex === minIndex || maxIndex === -1 || minIndex === -1) {
         // Fallback to a closed outline if opposite segments couldn't be found
-        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH})})];
+        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH()})})];
     }
 
     const segmentsToGap = [maxIndex, minIndex];
@@ -5800,7 +5801,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     // 4) Create the final perimeter style
     const outlineStyle = new Style({
         geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: color, width: LINE_WIDTH}),
+        stroke: new Stroke({color: color, width: LINE_WIDTH()}),
     });
     styles.push(outlineStyle);
 
@@ -5883,7 +5884,7 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
             }),
             stroke: new Stroke({
                 color: byMode('rgb(255, 50, 50)', 'rgb(208,104,104)'),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),
         });

@@ -166,7 +166,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                     fill: new Fill({color: color}),
                     stroke: new Stroke({
                         color: color,
-                        width: LINE_WIDTH,
+                        width: LINE_WIDTH(),
                     }),
                 })
             })
@@ -218,7 +218,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 if (!geom) return [];
                 const lines = geom.getCoordinates();
                 const color = feature.get('hostilityColor') || getDefaultLineColor();
-                const stroke = new Stroke({color, width: LINE_WIDTH});
+                const stroke = new Stroke({color, width: LINE_WIDTH()});
 
                 const styles: Style[] = [];
                 const horiz = lines[0];
@@ -304,7 +304,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
 
                 return lines.map((line) => new Style({
                     geometry: new LineString(line),
-                    stroke: new Stroke({color: defaultColor, width: LINE_WIDTH}),
+                    stroke: new Stroke({color: defaultColor, width: LINE_WIDTH()}),
                 }));
             });
         }
