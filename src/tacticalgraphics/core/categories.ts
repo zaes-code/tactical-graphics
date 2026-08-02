@@ -138,8 +138,9 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
     // Convoy Symbols OK
-    [TacticalGraphicName.HaltedConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
-    [TacticalGraphicName.MovingConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.HaltedConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    // [TacticalGraphicName.MovingConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
 
     // Countermobility OK
     // [TacticalGraphicName.Abatis]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet

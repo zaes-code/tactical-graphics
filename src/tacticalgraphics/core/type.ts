@@ -736,8 +736,9 @@ export enum TacticalGraphicName {
     LimitedAccessArea = 'LimitedAccessArea',
 
     // Convoy
-    MovingConvoy = 'MovingConvoy',
-    HaltedConvoy = 'HaltedConvoy',
+    // Excluded — see ai/excluded-graphics.md
+    // MovingConvoy = 'MovingConvoy',
+    // HaltedConvoy = 'HaltedConvoy',
 
     // Target control measures
     // TargetReferencePoint = 'TargetReferencePoint',
