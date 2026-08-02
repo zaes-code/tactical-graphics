@@ -5,8 +5,8 @@
   // may, or the geometry stops being portable.
   //
   // rootDir is `src` rather than the openlayers folder: the layer legitimately
-  // reaches src/settings.ts and four src/utils modules, and tsc requires a
-  // rootDir that contains every input.
+  // reaches four src/utils modules, and tsc requires a rootDir that contains
+  // every input.
   "compilerOptions": {
     "target": "es2019",
     // `dom` on top of the library config: style functions measure text on a
@@ -33,7 +33,6 @@
   },
   "include": [
     "src/components/openlayers/**/*.ts",
-    "src/settings.ts",
     "src/utils/graphicLinkRegistry.ts",
     "src/utils/isEmpty.ts",
     "src/utils/scaleAndRotateCoordinates.ts",
