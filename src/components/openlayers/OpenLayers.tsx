@@ -15,9 +15,10 @@ import {setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
+    lineWidth: number;
 }
 
-const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
+const OpenLayersMapComponent: React.FC<Props> = ({darkMode, lineWidth}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
@@ -83,6 +84,15 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
             f.changed();
         });
     }, [map, darkMode]);
+
+    // Re-render already-drawn graphics when the line-width setting changes — style
+    // functions read LINE_WIDTH() live, but OL caches the rendered output per feature
+    // revision, so a feature that hasn't otherwise changed keeps its old stroke width
+    // until something bumps its revision. Same reasoning as the dark-mode sweep above.
+    useEffect(() => {
+        if (!map) return;
+        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => f.changed());
+    }, [map, lineWidth]);
 
     const handleDrawTacticalGraphic = () => {
         setInteractionMode(InteractionType.drawing);
