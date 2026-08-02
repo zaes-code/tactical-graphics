@@ -173,11 +173,14 @@ can keep drawing the old label.
 
 Everything re-styleable lives on one all-optional config. Omit a field and you
 get the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of
-this:
+this.
+
+It lives in the **root** entry point, not the OpenLayers one: none of it is
+specific to a renderer, so a second view inherits it rather than reinventing it,
+and you configure the library once however many views you have open.
 
 ```ts
-import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
-import {configureTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+import {TacticalGraphicHostility, configureTacticalGraphics} from '@zaes/tactical-graphics';
 
 configureTacticalGraphics({
     labelSize: 18,                 // px, default 16
@@ -200,12 +203,16 @@ see your basemap, so it never swaps colours off a mode flag — you send what yo
 want. `paletteForMode` is a ready-made pair for a plain light/dark map:
 
 ```ts
-import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from '@zaes/tactical-graphics/openlayers';
+import {configureTacticalGraphics, paletteForMode} from '@zaes/tactical-graphics';
+import {setDarkModeFlag} from '@zaes/tactical-graphics/openlayers';
 
+configureTacticalGraphics(paletteForMode(dark));   // symbol colours — renderer-agnostic
 setDarkModeFlag(dark);                             // editor chrome: handles, selection fill
-configureTacticalGraphics(paletteForMode(dark));   // symbol colours
 source.forEachFeature(f => f.changed());
 ```
+
+The split is the same one the package is built on: symbol colours are the
+library's, editor chrome belongs to the renderer drawing the handles.
 
 `paletteForMode` changes only the *unaffiliated* neutrals — the default line
 colour, the label text that follows it, and the halo and plate behind that text.

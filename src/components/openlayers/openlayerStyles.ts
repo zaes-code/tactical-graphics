@@ -35,8 +35,8 @@ import {
     getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
-    isDarkMode,
-} from '../../settings';
+} from '@zaes/tactical-graphics';
+import {isDarkMode} from '../../settings';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 

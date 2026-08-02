@@ -18,14 +18,14 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import {TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
     MIN_LABEL_SIZE,
     MIN_LINE_WIDTH,
+    TacticalGraphicHostility,
     TacticalGraphicsConfigOptions,
-} from '../settings';
+} from '@zaes/tactical-graphics';
 import {
     getDefaultLineColor,
     getDoctrinalHostilityColor,

@@ -78,3 +78,52 @@ export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
 export {default as geometryService} from './core/GeometryService';
+
+/**
+ * Configuration — label size, line width, and the colours. All optional; omit a field
+ * and you get the doctrinal FM 1-02.2 value.
+ *
+ * Lives in the map-agnostic half deliberately. None of it knows what a renderer is:
+ * pixel sizes and affiliation colours are properties of the symbology, so a second
+ * renderer inherits them rather than reinventing them, and a host configures the library
+ * once no matter how many views it has.
+ *
+ * There is one palette and it does not follow dark mode — the library cannot see your
+ * basemap, so you send the colours you want. `paletteForMode` is a ready-made pair for
+ * the common case. After changing anything, tell your renderer to invalidate; with
+ * OpenLayers that is `source.forEachFeature(f => f.changed())`.
+ */
+export {
+    BASE_FONT_SIZE_PX,
+    DARK_MODE_PALETTE,
+    DEFAULT_LINE_WIDTH,
+    LIGHT_MODE_PALETTE,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    getTacticalGraphicsConfig,
+    paletteForMode,
+    resetTacticalGraphicsConfig,
+    setDefaultLabelSize,
+    setDefaultLineWidth,
+    setTacticalGraphicsConfig,
+} from './core/config';
+export type {TacticalGraphicsConfigOptions} from './core/config';
+
+/**
+ * Override readers, for a renderer resolving a colour. Each returns `undefined` when the
+ * host has not overridden that colour, leaving the renderer to supply the doctrinal
+ * default — the fallback is the renderer's, because only it knows its own defaults.
+ */
+export {
+    getDefaultLineColorOverride,
+    getHostilityColorOverride,
+    getLabelBackgroundFillOverride,
+    getLabelFillColorOverride,
+    getLabelHaloColorOverride,
+} from './core/config';
