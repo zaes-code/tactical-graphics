@@ -370,8 +370,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.LinearTarget]:        line(2),
     [TacticalGraphicName.FinalProtectiveFire]: line(2),
     [TacticalGraphicName.LinearSmokeTarget]:   line(2),
-    [TacticalGraphicName.MovingConvoy]:        line(),
-    [TacticalGraphicName.HaltedConvoy]:        line(),
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.MovingConvoy]:     line(),
+    // [TacticalGraphicName.HaltedConvoy]:     line(),
 
     // ── Circular / point target control measures ─────────────────────────────
     // [TacticalGraphicName.TargetReferencePoint]: circularArea,
