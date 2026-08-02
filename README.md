@@ -455,6 +455,25 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
 | Restrictive Fire Line | Lines |
+| Alternate Supply Route | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Assault Crossing | Mobility and Countermobility Control Measures |
+| Bridge | Mobility and Countermobility Control Measures |
+| Ferry Crossing | Mobility and Countermobility Control Measures |
+| Ford, Difficult | Mobility and Countermobility Control Measures |
+| Ford, Easy | Mobility and Countermobility Control Measures |
+| Gap | Mobility and Countermobility Control Measures |
+| Main Supply Route | Mobility and Countermobility Control Measures |
+| Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Passage Lane | Mobility and Countermobility Control Measures |
+| Route | Mobility and Countermobility Control Measures |
+| Route - Alternating Traffic | Mobility and Countermobility Control Measures |
+| Route - One-Way Traffic | Mobility and Countermobility Control Measures |
+| Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
@@ -543,17 +562,10 @@ Everything still being worked towards. A graphic is listed here until it is draw
 |---|---|
 | Limited Access Area | Areas |
 | Abatis | Mobility and Countermobility Control Measures |
-| Alternate Supply Route | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
-| Alternating Traffic Route | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
-| Assault Crossing | Mobility and Countermobility Control Measures |
 | Block | Mobility and Countermobility Control Measures |
-| Bridge | Mobility and Countermobility Control Measures |
 | Disrupt | Mobility and Countermobility Control Measures |
 | Double Apron Fence | Mobility and Countermobility Control Measures |
 | Double Fence | Mobility and Countermobility Control Measures |
@@ -561,18 +573,10 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
-| Ferry Crossing | Mobility and Countermobility Control Measures |
 | Fix | Mobility and Countermobility Control Measures |
-| Ford, Difficult | Mobility and Countermobility Control Measures |
-| Ford, Easy | Mobility and Countermobility Control Measures |
-| Gap | Mobility and Countermobility Control Measures |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | High Wire Fence | Mobility and Countermobility Control Measures |
 | Low Wire Fence | Mobility and Countermobility Control Measures |
-| Main Supply Route | Mobility and Countermobility Control Measures |
-| Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
-| Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
-| Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
@@ -580,10 +584,7 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Obstacle Line | Mobility and Countermobility Control Measures |
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
-| One-Way Traffic Route | Mobility and Countermobility Control Measures |
-| Passage Lane | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
-| Route | Mobility and Countermobility Control Measures |
 | Single Concertina | Mobility and Countermobility Control Measures |
 | Single Fence | Mobility and Countermobility Control Measures |
 | Triple Strand Concertina | Mobility and Countermobility Control Measures |
