@@ -49,11 +49,54 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the colour and width constants they share.
 export * from './openlayerStyles';
 
-// Light/dark mode. Every colour accessor above reads this flag, so without it a host
-// got a two-mode palette and no way to choose between the modes. Default is light —
-// call `setDarkModeFlag(true)` when your map background is dark, then invalidate your
-// features (`feature.changed()`) so the style functions re-evaluate.
-export {isDarkMode, setDarkModeFlag} from '../../settings';
+// Configuration — label size, line width, colours. These are **re-exports**: the config
+// is defined in the root entry point (`@zaes/tactical-graphics`), because none of it is
+// specific to OpenLayers. Pixel sizes and affiliation colours mean the same thing to any
+// renderer, so a second one inherits them rather than reinventing them.
+//
+// Mirrored here as a convenience, so a host wiring up this renderer does not need a
+// second import line for the config it is about to apply. Same symbols, same singleton —
+// `import {configureTacticalGraphics} from '@zaes/tactical-graphics'` is equivalent and
+// is the canonical path if you are not using this renderer at all.
+//
+// After changing the config, invalidate your features
+// (`source.forEachFeature(f => f.changed())`) so the style functions re-evaluate.
+export {
+    BASE_FONT_SIZE_PX,
+    DARK_MODE_PALETTE,
+    DEFAULT_LINE_WIDTH,
+    LIGHT_MODE_PALETTE,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    getTacticalGraphicsConfig,
+    paletteForMode,
+    resetTacticalGraphicsConfig,
+    setDefaultLabelSize,
+    setDefaultLineWidth,
+    setTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
+export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
+
+// Editor-chrome colours, resolved. Handle dots, the inert centre, the selection fill and
+// the draw marker — the affordances this renderer draws so a user can edit a graphic.
+// Each falls back to a built-in default until the host overrides it through the config.
+//
+// There is no `isDarkMode` / `setDarkModeFlag` / `byMode` any more. The library has no
+// concept of light or dark: it has colours, and the host decides them. Send
+// `paletteForMode(dark)` on a mode change and that is the whole of it.
+export {
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getSelectionFillColor,
+} from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
 // the base — and `restoreTacticalGraphics` rebuilds them editable. Each record carries

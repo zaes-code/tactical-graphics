@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**160 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**201 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ---
 
@@ -168,6 +168,63 @@ writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, 
 Set amplifiers through `writeGraphicProperties`, never `feature.set` —
 `ol/Object.set` fires `propertychange` without calling `changed()`, so the map
 can keep drawing the old label.
+
+### Configuring colours and sizes
+
+Everything re-styleable lives on one all-optional config. Omit a field and you
+get the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of
+this.
+
+It lives in the **root** entry point, not the OpenLayers one: none of it is
+specific to a renderer, so a second view inherits it rather than reinventing it,
+and you configure the library once however many views you have open.
+
+```ts
+import {TacticalGraphicHostility, configureTacticalGraphics} from '@zaes/tactical-graphics';
+
+configureTacticalGraphics({
+    labelSize: 18,                 // px, default 16
+    lineWidth: 3,                  // px, default 4, clamped to [1, 8]
+    hostilityColors: {             // partial — the rest stay doctrinal
+        [TacticalGraphicHostility.friend]: 'rgb(92,148,255)',
+    },
+    defaultLineColor: '#000000',   // unaffiliated line work, and label text with it
+});
+
+source.forEachFeature(f => f.changed());   // repaint what is already drawn
+```
+
+That last line matters: OpenLayers caches its render per feature revision, so a
+config change does not reach features already on the map until something bumps
+their revision.
+
+**There is one palette, and it does not follow dark mode.** The library cannot
+see your basemap, so it never swaps colours off a mode flag — you send what you
+want. `paletteForMode` is a ready-made pair for a plain light/dark map:
+
+```ts
+import {configureTacticalGraphics, paletteForMode} from '@zaes/tactical-graphics';
+
+configureTacticalGraphics(paletteForMode(dark));
+source.forEachFeature(f => f.changed());
+```
+
+That is the whole of it. The library has no mode flag to keep in step — it has
+colours, and you decide them. `paletteForMode` also carries the editor chrome
+(handle dots, the inert centre, the selection fill, the draw marker), so nothing
+is left behind on the old mode.
+
+`paletteForMode` changes only the *unaffiliated* neutrals — the default line
+colour, the label text that follows it, and the halo and plate behind that text.
+The four affiliation colours are identical in both modes on purpose: they are
+doctrine, and shifting them for a display setting makes a symbol read
+differently depending on how the app is configured. Pass `hostilityColors`
+yourself if you disagree.
+
+Building your own settings UI? Use `getDoctrinalHostilityColor(hostility)` for
+the swatch, not `getColorByHostility`. The latter reads the live config, so a
+control that edits an override renders one frame stale — clearing an override
+shows you the value you just cleared. The former is a pure function of the enum.
 
 ### OpenLayers — geometry only
 
@@ -398,6 +455,25 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
 | Restrictive Fire Line | Lines |
+| Alternate Supply Route | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Assault Crossing | Mobility and Countermobility Control Measures |
+| Bridge | Mobility and Countermobility Control Measures |
+| Ferry Crossing | Mobility and Countermobility Control Measures |
+| Ford, Difficult | Mobility and Countermobility Control Measures |
+| Ford, Easy | Mobility and Countermobility Control Measures |
+| Gap | Mobility and Countermobility Control Measures |
+| Main Supply Route | Mobility and Countermobility Control Measures |
+| Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
+| Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Passage Lane | Mobility and Countermobility Control Measures |
+| Route | Mobility and Countermobility Control Measures |
+| Route - Alternating Traffic | Mobility and Countermobility Control Measures |
+| Route - One-Way Traffic | Mobility and Countermobility Control Measures |
+| Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
@@ -486,17 +562,10 @@ Everything still being worked towards. A graphic is listed here until it is draw
 |---|---|
 | Limited Access Area | Areas |
 | Abatis | Mobility and Countermobility Control Measures |
-| Alternate Supply Route | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
-| Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
-| Alternating Traffic Route | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
-| Assault Crossing | Mobility and Countermobility Control Measures |
 | Block | Mobility and Countermobility Control Measures |
-| Bridge | Mobility and Countermobility Control Measures |
 | Disrupt | Mobility and Countermobility Control Measures |
 | Double Apron Fence | Mobility and Countermobility Control Measures |
 | Double Fence | Mobility and Countermobility Control Measures |
@@ -504,18 +573,10 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
-| Ferry Crossing | Mobility and Countermobility Control Measures |
 | Fix | Mobility and Countermobility Control Measures |
-| Ford, Difficult | Mobility and Countermobility Control Measures |
-| Ford, Easy | Mobility and Countermobility Control Measures |
-| Gap | Mobility and Countermobility Control Measures |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | High Wire Fence | Mobility and Countermobility Control Measures |
 | Low Wire Fence | Mobility and Countermobility Control Measures |
-| Main Supply Route | Mobility and Countermobility Control Measures |
-| Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
-| Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
-| Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
@@ -523,10 +584,7 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Obstacle Line | Mobility and Countermobility Control Measures |
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
-| One-Way Traffic Route | Mobility and Countermobility Control Measures |
-| Passage Lane | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
-| Route | Mobility and Countermobility Control Measures |
 | Single Concertina | Mobility and Countermobility Control Measures |
 | Single Fence | Mobility and Countermobility Control Measures |
 | Triple Strand Concertina | Mobility and Countermobility Control Measures |

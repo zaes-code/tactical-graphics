@@ -1,7 +1,7 @@
 import {Map, View} from 'ol';
 import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
-import {Fill, Icon, Stroke, Style, Text} from 'ol/style';
+import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
@@ -17,16 +17,25 @@ import {
     TacticalGraphicName,
     TacticalGraphicStatus,
 } from '@zaes/tactical-graphics';
-import {
-    ALTERNATING_ARROW as alternating_arrow,
-    ONE_WAY_ARROW as one_way_arrow,
-    TWO_WAY_ARROW as two_way_arrow,
-} from './assets/routeDirectionIcons';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
-import {BASE_FONT_SIZE_PX, getDefaultLabelSize, isDarkMode} from '../../settings';
+import {
+    BASE_FONT_SIZE_PX,
+    getDefaultLabelSize,
+    getDefaultLineColorOverride,
+    getDefaultLineWidth,
+    getDrawMarkerColorOverride,
+    getDrawMarkerOutlineColorOverride,
+    getHandleColorOverride,
+    getHostilityColorOverride,
+    getInertHandleColorOverride,
+    getLabelBackgroundFillOverride,
+    getLabelFillColorOverride,
+    getLabelHaloColorOverride,
+    getSelectionFillColorOverride,
+} from '@zaes/tactical-graphics';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
@@ -57,80 +66,116 @@ const TEXT_RESOLUTION_FALLBACK = 3000; // used as fallback when drawingResolutio
 export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
 
 /**
- * Default stroke width (in screen pixels) for every graphic's lines:
- * phase-lines, area outlines, arrows, and custom-rendered graphics all
- * use this width. Change this single constant to re-weight the whole
- * library.
+ * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
+ * area outlines, arrows, and custom-rendered graphics all use this width.
+ * Backed by the live Settings-panel value (see `settings.ts`) — call it
+ * fresh from inside a style function rather than caching the result, the
+ * same rule as `getDefaultLabelSize()`/`isDarkMode()`.
  */
-export const LINE_WIDTH = 4;
+export const LINE_WIDTH = (): number => getDefaultLineWidth();
 
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
 
 /**
- * ## The dark-mode palette
+ * ## One palette, and where a host changes it
  *
- * Every colour below has *two* real values now. It used to have one: all four
- * accessors returned the same string on both branches, and dark mode worked anyway
- * — by accident. The demo's `invert(95%) hue-rotate(180deg) brightness(85%)
- * contrast(90%)` filter (`src/styles/map.css`) was landing on the graphics canvas as
- * well as the basemap, because OL composites consecutive layers that share a
- * className onto one canvas. That is fixed at source (see
- * `TacticalGraphicsManager.renderingVectorLayer`), so the colours have to carry
- * themselves from here on.
+ * These colours are the doctrinal FM 1-02.2 ones and they do **not** vary with
+ * `isDarkMode()`. A host that wants different line work on a dark basemap supplies it
+ * through `configureTacticalGraphics` (`src/settings.ts`) — only the host knows what
+ * its own basemap looks like, and a library-side dark palette can only guess. See
+ * `src/App.tsx` for the worked example.
  *
- * The dark values are the *measured* output of that old filter chain, so the fix is
- * visually a no-op — with the one exception it exists for. `invert` maps yellow onto
- * blue and CSS `hue-rotate`'s linear matrix crushes blue's luminance, so pending's
- * `rgb(255,255,0)` was arriving on screen as `rgb(48,48,13)`, a near-black olive. It
- * is now the same bright yellow in both modes. See `ai/decisions.md`.
+ * There used to be a second, dark set of values. They were the *measured output* of a
+ * CSS filter — `invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%)` — that
+ * once landed on the graphics canvas along with the basemap, because OL composites
+ * consecutive layers sharing a className onto one canvas. When that was fixed at
+ * source (see `TacticalGraphicsManager.renderingVectorLayer`) the filter's output was
+ * frozen into literals so the change would look like a no-op. That is not a palette
+ * anyone designed, and re-tinting doctrinal affiliation colours is the host's call
+ * rather than the library's, so the dark set is gone. `ai/decisions.md` has the
+ * history.
  */
 
-/** Default stroke/fill color for graphics with no specific hostility color. White in dark mode, black in light. */
+/** Default stroke/fill colour for graphics with no specific hostility colour. */
 export function getDefaultLineColor(): string {
-    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
+    return getDefaultLineColorOverride() ?? '#000000';
 }
 
-/** Text label fill color. */
+/** Text label fill colour. Follows the default line colour unless overridden on its own. */
 export function getLabelFillColor(): string {
-    return isDarkMode() ? 'rgb(198,198,198)' : '#000000';
+    return getLabelFillColorOverride() ?? getDefaultLineColor();
 }
 
-/** Text label halo (outline) color — contrast against the map background. */
+/** Text label halo (outline) colour — contrast against the map background. */
 export function getLabelHaloColor(): string {
-    return isDarkMode() ? 'rgb(23,23,23)' : 'rgba(255,255,255,1)';
+    return getLabelHaloColorOverride() ?? 'rgba(255,255,255,1)';
 }
 
 /**
- * Picks between a light-mode and a dark-mode colour.
+ * ## Editor chrome
  *
- * For editor chrome and one-off literals that are not affiliation colours and so have
- * no place in `HOSTILITY_COLORS` — handles, marker dots, the air coordinating area's
- * own red. Exported so a host styling its own additions can stay in step with the
- * library's mode.
+ * The affordances a user edits a graphic with — handle dots, the inert centre, the
+ * selection fill, the draw marker. Not part of any symbol: they say "you can drag this",
+ * and that meaning must not shift with a graphic's affiliation. Tinting handles by
+ * hostility made a hostile graphic's handles the same red as its own strokes, so they
+ * stopped reading as handles at all.
+ *
+ * These used to come from `byMode(light, dark)`, a helper that read a `isDarkMode()`
+ * flag. Both are gone: the flag was a boolean whose entire job was choosing between two
+ * hardcoded colour literals, which is what the config already does — better, since it
+ * also lets a host re-theme chrome that was previously not overridable at all. See
+ * `ai/decisions.md`, "The library has no concept of dark mode".
  */
-export function byMode(light: string, dark: string): string {
-    return isDarkMode() ? dark : light;
+
+/** Draggable handle dots. Renderers apply their own opacity on top. */
+export function getHandleColor(): string {
+    return getHandleColorOverride() ?? 'rgba(255,0,0,1)';
+}
+
+/** Handle dots that exist but cannot be dragged in the current mode. */
+export function getInertHandleColor(): string {
+    return getInertHandleColorOverride() ?? 'rgba(130,130,130,0.8)';
+}
+
+/** Fill for a selected or default-styled graphic. */
+export function getSelectionFillColor(): string {
+    return getSelectionFillColorOverride() ?? 'rgba(0, 120, 255, 0.2)';
+}
+
+/** The marker shown while placing a point-anchored graphic. */
+export function getDrawMarkerColor(): string {
+    return getDrawMarkerColorOverride() ?? 'rgba(87, 140, 255, 1)';
+}
+
+/** That marker's outline. */
+export function getDrawMarkerOutlineColor(): string {
+    return getDrawMarkerOutlineColorOverride() ?? 'white';
 }
 
 /** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
 export function getLabelBackgroundFill(): string {
-    return isDarkMode() ? 'rgba(22, 27, 34, 0.90)' : 'rgba(255, 255, 255, 0.90)';
+    return getLabelBackgroundFillOverride() ?? 'rgba(255, 255, 255, 0.90)';
 }
 
 /**
  * Halo used for the label background.
  *
  * A function, not a `const`. As a module-level const the halo colour was frozen at
- * import and could never follow a dark-mode toggle — harmless while both branches of
- * `getLabelHaloColor` returned white, a silent bug the moment they diverged. Cached
- * per mode so the ~75 call sites don't allocate a `Stroke` per style call.
+ * import and could never follow a later change — harmless while it was always white,
+ * a silent bug the moment a host overrode it. Cached so the ~75 call sites don't
+ * allocate a `Stroke` per style call.
+ *
+ * Keyed on the resolved colour rather than on the mode: the halo now comes from the
+ * config, which a host may change at any time, so the mode flag is no longer a
+ * complete cache key. In practice a host uses one or two halo colours, so the cache
+ * stays tiny. (A plain record, not a `Map` — `Map` is OpenLayers' in this module.)
  */
-const haloStrokeCache: Partial<Record<'dark' | 'light', Stroke>> = {};
+const haloStrokeCache: Record<string, Stroke> = {};
 
 export function getHaloStroke(): Stroke {
-    const key = isDarkMode() ? 'dark' : 'light';
-    return haloStrokeCache[key] ??= new Stroke({color: getLabelHaloColor(), width: HALO_WIDTH});
+    const color = getLabelHaloColor();
+    return haloStrokeCache[color] ??= new Stroke({color, width: HALO_WIDTH});
 }
 
 /**
@@ -240,7 +285,7 @@ export const modifyStyle = (color: string) => {
         fill: undefined,
         stroke: new Stroke({
             color: color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: [4, 4],
         }),
     });
@@ -328,7 +373,7 @@ export const createHandleFeature = () => {
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8),
+                    color: setOpacity(getHandleColor(), .8),
                 }),
             }),
         });
@@ -374,8 +419,8 @@ export const createInertHandleFeature = () => {
                 radius: 5,
                 fill: new Fill({
                     color: grabbable
-                        ? setOpacity(byMode('rgba(255,0,0,1)', 'rgba(208,123,123,1)'), .8)
-                        : byMode('rgba(130,130,130,0.8)', 'rgba(109,109,109,0.8)'),
+                        ? setOpacity(getHandleColor(), .8)
+                        : getInertHandleColor(),
                 }),
             }),
         });
@@ -411,16 +456,16 @@ export const createFeature = () => {
             || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
         return new Style({
             fill: new Fill({
-                color: byMode('rgba(0, 120, 255, 0.2)', 'rgba(55, 137, 208, 0.2)'),
+                color: getSelectionFillColor(),
             }),
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
             image: new CircleStyle({
                 radius: 5,
                 fill: new Fill({
-                    color: byMode('rgba(255, 0, 0, 0.8)', 'rgba(208, 123, 123, 0.8)'),
+                    color: setOpacity(getHandleColor(), .8),
                 }),
             }),
         });
@@ -561,7 +606,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                     geometry: new Point(coords[i]),
                     stroke: new Stroke({
                         color,
-                        width: LINE_WIDTH,
+                        width: LINE_WIDTH(),
                     }),
                     text: new Text({
                         text: labelText,
@@ -587,7 +632,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
                 geometry: new Point(coords[coords.length - 1]),
                 stroke: new Stroke({
                     color,
-                    width: LINE_WIDTH,
+                    width: LINE_WIDTH(),
                 }),
                 text: new Text({
                     text: `ACP ${coords.length}`,
@@ -615,7 +660,7 @@ export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
                 styles.push(
                     new Style({
                         geometry: geom,
-                        stroke: new Stroke({color, width: LINE_WIDTH}),
+                        stroke: new Stroke({color, width: LINE_WIDTH()}),
                         fill: undefined,
                     }),
                 );
@@ -625,7 +670,7 @@ export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
                         geometry: geom,
                         stroke: new Stroke({
                             color: color,
-                            width: LINE_WIDTH,
+                            width: LINE_WIDTH(),
                         }),
                         fill: undefined,
                     }),
@@ -715,7 +760,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     /* ---------- stroke ---------- */
     const lineStroke = new Stroke({
         color: hostilityColor,
-        width: LINE_WIDTH,
+        width: LINE_WIDTH(),
         lineCap: 'butt',
         lineJoin: 'round',
     });
@@ -867,6 +912,9 @@ function bridgeGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFuncti
     };
 }
 
+/** Screen-px clear space between the passage lane's fishtail and its DTG. */
+const PASSAGE_LANE_LABEL_GAP_PX = 8;
+
 export function passageLaneGraphicStyle(): StyleFunction {
     return (f, resolution) => passageLaneGraphicStyleFromLabels(readGraphicLabels(f))(f, resolution);
 }
@@ -889,9 +937,54 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
             rotation += Math.PI;
         }
 
-        const spanPx = Math.sqrt(dx * dx + dy * dy) / resolution;
-        const scale = (spanPx * 0.7) / 24;
-        let labelCoord = offsetCoordinatesInLine(coords[0], coords[1], resolution);
+        // Zoom-anchored and clamped, exactly as Bridge sizes its DTG. The span-
+        // proportional formula this replaced tied the glyph to the width of the
+        // lane, so a lane drawn a few hundred metres wider rendered text several
+        // times the height of every other mobility label.
+        const scale = featureLabelScale(f, resolution);
+
+        // The DTG sits clear of the whole symbol, so it has to start behind the
+        // fishtail — not behind the centre line, which is where a flat offset off
+        // `coords[0]` put it. Sub-line [2] is the tail: `[hook, start, hook]`,
+        // both hooks swept back from the start point, so measuring how far they
+        // reach along the line is the only way to know what to clear. A constant
+        // cannot: the hooks are `size * 20` metres, so their screen reach changes
+        // with zoom while a pixel offset does not.
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len;
+        const uy = dy / len;
+        const tail = geom.getCoordinates()[2] ?? [];
+        let tailReachPx = 0;
+        for (const p of [tail[0], tail[2]]) {
+            if (!p) continue;
+            const alongPx = ((p[0] - x1) * ux + (p[1] - y1) * uy) / resolution;
+            tailReachPx = Math.max(tailReachPx, -alongPx);   // negative = behind the start
+        }
+        // Text is rendered turned 90°, so half its *height* is what overhangs
+        // toward the symbol; `BASE_FONT_SIZE_PX` is the height `fontStyle` declares.
+        const clearancePx = tailReachPx + PASSAGE_LANE_LABEL_GAP_PX + (BASE_FONT_SIZE_PX / 2) * scale;
+        const labelCoord: Coordinate = [x1 - ux * clearancePx * resolution, y1 - uy * clearancePx * resolution];
+
+        // The DTG reads across the lane, so it needs its *own* upright pass: the
+        // one above keeps `rotation` upright, and adding a quarter turn to an
+        // already-normalised angle pushes it straight back out of range. Drawn
+        // north-to-south the lane landed the label on π — upside down.
+        //
+        // **Wrap before comparing.** The pass above corrects by *adding* π, so a
+        // south-west lane leaves `rotation` at 7π/4 — the same direction as −π/4
+        // and drawn identically, but numerically far outside any range test. A
+        // bare `if (θ > π/2)` on that reads it as needing a flip and turns an
+        // upright label over, which is exactly the fault being fixed here.
+        // `atan2(sin, cos)` folds any angle back into (−π, π] first.
+        //
+        // Correcting by ±π keeps the label perpendicular to the lane, so it only
+        // ever flips end-for-end about its own centre. That matters twice over:
+        // the anchor does not move, and the clearance above stays valid, because
+        // it is still the glyph's *height* that overhangs toward the symbol.
+        const acrossLane = rotation + Math.PI / 2;
+        let labelRotation = Math.atan2(Math.sin(acrossLane), Math.cos(acrossLane));
+        if (labelRotation > Math.PI / 2) labelRotation -= Math.PI;
+        else if (labelRotation <= -Math.PI / 2) labelRotation += Math.PI;
 
         styles.push(new Style({
             geometry: new Point(labelCoord),
@@ -901,7 +994,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
                 fill: new Fill({color: getLabelFillColor()}),
                 textAlign: 'center',
                 textBaseline: 'middle',
-                rotation: rotation + Math.PI / 2,
+                rotation: labelRotation,
                 scale,
                 stroke: getHaloStroke(),
             }),
@@ -909,7 +1002,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
         let hostility = f.get('hostility');
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
         return styles;
@@ -926,7 +1019,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
@@ -974,7 +1067,7 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
     return (feature) => {
         const color = feature.get('hostilityColor') || getDefaultLineColor();
-        const lineStroke = new Stroke({color, width: LINE_WIDTH});
+        const lineStroke = new Stroke({color, width: LINE_WIDTH()});
         const fill = new Fill({color});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
@@ -995,7 +1088,7 @@ export function mobileDefenseGraphicStyleFunc(): StyleFunction {
 
 export function envelopmentGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH});
+        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -1290,7 +1383,7 @@ function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: Gr
             const s = Math.sqrt(tdx * tdx + tdy * tdy) * 0.5;
 
             const color = (f as Feature).get?.('hostilityColor') || getDefaultLineColor();
-            const symbolStroke = new Stroke({ color, width: LINE_WIDTH });
+            const symbolStroke = new Stroke({ color, width: LINE_WIDTH() });
             const symbolFill = new Fill({ color });
 
             // Helper: offset from center by angle and distance
@@ -1539,7 +1632,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -1602,122 +1695,208 @@ function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: nu
     return [start[0] + nx * offsetMap, start[1] + ny * offsetMap];
 }
 
-function offsetCoordinatesInLine(start: Coordinate, next: Coordinate, resolution: number): Coordinate {
-    const dx = next[0] - start[0];
-    const dy = next[1] - start[1];
+/**
+ * ## Route / MSR / ASR traffic-direction block (FM 1-02.2 Table 5-17)
+ *
+ * The plates stack three things above the route line, in this order going up:
+ * the line itself, then the traffic arrow(s), then the identifier. Each variant
+ * has its own arrow figure:
+ *
+ * - **one-way** — a single arrow.
+ * - **two-way** — two arrows on separate rows, the upper pointing forward and
+ *   the lower pointing back.
+ * - **alternating** — one row reading `←— ALT —→`: the word sits *between* two
+ *   outward-pointing arrows, not beside them.
+ * - **general** — no arrow at all, identifier only.
+ *
+ * Everything below is screen-pixel geometry multiplied by `resolution` once, so
+ * the block keeps its proportions at every zoom. It is drawn rather than blitted
+ * from the 24 px `routeDirectionIcons` sprites, which could not carry the ALT
+ * text and rendered a fixed size no matter how big the label beside them grew.
+ * (Those constants stay exported — they are published API.)
+ *
+ * The arrow span tracks the measured identifier width, which is what makes the
+ * figure read as one unit the way the plates do.
+ *
+ * Every constant below is a screen-pixel figure **at label scale 1**, i.e.
+ * against a 16 px `fontStyle` glyph — the whole block is multiplied by the
+ * identifier's own scale so the figure and the word it belongs to grow
+ * together. The ratios are read off the plate: arrowhead ≈ 0.6 of the
+ * identifier's cap height, the line-to-arrow gap ≈ 1.2 of it, and the
+ * arrow-to-identifier gap ≈ 1.0.
+ */
 
-    const offsetPx = 15;
-    const offsetMap = offsetPx * resolution;
-    const len = Math.hypot(dx, dy);
+/**
+ * Traffic arrows are decoration on the route, so they draw thinner than it.
+ *
+ * Half the route's width rather than a fixed 2px, because the route's width is a host
+ * setting now (`lineWidth`, 1–8). A pinned 2 kept the intended look only at the default
+ * 4 — at `lineWidth: 1` the "thinner" decoration came out *thicker* than the line it
+ * decorates. Floors at 1 so it never vanishes, which also stops it from crossing over.
+ */
+const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
+/** Centreline of the arrow row nearest the route. */
+const ROUTE_ARROW_BASE_PX = 14;
+/** Row-to-row pitch for the two-way pair. */
+const ROUTE_ARROW_ROW_PITCH_PX = 12;
+const ROUTE_ARROW_HEAD_LEN_PX = 10;
+const ROUTE_ARROW_HEAD_HALF_PX = 5;
+/** Clear space either side of the ALT word before its arrows start. */
+const ROUTE_ALT_GAP_PX = 5;
+/**
+ * Shortest an alternating arm may be, head included. The plate draws each arm at
+ * roughly two-thirds the width of the word between them, so a bare `ROUTE` — the
+ * narrowest identifier there is — still gets an arm that reads as an arrow
+ * rather than a head with a stub behind it.
+ */
+const ROUTE_ALT_ARM_PX = 26;
+/** Shortest a traffic arrow may get when the identifier is short or empty. */
+const ROUTE_ARROW_MIN_SPAN_PX = 56;
 
-    // Unit vector in the direction of the line
-    const ux = dx / len;
-    const uy = dy / len;
-
-    // To find a point continuing past 'next':
-    // return [next[0] + ux * offsetMap, next[1] + uy * offsetMap];
-
-    // OR to find a point 'before' start:
-    return [start[0] - ux * offsetMap, start[1] - uy * offsetMap];
-}
-
-function getDirectionIconSrc(direction: RouteDirection) {
-    switch (direction) {
-        case RouteDirection.ONE_WAY:
-            return one_way_arrow;
-        case RouteDirection.ALTERNATING:
-            return alternating_arrow;
-        case RouteDirection.TWO_WAY:
-            return two_way_arrow;
-        default:
-            return '';
-    }
-}
-
-function routeControlMeasureStyles(f: FeatureLike, resolution: number, label: string, direction: RouteDirection) {
-    const geom = f.getGeometry() as MultiPoint;
-    const coords = geom.getCoordinates();
-
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+/**
+ * One end of the route: the identifier, plus the traffic-direction figure for
+ * everything except {@link RouteDirection.GENERAL}.
+ *
+ * `anchor` is the line endpoint; `a`→`b` is the segment whose bearing orients
+ * the block. Offsets go through `offsetAbove` / `offsetBelow` so the block lands
+ * on the same side of the line whichever way the user drew it.
+ *
+ * The whole block renders in the label colour — see the note on `color` below.
+ */
+function routeEndStyles(
+    resolution: number,
+    label: string,
+    direction: RouteDirection,
+    atStart: boolean,
+    anchor: Coordinate,
+    a: Coordinate,
+    b: Coordinate,
+    labelScale: number,
+): Style[] {
     const styles: Style[] = [];
+    // The traffic arrows are part of the amplifier block, not the control
+    // measure's line work, so they take the label colour and stay black on a
+    // hostile route — the same call `ALT` and the identifier make. Only the
+    // route line itself answers to `getColorByHostility`.
+    const color = getLabelFillColor();
+    const rotation = getRotation(a, b);
+    // getRotation returns -atan2(dy, dx) flipped to keep text upright, so
+    // negating it recovers the along-line unit vector in the same, upright
+    // direction the text reads.
+    const ux = Math.cos(-rotation);
+    const uy = Math.sin(-rotation);
 
-    const start = coords[0];
-    const afterStart = coords[1];
+    /**
+     * How far along the line the whole block is pushed off `anchor`, in screen px.
+     * Set once the block's width is known; the figure is built symmetrically about
+     * zero and then slid inward by half its width so it sits **over** the route
+     * instead of straddling its end. Zero for GENERAL, which has no figure and
+     * keeps the endpoint-anchored identifier every other line graphic uses.
+     */
+    let shiftPx = 0;
+    /** Point `alongPx` screen px along the line from the row centred `upPx` above it. */
+    const at = (upPx: number, alongPx: number): Coordinate => {
+        const [cx, cy] = offsetAbove(anchor, a, b, resolution, upPx);
+        const d = (alongPx + shiftPx) * resolution;
+        return [cx + ux * d, cy + uy * d];
+    };
 
-    const end = coords[coords.length - 1];
-    const beforeEnd = coords[coords.length - 2];
+    const s = labelScale;
+    const headLenPx = ROUTE_ARROW_HEAD_LEN_PX * s;
+    const headHalfPx = ROUTE_ARROW_HEAD_HALF_PX * s;
 
-    let startLabelCoordinate = offsetCoordinatesUp(start, afterStart, 2 * resolution);
-    let endLabelCoordinate = offsetCoordinatesUp(end, beforeEnd, -2 * resolution);
-    let directionStart = offsetCoordinatesUp(start, afterStart, resolution);
-    let directionEnd = offsetCoordinatesUp(end, beforeEnd, -resolution);
+    /** Shaft `fromPx`→`toPx` on row `rowPx`, with the solid head always at `toPx`. */
+    const arrow = (rowPx: number, fromPx: number, toPx: number) => {
+        const base = at(rowPx, toPx + (fromPx > toPx ? headLenPx : -headLenPx));
+        styles.push(new Style({
+            geometry: new LineString([at(rowPx, fromPx), at(rowPx, toPx)]),
+            stroke: new Stroke({color, width: routeArrowWidth()}),
+        }));
+        const tip = at(rowPx, toPx);
+        const left = offsetAbove(base, a, b, resolution, headHalfPx);
+        const right = offsetBelow(base, a, b, resolution, headHalfPx);
+        styles.push(new Style({
+            // Ring closed explicitly — an open ring renders inconsistently.
+            geometry: new Polygon([[tip, left, right, tip]]),
+            fill: new Fill({color}),
+        }));
+    };
 
-    let startRotation = getRotation(start, afterStart);
-    let endRotation = getRotation(end, beforeEnd);
+    const rows = direction === RouteDirection.TWO_WAY ? 2 : direction === RouteDirection.GENERAL ? 0 : 1;
+    const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * s;
 
-    let iconSrc = getDirectionIconSrc(direction);
+    if (rows > 0) {
+        const labelWidthPx = getTextWidth(label, fontStyle, s);
+        const altWidthPx = direction === RouteDirection.ALTERNATING ? getTextWidth('ALT', fontStyle, s) : 0;
+        // An alternating row has to hold ALT plus a full arrow on each side, so
+        // its floor is that content — never the label, which may be shorter.
+        const minSpanPx = altWidthPx > 0
+            ? altWidthPx + 2 * (ROUTE_ALT_GAP_PX + ROUTE_ALT_ARM_PX) * s
+            : ROUTE_ARROW_MIN_SPAN_PX * s;
+        const halfPx = Math.max(labelWidthPx, minSpanPx) / 2;
 
-    // left label
-    styles.push(new Style(
-        {
-            geometry: new Point(startLabelCoordinate), // dummy point
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: featureLabelScale(f, resolution),
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(directionStart), // dummy point
+        // Slide the block off the endpoint and onto the route. `ux`/`uy` point
+        // the way the text reads, which is inward at one end of the line and
+        // outward at the other, so the direction has to be taken from the
+        // segment rather than assumed.
+        const inward: Coordinate = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
+        shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
 
-            image: new Icon({
-                src: iconSrc,
-                rotation: startRotation,
-                scale: 1.2,
-                // Tint, not a literal: a hardcoded black arrow is invisible on a dark basemap.
-                color: getDefaultLineColor(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endLabelCoordinate),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: featureLabelScale(f, resolution),
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    // right label
-    styles.push(new Style(
-        {
-            geometry: new Point(directionEnd),
-            image: new Icon({
-                src: iconSrc,
-                rotation: endRotation,
-                scale: 1.2,
-                // Tint, not a literal — see the matching arrow above.
-                color: getDefaultLineColor(),
-            }),
-        },
-    ));
-    // main line
+        if (direction === RouteDirection.ONE_WAY) {
+            arrow(row(0), -halfPx, halfPx);
+        } else if (direction === RouteDirection.TWO_WAY) {
+            arrow(row(0), halfPx, -halfPx);   // lower row points back
+            arrow(row(1), -halfPx, halfPx);   // upper row points forward
+        } else {
+            // Both arms point away from the word, so each shaft runs outward.
+            const innerPx = altWidthPx / 2 + ROUTE_ALT_GAP_PX * s;
+            arrow(row(0), innerPx, halfPx);
+            arrow(row(0), -innerPx, -halfPx);
+            styles.push(new Style({
+                geometry: new Point(at(row(0), 0)),
+                text: new Text({
+                    text: 'ALT',
+                    font: fontStyle,
+                    // A text amplifier, so it stays in the label colour even when
+                    // the route's line work has gone red for a hostile identity.
+                    fill: new Fill({color: getLabelFillColor()}),
+                    rotation,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    scale: s,
+                    stroke: getHaloStroke(),
+                }),
+            }));
+        }
+    }
+
+    // Identifier clears the top arrow row; with no arrows it falls back to the
+    // plain 8 px every other line graphic uses.
+    const labelOffsetPx = rows > 0
+        ? row(rows - 1) + headHalfPx + 11 * s
+        : 8;
+    // Each endpoint is judged on its own segment — a route can start left-to-right
+    // and have its last leg turn back, so one shared flag would flip the wrong one.
+    const goesRight = b[0] >= a[0];
+    const endAlign: CanvasTextAlign = atStart
+        ? (goesRight ? 'left' : 'right')
+        : (goesRight ? 'right' : 'left');
     styles.push(new Style({
-        geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        // Through `at`, so the identifier rides the same inward shift as the
+        // figure it caps and the two stay registered with each other.
+        geometry: new Point(at(labelOffsetPx, 0)),
+        text: new Text({
+            text: label,
+            font: fontStyle,
+            fill: new Fill({color: getLabelFillColor()}),
+            rotation,
+            // Centre the identifier over the arrow figure it caps; with no arrows
+            // there is nothing to centre on, so run it inward off the endpoint.
+            textAlign: rows > 0 ? 'center' : endAlign,
+            textBaseline: 'bottom',
+            scale: labelScale,
+            stroke: getHaloStroke(),
+        }),
     }));
 
     return styles;
@@ -1728,12 +1907,36 @@ export function routeControlMeasureStyle(name: TacticalGraphicName): StyleFuncti
 }
 
 function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    let label = getFullLabel(name, labels.label ?? '');
-    let direction = labels.direction ?? RouteDirection.GENERAL;
+    const label = getFullLabel(name, labels.label ?? '');
+    const direction = labels.direction ?? RouteDirection.GENERAL;
     return (f, resolution) => {
-        return direction === RouteDirection.GENERAL ?
-            offensiveLineStyles(f, resolution, label) :
-            routeControlMeasureStyles(f, resolution, label, direction);
+        const geom = f.getGeometry() as MultiPoint;
+        const coords = geom.getCoordinates();
+        if (!coords || coords.length < 2) return [];
+
+        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const color = getColorByHostility(hostility);
+        const labelScale = featureLabelScale(f, resolution);
+
+        const start = coords[0];
+        const afterStart = coords[1];
+        const end = coords[coords.length - 1];
+        const beforeEnd = coords[coords.length - 2];
+
+        const styles: Style[] = [
+            ...routeEndStyles(resolution, label, direction, true, start, start, afterStart, labelScale),
+            ...routeEndStyles(resolution, label, direction, false, end, beforeEnd, end, labelScale),
+        ];
+
+        // The route line is the only line work here, so it is the only thing that
+        // carries the hostility colour and the only thing that goes dashed when
+        // planned or suspected. The amplifier block above it stays black.
+        styles.push(new Style({
+            geometry: geom,
+            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
+        }));
+
+        return styles;
     };
 }
 
@@ -1833,73 +2036,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
     ));
     const outlineStyle = new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
-    });
-    styles.push(outlineStyle);
-
-    return styles;
-}
-
-function offensiveLineStyles(f: FeatureLike, resolution: number, label: string) {
-    const geom = f.getGeometry() as MultiPoint;
-    const coords = geom.getCoordinates();
-
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
-    const styles: Style[] = [];
-
-    const start = coords[0];
-    const afterStart = coords[1];
-
-    const end = coords[coords.length - 1];
-    const beforeEnd = coords[coords.length - 2];
-
-    let startLabelCoordinate = offsetAbove(start, start, afterStart, resolution, 8);
-    let endLabelCoordinate = offsetAbove(end, beforeEnd, end, resolution, 8);
-
-    let startRotation = getRotation(start, afterStart);
-    let endRotation = getRotation(end, beforeEnd);
-
-    const startGoesRight = afterStart[0] >= start[0];
-    const endGoesRight   = end[0] >= beforeEnd[0];
-    const startAlign: CanvasTextAlign = startGoesRight ? 'left' : 'right';
-    const endAlign: CanvasTextAlign   = endGoesRight   ? 'right' : 'left';
-
-    const startScale = featureLabelScale(f, resolution);
-    const endScale = featureLabelScale(f, resolution);
-
-    styles.push(new Style(
-        {
-            geometry: new Point(startLabelCoordinate), // dummy point
-            text: new Text({
-                text: label,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: startAlign,
-                textBaseline: 'bottom',
-                scale: startScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endLabelCoordinate),
-            text: new Text({
-                text: label,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: endAlign,
-                textBaseline: 'bottom',
-                scale: endScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    const outlineStyle = new Style({
-        geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     });
     styles.push(outlineStyle);
 
@@ -1988,7 +2125,7 @@ function buildLinearTargetStyles(
         ]),
         stroke: new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: dashStyle(labels),
         }),
     }));
@@ -2152,12 +2289,12 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
             // both identities at once, so the pair has to stay balanced.
             new Style({
                 geometry: new LineString(topCoords),
-                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH()}),
             }),
             // Friendly-side wave
             new Style({
                 geometry: new LineString(bottomCoords),
-                stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH()}),
             }),
             // "LC" label at start (left-aligned to the left of the line start)
             new Style({
@@ -2258,7 +2395,7 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2334,7 +2471,7 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
             }),
             new Style({
                 geometry: new MultiLineString(outlineSegments),
-                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
             }),
         ];
     };
@@ -2356,7 +2493,7 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
         const topArrow = coords[4];
 
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
-        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH});
+        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
 
         const p1 = topLine[0];
         const p2 = topLine[1];
@@ -2463,7 +2600,7 @@ export function breachStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2586,7 +2723,7 @@ export function blockStyleFunc(label: string): StyleFunction {
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         // Base layers
         styles.push(outlineStyle);
@@ -2608,7 +2745,7 @@ function firePositionStyles(f: FeatureLike): Style[] {
     const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
     return [new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     })];
 }
 
@@ -2757,7 +2894,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
         if (labels.status && labels.status === TacticalGraphicStatus.planned) {
@@ -2906,7 +3043,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         styles.push(new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         }));
         if (labels.status && labels.status === TacticalGraphicStatus.planned) {
             // Override the line stroke to always be dashed
@@ -3042,7 +3179,7 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
         const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
         const outlineStyle = new Style({
             geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
         });
         styles.push(outlineStyle);
 
@@ -3068,7 +3205,7 @@ function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: Graphic
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         });
@@ -3094,7 +3231,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3170,7 +3307,7 @@ export function defaultStyleFunc(): StyleFunction {
             fill: new Fill({color: color}),
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         });
     };
@@ -3219,7 +3356,7 @@ export function fightingPositionStyleFunc(): StyleFunction {
     return (f) => {
         const color = f.get('hostilityColor') || getDefaultLineColor();
         return new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH}),
+            stroke: new Stroke({color, width: LINE_WIDTH()}),
         });
     };
 }
@@ -3249,7 +3386,7 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
             geometry: geom,
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3354,7 +3491,7 @@ function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: Graphi
             geometry: new LineString(baseCoords),
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         }));
@@ -3363,7 +3500,7 @@ function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: Graphi
         if (allCoords.length > 1) {
             styles.push(new Style({
                 geometry: new MultiLineString(allCoords.slice(1)),
-                stroke: new Stroke({color, width: LINE_WIDTH}),
+                stroke: new Stroke({color, width: LINE_WIDTH()}),
             }));
         }
 
@@ -3508,7 +3645,7 @@ function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels
         return [new Style({
             stroke: new Stroke({
                 color: color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         })];
@@ -3526,7 +3663,7 @@ function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
 
         // Thin stroke for the whole MultiLineString (V legs + both arrowheads).
         styles.push(new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH}),
+            stroke: new Stroke({color, width: LINE_WIDTH()}),
         }));
 
         const coords0 = (f.getGeometry() as MultiLineString).getCoordinates()[0];
@@ -3680,7 +3817,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
             geometry: new MultiLineString(outlineSegments),
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         });
 
@@ -3875,7 +4012,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
             geometry: new MultiLineString(outlineSegments),
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
         });
@@ -4288,7 +4425,7 @@ export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFun
             // area outline — FM 1-02.2 para 5-3.
             stroke: new Stroke({
                 color: f.get('hostilityColor') || getDefaultLineColor(),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         }));
 
@@ -4586,7 +4723,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
         const color = feature.get('hostilityColor') || getDefaultLineColor();
         const strokeFor = (hashed: boolean) => new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: hashed ? CROSSED_HASH_DASH : undefined,
         });
 
@@ -4676,7 +4813,7 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
     const label = getLabel(name);
     return (f, resolution) => {
         const color = f.get('hostilityColor') || getDefaultLineColor();
-        const stroke = new Stroke({color, width: LINE_WIDTH});
+        const stroke = new Stroke({color, width: LINE_WIDTH()});
         const geom = f.getGeometry();
         if (!(geom instanceof GeometryCollection)) {
             return new Style({fill: new Fill({color}), stroke});
@@ -4926,7 +5063,7 @@ export const createFeatureWithDashedLines = () => {
     const style = new Style({
         stroke: new Stroke({
             color: getDefaultLineColor(),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: [4, 4],
         }),
     });
@@ -4978,7 +5115,7 @@ function generateCrossTiesForPolygon(polygon: Polygon | MultiLineString, resolut
                             geometry: new LineString([tieStart, tieEnd]),
                             stroke: new Stroke({
                                 color: color,
-                                width: LINE_WIDTH,
+                                width: LINE_WIDTH(),
                             }),
                         }),
                     );
@@ -5119,7 +5256,7 @@ function railroadStyleFunction(feature: FeatureLike, resolution: number) {
     // 6) build styles
     const outlineStyle = new Style({
         geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH}),
+        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
     });
     // Base layers
     styles.push(outlineStyle);
@@ -5193,7 +5330,7 @@ function createEchelonStyles(mid: Coordinate, dx: number, dy: number, resolution
     const lineHalf = lineHalfPx * resolution;
 
     const fillStyle = new Fill({color});
-    const strokeStyle = new Stroke({color, width: LINE_WIDTH});
+    const strokeStyle = new Stroke({color, width: LINE_WIDTH()});
 
     const styles: Style[] = [];
 
@@ -5352,7 +5489,7 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
         geometry: new MultiLineString(outlineSegments),
         stroke: new Stroke({
             color: getColorByHostility(hostility),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined
         }),
     });
@@ -5363,56 +5500,63 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
 }
 
 /**
- * The four affiliation colours, per mode. See the palette note above
- * `getDefaultLineColor` for where the dark values come from.
+ * The four affiliation colours, straight from FM 1-02.2. One set, used in every mode —
+ * see the palette note above `getDefaultLineColor` for why there is no longer a second.
  *
- * Most dark values are the measured output of the CSS filter that used to repaint this
- * layer, so the switch to a real palette left them looking the same. Two are not:
- *
- * - `pending`/`suspectJoker` is **identical in both modes**. Yellow is legible on a dark
- *   basemap as-is, and it is the colour the old filter destroyed — the reason the
- *   palette exists at all.
- * - `friend` is a **deliberately re-picked blue**. The filter emitted
- *   `rgb(173,173,208)`, whose red and green channels are equal and whose blue is only
- *   35 higher — barely saturated, so it read as grey-lavender rather than blue. This is
- *   the doctrinal blue lightened to survive a dark background and nudged a little toward
- *   cyan, which is what stops a high-lightness hue-240 blue reading as violet.
- *
- * Keep any future dark value legible against the basemap *and* recognisable as its
- * doctrinal hue. Reproducing what the old filter happened to emit is not a goal.
+ * A host re-tints these through `configureTacticalGraphics({hostilityColors})` rather
+ * than by editing this table.
  */
 const HOSTILITY_COLORS = {
-    light: {
-        friend: 'rgba(0, 0, 255, 1)',
-        hostile: 'rgba(255, 0, 0, 1)',
-        neutral: 'rgba(0, 128, 0, 1)',
-        pending: 'rgba(255, 255, 0, 1)',
-    },
-    dark: {
-        friend: 'rgb(92,148,255)',
-        hostile: 'rgb(208,123,123)',
-        neutral: 'rgb(72,160,72)',
-        pending: 'rgba(255, 255, 0, 1)',
-    },
+    friend: 'rgba(0, 0, 255, 1)',
+    hostile: 'rgba(255, 0, 0, 1)',
+    neutral: 'rgba(0, 128, 0, 1)',
+    pending: 'rgba(255, 255, 0, 1)',
 } as const;
 
-export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
-    const palette = isDarkMode() ? HOSTILITY_COLORS.dark : HOSTILITY_COLORS.light;
-    switch (hostility) {
+/**
+ * Affiliations that draw as another one. Doctrine gives assumed-friend the friendly
+ * blue and suspect/joker the pending yellow, so an override on the affiliation a host
+ * actually thinks about (`friend`, `pending`) carries to its alias without their having
+ * to name both. An override on the alias itself still wins, for a host that wants them
+ * distinguishable.
+ */
+const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphicHostility>> = {
+    [TacticalGraphicHostility.assumedFriend]: TacticalGraphicHostility.friend,
+    [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
+};
+
+/**
+ * The doctrinal FM 1-02.2 colour for an affiliation, **ignoring any config override**.
+ * `undefined` for `unknown`, whose colour is `getDefaultLineColor()` rather than an
+ * affiliation colour of its own.
+ *
+ * Exported because it is a *pure* answer to "what would this be with no override" —
+ * something a settings UI needs and cannot get from `getColorByHostility`, which reads
+ * the live config. Reading the live config to render a control that edits the live
+ * config renders one frame stale: clearing an override re-renders before the host has
+ * republished, so the cleared value is still what comes back.
+ */
+export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility): string | undefined {
+    switch (HOSTILITY_ALIASES[hostility] ?? hostility) {
         case TacticalGraphicHostility.friend:
-        case TacticalGraphicHostility.assumedFriend:
-            return palette.friend;
+            return HOSTILITY_COLORS.friend;
         case TacticalGraphicHostility.hostileFaker:
-            return palette.hostile;
+            return HOSTILITY_COLORS.hostile;
         case TacticalGraphicHostility.neutral:
-            return palette.neutral;
+            return HOSTILITY_COLORS.neutral;
         case TacticalGraphicHostility.pending:
-        case TacticalGraphicHostility.suspectJoker:
-            return palette.pending;
-        case TacticalGraphicHostility.unknown:
+            return HOSTILITY_COLORS.pending;
         default:
-            return getDefaultLineColor();
+            return undefined;
     }
+}
+
+export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
+    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
+    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
+    if (override) return override;
+
+    return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
 };
 
 function withOpacity(color: string, alpha: number): string {
@@ -5480,7 +5624,7 @@ export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: nu
         }),
         stroke: new Stroke({
             color: getColorByHostility(hostility),
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
         }),
     });
 }
@@ -5503,7 +5647,7 @@ function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFuncti
             fill: hatchPattern ? new Fill({color: hatchPattern}) : undefined,
             stroke: new Stroke({
                 color,
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),
         });
@@ -5524,7 +5668,7 @@ export function groupOrSeriesOfTargetsGraphicStyle(
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
     const stroke = new Stroke({
         color,
-        width: LINE_WIDTH,
+        width: LINE_WIDTH(),
         lineDash: isPlanned ? [12, 8] : undefined,
     });
 
@@ -5587,7 +5731,7 @@ function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: Featur
         }),
         stroke: new Stroke({
             color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined,
         }),
     });
@@ -5621,7 +5765,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     return new Style({
         stroke: new Stroke({
             color: color,
-            width: LINE_WIDTH,
+            width: LINE_WIDTH(),
             lineDash: isPlanned ? [12, 8] : undefined,
         }),
     });
@@ -5634,7 +5778,7 @@ export function encirclementGraphicStyle(feature: FeatureLike, resolution: numbe
         new Style({
             stroke: new Stroke({
                 color: getColorByHostility(hostility),
-                width: LINE_WIDTH,
+                width: LINE_WIDTH(),
             }),
         }),
     ];
@@ -5730,7 +5874,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     // Ensure we found two distinct segments
     if (maxIndex === minIndex || maxIndex === -1 || minIndex === -1) {
         // Fallback to a closed outline if opposite segments couldn't be found
-        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH})})];
+        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH()})})];
     }
 
     const segmentsToGap = [maxIndex, minIndex];
@@ -5800,7 +5944,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     // 4) Create the final perimeter style
     const outlineStyle = new Style({
         geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: color, width: LINE_WIDTH}),
+        stroke: new Stroke({color: color, width: LINE_WIDTH()}),
     });
     styles.push(outlineStyle);
 
@@ -5878,12 +6022,14 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
         // Fallback Polygon Style (optional, but good practice)
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const polygonStyle = new Style({
+            // Fixed literals, and not chrome: this is the graphic's own line work. See
+            // the palette note above `getDefaultLineColor`.
             fill: new Fill({
-                color: byMode('rgba(255, 100, 100, 0.4)', 'rgba(190, 84, 84, 0.4)'),
+                color: 'rgba(255, 100, 100, 0.4)',
             }),
             stroke: new Stroke({
-                color: byMode('rgb(255, 50, 50)', 'rgb(208,104,104)'),
-                width: LINE_WIDTH,
+                color: 'rgb(255, 50, 50)',
+                width: LINE_WIDTH(),
                 lineDash: isPlanned ? [12, 8] : undefined,
             }),
         });
