@@ -1,9 +1,15 @@
 import Feature from 'ol/Feature';
-import {LineString} from 'ol/geom';
+import {LineString, MultiPoint} from 'ol/geom';
 import Style from 'ol/style/Style';
 import {readGraphicLabels, TACTICAL_GRAPHIC_KEY, writeGraphicProperties} from './graphicProperties';
-import {TacticalGraphicName, TacticalGraphicStatus} from '@zaes/tactical-graphics';
-import {coordinatedFireLineStyle, defaultLineStyle, phaseLineStyleFunc} from './openlayerStyles';
+import {
+    RouteDirection,
+    TacticalGraphicName,
+    TacticalGraphicStatus,
+    configureTacticalGraphics,
+    resetTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
+import {coordinatedFireLineStyle, defaultLineStyle, phaseLineStyleFunc, routeControlMeasureStyle} from './openlayerStyles';
 
 /** A 3857 line long enough that the style functions emit their labels. */
 const lineFeature = () => new Feature(new LineString([[0, 0], [10000, 0], [20000, 0]]));
@@ -108,5 +114,63 @@ describe('style functions read amplifiers off the feature', () => {
         };
         expect(dashOf(present)).toBeUndefined();
         expect(dashOf(planned)).toBeDefined();
+    });
+});
+
+/**
+ * The traffic arrows are decoration on the route, so they must stay thinner than
+ * the line they decorate — at every width a host can configure.
+ *
+ * They were a fixed 2px, which was only correct while the route was itself always
+ * 4. Once `lineWidth` became a host setting (1-8), `lineWidth: 1` rendered a
+ * "thinner" decoration *thicker* than its route: the comment's intent inverted
+ * without the constant changing. Nothing failed loudly, which is why this is a
+ * test rather than a code comment.
+ */
+describe('route traffic arrows scale with the configured line width', () => {
+    afterEach(resetTacticalGraphicsConfig);
+
+    /** A 3857 route long enough for the endpoint figures to be emitted. */
+    const routeFeature = () => {
+        const f = new Feature(new MultiPoint([[0, 0], [40000, 0]]));
+        writeGraphicProperties([f], TacticalGraphicName.Route, {
+            label: 'MSR1',
+            direction: RouteDirection.TWO_WAY,
+        });
+        return f;
+    };
+
+    /** Every stroke width the style function resolves, widest first. */
+    const strokeWidths = (result: Style | Style[] | void): number[] => {
+        const styles = Array.isArray(result) ? result : result ? [result] : [];
+        return styles
+            .map(s => s.getStroke()?.getWidth())
+            .filter((w): w is number => typeof w === 'number')
+            .sort((a, b) => b - a);
+    };
+
+    it.each([1, 2, 4, 8])('at lineWidth %i the arrow is never thicker than the route', lineWidth => {
+        configureTacticalGraphics({lineWidth});
+        const widths = strokeWidths(routeControlMeasureStyle(TacticalGraphicName.Route)(routeFeature(), 10));
+
+        expect(widths.length).toBeGreaterThan(1);
+        const route = widths[0];
+        const arrow = widths[widths.length - 1];
+        expect(route).toBe(lineWidth);
+        expect(arrow).toBeLessThanOrEqual(route);
+        expect(arrow).toBe(Math.max(1, lineWidth / 2));
+    });
+
+    it('keeps the arrow at 2px for the default line width, so nothing shifted', () => {
+        // The whole change has to be a visual no-op at the shipped default.
+        const widths = strokeWidths(routeControlMeasureStyle(TacticalGraphicName.Route)(routeFeature(), 10));
+        expect(widths[0]).toBe(4);
+        expect(widths[widths.length - 1]).toBe(2);
+    });
+
+    it('never floors the arrow to nothing', () => {
+        configureTacticalGraphics({lineWidth: 1});
+        const widths = strokeWidths(routeControlMeasureStyle(TacticalGraphicName.Route)(routeFeature(), 10));
+        expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(1);
     });
 });

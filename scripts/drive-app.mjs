@@ -146,6 +146,16 @@ const main = async () => {
     page.on('console', m => m.type() === 'error' && consoleErrors.push(m.text()));
     page.on('pageerror', e => consoleErrors.push(String(e)));
 
+    // Pin the library config to its defaults before the app boots.
+    //
+    // The route checks below tell an arrow shaft from the route line by stroke
+    // width — 2 vs 4 — which only holds while `lineWidth` is its default 4. That
+    // is a host setting now, persisted in this key by the settings panel, so a
+    // developer who once dragged the slider would get confusing failures here
+    // rather than in their own app. A fresh Playwright context happens to start
+    // with empty storage, which made this work by accident; state it outright.
+    await page.addInitScript(() => localStorage.setItem('tg_graphicsSettings', '{}'));
+
     console.log(`\nDriving ${URL}\n`);
     await page.goto(URL, {waitUntil: 'domcontentloaded'});
 
