@@ -207,8 +207,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
     [TacticalGraphicName.FinalProtectiveFire]: f(true, true, false, false, false, {weapon: true}),
     [TacticalGraphicName.LinearSmokeTarget]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.MovingConvoy]: MOV,
-    [TacticalGraphicName.HaltedConvoy]: MOV,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.MovingConvoy]: MOV,
+    // [TacticalGraphicName.HaltedConvoy]: MOV,
 
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
