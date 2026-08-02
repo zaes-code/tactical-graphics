@@ -11,14 +11,15 @@ import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
-import {configureTacticalGraphics, paletteForMode, setDarkModeFlag} from '../../settings';
+import {TacticalGraphicsConfigOptions, setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
-    lineWidth: number;
+    /** The user's config overrides. Used as an invalidation trigger, not read directly. */
+    graphicsSettings: TacticalGraphicsConfigOptions;
 }
 
-const OpenLayersMapComponent: React.FC<Props> = ({darkMode, lineWidth}) => {
+const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
@@ -58,13 +59,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, lineWidth}) => {
     // Swap tile source when dark mode changes
     useEffect(() => {
         if (!map) return;
-        // Keep the library singletons in sync with React state so StyleFunctions read the
-        // right values. Two of them, and they cover different ground: the flag selects
-        // editor chrome, while symbol colours come from the config — the library has one
-        // doctrinal palette and never swaps it off a mode flag, so the host sends what it
-        // wants. `paletteForMode` is the library's ready-made pair.
+        // The editor-chrome flag only — handle dots, the selection fill. Symbol colours
+        // are config, and `MapRendering` is the single writer of that (see
+        // `applyGraphicsConfig` there); publishing it from here too would re-impose the
+        // mode palette over a user's own colour on every toggle.
         setDarkModeFlag(darkMode);
-        configureTacticalGraphics(paletteForMode(darkMode));
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
         const darkTileLayer = tileLayers.find(l => l.get('name') === 'darkBaseMap');
@@ -90,14 +89,27 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, lineWidth}) => {
         });
     }, [map, darkMode]);
 
-    // Re-render already-drawn graphics when the line-width setting changes — style
-    // functions read LINE_WIDTH() live, but OL caches the rendered output per feature
-    // revision, so a feature that hasn't otherwise changed keeps its old stroke width
-    // until something bumps its revision. Same reasoning as the dark-mode sweep above.
+    // Re-render already-drawn graphics when any config setting changes — style functions
+    // read the config live, but OL caches the rendered output per feature revision, so a
+    // feature that hasn't otherwise changed keeps its old stroke width and colours until
+    // something bumps its revision. Same reasoning as the dark-mode sweep above.
+    //
+    // `MapRendering`'s own effect publishes the config, and child effects run first — but
+    // `changed()` only *marks* a feature dirty. OL repaints on the next animation frame,
+    // by which point every effect in the commit has run, so the style functions do read
+    // the new config.
     useEffect(() => {
         if (!map) return;
-        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => f.changed());
-    }, [map, lineWidth]);
+        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
+            const hostility = f.get('hostility');
+            // Same stale-stamp problem as the mode sweep: `hostilityColor` caches a
+            // *resolved* colour, so re-tinting an affiliation has to re-derive it.
+            if (hostility && f.get('hostilityColor')) {
+                f.set('hostilityColor', getColorByHostility(hostility));
+            }
+            f.changed();
+        });
+    }, [map, graphicsSettings]);
 
     const handleDrawTacticalGraphic = () => {
         setInteractionMode(InteractionType.drawing);
