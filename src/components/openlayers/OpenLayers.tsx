@@ -9,15 +9,16 @@ import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {isEmpty} from '../../utils/isEmpty';
-import {setDarkModeFlag} from '../../settings';
 
 interface Props {
     darkMode: boolean;
+    /** The user's config overrides. Used as an invalidation trigger, not read directly. */
+    graphicsSettings: TacticalGraphicsConfigOptions;
 }
 
-const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
+const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
@@ -57,8 +58,9 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
     // Swap tile source when dark mode changes
     useEffect(() => {
         if (!map) return;
-        // Keep singleton in sync with React state so StyleFunctions read the right value
-        setDarkModeFlag(darkMode);
+        // Nothing to publish to the library: `MapRendering` is the single writer of the
+        // config, chrome colours included. This effect only swaps the basemap layers and
+        // sweeps the drawn features so they re-render.
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
         const darkTileLayer = tileLayers.find(l => l.get('name') === 'darkBaseMap');
@@ -83,6 +85,28 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode}) => {
             f.changed();
         });
     }, [map, darkMode]);
+
+    // Re-render already-drawn graphics when any config setting changes — style functions
+    // read the config live, but OL caches the rendered output per feature revision, so a
+    // feature that hasn't otherwise changed keeps its old stroke width and colours until
+    // something bumps its revision. Same reasoning as the dark-mode sweep above.
+    //
+    // `MapRendering`'s own effect publishes the config, and child effects run first — but
+    // `changed()` only *marks* a feature dirty. OL repaints on the next animation frame,
+    // by which point every effect in the commit has run, so the style functions do read
+    // the new config.
+    useEffect(() => {
+        if (!map) return;
+        tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
+            const hostility = f.get('hostility');
+            // Same stale-stamp problem as the mode sweep: `hostilityColor` caches a
+            // *resolved* colour, so re-tinting an affiliation has to re-derive it.
+            if (hostility && f.get('hostilityColor')) {
+                f.set('hostilityColor', getColorByHostility(hostility));
+            }
+            f.changed();
+        });
+    }, [map, graphicsSettings]);
 
     const handleDrawTacticalGraphic = () => {
         setInteractionMode(InteractionType.drawing);
