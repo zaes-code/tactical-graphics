@@ -1,3 +1,5 @@
+import {readFileSync} from 'fs';
+import {join} from 'path';
 import {Feature} from 'geojson';
 import {
     isTacticalGraphicFeature,
@@ -8,6 +10,7 @@ import {
     toFeatureCollection,
 } from './render';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {booleanPointInPolygon, point, polygon} from '@turf/turf';
 
 const axisFeature = (): Feature => ({
     type: 'Feature',
@@ -252,5 +255,104 @@ describe('Turn', () => {
         expect(label).not.toEqual([-77.0, 38.9]);
         expect(Math.hypot(label[0] - before[before.length - 1][0], label[1] - before[before.length - 1][1]))
             .toBeLessThan(Math.hypot(label[0] - before[0][0], label[1] - before[0][1]));
+    });
+});
+
+/**
+ * Teeth belong to the geometry, not to the order the corners were clicked.
+ *
+ * The tooth apex is placed 90° off the direction of travel along the ring, so which side
+ * that lands on depends entirely on the winding — and nothing normalises the winding of
+ * what a user draws. Drawing an area clockwise put the teeth outside; drawing the same
+ * area anticlockwise put every one of them inside.
+ */
+describe('obstacle teeth ignore the drawing direction', () => {
+    // A square, and the same square with its corners in the opposite order.
+    const CLOCKWISE = [[-77.10, 38.85], [-77.10, 38.95], [-77.00, 38.95], [-77.00, 38.85], [-77.10, 38.85]];
+    const ANTICLOCKWISE = [...CLOCKWISE].reverse();
+
+    const area = (name: TacticalGraphicName, ring: number[][]): Feature => ({
+        type: 'Feature',
+        geometry: {type: 'Polygon', coordinates: [ring]},
+        properties: {tacticalGraphic: {name, size: 30}},
+    });
+
+    /**
+     * Apexes are the vertices that leave the drawn edge. Every tooth is pushed as
+     * (foot, apex, foot) with both feet on the edge, so a vertex further than a metre or
+     * so from the square's outline is an apex — measured against the drawn ring rather
+     * than against a tooth count, which would depend on the perimeter maths.
+     */
+    const apexSides = (name: TacticalGraphicName, ring: number[][]) => {
+        const rendered = renderTacticalGraphic(area(name, ring)).graphic.geometry as any;
+        const vertices: number[][] = rendered.type === 'Polygon'
+            ? rendered.coordinates[0]
+            : rendered.coordinates.flat();
+
+        const outside: number[][] = [];
+        const inside: number[][] = [];
+        vertices.forEach(v => {
+            const onEdge = ring.some((_, i) => {
+                if (i === ring.length - 1) return false;
+                const [ax, ay] = ring[i];
+                const [bx, by] = ring[i + 1];
+                const [px, py] = v;
+                // Perpendicular distance to the drawn edge, in degrees — the teeth stand
+                // well clear of it, tooth feet sit on it.
+                const dx = bx - ax, dy = by - ay;
+                const len2 = dx * dx + dy * dy;
+                const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+                return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < 1e-5;
+            });
+            if (onEdge) return;
+            (booleanPointInPolygon(point(v), polygon([ring])) ? inside : outside).push(v);
+        });
+        return {outside: outside.length, inside: inside.length};
+    };
+
+    it.each([
+        TacticalGraphicName.ObstacleBelt,
+        TacticalGraphicName.ObstacleGroup,
+        TacticalGraphicName.ObstacleZone,
+    ])('points %s outward whichever way the area is drawn', name => {
+        const cw = apexSides(name, CLOCKWISE);
+        const ccw = apexSides(name, ANTICLOCKWISE);
+
+        expect(cw.outside).toBeGreaterThan(0);
+        expect(cw.inside).toBe(0);
+        expect(ccw.outside).toBeGreaterThan(0);
+        expect(ccw.inside).toBe(0);
+    });
+
+    it.each([
+        TacticalGraphicName.ObstacleFreeArea,
+        TacticalGraphicName.ObstacleRestrictedArea,
+    ])('points %s inward whichever way the area is drawn', name => {
+        const cw = apexSides(name, CLOCKWISE);
+        const ccw = apexSides(name, ANTICLOCKWISE);
+
+        expect(cw.inside).toBeGreaterThan(0);
+        expect(cw.outside).toBe(0);
+        expect(ccw.inside).toBeGreaterThan(0);
+        expect(ccw.outside).toBe(0);
+    });
+});
+
+/**
+ * The README quotes numbers that come from the code, and they drift silently — the
+ * "supported names" figure in its Errors section was 199 against a registry of 195, and
+ * the intro count sat at 201 against 207 until the tracker generator was taught to own
+ * it. Nothing renders wrong when they rot; the docs just quietly start lying.
+ *
+ * The tracker-derived tables have `gen-readme-graphics-table.py --check`. This is the
+ * one number that comes from the registry instead, so it needs its own guard.
+ */
+describe('README stays honest about the registry', () => {
+    const readme = readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf8');
+
+    it('quotes the real number of registered graphics in its error example', () => {
+        const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);
+        expect(quoted).not.toBeNull();
+        expect(Number(quoted![1])).toBe(listTacticalGraphicNames().length);
     });
 });

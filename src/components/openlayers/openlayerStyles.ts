@@ -23,6 +23,7 @@ import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
 import {
     BASE_FONT_SIZE_PX,
+    DEFAULT_PALETTE,
     getDefaultLabelSize,
     getDefaultLineColorOverride,
     getDefaultLineWidth,
@@ -31,10 +32,8 @@ import {
     getHandleColorOverride,
     getHostilityColorOverride,
     getInertHandleColorOverride,
-    getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
-    getSelectionFillColorOverride,
 } from '@zaes/tactical-graphics';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
@@ -68,9 +67,8 @@ export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
 /**
  * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
  * area outlines, arrows, and custom-rendered graphics all use this width.
- * Backed by the live Settings-panel value (see `settings.ts`) — call it
- * fresh from inside a style function rather than caching the result, the
- * same rule as `getDefaultLabelSize()`/`isDarkMode()`.
+ * Backed by the live config — call it fresh from inside a style function
+ * rather than caching the result, the same rule as `getDefaultLabelSize()`.
  */
 export const LINE_WIDTH = (): number => getDefaultLineWidth();
 
@@ -78,28 +76,73 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 const HALO_WIDTH = 4;
 
 /**
+ * Gap between an obstacle line's teeth and the nearest edge of its label, as a fraction
+ * of how far those teeth stand off the line. Proportional so the label holds its place
+ * in the symbol at every zoom, rather than creeping in or drifting out as the map scales.
+ */
+const OBSTACLE_LABEL_GAP_RATIO = 0.5;
+
+/** Floor under that gap, in screen pixels: a proportion alone closes up when zoomed out. */
+const OBSTACLE_LABEL_MIN_GAP_PX = 8;
+
+/**
  * ## One palette, and where a host changes it
  *
- * These colours are the doctrinal FM 1-02.2 ones and they do **not** vary with
- * `isDarkMode()`. A host that wants different line work on a dark basemap supplies it
- * through `configureTacticalGraphics` (`src/settings.ts`) — only the host knows what
- * its own basemap looks like, and a library-side dark palette can only guess. See
- * `src/App.tsx` for the worked example.
+ * Every accessor below is the same two lines: the host's override if there is one,
+ * otherwise the value from `DEFAULT_PALETTE`. The defaults live in the config module
+ * rather than as literals here so that "what does this library look like unconfigured"
+ * has exactly one answer, and so a host composing its own set can start from it —
+ * `{...DEFAULT_PALETTE, ...myColours}`.
  *
- * There used to be a second, dark set of values. They were the *measured output* of a
- * CSS filter — `invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%)` — that
- * once landed on the graphics canvas along with the basemap, because OL composites
- * consecutive layers sharing a className onto one canvas. When that was fixed at
- * source (see `TacticalGraphicsManager.renderingVectorLayer`) the filter's output was
- * frozen into literals so the change would look like a no-op. That is not a palette
- * anyone designed, and re-tinting doctrinal affiliation colours is the host's call
- * rather than the library's, so the dark set is gone. `ai/decisions.md` has the
- * history.
+ * A host that wants different line work on a dark basemap supplies it through
+ * `configureTacticalGraphics`. The library has no mode of its own to consult: only the
+ * host knows what its basemap looks like and which state it is in, so a library-side
+ * second palette could only guess. `ai/decisions.md` has the history — there was once a
+ * dark set, and it was the measured output of a CSS filter rather than anything anyone
+ * designed.
  */
+
+/**
+ * ## Reading a graphic's affiliation
+ *
+ * **The amplifier bag first, the loose feature key second.** `writeGraphicProperties`
+ * — the documented way to set amplifiers, and the only way the library itself sets them
+ * — writes `properties.tacticalGraphic` and nothing else. The `hostility` /
+ * `hostilityColor` keys are stamped by three paths in the *demo* (the properties dialog,
+ * the sample sweep, and the basemap re-colour in `OpenLayers.tsx`), so a style function
+ * that reads only those keys is correct only while a human is driving this app.
+ *
+ * Two things it was wrong for, both silent:
+ *
+ * - **Restore.** `restoreTacticalGraphics` rebuilds a graphic from its saved
+ *   `tacticalGraphic` bag and sets no loose key, so every saved hostile graphic came
+ *   back in the neutral default. Nothing throws; the map is just wrong, and only for
+ *   graphics that have been round-tripped.
+ * - **Consumers.** The README tells a host to call
+ *   `writeGraphicProperties(features, name, {hostility: 'Hostile/Faker'})` and says the
+ *   strokes turn red. They did not.
+ *
+ * The key is kept as a fallback rather than deleted: the demo paths above still set it,
+ * and a host may be colouring features by some route of its own.
+ */
+export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
+    return readGraphicLabels(feature).hostility
+        ?? feature.get('hostility')
+        ?? TacticalGraphicHostility.unknown;
+}
+
+/**
+ * The line colour for a feature: an explicit `hostilityColor` override if something set
+ * one, otherwise the affiliation's colour. `getColorByHostility` already resolves
+ * `unknown` to the default line colour, so this covers the unaffiliated case too.
+ */
+export function readHostilityColor(feature: FeatureLike): string {
+    return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
+}
 
 /** Default stroke/fill colour for graphics with no specific hostility colour. */
 export function getDefaultLineColor(): string {
-    return getDefaultLineColorOverride() ?? '#000000';
+    return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
 }
 
 /** Text label fill colour. Follows the default line colour unless overridden on its own. */
@@ -109,53 +152,94 @@ export function getLabelFillColor(): string {
 
 /** Text label halo (outline) colour — contrast against the map background. */
 export function getLabelHaloColor(): string {
-    return getLabelHaloColorOverride() ?? 'rgba(255,255,255,1)';
+    return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
 }
 
 /**
  * ## Editor chrome
  *
- * The affordances a user edits a graphic with — handle dots, the inert centre, the
- * selection fill, the draw marker. Not part of any symbol: they say "you can drag this",
- * and that meaning must not shift with a graphic's affiliation. Tinting handles by
- * hostility made a hostile graphic's handles the same red as its own strokes, so they
- * stopped reading as handles at all.
- *
- * These used to come from `byMode(light, dark)`, a helper that read a `isDarkMode()`
- * flag. Both are gone: the flag was a boolean whose entire job was choosing between two
- * hardcoded colour literals, which is what the config already does — better, since it
- * also lets a host re-theme chrome that was previously not overridable at all. See
- * `ai/decisions.md`, "The library has no concept of dark mode".
+ * The affordances a user edits a graphic with — handle dots, the inert centre, the draw
+ * marker. Not part of any symbol: they say "you can drag this", and that meaning must
+ * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
+ * graphic's handles the same red as its own strokes, so they stopped reading as handles
+ * at all.
  */
 
 /** Draggable handle dots. Renderers apply their own opacity on top. */
 export function getHandleColor(): string {
-    return getHandleColorOverride() ?? 'rgba(255,0,0,1)';
+    return getHandleColorOverride() ?? DEFAULT_PALETTE.handleColor;
 }
 
 /** Handle dots that exist but cannot be dragged in the current mode. */
 export function getInertHandleColor(): string {
-    return getInertHandleColorOverride() ?? 'rgba(130,130,130,0.8)';
+    return getInertHandleColorOverride() ?? DEFAULT_PALETTE.inertHandleColor;
 }
 
-/** Fill for a selected or default-styled graphic. */
-export function getSelectionFillColor(): string {
-    return getSelectionFillColorOverride() ?? 'rgba(0, 120, 255, 0.2)';
-}
-
-/** The marker shown while placing a point-anchored graphic. */
+/** The marker and sketch line shown while a graphic is being drawn. */
 export function getDrawMarkerColor(): string {
-    return getDrawMarkerColorOverride() ?? 'rgba(87, 140, 255, 1)';
+    return getDrawMarkerColorOverride() ?? DEFAULT_PALETTE.drawMarkerColor;
 }
 
 /** That marker's outline. */
 export function getDrawMarkerOutlineColor(): string {
-    return getDrawMarkerOutlineColorOverride() ?? 'white';
+    return getDrawMarkerOutlineColorOverride() ?? DEFAULT_PALETTE.drawMarkerOutlineColor;
 }
 
-/** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
-export function getLabelBackgroundFill(): string {
-    return getLabelBackgroundFillOverride() ?? 'rgba(255, 255, 255, 0.90)';
+/** Radius in px of the dot under the cursor while drawing. */
+const DRAW_MARKER_RADIUS = 6;
+const DRAW_MARKER_OUTLINE_WIDTH = 1.5;
+
+/**
+ * The dot drawn at the cursor while a graphic is being placed.
+ *
+ * Built fresh on each call rather than cached, so a host changing `drawMarkerColor`
+ * mid-session sees it on the next frame — the same reason `getHaloStroke` is a function.
+ */
+export function drawMarkerStyle(): Style {
+    return new Style({
+        image: new CircleStyle({
+            radius: DRAW_MARKER_RADIUS,
+            fill: new Fill({color: getDrawMarkerColor()}),
+            stroke: new Stroke({color: getDrawMarkerOutlineColor(), width: DRAW_MARKER_OUTLINE_WIDTH}),
+        }),
+    });
+}
+
+/**
+ * The draw-time style for **every** graphic — the manager installs it on the `Draw`
+ * interaction for any controller that does not supply a `drawStyleFunc` of its own.
+ *
+ * Before this existed only `MissionTaskController` styled its draw, so the draw-marker
+ * colours reached point-anchored graphics and nothing else: every line, polygon and area
+ * fell through to OpenLayers' built-in editing style, which is hardcoded and ignores the
+ * config entirely. A host could set `drawMarkerColor` and watch it apply to a handful of
+ * graphics.
+ *
+ * OpenLayers renders a draw in two features — the sketch geometry, and a separate Point
+ * for the cursor. Both arrive here, which is why the `Point` branch is the marker and
+ * everything else is the sketch line. The sketch is dashed and drawn over an outline in
+ * the marker's outline colour, so it stays legible over both the basemap and any graphic
+ * already on the map.
+ */
+export function defaultDrawStyleFunc(): StyleFunction {
+    return (feature) => {
+        if (feature.getGeometry()?.getType() === 'Point') return drawMarkerStyle();
+        return [
+            new Style({
+                stroke: new Stroke({
+                    color: getDrawMarkerOutlineColor(),
+                    width: LINE_WIDTH() + 2,
+                }),
+            }),
+            new Style({
+                stroke: new Stroke({
+                    color: getDrawMarkerColor(),
+                    width: LINE_WIDTH(),
+                    lineDash: [10, 8],
+                }),
+            }),
+        ];
+    };
 }
 
 /**
@@ -306,9 +390,7 @@ export const createBaseFeature = () => {
         let isHidden = feature.get('hidden');
 
         if (isHidden) return new Style({});
-        const hostility = feature.get('hostility');
-        const color = hostility ? getColorByHostility(hostility) : getDefaultLineColor();
-        return modifyStyle(setOpacity(color, .35));
+        return modifyStyle(setOpacity(readHostilityColor(feature), .35));
     });
 
     feature.set('base', true);
@@ -446,18 +528,18 @@ export const createInertHandleFeature = () => {
  *
  * `hostilityColor` is what the properties dialog stamps; `hostility` is the raw
  * enum, kept as a fallback for features coloured by some other path.
+ *
+ * **Stroke only, no fill.** There used to be a translucent blue fill here, left over
+ * from a selection highlight that never tracked selection — it painted every
+ * default-styled area graphic all the time, which is not what FM 1-02.2 draws and not
+ * what any of the graphics with a bespoke style do.
  */
 export const createFeature = () => {
     let feature = new Feature();
 
     feature.setStyle((feature) => {
-        const hostility = feature.get('hostility');
-        const color = feature.get('hostilityColor')
-            || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
+        const color = readHostilityColor(feature);
         return new Style({
-            fill: new Fill({
-                color: getSelectionFillColor(),
-            }),
             stroke: new Stroke({
                 color,
                 width: LINE_WIDTH(),
@@ -543,7 +625,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         const acpScale = featureGraphicLabelScale(feature, resolution);
 
         // 🟡 Pull hostility color dynamically
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
 
         // ── Properties info block (above the graphic, upper-left) ──────────────
         const infoLines: string[] = [];
@@ -651,7 +733,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
 
 export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
     const geometry = feature.getGeometry();
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const styles: Style[] = [];
 
     if (geometry instanceof GeometryCollection) {
@@ -724,12 +806,12 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     const coords = (featureGeometry as LineString).getCoordinates();
     if (coords.length < 2) return []; // need at least 2 pts
 
-    const hostilityColor = feature.get('hostilityColor') || getDefaultLineColor();
+    const hostilityColor = readHostilityColor(feature);
     // Test the affiliation, not the colour string. `hostilityColor` is a colour resolved
     // at stamp time, so once the palette became mode-dependent a string compare would
     // both miss a feature stamped in the other mode and be one refactor away from
     // matching some unrelated red.
-    if (feature.get('hostility') === TacticalGraphicHostility.hostileFaker) {
+    if (readHostility(feature) === TacticalGraphicHostility.hostileFaker) {
         labelText = `ENY ${labelText}`;
     }
 
@@ -999,7 +1081,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
                 stroke: getHaloStroke(),
             }),
         }));
-        let hostility = f.get('hostility');
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -1019,7 +1101,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
+        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
@@ -1066,7 +1148,7 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 // stroked line (arcs, arrow shaft, arrow head).
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
     return (feature) => {
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
         const lineStroke = new Stroke({color, width: LINE_WIDTH()});
         const fill = new Fill({color});
         const geom = feature.getGeometry() as MultiLineString;
@@ -1088,7 +1170,7 @@ export function mobileDefenseGraphicStyleFunc(): StyleFunction {
 
 export function envelopmentGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
+        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -1561,7 +1643,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
         let midLine = coords[4];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -1914,7 +1996,7 @@ function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: G
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const color = getColorByHostility(hostility);
         const labelScale = featureLabelScale(f, resolution);
 
@@ -1944,7 +2026,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
     const geom = f.getGeometry() as MultiPoint;
     const coords = geom.getCoordinates();
 
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     const styles: Style[] = [];
 
     const start = coords[0];
@@ -2112,7 +2194,7 @@ function buildLinearTargetStyles(
 
     const center: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
 
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     const color = getColorByHostility(hostility);
 
     const styles: Style[] = [];
@@ -2338,7 +2420,7 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
         let baseLine = coords[0];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -2425,7 +2507,7 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
         const route = lines[0];
         if (!route || route.length < 2) return [];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         // Everything after the route renders untouched — that is the arrowhead.
         const outlineSegments: Coordinate[][] = lines.slice(1);
 
@@ -2492,7 +2574,7 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
         const bottomArrow = coords[3];
         const topArrow = coords[4];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
 
         const p1 = topLine[0];
@@ -2547,7 +2629,7 @@ export function breachStyleFunc(label: string): StyleFunction {
         let verticalLine = coords[coords.length - 1];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -2620,7 +2702,7 @@ export function blockStyleFunc(label: string): StyleFunction {
         else return;
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
         if (geom instanceof MultiLineString) {
@@ -2742,7 +2824,7 @@ export function blockStyleFunc(label: string): StyleFunction {
 function firePositionStyles(f: FeatureLike): Style[] {
     const geom = f.getGeometry();
     if (!(geom instanceof MultiLineString)) return [];
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     return [new Style({
         geometry: geom,
         stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -2891,7 +2973,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
             },
         ));
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3040,7 +3122,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
         }
 
         // ── Line ──────────────────────────────────────────────────────────
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         styles.push(new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3056,6 +3138,98 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
     };
 }
 
+/**
+ * The line the user actually drew, behind a decorated line graphic.
+ *
+ * `LineGraphicBase` stamps it because the rendered geometry is not the drawn one: an
+ * obstacle line's geometry is the *toothed* path, whose vertices are mostly tooth feet
+ * and apexes. Anything that needs to reason about the drawn shape — which segment is the
+ * middle one, which way it runs — cannot recover that from the teeth without guessing.
+ *
+ * Falls back to the rendered endpoints, which is right for the common two-point line and
+ * degrades to the old chord behaviour for a host driving these styles itself.
+ */
+function drawnBaseline(f: FeatureLike, rendered: Coordinate[]): Coordinate[] {
+    const stamped = f.get('baseCoordinates') as Coordinate[] | undefined;
+    if (Array.isArray(stamped) && stamped.length >= 2) return stamped;
+    return [rendered[0], rendered[rendered.length - 1]];
+}
+
+/** Index of the segment containing the halfway point by length — the centre-most one. */
+function centreSegmentIndex(coords: Coordinate[]): number {
+    const lengths: number[] = [];
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
+        lengths.push(len);
+        total += len;
+    }
+    let travelled = 0;
+    for (let i = 0; i < lengths.length; i++) {
+        travelled += lengths[i];
+        if (travelled >= total / 2) return i;
+    }
+    return Math.max(0, lengths.length - 1);
+}
+
+/**
+ * How far the rendered geometry reaches past a segment on one side, in map units.
+ *
+ * The teeth are map-unit sized — they were generated from the drawing resolution — so
+ * they grow on screen as the user zooms in, while a label offset in screen pixels does
+ * not. Offsetting by a fixed pixel gap therefore looks right at the drawing zoom and
+ * buries the label in the teeth two zoom levels later. Measuring the geometry instead of
+ * re-deriving the tooth height keeps the clearance correct at every zoom, and keeps this
+ * function from carrying a copy of a constant that lives in the generator.
+ */
+function extentBeyondSegment(rendered: Coordinate[], from: Coordinate, dir: Coordinate, normal: Coordinate, segLength: number): number {
+    let extent = 0;
+    for (const [x, y] of rendered) {
+        const vx = x - from[0];
+        const vy = y - from[1];
+        const along = vx * dir[0] + vy * dir[1];
+        if (along < 0 || along > segLength) continue;
+        const across = vx * normal[0] + vy * normal[1];
+        if (across > extent) extent = across;
+    }
+    return extent;
+}
+
+/** Index of the rendered vertex closest to a drawn one. Exact in practice — the
+ *  generator walks the drawn line and emits its vertices as it goes — so this is a
+ *  tolerant lookup rather than a search. */
+function nearestVertexIndex(rendered: Coordinate[], target: Coordinate): number {
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < rendered.length; i++) {
+        const distance = Math.hypot(rendered[i][0] - target[0], rendered[i][1] - target[1]);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = i;
+        }
+    }
+    return best;
+}
+
+/**
+ * The stretch of rendered geometry belonging to one drawn segment.
+ *
+ * The clearance measurement has to be about *this* segment's teeth and nothing else. An
+ * along-track filter alone is not enough: on a line that doubles back — which is normal
+ * once a user edits vertices around — a limb from somewhere else in the line projects
+ * into the same along-range while being an enormous distance to the side, and gets
+ * measured as though it were a tooth. The label then flies off to clear geometry it was
+ * never near.
+ *
+ * The generator walks the drawn line in order, so a segment's teeth are the contiguous
+ * run between its two endpoints in the output.
+ */
+function renderedSpanForSegment(rendered: Coordinate[], p1: Coordinate, p2: Coordinate): Coordinate[] {
+    const a = nearestVertexIndex(rendered, p1);
+    const b = nearestVertexIndex(rendered, p2);
+    return rendered.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3069,95 +3243,68 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
 
         if (coords.length < 2) return styles;
 
-        const start = coords[0];
-        const end = coords[coords.length - 1];
+        // ── 1. The centre-most drawn segment ──────────────────────────────
+        // Off the drawn baseline, not the rendered one: every third vertex of the
+        // rendered geometry is a tooth apex, so "the middle segment" of it would be a
+        // tooth edge, and the label would ride whichever tooth happened to be central.
+        const baseline = drawnBaseline(f, coords);
+        const segIdx = centreSegmentIndex(baseline);
+        const p1 = baseline[segIdx];
+        const p2 = baseline[segIdx + 1];
 
-        // --- 1. Baseline vector (dominant direction)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
+        const segDx = p2[0] - p1[0];
+        const segDy = p2[1] - p1[1];
+        const segLength = Math.hypot(segDx, segDy);
+        if (segLength === 0) return styles;
 
-        if (baseLen === 0) return styles;
+        const dir: Coordinate = [segDx / segLength, segDy / segLength];
+        const mid: Coordinate = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
 
-        const ux = baseDx / baseLen;
-        const uy = baseDy / baseLen;
-
-        // --- 2. Project all vertices onto baseline
-        const projected = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return vx * ux + vy * uy;
-        });
-
-        const minP = Math.min(...projected);
-        const maxP = Math.max(...projected);
-        const target = (minP + maxP) / 2;
-
-        // --- 3. Find segment containing the midpoint projection
-        let segIdx = 0;
-        for (let i = 0; i < projected.length - 1; i++) {
-            if (
-                (projected[i] <= target && projected[i + 1] >= target) ||
-                (projected[i] >= target && projected[i + 1] <= target)
-            ) {
-                segIdx = i;
-                break;
-            }
+        // ── 2. The side that is down ──────────────────────────────────────
+        // Both perpendiculars are equally "beside the line"; the one with a negative
+        // northing is the one below it on screen. Picking by the segment's own direction
+        // is what made the label change sides when the same line was drawn right-to-left
+        // — the direction of travel reverses, and every perpendicular derived from it
+        // with it. A vertical line has no lower side, so the tie breaks to the east.
+        let normal: Coordinate = [-dir[1], dir[0]];
+        if (normal[1] > 0 || (normal[1] === 0 && normal[0] < 0)) {
+            normal = [-normal[0], -normal[1]];
         }
-        const SMOOTH_WINDOW = 3;
 
-        let dirX = 0;
-        let dirY = 0;
+        // ── 3. Clear the graphic, at any zoom, by a proportional gap ──────
+        // Three terms, and each is in the unit that keeps it honest:
+        //
+        //  - how far the graphic itself reaches below the segment, measured off the
+        //    geometry, in map units. The teeth are map-unit sized, so this is what grows
+        //    when the user zooms in and what a pixel offset alone could never track.
+        //  - half a line of text, in screen pixels: the anchor is the text's middle, and
+        //    text does not scale with the map.
+        //  - the gap, which is proportional to the teeth — so the symbol and its label
+        //    keep the same relationship at every zoom instead of the label drifting
+        //    closer or further as the map scales — with a screen-pixel floor, since a
+        //    proportional gap alone collapses onto the line when zoomed far enough out.
+        const obsScale = featureLabelScale(f, resolution);
+        const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
 
-        for (let i = -SMOOTH_WINDOW; i <= SMOOTH_WINDOW; i++) {
-            const idx = segIdx + i;
-            if (idx < 0 || idx >= coords.length - 1) continue;
+        const up: Coordinate = [-normal[0], -normal[1]];
+        const span = renderedSpanForSegment(coords, p1, p2);
+        const clearanceMap = extentBeyondSegment(span, p1, dir, normal, segLength);
+        const toothExtentMap = Math.max(clearanceMap, extentBeyondSegment(span, p1, dir, up, segLength));
 
-            const a = coords[idx];
-            const b = coords[idx + 1];
+        const gapMap = Math.max(toothExtentMap * OBSTACLE_LABEL_GAP_RATIO, OBSTACLE_LABEL_MIN_GAP_PX * resolution);
+        const offsetMap = clearanceMap + halfTextHeightPx * resolution + gapMap;
 
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const len = Math.hypot(dx, dy);
-
-            if (len > 0) {
-                dirX += dx / len;
-                dirY += dy / len;
-            }
-        }
-        const p1 = coords[segIdx];
-        const p2 = coords[segIdx + 1];
-        const d1 = projected[segIdx];
-        const d2 = projected[segIdx + 1];
-
-        const t = d1 === d2 ? 0.5 : (target - d1) / (d2 - d1);
-
-        // --- 4. True midpoint position on geometry
-        const mid: Coordinate = [
-            p1[0] + (p2[0] - p1[0]) * t,
-            p1[1] + (p2[1] - p1[1]) * t,
+        const labelPoint: Coordinate = [
+            mid[0] + normal[0] * offsetMap,
+            mid[1] + normal[1] * offsetMap,
         ];
 
-        // --- 5. Rotation from baseline ONLY
-        let rotation = -Math.atan2(dirY, dirX);
+        // ── 4. Read along the segment, always upright ─────────────────────
+        let rotation = -Math.atan2(dir[1], dir[0]);
         if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
             rotation += Math.PI;
         }
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // --- 7. Offset label perpendicular to baseline
-        // Center at (half text height + 8px) so nearest text edge is always 8px from line
-        const obsScale = featureLabelScale(f, resolution);
-        const obsOffsetPx = 12 * obsScale + 8;
-        const obsOffsetMap = obsOffsetPx * resolution;
-
-        const nx = -uy;
-        const ny = ux;
-
-        const labelPoint: Coordinate = [
-            mid[0] - nx * obsOffsetMap,
-            mid[1] - ny * obsOffsetMap,
-        ];
 
 
         styles.push(new Style(
@@ -3176,7 +3323,7 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
             },
         ));
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3200,7 +3347,7 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
 
 function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3226,7 +3373,7 @@ export function tacticalFixStyleFunc(): StyleFunction {
 function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
         const styles: Style[] = [];
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         styles.push(new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3302,7 +3449,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
 
 export function defaultStyleFunc(): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3354,7 +3501,7 @@ export function baseDefenseZoneLabelStyleFn(): StyleFunction {
  */
 export function fightingPositionStyleFunc(): StyleFunction {
     return (f) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         return new Style({
             stroke: new Stroke({color, width: LINE_WIDTH()}),
         });
@@ -3378,7 +3525,7 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
     return (f, resolution) => {
         const geom = f.getGeometry() as MultiLineString;
         if (!geom) return [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const color = getColorByHostility(hostility);
         const styles: Style[] = [];
 
@@ -3479,7 +3626,7 @@ export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunctio
 
 function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const geom = f.getGeometry() as MultiLineString;
         const allCoords = geom.getCoordinates();
         const baseCoords = allCoords[0];
@@ -3641,7 +3788,7 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return [new Style({
             stroke: new Stroke({
                 color: color,
@@ -3658,7 +3805,7 @@ export function fieldOfFireStyleFunc(): StyleFunction {
 
 function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const styles: Style[] = [];
 
         // Thin stroke for the whole MultiLineString (V legs + both arrowheads).
@@ -3720,7 +3867,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
         const coords = geom.getCoordinates();
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -3873,7 +4020,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
         const coords = geom.getCoordinates();
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const echelon = f.get('echelon') || TacticalGraphicEchelon.unknown;
 
         const outlineSegments: Coordinate[][] = [];
@@ -4159,6 +4306,37 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
 
                 return styles;
             };
+        case TacticalGraphicName.ObstacleFreeArea:
+        case TacticalGraphicName.ObstacleRestrictedArea:
+            // Stacked inside the toothed ring: the free area's literal "FREE" over T (the
+            // designation) over W - W1 (the two DTGs, which `getDateLabel` already joins
+            // with the hyphen the plate shows). "FREE" is a line of its own rather than
+            // the `getLabel` prefix, which would set it beside the name instead of above
+            // it. One Text with newlines rather than a style per line, for the same
+            // reason the fire support areas use one: a fixed pixel offset between
+            // separate styles collides with text that grows on zoom.
+            return (feature: FeatureLike, resolution: number) => {
+                const anchorPoint = feature.getGeometry() as Point;
+                if (!anchorPoint) return [];
+                const lines = [
+                    name === TacticalGraphicName.ObstacleFreeArea ? 'FREE' : '',
+                    fullLabel.trim(),
+                    dateLabel.trim(),
+                ].filter(line => line.length > 0);
+                if (lines.length === 0) return [];
+                return [new Style({
+                    geometry: anchorPoint,
+                    text: new Text({
+                        text: lines.join('\n'),
+                        font: fontStyle,
+                        fill: new Fill({color: getLabelFillColor()}),
+                        stroke: getHaloStroke(),
+                        textAlign: 'center',
+                        textBaseline: 'middle',
+                        scale: featureLabelScale(feature, resolution),
+                    }),
+                })];
+            };
         case TacticalGraphicName.FireSupportAreaIrregular:
             // FSA Irregular: stack "FSA" / name / DTG1 / DTG2 in a single Text
             // centered at the polygon centroid. Using "\n" instead of separate
@@ -4424,7 +4602,7 @@ export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFun
             // amplifier, so they take the standard identity colour with the
             // area outline — FM 1-02.2 para 5-3.
             stroke: new Stroke({
-                color: f.get('hostilityColor') || getDefaultLineColor(),
+                color: readHostilityColor(f),
                 width: LINE_WIDTH(),
             }),
         }));
@@ -4720,7 +4898,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
         const lines = geom.getCoordinates();
         if (lines.length < 2) return [];
 
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
         const strokeFor = (hashed: boolean) => new Stroke({
             color,
             width: LINE_WIDTH(),
@@ -4812,7 +4990,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
 export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
     const label = getLabel(name);
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const stroke = new Stroke({color, width: LINE_WIDTH()});
         const geom = f.getGeometry();
         if (!(geom instanceof GeometryCollection)) {
@@ -5250,7 +5428,7 @@ function railroadStyleFunction(feature: FeatureLike, resolution: number) {
     const styles = [];
     const {outlineSegments, midGap, dx, dy} = geoData;
     // 0 = east, π/2 = north, etc.
-    const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(feature);
     const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
 
     // 6) build styles
@@ -5478,7 +5656,7 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
         return [];
     }
 
-    const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(feature);
     const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
     const {outlineSegments, midGap, dx, dy} = geoData;
 
@@ -5611,7 +5789,7 @@ export function createDiagonalHatchPattern(
 }
 
 export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
-    let hostility = feature.get('hostility');
+    const hostility = readHostility(feature);
     const hatchPattern = createDiagonalHatchPattern(
         hostility,
         8,
@@ -5638,8 +5816,8 @@ export function freeFireAreaCircularStyleFunc(): StyleFunction {
 
 function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (feature) => {
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
-        const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+        const color = readHostilityColor(feature);
+        const hostility = readHostility(feature);
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const hatchPattern = isPlanned ? createDiagonalHatchPattern(hostility, 8, 1) : undefined;
 
@@ -5664,7 +5842,7 @@ export function groupOrSeriesOfTargetsGraphicStyle(
     const ring = geom.getCoordinates()[0];
     if (!ring || ring.length < 2) return [];
 
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
     const stroke = new Stroke({
         color,
@@ -5716,7 +5894,7 @@ export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: num
 }
 
 function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style {
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
 
     const pattern = createDiagonalHatchPattern(
@@ -5758,7 +5936,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
         return groupOrSeriesOfTargetsGraphicStyle(labels, feature, resolution);
     }
     // ✅ Pull hostility-based color if available
-    let color = feature.get('hostilityColor') || getDefaultLineColor();
+    let color = readHostilityColor(feature);
 
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
 
@@ -5772,7 +5950,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
 }
 
 export function encirclementGraphicStyle(feature: FeatureLike, resolution: number): Style[] | Style {
-    let hostility = feature.get('hostility');
+    const hostility = readHostility(feature);
     let geom = feature.getGeometry();
     let styles = [
         new Style({
@@ -5839,7 +6017,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     let rotation = feature.get('rotation') || 0;
 
     const unitRot = [Math.cos(rotation), Math.sin(rotation)];
-    const color = getColorByHostility(feature.get('hostility'));
+    const color = readHostilityColor(feature);
     const gapMapUnits = GAP_WIDTH_PX * resolution;
 
     // --- NEW LOGIC: FINDING OPPOSITE SEGMENTS ---

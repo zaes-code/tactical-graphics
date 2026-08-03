@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**201 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**207 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ---
 
@@ -198,28 +198,37 @@ That last line matters: OpenLayers caches its render per feature revision, so a
 config change does not reach features already on the map until something bumps
 their revision.
 
-**There is one palette, and it does not follow dark mode.** The library cannot
-see your basemap, so it never swaps colours off a mode flag — you send what you
-want. `paletteForMode` is a ready-made pair for a plain light/dark map:
+**There is one palette: `DEFAULT_PALETTE`.** The library takes colours, not
+themes. It cannot see your basemap — or your projector, or your darkened
+operations floor — so it never picks a colour set for you. If your app has more
+than one look, keep the sets yourself and send whichever is current:
 
 ```ts
-import {configureTacticalGraphics, paletteForMode} from '@zaes/tactical-graphics';
+import {configureTacticalGraphics, DEFAULT_PALETTE} from '@zaes/tactical-graphics';
 
-configureTacticalGraphics(paletteForMode(dark));
+const MY_DARK_PALETTE = {
+    ...DEFAULT_PALETTE,
+    defaultLineColor: 'rgb(198,198,198)',   // and the label text that follows it
+    labelHaloColor: 'rgb(23,23,23)',
+    handleColor: 'rgba(208,123,123,1)',     // editor chrome, so nothing is left behind
+    drawMarkerColor: 'rgb(69,106,185)',
+};
+
+configureTacticalGraphics(dark ? MY_DARK_PALETTE : DEFAULT_PALETTE);
 source.forEachFeature(f => f.changed());
 ```
 
-That is the whole of it. The library has no mode flag to keep in step — it has
-colours, and you decide them. `paletteForMode` also carries the editor chrome
-(handle dots, the inert centre, the selection fill, the draw marker), so nothing
-is left behind on the old mode.
+Spread `DEFAULT_PALETTE` into your set as above. `configureTacticalGraphics`
+merges, so a set that names only the colours it changes can never undo the
+previous one — going back to light has to actively re-send the light values, not
+merely stop sending the dark ones.
 
-`paletteForMode` changes only the *unaffiliated* neutrals — the default line
-colour, the label text that follows it, and the halo and plate behind that text.
-The four affiliation colours are identical in both modes on purpose: they are
-doctrine, and shifting them for a display setting makes a symbol read
-differently depending on how the app is configured. Pass `hostilityColors`
-yourself if you disagree.
+`DEFAULT_PALETTE` covers the *unaffiliated* neutrals — the default line colour,
+the label text that follows it, the halo behind that text — and the editor chrome
+(handle dots, the inert centre, the draw marker). It deliberately carries no
+`hostilityColors`: the four affiliation colours are doctrine, and shifting them
+for a display setting makes a symbol read differently depending on how the app is
+configured. Pass `hostilityColors` yourself if you disagree.
 
 Building your own settings UI? Use `getDoctrinalHostilityColor(hostility)` for
 the swatch, not `getColorByHostility`. The latter reads the live config, so a
@@ -323,7 +332,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 199 supported names.
+the 195 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -469,6 +478,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Free Area | Mobility and Countermobility Control Measures |
+| Obstacle Group | Mobility and Countermobility Control Measures |
+| Obstacle Line | Mobility and Countermobility Control Measures |
+| Obstacle Restricted Area | Mobility and Countermobility Control Measures |
+| Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
@@ -578,12 +593,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | High Wire Fence | Mobility and Countermobility Control Measures |
 | Low Wire Fence | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Obstacle Belt | Mobility and Countermobility Control Measures |
-| Obstacle Free Area | Mobility and Countermobility Control Measures |
-| Obstacle Group | Mobility and Countermobility Control Measures |
-| Obstacle Line | Mobility and Countermobility Control Measures |
-| Obstacle Restricted Area | Mobility and Countermobility Control Measures |
-| Obstacle Zone | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Single Concertina | Mobility and Countermobility Control Measures |
 | Single Fence | Mobility and Countermobility Control Measures |
