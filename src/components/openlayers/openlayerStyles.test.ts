@@ -472,6 +472,52 @@ describe('obstacle line label', () => {
         expect(Math.abs(tiny)).toBeGreaterThan(8 * 2000);
     });
 
+    it('stays with its own segment on a line that doubles back', () => {
+        // The reported case, reprojected: a saved obstacle line whose vertices had been
+        // dragged around until the path crosses back over itself. Filtering the
+        // clearance scan by along-track projection alone let a limb from elsewhere in
+        // the line — far to the side, but projecting into the same along-range — be
+        // measured as though it were a tooth of the centre segment, and the label flew
+        // off to clear geometry it was never near.
+        const drawn = [
+            [-48.8204960524337, 1.9618674420930944],
+            [-41.5855986018727, 3.3097380307984423],
+            [-22.847995563775484, -4.2836600068830535],
+            [-32.617872882491426, 29.452801896485823],
+            [-5.529335124093375, -3.209786277366021],
+            [-4.175693213301526, 1.957358704138855],
+            [2.441018634505347, 2.7424415539130536],
+            [26.81962371892284, 20.103193854805923],
+        ].map(([x, y]) => [x * 111320, y * 111320]);
+
+        const TOOTH = 60000;
+        const label = labelPointFor(drawn, 9783.93962050256, TOOTH);
+
+        const segIdx = 3; // the centre-most segment by length, for this line
+        const [p1, p2] = [drawn[segIdx], drawn[segIdx + 1]];
+        const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        const distance = Math.hypot(label[0] - mid[0], label[1] - mid[1]);
+
+        // Its own teeth plus a gap and a line of text — not the width of the whole
+        // drawing. Before the fix this was more than an order of magnitude larger.
+        expect(distance).toBeLessThan(TOOTH * 3);
+    });
+
+    it('takes its hostility from the amplifier bag, so a restored line is still red', () => {
+        // `restoreTacticalGraphics` rebuilds from `properties.tacticalGraphic` and sets
+        // no loose `hostility` key, so a style reading only that key drew a saved
+        // hostile line in the neutral default.
+        const f = new Feature(new LineString(toothed(WEST_TO_EAST, 400)));
+        f.set('baseCoordinates', WEST_TO_EAST);
+        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {
+            label: 'OBS-1', hostility: TacticalGraphicHostility.hostileFaker,
+        });
+        const strokes = (obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[])
+            .map(s => s.getStroke()?.getColor()).filter(Boolean);
+        expect(strokes).toContain(getColorByHostility(TacticalGraphicHostility.hostileFaker));
+        expect(strokes).not.toContain(getDefaultLineColor());
+    });
+
     it('still works for a host that has not stamped the drawn line', () => {
         const f = new Feature(new LineString(toothed(WEST_TO_EAST, 400)));
         writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
