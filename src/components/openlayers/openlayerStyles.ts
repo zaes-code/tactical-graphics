@@ -3123,6 +3123,41 @@ function extentBeyondSegment(rendered: Coordinate[], from: Coordinate, dir: Coor
     return extent;
 }
 
+/** Index of the rendered vertex closest to a drawn one. Exact in practice — the
+ *  generator walks the drawn line and emits its vertices as it goes — so this is a
+ *  tolerant lookup rather than a search. */
+function nearestVertexIndex(rendered: Coordinate[], target: Coordinate): number {
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < rendered.length; i++) {
+        const distance = Math.hypot(rendered[i][0] - target[0], rendered[i][1] - target[1]);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = i;
+        }
+    }
+    return best;
+}
+
+/**
+ * The stretch of rendered geometry belonging to one drawn segment.
+ *
+ * The clearance measurement has to be about *this* segment's teeth and nothing else. An
+ * along-track filter alone is not enough: on a line that doubles back — which is normal
+ * once a user edits vertices around — a limb from somewhere else in the line projects
+ * into the same along-range while being an enormous distance to the side, and gets
+ * measured as though it were a tooth. The label then flies off to clear geometry it was
+ * never near.
+ *
+ * The generator walks the drawn line in order, so a segment's teeth are the contiguous
+ * run between its two endpoints in the output.
+ */
+function renderedSpanForSegment(rendered: Coordinate[], p1: Coordinate, p2: Coordinate): Coordinate[] {
+    const a = nearestVertexIndex(rendered, p1);
+    const b = nearestVertexIndex(rendered, p2);
+    return rendered.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3180,8 +3215,9 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
         const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
 
         const up: Coordinate = [-normal[0], -normal[1]];
-        const clearanceMap = extentBeyondSegment(coords, p1, dir, normal, segLength);
-        const toothExtentMap = Math.max(clearanceMap, extentBeyondSegment(coords, p1, dir, up, segLength));
+        const span = renderedSpanForSegment(coords, p1, p2);
+        const clearanceMap = extentBeyondSegment(span, p1, dir, normal, segLength);
+        const toothExtentMap = Math.max(clearanceMap, extentBeyondSegment(span, p1, dir, up, segLength));
 
         const gapMap = Math.max(toothExtentMap * OBSTACLE_LABEL_GAP_RATIO, OBSTACLE_LABEL_MIN_GAP_PX * resolution);
         const offsetMap = clearanceMap + halfTextHeightPx * resolution + gapMap;
@@ -3215,7 +3251,12 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
             },
         ));
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        // The amplifier bag first, the loose feature key second. `restoreTacticalGraphics`
+        // rebuilds a graphic from `properties.tacticalGraphic` and sets no `hostility`
+        // key, so reading the key alone drew a *saved* hostile obstacle line in the
+        // neutral default — FM 1-02.2 para 5-3 puts its line work in red. The key stays
+        // as a fallback for features coloured by some other path.
+        const hostility = labels.hostility || f.get('hostility') || TacticalGraphicHostility.unknown;
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
