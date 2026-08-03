@@ -1,5 +1,5 @@
 import Feature from 'ol/Feature';
-import {LineString, MultiPoint} from 'ol/geom';
+import {LineString, MultiPoint, Point} from 'ol/geom';
 import Style from 'ol/style/Style';
 import {readGraphicLabels, TACTICAL_GRAPHIC_KEY, writeGraphicProperties} from './graphicProperties';
 import {
@@ -9,7 +9,9 @@ import {
     configureTacticalGraphics,
     resetTacticalGraphicsConfig,
 } from '@zaes/tactical-graphics';
-import {coordinatedFireLineStyle, defaultLineStyle, phaseLineStyleFunc, routeControlMeasureStyle} from './openlayerStyles';
+import {coordinatedFireLineStyle, defaultLineStyle, getAreaLabelStylesFn, obstacleLineStyle, phaseLineStyleFunc, routeControlMeasureStyle} from './openlayerStyles';
+import {getGraphicFields} from './graphicFieldRegistry';
+import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
 /** A 3857 line long enough that the style functions emit their labels. */
 const lineFeature = () => new Feature(new LineString([[0, 0], [10000, 0], [20000, 0]]));
@@ -172,5 +174,87 @@ describe('route traffic arrows scale with the configured line width', () => {
         configureTacticalGraphics({lineWidth: 1});
         const widths = strokeWidths(routeControlMeasureStyle(TacticalGraphicName.Route)(routeFeature(), 10));
         expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(1);
+    });
+});
+
+/**
+ * The obstacle free and restricted areas carry a stacked amplifier block inside their
+ * toothed ring: the free area's literal "FREE" over the designation over the two DTGs,
+ * joined by a hyphen. Both took a name and nothing else before — the dialog offered no
+ * date inputs, so the two DTGs the plate shows could not be entered at all.
+ */
+describe('obstacle area amplifiers', () => {
+    const areaFeature = () => new Feature(new Point([0, 0]));
+
+    const block = (name: TacticalGraphicName, labels: Partial<GraphicLabels>) => {
+        const f = areaFeature();
+        writeGraphicProperties([f], name, {label: '', ...labels});
+        return texts(getAreaLabelStylesFn(name)(f, 10))[0] ?? '';
+    };
+
+    it('offers the name and both DTGs on each', () => {
+        for (const name of [TacticalGraphicName.ObstacleFreeArea, TacticalGraphicName.ObstacleRestrictedArea]) {
+            const fields = getGraphicFields(name);
+            expect(fields.identifier1).toBe(true);
+            expect(fields.dtg1).toBe(true);
+            expect(fields.dtg2).toBe(true);
+        }
+    });
+
+    it('stacks FREE over the name over the dates, in that order', () => {
+        const text = block(TacticalGraphicName.ObstacleFreeArea, {
+            label: 'T-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
+        });
+        expect(text.split('\n')).toEqual(['FREE', 'T-1', '021200ZJUN26 - 021800ZJUN26']);
+    });
+
+    it('keeps FREE when nothing has been filled in — it is part of the symbol', () => {
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {})).toBe('FREE');
+    });
+
+    it('gives the restricted area the same block without the literal', () => {
+        const text = block(TacticalGraphicName.ObstacleRestrictedArea, {
+            label: 'T-2', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
+        });
+        expect(text.split('\n')).toEqual(['T-2', '021200ZJUN26 - 021800ZJUN26']);
+    });
+
+    it('renders nothing for a restricted area with no amplifiers', () => {
+        expect(texts(getAreaLabelStylesFn(TacticalGraphicName.ObstacleRestrictedArea)(areaFeature(), 10))).toEqual([]);
+    });
+
+    it('drops the hyphen when only one DTG is set', () => {
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {label: 'T-1', startDate: '021200ZJUN26'}))
+            .toBe('FREE\nT-1\n021200ZJUN26');
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {label: 'T-1', endDate: '021800ZJUN26'}))
+            .toBe('FREE\nT-1\n021800ZJUN26');
+    });
+
+    it('omits the name line rather than leaving a blank one', () => {
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {startDate: '021200ZJUN26'}))
+            .toBe('FREE\n021200ZJUN26');
+    });
+});
+
+describe('obstacle line fields', () => {
+    it('offers the identifier but not status', () => {
+        // The style function never reads status — there is no planned form of this
+        // graphic to dash — so the control would have changed nothing on the map.
+        const fields = getGraphicFields(TacticalGraphicName.ObstacleLine);
+        expect(fields.identifier1).toBe(true);
+        expect(fields.status).toBe(false);
+    });
+
+    it('renders identically whether or not a status is stamped', () => {
+        const withStatus = new Feature(new LineString([[0, 0], [10000, 0]]));
+        const without = new Feature(new LineString([[0, 0], [10000, 0]]));
+        writeGraphicProperties([withStatus], TacticalGraphicName.ObstacleLine,
+            {label: 'OBS-1', status: TacticalGraphicStatus.planned});
+        writeGraphicProperties([without], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+
+        const dashes = (f: Feature) => (obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[])
+            .map(s => JSON.stringify(s.getStroke()?.getLineDash() ?? null));
+
+        expect(dashes(withStatus)).toEqual(dashes(without));
     });
 });

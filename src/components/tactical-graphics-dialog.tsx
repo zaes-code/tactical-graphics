@@ -26,6 +26,7 @@ import {getColorByHostility} from './openlayers/openlayerStyles';
 import {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
 import {GraphicLabels, GraphicLinkRegistry, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import {readGraphicLabels, writeGraphicProperties} from './openlayers/graphicProperties';
+import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
     RangeFanBand,
@@ -54,36 +55,6 @@ function defaultRangeFanConfig(): RangeFanConfig {
     return {
         bands: [{range: 1}],
     };
-}
-
-const DTG_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-
-function nowDtg(): string {
-    const d = new Date();
-    const dd = String(d.getUTCDate()).padStart(2, '0');
-    const hh = String(d.getUTCHours()).padStart(2, '0');
-    const mm = String(d.getUTCMinutes()).padStart(2, '0');
-    return `${dd}${hh}${mm}Z${DTG_MONTHS[d.getUTCMonth()]}${d.getUTCFullYear()}`;
-}
-
-/** Convert DTG string (e.g. "101430ZAPR2026") to datetime-local value ("2026-04-10T14:30"). */
-function dtgToDateTimeLocal(dtg: string): string {
-    const m = dtg.match(/^(\d{2})(\d{2})(\d{2})Z([A-Z]{3})(\d{4})$/);
-    if (!m) return '';
-    const [, dd, hh, min, mon, yyyy] = m;
-    const monthIdx = DTG_MONTHS.indexOf(mon);
-    if (monthIdx < 0) return '';
-    const month = String(monthIdx + 1).padStart(2, '0');
-    return `${yyyy}-${month}-${dd}T${hh}:${min}`;
-}
-
-/** Convert datetime-local value ("2026-04-10T14:30") to DTG string ("101430ZAPR2026"). */
-function dateTimeLocalToDtg(value: string): string {
-    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-    if (!m) return '';
-    const [, yyyy, month, dd, hh, min] = m;
-    const mon = DTG_MONTHS[parseInt(month, 10) - 1];
-    return `${dd}${hh}${min}Z${mon}${yyyy}`;
 }
 
 interface TacticalGraphicsDialogProps {
