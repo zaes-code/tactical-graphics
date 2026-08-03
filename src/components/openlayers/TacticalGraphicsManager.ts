@@ -13,6 +13,7 @@ import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
 
 export enum InteractionType {
@@ -644,7 +645,10 @@ export class TacticalGraphicsManager {
         this.draw = new Draw({
             source: drawingVectorSource,
             type: tacticalGraphicHandler.type,
-            style: tacticalGraphicHandler.drawStyleFunc ?? undefined,
+            // Falls back to the shared draw style rather than to OpenLayers' built-in
+            // editing style, so the configured draw-marker colours apply to every
+            // graphic — not just the point-anchored ones whose controller styles itself.
+            style: tacticalGraphicHandler.drawStyleFunc ?? defaultDrawStyleFunc(),
             maxPoints: tacticalGraphicHandler.maxPoints ?? undefined,
             geometryFunction: tacticalGraphicHandler.geometryFn ?? undefined,
         });
