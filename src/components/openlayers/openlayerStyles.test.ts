@@ -356,14 +356,17 @@ describe('the library default', () => {
 /**
  * The obstacle line's label.
  *
- * Two failures, both of which only show up on a graphic drawn a particular way or looked
- * at from a particular zoom, which is why they survived a green suite:
+ * It sits under the centre-most drawn segment. Three faults got it there, and each only
+ * showed up on a line drawn a particular way or looked at from a particular zoom, which
+ * is why they survived a green suite:
  *
  *  - Its offset was taken from the drawn line's *direction of travel*, so the same line
- *    drawn right-to-left put the label under the line instead of over it.
+ *    drawn right-to-left put the label on the opposite side.
  *  - Its offset was a fixed number of screen pixels, while the teeth it has to clear are
  *    map-unit sized. At the drawing zoom that looked fine; two zoom levels in, the teeth
  *    had grown through the text.
+ *  - It anchored on the rendered geometry, every third vertex of which is a tooth apex,
+ *    so "the middle" was a tooth rather than the middle of the drawn line.
  */
 describe('obstacle line label', () => {
     /** A drawn line plus the teeth a generator would hang off it, all on the north side. */
@@ -392,12 +395,25 @@ describe('obstacle line label', () => {
         return (text!.getGeometry() as Point).getCoordinates();
     };
 
+    /** Teeth on the *label's* side, which is the case that has to clear them. */
+    const toothedBelow = (drawn: number[][], toothHeight: number) =>
+        toothed(drawn, -toothHeight);
+
+    const labelPointBelowTeeth = (drawn: number[][], resolution: number, toothHeight = 400) => {
+        const f = new Feature(new LineString(toothedBelow(drawn, toothHeight)));
+        f.set('baseCoordinates', drawn);
+        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+        const styles = obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, resolution) as Style[];
+        const text = (Array.isArray(styles) ? styles : [styles]).find(s => s.getText?.()?.getText?.());
+        return (text!.getGeometry() as Point).getCoordinates();
+    };
+
     const WEST_TO_EAST = [[0, 0], [1000, 0]];
     const EAST_TO_WEST = [[1000, 0], [0, 0]];
 
-    it('puts the label above the line whichever way it was drawn', () => {
-        expect(labelPointFor(WEST_TO_EAST, 10)[1]).toBeGreaterThan(0);
-        expect(labelPointFor(EAST_TO_WEST, 10)[1]).toBeGreaterThan(0);
+    it('puts the label under the line whichever way it was drawn', () => {
+        expect(labelPointFor(WEST_TO_EAST, 10)[1]).toBeLessThan(0);
+        expect(labelPointFor(EAST_TO_WEST, 10)[1]).toBeLessThan(0);
     });
 
     it('anchors it at the same place either way — the line is the same line', () => {
@@ -425,22 +441,35 @@ describe('obstacle line label', () => {
         expect(along).toBeCloseTo(0, 6);
     });
 
-    it('clears the teeth at every zoom, not just the one it was drawn at', () => {
+    it('clears teeth on its own side at every zoom, not just the one drawn at', () => {
         const TOOTH = 400;
-        // Zooming in shrinks `resolution`; the teeth stay 400 map units tall, so a label
+        // Zooming in shrinks `resolution`; the teeth stay 400 map units deep, so a label
         // offset that is purely a pixel count walks straight into them.
         for (const resolution of [40, 10, 2, 0.5]) {
-            expect(labelPointFor(WEST_TO_EAST, resolution, TOOTH)[1]).toBeGreaterThan(TOOTH);
+            expect(labelPointBelowTeeth(WEST_TO_EAST, resolution, TOOTH)[1]).toBeLessThan(-TOOTH);
         }
     });
 
-    it('keeps a readable gap over the teeth without floating away', () => {
-        // The clearance is the tooth height plus half a line of text and a gap, so it
-        // tracks zoom rather than being fixed in either unit alone.
-        const near = labelPointFor(WEST_TO_EAST, 2, 400)[1];
-        const far = labelPointFor(WEST_TO_EAST, 40, 400)[1];
-        expect(near).toBeLessThan(far);
-        expect(near).toBeGreaterThan(400);
+    it('holds the same proportional distance as the map scales', () => {
+        // Zoomed in far enough that the proportional gap governs, the offset stops
+        // depending on resolution at all: the label keeps its place in the symbol
+        // instead of creeping toward the line or drifting away from it.
+        const TOOTH = 400;
+        const close = labelPointFor(WEST_TO_EAST, 0.5, TOOTH)[1];
+        const closer = labelPointFor(WEST_TO_EAST, 0.1, TOOTH)[1];
+        expect(closer / close).toBeCloseTo(1, 1);
+
+        // And that distance is set by the teeth: a symbol twice as deep pushes the label
+        // twice as far, rather than both landing at the same pixel offset.
+        const deep = labelPointFor(WEST_TO_EAST, 0.5, TOOTH * 2)[1];
+        expect(deep / close).toBeCloseTo(2, 1);
+    });
+
+    it('keeps a readable gap when zoomed out, where a proportion alone would collapse', () => {
+        // Far enough out that the teeth are sub-pixel, the screen floor takes over and
+        // the text still clears the line.
+        const tiny = labelPointFor(WEST_TO_EAST, 2000, 400)[1];
+        expect(Math.abs(tiny)).toBeGreaterThan(8 * 2000);
     });
 
     it('still works for a host that has not stamped the drawn line', () => {
@@ -448,6 +477,6 @@ describe('obstacle line label', () => {
         writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
         const styles = obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[];
         const text = (Array.isArray(styles) ? styles : [styles]).find(s => s.getText?.()?.getText?.());
-        expect((text!.getGeometry() as Point).getCoordinates()[1]).toBeGreaterThan(400);
+        expect((text!.getGeometry() as Point).getCoordinates()[1]).toBeLessThan(0);
     });
 });
