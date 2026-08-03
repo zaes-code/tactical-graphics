@@ -117,7 +117,7 @@ const RATIO_LOCKED_MIN_RADIUS_PX = 50;
 const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {Fill, Stroke, Style} from "ol/style";
-import {getDefaultLineColor, LINE_WIDTH} from "../openlayerStyles";
+import {LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
@@ -161,7 +161,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         if (name === TacticalGraphicName.AreaDefense) {
             this.graphic.setStyle((feature, resolution) => {
-                let color = feature.get('hostilityColor') || getDefaultLineColor();
+                let color = readHostilityColor(feature);
                 return new Style({
                     fill: new Fill({color: color}),
                     stroke: new Stroke({
@@ -217,7 +217,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const lines = geom.getCoordinates();
-                const color = feature.get('hostilityColor') || getDefaultLineColor();
+                const color = readHostilityColor(feature);
                 const stroke = new Stroke({color, width: LINE_WIDTH()});
 
                 const styles: Style[] = [];
@@ -259,7 +259,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 const geom = feature.getGeometry() as MultiLineString;
                 if (!geom) return [];
                 const rawLines = geom.getCoordinates();
-                const defaultColor = feature.get('hostilityColor') || getDefaultLineColor();
+                const defaultColor = readHostilityColor(feature);
 
                 // Recover the arrow's half-length `r` from the geometry. The tip A
                 // sits at local(+r, 0) and the two tail-fin tips E/F at

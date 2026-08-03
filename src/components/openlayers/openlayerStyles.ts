@@ -107,6 +107,44 @@ const OBSTACLE_LABEL_MIN_GAP_PX = 8;
  * history.
  */
 
+/**
+ * ## Reading a graphic's affiliation
+ *
+ * **The amplifier bag first, the loose feature key second.** `writeGraphicProperties`
+ * — the documented way to set amplifiers, and the only way the library itself sets them
+ * — writes `properties.tacticalGraphic` and nothing else. The `hostility` /
+ * `hostilityColor` keys are stamped by three paths in the *demo* (the properties dialog,
+ * the sample sweep, and the basemap re-colour in `OpenLayers.tsx`), so a style function
+ * that reads only those keys is correct only while a human is driving this app.
+ *
+ * Two things it was wrong for, both silent:
+ *
+ * - **Restore.** `restoreTacticalGraphics` rebuilds a graphic from its saved
+ *   `tacticalGraphic` bag and sets no loose key, so every saved hostile graphic came
+ *   back in the neutral default. Nothing throws; the map is just wrong, and only for
+ *   graphics that have been round-tripped.
+ * - **Consumers.** The README tells a host to call
+ *   `writeGraphicProperties(features, name, {hostility: 'Hostile/Faker'})` and says the
+ *   strokes turn red. They did not.
+ *
+ * The key is kept as a fallback rather than deleted: the demo paths above still set it,
+ * and a host may be colouring features by some route of its own.
+ */
+export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
+    return readGraphicLabels(feature).hostility
+        ?? feature.get('hostility')
+        ?? TacticalGraphicHostility.unknown;
+}
+
+/**
+ * The line colour for a feature: an explicit `hostilityColor` override if something set
+ * one, otherwise the affiliation's colour. `getColorByHostility` already resolves
+ * `unknown` to the default line colour, so this covers the unaffiliated case too.
+ */
+export function readHostilityColor(feature: FeatureLike): string {
+    return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
+}
+
 /** Default stroke/fill colour for graphics with no specific hostility colour. */
 export function getDefaultLineColor(): string {
     return getDefaultLineColorOverride() ?? '#000000';
@@ -316,9 +354,7 @@ export const createBaseFeature = () => {
         let isHidden = feature.get('hidden');
 
         if (isHidden) return new Style({});
-        const hostility = feature.get('hostility');
-        const color = hostility ? getColorByHostility(hostility) : getDefaultLineColor();
-        return modifyStyle(setOpacity(color, .35));
+        return modifyStyle(setOpacity(readHostilityColor(feature), .35));
     });
 
     feature.set('base', true);
@@ -461,9 +497,7 @@ export const createFeature = () => {
     let feature = new Feature();
 
     feature.setStyle((feature) => {
-        const hostility = feature.get('hostility');
-        const color = feature.get('hostilityColor')
-            || (hostility ? getColorByHostility(hostility) : getDefaultLineColor());
+        const color = readHostilityColor(feature);
         return new Style({
             fill: new Fill({
                 color: getSelectionFillColor(),
@@ -553,7 +587,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         const acpScale = featureGraphicLabelScale(feature, resolution);
 
         // 🟡 Pull hostility color dynamically
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
 
         // ── Properties info block (above the graphic, upper-left) ──────────────
         const infoLines: string[] = [];
@@ -661,7 +695,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
 
 export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
     const geometry = feature.getGeometry();
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const styles: Style[] = [];
 
     if (geometry instanceof GeometryCollection) {
@@ -734,12 +768,12 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     const coords = (featureGeometry as LineString).getCoordinates();
     if (coords.length < 2) return []; // need at least 2 pts
 
-    const hostilityColor = feature.get('hostilityColor') || getDefaultLineColor();
+    const hostilityColor = readHostilityColor(feature);
     // Test the affiliation, not the colour string. `hostilityColor` is a colour resolved
     // at stamp time, so once the palette became mode-dependent a string compare would
     // both miss a feature stamped in the other mode and be one refactor away from
     // matching some unrelated red.
-    if (feature.get('hostility') === TacticalGraphicHostility.hostileFaker) {
+    if (readHostility(feature) === TacticalGraphicHostility.hostileFaker) {
         labelText = `ENY ${labelText}`;
     }
 
@@ -1009,7 +1043,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
                 stroke: getHaloStroke(),
             }),
         }));
-        let hostility = f.get('hostility');
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -1029,7 +1063,7 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
+        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
@@ -1076,7 +1110,7 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 // stroked line (arcs, arrow shaft, arrow head).
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
     return (feature) => {
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
         const lineStroke = new Stroke({color, width: LINE_WIDTH()});
         const fill = new Fill({color});
         const geom = feature.getGeometry() as MultiLineString;
@@ -1098,7 +1132,7 @@ export function mobileDefenseGraphicStyleFunc(): StyleFunction {
 
 export function envelopmentGraphicStyleFunc(): StyleFunction {
     return (feature, resolution) => {
-        const lineStroke = new Stroke({color: feature.get('hostilityColor') || getDefaultLineColor(), width: LINE_WIDTH()});
+        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
         const geom = feature.getGeometry() as MultiLineString;
         if (!geom) return [];
         const coords = geom.getCoordinates();
@@ -1571,7 +1605,7 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
         let midLine = coords[4];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -1924,7 +1958,7 @@ function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: G
         const coords = geom.getCoordinates();
         if (!coords || coords.length < 2) return [];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const color = getColorByHostility(hostility);
         const labelScale = featureLabelScale(f, resolution);
 
@@ -1954,7 +1988,7 @@ function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabe
     const geom = f.getGeometry() as MultiPoint;
     const coords = geom.getCoordinates();
 
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     const styles: Style[] = [];
 
     const start = coords[0];
@@ -2122,7 +2156,7 @@ function buildLinearTargetStyles(
 
     const center: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
 
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     const color = getColorByHostility(hostility);
 
     const styles: Style[] = [];
@@ -2348,7 +2382,7 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
         let baseLine = coords[0];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -2435,7 +2469,7 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
         const route = lines[0];
         if (!route || route.length < 2) return [];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         // Everything after the route renders untouched — that is the arrowhead.
         const outlineSegments: Coordinate[][] = lines.slice(1);
 
@@ -2502,7 +2536,7 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
         const bottomArrow = coords[3];
         const topArrow = coords[4];
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
 
         const p1 = topLine[0];
@@ -2557,7 +2591,7 @@ export function breachStyleFunc(label: string): StyleFunction {
         let verticalLine = coords[coords.length - 1];
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -2630,7 +2664,7 @@ export function blockStyleFunc(label: string): StyleFunction {
         else return;
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
         if (geom instanceof MultiLineString) {
@@ -2752,7 +2786,7 @@ export function blockStyleFunc(label: string): StyleFunction {
 function firePositionStyles(f: FeatureLike): Style[] {
     const geom = f.getGeometry();
     if (!(geom instanceof MultiLineString)) return [];
-    const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(f);
     return [new Style({
         geometry: geom,
         stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -2901,7 +2935,7 @@ function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: G
             },
         ));
 
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3050,7 +3084,7 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
         }
 
         // ── Line ──────────────────────────────────────────────────────────
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         styles.push(new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3251,12 +3285,7 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
             },
         ));
 
-        // The amplifier bag first, the loose feature key second. `restoreTacticalGraphics`
-        // rebuilds a graphic from `properties.tacticalGraphic` and sets no `hostility`
-        // key, so reading the key alone drew a *saved* hostile obstacle line in the
-        // neutral default — FM 1-02.2 para 5-3 puts its line work in red. The key stays
-        // as a fallback for features coloured by some other path.
-        const hostility = labels.hostility || f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const outlineStyle = new Style({
             geometry: geom,
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
@@ -3280,7 +3309,7 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
 
 function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3306,7 +3335,7 @@ export function tacticalFixStyleFunc(): StyleFunction {
 function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
         const styles: Style[] = [];
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         styles.push(new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3382,7 +3411,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
 
 export function defaultStyleFunc(): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return new Style({
             fill: new Fill({color: color}),
             stroke: new Stroke({
@@ -3434,7 +3463,7 @@ export function baseDefenseZoneLabelStyleFn(): StyleFunction {
  */
 export function fightingPositionStyleFunc(): StyleFunction {
     return (f) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         return new Style({
             stroke: new Stroke({color, width: LINE_WIDTH()}),
         });
@@ -3458,7 +3487,7 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
     return (f, resolution) => {
         const geom = f.getGeometry() as MultiLineString;
         if (!geom) return [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const color = getColorByHostility(hostility);
         const styles: Style[] = [];
 
@@ -3559,7 +3588,7 @@ export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunctio
 
 function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const geom = f.getGeometry() as MultiLineString;
         const allCoords = geom.getCoordinates();
         const baseCoords = allCoords[0];
@@ -3721,7 +3750,7 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = f.get('hostilityColor') || getDefaultLineColor();
+        let color = readHostilityColor(f);
         return [new Style({
             stroke: new Stroke({
                 color: color,
@@ -3738,7 +3767,7 @@ export function fieldOfFireStyleFunc(): StyleFunction {
 
 function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const styles: Style[] = [];
 
         // Thin stroke for the whole MultiLineString (V legs + both arrowheads).
@@ -3800,7 +3829,7 @@ function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction
         const coords = geom.getCoordinates();
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
 
         const outlineSegments: Coordinate[][] = [];
 
@@ -3953,7 +3982,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
         const coords = geom.getCoordinates();
 
         const styles: Style[] = [];
-        const hostility = f.get('hostility') || TacticalGraphicHostility.unknown;
+        const hostility = readHostility(f);
         const echelon = f.get('echelon') || TacticalGraphicEchelon.unknown;
 
         const outlineSegments: Coordinate[][] = [];
@@ -4535,7 +4564,7 @@ export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFun
             // amplifier, so they take the standard identity colour with the
             // area outline — FM 1-02.2 para 5-3.
             stroke: new Stroke({
-                color: f.get('hostilityColor') || getDefaultLineColor(),
+                color: readHostilityColor(f),
                 width: LINE_WIDTH(),
             }),
         }));
@@ -4831,7 +4860,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
         const lines = geom.getCoordinates();
         if (lines.length < 2) return [];
 
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(feature);
         const strokeFor = (hashed: boolean) => new Stroke({
             color,
             width: LINE_WIDTH(),
@@ -4923,7 +4952,7 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
 export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
     const label = getLabel(name);
     return (f, resolution) => {
-        const color = f.get('hostilityColor') || getDefaultLineColor();
+        const color = readHostilityColor(f);
         const stroke = new Stroke({color, width: LINE_WIDTH()});
         const geom = f.getGeometry();
         if (!(geom instanceof GeometryCollection)) {
@@ -5361,7 +5390,7 @@ function railroadStyleFunction(feature: FeatureLike, resolution: number) {
     const styles = [];
     const {outlineSegments, midGap, dx, dy} = geoData;
     // 0 = east, π/2 = north, etc.
-    const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(feature);
     const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
 
     // 6) build styles
@@ -5589,7 +5618,7 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
         return [];
     }
 
-    const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+    const hostility = readHostility(feature);
     const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
     const {outlineSegments, midGap, dx, dy} = geoData;
 
@@ -5722,7 +5751,7 @@ export function createDiagonalHatchPattern(
 }
 
 export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
-    let hostility = feature.get('hostility');
+    const hostility = readHostility(feature);
     const hatchPattern = createDiagonalHatchPattern(
         hostility,
         8,
@@ -5749,8 +5778,8 @@ export function freeFireAreaCircularStyleFunc(): StyleFunction {
 
 function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (feature) => {
-        const color = feature.get('hostilityColor') || getDefaultLineColor();
-        const hostility = feature.get('hostility') || TacticalGraphicHostility.unknown;
+        const color = readHostilityColor(feature);
+        const hostility = readHostility(feature);
         const isPlanned = labels.status === TacticalGraphicStatus.planned;
         const hatchPattern = isPlanned ? createDiagonalHatchPattern(hostility, 8, 1) : undefined;
 
@@ -5775,7 +5804,7 @@ export function groupOrSeriesOfTargetsGraphicStyle(
     const ring = geom.getCoordinates()[0];
     if (!ring || ring.length < 2) return [];
 
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
     const stroke = new Stroke({
         color,
@@ -5827,7 +5856,7 @@ export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: num
 }
 
 function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style {
-    const color = feature.get('hostilityColor') || getDefaultLineColor();
+    const color = readHostilityColor(feature);
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
 
     const pattern = createDiagonalHatchPattern(
@@ -5869,7 +5898,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
         return groupOrSeriesOfTargetsGraphicStyle(labels, feature, resolution);
     }
     // ✅ Pull hostility-based color if available
-    let color = feature.get('hostilityColor') || getDefaultLineColor();
+    let color = readHostilityColor(feature);
 
     const isPlanned = labels.status === TacticalGraphicStatus.planned;
 
@@ -5883,7 +5912,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
 }
 
 export function encirclementGraphicStyle(feature: FeatureLike, resolution: number): Style[] | Style {
-    let hostility = feature.get('hostility');
+    const hostility = readHostility(feature);
     let geom = feature.getGeometry();
     let styles = [
         new Style({
@@ -5950,7 +5979,7 @@ function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: num
     let rotation = feature.get('rotation') || 0;
 
     const unitRot = [Math.cos(rotation), Math.sin(rotation)];
-    const color = getColorByHostility(feature.get('hostility'));
+    const color = readHostilityColor(feature);
     const gapMapUnits = GAP_WIDTH_PX * resolution;
 
     // --- NEW LOGIC: FINDING OPPOSITE SEGMENTS ---
