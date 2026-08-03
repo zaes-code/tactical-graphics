@@ -75,15 +75,8 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
 
-/**
- * Gap between an obstacle line's teeth and the nearest edge of its label, as a fraction
- * of how far those teeth stand off the line. Proportional so the label holds its place
- * in the symbol at every zoom, rather than creeping in or drifting out as the map scales.
- */
-const OBSTACLE_LABEL_GAP_RATIO = 0.5;
-
-/** Floor under that gap, in screen pixels: a proportion alone closes up when zoomed out. */
-const OBSTACLE_LABEL_MIN_GAP_PX = 8;
+/** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
+const OBSTACLE_LABEL_GAP_PX = 8;
 
 /**
  * ## One palette, and where a host changes it
@@ -2331,54 +2324,53 @@ export function lineOfContactStyleFunc(): StyleFunction {
 
 function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const lines = geom.getCoordinates();
-        if (!lines || lines.length < 2) return [];
+        const geom = f.getGeometry() as LineString;
+        const coords = geom?.getCoordinates() ?? [];
+        if (coords.length < 2) return [];
 
-        const topCoords = lines[0];   // left/top wave (red)
-        const bottomCoords = lines[1]; // right/bottom wave (black)
+        // Both waves and — the point of this symbol — the gap between them are screen
+        // sized. Baked into the geometry the offset was fixed in metres, so the distance
+        // between the enemy-side and friendly-side lines grew as the map zoomed in and
+        // closed up as it zoomed out.
+        //
+        // Deliberately *not* passed through `decorationScale`, unlike every other
+        // decoration here. That cap keys off the shape's on-screen size, which is itself
+        // a function of zoom — fine for a tooth, which may quietly shrink on a small
+        // symbol, but not for this: the separation is what the graphic says, so it holds
+        // at every zoom and on every length of line, even where that makes a very short
+        // one look crowded.
+        const wavelengthMap = WAVE_WAVELENGTH_PX * resolution;
+        const amplitudeMap = WAVE_AMPLITUDE_PX * resolution;
+        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * resolution;
 
-        // Anchor the LC labels on the centerline between the two offset waves.
-        const bottomStart = bottomCoords[0];
-        const bottomEnd = bottomCoords[bottomCoords.length - 1];
-        const topStart = topCoords[0];
-        const topEnd = topCoords[topCoords.length - 1];
-        const start = [(topStart[0] + bottomStart[0]) / 2, (topStart[1] + bottomStart[1]) / 2];
-        const end = [(topEnd[0] + bottomEnd[0]) / 2, (topEnd[1] + bottomEnd[1]) / 2];
+        // Which side is which is a property of the map, not of the drawing gesture: the
+        // enemy-side wave takes the upper side of the line however it was drawn.
+        const {dir} = pathPointAt(coords, pathLength(coords) / 2);
+        const enemySign = upSign(dir);
 
-        const startScale = featureLabelScale(f, resolution);
-        const endScale = featureLabelScale(f, resolution);
-        // Gap between label and graphic, scaled with label size.
-        const labelPadPx = 10;
-
-        // Rotate labels to follow the centerline's orientation (midpoint of
-        // the two waves), not the wavy top wave itself.
+        const start = coords[0];
+        const end = coords[coords.length - 1];
+        const labelScale = featureLabelScale(f, resolution);
         const startRotation = getRotation(start, end);
         const endRotation = getRotation(end, start);
-
-        // getRotation flips rotation 180° to keep text upright, so when the
-        // line is drawn right→left the anchor/offset need to swap to keep the
-        // labels outside the graphic.
+        // getRotation flips rotation 180° to keep text upright, so a line drawn right→left
+        // needs its anchors swapped to keep the labels outside the graphic.
         const reversed = end[0] < start[0];
-        const startAlign = reversed ? 'left' : 'right';
-        const endAlign = reversed ? 'right' : 'left';
-        const startOffsetSign = reversed ? 1 : -1;
-        const endOffsetSign = reversed ? -1 : 1;
+        const labelPadPx = 10;
 
         return [
-            // Enemy-side wave. Routed through the palette rather than a literal 'red' so it
-            // tracks the mode alongside its friendly-side partner below; the graphic draws
-            // both identities at once, so the pair has to stay balanced.
+            // Enemy-side wave. Routed through the palette rather than a literal 'red' so
+            // it tracks its friendly-side partner; the graphic draws both identities at
+            // once, so the pair has to stay balanced.
             new Style({
-                geometry: new LineString(topCoords),
+                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, enemySign, offsetMap)),
                 stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH()}),
             }),
             // Friendly-side wave
             new Style({
-                geometry: new LineString(bottomCoords),
+                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)),
                 stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH()}),
             }),
-            // "LC" label at start (left-aligned to the left of the line start)
             new Style({
                 geometry: new Point(start),
                 text: new Text({
@@ -2386,14 +2378,13 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
                     rotation: startRotation,
-                    textAlign: startAlign,
+                    textAlign: reversed ? 'left' : 'right',
                     textBaseline: 'middle',
-                    scale: startScale,
-                    offsetX: startOffsetSign * labelPadPx * startScale,
+                    scale: labelScale,
+                    offsetX: (reversed ? 1 : -1) * labelPadPx,
                     stroke: getHaloStroke(),
                 }),
             }),
-            // "LC" label at end (right-aligned to the right of the line end)
             new Style({
                 geometry: new Point(end),
                 text: new Text({
@@ -2401,10 +2392,10 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
                     rotation: endRotation,
-                    textAlign: endAlign,
+                    textAlign: reversed ? 'right' : 'left',
                     textBaseline: 'middle',
-                    scale: endScale,
-                    offsetX: endOffsetSign * labelPadPx * endScale,
+                    scale: labelScale,
+                    offsetX: (reversed ? -1 : 1) * labelPadPx,
                     stroke: getHaloStroke(),
                 }),
             }),
@@ -3139,20 +3130,266 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
 }
 
 /**
- * The line the user actually drew, behind a decorated line graphic.
+ * ## Obstacle crenellation
  *
- * `LineGraphicBase` stamps it because the rendered geometry is not the drawn one: an
- * obstacle line's geometry is the *toothed* path, whose vertices are mostly tooth feet
- * and apexes. Anything that needs to reason about the drawn shape — which segment is the
- * middle one, which way it runs — cannot recover that from the teeth without guessing.
+ * Teeth are a feature of the symbol, not a measurement: their size says nothing about
+ * the ground, so it should not change with zoom. They are drawn here at a constant
+ * number of screen pixels, the way `StrongPoint`'s cross-ties always have been.
  *
- * Falls back to the rendered endpoints, which is right for the common two-point line and
- * degrades to the old chord behaviour for a host driving these styles itself.
+ * They used to be baked into the geometry by the generator, sized from the drawing
+ * resolution — 15 px at whatever zoom the graphic happened to be drawn at, then fixed in
+ * metres, so they grew on screen as the map zoomed in and shrank to nothing zoomed out.
+ * That also made the obstacle line's label clearance a measuring exercise: with teeth of
+ * unknown map-unit height, the label had to scan the rendered geometry to find out how
+ * far to stand off. A constant in pixels needs no measuring.
+ *
+ * The one place a constant is wrong is a symbol smaller than its own decoration — a
+ * 15 px sample in the gallery cannot carry a 10 px tooth. So the height is capped at a
+ * share of the shape's own on-screen extent, and the base and gap scale with it, keeping
+ * the teeth in proportion as they shrink.
  */
-function drawnBaseline(f: FeatureLike, rendered: Coordinate[]): Coordinate[] {
-    const stamped = f.get('baseCoordinates') as Coordinate[] | undefined;
-    if (Array.isArray(stamped) && stamped.length >= 2) return stamped;
-    return [rendered[0], rendered[rendered.length - 1]];
+const OBSTACLE_TOOTH_HEIGHT_PX = 10;
+const OBSTACLE_TOOTH_BASE_PX = 10;
+const OBSTACLE_TOOTH_GAP_PX = 10;
+
+/**
+ * The fortified line and area wear square merlons; the forward line of own troops and
+ * each half of the line of contact wear a scalloped wave. Both were baked into geometry
+ * at the drawing resolution until 2026-08-03, for the same reason and with the same
+ * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
+ * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
+ */
+const FORTIFIED_MERLON_PX = 15;
+const FORTIFIED_CRENEL_PX = 15;
+const FORTIFIED_HEIGHT_PX = 11;
+const WAVE_WAVELENGTH_PX = 15;
+const WAVE_AMPLITUDE_PX = 8;
+const LINE_OF_CONTACT_OFFSET_PX = 16;
+
+/**
+ * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
+ *
+ * A constant pixel size is right everywhere except on a shape smaller than its own
+ * decoration — the sample gallery draws areas 15 px across. `available` is what the
+ * decoration has to fit inside: the smaller side of a closed ring's extent, or the length
+ * of an open path, because a horizontal line's extent has no height and the smaller side
+ * would be zero.
+ */
+function decorationScale(path: Coordinate[], closed: boolean, resolution: number, heightPx: number): number {
+    let availablePx: number;
+    if (closed) {
+        const xs = path.map(p => p[0]);
+        const ys = path.map(p => p[1]);
+        availablePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / resolution;
+    } else {
+        availablePx = pathLength(path) / resolution;
+    }
+    const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
+    return Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+}
+
+const DECORATION_MAX_SHARE_CLOSED = 0.25;
+const DECORATION_MAX_SHARE_OPEN = 0.12;
+
+/** The point at a distance along a polyline, with the unit direction there. */
+function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
+    let remaining = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (length === 0) continue;
+        const dir: Coordinate = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+        if (remaining <= length) {
+            return {point: [a[0] + dir[0] * remaining, a[1] + dir[1] * remaining], dir};
+        }
+        remaining -= length;
+    }
+    const a = path[path.length - 2];
+    const b = path[path.length - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return {point: b, dir: [(b[0] - a[0]) / length, (b[1] - a[1]) / length]};
+}
+
+/** The side of a segment that points up on screen, as a sign on the left-hand normal. */
+function upSign(dir: Coordinate): number {
+    return dir[0] >= 0 ? 1 : -1;
+}
+
+/**
+ * Square merlons along a path — the fortified line and area.
+ *
+ * The tooth is a rectangle standing off the baseline, so the path runs along the
+ * baseline for a crenel, up, across a merlon, down, and on. Emitted as one connected
+ * path: the generator used to hand back interleaved gap and tooth sub-lines, which drew
+ * identically but had to be reassembled by anything that wanted the outline.
+ */
+function castellatedPath(path: Coordinate[], merlonMap: number, crenelMap: number, heightMap: number, side: number | 'up'): Coordinate[] {
+    const total = pathLength(path);
+    const pattern = merlonMap + crenelMap;
+    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
+
+    const count = Math.max(1, Math.round(total / pattern));
+    const spacing = total / count;
+    const merlon = spacing * (merlonMap / pattern);
+
+    const out: Coordinate[] = [path[0]];
+    for (let i = 0; i < count; i++) {
+        const startAt = i * spacing + (spacing - merlon) / 2;
+        const left = pathPointAt(path, startAt);
+        const right = pathPointAt(path, startAt + merlon);
+        const sign = side === 'up' ? upSign(left.dir) : side;
+        const ln: Coordinate = [-left.dir[1] * sign, left.dir[0] * sign];
+        const rn: Coordinate = [-right.dir[1] * sign, right.dir[0] * sign];
+        out.push(
+            left.point,
+            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
+            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
+            right.point,
+        );
+    }
+    out.push(path[path.length - 1]);
+    return out;
+}
+
+/** Steps per bump. Enough that a semicircle reads as a curve rather than a tent. */
+const WAVE_STEPS = 12;
+
+/**
+ * A scalloped path — the forward line of own troops, and each half of the line of
+ * contact. `offsetMap` shifts the whole wave sideways off the drawn line, which is what
+ * separates the line of contact's two identities.
+ */
+function wavePath(path: Coordinate[], wavelengthMap: number, amplitudeMap: number, sideSign: number, offsetMap = 0): Coordinate[] {
+    const total = pathLength(path);
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return path;
+
+    const count = Math.max(1, Math.round(total / wavelengthMap));
+    const wavelength = total / count;
+    const out: Coordinate[] = [];
+
+    const shifted = (at: {point: Coordinate, dir: Coordinate}): Coordinate => {
+        const n: Coordinate = [-at.dir[1] * sideSign, at.dir[0] * sideSign];
+        return [at.point[0] + n[0] * offsetMap, at.point[1] + n[1] * offsetMap];
+    };
+
+    for (let i = 0; i < count; i++) {
+        const from = pathPointAt(path, i * wavelength);
+        const to = pathPointAt(path, (i + 1) * wavelength);
+        const a = shifted(from);
+        const b = shifted(to);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const chord = Math.hypot(dx, dy) || 1;
+        const nx = -(dy / chord) * sideSign;
+        const ny = (dx / chord) * sideSign;
+
+        for (let step = 0; step <= WAVE_STEPS; step++) {
+            if (i > 0 && step === 0) continue; // the previous bump ended here
+            const t = step / WAVE_STEPS;
+            const bump = Math.sin(Math.PI * t) * amplitudeMap;
+            out.push([a[0] + dx * t + nx * bump, a[1] + dy * t + ny * bump]);
+        }
+    }
+    return out;
+}
+
+/** Winding, by the shoelace sum: `> 0` is clockwise in projected coordinates. */
+function ringIsClockwise(ring: Coordinate[]): boolean {
+    let sum = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+        sum += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+    }
+    return sum > 0;
+}
+
+function pathLength(path: Coordinate[]): number {
+    let total = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+        total += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+    }
+    return total;
+}
+
+/**
+ * Tooth dimensions in map units for one path, honouring the cap.
+ *
+ * `available` is what the teeth have to fit inside: the smaller side of a closed ring's
+ * extent, or the length of an open one — a horizontal line's extent has no height, so
+ * the smaller side would be zero and the teeth would vanish.
+ */
+function obstacleToothSize(path: Coordinate[], closed: boolean, resolution: number) {
+    const scale = decorationScale(path, closed, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
+    return {
+        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
+        baseMap: OBSTACLE_TOOTH_BASE_PX * scale * resolution,
+        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
+        heightPx: OBSTACLE_TOOTH_HEIGHT_PX * scale,
+    };
+}
+
+/**
+ * Walks a path and inserts teeth, apex on the side `sideSign` selects (+1 left of travel,
+ * -1 right). A tooth is only placed where it fits wholly within one segment, so corners
+ * get a slightly wider gap rather than a tooth bent around them; the pattern carries
+ * across the vertex so the spacing stays even along the whole path.
+ */
+function crenellatedPath(path: Coordinate[], heightMap: number, baseMap: number, gapMap: number, side: number | 'up'): Coordinate[] {
+    if (path.length < 2 || baseMap <= 0) return path;
+    const out: Coordinate[] = [];
+    const unit = baseMap + gapMap;
+    let nextToothAt = gapMap / 2;
+
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        out.push(a);
+
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const length = Math.hypot(dx, dy);
+        if (length === 0) continue;
+
+        const ux = dx / length;
+        const uy = dy / length;
+        // 'up' is decided per segment: a closed ring has an inside and an outside, but an
+        // open line has neither, so the only stable choice is the one the map defines.
+        // Picking a side of *travel* is what made the same line drawn right-to-left come
+        // out with its teeth on the other side.
+        const sideSign = side === 'up' ? (ux >= 0 ? 1 : -1) : side;
+        const nx = -uy * sideSign;
+        const ny = ux * sideSign;
+
+        while (nextToothAt + baseMap <= length) {
+            const p1: Coordinate = [a[0] + ux * nextToothAt, a[1] + uy * nextToothAt];
+            const p2: Coordinate = [a[0] + ux * (nextToothAt + baseMap), a[1] + uy * (nextToothAt + baseMap)];
+            out.push(
+                p1,
+                [(p1[0] + p2[0]) / 2 + nx * heightMap, (p1[1] + p2[1]) / 2 + ny * heightMap],
+                p2,
+            );
+            nextToothAt += unit;
+        }
+        nextToothAt = Math.max(0, nextToothAt - length);
+    }
+    out.push(path[path.length - 1]);
+    return out;
+}
+
+/**
+ * The crenellated ring for an obstacle area.
+ *
+ * `outward` is a geometric intent, and the side of travel it lands on depends on the
+ * ring's winding — which nothing normalises, since the ring comes back in the order the
+ * user clicked the corners. Reconciling the two here is what keeps an area drawn
+ * anticlockwise from turning its teeth inside out.
+ */
+function obstacleRing(ring: Coordinate[], resolution: number, outward: boolean): Coordinate[] {
+    const {heightMap, baseMap, gapMap} = obstacleToothSize(ring, true, resolution);
+    if (heightMap <= 0) return ring;
+    const outwardIsLeft = ringIsClockwise(ring);
+    const sideSign = outward === outwardIsLeft ? 1 : -1;
+    return crenellatedPath(ring, heightMap, baseMap, gapMap, sideSign);
 }
 
 /** Index of the segment containing the halfway point by length — the centre-most one. */
@@ -3172,64 +3409,6 @@ function centreSegmentIndex(coords: Coordinate[]): number {
     return Math.max(0, lengths.length - 1);
 }
 
-/**
- * How far the rendered geometry reaches past a segment on one side, in map units.
- *
- * The teeth are map-unit sized — they were generated from the drawing resolution — so
- * they grow on screen as the user zooms in, while a label offset in screen pixels does
- * not. Offsetting by a fixed pixel gap therefore looks right at the drawing zoom and
- * buries the label in the teeth two zoom levels later. Measuring the geometry instead of
- * re-deriving the tooth height keeps the clearance correct at every zoom, and keeps this
- * function from carrying a copy of a constant that lives in the generator.
- */
-function extentBeyondSegment(rendered: Coordinate[], from: Coordinate, dir: Coordinate, normal: Coordinate, segLength: number): number {
-    let extent = 0;
-    for (const [x, y] of rendered) {
-        const vx = x - from[0];
-        const vy = y - from[1];
-        const along = vx * dir[0] + vy * dir[1];
-        if (along < 0 || along > segLength) continue;
-        const across = vx * normal[0] + vy * normal[1];
-        if (across > extent) extent = across;
-    }
-    return extent;
-}
-
-/** Index of the rendered vertex closest to a drawn one. Exact in practice — the
- *  generator walks the drawn line and emits its vertices as it goes — so this is a
- *  tolerant lookup rather than a search. */
-function nearestVertexIndex(rendered: Coordinate[], target: Coordinate): number {
-    let best = 0;
-    let bestDistance = Infinity;
-    for (let i = 0; i < rendered.length; i++) {
-        const distance = Math.hypot(rendered[i][0] - target[0], rendered[i][1] - target[1]);
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            best = i;
-        }
-    }
-    return best;
-}
-
-/**
- * The stretch of rendered geometry belonging to one drawn segment.
- *
- * The clearance measurement has to be about *this* segment's teeth and nothing else. An
- * along-track filter alone is not enough: on a line that doubles back — which is normal
- * once a user edits vertices around — a limb from somewhere else in the line projects
- * into the same along-range while being an enormous distance to the side, and gets
- * measured as though it were a tooth. The label then flies off to clear geometry it was
- * never near.
- *
- * The generator walks the drawn line in order, so a segment's teeth are the contiguous
- * run between its two endpoints in the output.
- */
-function renderedSpanForSegment(rendered: Coordinate[], p1: Coordinate, p2: Coordinate): Coordinate[] {
-    const a = nearestVertexIndex(rendered, p1);
-    const b = nearestVertexIndex(rendered, p2);
-    return rendered.slice(Math.min(a, b), Math.max(a, b) + 1);
-}
-
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3244,13 +3423,13 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
         if (coords.length < 2) return styles;
 
         // ── 1. The centre-most drawn segment ──────────────────────────────
-        // Off the drawn baseline, not the rendered one: every third vertex of the
-        // rendered geometry is a tooth apex, so "the middle segment" of it would be a
-        // tooth edge, and the label would ride whichever tooth happened to be central.
-        const baseline = drawnBaseline(f, coords);
-        const segIdx = centreSegmentIndex(baseline);
-        const p1 = baseline[segIdx];
-        const p2 = baseline[segIdx + 1];
+        // The geometry *is* the drawn line now — the teeth are added below, in screen
+        // space — so its own segments are the drawn ones. While the teeth were baked in,
+        // every third vertex here was a tooth apex, and finding the middle of the drawn
+        // line meant carrying a copy of it on the feature.
+        const segIdx = centreSegmentIndex(coords);
+        const p1 = coords[segIdx];
+        const p2 = coords[segIdx + 1];
 
         const segDx = p2[0] - p1[0];
         const segDy = p2[1] - p1[1];
@@ -3271,28 +3450,15 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
             normal = [-normal[0], -normal[1]];
         }
 
-        // ── 3. Clear the graphic, at any zoom, by a proportional gap ──────
-        // Three terms, and each is in the unit that keeps it honest:
-        //
-        //  - how far the graphic itself reaches below the segment, measured off the
-        //    geometry, in map units. The teeth are map-unit sized, so this is what grows
-        //    when the user zooms in and what a pixel offset alone could never track.
-        //  - half a line of text, in screen pixels: the anchor is the text's middle, and
-        //    text does not scale with the map.
-        //  - the gap, which is proportional to the teeth — so the symbol and its label
-        //    keep the same relationship at every zoom instead of the label drifting
-        //    closer or further as the map scales — with a screen-pixel floor, since a
-        //    proportional gap alone collapses onto the line when zoomed far enough out.
+        // ── 3. Stand off the line — a constant, in pixels ─────────────────
+        // The teeth take the upper side and the label the lower, so it has only the line
+        // itself to clear, and both terms are screen-sized: text does not scale with the
+        // map. This used to be a scan of the rendered geometry to discover how far
+        // map-unit teeth happened to reach, which is what sent the label a screen away on
+        // a line that doubled back over itself.
         const obsScale = featureLabelScale(f, resolution);
         const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
-
-        const up: Coordinate = [-normal[0], -normal[1]];
-        const span = renderedSpanForSegment(coords, p1, p2);
-        const clearanceMap = extentBeyondSegment(span, p1, dir, normal, segLength);
-        const toothExtentMap = Math.max(clearanceMap, extentBeyondSegment(span, p1, dir, up, segLength));
-
-        const gapMap = Math.max(toothExtentMap * OBSTACLE_LABEL_GAP_RATIO, OBSTACLE_LABEL_MIN_GAP_PX * resolution);
-        const offsetMap = clearanceMap + halfTextHeightPx * resolution + gapMap;
+        const offsetMap = (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * resolution;
 
         const labelPoint: Coordinate = [
             mid[0] + normal[0] * offsetMap,
@@ -3323,12 +3489,14 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
             },
         ));
 
+        // The line, crenellated in screen space. The teeth take the upper side whichever
+        // way the line was drawn, and the label sits below, so the two never compete.
+        const {heightMap, baseMap, gapMap} = obstacleToothSize(coords, false, resolution);
         const hostility = readHostility(f);
-        const outlineStyle = new Style({
-            geometry: geom,
+        styles.push(new Style({
+            geometry: new LineString(crenellatedPath(coords, heightMap, baseMap, gapMap, 'up')),
             stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        styles.push(outlineStyle);
+        }));
 
         return styles;
     };
@@ -3523,69 +3691,39 @@ export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction
 function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     const label = getFullLabel(name, labels.label ?? '');
     return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
+        const geom = f.getGeometry() as LineString;
         if (!geom) return [];
-        const hostility = readHostility(f);
-        const color = getColorByHostility(hostility);
+        const coords = geom.getCoordinates();
+        if (coords.length < 2) return [];
+
+        const color = readHostilityColor(f);
         const styles: Style[] = [];
 
+        // Merlons in screen pixels, on the upper side of each segment whichever way the
+        // line was drawn. The generator used to hand back interleaved gap and tooth
+        // sub-lines, sized at the drawing resolution; the geometry is the drawn line now.
+        const scale = decorationScale(coords, false, resolution, FORTIFIED_HEIGHT_PX);
         styles.push(new Style({
-            geometry: geom,
-            stroke: new Stroke({
-                color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
+            geometry: new LineString(castellatedPath(
+                coords,
+                FORTIFIED_MERLON_PX * scale * resolution,
+                FORTIFIED_CRENEL_PX * scale * resolution,
+                FORTIFIED_HEIGHT_PX * scale * resolution,
+                'up',
+            )),
+            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
         }));
 
         if (!label) return styles;
 
-        // Sub-lines are interleaved gap/tooth/gap/.../gap. The user-drawn
-        // baseline endpoints are the very first point of the first sub-line
-        // and the very last point of the last sub-line — those are always
-        // gap pieces (the layout starts and ends with a gap).
-        const lines = geom.getCoordinates();
-        if (!lines.length) return styles;
-        const firstLine = lines[0];
-        const lastLine = lines[lines.length - 1];
-        if (firstLine.length < 1 || lastLine.length < 1) return styles;
-        const start = firstLine[0];
-        const end = lastLine[lastLine.length - 1];
-        // Treat the start→end span as the baseline for label projection. For
-        // multi-segment user lines this is an approximation, but the user's
-        // drawn line is contiguous so the midpoint sits close to the
-        // visual center.
-        const baseline = [start, end];
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-        if (baseLen === 0) return styles;
-        const ux = baseDx / baseLen;
-        const uy = baseDy / baseLen;
-
-        const projected = baseline.map(([x, y]) => (x - start[0]) * ux + (y - start[1]) * uy);
-        const target = (Math.min(...projected) + Math.max(...projected)) / 2;
-        let segIdx = 0;
-        for (let i = 0; i < projected.length - 1; i++) {
-            if ((projected[i] <= target && projected[i + 1] >= target) ||
-                (projected[i] >= target && projected[i + 1] <= target)) {
-                segIdx = i;
-                break;
-            }
-        }
-        const a = baseline[segIdx];
-        const b = baseline[segIdx + 1];
-        const da = projected[segIdx];
-        const db = projected[segIdx + 1];
-        const t = da === db ? 0.5 : (target - da) / (db - da);
-        const mid: Coordinate = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-
-        // Label below the line (teeth bump up) — same 8 px gap rule as the
-        // other line styles, with bottom-anchored text so the gap is
-        // constant regardless of label scale.
-        const scale = featureLabelScale(f, resolution);
+        // The label goes under the centre-most drawn segment — the merlons take the upper
+        // side, so the two never compete.
+        const segIdx = centreSegmentIndex(coords);
+        const a = coords[segIdx];
+        const b = coords[segIdx + 1];
+        const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const labelScale = featureLabelScale(f, resolution);
         const labelAnchor = offsetBelow(mid, a, b, resolution, 8);
-        const rotation = getRotation(a, b);
 
         styles.push(new Style({
             geometry: new Point(labelAnchor),
@@ -3593,10 +3731,10 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
                 text: label,
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
-                rotation,
+                rotation: getRotation(a, b),
                 textAlign: 'center',
                 textBaseline: 'top',
-                scale,
+                scale: labelScale,
                 stroke: getHaloStroke(),
             }),
         }));
@@ -3605,21 +3743,6 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
     };
 }
 
-/**
- * Unified style function for all four direction-arrow graphics:
- * DirectionOfMainAttack, DirectionOfSupportingAttack, DirectionOfMainAttackFeint,
- * AviationDirectionOfAttack.
- *
- * Layout rules:
- *  - Base line uses `dashStyle(labels)` so it goes dashed when planned /
- *    suspected, per the shared hash convention. Arrowheads stay solid.
- *  - Name label sits on the line, rotated with the line, right-aligned so its
- *    right edge stops just before the arrowhead (never invades it).
- *  - DTG (dtg1 - dtg2) sits below the line at 20 px * labelScale clearance,
- *    direction-safe via `offsetBelow` and `textBaseline:'top'`.
- *  - DirectionOfSupportingAttack: if hostility is hostile, prepend a separate
- *    "ENY" label one gap to the left of the name.
- */
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => directionArrowStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3788,10 +3911,22 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = readHostilityColor(f);
+        const geom = f.getGeometry() as LineString;
+        const coords = geom?.getCoordinates() ?? [];
+        if (coords.length < 2) return [];
+
+        // The scallops are screen-sized: baked into the geometry they were fixed in
+        // metres, so a FLOT drawn zoomed out came back as a row of huge bulges.
+        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
         return [new Style({
+            geometry: new LineString(wavePath(
+                coords,
+                WAVE_WAVELENGTH_PX * scale * resolution,
+                WAVE_AMPLITUDE_PX * scale * resolution,
+                1,
+            )),
             stroke: new Stroke({
-                color: color,
+                color: readHostilityColor(f),
                 width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
@@ -5788,23 +5923,53 @@ export function createDiagonalHatchPattern(
     return ctx.createPattern(canvas, 'repeat')!;
 }
 
-export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
-    const hostility = readHostility(feature);
-    const hatchPattern = createDiagonalHatchPattern(
-        hostility,
-        8,
-        1,
-    );
+/**
+ * The obstacle areas: belt, group and zone wear their teeth outward, the free and
+ * restricted areas inward, and the restricted area alone carries a hatch fill.
+ *
+ * The geometry is the plain drawn ring — the crenellation is added here, in screen
+ * pixels. @see obstacleRing
+ */
+export function obstacleAreaStyles(feature: FeatureLike, resolution: number, opts: {outward: boolean, hatched?: boolean}): Style[] {
+    const geometry = feature.getGeometry();
+    if (!(geometry instanceof Polygon)) return [];
 
-    return new Style({
-        fill: new Fill({
-            color: hatchPattern,
-        }),
-        stroke: new Stroke({
-            color: getColorByHostility(hostility),
-            width: LINE_WIDTH(),
-        }),
-    });
+    const hostility = readHostility(feature);
+    const color = getColorByHostility(hostility);
+    const toothed = geometry.getCoordinates().map(ring => obstacleRing(ring, resolution, opts.outward));
+
+    return [new Style({
+        geometry: new Polygon(toothed),
+        stroke: new Stroke({color, width: LINE_WIDTH()}),
+        fill: opts.hatched ? new Fill({color: createDiagonalHatchPattern(hostility, 8, 1)}) : undefined,
+    })];
+}
+
+export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
+    return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
+}
+
+/**
+ * The fortified area: square merlons standing outward off the drawn ring, in screen
+ * pixels. Same reasoning as the obstacle teeth, same winding correction — outward is a
+ * property of the ring, not of the order its corners were clicked.
+ */
+export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
+    const geometry = feature.getGeometry();
+    if (!(geometry instanceof Polygon)) return [];
+
+    const scale = decorationScale(geometry.getCoordinates()[0], true, resolution, FORTIFIED_HEIGHT_PX);
+    const merlonMap = FORTIFIED_MERLON_PX * scale * resolution;
+    const crenelMap = FORTIFIED_CRENEL_PX * scale * resolution;
+    const heightMap = FORTIFIED_HEIGHT_PX * scale * resolution;
+
+    const rings = geometry.getCoordinates().map(ring =>
+        castellatedPath(ring, merlonMap, crenelMap, heightMap, ringIsClockwise(ring) ? 1 : -1));
+
+    return [new Style({
+        geometry: new Polygon(rings),
+        stroke: new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()}),
+    })];
 }
 
 // FreeFireAreaCircular: present = solid stroke with no fill; planned = dashed
@@ -5925,6 +6090,13 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
     if (name === TacticalGraphicName.Encirclement) return encirclementGraphicStyle(feature, resolution);
     if (name === TacticalGraphicName.ObstacleRestrictedArea) return obstacleRestrictedZoneStyle(feature, resolution);
+    if (name === TacticalGraphicName.ObstacleFreeArea) return obstacleAreaStyles(feature, resolution, {outward: false});
+    if (name === TacticalGraphicName.FortifiedArea) return fortifiedAreaStyle(feature, resolution);
+    if (
+        name === TacticalGraphicName.ObstacleBelt ||
+        name === TacticalGraphicName.ObstacleGroup ||
+        name === TacticalGraphicName.ObstacleZone
+    ) return obstacleAreaStyles(feature, resolution, {outward: true});
     if (name === TacticalGraphicName.LimitedAccessArea) return limitedAccessAreaStyleFromLabels(labels, feature, resolution);
     if (
         name === TacticalGraphicName.NoFireAreaCircular ||

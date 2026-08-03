@@ -194,13 +194,6 @@ export class LineGraphicBase implements LineGraphic {
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
 
-        // The drawn line, for style functions whose rendered geometry is not it — an
-        // obstacle line renders as a toothed path, so its own vertices cannot tell a
-        // style function where the middle of the *drawn* line is, or which way it runs.
-        // Set before `setGeometry`, which fires the change that re-renders: `set` alone
-        // dispatches `propertychange` without calling `changed()`.
-        this.graphics.set('baseCoordinates', this.base.getGeometry()?.getCoordinates());
-
         this.graphics.setGeometry(graphic);
         this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
     };

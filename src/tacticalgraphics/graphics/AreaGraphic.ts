@@ -80,9 +80,9 @@ export class FortifiedArea extends TacticalGraphicsBase {
     name = 'FortifiedArea';
     type: string = "Polygon";
 
+    /** The drawn area, undecorated — the merlons are drawn in screen space. @see Obstacle */
     generateGraphics(base: Feature<Polygon>, opts?: EncirclementAreaOptions): Feature<Polygon> {
-        let size = opts?.size ?? 1;
-        return this.asPolygonFeature(geometryService.fortifiedAreaGraphic(base.geometry, 10 * size, 10 * size, 10 * size));
+        return this.asPolygonFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<Polygon>, opts: EncirclementAreaOptions | undefined): Feature<MultiPoint> {
@@ -105,11 +105,18 @@ export class Obstacle extends TacticalGraphicsBase<EncirclementAreaOptions> {
         this.name = tacticalGraphicName;
     }
 
+    /**
+     * The drawn area, undecorated.
+     *
+     * The teeth used to be baked in here, sized off the drawing resolution — so they were
+     * 15 px at whatever zoom the user happened to be at and then fixed in metres forever,
+     * growing on screen as the map zoomed in. They are crenellation: a feature of the
+     * *symbol*, carrying no measurement, which is precisely what belongs in a style
+     * function at a constant number of screen pixels. `StrongPoint` has always worked this
+     * way. See `obstacleAreaStyles` in `openlayerStyles.ts`.
+     */
     generateGraphics(base: Feature<Polygon>, opts?: EncirclementAreaOptions): Feature<Polygon> {
-        let size = opts?.size ?? 1;
-        let triangles = geometryService.generateToothedPolygonFromTriangles(base.geometry.coordinates, size * 15, size * 20, size * 20);
-
-        return this.asPolygonFeature(triangles);
+        return this.asPolygonFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<Polygon>, opts: EncirclementAreaOptions | undefined): Feature<MultiPoint> {
@@ -131,11 +138,9 @@ export class ObstacleFree extends TacticalGraphicsBase<EncirclementAreaOptions> 
         this.name = tacticalGraphicName;
     }
 
+    /** The drawn area, undecorated — the inward teeth are drawn in screen space. @see Obstacle */
     generateGraphics(base: Feature<Polygon>, opts?: EncirclementAreaOptions): Feature<Polygon> {
-        let size = opts?.size ?? 1;
-        let triangles = geometryService.generateToothedPolygonFromTriangles(base.geometry.coordinates, size * 15, size * 15, size * 20, false);
-
-        return this.asPolygonFeature(triangles);
+        return this.asPolygonFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<Polygon>, opts: EncirclementAreaOptions | undefined): Feature<MultiPoint> {
