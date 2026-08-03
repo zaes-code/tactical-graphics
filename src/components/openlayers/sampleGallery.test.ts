@@ -35,7 +35,7 @@ import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByC
 
 /** Roughly what the sweep frames at; only the ratios under test depend on it. */
 const RESOLUTION = 1200;
-/** What getColorByHostility returns for hostileFaker, in light mode. */
+/** What getColorByHostility returns for hostileFaker — doctrinal, so it is the only answer. */
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
 /**
