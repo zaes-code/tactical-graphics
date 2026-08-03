@@ -17,7 +17,7 @@
  * accessor that should honour it, editor chrome included.
  */
 import Feature from 'ol/Feature';
-import {LineString, Point} from 'ol/geom';
+import {LineString, Point, Polygon} from 'ol/geom';
 import CircleStyle from 'ol/style/Circle';
 import {Style} from 'ol/style';
 import {writeGraphicProperties} from './graphicProperties';
@@ -48,7 +48,9 @@ import {
     getHandleColor,
     getInertHandleColor,
     getLabelHaloColor,
+    obstacleAreaStyles,
     obstacleLineStyle,
+    obstacleRestrictedZoneStyle,
 } from './openlayerStyles';
 
 // Every test starts from the shipped defaults; the overrides below are global.
@@ -399,58 +401,35 @@ describe('the library default', () => {
 });
 
 /**
- * The obstacle line's label.
+ * The obstacle line: its teeth and its label take opposite sides, and both are sized in
+ * screen pixels.
  *
- * It sits under the centre-most drawn segment. Three faults got it there, and each only
- * showed up on a line drawn a particular way or looked at from a particular zoom, which
- * is why they survived a green suite:
- *
- *  - Its offset was taken from the drawn line's *direction of travel*, so the same line
- *    drawn right-to-left put the label on the opposite side.
- *  - Its offset was a fixed number of screen pixels, while the teeth it has to clear are
- *    map-unit sized. At the drawing zoom that looked fine; two zoom levels in, the teeth
- *    had grown through the text.
- *  - It anchored on the rendered geometry, every third vertex of which is a tooth apex,
- *    so "the middle" was a tooth rather than the middle of the drawn line.
+ * The faults this replaced were all consequences of teeth baked into the geometry at
+ * map-unit size: the label was offset along the drawn *direction of travel*, so drawing
+ * right-to-left flipped it; the offset was a fixed pixel count against teeth that grew
+ * with zoom, so it was buried two levels in; and it anchored on a geometry whose every
+ * third vertex was a tooth apex, so "the middle" was a tooth rather than the middle of
+ * the line.
  */
-describe('obstacle line label', () => {
-    /** A drawn line plus the teeth a generator would hang off it, all on the north side. */
-    const toothed = (drawn: number[][], toothHeight: number): number[][] => {
-        const out: number[][] = [];
-        for (let i = 0; i < drawn.length - 1; i++) {
-            const [ax, ay] = drawn[i];
-            const [bx, by] = drawn[i + 1];
-            out.push(drawn[i]);
-            for (const t of [0.3, 0.6]) {
-                const fx = ax + (bx - ax) * t;
-                const fy = ay + (by - ay) * t;
-                out.push([fx, fy], [fx, fy + toothHeight], [fx + 1, fy]);
-            }
-        }
-        out.push(drawn[drawn.length - 1]);
-        return out;
+describe('obstacle line', () => {
+    const feature = (drawn: number[][]) => {
+        const f = new Feature(new LineString(drawn));
+        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+        return f;
     };
 
-    const labelPointFor = (drawn: number[][], resolution: number, toothHeight = 400) => {
-        const f = new Feature(new LineString(toothed(drawn, toothHeight)));
-        f.set('baseCoordinates', drawn);
-        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
-        const styles = obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, resolution) as Style[];
-        const text = (Array.isArray(styles) ? styles : [styles]).find(s => s.getText?.()?.getText?.());
+    const styles = (drawn: number[][], resolution: number) =>
+        obstacleLineStyle(TacticalGraphicName.ObstacleLine)(feature(drawn), resolution) as Style[];
+
+    const labelPointFor = (drawn: number[][], resolution: number) => {
+        const text = styles(drawn, resolution).find(s => s.getText?.()?.getText?.());
         return (text!.getGeometry() as Point).getCoordinates();
     };
 
-    /** Teeth on the *label's* side, which is the case that has to clear them. */
-    const toothedBelow = (drawn: number[][], toothHeight: number) =>
-        toothed(drawn, -toothHeight);
-
-    const labelPointBelowTeeth = (drawn: number[][], resolution: number, toothHeight = 400) => {
-        const f = new Feature(new LineString(toothedBelow(drawn, toothHeight)));
-        f.set('baseCoordinates', drawn);
-        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
-        const styles = obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, resolution) as Style[];
-        const text = (Array.isArray(styles) ? styles : [styles]).find(s => s.getText?.()?.getText?.());
-        return (text!.getGeometry() as Point).getCoordinates();
+    /** The drawn path with the teeth the style adds. */
+    const toothedPath = (drawn: number[][], resolution: number) => {
+        const stroke = styles(drawn, resolution).find(s => !s.getText?.()?.getText?.());
+        return (stroke!.getGeometry() as LineString).getCoordinates();
     };
 
     const WEST_TO_EAST = [[0, 0], [1000, 0]];
@@ -461,7 +440,21 @@ describe('obstacle line label', () => {
         expect(labelPointFor(EAST_TO_WEST, 10)[1]).toBeLessThan(0);
     });
 
-    it('anchors it at the same place either way — the line is the same line', () => {
+    it('puts the teeth above it whichever way it was drawn', () => {
+        for (const drawn of [WEST_TO_EAST, EAST_TO_WEST]) {
+            const apexes = toothedPath(drawn, 10).filter(([, y]) => Math.abs(y) > 0.001);
+            expect(apexes.length).toBeGreaterThan(0);
+            expect(apexes.every(([, y]) => y > 0)).toBe(true);
+        }
+    });
+
+    it('keeps the label and the teeth on opposite sides, so they never compete', () => {
+        const label = labelPointFor(WEST_TO_EAST, 10);
+        const apexes = toothedPath(WEST_TO_EAST, 10).filter(([, y]) => Math.abs(y) > 0.001);
+        expect(Math.sign(label[1])).toBe(-Math.sign(apexes[0][1]));
+    });
+
+    it('anchors the label at the same place either way — the line is the same line', () => {
         const [wx] = labelPointFor(WEST_TO_EAST, 10);
         const [ex] = labelPointFor(EAST_TO_WEST, 10);
         expect(wx).toBeCloseTo(ex, 6);
@@ -470,8 +463,7 @@ describe('obstacle line label', () => {
 
     it('centres it on the middle drawn segment, not on the chord through the ends', () => {
         // Bent on purpose: on a straight line the middle of the drawn line and the middle
-        // of the straight run between its endpoints are the same point, and the old
-        // chord-projection would pass this without ever looking at a segment.
+        // of the straight run between its endpoints are the same point.
         const bent = [[0, 0], [1000, 0], [1400, 800], [2400, 800]];
         const [p1, p2] = [bent[1], bent[2]];
         const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
@@ -479,51 +471,25 @@ describe('obstacle line label', () => {
         const dir = [(p2[0] - p1[0]) / len, (p2[1] - p1[1]) / len];
 
         const label = labelPointFor(bent, 10);
-
-        // Directly across from the middle segment's midpoint: the label is offset
-        // perpendicular to that segment, so it has no component along it.
         const along = (label[0] - mid[0]) * dir[0] + (label[1] - mid[1]) * dir[1];
         expect(along).toBeCloseTo(0, 6);
     });
 
-    it('clears teeth on its own side at every zoom, not just the one drawn at', () => {
-        const TOOTH = 400;
-        // Zooming in shrinks `resolution`; the teeth stay 400 map units deep, so a label
-        // offset that is purely a pixel count walks straight into them.
-        for (const resolution of [40, 10, 2, 0.5]) {
-            expect(labelPointBelowTeeth(WEST_TO_EAST, resolution, TOOTH)[1]).toBeLessThan(-TOOTH);
-        }
-    });
-
-    it('holds the same proportional distance as the map scales', () => {
-        // Zoomed in far enough that the proportional gap governs, the offset stops
-        // depending on resolution at all: the label keeps its place in the symbol
-        // instead of creeping toward the line or drifting away from it.
-        const TOOTH = 400;
-        const close = labelPointFor(WEST_TO_EAST, 0.5, TOOTH)[1];
-        const closer = labelPointFor(WEST_TO_EAST, 0.1, TOOTH)[1];
-        expect(closer / close).toBeCloseTo(1, 1);
-
-        // And that distance is set by the teeth: a symbol twice as deep pushes the label
-        // twice as far, rather than both landing at the same pixel offset.
-        const deep = labelPointFor(WEST_TO_EAST, 0.5, TOOTH * 2)[1];
-        expect(deep / close).toBeCloseTo(2, 1);
-    });
-
-    it('keeps a readable gap when zoomed out, where a proportion alone would collapse', () => {
-        // Far enough out that the teeth are sub-pixel, the screen floor takes over and
-        // the text still clears the line.
-        const tiny = labelPointFor(WEST_TO_EAST, 2000, 400)[1];
-        expect(Math.abs(tiny)).toBeGreaterThan(8 * 2000);
+    it('stands the label off by the same pixel distance at every zoom', () => {
+        // Both terms are screen-sized now, so the offset in pixels is a constant. It was
+        // a scan of the rendered geometry while the teeth were map-unit sized.
+        const offsets = [40, 10, 2, 0.5].map(res => {
+            const label = labelPointFor(WEST_TO_EAST, res);
+            return Math.abs(label[1]) / res;
+        });
+        offsets.forEach(px => expect(px).toBeCloseTo(offsets[0], 6));
+        expect(offsets[0]).toBeGreaterThan(8);
     });
 
     it('stays with its own segment on a line that doubles back', () => {
-        // The reported case, reprojected: a saved obstacle line whose vertices had been
-        // dragged around until the path crosses back over itself. Filtering the
-        // clearance scan by along-track projection alone let a limb from elsewhere in
-        // the line — far to the side, but projecting into the same along-range — be
-        // measured as though it were a tooth of the centre segment, and the label flew
-        // off to clear geometry it was never near.
+        // The reported case: a saved line whose vertices had been dragged until the path
+        // crosses back over itself. The label used to clear geometry it was never near --
+        // 5,056,254 map units from its segment, against a tooth reach of 180,000.
         const drawn = [
             [-48.8204960524337, 1.9618674420930944],
             [-41.5855986018727, 3.3097380307984423],
@@ -535,39 +501,105 @@ describe('obstacle line label', () => {
             [26.81962371892284, 20.103193854805923],
         ].map(([x, y]) => [x * 111320, y * 111320]);
 
-        const TOOTH = 60000;
-        const label = labelPointFor(drawn, 9783.93962050256, TOOTH);
-
-        const segIdx = 3; // the centre-most segment by length, for this line
+        const resolution = 9783.93962050256;
+        const label = labelPointFor(drawn, resolution);
+        const segIdx = 3;
         const [p1, p2] = [drawn[segIdx], drawn[segIdx + 1]];
         const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-        const distance = Math.hypot(label[0] - mid[0], label[1] - mid[1]);
+        const distancePx = Math.hypot(label[0] - mid[0], label[1] - mid[1]) / resolution;
 
-        // Its own teeth plus a gap and a line of text — not the width of the whole
-        // drawing. Before the fix this was more than an order of magnitude larger.
-        expect(distance).toBeLessThan(TOOTH * 3);
+        // A line of text and a gap — not the width of the whole drawing.
+        expect(distancePx).toBeLessThan(40);
+    });
+});
+
+/**
+ * Obstacle crenellation, now drawn in screen space.
+ *
+ * Three properties, each of which the old baked-in geometry got wrong:
+ *
+ *  - the side the teeth fall on is a property of the shape, not of the order its corners
+ *    were clicked;
+ *  - their size is a count of screen pixels, so it does not change with zoom;
+ *  - except where the symbol is too small to carry them, which is the one case a
+ *    constant cannot serve.
+ */
+describe('obstacle teeth in screen space', () => {
+    // A square, and the same square with its corners in the opposite order.
+    const CLOCKWISE: number[][] = [[0, 0], [0, 4000], [4000, 4000], [4000, 0], [0, 0]];
+    const ANTICLOCKWISE = [...CLOCKWISE].reverse();
+
+    const areaFeature = (ring: number[][]) => new Feature(new Polygon([ring]));
+
+    /** Apexes: the vertices the style adds, i.e. the ones off the drawn outline. */
+    const apexes = (ring: number[][], resolution: number, outward: boolean) => {
+        const styles = obstacleAreaStyles(areaFeature(ring), resolution, {outward});
+        const drawn = (styles[0].getGeometry() as Polygon).getCoordinates()[0];
+        const onOutline = ([x, y]: number[]) =>
+            (Math.abs(x) < 1 || Math.abs(x - 4000) < 1) || (Math.abs(y) < 1 || Math.abs(y - 4000) < 1);
+        return drawn.filter(c => !onOutline(c));
+    };
+
+    const inside = ([x, y]: number[]) => x > 0 && x < 4000 && y > 0 && y < 4000;
+
+    it('points them outward whichever way the area was drawn', () => {
+        for (const ring of [CLOCKWISE, ANTICLOCKWISE]) {
+            const found = apexes(ring, 10, true);
+            expect(found.length).toBeGreaterThan(0);
+            expect(found.every(a => !inside(a))).toBe(true);
+        }
     });
 
-    it('takes its hostility from the amplifier bag, so a restored line is still red', () => {
-        // `restoreTacticalGraphics` rebuilds from `properties.tacticalGraphic` and sets
-        // no loose `hostility` key, so a style reading only that key drew a saved
-        // hostile line in the neutral default.
-        const f = new Feature(new LineString(toothed(WEST_TO_EAST, 400)));
-        f.set('baseCoordinates', WEST_TO_EAST);
-        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {
-            label: 'OBS-1', hostility: TacticalGraphicHostility.hostileFaker,
+    it('points them inward whichever way the area was drawn', () => {
+        for (const ring of [CLOCKWISE, ANTICLOCKWISE]) {
+            const found = apexes(ring, 10, false);
+            expect(found.length).toBeGreaterThan(0);
+            expect(found.every(a => inside(a))).toBe(true);
+        }
+    });
+
+    /** How far an apex stands off the edge it sits on, in screen pixels. */
+    const toothHeightPx = (resolution: number) => {
+        const found = apexes(CLOCKWISE, resolution, true);
+        const offsets = found.map(([x, y]) => {
+            if (x < 0) return -x;
+            if (x > 4000) return x - 4000;
+            if (y < 0) return -y;
+            return y - 4000;
         });
-        const strokes = (obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[])
-            .map(s => s.getStroke()?.getColor()).filter(Boolean);
-        expect(strokes).toContain(getColorByHostility(TacticalGraphicHostility.hostileFaker));
-        expect(strokes).not.toContain(getDefaultLineColor());
+        return Math.max(...offsets) / resolution;
+    };
+
+    it('holds the same pixel height as the map scales', () => {
+        // The whole point: the same symbol, the same size on screen, at every zoom.
+        // Baked into geometry this was fixed in *metres*, so zooming in grew the teeth.
+        for (const resolution of [40, 10, 2, 0.5]) {
+            expect(toothHeightPx(resolution)).toBeCloseTo(10, 6);
+        }
     });
 
-    it('still works for a host that has not stamped the drawn line', () => {
-        const f = new Feature(new LineString(toothed(WEST_TO_EAST, 400)));
-        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
-        const styles = obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[];
-        const text = (Array.isArray(styles) ? styles : [styles]).find(s => s.getText?.()?.getText?.());
-        expect((text!.getGeometry() as Point).getCoordinates()[1]).toBeLessThan(0);
+    it('shrinks the teeth rather than swamping a symbol too small to carry them', () => {
+        // A 40 m square at resolution 10 is 4 px across — the gallery case. A 10 px tooth
+        // on a 4 px symbol is nonsense, so the height is capped at a share of the shape.
+        const tiny: number[][] = [[0, 0], [0, 40], [40, 40], [40, 0], [0, 0]];
+        const styles = obstacleAreaStyles(new Feature(new Polygon([tiny])), 10, {outward: true});
+        const drawn = (styles[0].getGeometry() as Polygon).getCoordinates()[0];
+        const offsets = drawn.map(([x, y]) => Math.max(-x, x - 40, -y, y - 40)).filter(d => d > 0.001);
+        const tallestPx = (offsets.length ? Math.max(...offsets) : 0) / 10;
+        expect(tallestPx).toBeLessThan(10);
+        expect(tallestPx).toBeCloseTo(4 * 0.25, 6);
+    });
+
+    it('leaves a degenerate ring alone rather than emitting spikes', () => {
+        const flat: number[][] = [[0, 0], [0, 0], [0, 0]];
+        const styles = obstacleAreaStyles(new Feature(new Polygon([flat])), 10, {outward: true});
+        expect((styles[0].getGeometry() as Polygon).getCoordinates()[0]).toEqual(flat);
+    });
+
+    it('hatches the restricted area and only the restricted area', () => {
+        const restricted = obstacleRestrictedZoneStyle(areaFeature(CLOCKWISE), 10) as Style[];
+        const belt = obstacleAreaStyles(areaFeature(CLOCKWISE), 10, {outward: true});
+        expect(restricted[0].getFill()).not.toBeNull();
+        expect(belt[0].getFill()).toBeFalsy();
     });
 });
