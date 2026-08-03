@@ -77,8 +77,15 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
 
-/** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
-const OBSTACLE_LABEL_GAP_PX = 8;
+/**
+ * Gap between an obstacle line's teeth and the nearest edge of its label, as a fraction
+ * of how far those teeth stand off the line. Proportional so the label holds its place
+ * in the symbol at every zoom, rather than creeping in or drifting out as the map scales.
+ */
+const OBSTACLE_LABEL_GAP_RATIO = 0.5;
+
+/** Floor under that gap, in screen pixels: a proportion alone closes up when zoomed out. */
+const OBSTACLE_LABEL_MIN_GAP_PX = 8;
 
 /**
  * ## One palette, and where a host changes it
@@ -3146,22 +3153,38 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
         const dir: Coordinate = [segDx / segLength, segDy / segLength];
         const mid: Coordinate = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
 
-        // ── 2. The side that is up ────────────────────────────────────────
-        // Both perpendiculars are equally "beside the line"; the one with a positive
-        // northing is the one above it on screen. Picking by the segment's own direction
-        // is what made the label flip sides when the same line was drawn right-to-left —
-        // the direction of travel reverses, and every perpendicular derived from it with
-        // it. A vertical line has no upper side, so the tie breaks to the east.
+        // ── 2. The side that is down ──────────────────────────────────────
+        // Both perpendiculars are equally "beside the line"; the one with a negative
+        // northing is the one below it on screen. Picking by the segment's own direction
+        // is what made the label change sides when the same line was drawn right-to-left
+        // — the direction of travel reverses, and every perpendicular derived from it
+        // with it. A vertical line has no lower side, so the tie breaks to the east.
         let normal: Coordinate = [-dir[1], dir[0]];
-        if (normal[1] < 0 || (normal[1] === 0 && normal[0] < 0)) {
+        if (normal[1] > 0 || (normal[1] === 0 && normal[0] < 0)) {
             normal = [-normal[0], -normal[1]];
         }
 
-        // ── 3. Clear the graphic, at any zoom ─────────────────────────────
+        // ── 3. Clear the graphic, at any zoom, by a proportional gap ──────
+        // Three terms, and each is in the unit that keeps it honest:
+        //
+        //  - how far the graphic itself reaches below the segment, measured off the
+        //    geometry, in map units. The teeth are map-unit sized, so this is what grows
+        //    when the user zooms in and what a pixel offset alone could never track.
+        //  - half a line of text, in screen pixels: the anchor is the text's middle, and
+        //    text does not scale with the map.
+        //  - the gap, which is proportional to the teeth — so the symbol and its label
+        //    keep the same relationship at every zoom instead of the label drifting
+        //    closer or further as the map scales — with a screen-pixel floor, since a
+        //    proportional gap alone collapses onto the line when zoomed far enough out.
         const obsScale = featureLabelScale(f, resolution);
         const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
+
+        const up: Coordinate = [-normal[0], -normal[1]];
         const clearanceMap = extentBeyondSegment(coords, p1, dir, normal, segLength);
-        const offsetMap = clearanceMap + (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * resolution;
+        const toothExtentMap = Math.max(clearanceMap, extentBeyondSegment(coords, p1, dir, up, segLength));
+
+        const gapMap = Math.max(toothExtentMap * OBSTACLE_LABEL_GAP_RATIO, OBSTACLE_LABEL_MIN_GAP_PX * resolution);
+        const offsetMap = clearanceMap + halfTextHeightPx * resolution + gapMap;
 
         const labelPoint: Coordinate = [
             mid[0] + normal[0] * offsetMap,
@@ -4174,6 +4197,37 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                 }
 
                 return styles;
+            };
+        case TacticalGraphicName.ObstacleFreeArea:
+        case TacticalGraphicName.ObstacleRestrictedArea:
+            // Stacked inside the toothed ring: the free area's literal "FREE" over T (the
+            // designation) over W - W1 (the two DTGs, which `getDateLabel` already joins
+            // with the hyphen the plate shows). "FREE" is a line of its own rather than
+            // the `getLabel` prefix, which would set it beside the name instead of above
+            // it. One Text with newlines rather than a style per line, for the same
+            // reason the fire support areas use one: a fixed pixel offset between
+            // separate styles collides with text that grows on zoom.
+            return (feature: FeatureLike, resolution: number) => {
+                const anchorPoint = feature.getGeometry() as Point;
+                if (!anchorPoint) return [];
+                const lines = [
+                    name === TacticalGraphicName.ObstacleFreeArea ? 'FREE' : '',
+                    fullLabel.trim(),
+                    dateLabel.trim(),
+                ].filter(line => line.length > 0);
+                if (lines.length === 0) return [];
+                return [new Style({
+                    geometry: anchorPoint,
+                    text: new Text({
+                        text: lines.join('\n'),
+                        font: fontStyle,
+                        fill: new Fill({color: getLabelFillColor()}),
+                        stroke: getHaloStroke(),
+                        textAlign: 'center',
+                        textBaseline: 'middle',
+                        scale: featureLabelScale(feature, resolution),
+                    }),
+                })];
             };
         case TacticalGraphicName.FireSupportAreaIrregular:
             // FSA Irregular: stack "FSA" / name / DTG1 / DTG2 in a single Text
