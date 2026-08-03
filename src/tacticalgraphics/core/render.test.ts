@@ -10,7 +10,6 @@ import {
     toFeatureCollection,
 } from './render';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
-import {booleanPointInPolygon, point, polygon} from '@turf/turf';
 
 const axisFeature = (): Feature => ({
     type: 'Feature',
@@ -259,82 +258,80 @@ describe('Turn', () => {
 });
 
 /**
- * Teeth belong to the geometry, not to the order the corners were clicked.
+ * The obstacle graphics emit the drawn shape, undecorated.
  *
- * The tooth apex is placed 90° off the direction of travel along the ring, so which side
- * that lands on depends entirely on the winding — and nothing normalises the winding of
- * what a user draws. Drawing an area clockwise put the teeth outside; drawing the same
- * area anticlockwise put every one of them inside.
+ * Their teeth used to be baked in here, sized from the drawing resolution — so they were
+ * fixed in metres and grew on screen as the map zoomed in. Crenellation carries no
+ * measurement, so it belongs in a style function at a constant number of screen pixels,
+ * which is where it now lives (`obstacleAreaStyles`). The cost is deliberate: a consumer
+ * rendering this GeoJSON outside the OpenLayers entry point gets the plain shape, the
+ * same contract `StrongPoint` has always had.
  */
-describe('obstacle teeth ignore the drawing direction', () => {
-    // A square, and the same square with its corners in the opposite order.
-    const CLOCKWISE = [[-77.10, 38.85], [-77.10, 38.95], [-77.00, 38.95], [-77.00, 38.85], [-77.10, 38.85]];
-    const ANTICLOCKWISE = [...CLOCKWISE].reverse();
+describe('decorated graphics emit the drawn shape', () => {
+    const RING = [[-77.10, 38.85], [-77.10, 38.95], [-77.00, 38.95], [-77.00, 38.85], [-77.10, 38.85]];
 
-    const area = (name: TacticalGraphicName, ring: number[][]): Feature => ({
+    const area = (name: TacticalGraphicName): Feature => ({
         type: 'Feature',
-        geometry: {type: 'Polygon', coordinates: [ring]},
+        geometry: {type: 'Polygon', coordinates: [RING]},
         properties: {tacticalGraphic: {name, size: 30}},
     });
-
-    /**
-     * Apexes are the vertices that leave the drawn edge. Every tooth is pushed as
-     * (foot, apex, foot) with both feet on the edge, so a vertex further than a metre or
-     * so from the square's outline is an apex — measured against the drawn ring rather
-     * than against a tooth count, which would depend on the perimeter maths.
-     */
-    const apexSides = (name: TacticalGraphicName, ring: number[][]) => {
-        const rendered = renderTacticalGraphic(area(name, ring)).graphic.geometry as any;
-        const vertices: number[][] = rendered.type === 'Polygon'
-            ? rendered.coordinates[0]
-            : rendered.coordinates.flat();
-
-        const outside: number[][] = [];
-        const inside: number[][] = [];
-        vertices.forEach(v => {
-            const onEdge = ring.some((_, i) => {
-                if (i === ring.length - 1) return false;
-                const [ax, ay] = ring[i];
-                const [bx, by] = ring[i + 1];
-                const [px, py] = v;
-                // Perpendicular distance to the drawn edge, in degrees — the teeth stand
-                // well clear of it, tooth feet sit on it.
-                const dx = bx - ax, dy = by - ay;
-                const len2 = dx * dx + dy * dy;
-                const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
-                return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < 1e-5;
-            });
-            if (onEdge) return;
-            (booleanPointInPolygon(point(v), polygon([ring])) ? inside : outside).push(v);
-        });
-        return {outside: outside.length, inside: inside.length};
-    };
 
     it.each([
         TacticalGraphicName.ObstacleBelt,
         TacticalGraphicName.ObstacleGroup,
         TacticalGraphicName.ObstacleZone,
-    ])('points %s outward whichever way the area is drawn', name => {
-        const cw = apexSides(name, CLOCKWISE);
-        const ccw = apexSides(name, ANTICLOCKWISE);
+        TacticalGraphicName.ObstacleFreeArea,
+        TacticalGraphicName.ObstacleRestrictedArea,
+    ])('%s returns its ring unchanged', name => {
+        const geometry = renderTacticalGraphic(area(name)).graphic.geometry as any;
+        expect(geometry.type).toBe('Polygon');
+        expect(geometry.coordinates[0]).toEqual(RING);
+    });
 
-        expect(cw.outside).toBeGreaterThan(0);
-        expect(cw.inside).toBe(0);
-        expect(ccw.outside).toBeGreaterThan(0);
-        expect(ccw.inside).toBe(0);
+    it('ObstacleLine returns the drawn line unchanged', () => {
+        const drawn = [[-77.05, 38.88], [-76.99, 38.91], [-76.95, 38.93]];
+        const geometry = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: drawn},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.ObstacleLine, size: 30}},
+        }).graphic.geometry as any;
+        expect(geometry.type).toBe('LineString');
+        expect(geometry.coordinates).toEqual(drawn);
     });
 
     it.each([
-        TacticalGraphicName.ObstacleFreeArea,
-        TacticalGraphicName.ObstacleRestrictedArea,
-    ])('points %s inward whichever way the area is drawn', name => {
-        const cw = apexSides(name, CLOCKWISE);
-        const ccw = apexSides(name, ANTICLOCKWISE);
+        [TacticalGraphicName.FortifiedLine, 'LineString'],
+        [TacticalGraphicName.ForwardLineOfOwnTroops, 'LineString'],
+        [TacticalGraphicName.LineOfContact, 'LineString'],
+    ])('%s returns the drawn line unchanged too', (name, type) => {
+        // Their merlons and scallops moved to the style layer for the same reason: both
+        // were sized from the drawing resolution and then fixed in metres. The line of
+        // contact is the sharpest case — the *gap between its two waves* is what the
+        // symbol says, and baked in it changed with zoom.
+        const drawn = [[-77.05, 38.88], [-76.99, 38.91], [-76.95, 38.93]];
+        const geometry = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: drawn},
+            properties: {tacticalGraphic: {name, size: 30}},
+        }).graphic.geometry as any;
+        expect(geometry.type).toBe(type);
+        expect(geometry.coordinates).toEqual(drawn);
+    });
 
-        expect(cw.inside).toBeGreaterThan(0);
-        expect(cw.outside).toBe(0);
-        expect(ccw.inside).toBeGreaterThan(0);
-        expect(ccw.outside).toBe(0);
+    it('FortifiedArea returns its ring unchanged', () => {
+        const geometry = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Polygon', coordinates: [RING]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.FortifiedArea, size: 30}},
+        }).graphic.geometry as any;
+        expect(geometry.type).toBe('Polygon');
+        expect(geometry.coordinates[0]).toEqual(RING);
+    });
+
+    it('still stamps the properties and role onto that output', () => {
+        const rendered = renderTacticalGraphic(area(TacticalGraphicName.ObstacleBelt));
+        expect(rendered.graphic.properties!.role).toBe('graphic');
+        expect(rendered.graphic.properties!.tacticalGraphic.name).toBe(TacticalGraphicName.ObstacleBelt);
     });
 });
 
