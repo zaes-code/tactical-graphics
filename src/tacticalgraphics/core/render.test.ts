@@ -1,3 +1,5 @@
+import {readFileSync} from 'fs';
+import {join} from 'path';
 import {Feature} from 'geojson';
 import {
     isTacticalGraphicFeature,
@@ -333,5 +335,24 @@ describe('obstacle teeth ignore the drawing direction', () => {
         expect(cw.outside).toBe(0);
         expect(ccw.inside).toBeGreaterThan(0);
         expect(ccw.outside).toBe(0);
+    });
+});
+
+/**
+ * The README quotes numbers that come from the code, and they drift silently — the
+ * "supported names" figure in its Errors section was 199 against a registry of 195, and
+ * the intro count sat at 201 against 207 until the tracker generator was taught to own
+ * it. Nothing renders wrong when they rot; the docs just quietly start lying.
+ *
+ * The tracker-derived tables have `gen-readme-graphics-table.py --check`. This is the
+ * one number that comes from the registry instead, so it needs its own guard.
+ */
+describe('README stays honest about the registry', () => {
+    const readme = readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf8');
+
+    it('quotes the real number of registered graphics in its error example', () => {
+        const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);
+        expect(quoted).not.toBeNull();
+        expect(Number(quoted![1])).toBe(listTacticalGraphicNames().length);
     });
 });
