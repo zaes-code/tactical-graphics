@@ -267,7 +267,7 @@ describe('Turn', () => {
  * rendering this GeoJSON outside the OpenLayers entry point gets the plain shape, the
  * same contract `StrongPoint` has always had.
  */
-describe('obstacle graphics emit the drawn shape', () => {
+describe('decorated graphics emit the drawn shape', () => {
     const RING = [[-77.10, 38.85], [-77.10, 38.95], [-77.00, 38.95], [-77.00, 38.85], [-77.10, 38.85]];
 
     const area = (name: TacticalGraphicName): Feature => ({
@@ -297,6 +297,35 @@ describe('obstacle graphics emit the drawn shape', () => {
         }).graphic.geometry as any;
         expect(geometry.type).toBe('LineString');
         expect(geometry.coordinates).toEqual(drawn);
+    });
+
+    it.each([
+        [TacticalGraphicName.FortifiedLine, 'LineString'],
+        [TacticalGraphicName.ForwardLineOfOwnTroops, 'LineString'],
+        [TacticalGraphicName.LineOfContact, 'LineString'],
+    ])('%s returns the drawn line unchanged too', (name, type) => {
+        // Their merlons and scallops moved to the style layer for the same reason: both
+        // were sized from the drawing resolution and then fixed in metres. The line of
+        // contact is the sharpest case — the *gap between its two waves* is what the
+        // symbol says, and baked in it changed with zoom.
+        const drawn = [[-77.05, 38.88], [-76.99, 38.91], [-76.95, 38.93]];
+        const geometry = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: drawn},
+            properties: {tacticalGraphic: {name, size: 30}},
+        }).graphic.geometry as any;
+        expect(geometry.type).toBe(type);
+        expect(geometry.coordinates).toEqual(drawn);
+    });
+
+    it('FortifiedArea returns its ring unchanged', () => {
+        const geometry = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Polygon', coordinates: [RING]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.FortifiedArea, size: 30}},
+        }).graphic.geometry as any;
+        expect(geometry.type).toBe('Polygon');
+        expect(geometry.coordinates[0]).toEqual(RING);
     });
 
     it('still stamps the properties and role onto that output', () => {
