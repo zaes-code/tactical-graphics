@@ -17,12 +17,13 @@
  * This module holds values and pure functions only: no `ol`, no React, no DOM. That is
  * what lets it sit in the root entry point, and the build asserts it.
  *
- * ## Colours do not follow dark mode
+ * ## One palette
  *
- * There is exactly one palette — the doctrinal one — and the library never swaps it off
- * a mode flag. A host that wants different line work on a dark basemap sends the colours
- * it wants, because only the host knows what its own basemap looks like.
- * `paletteForMode` is a ready-made pair for the common case; nothing applies it for you.
+ * There is exactly one palette here — `DEFAULT_PALETTE`, the doctrinal one — and the
+ * library never swaps it for another. It cannot: only the host knows what its own
+ * basemap looks like, whether the map is on a projector or a darkened operations floor,
+ * and which of those states it is in right now. A host that wants different colours on a
+ * dark basemap keeps that set itself and sends it. The library takes colours, not modes.
  */
 import type {TacticalGraphicHostility} from './type';
 
@@ -42,10 +43,12 @@ export const MAX_LINE_WIDTH = 8;
  *
  * Was `Math.max(1, size)` before 2026-08-02 — an upper bound was missing and the lower
  * one admitted sizes no one can read. A label under 8px is illegible at any zoom, and
- * over 48px it swamps the graphic it belongs to.
+ * past the upper bound it swamps the graphic it belongs to. That ceiling came down from
+ * 48 to 26 on 2026-08-03: 48 was picked to mirror the line-width pair rather than from
+ * looking at the map, and labels well short of it already overran their graphics.
  */
 export const MIN_LABEL_SIZE = 8;
-export const MAX_LABEL_SIZE = 48;
+export const MAX_LABEL_SIZE = 26;
 
 /**
  * Every knob the library exposes. All optional — an omitted field keeps the default.
@@ -68,8 +71,6 @@ export interface TacticalGraphicsConfigOptions {
     labelFillColor?: string;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
-    /** Solid fill painted behind label text to block pattern fills. Default 90%-opacity white. */
-    labelBackgroundFill?: string;
 
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these colour the affordances a renderer draws so a user
@@ -82,9 +83,7 @@ export interface TacticalGraphicsConfigOptions {
     handleColor?: string;
     /** Handle dots that are present but not draggable right now. Default 80%-opacity grey. */
     inertHandleColor?: string;
-    /** Fill for a selected/default-styled graphic. Default 20%-opacity blue. */
-    selectionFillColor?: string;
-    /** The marker shown while drawing a point-anchored graphic. Default solid blue. */
+    /** The marker and sketch line shown while drawing any graphic. Default solid blue. */
     drawMarkerColor?: string;
     /** That marker's outline, which has to contrast against `drawMarkerColor`. Default white. */
     drawMarkerOutlineColor?: string;
@@ -107,10 +106,8 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly defaultLineColor?: string;
     readonly labelFillColor?: string;
     readonly labelHaloColor?: string;
-    readonly labelBackgroundFill?: string;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
-    readonly selectionFillColor?: string;
     readonly drawMarkerColor?: string;
     readonly drawMarkerOutlineColor?: string;
 
@@ -123,10 +120,8 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
-        if (options.labelBackgroundFill !== undefined) this.labelBackgroundFill = options.labelBackgroundFill;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
-        if (options.selectionFillColor !== undefined) this.selectionFillColor = options.selectionFillColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
         if (options.drawMarkerOutlineColor !== undefined) this.drawMarkerOutlineColor = options.drawMarkerOutlineColor;
         Object.freeze(this);
@@ -149,10 +144,8 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             defaultLineColor: overrides.defaultLineColor ?? this.defaultLineColor,
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
-            labelBackgroundFill: overrides.labelBackgroundFill ?? this.labelBackgroundFill,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
-            selectionFillColor: overrides.selectionFillColor ?? this.selectionFillColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
             drawMarkerOutlineColor: overrides.drawMarkerOutlineColor ?? this.drawMarkerOutlineColor,
         });
@@ -160,65 +153,34 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
 }
 
 /**
- * Colours for a light basemap — the library defaults, restated as an explicit set.
+ * The one palette: every colour the library falls back to, restated as an explicit set.
  *
- * Restated rather than left implicit because `configureTacticalGraphics` merges:
- * going back to light has to actively undo the dark values, not merely stop sending
- * the dark ones.
+ * Two jobs, which is why it is exported rather than left implicit inside the accessors:
+ *
+ * - **It is the fallback.** The renderer's `get*Color()` accessors resolve to these
+ *   values when the host has overridden nothing, so the defaults are written down once
+ *   instead of once per accessor.
+ * - **It is what a host builds its own sets on top of.** `setTacticalGraphicsConfig`
+ *   replaces wholesale, so a host swapping palettes has to send a complete one —
+ *   `{...DEFAULT_PALETTE, ...myDarkColours}` is the intended shape.
+ *
+ * Note what is **absent**: no `hostilityColors`. The four affiliation colours — friendly
+ * blue, hostile red, neutral green, pending yellow — are doctrine. They are how an
+ * operator identifies a symbol at a glance, and re-tinting them for a display setting
+ * makes a graphic mean something slightly different depending on how the app is
+ * configured. A host that disagrees can still pass `hostilityColors`; the library will
+ * not do it on its own.
  */
-export const LIGHT_MODE_PALETTE: TacticalGraphicsConfigOptions = {
+export const DEFAULT_PALETTE: Readonly<Required<Pick<TacticalGraphicsConfigOptions,
+    'defaultLineColor' | 'labelFillColor' | 'labelHaloColor' | 'handleColor' | 'inertHandleColor' | 'drawMarkerColor' | 'drawMarkerOutlineColor'>>> = {
     defaultLineColor: '#000000',
     labelFillColor: '#000000',
     labelHaloColor: 'rgba(255,255,255,1)',
-    labelBackgroundFill: 'rgba(255, 255, 255, 0.90)',
     handleColor: 'rgba(255,0,0,1)',
     inertHandleColor: 'rgba(130,130,130,0.8)',
-    selectionFillColor: 'rgba(0, 120, 255, 0.2)',
     drawMarkerColor: 'rgba(87, 140, 255, 1)',
     drawMarkerOutlineColor: 'white',
 };
-
-/**
- * Colours for a dark basemap.
- *
- * Note what is **absent**: no `hostilityColors`. The four affiliation colours —
- * friendly blue, hostile red, neutral green, pending yellow — are identical in both
- * modes on purpose. They are doctrine, they are how an operator identifies a symbol at
- * a glance, and shifting them on a dark background makes a graphic mean something
- * slightly different depending on a display setting. They are saturated enough to carry
- * on either background as-is.
- *
- * What does change is the *unaffiliated* neutrals — the line colour for graphics with no
- * affiliation, the label text that follows it, and the halo and background plate behind
- * that text — and the editor chrome. Those are black-on-white by default and would be
- * invisible on a dark basemap.
- *
- * This is a starting point, not a mandate — a host with a different basemap is expected
- * to pass its own values, and may add `hostilityColors` if it really wants them
- * re-tinted.
- */
-export const DARK_MODE_PALETTE: TacticalGraphicsConfigOptions = {
-    defaultLineColor: 'rgb(198,198,198)',
-    labelFillColor: 'rgb(198,198,198)',
-    labelHaloColor: 'rgb(23,23,23)',
-    labelBackgroundFill: 'rgba(22, 27, 34, 0.90)',
-    handleColor: 'rgba(208,123,123,1)',
-    inertHandleColor: 'rgba(109,109,109,0.8)',
-    selectionFillColor: 'rgba(55, 137, 208, 0.2)',
-    drawMarkerColor: 'rgb(69,106,185)',
-    drawMarkerOutlineColor: 'rgb(23,23,23)',
-};
-
-/**
- * The colour overrides to send for a given basemap brightness.
- *
- * Nothing calls this for you — the library never picks a palette off a mode flag,
- * because only the host knows what its basemap looks like. Pass the result to
- * `configureTacticalGraphics` when your mode changes.
- */
-export function paletteForMode(dark: boolean): TacticalGraphicsConfigOptions {
-    return dark ? DARK_MODE_PALETTE : LIGHT_MODE_PALETTE;
-}
 
 /** The empty config — every default in force. */
 const EMPTY_CONFIG = new TacticalGraphicsConfig();
@@ -291,20 +253,12 @@ export function getLabelHaloColorOverride(): string | undefined {
     return _config.labelHaloColor;
 }
 
-export function getLabelBackgroundFillOverride(): string | undefined {
-    return _config.labelBackgroundFill;
-}
-
 export function getHandleColorOverride(): string | undefined {
     return _config.handleColor;
 }
 
 export function getInertHandleColorOverride(): string | undefined {
     return _config.inertHandleColor;
-}
-
-export function getSelectionFillColorOverride(): string | undefined {
-    return _config.selectionFillColor;
 }
 
 export function getDrawMarkerColorOverride(): string | undefined {
