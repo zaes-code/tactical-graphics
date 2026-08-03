@@ -33,10 +33,8 @@ import {
     getDrawMarkerOutlineColor,
     getHandleColor,
     getInertHandleColor,
-    getLabelBackgroundFill,
     getLabelFillColor,
     getLabelHaloColor,
-    getSelectionFillColor,
 } from './openlayers/openlayerStyles';
 
 /**
@@ -45,8 +43,9 @@ import {
  * a config field and it belongs here too.
  *
  * **Colours are overrides, not values.** A colour the user has not touched is absent
- * from `settings`, and the library resolves it: the doctrinal value for an affiliation,
- * the mode palette for the base colours. So each swatch shows the *effective* colour
+ * from `settings` and something below resolves it: the doctrinal value for an
+ * affiliation, and for the base colours the palette this app sends for its current mode
+ * (`MapRendering.paletteFor`). So each swatch shows the *effective* colour
  * (read live off the library) while the reset button is enabled only when an override
  * actually exists. Clearing one deletes the key rather than writing a default back —
  * see `MapRendering.applyGraphicsConfig` for why that is what restores mode-following.
@@ -57,8 +56,8 @@ interface SettingsModalProps {
     /** The user's overrides — only what they have actually changed. */
     settings: TacticalGraphicsConfigOptions;
     /**
-     * The mode palette the overrides sit on top of, passed in rather than read back off
-     * the library.
+     * The app's palette for the current mode, which the overrides sit on top of — passed
+     * in rather than read back off the library.
      *
      * Reading `getDefaultLineColor()` here would render one frame stale: a mode toggle
      * re-renders this component before `MapRendering`'s effect has published the new
@@ -158,7 +157,7 @@ const NumberSetting: React.FC<NumberSettingProps> = ({label, hint, value, min, m
  * `<input type="color">` only accepts `#rrggbb`, but the library's defaults are `rgb()`
  * and `rgba()` strings. Best-effort conversion so the swatch shows something truthful;
  * the text field beside it stays authoritative and accepts any CSS colour, which is the
- * only way to express the alpha that `labelBackgroundFill` carries.
+ * only way to express the alpha several of the defaults carry.
  */
 function toSwatchHex(color: string): string {
     const trimmed = color.trim();
@@ -357,13 +356,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 effective={basePalette.labelHaloColor ?? getLabelHaloColor()}
                 onChange={labelHaloColor => onChange({labelHaloColor})}
             />
-            <ColorSetting
-                label="Label Plate"
-                hint="Blocks pattern fills behind text"
-                value={settings.labelBackgroundFill}
-                effective={basePalette.labelBackgroundFill ?? getLabelBackgroundFill()}
-                onChange={labelBackgroundFill => onChange({labelBackgroundFill})}
-            />
 
             <Divider/>
             <Typography sx={sectionSx}>Editor chrome</Typography>
@@ -386,15 +378,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={inertHandleColor => onChange({inertHandleColor})}
             />
             <ColorSetting
-                label="Selection Fill"
-                hint="Fill for a default-styled graphic"
-                value={settings.selectionFillColor}
-                effective={basePalette.selectionFillColor ?? getSelectionFillColor()}
-                onChange={selectionFillColor => onChange({selectionFillColor})}
-            />
-            <ColorSetting
                 label="Draw Marker"
-                hint="Shown while placing a graphic"
+                hint="Shown while drawing any graphic"
                 value={settings.drawMarkerColor}
                 effective={basePalette.drawMarkerColor ?? getDrawMarkerColor()}
                 onChange={drawMarkerColor => onChange({drawMarkerColor})}
