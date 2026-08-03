@@ -63,9 +63,8 @@ export * from './openlayerStyles';
 // (`source.forEachFeature(f => f.changed())`) so the style functions re-evaluate.
 export {
     BASE_FONT_SIZE_PX,
-    DARK_MODE_PALETTE,
     DEFAULT_LINE_WIDTH,
-    LIGHT_MODE_PALETTE,
+    DEFAULT_PALETTE,
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
     MIN_LABEL_SIZE,
@@ -75,7 +74,6 @@ export {
     getDefaultLabelSize,
     getDefaultLineWidth,
     getTacticalGraphicsConfig,
-    paletteForMode,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,
     setDefaultLineWidth,
@@ -83,19 +81,22 @@ export {
 } from '@zaes/tactical-graphics';
 export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
-// Editor-chrome colours, resolved. Handle dots, the inert centre, the selection fill and
-// the draw marker — the affordances this renderer draws so a user can edit a graphic.
-// Each falls back to a built-in default until the host overrides it through the config.
+// Editor-chrome colours, resolved. Handle dots, the inert centre and the draw marker —
+// the affordances this renderer draws so a user can edit a graphic. Each falls back to
+// `DEFAULT_PALETTE` until the host overrides it through the config.
 //
-// There is no `isDarkMode` / `setDarkModeFlag` / `byMode` any more. The library has no
-// concept of light or dark: it has colours, and the host decides them. Send
-// `paletteForMode(dark)` on a mode change and that is the whole of it.
+// The library has no concept of light or dark: it has colours, and the host decides
+// them. Keep whatever sets your app needs and send one on a mode change — that is the
+// whole of it. `defaultDrawStyleFunc` is the draw-time style built from the marker pair;
+// the manager installs it for every graphic, and it is exported for a host driving the
+// `Draw` interaction itself.
 export {
+    defaultDrawStyleFunc,
+    drawMarkerStyle,
     getDrawMarkerColor,
     getDrawMarkerOutlineColor,
     getHandleColor,
     getInertHandleColor,
-    getSelectionFillColor,
 } from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
