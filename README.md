@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**201 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**207 graphics** are implemented and verified today, across 12 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ---
 
@@ -469,6 +469,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Free Area | Mobility and Countermobility Control Measures |
+| Obstacle Group | Mobility and Countermobility Control Measures |
+| Obstacle Line | Mobility and Countermobility Control Measures |
+| Obstacle Restricted Area | Mobility and Countermobility Control Measures |
+| Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
@@ -578,12 +584,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | High Wire Fence | Mobility and Countermobility Control Measures |
 | Low Wire Fence | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Obstacle Belt | Mobility and Countermobility Control Measures |
-| Obstacle Free Area | Mobility and Countermobility Control Measures |
-| Obstacle Group | Mobility and Countermobility Control Measures |
-| Obstacle Line | Mobility and Countermobility Control Measures |
-| Obstacle Restricted Area | Mobility and Countermobility Control Measures |
-| Obstacle Zone | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Single Concertina | Mobility and Countermobility Control Measures |
 | Single Fence | Mobility and Countermobility Control Measures |
