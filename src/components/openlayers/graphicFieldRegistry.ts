@@ -88,6 +88,15 @@ const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
 /** Generic line: identifier + start/end date at both ends. */
 const GENERIC_LINE = f(true, false, false, false, true);
+
+/**
+ * Obstacle line: identifier only.
+ *
+ * No status. `obstacleLineStyleFunc` never reads it — the graphic has no planned form to
+ * dash — so offering the control put a setting in the dialog that changed nothing on the
+ * map, which is the same trap "Label Plate" was.
+ */
+const OBSTACLE_LINE = f(true, false, false, false, false);
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
@@ -196,7 +205,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
-    [TacticalGraphicName.ObstacleLine]: GENERIC_LINE,
+    [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
     // Table 5-9 (direction of attack): T + W/W1 per FM construct examples.
     [TacticalGraphicName.DirectionOfMainAttack]: MOVEMENT_ARROW,
     [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
