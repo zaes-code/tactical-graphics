@@ -19,8 +19,9 @@ import {
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {PROVEN_GRAPHICS} from './provenGraphics';
+import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {supportsHostility} from './graphicFieldRegistry';
-import {readGraphicLabels} from './graphicProperties';
+import {readGraphicLabels, writeGraphicProperties} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
 
 /**
@@ -35,7 +36,7 @@ import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByC
 
 /** Roughly what the sweep frames at; only the ratios under test depend on it. */
 const RESOLUTION = 1200;
-/** What getColorByHostility returns for hostileFaker, in light mode. */
+/** What getColorByHostility returns for hostileFaker — doctrinal, so it is the only answer. */
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
 /**
@@ -206,5 +207,36 @@ describe('grouping', () => {
         groupByCategory(PROVEN_GRAPHICS).forEach(([category, names]) => {
             names.forEach(name => expect(GRAPHIC_CATEGORIES[name]).toBe(category));
         });
+    });
+});
+
+/**
+ * The same rule as above, reached the way a *saved* graphic reaches it.
+ *
+ * `applyHostility` stamps the amplifier bag **and** the loose `hostility` /
+ * `hostilityColor` keys, because that is what the demo's dialog and sweep do. Restore
+ * does not: `restoreTacticalGraphics` rebuilds from `properties.tacticalGraphic` alone,
+ * and so does any consumer following the README's `writeGraphicProperties` example. A
+ * style function reading only the loose keys was therefore correct on screen and wrong
+ * for every graphic that had been round-tripped — silently, since nothing throws and the
+ * shape is still right.
+ *
+ * So: stamp the bag and nothing else, and require the line work to come out red anyway.
+ */
+describe('hostility survives a bag-only stamp, as restore and consumers produce', () => {
+    const bagOnly = (name: TacticalGraphicName) => {
+        const handler = sample(name);
+        const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
+        const labels: GraphicLabels = {label: '', hostility: TacticalGraphicHostility.hostileFaker};
+        // Deliberately not `applyHostility`: no loose keys, exactly what restore leaves.
+        if (holder.setLabel) holder.setLabel(labels);
+        else writeGraphicProperties(handler.getFeatures(), name, labels);
+        return handler;
+    };
+
+    it.each(others)('%s paints hostile red from the bag alone', name => {
+        const colours = strokeColours(bagOnly(name));
+        expect(colours.length).toBeGreaterThan(0);
+        expect(colours).toContain(normalise(HOSTILE_RED));
     });
 });

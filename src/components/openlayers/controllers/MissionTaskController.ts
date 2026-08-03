@@ -1,5 +1,4 @@
-import {Fill, Stroke, Style} from 'ol/style';
-import CircleStyle from 'ol/style/Circle';
+import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, Point} from 'ol/geom';
 import Feature, {FeatureLike} from 'ol/Feature';
@@ -8,7 +7,7 @@ import {StyleFunction} from 'ol/style/Style';
 import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
-import {getDrawMarkerColor, getDrawMarkerOutlineColor} from "../openlayerStyles";
+import {drawMarkerStyle} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     base: Feature<Point>;
@@ -84,19 +83,19 @@ export class MissionTaskController implements TacticalGraphicHandler {
     onResolutionChangeFunc(e: ObjectEvent): void {
     }
 
+    /**
+     * Only the cursor marker: a point-anchored graphic renders itself live from
+     * `onDrawStartFunc`, so OpenLayers' own circle would draw a second, wrong shape on
+     * top of it. The marker itself comes from `drawMarkerStyle` — shared with the draw
+     * style every other graphic gets, so the two cannot drift.
+     */
     drawStyleFunc: StyleFunction = (feature: FeatureLike, resolution: number): Style | undefined => {
         const geomType = feature.getGeometry()?.getType();
         if (geomType === 'Circle') {
             return new Style({}); // suppress actual circle rendering
         }
         if (geomType === 'Point') {
-            return new Style({
-                image: new CircleStyle({
-                    radius: 6,
-                    fill: new Fill({color: getDrawMarkerColor()}),
-                    stroke: new Stroke({color: getDrawMarkerOutlineColor(), width: 1.5}),
-                }),
-            });
+            return drawMarkerStyle();
         }
         return undefined;
     };

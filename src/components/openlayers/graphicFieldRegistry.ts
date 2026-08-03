@@ -88,6 +88,15 @@ const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
 /** Generic line: identifier + start/end date at both ends. */
 const GENERIC_LINE = f(true, false, false, false, true);
+
+/**
+ * Obstacle line: identifier only.
+ *
+ * No status. `obstacleLineStyleFunc` never reads it — the graphic has no planned form to
+ * dash — so offering the control put a setting in the dialog that changed nothing on the
+ * map, which is the same trap "Label Plate" was.
+ */
+const OBSTACLE_LINE = f(true, false, false, false, false);
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
@@ -98,6 +107,13 @@ const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
 const NAME_FIELD_ONLY = f(true, false, false, false, false);
+
+/**
+ * Obstacle free / restricted area: T over W - W1, inside the toothed ring.
+ * Both are time-bounded by definition — an obstacle restriction is imposed for a
+ * period — so the two DTGs are part of the symbol rather than an optional extra.
+ */
+const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
 const FIRE_SUPPORT_AREA = f(true, false, true, true, true);
 
@@ -189,7 +205,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
-    [TacticalGraphicName.ObstacleLine]: GENERIC_LINE,
+    [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
     // Table 5-9 (direction of attack): T + W/W1 per FM construct examples.
     [TacticalGraphicName.DirectionOfMainAttack]: MOVEMENT_ARROW,
     [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
@@ -394,8 +410,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleBelt]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleZone]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.ObstacleFreeArea]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.ObstacleRestrictedArea]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.ObstacleFreeArea]: OBSTACLE_AREA,
+    [TacticalGraphicName.ObstacleRestrictedArea]: OBSTACLE_AREA,
     [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false),
     [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, true),
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
