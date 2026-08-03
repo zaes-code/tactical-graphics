@@ -77,6 +77,9 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 /** Text-halo stroke width — independent of LINE_WIDTH by design. */
 const HALO_WIDTH = 4;
 
+/** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
+const OBSTACLE_LABEL_GAP_PX = 8;
+
 /**
  * ## One palette, and where a host changes it
  *
@@ -3056,6 +3059,63 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
     };
 }
 
+/**
+ * The line the user actually drew, behind a decorated line graphic.
+ *
+ * `LineGraphicBase` stamps it because the rendered geometry is not the drawn one: an
+ * obstacle line's geometry is the *toothed* path, whose vertices are mostly tooth feet
+ * and apexes. Anything that needs to reason about the drawn shape — which segment is the
+ * middle one, which way it runs — cannot recover that from the teeth without guessing.
+ *
+ * Falls back to the rendered endpoints, which is right for the common two-point line and
+ * degrades to the old chord behaviour for a host driving these styles itself.
+ */
+function drawnBaseline(f: FeatureLike, rendered: Coordinate[]): Coordinate[] {
+    const stamped = f.get('baseCoordinates') as Coordinate[] | undefined;
+    if (Array.isArray(stamped) && stamped.length >= 2) return stamped;
+    return [rendered[0], rendered[rendered.length - 1]];
+}
+
+/** Index of the segment containing the halfway point by length — the centre-most one. */
+function centreSegmentIndex(coords: Coordinate[]): number {
+    const lengths: number[] = [];
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
+        lengths.push(len);
+        total += len;
+    }
+    let travelled = 0;
+    for (let i = 0; i < lengths.length; i++) {
+        travelled += lengths[i];
+        if (travelled >= total / 2) return i;
+    }
+    return Math.max(0, lengths.length - 1);
+}
+
+/**
+ * How far the rendered geometry reaches past a segment on one side, in map units.
+ *
+ * The teeth are map-unit sized — they were generated from the drawing resolution — so
+ * they grow on screen as the user zooms in, while a label offset in screen pixels does
+ * not. Offsetting by a fixed pixel gap therefore looks right at the drawing zoom and
+ * buries the label in the teeth two zoom levels later. Measuring the geometry instead of
+ * re-deriving the tooth height keeps the clearance correct at every zoom, and keeps this
+ * function from carrying a copy of a constant that lives in the generator.
+ */
+function extentBeyondSegment(rendered: Coordinate[], from: Coordinate, dir: Coordinate, normal: Coordinate, segLength: number): number {
+    let extent = 0;
+    for (const [x, y] of rendered) {
+        const vx = x - from[0];
+        const vy = y - from[1];
+        const along = vx * dir[0] + vy * dir[1];
+        if (along < 0 || along > segLength) continue;
+        const across = vx * normal[0] + vy * normal[1];
+        if (across > extent) extent = across;
+    }
+    return extent;
+}
+
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3069,95 +3129,51 @@ function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicL
 
         if (coords.length < 2) return styles;
 
-        const start = coords[0];
-        const end = coords[coords.length - 1];
+        // ── 1. The centre-most drawn segment ──────────────────────────────
+        // Off the drawn baseline, not the rendered one: every third vertex of the
+        // rendered geometry is a tooth apex, so "the middle segment" of it would be a
+        // tooth edge, and the label would ride whichever tooth happened to be central.
+        const baseline = drawnBaseline(f, coords);
+        const segIdx = centreSegmentIndex(baseline);
+        const p1 = baseline[segIdx];
+        const p2 = baseline[segIdx + 1];
 
-        // --- 1. Baseline vector (dominant direction)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
+        const segDx = p2[0] - p1[0];
+        const segDy = p2[1] - p1[1];
+        const segLength = Math.hypot(segDx, segDy);
+        if (segLength === 0) return styles;
 
-        if (baseLen === 0) return styles;
+        const dir: Coordinate = [segDx / segLength, segDy / segLength];
+        const mid: Coordinate = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
 
-        const ux = baseDx / baseLen;
-        const uy = baseDy / baseLen;
-
-        // --- 2. Project all vertices onto baseline
-        const projected = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return vx * ux + vy * uy;
-        });
-
-        const minP = Math.min(...projected);
-        const maxP = Math.max(...projected);
-        const target = (minP + maxP) / 2;
-
-        // --- 3. Find segment containing the midpoint projection
-        let segIdx = 0;
-        for (let i = 0; i < projected.length - 1; i++) {
-            if (
-                (projected[i] <= target && projected[i + 1] >= target) ||
-                (projected[i] >= target && projected[i + 1] <= target)
-            ) {
-                segIdx = i;
-                break;
-            }
+        // ── 2. The side that is up ────────────────────────────────────────
+        // Both perpendiculars are equally "beside the line"; the one with a positive
+        // northing is the one above it on screen. Picking by the segment's own direction
+        // is what made the label flip sides when the same line was drawn right-to-left —
+        // the direction of travel reverses, and every perpendicular derived from it with
+        // it. A vertical line has no upper side, so the tie breaks to the east.
+        let normal: Coordinate = [-dir[1], dir[0]];
+        if (normal[1] < 0 || (normal[1] === 0 && normal[0] < 0)) {
+            normal = [-normal[0], -normal[1]];
         }
-        const SMOOTH_WINDOW = 3;
 
-        let dirX = 0;
-        let dirY = 0;
+        // ── 3. Clear the graphic, at any zoom ─────────────────────────────
+        const obsScale = featureLabelScale(f, resolution);
+        const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
+        const clearanceMap = extentBeyondSegment(coords, p1, dir, normal, segLength);
+        const offsetMap = clearanceMap + (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * resolution;
 
-        for (let i = -SMOOTH_WINDOW; i <= SMOOTH_WINDOW; i++) {
-            const idx = segIdx + i;
-            if (idx < 0 || idx >= coords.length - 1) continue;
-
-            const a = coords[idx];
-            const b = coords[idx + 1];
-
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const len = Math.hypot(dx, dy);
-
-            if (len > 0) {
-                dirX += dx / len;
-                dirY += dy / len;
-            }
-        }
-        const p1 = coords[segIdx];
-        const p2 = coords[segIdx + 1];
-        const d1 = projected[segIdx];
-        const d2 = projected[segIdx + 1];
-
-        const t = d1 === d2 ? 0.5 : (target - d1) / (d2 - d1);
-
-        // --- 4. True midpoint position on geometry
-        const mid: Coordinate = [
-            p1[0] + (p2[0] - p1[0]) * t,
-            p1[1] + (p2[1] - p1[1]) * t,
+        const labelPoint: Coordinate = [
+            mid[0] + normal[0] * offsetMap,
+            mid[1] + normal[1] * offsetMap,
         ];
 
-        // --- 5. Rotation from baseline ONLY
-        let rotation = -Math.atan2(dirY, dirX);
+        // ── 4. Read along the segment, always upright ─────────────────────
+        let rotation = -Math.atan2(dir[1], dir[0]);
         if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
             rotation += Math.PI;
         }
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // --- 7. Offset label perpendicular to baseline
-        // Center at (half text height + 8px) so nearest text edge is always 8px from line
-        const obsScale = featureLabelScale(f, resolution);
-        const obsOffsetPx = 12 * obsScale + 8;
-        const obsOffsetMap = obsOffsetPx * resolution;
-
-        const nx = -uy;
-        const ny = ux;
-
-        const labelPoint: Coordinate = [
-            mid[0] - nx * obsOffsetMap,
-            mid[1] - ny * obsOffsetMap,
-        ];
 
 
         styles.push(new Style(
