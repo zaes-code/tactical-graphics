@@ -2324,54 +2324,53 @@ export function lineOfContactStyleFunc(): StyleFunction {
 
 function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const lines = geom.getCoordinates();
-        if (!lines || lines.length < 2) return [];
+        const geom = f.getGeometry() as LineString;
+        const coords = geom?.getCoordinates() ?? [];
+        if (coords.length < 2) return [];
 
-        const topCoords = lines[0];   // left/top wave (red)
-        const bottomCoords = lines[1]; // right/bottom wave (black)
+        // Both waves and — the point of this symbol — the gap between them are screen
+        // sized. Baked into the geometry the offset was fixed in metres, so the distance
+        // between the enemy-side and friendly-side lines grew as the map zoomed in and
+        // closed up as it zoomed out.
+        //
+        // Deliberately *not* passed through `decorationScale`, unlike every other
+        // decoration here. That cap keys off the shape's on-screen size, which is itself
+        // a function of zoom — fine for a tooth, which may quietly shrink on a small
+        // symbol, but not for this: the separation is what the graphic says, so it holds
+        // at every zoom and on every length of line, even where that makes a very short
+        // one look crowded.
+        const wavelengthMap = WAVE_WAVELENGTH_PX * resolution;
+        const amplitudeMap = WAVE_AMPLITUDE_PX * resolution;
+        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * resolution;
 
-        // Anchor the LC labels on the centerline between the two offset waves.
-        const bottomStart = bottomCoords[0];
-        const bottomEnd = bottomCoords[bottomCoords.length - 1];
-        const topStart = topCoords[0];
-        const topEnd = topCoords[topCoords.length - 1];
-        const start = [(topStart[0] + bottomStart[0]) / 2, (topStart[1] + bottomStart[1]) / 2];
-        const end = [(topEnd[0] + bottomEnd[0]) / 2, (topEnd[1] + bottomEnd[1]) / 2];
+        // Which side is which is a property of the map, not of the drawing gesture: the
+        // enemy-side wave takes the upper side of the line however it was drawn.
+        const {dir} = pathPointAt(coords, pathLength(coords) / 2);
+        const enemySign = upSign(dir);
 
-        const startScale = featureLabelScale(f, resolution);
-        const endScale = featureLabelScale(f, resolution);
-        // Gap between label and graphic, scaled with label size.
-        const labelPadPx = 10;
-
-        // Rotate labels to follow the centerline's orientation (midpoint of
-        // the two waves), not the wavy top wave itself.
+        const start = coords[0];
+        const end = coords[coords.length - 1];
+        const labelScale = featureLabelScale(f, resolution);
         const startRotation = getRotation(start, end);
         const endRotation = getRotation(end, start);
-
-        // getRotation flips rotation 180° to keep text upright, so when the
-        // line is drawn right→left the anchor/offset need to swap to keep the
-        // labels outside the graphic.
+        // getRotation flips rotation 180° to keep text upright, so a line drawn right→left
+        // needs its anchors swapped to keep the labels outside the graphic.
         const reversed = end[0] < start[0];
-        const startAlign = reversed ? 'left' : 'right';
-        const endAlign = reversed ? 'right' : 'left';
-        const startOffsetSign = reversed ? 1 : -1;
-        const endOffsetSign = reversed ? -1 : 1;
+        const labelPadPx = 10;
 
         return [
-            // Enemy-side wave. Routed through the palette rather than a literal 'red' so it
-            // tracks the mode alongside its friendly-side partner below; the graphic draws
-            // both identities at once, so the pair has to stay balanced.
+            // Enemy-side wave. Routed through the palette rather than a literal 'red' so
+            // it tracks its friendly-side partner; the graphic draws both identities at
+            // once, so the pair has to stay balanced.
             new Style({
-                geometry: new LineString(topCoords),
+                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, enemySign, offsetMap)),
                 stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH()}),
             }),
             // Friendly-side wave
             new Style({
-                geometry: new LineString(bottomCoords),
+                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)),
                 stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH()}),
             }),
-            // "LC" label at start (left-aligned to the left of the line start)
             new Style({
                 geometry: new Point(start),
                 text: new Text({
@@ -2379,14 +2378,13 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
                     rotation: startRotation,
-                    textAlign: startAlign,
+                    textAlign: reversed ? 'left' : 'right',
                     textBaseline: 'middle',
-                    scale: startScale,
-                    offsetX: startOffsetSign * labelPadPx * startScale,
+                    scale: labelScale,
+                    offsetX: (reversed ? 1 : -1) * labelPadPx,
                     stroke: getHaloStroke(),
                 }),
             }),
-            // "LC" label at end (right-aligned to the right of the line end)
             new Style({
                 geometry: new Point(end),
                 text: new Text({
@@ -2394,10 +2392,10 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
                     font: fontStyle,
                     fill: new Fill({color: getLabelFillColor()}),
                     rotation: endRotation,
-                    textAlign: endAlign,
+                    textAlign: reversed ? 'right' : 'left',
                     textBaseline: 'middle',
-                    scale: endScale,
-                    offsetX: endOffsetSign * labelPadPx * endScale,
+                    scale: labelScale,
+                    offsetX: (reversed ? -1 : 1) * labelPadPx,
                     stroke: getHaloStroke(),
                 }),
             }),
@@ -3153,9 +3151,148 @@ function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: Grap
 const OBSTACLE_TOOTH_HEIGHT_PX = 10;
 const OBSTACLE_TOOTH_BASE_PX = 10;
 const OBSTACLE_TOOTH_GAP_PX = 10;
-/** A tooth never takes more than this share of the smallest dimension it decorates. */
-const OBSTACLE_TOOTH_MAX_SHARE_CLOSED = 0.25;
-const OBSTACLE_TOOTH_MAX_SHARE_OPEN = 0.12;
+
+/**
+ * The fortified line and area wear square merlons; the forward line of own troops and
+ * each half of the line of contact wear a scalloped wave. Both were baked into geometry
+ * at the drawing resolution until 2026-08-03, for the same reason and with the same
+ * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
+ * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
+ */
+const FORTIFIED_MERLON_PX = 15;
+const FORTIFIED_CRENEL_PX = 15;
+const FORTIFIED_HEIGHT_PX = 11;
+const WAVE_WAVELENGTH_PX = 15;
+const WAVE_AMPLITUDE_PX = 8;
+const LINE_OF_CONTACT_OFFSET_PX = 16;
+
+/**
+ * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
+ *
+ * A constant pixel size is right everywhere except on a shape smaller than its own
+ * decoration — the sample gallery draws areas 15 px across. `available` is what the
+ * decoration has to fit inside: the smaller side of a closed ring's extent, or the length
+ * of an open path, because a horizontal line's extent has no height and the smaller side
+ * would be zero.
+ */
+function decorationScale(path: Coordinate[], closed: boolean, resolution: number, heightPx: number): number {
+    let availablePx: number;
+    if (closed) {
+        const xs = path.map(p => p[0]);
+        const ys = path.map(p => p[1]);
+        availablePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / resolution;
+    } else {
+        availablePx = pathLength(path) / resolution;
+    }
+    const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
+    return Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+}
+
+const DECORATION_MAX_SHARE_CLOSED = 0.25;
+const DECORATION_MAX_SHARE_OPEN = 0.12;
+
+/** The point at a distance along a polyline, with the unit direction there. */
+function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
+    let remaining = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (length === 0) continue;
+        const dir: Coordinate = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+        if (remaining <= length) {
+            return {point: [a[0] + dir[0] * remaining, a[1] + dir[1] * remaining], dir};
+        }
+        remaining -= length;
+    }
+    const a = path[path.length - 2];
+    const b = path[path.length - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return {point: b, dir: [(b[0] - a[0]) / length, (b[1] - a[1]) / length]};
+}
+
+/** The side of a segment that points up on screen, as a sign on the left-hand normal. */
+function upSign(dir: Coordinate): number {
+    return dir[0] >= 0 ? 1 : -1;
+}
+
+/**
+ * Square merlons along a path — the fortified line and area.
+ *
+ * The tooth is a rectangle standing off the baseline, so the path runs along the
+ * baseline for a crenel, up, across a merlon, down, and on. Emitted as one connected
+ * path: the generator used to hand back interleaved gap and tooth sub-lines, which drew
+ * identically but had to be reassembled by anything that wanted the outline.
+ */
+function castellatedPath(path: Coordinate[], merlonMap: number, crenelMap: number, heightMap: number, side: number | 'up'): Coordinate[] {
+    const total = pathLength(path);
+    const pattern = merlonMap + crenelMap;
+    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
+
+    const count = Math.max(1, Math.round(total / pattern));
+    const spacing = total / count;
+    const merlon = spacing * (merlonMap / pattern);
+
+    const out: Coordinate[] = [path[0]];
+    for (let i = 0; i < count; i++) {
+        const startAt = i * spacing + (spacing - merlon) / 2;
+        const left = pathPointAt(path, startAt);
+        const right = pathPointAt(path, startAt + merlon);
+        const sign = side === 'up' ? upSign(left.dir) : side;
+        const ln: Coordinate = [-left.dir[1] * sign, left.dir[0] * sign];
+        const rn: Coordinate = [-right.dir[1] * sign, right.dir[0] * sign];
+        out.push(
+            left.point,
+            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
+            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
+            right.point,
+        );
+    }
+    out.push(path[path.length - 1]);
+    return out;
+}
+
+/** Steps per bump. Enough that a semicircle reads as a curve rather than a tent. */
+const WAVE_STEPS = 12;
+
+/**
+ * A scalloped path — the forward line of own troops, and each half of the line of
+ * contact. `offsetMap` shifts the whole wave sideways off the drawn line, which is what
+ * separates the line of contact's two identities.
+ */
+function wavePath(path: Coordinate[], wavelengthMap: number, amplitudeMap: number, sideSign: number, offsetMap = 0): Coordinate[] {
+    const total = pathLength(path);
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return path;
+
+    const count = Math.max(1, Math.round(total / wavelengthMap));
+    const wavelength = total / count;
+    const out: Coordinate[] = [];
+
+    const shifted = (at: {point: Coordinate, dir: Coordinate}): Coordinate => {
+        const n: Coordinate = [-at.dir[1] * sideSign, at.dir[0] * sideSign];
+        return [at.point[0] + n[0] * offsetMap, at.point[1] + n[1] * offsetMap];
+    };
+
+    for (let i = 0; i < count; i++) {
+        const from = pathPointAt(path, i * wavelength);
+        const to = pathPointAt(path, (i + 1) * wavelength);
+        const a = shifted(from);
+        const b = shifted(to);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const chord = Math.hypot(dx, dy) || 1;
+        const nx = -(dy / chord) * sideSign;
+        const ny = (dx / chord) * sideSign;
+
+        for (let step = 0; step <= WAVE_STEPS; step++) {
+            if (i > 0 && step === 0) continue; // the previous bump ended here
+            const t = step / WAVE_STEPS;
+            const bump = Math.sin(Math.PI * t) * amplitudeMap;
+            out.push([a[0] + dx * t + nx * bump, a[1] + dy * t + ny * bump]);
+        }
+    }
+    return out;
+}
 
 /** Winding, by the shoelace sum: `> 0` is clockwise in projected coordinates. */
 function ringIsClockwise(ring: Coordinate[]): boolean {
@@ -3182,22 +3319,12 @@ function pathLength(path: Coordinate[]): number {
  * the smaller side would be zero and the teeth would vanish.
  */
 function obstacleToothSize(path: Coordinate[], closed: boolean, resolution: number) {
-    let availablePx: number;
-    if (closed) {
-        const xs = path.map(p => p[0]);
-        const ys = path.map(p => p[1]);
-        availablePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / resolution;
-    } else {
-        availablePx = pathLength(path) / resolution;
-    }
-    const share = closed ? OBSTACLE_TOOTH_MAX_SHARE_CLOSED : OBSTACLE_TOOTH_MAX_SHARE_OPEN;
-    const heightPx = Math.min(OBSTACLE_TOOTH_HEIGHT_PX, Math.max(0, availablePx) * share);
-    const scale = heightPx / OBSTACLE_TOOTH_HEIGHT_PX;
+    const scale = decorationScale(path, closed, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
     return {
-        heightMap: heightPx * resolution,
+        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
         baseMap: OBSTACLE_TOOTH_BASE_PX * scale * resolution,
         gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
-        heightPx,
+        heightPx: OBSTACLE_TOOTH_HEIGHT_PX * scale,
     };
 }
 
@@ -3564,69 +3691,39 @@ export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction
 function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     const label = getFullLabel(name, labels.label ?? '');
     return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
+        const geom = f.getGeometry() as LineString;
         if (!geom) return [];
-        const hostility = readHostility(f);
-        const color = getColorByHostility(hostility);
+        const coords = geom.getCoordinates();
+        if (coords.length < 2) return [];
+
+        const color = readHostilityColor(f);
         const styles: Style[] = [];
 
+        // Merlons in screen pixels, on the upper side of each segment whichever way the
+        // line was drawn. The generator used to hand back interleaved gap and tooth
+        // sub-lines, sized at the drawing resolution; the geometry is the drawn line now.
+        const scale = decorationScale(coords, false, resolution, FORTIFIED_HEIGHT_PX);
         styles.push(new Style({
-            geometry: geom,
-            stroke: new Stroke({
-                color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
+            geometry: new LineString(castellatedPath(
+                coords,
+                FORTIFIED_MERLON_PX * scale * resolution,
+                FORTIFIED_CRENEL_PX * scale * resolution,
+                FORTIFIED_HEIGHT_PX * scale * resolution,
+                'up',
+            )),
+            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
         }));
 
         if (!label) return styles;
 
-        // Sub-lines are interleaved gap/tooth/gap/.../gap. The user-drawn
-        // baseline endpoints are the very first point of the first sub-line
-        // and the very last point of the last sub-line — those are always
-        // gap pieces (the layout starts and ends with a gap).
-        const lines = geom.getCoordinates();
-        if (!lines.length) return styles;
-        const firstLine = lines[0];
-        const lastLine = lines[lines.length - 1];
-        if (firstLine.length < 1 || lastLine.length < 1) return styles;
-        const start = firstLine[0];
-        const end = lastLine[lastLine.length - 1];
-        // Treat the start→end span as the baseline for label projection. For
-        // multi-segment user lines this is an approximation, but the user's
-        // drawn line is contiguous so the midpoint sits close to the
-        // visual center.
-        const baseline = [start, end];
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-        if (baseLen === 0) return styles;
-        const ux = baseDx / baseLen;
-        const uy = baseDy / baseLen;
-
-        const projected = baseline.map(([x, y]) => (x - start[0]) * ux + (y - start[1]) * uy);
-        const target = (Math.min(...projected) + Math.max(...projected)) / 2;
-        let segIdx = 0;
-        for (let i = 0; i < projected.length - 1; i++) {
-            if ((projected[i] <= target && projected[i + 1] >= target) ||
-                (projected[i] >= target && projected[i + 1] <= target)) {
-                segIdx = i;
-                break;
-            }
-        }
-        const a = baseline[segIdx];
-        const b = baseline[segIdx + 1];
-        const da = projected[segIdx];
-        const db = projected[segIdx + 1];
-        const t = da === db ? 0.5 : (target - da) / (db - da);
-        const mid: Coordinate = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-
-        // Label below the line (teeth bump up) — same 8 px gap rule as the
-        // other line styles, with bottom-anchored text so the gap is
-        // constant regardless of label scale.
-        const scale = featureLabelScale(f, resolution);
+        // The label goes under the centre-most drawn segment — the merlons take the upper
+        // side, so the two never compete.
+        const segIdx = centreSegmentIndex(coords);
+        const a = coords[segIdx];
+        const b = coords[segIdx + 1];
+        const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const labelScale = featureLabelScale(f, resolution);
         const labelAnchor = offsetBelow(mid, a, b, resolution, 8);
-        const rotation = getRotation(a, b);
 
         styles.push(new Style({
             geometry: new Point(labelAnchor),
@@ -3634,10 +3731,10 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
                 text: label,
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
-                rotation,
+                rotation: getRotation(a, b),
                 textAlign: 'center',
                 textBaseline: 'top',
-                scale,
+                scale: labelScale,
                 stroke: getHaloStroke(),
             }),
         }));
@@ -3646,21 +3743,6 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
     };
 }
 
-/**
- * Unified style function for all four direction-arrow graphics:
- * DirectionOfMainAttack, DirectionOfSupportingAttack, DirectionOfMainAttackFeint,
- * AviationDirectionOfAttack.
- *
- * Layout rules:
- *  - Base line uses `dashStyle(labels)` so it goes dashed when planned /
- *    suspected, per the shared hash convention. Arrowheads stay solid.
- *  - Name label sits on the line, rotated with the line, right-aligned so its
- *    right edge stops just before the arrowhead (never invades it).
- *  - DTG (dtg1 - dtg2) sits below the line at 20 px * labelScale clearance,
- *    direction-safe via `offsetBelow` and `textBaseline:'top'`.
- *  - DirectionOfSupportingAttack: if hostility is hostile, prepend a separate
- *    "ENY" label one gap to the left of the name.
- */
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => directionArrowStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
@@ -3829,10 +3911,22 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = readHostilityColor(f);
+        const geom = f.getGeometry() as LineString;
+        const coords = geom?.getCoordinates() ?? [];
+        if (coords.length < 2) return [];
+
+        // The scallops are screen-sized: baked into the geometry they were fixed in
+        // metres, so a FLOT drawn zoomed out came back as a row of huge bulges.
+        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
         return [new Style({
+            geometry: new LineString(wavePath(
+                coords,
+                WAVE_WAVELENGTH_PX * scale * resolution,
+                WAVE_AMPLITUDE_PX * scale * resolution,
+                1,
+            )),
             stroke: new Stroke({
-                color: color,
+                color: readHostilityColor(f),
                 width: LINE_WIDTH(),
                 lineDash: dashStyle(labels),
             }),
@@ -5855,6 +5949,29 @@ export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: nu
     return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
 }
 
+/**
+ * The fortified area: square merlons standing outward off the drawn ring, in screen
+ * pixels. Same reasoning as the obstacle teeth, same winding correction — outward is a
+ * property of the ring, not of the order its corners were clicked.
+ */
+export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
+    const geometry = feature.getGeometry();
+    if (!(geometry instanceof Polygon)) return [];
+
+    const scale = decorationScale(geometry.getCoordinates()[0], true, resolution, FORTIFIED_HEIGHT_PX);
+    const merlonMap = FORTIFIED_MERLON_PX * scale * resolution;
+    const crenelMap = FORTIFIED_CRENEL_PX * scale * resolution;
+    const heightMap = FORTIFIED_HEIGHT_PX * scale * resolution;
+
+    const rings = geometry.getCoordinates().map(ring =>
+        castellatedPath(ring, merlonMap, crenelMap, heightMap, ringIsClockwise(ring) ? 1 : -1));
+
+    return [new Style({
+        geometry: new Polygon(rings),
+        stroke: new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()}),
+    })];
+}
+
 // FreeFireAreaCircular: present = solid stroke with no fill; planned = dashed
 // stroke with diagonal hatch fill. Mirrors the polygon FFA rendering so all
 // three FFA variants read the same when their status is set.
@@ -5974,6 +6091,7 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.Encirclement) return encirclementGraphicStyle(feature, resolution);
     if (name === TacticalGraphicName.ObstacleRestrictedArea) return obstacleRestrictedZoneStyle(feature, resolution);
     if (name === TacticalGraphicName.ObstacleFreeArea) return obstacleAreaStyles(feature, resolution, {outward: false});
+    if (name === TacticalGraphicName.FortifiedArea) return fortifiedAreaStyle(feature, resolution);
     if (
         name === TacticalGraphicName.ObstacleBelt ||
         name === TacticalGraphicName.ObstacleGroup ||

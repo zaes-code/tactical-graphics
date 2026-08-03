@@ -48,6 +48,10 @@ import {
     getHandleColor,
     getInertHandleColor,
     getLabelHaloColor,
+    fortifiedAreaStyle,
+    fortifiedLineStyleFunc,
+    forwardLineOfOwnTroopsStyleFunc,
+    lineOfContactStyleFunc,
     obstacleAreaStyles,
     obstacleLineStyle,
     obstacleRestrictedZoneStyle,
@@ -601,5 +605,111 @@ describe('obstacle teeth in screen space', () => {
         const belt = obstacleAreaStyles(areaFeature(CLOCKWISE), 10, {outward: true});
         expect(restricted[0].getFill()).not.toBeNull();
         expect(belt[0].getFill()).toBeFalsy();
+    });
+});
+
+/**
+ * The rest of the family whose decoration was baked into geometry at the drawing
+ * resolution: the fortified line and area wear square merlons, the forward line of own
+ * troops and the line of contact wear scallops. All four are screen-sized now.
+ */
+describe('fortified and wave graphics in screen space', () => {
+    const LINE = [[0, 0], [4000, 0]];
+    const RING: number[][] = [[0, 0], [0, 4000], [4000, 4000], [4000, 0], [0, 0]];
+
+    const lineFeature = (name: TacticalGraphicName, drawn: number[][] = LINE) => {
+        const f = new Feature(new LineString(drawn));
+        writeGraphicProperties([f], name, {label: ''});
+        return f;
+    };
+
+    /** Every vertex the style adds that leaves the drawn line, in pixels off it. */
+    const excursionsPx = (styles: Style[], resolution: number, index = 0) => {
+        const geom = styles[index].getGeometry() as LineString;
+        return geom.getCoordinates().map(([, y]) => Math.abs(y) / resolution).filter(d => d > 0.01);
+    };
+
+    it('sizes the fortified line’s merlons in pixels, not metres', () => {
+        const heights = [40, 10, 2, 0.5].map(res => {
+            const styles = fortifiedLineStyleFunc(TacticalGraphicName.FortifiedLine)(
+                lineFeature(TacticalGraphicName.FortifiedLine), res) as Style[];
+            return Math.max(...excursionsPx(styles, res));
+        });
+        heights.forEach(h => expect(h).toBeCloseTo(heights[0], 6));
+        expect(heights[0]).toBeCloseTo(11, 6);
+    });
+
+    it('sizes the fortified area’s merlons in pixels too, outward whichever way it was drawn', () => {
+        for (const ring of [RING, [...RING].reverse()]) {
+            const f = new Feature(new Polygon([ring]));
+            const heights = [40, 10, 2].map(res => {
+                const drawn = (fortifiedAreaStyle(f, res)[0].getGeometry() as Polygon).getCoordinates()[0];
+                const outside = drawn.filter(([x, y]) => x < -0.01 || x > 4000.01 || y < -0.01 || y > 4000.01);
+                const inside = drawn.filter(([x, y]) => x > 0.01 && x < 3999.99 && y > 0.01 && y < 3999.99);
+                expect(outside.length).toBeGreaterThan(0);
+                expect(inside.length).toBe(0);
+                return Math.max(...outside.map(([x, y]) => Math.max(-x, x - 4000, -y, y - 4000))) / res;
+            });
+            heights.forEach(h => expect(h).toBeCloseTo(11, 6));
+        }
+    });
+
+    it('sizes the forward line of own troops’ scallops in pixels', () => {
+        const amplitudes = [40, 10, 2, 0.5].map(res => {
+            const styles = forwardLineOfOwnTroopsStyleFunc(TacticalGraphicName.ForwardLineOfOwnTroops)(
+                lineFeature(TacticalGraphicName.ForwardLineOfOwnTroops), res) as Style[];
+            return Math.max(...excursionsPx(styles, res));
+        });
+        amplitudes.forEach(a => expect(a).toBeCloseTo(8, 6));
+    });
+
+    describe('line of contact', () => {
+        const styles = (res: number, drawn: number[][] = LINE) =>
+            lineOfContactStyleFunc()(lineFeature(TacticalGraphicName.LineOfContact, drawn), res) as Style[];
+
+        /** The gap between the two waves at their closest, in pixels. */
+        const separationPx = (res: number, drawn: number[][] = LINE) => {
+            const [enemy, friendly] = styles(res, drawn);
+            const ys = (s: Style) => (s.getGeometry() as LineString).getCoordinates().map(c => c[1]);
+            const enemyYs = ys(enemy);
+            const friendlyYs = ys(friendly);
+            return (Math.min(...enemyYs.filter(y => y > 0)) - Math.max(...friendlyYs.filter(y => y < 0))) / res;
+        };
+
+        it('holds the distance between the two lines as the map scales', () => {
+            // The whole point of the symbol is the pair, so the gap between them cannot
+            // be a distance on the ground. Baked into geometry it was exactly that.
+            const gaps = [40, 10, 2, 0.5].map(res => separationPx(res));
+            gaps.forEach(g => expect(g).toBeCloseTo(2 * 16, 6));
+        });
+
+        it('holds it on a short line too, where a size cap would have closed the gap', () => {
+            // Every other decoration here shrinks on a symbol too small to carry it.
+            // This one must not: the separation *is* the symbol, so it survives a line
+            // only a few pixels long as well as a zoom change.
+            const short = [[0, 0], [200, 0]];
+            expect(separationPx(10, short)).toBeCloseTo(2 * 16, 6);
+        });
+
+        it('puts the enemy-side wave above and the friendly-side below, either way drawn', () => {
+            for (const drawn of [LINE, [...LINE].reverse()]) {
+                const [enemy, friendly] = styles(10, drawn);
+                const highest = (s: Style) => Math.max(...(s.getGeometry() as LineString).getCoordinates().map(c => c[1]));
+                const lowest = (s: Style) => Math.min(...(s.getGeometry() as LineString).getCoordinates().map(c => c[1]));
+                expect(highest(enemy)).toBeGreaterThan(0);
+                expect(lowest(friendly)).toBeLessThan(0);
+            }
+        });
+
+        it('draws the enemy side red and the friendly side in the default line colour', () => {
+            const [enemy, friendly] = styles(10);
+            expect(enemy.getStroke()!.getColor()).toBe(getColorByHostility(TacticalGraphicHostility.hostileFaker));
+            expect(friendly.getStroke()!.getColor()).toBe(getDefaultLineColor());
+        });
+
+        it('still labels both ends LC', () => {
+            const texts = styles(10).map(s => s.getText?.()?.getText?.()).filter(Boolean);
+            expect(texts).toEqual(['LC', 'LC']);
+        });
     });
 });
