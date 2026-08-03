@@ -98,6 +98,13 @@ const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
 const NAME_FIELD_ONLY = f(true, false, false, false, false);
+
+/**
+ * Obstacle free / restricted area: T over W - W1, inside the toothed ring.
+ * Both are time-bounded by definition — an obstacle restriction is imposed for a
+ * period — so the two DTGs are part of the symbol rather than an optional extra.
+ */
+const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
 const FIRE_SUPPORT_AREA = f(true, false, true, true, true);
 
@@ -394,8 +401,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleBelt]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleZone]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.ObstacleFreeArea]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.ObstacleRestrictedArea]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.ObstacleFreeArea]: OBSTACLE_AREA,
+    [TacticalGraphicName.ObstacleRestrictedArea]: OBSTACLE_AREA,
     [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false),
     [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, true),
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
