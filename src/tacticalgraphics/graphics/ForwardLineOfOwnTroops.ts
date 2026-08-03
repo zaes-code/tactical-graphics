@@ -1,15 +1,14 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {IBaseGraphicOptions, TacticalGraphicName} from "../core/type";
-import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
-import geometryService from "../core/GeometryService";
+import {Feature, LineString, MultiPoint} from "geojson";
 
 export class ForwardLineOfOwnTroops extends TacticalGraphicsBase {
     name: string = TacticalGraphicName.ForwardLineOfOwnTroops;
     type: string = "LineString";
 
+    /** The drawn line, undecorated — the wave is drawn in screen space. @see LineOfContact */
     generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<LineString> {
-        let size = opts?.size || 1;
-        return geometryService.lineStringToWave(base, size * 15, 8 * size, 15);
+        return this.asLineStringFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<MultiPoint> {
@@ -27,20 +26,16 @@ export class LineOfContact extends TacticalGraphicsBase {
     name: string = TacticalGraphicName.LineOfContact;
     type: string = "LineString";
 
-    generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<MultiLineString> {
-        let size = opts?.size || 1;
-        const amplitude = 8 * size;
-        const wavelength = size * 15;
-        // Offset each wave's baseline perpendicular to the original line so the
-        // two wave rows sit on opposite sides of the centerline and bow outward
-        // (facing away from each other) rather than forming closed ovals.
-        const topBaseCoords = geometryService.computeParallelLineString(base.geometry.coordinates, -amplitude * 2);
-        const bottomBaseCoords = geometryService.computeParallelLineString(base.geometry.coordinates, amplitude * 2);
-        const topBase = this.asLineStringFeature(topBaseCoords);
-        const bottomBase = this.asLineStringFeature(bottomBaseCoords);
-        const topWave = geometryService.lineStringToWave(topBase, wavelength, amplitude, 15, true);
-        const bottomWave = geometryService.lineStringToWave(bottomBase, wavelength, amplitude, 15, false);
-        return this.asMultiLineStringFeature([topWave.geometry.coordinates, bottomWave.geometry.coordinates]);
+    /**
+     * The drawn centreline, undecorated.
+     *
+     * Both waves and the gap between them are drawn in screen space by
+     * `lineOfContactStyleFunc`. Baked in here they were sized from the drawing
+     * resolution, so the distance between the enemy-side and friendly-side waves — the
+     * one thing this symbol is *about* — grew and shrank with zoom.
+     */
+    generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<LineString> {
+        return this.asLineStringFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<MultiPoint> {
