@@ -23,6 +23,7 @@ import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
 import {
     BASE_FONT_SIZE_PX,
+    DEFAULT_PALETTE,
     getDefaultLabelSize,
     getDefaultLineColorOverride,
     getDefaultLineWidth,
@@ -31,10 +32,8 @@ import {
     getHandleColorOverride,
     getHostilityColorOverride,
     getInertHandleColorOverride,
-    getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
-    getSelectionFillColorOverride,
 } from '@zaes/tactical-graphics';
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
@@ -68,9 +67,8 @@ export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
 /**
  * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
  * area outlines, arrows, and custom-rendered graphics all use this width.
- * Backed by the live Settings-panel value (see `settings.ts`) — call it
- * fresh from inside a style function rather than caching the result, the
- * same rule as `getDefaultLabelSize()`/`isDarkMode()`.
+ * Backed by the live config — call it fresh from inside a style function
+ * rather than caching the result, the same rule as `getDefaultLabelSize()`.
  */
 export const LINE_WIDTH = (): number => getDefaultLineWidth();
 
@@ -90,21 +88,18 @@ const OBSTACLE_LABEL_MIN_GAP_PX = 8;
 /**
  * ## One palette, and where a host changes it
  *
- * These colours are the doctrinal FM 1-02.2 ones and they do **not** vary with
- * `isDarkMode()`. A host that wants different line work on a dark basemap supplies it
- * through `configureTacticalGraphics` (`src/settings.ts`) — only the host knows what
- * its own basemap looks like, and a library-side dark palette can only guess. See
- * `src/App.tsx` for the worked example.
+ * Every accessor below is the same two lines: the host's override if there is one,
+ * otherwise the value from `DEFAULT_PALETTE`. The defaults live in the config module
+ * rather than as literals here so that "what does this library look like unconfigured"
+ * has exactly one answer, and so a host composing its own set can start from it —
+ * `{...DEFAULT_PALETTE, ...myColours}`.
  *
- * There used to be a second, dark set of values. They were the *measured output* of a
- * CSS filter — `invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%)` — that
- * once landed on the graphics canvas along with the basemap, because OL composites
- * consecutive layers sharing a className onto one canvas. When that was fixed at
- * source (see `TacticalGraphicsManager.renderingVectorLayer`) the filter's output was
- * frozen into literals so the change would look like a no-op. That is not a palette
- * anyone designed, and re-tinting doctrinal affiliation colours is the host's call
- * rather than the library's, so the dark set is gone. `ai/decisions.md` has the
- * history.
+ * A host that wants different line work on a dark basemap supplies it through
+ * `configureTacticalGraphics`. The library has no mode of its own to consult: only the
+ * host knows what its basemap looks like and which state it is in, so a library-side
+ * second palette could only guess. `ai/decisions.md` has the history — there was once a
+ * dark set, and it was the measured output of a CSS filter rather than anything anyone
+ * designed.
  */
 
 /**
@@ -147,7 +142,7 @@ export function readHostilityColor(feature: FeatureLike): string {
 
 /** Default stroke/fill colour for graphics with no specific hostility colour. */
 export function getDefaultLineColor(): string {
-    return getDefaultLineColorOverride() ?? '#000000';
+    return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
 }
 
 /** Text label fill colour. Follows the default line colour unless overridden on its own. */
@@ -157,53 +152,94 @@ export function getLabelFillColor(): string {
 
 /** Text label halo (outline) colour — contrast against the map background. */
 export function getLabelHaloColor(): string {
-    return getLabelHaloColorOverride() ?? 'rgba(255,255,255,1)';
+    return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
 }
 
 /**
  * ## Editor chrome
  *
- * The affordances a user edits a graphic with — handle dots, the inert centre, the
- * selection fill, the draw marker. Not part of any symbol: they say "you can drag this",
- * and that meaning must not shift with a graphic's affiliation. Tinting handles by
- * hostility made a hostile graphic's handles the same red as its own strokes, so they
- * stopped reading as handles at all.
- *
- * These used to come from `byMode(light, dark)`, a helper that read a `isDarkMode()`
- * flag. Both are gone: the flag was a boolean whose entire job was choosing between two
- * hardcoded colour literals, which is what the config already does — better, since it
- * also lets a host re-theme chrome that was previously not overridable at all. See
- * `ai/decisions.md`, "The library has no concept of dark mode".
+ * The affordances a user edits a graphic with — handle dots, the inert centre, the draw
+ * marker. Not part of any symbol: they say "you can drag this", and that meaning must
+ * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
+ * graphic's handles the same red as its own strokes, so they stopped reading as handles
+ * at all.
  */
 
 /** Draggable handle dots. Renderers apply their own opacity on top. */
 export function getHandleColor(): string {
-    return getHandleColorOverride() ?? 'rgba(255,0,0,1)';
+    return getHandleColorOverride() ?? DEFAULT_PALETTE.handleColor;
 }
 
 /** Handle dots that exist but cannot be dragged in the current mode. */
 export function getInertHandleColor(): string {
-    return getInertHandleColorOverride() ?? 'rgba(130,130,130,0.8)';
+    return getInertHandleColorOverride() ?? DEFAULT_PALETTE.inertHandleColor;
 }
 
-/** Fill for a selected or default-styled graphic. */
-export function getSelectionFillColor(): string {
-    return getSelectionFillColorOverride() ?? 'rgba(0, 120, 255, 0.2)';
-}
-
-/** The marker shown while placing a point-anchored graphic. */
+/** The marker and sketch line shown while a graphic is being drawn. */
 export function getDrawMarkerColor(): string {
-    return getDrawMarkerColorOverride() ?? 'rgba(87, 140, 255, 1)';
+    return getDrawMarkerColorOverride() ?? DEFAULT_PALETTE.drawMarkerColor;
 }
 
 /** That marker's outline. */
 export function getDrawMarkerOutlineColor(): string {
-    return getDrawMarkerOutlineColorOverride() ?? 'white';
+    return getDrawMarkerOutlineColorOverride() ?? DEFAULT_PALETTE.drawMarkerOutlineColor;
 }
 
-/** Solid map-background fill for label backgrounds (blocks pattern fills behind text). */
-export function getLabelBackgroundFill(): string {
-    return getLabelBackgroundFillOverride() ?? 'rgba(255, 255, 255, 0.90)';
+/** Radius in px of the dot under the cursor while drawing. */
+const DRAW_MARKER_RADIUS = 6;
+const DRAW_MARKER_OUTLINE_WIDTH = 1.5;
+
+/**
+ * The dot drawn at the cursor while a graphic is being placed.
+ *
+ * Built fresh on each call rather than cached, so a host changing `drawMarkerColor`
+ * mid-session sees it on the next frame — the same reason `getHaloStroke` is a function.
+ */
+export function drawMarkerStyle(): Style {
+    return new Style({
+        image: new CircleStyle({
+            radius: DRAW_MARKER_RADIUS,
+            fill: new Fill({color: getDrawMarkerColor()}),
+            stroke: new Stroke({color: getDrawMarkerOutlineColor(), width: DRAW_MARKER_OUTLINE_WIDTH}),
+        }),
+    });
+}
+
+/**
+ * The draw-time style for **every** graphic — the manager installs it on the `Draw`
+ * interaction for any controller that does not supply a `drawStyleFunc` of its own.
+ *
+ * Before this existed only `MissionTaskController` styled its draw, so the draw-marker
+ * colours reached point-anchored graphics and nothing else: every line, polygon and area
+ * fell through to OpenLayers' built-in editing style, which is hardcoded and ignores the
+ * config entirely. A host could set `drawMarkerColor` and watch it apply to a handful of
+ * graphics.
+ *
+ * OpenLayers renders a draw in two features — the sketch geometry, and a separate Point
+ * for the cursor. Both arrive here, which is why the `Point` branch is the marker and
+ * everything else is the sketch line. The sketch is dashed and drawn over an outline in
+ * the marker's outline colour, so it stays legible over both the basemap and any graphic
+ * already on the map.
+ */
+export function defaultDrawStyleFunc(): StyleFunction {
+    return (feature) => {
+        if (feature.getGeometry()?.getType() === 'Point') return drawMarkerStyle();
+        return [
+            new Style({
+                stroke: new Stroke({
+                    color: getDrawMarkerOutlineColor(),
+                    width: LINE_WIDTH() + 2,
+                }),
+            }),
+            new Style({
+                stroke: new Stroke({
+                    color: getDrawMarkerColor(),
+                    width: LINE_WIDTH(),
+                    lineDash: [10, 8],
+                }),
+            }),
+        ];
+    };
 }
 
 /**
@@ -492,6 +528,11 @@ export const createInertHandleFeature = () => {
  *
  * `hostilityColor` is what the properties dialog stamps; `hostility` is the raw
  * enum, kept as a fallback for features coloured by some other path.
+ *
+ * **Stroke only, no fill.** There used to be a translucent blue fill here, left over
+ * from a selection highlight that never tracked selection — it painted every
+ * default-styled area graphic all the time, which is not what FM 1-02.2 draws and not
+ * what any of the graphics with a bespoke style do.
  */
 export const createFeature = () => {
     let feature = new Feature();
@@ -499,9 +540,6 @@ export const createFeature = () => {
     feature.setStyle((feature) => {
         const color = readHostilityColor(feature);
         return new Style({
-            fill: new Fill({
-                color: getSelectionFillColor(),
-            }),
             stroke: new Stroke({
                 color,
                 width: LINE_WIDTH(),

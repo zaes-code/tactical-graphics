@@ -88,16 +88,15 @@ export {default as geometryService} from './core/GeometryService';
  * renderer inherits them rather than reinventing them, and a host configures the library
  * once no matter how many views it has.
  *
- * There is one palette and it does not follow dark mode — the library cannot see your
- * basemap, so you send the colours you want. `paletteForMode` is a ready-made pair for
- * the common case. After changing anything, tell your renderer to invalidate; with
- * OpenLayers that is `source.forEachFeature(f => f.changed())`.
+ * There is one palette — `DEFAULT_PALETTE`. The library cannot see your basemap, so it
+ * never picks colours for you: keep whatever sets your app needs and send one. After
+ * changing anything, tell your renderer to invalidate; with OpenLayers that is
+ * `source.forEachFeature(f => f.changed())`.
  */
 export {
     BASE_FONT_SIZE_PX,
-    DARK_MODE_PALETTE,
     DEFAULT_LINE_WIDTH,
-    LIGHT_MODE_PALETTE,
+    DEFAULT_PALETTE,
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
     MIN_LABEL_SIZE,
@@ -107,7 +106,6 @@ export {
     getDefaultLabelSize,
     getDefaultLineWidth,
     getTacticalGraphicsConfig,
-    paletteForMode,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,
     setDefaultLineWidth,
@@ -127,8 +125,6 @@ export {
     getHandleColorOverride,
     getHostilityColorOverride,
     getInertHandleColorOverride,
-    getLabelBackgroundFillOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
-    getSelectionFillColorOverride,
 } from './core/config';
