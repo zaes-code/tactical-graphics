@@ -433,6 +433,11 @@ class GeometryService {
         const numVertices = exteriorRing.length;
         const allTriangles: Position[][] = [];
 
+        // Same winding correction as `generateToothedPolygonFromTriangles`: without it the
+        // triangles sit inside or outside according to the order the user happened to
+        // click the corners. @see ringIsCounterClockwise
+        const toothSide = outward !== this.ringIsCounterClockwise(exteriorRing);
+
         // 1. Calculate Total Perimeter Length and Segment Lengths (Global Calculation)
         const segmentLengthsMeters: number[] = [];
         let totalPerimeter = 0;
@@ -508,7 +513,7 @@ class GeometryService {
                     baseStartDistRel,
                     triangleWidth,
                     triangleHeight,
-                    outward
+                    toothSide
                 );
 
                 allTriangles.push(segmentTriangles);
@@ -540,6 +545,11 @@ class GeometryService {
         const exteriorRing = polygonRings[0];
         const numVertices = exteriorRing.length;
         const newRing: Position[] = [];
+
+        // `outward` is a geometric intent; the tooth helper takes a side of travel.
+        // Reconcile them against the ring's winding so a polygon drawn anticlockwise
+        // gets its teeth on the same side as one drawn clockwise. @see ringIsCounterClockwise
+        const toothSide = outward !== this.ringIsCounterClockwise(exteriorRing);
 
         // ---- 1. Compute segment lengths & total perimeter ----
         const segmentLengthsMeters: number[] = [];
@@ -614,7 +624,7 @@ class GeometryService {
                     baseStartDistRel,
                     triangleWidth,
                     triangleHeight,
-                    outward
+                    toothSide
                 );
 
                 newRing.push(p1, apex, p2);
@@ -2281,6 +2291,29 @@ class GeometryService {
      * Helper to generate a single triangle using linear interpolation along the segment.
      * This ensures the base points lie exactly on the polygon edge.
      */
+    /**
+     * Winding of a closed ring, by the shoelace sum.
+     *
+     * Teeth are placed with `turf.bearing ± 90`, which is a side of *travel* — left or
+     * right of the direction the ring is being walked. Which of those is the outside of
+     * the polygon depends entirely on the winding, and nothing normalises the winding of
+     * what a user draws: click the corners of an area clockwise and the teeth point out,
+     * click the same corners the other way round and every tooth points in. Callers pass
+     * a geometric intent (`outward`), so they need this to turn it into a side.
+     *
+     * `sum > 0` is clockwise for this form of the shoelace, which is the winding the
+     * tooth helper's `outward = bearing - 90` already assumes.
+     */
+    private ringIsCounterClockwise(ring: Position[]): boolean {
+        let sum = 0;
+        for (let i = 0; i < ring.length - 1; i++) {
+            const [x1, y1] = ring[i];
+            const [x2, y2] = ring[i + 1];
+            sum += (x2 - x1) * (y2 + y1);
+        }
+        return sum < 0;
+    }
+
     private generateSingleTriangleLinear(
         pStart: Position,
         pEnd: Position,
