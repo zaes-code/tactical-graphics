@@ -6,10 +6,10 @@ import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import {
+    DEFAULT_PALETTE,
     TacticalGraphicHostility,
     TacticalGraphicsConfig,
     TacticalGraphicsConfigOptions,
-    paletteForMode,
     setTacticalGraphicsConfig,
 } from '@zaes/tactical-graphics';
 
@@ -24,8 +24,35 @@ const LS_LEGACY_LABELSIZE = 'tg_defaultLabelSize';
 const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
 
 /**
- * Publish the whole config in one call, mode palette first and the user's overrides on
- * top.
+ * The demo's colours for a dark basemap — **the app's, not the library's.**
+ *
+ * The library ships one palette (`DEFAULT_PALETTE`) and has no idea whether this app is
+ * in dark mode; it cannot, since it never sees the basemap. So a host that wants a
+ * second set keeps it, which is exactly what this is: the worked example of what a
+ * consumer writes. Add or drop keys freely — the only rule is that a set be *complete*
+ * enough to undo the other, since `setTacticalGraphicsConfig` replaces rather than
+ * merges.
+ *
+ * No `hostilityColors`: the four affiliation colours are doctrine and stay put in both
+ * modes. What moves is the unaffiliated neutrals — the default line colour, the label
+ * text that follows it, the halo behind that text — and the editor chrome, all of which
+ * are black-on-white by default and would be invisible on a dark basemap.
+ */
+const DARK_PALETTE: TacticalGraphicsConfigOptions = {
+    defaultLineColor: 'rgb(198,198,198)',
+    labelFillColor: 'rgb(198,198,198)',
+    labelHaloColor: 'rgb(23,23,23)',
+    handleColor: 'rgba(208,123,123,1)',
+    inertHandleColor: 'rgba(109,109,109,0.8)',
+    drawMarkerColor: 'rgb(69,106,185)',
+    drawMarkerOutlineColor: 'rgb(23,23,23)',
+};
+
+const paletteFor = (dark: boolean): TacticalGraphicsConfigOptions => dark ? DARK_PALETTE : DEFAULT_PALETTE;
+
+/**
+ * Publish the whole config in one call, the mode's palette first and the user's
+ * overrides on top.
  *
  * **`setTacticalGraphicsConfig`, not `configureTacticalGraphics`.** The replacing form
  * is what makes "reset this colour" work: the settings panel clears an override by
@@ -37,7 +64,7 @@ const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
  * mode palette would re-impose itself over a user's colour on every toggle.
  */
 function applyGraphicsConfig(dark: boolean, overrides: TacticalGraphicsConfigOptions): void {
-    setTacticalGraphicsConfig(new TacticalGraphicsConfig({...paletteForMode(dark), ...overrides}));
+    setTacticalGraphicsConfig(new TacticalGraphicsConfig({...paletteFor(dark), ...overrides}));
 }
 
 function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
@@ -161,7 +188,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 settings={settings}
-                basePalette={paletteForMode(darkMode)}
+                basePalette={paletteFor(darkMode)}
                 onChange={handleChange}
                 onHostilityColorChange={handleHostilityColorChange}
                 darkMode={darkMode}
