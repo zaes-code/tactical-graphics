@@ -80,9 +80,9 @@ export class FortifiedArea extends TacticalGraphicsBase {
     name = 'FortifiedArea';
     type: string = "Polygon";
 
+    /** The drawn area, undecorated — the merlons are drawn in screen space. @see Obstacle */
     generateGraphics(base: Feature<Polygon>, opts?: EncirclementAreaOptions): Feature<Polygon> {
-        let size = opts?.size ?? 1;
-        return this.asPolygonFeature(geometryService.fortifiedAreaGraphic(base.geometry, 10 * size, 10 * size, 10 * size));
+        return this.asPolygonFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<Polygon>, opts: EncirclementAreaOptions | undefined): Feature<MultiPoint> {
