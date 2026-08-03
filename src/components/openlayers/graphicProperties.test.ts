@@ -9,7 +9,7 @@ import {
     configureTacticalGraphics,
     resetTacticalGraphicsConfig,
 } from '@zaes/tactical-graphics';
-import {coordinatedFireLineStyle, defaultLineStyle, getAreaLabelStylesFn, phaseLineStyleFunc, routeControlMeasureStyle} from './openlayerStyles';
+import {coordinatedFireLineStyle, defaultLineStyle, getAreaLabelStylesFn, obstacleLineStyle, phaseLineStyleFunc, routeControlMeasureStyle} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -233,5 +233,28 @@ describe('obstacle area amplifiers', () => {
     it('omits the name line rather than leaving a blank one', () => {
         expect(block(TacticalGraphicName.ObstacleFreeArea, {startDate: '021200ZJUN26'}))
             .toBe('FREE\n021200ZJUN26');
+    });
+});
+
+describe('obstacle line fields', () => {
+    it('offers the identifier but not status', () => {
+        // The style function never reads status — there is no planned form of this
+        // graphic to dash — so the control would have changed nothing on the map.
+        const fields = getGraphicFields(TacticalGraphicName.ObstacleLine);
+        expect(fields.identifier1).toBe(true);
+        expect(fields.status).toBe(false);
+    });
+
+    it('renders identically whether or not a status is stamped', () => {
+        const withStatus = new Feature(new LineString([[0, 0], [10000, 0]]));
+        const without = new Feature(new LineString([[0, 0], [10000, 0]]));
+        writeGraphicProperties([withStatus], TacticalGraphicName.ObstacleLine,
+            {label: 'OBS-1', status: TacticalGraphicStatus.planned});
+        writeGraphicProperties([without], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+
+        const dashes = (f: Feature) => (obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[])
+            .map(s => JSON.stringify(s.getStroke()?.getLineDash() ?? null));
+
+        expect(dashes(withStatus)).toEqual(dashes(without));
     });
 });
