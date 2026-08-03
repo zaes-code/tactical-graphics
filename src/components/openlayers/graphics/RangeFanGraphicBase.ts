@@ -5,7 +5,7 @@ import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import openlayersAdapter from "../openlayersAdapter";
-import {getDefaultLineColor, getRangeFanLabelStyleFn, LINE_WIDTH} from "../openlayerStyles";
+import {getRangeFanLabelStyleFn, LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
 import {resolveBandAzimuths, resolveBands} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
@@ -48,7 +48,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // Range fans render the geometry as plain strokes — nothing fancy
         // (no fill, no per-feature label baked into the line).
         this.graphic.setStyle((feature) => {
-            const color = feature.get('hostilityColor') || getDefaultLineColor();
+            const color = readHostilityColor(feature);
             return new Style({
                 stroke: new Stroke({color, width: LINE_WIDTH()}),
             });
