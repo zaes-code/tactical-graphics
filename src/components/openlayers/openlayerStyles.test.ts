@@ -20,6 +20,8 @@ import Feature from 'ol/Feature';
 import {LineString, Point, Polygon} from 'ol/geom';
 import CircleStyle from 'ol/style/Circle';
 import {Style} from 'ol/style';
+import {StyleFunction} from 'ol/style/Style';
+import Icon from 'ol/style/Icon';
 import {writeGraphicProperties} from './graphicProperties';
 import {
     DEFAULT_PALETTE,
@@ -56,6 +58,18 @@ import {
     obstacleLineStyle,
     obstacleRestrictedZoneStyle,
 } from './openlayerStyles';
+
+import {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    getSecurityOperationSymbolProvider,
+    getSecurityOperationSymbolSize,
+    securityOperationSidc,
+    securityOperationSymbolStyle,
+    setSecurityOperationSymbolProvider,
+    setSecurityOperationSymbolSize,
+} from './securityOperationSymbol';
 
 // Every test starts from the shipped defaults; the overrides below are global.
 beforeEach(resetTacticalGraphicsConfig);
@@ -354,13 +368,15 @@ describe('TacticalGraphicsConfig', () => {
 describe('the accessors the style layer reads', () => {
     it('default to the shipped values with no config', () => {
         expect(getDefaultLabelSize()).toBe(16);
-        expect(getDefaultLineWidth()).toBe(4);
+        expect(getDefaultLineWidth()).toBe(2);
     });
 
     it('follow the config once set', () => {
-        configureTacticalGraphics({labelSize: 20, lineWidth: 2});
+        // Both values differ from the shipped defaults on purpose — at lineWidth 2
+        // this could not tell "followed the config" from "fell back to the default".
+        configureTacticalGraphics({labelSize: 20, lineWidth: 5});
         expect(getDefaultLabelSize()).toBe(20);
-        expect(getDefaultLineWidth()).toBe(2);
+        expect(getDefaultLineWidth()).toBe(5);
     });
 
     it('clamp through configureTacticalGraphics too', () => {
@@ -398,7 +414,7 @@ describe('the library default', () => {
         jest.isolateModules(() => {
             const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
             expect(config.getDefaultLabelSize()).toBe(16);
-            expect(config.getDefaultLineWidth()).toBe(4);
+            expect(config.getDefaultLineWidth()).toBe(2);
             expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
         });
     });
@@ -711,5 +727,249 @@ describe('fortified and wave graphics in screen space', () => {
             const texts = styles(10).map(s => s.getText?.()?.getText?.()).filter(Boolean);
             expect(texts).toEqual(['LC', 'LC']);
         });
+    });
+});
+
+/**
+ * The centre symbol Cover / Guard / Screen draw between their arms.
+ *
+ * It used to be a hardcoded SIDC built through a static `import ms from
+ * 'milsymbol'`, which made an optional peer dependency mandatory for the whole
+ * `/openlayers` entry point and ignored the graphic's affiliation entirely.
+ */
+describe('security operation centre symbol', () => {
+    afterEach(() => setSecurityOperationSymbolProvider(undefined));
+
+    it('draws nothing until a host registers a provider', () => {
+        expect(getSecurityOperationSymbolProvider()).toBeUndefined();
+    });
+
+    // The literal is the code the controller carried inline. Deriving the SIDC from
+    // hostility must not have moved the symbol a Friend graphic renders.
+    it('reproduces the historical SIDC for a friendly graphic', () => {
+        expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001413010000000000000000');
+    });
+
+    it('varies only the standard-identity digit, position 4', () => {
+        const friend = securityOperationSidc(TacticalGraphicHostility.friend);
+        for (const hostility of Object.values(TacticalGraphicHostility)) {
+            const sidc = securityOperationSidc(hostility);
+            expect(sidc).toHaveLength(30);
+            // Everything except digit 4 is identical across every affiliation.
+            expect(sidc.slice(0, 3) + sidc.slice(4)).toBe(friend.slice(0, 3) + friend.slice(4));
+        }
+    });
+
+    it('maps each affiliation to its 2525E identity digit', () => {
+        const digit = (h: TacticalGraphicHostility) => securityOperationSidc(h)[3];
+        expect(digit(TacticalGraphicHostility.pending)).toBe('0');
+        expect(digit(TacticalGraphicHostility.unknown)).toBe('1');
+        expect(digit(TacticalGraphicHostility.assumedFriend)).toBe('2');
+        expect(digit(TacticalGraphicHostility.friend)).toBe('3');
+        expect(digit(TacticalGraphicHostility.neutral)).toBe('4');
+        expect(digit(TacticalGraphicHostility.suspectJoker)).toBe('5');
+        expect(digit(TacticalGraphicHostility.hostileFaker)).toBe('6');
+    });
+
+    it('survives a provider that throws, losing the glyph and not the graphic', () => {
+        setSecurityOperationSymbolProvider(() => {
+            throw new Error('no canvas here');
+        });
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {
+            label: '',
+            hostility: TacticalGraphicHostility.friend,
+        });
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+        expect(() => style(feature, 10)).not.toThrow();
+        expect(style(feature, 10)).toBeUndefined();
+    });
+});
+
+/**
+ * The centre symbol's on-screen size.
+ *
+ * It was a hardcoded 25px, and because the library builds the `Icon` around a
+ * provider that returns a `src` string, a provider could not change it — passing
+ * milsymbol its own `size` looked like it should and only changed the SVG's
+ * internal resolution.
+ */
+describe('security operation centre symbol size', () => {
+    afterEach(() => {
+        setSecurityOperationSymbolProvider(undefined);
+        setSecurityOperationSymbolSize(DEFAULT_SYMBOL_SIZE_PX);
+    });
+
+    it('defaults to the shipped size', () => {
+        expect(getSecurityOperationSymbolSize()).toBe(25);
+    });
+
+    it('reaches the provider, so a string-returning provider is sized too', () => {
+        const seen: number[] = [];
+        setSecurityOperationSymbolProvider(({sizePx}) => {
+            seen.push(sizePx);
+            return undefined;
+        });
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+
+        style(feature, 10);
+        setSecurityOperationSymbolSize(48);
+        style(feature, 10);
+
+        expect(seen).toEqual([DEFAULT_SYMBOL_SIZE_PX, 48]);
+    });
+
+    it('clamps to a readable range', () => {
+        setSecurityOperationSymbolSize(9999);
+        expect(getSecurityOperationSymbolSize()).toBe(MAX_SYMBOL_SIZE_PX);
+        setSecurityOperationSymbolSize(0);
+        expect(getSecurityOperationSymbolSize()).toBe(MIN_SYMBOL_SIZE_PX);
+    });
+});
+
+/**
+ * Per-graphic centre symbols.
+ *
+ * The provider registration is global — one call configures the whole app — so
+ * without an override two Screens can only differ by what they already carry. A
+ * map routinely wants a different unit symbol on one than on another.
+ */
+describe('per-graphic centre symbol providers', () => {
+    afterEach(() => setSecurityOperationSymbolProvider(undefined));
+
+    const screenFeature = () => {
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        return feature;
+    };
+
+    /** A StyleFunction may return one Style or several; these providers return one. */
+    const srcOf = (style: StyleFunction, feature: Feature): string | undefined => {
+        const resolved = style(feature, 10);
+        const first = Array.isArray(resolved) ? resolved[0] : resolved;
+        return (first?.getImage() as Icon | null | undefined)?.getSrc();
+    };
+
+    it('overrides the global provider for that graphic only', () => {
+        setSecurityOperationSymbolProvider(() => 'global');
+        const feature = screenFeature();
+
+        const usesGlobal = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+        const usesOwn = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'mine');
+
+        expect(srcOf(usesGlobal, feature)).toBe('global');
+        expect(srcOf(usesOwn, feature)).toBe('mine');
+    });
+
+    /**
+     * The regression the provider-keyed cache exists for. Two graphics identical in
+     * every field of the request, differing only in provider: a cache keyed on the
+     * request alone would hand the second one whatever the first produced.
+     */
+    it('does not serve one graphic the other one\'s symbol', () => {
+        const feature = screenFeature();
+        const a = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'recon');
+        const b = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'armour');
+
+        expect(srcOf(a, feature)).toBe('recon');
+        expect(srcOf(b, feature)).toBe('armour');
+        // And again, now that both are cached.
+        expect(srcOf(a, feature)).toBe('recon');
+    });
+
+    /**
+     * The global provider's only lever for these three: they are SHAPE_ONLY in the
+     * field registry and carry hostility alone, so `labels` cannot tell two Screens
+     * apart. `name` is what a global provider branches on.
+     */
+    it('caches one symbol per graphic name, so one provider can vary by graphic', () => {
+        const byName = (r: {name: TacticalGraphicName}) => `symbol-for-${r.name}`;
+        const feature = screenFeature();
+        const cover = new Feature(new Point([0, 0]));
+        writeGraphicProperties([cover], TacticalGraphicName.Cover, {label: ''});
+
+        const screenStyle = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => byName);
+        const coverStyle = securityOperationSymbolStyle(TacticalGraphicName.Cover, () => cover, () => byName);
+
+        expect(srcOf(screenStyle, feature)).toBe(`symbol-for-${TacticalGraphicName.Screen}`);
+        expect(srcOf(coverStyle, cover)).toBe(`symbol-for-${TacticalGraphicName.Cover}`);
+    });
+
+    it('falls back to the global provider when the override is cleared', () => {
+        setSecurityOperationSymbolProvider(() => 'global');
+        const feature = screenFeature();
+        let own: (() => string) | undefined = () => 'mine';
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => own);
+
+        expect(srcOf(style, feature)).toBe('mine');
+        own = undefined;
+        expect(srcOf(style, feature)).toBe('global');
+    });
+});
+
+/**
+ * The `{src, sizePx}` return form.
+ *
+ * A bare string is sized by the global `setSecurityOperationSymbolSize`, and
+ * overriding that per graphic used to mean returning a whole `Style` — building a
+ * `Style` and an `Icon`, and remembering the centring anchor, to change one number.
+ *
+ * The painted width is deliberately NOT asserted here. `Icon.getWidth()` is
+ * documented to return undefined until the image has loaded, and jsdom never loads
+ * one, so a width assertion in this suite can only ever read undefined. What the
+ * icons actually measure is checked against a real browser instead — see the
+ * probe in the notes for this change.
+ */
+describe('provider return shapes', () => {
+    afterEach(() => {
+        setSecurityOperationSymbolProvider(undefined);
+        setSecurityOperationSymbolSize(DEFAULT_SYMBOL_SIZE_PX);
+    });
+
+    const feature = () => {
+        const f = new Feature(new Point([0, 0]));
+        writeGraphicProperties([f], TacticalGraphicName.Screen, {label: ''});
+        return f;
+    };
+
+    const iconOf = (style: StyleFunction, f: Feature): Icon | undefined => {
+        const resolved = style(f, 10);
+        const first = Array.isArray(resolved) ? resolved[0] : resolved;
+        return (first?.getImage() as Icon | null | undefined) ?? undefined;
+    };
+
+    it('wraps a bare string in an icon', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => 'from-string');
+        expect(iconOf(style, f)?.getSrc()).toBe('from-string');
+    });
+
+    it('wraps {src, sizePx} in an icon too', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => ({src: 'from-object', sizePx: 64}));
+        expect(iconOf(style, f)?.getSrc()).toBe('from-object');
+    });
+
+    it('does not disturb the global size when a symbol overrides it', () => {
+        setSecurityOperationSymbolSize(30);
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => ({src: 'x', sizePx: 64}));
+        iconOf(style, f);
+        expect(getSecurityOperationSymbolSize()).toBe(30);
+    });
+
+    it('uses a returned Style verbatim, sizing and all', () => {
+        const f = feature();
+        const mine = new Style({image: new Icon({src: 'x', width: 123})});
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => mine);
+        expect(style(f, 10)).toBe(mine);
+    });
+
+    it('still resolves nothing when the provider returns undefined', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => undefined);
+        expect(style(f, 10)).toBeUndefined();
     });
 });

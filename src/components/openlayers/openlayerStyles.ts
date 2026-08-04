@@ -5353,10 +5353,21 @@ export function getSecurityOperationLabelStyle(textLabel: string, rotation: numb
         // keeps the size it has always had — it just stops growing from there.
         const labelScale = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
 
+        // The glyph is NOT rotated with the graphic, and `rotation` is spent only on
+        // the sub-pixel nudge below.
+        //
+        // Rotating it turned the C / G / S upside down as soon as the user swung the
+        // graphic past the horizontal, which is exactly what an amplifier must never
+        // do — a label is read by the operator, not by the symbol. The mission tasks
+        // already behave this way: `getMissionTaskStyleFn` takes a rotation and
+        // every caller, Retain included, leaves it at 0.
+        //
+        // The letter still travels with its own arm, because the label *anchor* is
+        // rotated about the centre in `SecurityOperationGraphicBase.placeCoordinates`.
+        // Position follows the graphic; orientation follows the screen.
         const [offsetX, offsetY] = getOffset(0.5 * orientation, rotation);
         return new Style({
             text: new Text({
-                rotation: rotation,
                 text: textLabel,
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),

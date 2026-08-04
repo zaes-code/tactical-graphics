@@ -30,8 +30,15 @@ import type {TacticalGraphicHostility} from './type';
 /** Base label font size in px. The label-scale formulas all normalise to this. */
 export const BASE_FONT_SIZE_PX = 16;
 
-/** Default stroke width in px for every graphic's line work. */
-export const DEFAULT_LINE_WIDTH = 4;
+/**
+ * Default stroke width in px for every graphic's line work.
+ *
+ * Came down from 4 to 2 on 2026-08-04. 4px reads as heavy at the zooms these graphics
+ * are actually used at — the line work crowds its own labels and the inner detail of
+ * the denser symbols (obstacle teeth, crenellations, fortified decoration) runs
+ * together. 2px is the weight the doctrinal plates read at.
+ */
+export const DEFAULT_LINE_WIDTH = 2;
 
 /** Readable bounds for the line-width setting: below 1px strokes vanish at typical zoom; above 8px they start to obscure the basemap and neighbouring graphics. */
 export const MIN_LINE_WIDTH = 1;
@@ -61,7 +68,7 @@ export const MAX_LABEL_SIZE = 26;
 export interface TacticalGraphicsConfigOptions {
     /** Base label font size in px. Default 16. Clamped to [MIN_LABEL_SIZE, MAX_LABEL_SIZE]. */
     labelSize?: number;
-    /** Stroke width in screen px for every graphic's line work. Default 4. Clamped to [MIN_LINE_WIDTH, MAX_LINE_WIDTH]. */
+    /** Stroke width in screen px for every graphic's line work. Default 2. Clamped to [MIN_LINE_WIDTH, MAX_LINE_WIDTH]. */
     lineWidth?: number;
     /** Per-affiliation line colours. Anything omitted keeps its FM 1-02.2 value. */
     hostilityColors?: Partial<Record<TacticalGraphicHostility, string>>;
