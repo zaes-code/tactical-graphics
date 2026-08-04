@@ -34,10 +34,29 @@ const CY = 2_000_000;
  */
 function fakeManager() {
     const resolutionListeners: string[] = [];
+    const watched: TacticalGraphicHandler[] = [];
     return {
         renderingVectorSource: new VectorSource(),
         graphicControllers: [] as TacticalGraphicHandler[],
         map: {getView: () => ({on: (event: string) => resolutionListeners.push(event)})},
+        // Restore subscribes through the manager now rather than reaching for the view
+        // itself, so the stand-in has to offer the same three methods. They record
+        // instead of subscribing — `resolutionListeners` is what the assertions read.
+        watchResolution: (handler: TacticalGraphicHandler) => {
+            if (watched.includes(handler)) return;
+            watched.push(handler);
+            resolutionListeners.push('change:resolution');
+        },
+        unwatchResolution: (handler: TacticalGraphicHandler) => {
+            const i = watched.indexOf(handler);
+            if (i < 0) return;
+            watched.splice(i, 1);
+            resolutionListeners.splice(resolutionListeners.indexOf('change:resolution'), 1);
+        },
+        releaseAllGraphics: () => {
+            watched.length = 0;
+            resolutionListeners.length = 0;
+        },
         resolutionListeners,
     } as unknown as TacticalGraphicsManager & {resolutionListeners: string[]};
 }
