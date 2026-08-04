@@ -2333,15 +2333,28 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
         // between the enemy-side and friendly-side lines grew as the map zoomed in and
         // closed up as it zoomed out.
         //
-        // Deliberately *not* passed through `decorationScale`, unlike every other
-        // decoration here. That cap keys off the shape's on-screen size, which is itself
-        // a function of zoom — fine for a tooth, which may quietly shrink on a small
-        // symbol, but not for this: the separation is what the graphic says, so it holds
-        // at every zoom and on every length of line, even where that makes a very short
-        // one look crowded.
-        const wavelengthMap = WAVE_WAVELENGTH_PX * resolution;
-        const amplitudeMap = WAVE_AMPLITUDE_PX * resolution;
-        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * resolution;
+        // One scale drives all three, so the symbol keeps its proportions and simply
+        // gets smaller. This was exempt from `decorationScale` until 2026-08-04, on the
+        // grounds that the separation is what the graphic says and so must hold at every
+        // zoom. What that produced was a 117 px line still wearing 8 px waves 16 px
+        // apart — two separate squiggles rather than one symbol. The separation is not
+        // lost by scaling: held in ratio to the waves it stays legible, which is what
+        // makes the pair read as a line of contact. The failure the exemption was
+        // guarding against — an offset fixed in *metres*, growing as you zoom in — is a
+        // different one, and is not what a shared cap does.
+        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
+        const wavelengthMap = WAVE_WAVELENGTH_PX * scale * resolution;
+        const amplitudeMap = WAVE_AMPLITUDE_PX * scale * resolution;
+
+        // The separation alone does not scale to nothing. Below `DECORATION_MIN_PX` the
+        // waves are dropped, and a shared scale of 0 would put the enemy-side and
+        // friendly-side lines on top of each other — one red line, and no symbol left.
+        // Held at the scale the waves were dropped at, the pair still stands apart:
+        // two plain lines in contact, which is the graphic with its detail removed
+        // rather than the graphic gone. This is the one place the old exemption's
+        // reasoning still holds.
+        const offsetScale = Math.max(scale, DECORATION_MIN_PX / WAVE_AMPLITUDE_PX);
+        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * offsetScale * resolution;
 
         // Which side is which is a property of the map, not of the drawing gesture: the
         // enemy-side wave takes the upper side of the line however it was drawn.
@@ -3168,12 +3181,20 @@ const LINE_OF_CONTACT_OFFSET_PX = 16;
 
 /**
  * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
+ * Zero means "draw the plain line or ring" — every decoration builder here returns
+ * its input path unchanged when the pattern comes out non-positive.
  *
- * A constant pixel size is right everywhere except on a shape smaller than its own
- * decoration — the sample gallery draws areas 15 px across. `available` is what the
- * decoration has to fit inside: the smaller side of a closed ring's extent, or the length
- * of an open path, because a horizontal line's extent has no height and the smaller side
- * would be zero.
+ * A constant pixel size is right in the middle of the range and wrong at both ends.
+ * Too small a shape cannot carry its own decoration — the sample gallery draws areas
+ * 15 px across — and the same is true of a full-size graphic seen from far enough
+ * out, which is the case this exists for. `available` is what the decoration has to
+ * fit inside: the smaller side of a closed ring's extent, or the length of an open
+ * path, because a horizontal line's extent has no height and the smaller side would
+ * be zero.
+ *
+ * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px across
+ * needs the same treatment whether it got that way by being drawn small or by the
+ * user zooming out, and a resolution threshold would only catch the second.
  */
 function decorationScale(path: Coordinate[], closed: boolean, resolution: number, heightPx: number): number {
     let availablePx: number;
@@ -3185,11 +3206,33 @@ function decorationScale(path: Coordinate[], closed: boolean, resolution: number
         availablePx = pathLength(path) / resolution;
     }
     const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
-    return Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+    const scale = Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+
+    // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
+    // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
+    // as an obstacle. Drop it and let the plain geometry stand.
+    return heightPx * scale < DECORATION_MIN_PX ? 0 : scale;
 }
 
-const DECORATION_MAX_SHARE_CLOSED = 0.25;
-const DECORATION_MAX_SHARE_OPEN = 0.12;
+/**
+ * The share of a shape's own on-screen size its decoration may occupy before it starts
+ * shrinking.
+ *
+ * These came down from 0.25 and 0.12 on 2026-08-04, which were loose enough that the cap
+ * effectively never engaged: at 0.12 an open path had to fall under 83 px before a 10 px
+ * tooth was touched, so an obstacle line zoomed out to 117 px still carried six full-size
+ * teeth and read as a zigzag rather than as a line.
+ *
+ * The open share is much the smaller of the two because it is measured against the
+ * path's whole length while the decoration repeats along it — a tooth a twentieth of the
+ * line long is already prominent. A closed ring is measured against its smaller side,
+ * which the decoration spans only once.
+ */
+const DECORATION_MAX_SHARE_CLOSED = 0.1;
+const DECORATION_MAX_SHARE_OPEN = 0.05;
+
+/** Below this many screen pixels a decoration is dropped rather than drawn. */
+const DECORATION_MIN_PX = 3;
 
 /** The point at a distance along a polyline, with the unit direction there. */
 function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
@@ -3260,9 +3303,32 @@ const WAVE_STEPS = 12;
  * contact. `offsetMap` shifts the whole wave sideways off the drawn line, which is what
  * separates the line of contact's two identities.
  */
+/**
+ * Slides a path sideways by `offsetMap`, on the side `sideSign` selects.
+ *
+ * Per vertex, using the direction at that point along the path, so a bend keeps both
+ * halves of the pair the same distance apart rather than pinching on the inside.
+ */
+function offsetPath(path: Coordinate[], sideSign: number, offsetMap: number): Coordinate[] {
+    if (!offsetMap || path.length < 2) return path;
+    const total = pathLength(path);
+    if (total === 0) return path;
+
+    let travelled = 0;
+    return path.map((point, i) => {
+        if (i > 0) travelled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(travelled, total));
+        return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as Coordinate;
+    });
+}
+
 function wavePath(path: Coordinate[], wavelengthMap: number, amplitudeMap: number, sideSign: number, offsetMap = 0): Coordinate[] {
     const total = pathLength(path);
-    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return path;
+    // No wave to draw, but `offsetMap` is a displacement of the whole line and not part
+    // of the wave — the line of contact is a *pair*, and returning the path undisplaced
+    // put its two halves on top of each other the moment the waves were dropped. Offset
+    // it and hand back a plain line.
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return offsetPath(path, sideSign, offsetMap);
 
     const count = Math.max(1, Math.round(total / wavelengthMap));
     const wavelength = total / count;
@@ -5353,10 +5419,21 @@ export function getSecurityOperationLabelStyle(textLabel: string, rotation: numb
         // keeps the size it has always had — it just stops growing from there.
         const labelScale = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
 
+        // The glyph is NOT rotated with the graphic, and `rotation` is spent only on
+        // the sub-pixel nudge below.
+        //
+        // Rotating it turned the C / G / S upside down as soon as the user swung the
+        // graphic past the horizontal, which is exactly what an amplifier must never
+        // do — a label is read by the operator, not by the symbol. The mission tasks
+        // already behave this way: `getMissionTaskStyleFn` takes a rotation and
+        // every caller, Retain included, leaves it at 0.
+        //
+        // The letter still travels with its own arm, because the label *anchor* is
+        // rotated about the centre in `SecurityOperationGraphicBase.placeCoordinates`.
+        // Position follows the graphic; orientation follows the screen.
         const [offsetX, offsetY] = getOffset(0.5 * orientation, rotation);
         return new Style({
             text: new Text({
-                rotation: rotation,
                 text: textLabel,
                 font: fontStyle,
                 fill: new Fill({color: getLabelFillColor()}),
@@ -5385,12 +5462,24 @@ export const createFeatureWithDashedLines = () => {
     return feature;
 };
 
+/** Screen-pixel size of a StrongPoint cross tie, and the spacing between ties. */
+const CROSS_TIE_PX = 10;
+
 function generateCrossTiesForPolygon(polygon: Polygon | MultiLineString, resolution: number, color: string) {
     const styles: any[] = [];
-    const tieSpacing = 10 * resolution; // Distance between ties
-    const tieLength = 10 * resolution; // Half-length of each cross tie
 
     const rings = polygon.getCoordinates(); // [ [ [x, y], ... ], [hole1], [hole2], ... ]
+
+    // StrongPoint's ties are where the screen-fixed decorations started — the obstacle
+    // teeth and the fortified merlons were changed to match them — but they were the one
+    // set never capped, so zoomed out they swamped the ring they hang off. Same
+    // shape-relative rule as the rest now, measured across the whole outline because
+    // `rings` here are the outline segments rather than one closed ring.
+    const scale = decorationScale(rings.flat() as Coordinate[], true, resolution, CROSS_TIE_PX);
+    if (scale <= 0) return styles;
+
+    const tieSpacing = CROSS_TIE_PX * scale * resolution; // Distance between ties
+    const tieLength = CROSS_TIE_PX * scale * resolution; // Half-length of each cross tie
 
     rings.forEach((ring: Coordinate[]) => {
         let totalDistance = 0;
