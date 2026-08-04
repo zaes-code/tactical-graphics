@@ -10,6 +10,10 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **207 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
+![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
+
+*Every verified graphic, drawn in one sweep by the demo's **Draw all samples** button and grouped by category. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would.*
+
 ---
 
 ## Install
@@ -496,11 +500,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
-![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
-
-*Drawn in a single sweep by the demo app's **Draw all samples** button, grouped by category — press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/). The gallery covers every graphic whose shape and labels are verified, so it also shows a few still finishing their edit handles — slightly more than the table below lists.*
-
-(`listTacticalGraphicNames()` returns more names than this — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
+(The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
 
 | Graphic | Category |
 |---|---|
