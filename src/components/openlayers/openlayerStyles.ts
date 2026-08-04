@@ -2333,15 +2333,28 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
         // between the enemy-side and friendly-side lines grew as the map zoomed in and
         // closed up as it zoomed out.
         //
-        // Deliberately *not* passed through `decorationScale`, unlike every other
-        // decoration here. That cap keys off the shape's on-screen size, which is itself
-        // a function of zoom — fine for a tooth, which may quietly shrink on a small
-        // symbol, but not for this: the separation is what the graphic says, so it holds
-        // at every zoom and on every length of line, even where that makes a very short
-        // one look crowded.
-        const wavelengthMap = WAVE_WAVELENGTH_PX * resolution;
-        const amplitudeMap = WAVE_AMPLITUDE_PX * resolution;
-        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * resolution;
+        // One scale drives all three, so the symbol keeps its proportions and simply
+        // gets smaller. This was exempt from `decorationScale` until 2026-08-04, on the
+        // grounds that the separation is what the graphic says and so must hold at every
+        // zoom. What that produced was a 117 px line still wearing 8 px waves 16 px
+        // apart — two separate squiggles rather than one symbol. The separation is not
+        // lost by scaling: held in ratio to the waves it stays legible, which is what
+        // makes the pair read as a line of contact. The failure the exemption was
+        // guarding against — an offset fixed in *metres*, growing as you zoom in — is a
+        // different one, and is not what a shared cap does.
+        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
+        const wavelengthMap = WAVE_WAVELENGTH_PX * scale * resolution;
+        const amplitudeMap = WAVE_AMPLITUDE_PX * scale * resolution;
+
+        // The separation alone does not scale to nothing. Below `DECORATION_MIN_PX` the
+        // waves are dropped, and a shared scale of 0 would put the enemy-side and
+        // friendly-side lines on top of each other — one red line, and no symbol left.
+        // Held at the scale the waves were dropped at, the pair still stands apart:
+        // two plain lines in contact, which is the graphic with its detail removed
+        // rather than the graphic gone. This is the one place the old exemption's
+        // reasoning still holds.
+        const offsetScale = Math.max(scale, DECORATION_MIN_PX / WAVE_AMPLITUDE_PX);
+        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * offsetScale * resolution;
 
         // Which side is which is a property of the map, not of the drawing gesture: the
         // enemy-side wave takes the upper side of the line however it was drawn.
@@ -3290,9 +3303,32 @@ const WAVE_STEPS = 12;
  * contact. `offsetMap` shifts the whole wave sideways off the drawn line, which is what
  * separates the line of contact's two identities.
  */
+/**
+ * Slides a path sideways by `offsetMap`, on the side `sideSign` selects.
+ *
+ * Per vertex, using the direction at that point along the path, so a bend keeps both
+ * halves of the pair the same distance apart rather than pinching on the inside.
+ */
+function offsetPath(path: Coordinate[], sideSign: number, offsetMap: number): Coordinate[] {
+    if (!offsetMap || path.length < 2) return path;
+    const total = pathLength(path);
+    if (total === 0) return path;
+
+    let travelled = 0;
+    return path.map((point, i) => {
+        if (i > 0) travelled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(travelled, total));
+        return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as Coordinate;
+    });
+}
+
 function wavePath(path: Coordinate[], wavelengthMap: number, amplitudeMap: number, sideSign: number, offsetMap = 0): Coordinate[] {
     const total = pathLength(path);
-    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return path;
+    // No wave to draw, but `offsetMap` is a displacement of the whole line and not part
+    // of the wave — the line of contact is a *pair*, and returning the path undisplaced
+    // put its two halves on top of each other the moment the waves were dropped. Offset
+    // it and hand back a plain line.
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return offsetPath(path, sideSign, offsetMap);
 
     const count = Math.max(1, Math.round(total / wavelengthMap));
     const wavelength = total / count;
