@@ -60,7 +60,21 @@ export interface RouteOptions extends BaseGraphicOptions {
 
 /** Options for security-operation fan graphics (Cover/Guard/Screen). */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
+    /** Distance from the centre to where each arm's line begins, in metres. */
     centerPadding: number;
+    /**
+     * Distance from the centre to the label anchor, in metres.
+     *
+     * Separate from `centerPadding` so the gap between the label and the line
+     * that follows it is a number someone can set, rather than whatever falls out
+     * of a ratio. It used to be `centerPadding / 1.5`, which pinned the gap at a
+     * third of the padding — 25px at the shipped padding, and impossible to change
+     * without moving the arms as well.
+     *
+     * Omitted keeps the old ratio, so an external caller passing the previous
+     * option set gets the previous geometry.
+     */
+    labelPadding?: number;
     arrowLength: number;
     arrowDepth: number;
     arrowHeadLength: number;
