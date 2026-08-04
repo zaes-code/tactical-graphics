@@ -111,6 +111,40 @@ function sampleUnitProvider(name: TacticalGraphicName): SecurityOperationSymbolP
     };
 }
 
+/**
+ * Graphics whose style hangs a repeating decoration off the drawn path — obstacle
+ * teeth, fortified merlons, the FLOT and line-of-contact scallops, a strong point's
+ * cross ties.
+ *
+ * They are drawn larger than the rest of the sweep. Those decorations are sized in
+ * screen pixels and are dropped below `DECORATION_MIN_PX`, and at the size the other
+ * samples use — 11 px for an area, 35 px for a line — the cap puts them at one or two
+ * pixels, so every one of these rendered as a plain line or rectangle and the eleven
+ * of them became indistinguishable from each other. A sample that cannot show its own
+ * decoration is not a sample of anything.
+ */
+const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleLine,
+    TacticalGraphicName.ObstacleBelt,
+    TacticalGraphicName.ObstacleGroup,
+    TacticalGraphicName.ObstacleZone,
+    TacticalGraphicName.ObstacleFreeArea,
+    TacticalGraphicName.ObstacleRestrictedArea,
+    TacticalGraphicName.FortifiedLine,
+    TacticalGraphicName.FortifiedArea,
+    TacticalGraphicName.StrongPoint,
+    TacticalGraphicName.ForwardLineOfOwnTroops,
+    TacticalGraphicName.LineOfContact,
+]);
+
+/**
+ * How much larger. Empirical, and only loosely predictable: growing these samples
+ * grows the packed layout, which the sweep then frames with a fit, which gives some
+ * of the gain back. Measured rather than derived — see the note on the security
+ * operation symbol in `measureSample` for the same effect.
+ */
+const DECORATED_SAMPLE_SCALE = 3;
+
 /** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
 export const HALF = 30_600;
 /**
@@ -634,16 +668,18 @@ export function applyBaseGeometry(
     cy: number,
     symbolId: string,
 ): void {
+    const grow = DECORATED_GRAPHICS.has(name) ? DECORATED_SAMPLE_SCALE : 1;
     if (handler instanceof MissionTaskController) {
-        handler.graphic.updateGeom({size: HALF, center: [cx, cy], rotation: 0});
+        handler.graphic.updateGeom({size: HALF * grow, center: [cx, cy], rotation: 0});
     } else if (handler instanceof SecurityOperationsController) {
         handler.setBaseFeature(pointFeature([cx, cy], symbolId, name));
     } else if (handler instanceof PolygonGraphicController) {
-        const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy) : pentagonRing(cx, cy);
+        const half = HALF * grow;
+        const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy, half) : pentagonRing(cx, cy, half);
         handler.setBaseFeature(polygonFeature(ring, symbolId, name));
     } else if (handler instanceof LineGraphicController) {
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts), symbolId, name));
+        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts, LINE_HALF * grow), symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }
@@ -655,35 +691,35 @@ export function applyBaseGeometry(
  * Line vertices centred on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
-function lineCoords(cx: number, cy: number, pts: number): Coordinate[] {
-    if (pts <= 2) return [[cx - LINE_HALF, cy], [cx + LINE_HALF, cy]];
+function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
+    if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
     return [
-        [cx - LINE_HALF, cy + LINE_HALF * 0.2],
-        [cx, cy - LINE_HALF * 0.2],
-        [cx + LINE_HALF, cy + LINE_HALF * 0.2],
+        [cx - half, cy + half * 0.2],
+        [cx, cy - half * 0.2],
+        [cx + half, cy + half * 0.2],
     ];
 }
 
 /** Closed 5-sided ring (point-up pentagon) inscribed in the cell. */
-function pentagonRing(cx: number, cy: number): Coordinate[] {
+function pentagonRing(cx: number, cy: number, half = HALF): Coordinate[] {
     const ring: Coordinate[] = [];
     for (let k = 0; k < 5; k++) {
         const a = -Math.PI / 2 + (k * 2 * Math.PI) / 5;
-        ring.push([cx + HALF * Math.cos(a), cy + HALF * Math.sin(a)]);
+        ring.push([cx + half * Math.cos(a), cy + half * Math.sin(a)]);
     }
     ring.push(ring[0]);
     return ring;
 }
 
 /** Closed rectangle ring (4 corners) inscribed in the cell. */
-function rectRing(cx: number, cy: number): Coordinate[] {
-    const hy = HALF * 0.68;
+function rectRing(cx: number, cy: number, half = HALF): Coordinate[] {
+    const hy = half * 0.68;
     return [
-        [cx - HALF, cy - hy],
-        [cx + HALF, cy - hy],
-        [cx + HALF, cy + hy],
-        [cx - HALF, cy + hy],
-        [cx - HALF, cy - hy],
+        [cx - half, cy - hy],
+        [cx + half, cy - hy],
+        [cx + half, cy + hy],
+        [cx - half, cy + hy],
+        [cx - half, cy - hy],
     ];
 }
 
