@@ -25,7 +25,7 @@ Two entry points ship, and you can use either on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
-| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` (and `milsymbol`) as peers |
+| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [centre symbol](#the-centre-symbol-on-security-operations) |
 
 ```bash
 npm install ol             # only if you want the OpenLayers entry point
@@ -492,7 +492,9 @@ Sizes (`radius`, `size`) are in **metres**, and range-fan band ranges are in **k
 
 ## Supported graphics
 
-The graphics below are **fully implemented and verified** — each can be drawn, labelled, rotated, resized, repositioned, and modified, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+The graphics below are **fully implemented and verified** — each can be drawn, labelled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+
+*Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
 ![Every proven tactical graphic rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -798,8 +800,9 @@ Steps 1 and 4 are enforced by the compiler — `GRAPHIC_CATEGORIES` is an exhaus
 the graphic into the demo app you also need entries in
 `controllerRegistry.ts` and `graphicFieldRegistry.ts`.
 
-A graphic is "done" when a user can draw it, label it, and rotate, resize,
-reposition, and modify it.
+A graphic is "done" when a user can draw it, label it, reposition and modify it,
+and rotate and resize it wherever those gestures mean something for that symbol —
+a fixed-size badge like Destroy has no resize to offer.
 
 ---
 
