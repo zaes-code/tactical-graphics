@@ -3168,12 +3168,20 @@ const LINE_OF_CONTACT_OFFSET_PX = 16;
 
 /**
  * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
+ * Zero means "draw the plain line or ring" — every decoration builder here returns
+ * its input path unchanged when the pattern comes out non-positive.
  *
- * A constant pixel size is right everywhere except on a shape smaller than its own
- * decoration — the sample gallery draws areas 15 px across. `available` is what the
- * decoration has to fit inside: the smaller side of a closed ring's extent, or the length
- * of an open path, because a horizontal line's extent has no height and the smaller side
- * would be zero.
+ * A constant pixel size is right in the middle of the range and wrong at both ends.
+ * Too small a shape cannot carry its own decoration — the sample gallery draws areas
+ * 15 px across — and the same is true of a full-size graphic seen from far enough
+ * out, which is the case this exists for. `available` is what the decoration has to
+ * fit inside: the smaller side of a closed ring's extent, or the length of an open
+ * path, because a horizontal line's extent has no height and the smaller side would
+ * be zero.
+ *
+ * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px across
+ * needs the same treatment whether it got that way by being drawn small or by the
+ * user zooming out, and a resolution threshold would only catch the second.
  */
 function decorationScale(path: Coordinate[], closed: boolean, resolution: number, heightPx: number): number {
     let availablePx: number;
@@ -3185,11 +3193,33 @@ function decorationScale(path: Coordinate[], closed: boolean, resolution: number
         availablePx = pathLength(path) / resolution;
     }
     const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
-    return Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+    const scale = Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+
+    // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
+    // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
+    // as an obstacle. Drop it and let the plain geometry stand.
+    return heightPx * scale < DECORATION_MIN_PX ? 0 : scale;
 }
 
-const DECORATION_MAX_SHARE_CLOSED = 0.25;
-const DECORATION_MAX_SHARE_OPEN = 0.12;
+/**
+ * The share of a shape's own on-screen size its decoration may occupy before it starts
+ * shrinking.
+ *
+ * These came down from 0.25 and 0.12 on 2026-08-04, which were loose enough that the cap
+ * effectively never engaged: at 0.12 an open path had to fall under 83 px before a 10 px
+ * tooth was touched, so an obstacle line zoomed out to 117 px still carried six full-size
+ * teeth and read as a zigzag rather than as a line.
+ *
+ * The open share is much the smaller of the two because it is measured against the
+ * path's whole length while the decoration repeats along it — a tooth a twentieth of the
+ * line long is already prominent. A closed ring is measured against its smaller side,
+ * which the decoration spans only once.
+ */
+const DECORATION_MAX_SHARE_CLOSED = 0.1;
+const DECORATION_MAX_SHARE_OPEN = 0.05;
+
+/** Below this many screen pixels a decoration is dropped rather than drawn. */
+const DECORATION_MIN_PX = 3;
 
 /** The point at a distance along a polyline, with the unit direction there. */
 function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
@@ -5396,12 +5426,24 @@ export const createFeatureWithDashedLines = () => {
     return feature;
 };
 
+/** Screen-pixel size of a StrongPoint cross tie, and the spacing between ties. */
+const CROSS_TIE_PX = 10;
+
 function generateCrossTiesForPolygon(polygon: Polygon | MultiLineString, resolution: number, color: string) {
     const styles: any[] = [];
-    const tieSpacing = 10 * resolution; // Distance between ties
-    const tieLength = 10 * resolution; // Half-length of each cross tie
 
     const rings = polygon.getCoordinates(); // [ [ [x, y], ... ], [hole1], [hole2], ... ]
+
+    // StrongPoint's ties are where the screen-fixed decorations started — the obstacle
+    // teeth and the fortified merlons were changed to match them — but they were the one
+    // set never capped, so zoomed out they swamped the ring they hang off. Same
+    // shape-relative rule as the rest now, measured across the whole outline because
+    // `rings` here are the outline segments rather than one closed ring.
+    const scale = decorationScale(rings.flat() as Coordinate[], true, resolution, CROSS_TIE_PX);
+    if (scale <= 0) return styles;
+
+    const tieSpacing = CROSS_TIE_PX * scale * resolution; // Distance between ties
+    const tieLength = CROSS_TIE_PX * scale * resolution; // Half-length of each cross tie
 
     rings.forEach((ring: Coordinate[]) => {
         let totalDistance = 0;

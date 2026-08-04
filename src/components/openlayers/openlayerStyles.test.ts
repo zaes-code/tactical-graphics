@@ -57,6 +57,7 @@ import {
     obstacleAreaStyles,
     obstacleLineStyle,
     obstacleRestrictedZoneStyle,
+    getStyle,
 } from './openlayerStyles';
 
 import {
@@ -598,16 +599,31 @@ describe('obstacle teeth in screen space', () => {
         }
     });
 
-    it('shrinks the teeth rather than swamping a symbol too small to carry them', () => {
-        // A 40 m square at resolution 10 is 4 px across — the gallery case. A 10 px tooth
-        // on a 4 px symbol is nonsense, so the height is capped at a share of the shape.
-        const tiny: number[][] = [[0, 0], [0, 40], [40, 40], [40, 0], [0, 0]];
-        const styles = obstacleAreaStyles(new Feature(new Polygon([tiny])), 10, {outward: true});
+    /** Tallest excursion outside the drawn square, in px. 0 when nothing was added. */
+    const areaToothPx = (sideMetres: number, resolution: number) => {
+        const ring: number[][] = [[0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0]];
+        const styles = obstacleAreaStyles(new Feature(new Polygon([ring])), resolution, {outward: true});
         const drawn = (styles[0].getGeometry() as Polygon).getCoordinates()[0];
-        const offsets = drawn.map(([x, y]) => Math.max(-x, x - 40, -y, y - 40)).filter(d => d > 0.001);
-        const tallestPx = (offsets.length ? Math.max(...offsets) : 0) / 10;
+        const offsets = drawn
+            .map(([x, y]) => Math.max(-x, x - sideMetres, -y, y - sideMetres))
+            .filter(d => d > 0.001);
+        return (offsets.length ? Math.max(...offsets) : 0) / resolution;
+    };
+
+    it('shrinks the teeth rather than swamping a symbol too small to carry them', () => {
+        // 800 m at resolution 10 is 80 px across. A full 10 px tooth is an eighth of the
+        // symbol, so it is capped at DECORATION_MAX_SHARE_CLOSED of the shape instead.
+        const tallestPx = areaToothPx(800, 10);
         expect(tallestPx).toBeLessThan(10);
-        expect(tallestPx).toBeCloseTo(4 * 0.25, 6);
+        expect(tallestPx).toBeCloseTo(80 * 0.1, 6);
+    });
+
+    it('drops the teeth entirely once they would be a few pixels', () => {
+        // A 40 m square at resolution 10 is 4 px across — the gallery case. The cap would
+        // put the teeth at 0.4 px, which is texture on the stroke rather than a symbol,
+        // so the plain ring is drawn instead. Below DECORATION_MIN_PX there is no
+        // decoration at all.
+        expect(areaToothPx(40, 10)).toBe(0);
     });
 
     it('leaves a degenerate ring alone rather than emitting spikes', () => {
@@ -645,20 +661,36 @@ describe('fortified and wave graphics in screen space', () => {
         return geom.getCoordinates().map(([, y]) => Math.abs(y) / resolution).filter(d => d > 0.01);
     };
 
+    /** Tallest merlon on the 4 km LINE at a given resolution, in px. */
+    const fortifiedLinePx = (res: number) => {
+        const styles = fortifiedLineStyleFunc(TacticalGraphicName.FortifiedLine)(
+            lineFeature(TacticalGraphicName.FortifiedLine), res) as Style[];
+        return Math.max(...excursionsPx(styles, res));
+    };
+
+    // Resolution 40 is deliberately absent: it puts the 4 km line at 100 px, small
+    // enough on screen that the shape-relative cap engages. That is the subject of the
+    // test below, not a violation of this one.
     it('sizes the fortified line’s merlons in pixels, not metres', () => {
-        const heights = [40, 10, 2, 0.5].map(res => {
-            const styles = fortifiedLineStyleFunc(TacticalGraphicName.FortifiedLine)(
-                lineFeature(TacticalGraphicName.FortifiedLine), res) as Style[];
-            return Math.max(...excursionsPx(styles, res));
-        });
+        const heights = [10, 2, 0.5].map(fortifiedLinePx);
         heights.forEach(h => expect(h).toBeCloseTo(heights[0], 6));
         expect(heights[0]).toBeCloseTo(11, 6);
+    });
+
+    it('shrinks the merlons once the line itself is small on screen', () => {
+        // 4 km at resolution 40 is 100 px. An 11 px merlon on a 100 px line reads as a
+        // zigzag rather than as a fortified line, so it is capped at
+        // DECORATION_MAX_SHARE_OPEN of the length.
+        expect(fortifiedLinePx(40)).toBeCloseTo(100 * 0.05, 6);
+        expect(fortifiedLinePx(40)).toBeLessThan(fortifiedLinePx(10));
     });
 
     it('sizes the fortified area’s merlons in pixels too, outward whichever way it was drawn', () => {
         for (const ring of [RING, [...RING].reverse()]) {
             const f = new Feature(new Polygon([ring]));
-            const heights = [40, 10, 2].map(res => {
+            // Resolution 40 leaves the 4 km ring 100 px across, inside the cap — see the
+            // fortified line's pair of tests above.
+            const heights = [10, 2].map(res => {
                 const drawn = (fortifiedAreaStyle(f, res)[0].getGeometry() as Polygon).getCoordinates()[0];
                 const outside = drawn.filter(([x, y]) => x < -0.01 || x > 4000.01 || y < -0.01 || y > 4000.01);
                 const inside = drawn.filter(([x, y]) => x > 0.01 && x < 3999.99 && y > 0.01 && y < 3999.99);
@@ -670,13 +702,21 @@ describe('fortified and wave graphics in screen space', () => {
         }
     });
 
+    /** Tallest scallop on the 4 km LINE at a given resolution, in px. */
+    const flotAmplitudePx = (res: number) => {
+        const styles = forwardLineOfOwnTroopsStyleFunc(TacticalGraphicName.ForwardLineOfOwnTroops)(
+            lineFeature(TacticalGraphicName.ForwardLineOfOwnTroops), res) as Style[];
+        return Math.max(...excursionsPx(styles, res));
+    };
+
+    // Resolution 40 excluded for the same reason as the fortified line: 100 px of line
+    // is inside the shape-relative cap.
     it('sizes the forward line of own troops’ scallops in pixels', () => {
-        const amplitudes = [40, 10, 2, 0.5].map(res => {
-            const styles = forwardLineOfOwnTroopsStyleFunc(TacticalGraphicName.ForwardLineOfOwnTroops)(
-                lineFeature(TacticalGraphicName.ForwardLineOfOwnTroops), res) as Style[];
-            return Math.max(...excursionsPx(styles, res));
-        });
-        amplitudes.forEach(a => expect(a).toBeCloseTo(8, 6));
+        [10, 2, 0.5].map(flotAmplitudePx).forEach(a => expect(a).toBeCloseTo(8, 6));
+    });
+
+    it('shrinks the scallops once the line itself is small on screen', () => {
+        expect(flotAmplitudePx(40)).toBeCloseTo(100 * 0.05, 6);
     });
 
     describe('line of contact', () => {
@@ -971,5 +1011,62 @@ describe('provider return shapes', () => {
         const f = feature();
         const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => undefined);
         expect(style(f, 10)).toBeUndefined();
+    });
+});
+
+/**
+ * StrongPoint's cross ties.
+ *
+ * These are where the screen-fixed decorations started — the obstacle teeth and the
+ * fortified merlons were changed on 2026-08-03 to match them — but they were the one
+ * set that never got the shape-relative cap, so zoomed out they swamped the ring they
+ * hang off.
+ */
+describe('strong point cross ties', () => {
+    /** A square strong point of `sideMetres`, and the tie lengths it renders, in px. */
+    const tiePx = (sideMetres: number, resolution: number): number[] => {
+        const ring: number[][] = [
+            [0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0],
+        ];
+        const f = new Feature(new Polygon([ring]));
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        const styles = getStyle(TacticalGraphicName.StrongPoint, f, resolution) as Style[];
+        return styles
+            .map(s => s.getGeometry())
+            .filter((g): g is LineString => g instanceof LineString)
+            .map(g => {
+                const [a, b] = g.getCoordinates();
+                return Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
+            });
+    };
+
+    it('holds the same pixel length while the ring is comfortably large', () => {
+        // 40 km at resolutions 40 and 10 is 1000 px and 4000 px across — far above the
+        // cap either way, so the ties keep their constant 10 px.
+        for (const resolution of [40, 10]) {
+            const ties = tiePx(40_000, resolution);
+            expect(ties.length).toBeGreaterThan(0);
+            ties.forEach(t => expect(t).toBeCloseTo(10, 6));
+        }
+    });
+
+    it('shrinks the ties once the ring is small on screen', () => {
+        // 100 px across is exactly the boundary — DECORATION_MAX_SHARE_CLOSED of it is
+        // the tie's own 10 px, so nothing is taken off. 2 km at resolution 40 is 50 px,
+        // inside it, and the ties come down to a tenth of that.
+        expect(tiePx(4_000, 40)[0]).toBeCloseTo(10, 6);
+
+        const ties = tiePx(2_000, 40);
+        expect(ties.length).toBeGreaterThan(0);
+        ties.forEach(t => expect(t).toBeCloseTo(50 * 0.1, 6));
+    });
+
+    it('drops the ties entirely once they would be a few pixels', () => {
+        // 400 m at resolution 40 is 10 px across — the cap puts a tie at 1 px, which is
+        // fuzz on the outline rather than a symbol. The outline is still drawn.
+        expect(tiePx(400, 40)).toHaveLength(0);
+        const f = new Feature(new Polygon([[[0, 0], [0, 400], [400, 400], [400, 0], [0, 0]]]));
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        expect((getStyle(TacticalGraphicName.StrongPoint, f, 40) as Style[]).length).toBeGreaterThan(0);
     });
 });
