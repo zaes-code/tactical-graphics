@@ -10,7 +10,21 @@ import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManage
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
+import {
+    getSecurityOperationSymbolSize,
+    setSecurityOperationSymbolSize,
+    useMilsymbolSecurityOperationSymbols,
+} from './securityOperationSymbol';
+import ms from 'milsymbol';
 import {isEmpty} from '../../utils/isEmpty';
+
+// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
+// Screen the way any consumer would — by handing over the milsymbol it already
+// depends on. The library names milsymbol nowhere, which is what makes the
+// optional peer dependency actually optional; this is the other half of that.
+// Module scope, not an effect: it is global state and idempotent, and a graphic
+// drawn before the first render would otherwise come up with an empty centre.
+useMilsymbolSecurityOperationSymbols(ms);
 
 interface Props {
     darkMode: boolean;
@@ -49,6 +63,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
             (window as unknown as Record<string, unknown>).__tacticalGraphics = {
                 map: olMap,
                 manager: tacticalGraphicManager.current,
+                // The centre-symbol controls, so a driving script can change the size
+                // and read back what the style function resolves. Module-level state,
+                // so this is a handle on it rather than a copy.
+                setSecurityOperationSymbolSize,
+                getSecurityOperationSymbolSize,
             };
         }
 

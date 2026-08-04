@@ -15,6 +15,8 @@ import LineString from "ol/geom/LineString";
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
+import {EventsKey} from "ol/events";
+import {unByKey} from "ol/Observable";
 
 export enum InteractionType {
     'resize',
@@ -77,6 +79,29 @@ export class TacticalGraphicsManager {
 
     // store the created tactical graphics, each containing a symbolId for a unique reference
     graphicControllers: TacticalGraphicHandler[] = [];
+
+    /**
+     * One `change:resolution` subscription per live handler.
+     *
+     * A graphic whose geometry is a screen-pixel constant times the map
+     * resolution — every security operation, and every graphic built the same
+     * way — only holds its on-screen size if something re-derives it when the
+     * zoom changes. That something is `onResolutionChangeFunc`, and it does
+     * nothing at all unless it is subscribed. A path that adds features without
+     * subscribing produces a graphic pinned in *map* units, which grows and
+     * shrinks with the zoom; that is what `drawProvenSamples` used to do.
+     *
+     * Kept rather than fire-and-forget so the listeners can be dropped again.
+     * They used not to be: draw and restore each attached one and never removed
+     * it, so a cancelled draw leaked one and a sample sweep — which clears and
+     * redraws two hundred graphics — leaked a couple of hundred per press, every
+     * one of them still re-deriving a graphic that had been removed from the map.
+     *
+     * A list of pairs and not a `Map`, because `Map` is OpenLayers' `Map` in this
+     * module and the built-in has no name here. The scan is linear, over a list
+     * the size of the graphics on the map, and only on subscribe/unsubscribe.
+     */
+    private resolutionKeys: {handler: TacticalGraphicHandler; key: EventsKey}[] = [];
 
     // current interaction mode, toggled by an external caller
     currentMode: InteractionType = InteractionType.view;
@@ -218,6 +243,40 @@ export class TacticalGraphicsManager {
     };
     getFeatureControllerBySymbolId = (symbolId: string): TacticalGraphicHandler | undefined => {
         return this.graphicControllers.find(controller => controller.getSymbolId() === symbolId);
+    };
+
+    /**
+     * Subscribes a handler to zoom changes, so its graphic re-derives and holds
+     * its on-screen size. @see resolutionKeys for why this is not optional.
+     *
+     * Call it from ANY path that puts a handler's features on the map — draw,
+     * restore, or a programmatic sweep. Idempotent: subscribing an already
+     * watched handler is a no-op rather than a second listener.
+     */
+    watchResolution = (handler: TacticalGraphicHandler): void => {
+        if (this.resolutionKeys.some(entry => entry.handler === handler)) return;
+        const key = this.map.getView().on('change:resolution', handler.onResolutionChangeFunc) as EventsKey;
+        this.resolutionKeys.push({handler, key});
+    };
+
+    /** Drops one handler's zoom subscription. Safe on a handler that has none. */
+    unwatchResolution = (handler: TacticalGraphicHandler): void => {
+        const index = this.resolutionKeys.findIndex(entry => entry.handler === handler);
+        if (index < 0) return;
+        unByKey(this.resolutionKeys[index].key);
+        this.resolutionKeys.splice(index, 1);
+    };
+
+    /**
+     * Drops every zoom subscription this manager holds.
+     *
+     * For a caller that empties the map wholesale — `clearAllGraphics` — where
+     * unwatching handler by handler would mean walking a list it is about to
+     * discard anyway.
+     */
+    releaseAllGraphics = (): void => {
+        this.resolutionKeys.forEach(entry => unByKey(entry.key));
+        this.resolutionKeys.length = 0;
     };
 
     // define what happens on mouse down, drag and mouse up events.
@@ -618,6 +677,9 @@ export class TacticalGraphicsManager {
         this.resumeDoubleClickZoomOnNextClick();
         if (cancelled) {
             tacticalGraphicHandler.getFeatures().forEach(f => this.renderingVectorSource.removeFeature(f));
+            // The subscription went on at draw start, so an abandoned draw has one
+            // to take off again — otherwise it outlives its own features.
+            this.unwatchResolution(tacticalGraphicHandler);
         }
         if (this.draw) {
             this.map.removeInteraction(this.draw);
@@ -637,7 +699,7 @@ export class TacticalGraphicsManager {
         let tacticalGraphicHandler: TacticalGraphicHandler = openlayersAdapter.getTacticalGraphicController(name, resolution);
 
         this.renderingVectorSource.addFeatures(tacticalGraphicHandler.getFeatures());
-        this.map.getView().on('change:resolution', tacticalGraphicHandler.onResolutionChangeFunc);
+        this.watchResolution(tacticalGraphicHandler);
 
         // Disable double-click zoom so finishing a draw with double-click doesn't zoom the map
         this.suspendDoubleClickZoom();
