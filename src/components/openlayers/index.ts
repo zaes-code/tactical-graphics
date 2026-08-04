@@ -147,5 +147,32 @@ export {MissionTaskController, PointDropController} from './controllers/MissionT
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 export {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
+// The centre symbol a security operation draws between its arms. A single-point
+// 2525E icon, which is milsymbol's job — so this package asks a provider for it
+// and never imports milsymbol itself. Register one with
+// `useMilsymbolSecurityOperationSymbols(ms)` if you already depend on milsymbol,
+// or `setSecurityOperationSymbolProvider` to draw it yourself. Register nothing
+// and the arms and labels draw with an empty centre.
+// Its on-screen size is the library's rather than the provider's, because the
+// library is what builds the Icon around a provider that returns a `src` string:
+// `setSecurityOperationSymbolSize`, not milsymbol's own `size` option.
+export {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    getSecurityOperationSymbolProvider,
+    getSecurityOperationSymbolSize,
+    securityOperationSidc,
+    setSecurityOperationSymbolProvider,
+    setSecurityOperationSymbolSize,
+    useMilsymbolSecurityOperationSymbols,
+} from './securityOperationSymbol';
+export type {
+    MilsymbolModule,
+    SecurityOperationSymbolImage,
+    SecurityOperationSymbolProvider,
+    SecurityOperationSymbolRequest,
+} from './securityOperationSymbol';
+
 // Route-direction arrows, inlined as data URIs so no asset loader is needed.
 export {ALTERNATING_ARROW, ONE_WAY_ARROW, TWO_WAY_ARROW} from './assets/routeDirectionIcons';

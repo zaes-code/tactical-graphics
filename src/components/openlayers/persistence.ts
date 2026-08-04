@@ -295,17 +295,13 @@ export function applyRestoredGeometry(
         handler.setBaseFeature(base as Feature<Point>);
         if (state.rotation !== undefined) handler.graphic.setRotation(state.rotation);
         if (renderer?.scale !== undefined) handler.graphic.setScale(renderer.scale);
-        const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
-        if (coords) handler.milSymbolFeature.setGeometry(new Point(coords));
-        // Only `onDrawEndFunc` builds the 2525E symbol, and a restore never draws. It
-        // rasterises through milsymbol, so it needs a real canvas — absent in Node and in
-        // a jsdom test. Losing the centre glyph is a blemish; losing the graphic because
-        // of it is not acceptable, so this failure stays local.
-        try {
-            handler.setMilSymStyle();
-        } catch {
-            // no-op: the fan, its labels and every interaction are already in place.
-        }
+        // The centre symbol needs nothing here any more. `setBaseFeature` positions
+        // it, and its style is a StyleFunction installed in the controller's
+        // constructor. This used to place the icon by hand and rebuild the symbol
+        // inside a try/catch, because the symbol was built at `drawend` only — a
+        // restore never draws — and milsymbol's canvas path needs a DOM that Node
+        // and jsdom do not have. A provider that fails now costs the glyph, not the
+        // graphic, so the guard has nothing left to guard.
         return;
     }
 
@@ -417,7 +413,7 @@ export function restoreTacticalGraphics(
             manager.graphicControllers.push(handler);
             // Without this a restored graphic never reacts to zoom — the security
             // operation fans in particular resize on every resolution change.
-            manager.map.getView().on('change:resolution', handler.onResolutionChangeFunc);
+            manager.watchResolution(handler);
             // The holder satisfies one arm of the GraphicObject union; which arm depends on
             // the controller, and the handler interface is deliberately narrower than all of them.
             GraphicLinkRegistry.registerAll(added, handler.graphic as GraphicObject, symbolId);
@@ -427,6 +423,9 @@ export function restoreTacticalGraphics(
             if (handler) {
                 const index = manager.graphicControllers.indexOf(handler);
                 if (index >= 0) manager.graphicControllers.splice(index, 1);
+                // Roll the zoom subscription back with the features — a record that
+                // failed halfway may already have been watched.
+                manager.unwatchResolution(handler);
                 for (const feature of added) {
                     if (manager.renderingVectorSource.hasFeature(feature)) {
                         manager.renderingVectorSource.removeFeature(feature);

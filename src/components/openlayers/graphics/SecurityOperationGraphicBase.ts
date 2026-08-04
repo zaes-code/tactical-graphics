@@ -14,19 +14,38 @@ import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicP
  * Screen-pixel sizes at scale 1. Every one is multiplied by the map resolution,
  * which is what keeps the graphic a constant size on screen as you zoom.
  */
-const CENTER_PADDING_PX = 75;
+/** Where the label anchor sits, measured from the centre. Unchanged. */
+const LABEL_PADDING_PX = 50;
+/**
+ * Clear space between the label and the line that runs away from it.
+ *
+ * The two used to be locked together: the label was placed at
+ * `centerPadding / 1.5`, so the gap was always a third of the padding — 25px,
+ * changeable only by moving the arms too. Naming the gap lets the line come in to
+ * meet the label without the label or the arrowheads moving at all.
+ */
+const LABEL_GAP_PX = 20;
+/**
+ * Where each arm's line begins — just past the label. Was 75px, which left the
+ * 25px gap described above.
+ */
+const CENTER_PADDING_PX = LABEL_PADDING_PX + LABEL_GAP_PX;
 const ARROW_LENGTH_PX = 75;
 const ARROW_DEPTH_PX = 20;
 const ARROW_HEAD_LENGTH_PX = 10;
 const ARROW_HEAD_DEGREE = 60;
 
 /**
- * Smallest resize factor.
+ * Smallest scale factor.
  *
  * Each line runs from `centerPadding` out to `2 * arrowLength * scale`. With
- * `centerPadding` pinned, a scale of 0.5 collapses that run to nothing and
- * anything below folds the line back through the 2525E symbol. The floor leaves
- * a quarter of the padding as visible line.
+ * `centerPadding` pinned, a scale that brings the outer end back to the padding
+ * collapses that run to nothing, and anything below folds the line back through
+ * the 2525E symbol. The floor leaves a quarter of the padding as visible line.
+ *
+ * The interactive resize that used to reach this is gone — see
+ * `SecurityOperationsController.handleResize`. It still guards `setScale`, which
+ * restore calls with a `renderer.scale` off an older snapshot.
  */
 const MIN_SCALE = (CENTER_PADDING_PX * 1.25) / (2 * ARROW_LENGTH_PX);
 
@@ -79,10 +98,13 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     }
 
     /**
-     * Built fresh on each call rather than once in the constructor. The style closes
-     * over `this.rotation`, and the constructor runs when rotation is still 0 — so a
-     * style installed there stayed upright forever no matter how far the graphic was
-     * turned. `updateFeatures` reinstalls them, which is what makes rotation visible.
+     * Built fresh on each call rather than once in the constructor, because the
+     * style closes over `this.rotation` and the constructor runs while that is
+     * still 0. `updateFeatures` reinstalls them.
+     *
+     * The rotation no longer tips the letter — see `getSecurityOperationLabelStyle`,
+     * where it survives only as a sub-pixel nudge. What moves the label around the
+     * graphic is `placeCoordinates` rotating its anchor about the centre.
      */
     getLabelStyle = (position: 'left' | 'right'): StyleFunction => {
         return getSecurityOperationLabelStyle(this.primaryLabel, this.rotation, position);
@@ -112,20 +134,22 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     updateFeatures = () => {
         // Resize lengthens the arrows outward and moves nothing else, so `scale`
         // is spent on the arrow's length rather than on the coordinates the
-        // generator returns. `centerPadding` — the gap between the 2525E symbol
-        // and where the lines begin — is left unscaled, which pins both the inner
-        // end of each line and the labels (placed at `centerPadding / 1.5`).
-        // `arrowDepth` and `arrowHeadLength` are unscaled too: the arrowheads
-        // move, they don't grow.
+        // generator returns. `centerPadding` — where the lines begin — and
+        // `labelPadding` are left unscaled, which pins the inner end of each line
+        // and the labels. `arrowDepth` and `arrowHeadLength` are unscaled too: the
+        // arrowheads move, they don't grow.
         let arrowLength = ARROW_LENGTH_PX * this.resolution * this.scale;
         let arrowDepth = ARROW_DEPTH_PX * this.resolution
         let arrowHeadLength = ARROW_HEAD_LENGTH_PX * this.resolution;
         let arrowHeadDegree = ARROW_HEAD_DEGREE;
+        // Passed explicitly rather than left to the generator's `centerPadding / 1.5`
+        // fallback, which is what tied the label-to-line gap to the padding.
+        let labelPadding = LABEL_PADDING_PX * this.resolution;
 
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
             this.base,
-            {centerPadding: this.centerPadding, arrowLength, arrowDepth, arrowHeadLength, arrowHeadDegree}
+            {centerPadding: this.centerPadding, labelPadding, arrowLength, arrowDepth, arrowHeadLength, arrowHeadDegree}
         );
         if (!tacticalGraphic) return;
 

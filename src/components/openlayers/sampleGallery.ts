@@ -54,6 +54,62 @@ import {supportsHostility} from './graphicFieldRegistry';
 import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
+import ms from 'milsymbol';
+import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
+
+/**
+ * A different unit symbol in the centre of each security operation.
+ *
+ * Cover, Guard and Screen otherwise draw the same generic land unit, which makes
+ * three graphics that already look alike harder still to tell apart in a
+ * catalogue. It also demonstrates the per-graphic provider — the global one is set
+ * once for the whole app and cannot, by itself, give two Screens different
+ * symbols.
+ *
+ * **Illustrative, not doctrinal.** These are the MIL-STD-2525E land-unit function
+ * IDs for reconnaissance, armoured cavalry and armour, in ascending combat power
+ * to match the three tasks; FM 1-02.2 does not prescribe which unit performs
+ * which, and a real deployment supplies its own. They were picked by rendering the
+ * symbol-set-10 entity range and reading the icons, since milsymbol carries no
+ * entity names to look them up by.
+ */
+const SAMPLE_UNIT_FUNCTION_ID: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.Screen]: '121300', // single diagonal — reconnaissance
+    [TacticalGraphicName.Guard]: '121000', // oval with a diagonal — armoured cavalry
+    [TacticalGraphicName.Cover]: '120500', // oval — armour
+};
+
+/**
+ * Bigger than the library's 25px default, because a sample sits in a dense grid
+ * where the default reads as a speck.
+ *
+ * Returned per symbol as `{src, sizePx}` rather than set through
+ * `setSecurityOperationSymbolSize`, which is global — the gallery has no business
+ * resizing the centre symbol for the rest of the host's application.
+ */
+const SAMPLE_UNIT_SIZE_PX = 50;
+
+/**
+ * Swaps the entity digits of the doctrinal SIDC, positions 11-16.
+ *
+ * Everything before them — version, context, the *standard identity* the library
+ * derived from this graphic's hostility, symbol set — is kept, so a hostile sample
+ * still frames as hostile.
+ */
+function sampleUnitProvider(name: TacticalGraphicName): SecurityOperationSymbolProvider | undefined {
+    const functionId = SAMPLE_UNIT_FUNCTION_ID[name];
+    if (!functionId) return undefined;
+    return ({sidc}) => {
+        const unit = sidc.slice(0, 10) + functionId + sidc.slice(16);
+        // `size` here is the SVG's internal resolution — 2x for a crisp HiDPI
+        // render. `sizePx` is what it actually draws at.
+        const svg = new ms.Symbol(unit, {size: SAMPLE_UNIT_SIZE_PX * 2}).asSVG();
+        return {
+            src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+            sizePx: SAMPLE_UNIT_SIZE_PX,
+        };
+    };
+}
 
 /** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
 export const HALF = 30_600;
@@ -178,6 +234,10 @@ export function applyHostility(
 export function clearAllGraphics(manager: TacticalGraphicsManager): void {
     manager.renderingVectorSource.clear();
     manager.graphicControllers.length = 0;
+    // The controllers are gone, so their zoom subscriptions have to go too. Without
+    // this every sweep left its predecessor's listeners re-deriving graphics that
+    // were no longer on the map.
+    manager.releaseAllGraphics();
 }
 
 /**
@@ -218,6 +278,9 @@ export function drawProvenSamples(
         const handler = getController(name, layout.resolution);
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
+        if (handler instanceof SecurityOperationsController) {
+            handler.setSymbolProvider(sampleUnitProvider(name));
+        }
         handler.getFeatures().forEach(f => {
             f.set('graphicName', name);
             f.set('symbolId', symbolId);
@@ -228,6 +291,13 @@ export function drawProvenSamples(
             applyBaseGeometry(handler, name, cx, cy, symbolId);
             if (hostility) applyHostility(handler, name, hostility);
             manager.graphicControllers.push(handler);
+            // The sweep used to skip this, so every sample it drew was pinned in map
+            // units and grew and shrank with the zoom — most visibly the security
+            // operations, whose whole geometry is a screen-pixel constant times the
+            // resolution. Drawing by hand always subscribed; the sweep did not, which
+            // is why the same graphic behaved differently depending on how it got
+            // onto the map.
+            manager.watchResolution(handler);
             source.addFeature(titleFeature([cx, titleY], getDisplayName(name)));
             drawn++;
         } catch (e) {
@@ -528,6 +598,31 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
         if (geometry) extend(extent, geometry.getExtent());
     });
     if (isEmpty(extent)) return null;
+
+    // A security operation's centre symbol is a Point with an Icon style, and a
+    // point has no extent — so the measured box counted the arms and the labels and
+    // nothing at all for the symbol between them. Cells came out too small and the
+    // caption landed on top of the symbol: invisible while the symbol was the
+    // library's 25px default, obvious at the size the sweep asks for.
+    //
+    // The multiplier is empirical, and has to be. Two things stop it being derived:
+    //
+    //   - The symbol is screen-fixed — an `Icon` is sized in pixels — while the
+    //     cell is map-fixed. `drawProvenSamples` frames the finished layout with a
+    //     fit, which lands on a coarser resolution than the one the boxes were
+    //     measured at, so every map-unit reservation shrinks in pixels while the
+    //     symbol does not.
+    //   - Growing the boxes reflows the packer, which moves that fit again.
+    //     Clearance is not monotonic in this number: ×2, ×2.5 and ×3 measured
+    //     3.7px, 1.9px and 7.5px of clear space respectively.
+    //
+    // ×3.5 of the symbol's half-width measures 13px, enough headroom that a reflow
+    // cannot eat it. Re-measure if the symbol size or the layout constants change.
+    if (handler instanceof SecurityOperationsController) {
+        const half = SAMPLE_UNIT_SIZE_PX * 1.75 * resolution;
+        extend(extent, [-half, -half, half, half]);
+    }
+
     return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
 }
 
