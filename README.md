@@ -28,11 +28,14 @@ Two entry points ship, and you can use either on its own:
 | `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` (and `milsymbol`) as peers |
 
 ```bash
-npm install ol milsymbol   # only if you want the OpenLayers entry point
+npm install ol             # only if you want the OpenLayers entry point
+npm install milsymbol      # only for the centre symbol on Cover / Guard / Screen
 ```
 
 Both are peer dependencies and both are optional, so installing the package for
-its geometry alone pulls in neither.
+its geometry alone pulls in neither. Nothing in this package imports `milsymbol`
+— you hand it in, once, if you want it. See
+[The centre symbol on security operations](#the-centre-symbol-on-security-operations).
 
 ---
 
@@ -169,6 +172,146 @@ Set amplifiers through `writeGraphicProperties`, never `feature.set` —
 `ol/Object.set` fires `propertychange` without calling `changed()`, so the map
 can keep drawing the old label.
 
+### The centre symbol on security operations
+
+Cover, Guard and Screen draw a single-point 2525E unit symbol between their two
+arms. That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job,
+not this library's — so this library **never imports milsymbol**. It asks a
+provider, and you register one:
+
+```ts
+import ms from 'milsymbol';
+import {useMilsymbolSecurityOperationSymbols} from '@zaes/tactical-graphics/openlayers';
+
+useMilsymbolSecurityOperationSymbols(ms);   // once, at startup
+```
+
+Register nothing and the arms and labels draw with an empty centre — no error,
+no missing module. That is what makes `milsymbol` an *actually* optional peer
+dependency: a consumer who wants the geometry, or the other 200-odd graphics,
+never resolves it.
+
+The SIDC handed to the provider is derived from the graphic's own `hostility`,
+so a hostile Screen gets a hostile-framed symbol. `securityOperationSidc(hostility)`
+exposes the same doctrinal code if you want to build on it.
+
+#### Making the symbol bigger
+
+```ts
+import {setSecurityOperationSymbolSize} from '@zaes/tactical-graphics/openlayers';
+
+setSecurityOperationSymbolSize(40);   // CSS px, default 25, clamped to [8, 96]
+```
+
+Global, and it takes effect on the next render — bump the features' revision if
+some are already drawn:
+
+```ts
+source.forEachFeature(f => f.changed());
+```
+
+To size **one** symbol rather than all of them, return `{src, sizePx}` from its
+provider — that wins over the global size and leaves it untouched.
+
+```ts
+handler.setSymbolProvider(({sidc}) => ({src: mySvgDataUri(sidc, 48), sizePx: 48}));
+```
+
+**Not** milsymbol's own `size` option. That sets the SVG's internal resolution;
+the `Icon` built around it still draws at the library's size, so
+`useMilsymbolSecurityOperationSymbols(ms, {size: 40})` changes the sharpness and
+nothing you can see. The size belongs to the library because the library is what
+builds the `Icon` around a provider that returns a `src` string — a provider
+returning a whole `Style` bypasses this and owns its own sizing.
+
+#### Choosing the symbol
+
+Register a provider of your own instead of `useMilsymbolSecurityOperationSymbols`.
+It can return four things, in ascending order of control:
+
+| Return | You get |
+|---|---|
+| a **string** | used as an image `src`, drawn at the library's size |
+| **`{src, sizePx}`** | a `src` plus its own on-screen size, for this symbol only |
+| an **`ol` `Style`** | used verbatim — no `Icon` is built, so sizing and anchoring are yours |
+| **`undefined`** | no centre symbol |
+
+```ts
+setSecurityOperationSymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
+```
+
+It is global — one call configures the whole application — and it is handed the
+graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
+
+That is as far as the global provider goes. It also receives `labels`, but these
+three graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing
+else), so two Screens look identical to it. To vary those, give the individual
+graphic its own provider with `setSymbolProvider` — it wins over the global one,
+and `undefined` puts the graphic back on it.
+
+#### Worked example: three security operations, three units
+
+```ts
+import ms from 'milsymbol';
+import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import {fromLonLat} from 'ol/proj';
+import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+
+// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard
+// identity the library derived from `hostility` survives the swap and a hostile
+// graphic stays hostile-framed whichever unit goes in.
+const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
+
+const UNIT = {
+    [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
+    [TacticalGraphicName.Guard]:  '121000',   // oval + diagonal  — armoured cavalry
+    [TacticalGraphicName.Cover]:  '120500',   // oval             — armour
+};
+
+function placeSecurityOperation(name, lonLat, hostility = TacticalGraphicHostility.friend) {
+    const handler = getController(name, map.getView().getResolution()!);
+    handler.setSymbolId(crypto.randomUUID());
+
+    // This graphic's own provider, overriding whatever is registered globally.
+    // `size` is the SVG's internal resolution — 2x for a crisp HiDPI render;
+    // `sizePx` is what it actually draws at, overriding the library's size for
+    // this symbol alone. Return a bare string instead to take the library's.
+    handler.setSymbolProvider(({sidc}) => {
+        const unit = sidc.slice(0, 10) + UNIT[name] + sidc.slice(16);
+        const svg = new ms.Symbol(unit, {size: UNIT_SIZE_PX * 2}).asSVG();
+        return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
+    });
+
+    handler.setBaseFeature(new Feature(new Point(fromLonLat(lonLat))));
+
+    // `hostility` is the only amplifier these three take. There is no user label:
+    // the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S.
+    // `label: ''` is here only because the type requires the field.
+    writeGraphicProperties(handler.getFeatures(), name, {label: '', hostility});
+
+    source.addFeatures(handler.getFeatures());
+    manager.watchResolution(handler);
+    return handler;
+}
+
+placeSecurityOperation(TacticalGraphicName.Screen, [-77.10, 38.89]);
+placeSecurityOperation(TacticalGraphicName.Guard,  [-77.04, 38.89], TacticalGraphicHostility.hostileFaker);
+placeSecurityOperation(TacticalGraphicName.Cover,  [-76.98, 38.89]);
+```
+
+`manager.watchResolution(handler)` is not optional. A security operation's geometry
+is a screen-pixel constant times the map resolution, so without a
+`change:resolution` subscription it is pinned in metres and grows and shrinks as
+you zoom. `TacticalGraphicsManager` does this for you when the user draws, and
+`restoreTacticalGraphics` does it on load; a graphic you build yourself needs it
+doing.
+
+The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
+performs which security task, so substitute your own. The demo's **Draw all
+samples** button uses exactly this mechanism.
+
 ### Configuring colours and sizes
 
 Everything re-styleable lives on one all-optional config. Omit a field and you
@@ -184,7 +327,7 @@ import {TacticalGraphicHostility, configureTacticalGraphics} from '@zaes/tactica
 
 configureTacticalGraphics({
     labelSize: 18,                 // px, default 16
-    lineWidth: 3,                  // px, default 4, clamped to [1, 8]
+    lineWidth: 3,                  // px, default 2, clamped to [1, 8]
     hostilityColors: {             // partial — the rest stay doctrinal
         [TacticalGraphicHostility.friend]: 'rgb(92,148,255)',
     },
