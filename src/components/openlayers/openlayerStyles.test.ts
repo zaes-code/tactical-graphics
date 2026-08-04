@@ -20,6 +20,8 @@ import Feature from 'ol/Feature';
 import {LineString, Point, Polygon} from 'ol/geom';
 import CircleStyle from 'ol/style/Circle';
 import {Style} from 'ol/style';
+import {StyleFunction} from 'ol/style/Style';
+import Icon from 'ol/style/Icon';
 import {writeGraphicProperties} from './graphicProperties';
 import {
     DEFAULT_PALETTE,
@@ -55,7 +57,20 @@ import {
     obstacleAreaStyles,
     obstacleLineStyle,
     obstacleRestrictedZoneStyle,
+    getStyle,
 } from './openlayerStyles';
+
+import {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    getSecurityOperationSymbolProvider,
+    getSecurityOperationSymbolSize,
+    securityOperationSidc,
+    securityOperationSymbolStyle,
+    setSecurityOperationSymbolProvider,
+    setSecurityOperationSymbolSize,
+} from './securityOperationSymbol';
 
 // Every test starts from the shipped defaults; the overrides below are global.
 beforeEach(resetTacticalGraphicsConfig);
@@ -354,13 +369,15 @@ describe('TacticalGraphicsConfig', () => {
 describe('the accessors the style layer reads', () => {
     it('default to the shipped values with no config', () => {
         expect(getDefaultLabelSize()).toBe(16);
-        expect(getDefaultLineWidth()).toBe(4);
+        expect(getDefaultLineWidth()).toBe(2);
     });
 
     it('follow the config once set', () => {
-        configureTacticalGraphics({labelSize: 20, lineWidth: 2});
+        // Both values differ from the shipped defaults on purpose — at lineWidth 2
+        // this could not tell "followed the config" from "fell back to the default".
+        configureTacticalGraphics({labelSize: 20, lineWidth: 5});
         expect(getDefaultLabelSize()).toBe(20);
-        expect(getDefaultLineWidth()).toBe(2);
+        expect(getDefaultLineWidth()).toBe(5);
     });
 
     it('clamp through configureTacticalGraphics too', () => {
@@ -398,7 +415,7 @@ describe('the library default', () => {
         jest.isolateModules(() => {
             const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
             expect(config.getDefaultLabelSize()).toBe(16);
-            expect(config.getDefaultLineWidth()).toBe(4);
+            expect(config.getDefaultLineWidth()).toBe(2);
             expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
         });
     });
@@ -582,16 +599,31 @@ describe('obstacle teeth in screen space', () => {
         }
     });
 
-    it('shrinks the teeth rather than swamping a symbol too small to carry them', () => {
-        // A 40 m square at resolution 10 is 4 px across — the gallery case. A 10 px tooth
-        // on a 4 px symbol is nonsense, so the height is capped at a share of the shape.
-        const tiny: number[][] = [[0, 0], [0, 40], [40, 40], [40, 0], [0, 0]];
-        const styles = obstacleAreaStyles(new Feature(new Polygon([tiny])), 10, {outward: true});
+    /** Tallest excursion outside the drawn square, in px. 0 when nothing was added. */
+    const areaToothPx = (sideMetres: number, resolution: number) => {
+        const ring: number[][] = [[0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0]];
+        const styles = obstacleAreaStyles(new Feature(new Polygon([ring])), resolution, {outward: true});
         const drawn = (styles[0].getGeometry() as Polygon).getCoordinates()[0];
-        const offsets = drawn.map(([x, y]) => Math.max(-x, x - 40, -y, y - 40)).filter(d => d > 0.001);
-        const tallestPx = (offsets.length ? Math.max(...offsets) : 0) / 10;
+        const offsets = drawn
+            .map(([x, y]) => Math.max(-x, x - sideMetres, -y, y - sideMetres))
+            .filter(d => d > 0.001);
+        return (offsets.length ? Math.max(...offsets) : 0) / resolution;
+    };
+
+    it('shrinks the teeth rather than swamping a symbol too small to carry them', () => {
+        // 800 m at resolution 10 is 80 px across. A full 10 px tooth is an eighth of the
+        // symbol, so it is capped at DECORATION_MAX_SHARE_CLOSED of the shape instead.
+        const tallestPx = areaToothPx(800, 10);
         expect(tallestPx).toBeLessThan(10);
-        expect(tallestPx).toBeCloseTo(4 * 0.25, 6);
+        expect(tallestPx).toBeCloseTo(80 * 0.1, 6);
+    });
+
+    it('drops the teeth entirely once they would be a few pixels', () => {
+        // A 40 m square at resolution 10 is 4 px across — the gallery case. The cap would
+        // put the teeth at 0.4 px, which is texture on the stroke rather than a symbol,
+        // so the plain ring is drawn instead. Below DECORATION_MIN_PX there is no
+        // decoration at all.
+        expect(areaToothPx(40, 10)).toBe(0);
     });
 
     it('leaves a degenerate ring alone rather than emitting spikes', () => {
@@ -629,20 +661,36 @@ describe('fortified and wave graphics in screen space', () => {
         return geom.getCoordinates().map(([, y]) => Math.abs(y) / resolution).filter(d => d > 0.01);
     };
 
+    /** Tallest merlon on the 4 km LINE at a given resolution, in px. */
+    const fortifiedLinePx = (res: number) => {
+        const styles = fortifiedLineStyleFunc(TacticalGraphicName.FortifiedLine)(
+            lineFeature(TacticalGraphicName.FortifiedLine), res) as Style[];
+        return Math.max(...excursionsPx(styles, res));
+    };
+
+    // Resolution 40 is deliberately absent: it puts the 4 km line at 100 px, small
+    // enough on screen that the shape-relative cap engages. That is the subject of the
+    // test below, not a violation of this one.
     it('sizes the fortified line’s merlons in pixels, not metres', () => {
-        const heights = [40, 10, 2, 0.5].map(res => {
-            const styles = fortifiedLineStyleFunc(TacticalGraphicName.FortifiedLine)(
-                lineFeature(TacticalGraphicName.FortifiedLine), res) as Style[];
-            return Math.max(...excursionsPx(styles, res));
-        });
+        const heights = [10, 2, 0.5].map(fortifiedLinePx);
         heights.forEach(h => expect(h).toBeCloseTo(heights[0], 6));
         expect(heights[0]).toBeCloseTo(11, 6);
+    });
+
+    it('shrinks the merlons once the line itself is small on screen', () => {
+        // 4 km at resolution 40 is 100 px. An 11 px merlon on a 100 px line reads as a
+        // zigzag rather than as a fortified line, so it is capped at
+        // DECORATION_MAX_SHARE_OPEN of the length.
+        expect(fortifiedLinePx(40)).toBeCloseTo(100 * 0.05, 6);
+        expect(fortifiedLinePx(40)).toBeLessThan(fortifiedLinePx(10));
     });
 
     it('sizes the fortified area’s merlons in pixels too, outward whichever way it was drawn', () => {
         for (const ring of [RING, [...RING].reverse()]) {
             const f = new Feature(new Polygon([ring]));
-            const heights = [40, 10, 2].map(res => {
+            // Resolution 40 leaves the 4 km ring 100 px across, inside the cap — see the
+            // fortified line's pair of tests above.
+            const heights = [10, 2].map(res => {
                 const drawn = (fortifiedAreaStyle(f, res)[0].getGeometry() as Polygon).getCoordinates()[0];
                 const outside = drawn.filter(([x, y]) => x < -0.01 || x > 4000.01 || y < -0.01 || y > 4000.01);
                 const inside = drawn.filter(([x, y]) => x > 0.01 && x < 3999.99 && y > 0.01 && y < 3999.99);
@@ -654,13 +702,21 @@ describe('fortified and wave graphics in screen space', () => {
         }
     });
 
+    /** Tallest scallop on the 4 km LINE at a given resolution, in px. */
+    const flotAmplitudePx = (res: number) => {
+        const styles = forwardLineOfOwnTroopsStyleFunc(TacticalGraphicName.ForwardLineOfOwnTroops)(
+            lineFeature(TacticalGraphicName.ForwardLineOfOwnTroops), res) as Style[];
+        return Math.max(...excursionsPx(styles, res));
+    };
+
+    // Resolution 40 excluded for the same reason as the fortified line: 100 px of line
+    // is inside the shape-relative cap.
     it('sizes the forward line of own troops’ scallops in pixels', () => {
-        const amplitudes = [40, 10, 2, 0.5].map(res => {
-            const styles = forwardLineOfOwnTroopsStyleFunc(TacticalGraphicName.ForwardLineOfOwnTroops)(
-                lineFeature(TacticalGraphicName.ForwardLineOfOwnTroops), res) as Style[];
-            return Math.max(...excursionsPx(styles, res));
-        });
-        amplitudes.forEach(a => expect(a).toBeCloseTo(8, 6));
+        [10, 2, 0.5].map(flotAmplitudePx).forEach(a => expect(a).toBeCloseTo(8, 6));
+    });
+
+    it('shrinks the scallops once the line itself is small on screen', () => {
+        expect(flotAmplitudePx(40)).toBeCloseTo(100 * 0.05, 6);
     });
 
     describe('line of contact', () => {
@@ -679,16 +735,35 @@ describe('fortified and wave graphics in screen space', () => {
         it('holds the distance between the two lines as the map scales', () => {
             // The whole point of the symbol is the pair, so the gap between them cannot
             // be a distance on the ground. Baked into geometry it was exactly that.
-            const gaps = [40, 10, 2, 0.5].map(res => separationPx(res));
+            // Resolution 40 is absent for the usual reason — it puts the 4 km line at
+            // 100 px, inside the shape-relative cap; see the test below.
+            const gaps = [10, 2, 0.5].map(res => separationPx(res));
             gaps.forEach(g => expect(g).toBeCloseTo(2 * 16, 6));
         });
 
-        it('holds it on a short line too, where a size cap would have closed the gap', () => {
-            // Every other decoration here shrinks on a symbol too small to carry it.
-            // This one must not: the separation *is* the symbol, so it survives a line
-            // only a few pixels long as well as a zoom change.
+        it('scales the gap with the waves once the line is small on screen', () => {
+            // This was exempt from the cap until 2026-08-04, on the grounds that the
+            // separation must hold at every zoom. What that produced was a 100 px line
+            // wearing full-size waves a full 32 px apart — two squiggles rather than one
+            // symbol. Scaled together the proportions survive, which is what makes the
+            // pair read as a line of contact.
+            const gap = separationPx(40); // 4 km at res 40 = 100 px
+            expect(gap).toBeLessThan(2 * 16);
+            expect(gap).toBeCloseTo(2 * 16 * ((100 * 0.05) / 8), 6);
+        });
+
+        it('keeps the two lines apart even where the waves are dropped', () => {
+            // A 20 px line cannot carry a wave at all — DECORATION_MIN_PX drops it. The
+            // separation must not go with it: a shared scale of 0 would put the two
+            // lines on top of each other and leave one red line where the symbol was.
             const short = [[0, 0], [200, 0]];
-            expect(separationPx(10, short)).toBeCloseTo(2 * 16, 6);
+            const [enemy, friendly] = styles(10, short);
+            const ys = (s: Style) => (s.getGeometry() as LineString).getCoordinates().map(c => c[1]);
+            // No waves: every vertex of each line sits at its own single offset.
+            expect(new Set(ys(enemy)).size).toBe(1);
+            expect(new Set(ys(friendly)).size).toBe(1);
+            // But still apart, at the scale the waves were dropped at.
+            expect(separationPx(10, short)).toBeCloseTo(2 * 16 * (3 / 8), 6);
         });
 
         it('puts the enemy-side wave above and the friendly-side below, either way drawn', () => {
@@ -711,5 +786,306 @@ describe('fortified and wave graphics in screen space', () => {
             const texts = styles(10).map(s => s.getText?.()?.getText?.()).filter(Boolean);
             expect(texts).toEqual(['LC', 'LC']);
         });
+    });
+});
+
+/**
+ * The centre symbol Cover / Guard / Screen draw between their arms.
+ *
+ * It used to be a hardcoded SIDC built through a static `import ms from
+ * 'milsymbol'`, which made an optional peer dependency mandatory for the whole
+ * `/openlayers` entry point and ignored the graphic's affiliation entirely.
+ */
+describe('security operation centre symbol', () => {
+    afterEach(() => setSecurityOperationSymbolProvider(undefined));
+
+    it('draws nothing until a host registers a provider', () => {
+        expect(getSecurityOperationSymbolProvider()).toBeUndefined();
+    });
+
+    // The literal is the code the controller carried inline. Deriving the SIDC from
+    // hostility must not have moved the symbol a Friend graphic renders.
+    it('reproduces the historical SIDC for a friendly graphic', () => {
+        expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001413010000000000000000');
+    });
+
+    it('varies only the standard-identity digit, position 4', () => {
+        const friend = securityOperationSidc(TacticalGraphicHostility.friend);
+        for (const hostility of Object.values(TacticalGraphicHostility)) {
+            const sidc = securityOperationSidc(hostility);
+            expect(sidc).toHaveLength(30);
+            // Everything except digit 4 is identical across every affiliation.
+            expect(sidc.slice(0, 3) + sidc.slice(4)).toBe(friend.slice(0, 3) + friend.slice(4));
+        }
+    });
+
+    it('maps each affiliation to its 2525E identity digit', () => {
+        const digit = (h: TacticalGraphicHostility) => securityOperationSidc(h)[3];
+        expect(digit(TacticalGraphicHostility.pending)).toBe('0');
+        expect(digit(TacticalGraphicHostility.unknown)).toBe('1');
+        expect(digit(TacticalGraphicHostility.assumedFriend)).toBe('2');
+        expect(digit(TacticalGraphicHostility.friend)).toBe('3');
+        expect(digit(TacticalGraphicHostility.neutral)).toBe('4');
+        expect(digit(TacticalGraphicHostility.suspectJoker)).toBe('5');
+        expect(digit(TacticalGraphicHostility.hostileFaker)).toBe('6');
+    });
+
+    it('survives a provider that throws, losing the glyph and not the graphic', () => {
+        setSecurityOperationSymbolProvider(() => {
+            throw new Error('no canvas here');
+        });
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {
+            label: '',
+            hostility: TacticalGraphicHostility.friend,
+        });
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+        expect(() => style(feature, 10)).not.toThrow();
+        expect(style(feature, 10)).toBeUndefined();
+    });
+});
+
+/**
+ * The centre symbol's on-screen size.
+ *
+ * It was a hardcoded 25px, and because the library builds the `Icon` around a
+ * provider that returns a `src` string, a provider could not change it — passing
+ * milsymbol its own `size` looked like it should and only changed the SVG's
+ * internal resolution.
+ */
+describe('security operation centre symbol size', () => {
+    afterEach(() => {
+        setSecurityOperationSymbolProvider(undefined);
+        setSecurityOperationSymbolSize(DEFAULT_SYMBOL_SIZE_PX);
+    });
+
+    it('defaults to the shipped size', () => {
+        expect(getSecurityOperationSymbolSize()).toBe(25);
+    });
+
+    it('reaches the provider, so a string-returning provider is sized too', () => {
+        const seen: number[] = [];
+        setSecurityOperationSymbolProvider(({sizePx}) => {
+            seen.push(sizePx);
+            return undefined;
+        });
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+
+        style(feature, 10);
+        setSecurityOperationSymbolSize(48);
+        style(feature, 10);
+
+        expect(seen).toEqual([DEFAULT_SYMBOL_SIZE_PX, 48]);
+    });
+
+    it('clamps to a readable range', () => {
+        setSecurityOperationSymbolSize(9999);
+        expect(getSecurityOperationSymbolSize()).toBe(MAX_SYMBOL_SIZE_PX);
+        setSecurityOperationSymbolSize(0);
+        expect(getSecurityOperationSymbolSize()).toBe(MIN_SYMBOL_SIZE_PX);
+    });
+});
+
+/**
+ * Per-graphic centre symbols.
+ *
+ * The provider registration is global — one call configures the whole app — so
+ * without an override two Screens can only differ by what they already carry. A
+ * map routinely wants a different unit symbol on one than on another.
+ */
+describe('per-graphic centre symbol providers', () => {
+    afterEach(() => setSecurityOperationSymbolProvider(undefined));
+
+    const screenFeature = () => {
+        const feature = new Feature(new Point([0, 0]));
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        return feature;
+    };
+
+    /** A StyleFunction may return one Style or several; these providers return one. */
+    const srcOf = (style: StyleFunction, feature: Feature): string | undefined => {
+        const resolved = style(feature, 10);
+        const first = Array.isArray(resolved) ? resolved[0] : resolved;
+        return (first?.getImage() as Icon | null | undefined)?.getSrc();
+    };
+
+    it('overrides the global provider for that graphic only', () => {
+        setSecurityOperationSymbolProvider(() => 'global');
+        const feature = screenFeature();
+
+        const usesGlobal = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
+        const usesOwn = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'mine');
+
+        expect(srcOf(usesGlobal, feature)).toBe('global');
+        expect(srcOf(usesOwn, feature)).toBe('mine');
+    });
+
+    /**
+     * The regression the provider-keyed cache exists for. Two graphics identical in
+     * every field of the request, differing only in provider: a cache keyed on the
+     * request alone would hand the second one whatever the first produced.
+     */
+    it('does not serve one graphic the other one\'s symbol', () => {
+        const feature = screenFeature();
+        const a = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'recon');
+        const b = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => () => 'armour');
+
+        expect(srcOf(a, feature)).toBe('recon');
+        expect(srcOf(b, feature)).toBe('armour');
+        // And again, now that both are cached.
+        expect(srcOf(a, feature)).toBe('recon');
+    });
+
+    /**
+     * The global provider's only lever for these three: they are SHAPE_ONLY in the
+     * field registry and carry hostility alone, so `labels` cannot tell two Screens
+     * apart. `name` is what a global provider branches on.
+     */
+    it('caches one symbol per graphic name, so one provider can vary by graphic', () => {
+        const byName = (r: {name: TacticalGraphicName}) => `symbol-for-${r.name}`;
+        const feature = screenFeature();
+        const cover = new Feature(new Point([0, 0]));
+        writeGraphicProperties([cover], TacticalGraphicName.Cover, {label: ''});
+
+        const screenStyle = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => byName);
+        const coverStyle = securityOperationSymbolStyle(TacticalGraphicName.Cover, () => cover, () => byName);
+
+        expect(srcOf(screenStyle, feature)).toBe(`symbol-for-${TacticalGraphicName.Screen}`);
+        expect(srcOf(coverStyle, cover)).toBe(`symbol-for-${TacticalGraphicName.Cover}`);
+    });
+
+    it('falls back to the global provider when the override is cleared', () => {
+        setSecurityOperationSymbolProvider(() => 'global');
+        const feature = screenFeature();
+        let own: (() => string) | undefined = () => 'mine';
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => own);
+
+        expect(srcOf(style, feature)).toBe('mine');
+        own = undefined;
+        expect(srcOf(style, feature)).toBe('global');
+    });
+});
+
+/**
+ * The `{src, sizePx}` return form.
+ *
+ * A bare string is sized by the global `setSecurityOperationSymbolSize`, and
+ * overriding that per graphic used to mean returning a whole `Style` — building a
+ * `Style` and an `Icon`, and remembering the centring anchor, to change one number.
+ *
+ * The painted width is deliberately NOT asserted here. `Icon.getWidth()` is
+ * documented to return undefined until the image has loaded, and jsdom never loads
+ * one, so a width assertion in this suite can only ever read undefined. What the
+ * icons actually measure is checked against a real browser instead — see the
+ * probe in the notes for this change.
+ */
+describe('provider return shapes', () => {
+    afterEach(() => {
+        setSecurityOperationSymbolProvider(undefined);
+        setSecurityOperationSymbolSize(DEFAULT_SYMBOL_SIZE_PX);
+    });
+
+    const feature = () => {
+        const f = new Feature(new Point([0, 0]));
+        writeGraphicProperties([f], TacticalGraphicName.Screen, {label: ''});
+        return f;
+    };
+
+    const iconOf = (style: StyleFunction, f: Feature): Icon | undefined => {
+        const resolved = style(f, 10);
+        const first = Array.isArray(resolved) ? resolved[0] : resolved;
+        return (first?.getImage() as Icon | null | undefined) ?? undefined;
+    };
+
+    it('wraps a bare string in an icon', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => 'from-string');
+        expect(iconOf(style, f)?.getSrc()).toBe('from-string');
+    });
+
+    it('wraps {src, sizePx} in an icon too', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => ({src: 'from-object', sizePx: 64}));
+        expect(iconOf(style, f)?.getSrc()).toBe('from-object');
+    });
+
+    it('does not disturb the global size when a symbol overrides it', () => {
+        setSecurityOperationSymbolSize(30);
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => ({src: 'x', sizePx: 64}));
+        iconOf(style, f);
+        expect(getSecurityOperationSymbolSize()).toBe(30);
+    });
+
+    it('uses a returned Style verbatim, sizing and all', () => {
+        const f = feature();
+        const mine = new Style({image: new Icon({src: 'x', width: 123})});
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => mine);
+        expect(style(f, 10)).toBe(mine);
+    });
+
+    it('still resolves nothing when the provider returns undefined', () => {
+        const f = feature();
+        const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => f, () => () => undefined);
+        expect(style(f, 10)).toBeUndefined();
+    });
+});
+
+/**
+ * StrongPoint's cross ties.
+ *
+ * These are where the screen-fixed decorations started — the obstacle teeth and the
+ * fortified merlons were changed on 2026-08-03 to match them — but they were the one
+ * set that never got the shape-relative cap, so zoomed out they swamped the ring they
+ * hang off.
+ */
+describe('strong point cross ties', () => {
+    /** A square strong point of `sideMetres`, and the tie lengths it renders, in px. */
+    const tiePx = (sideMetres: number, resolution: number): number[] => {
+        const ring: number[][] = [
+            [0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0],
+        ];
+        const f = new Feature(new Polygon([ring]));
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        const styles = getStyle(TacticalGraphicName.StrongPoint, f, resolution) as Style[];
+        return styles
+            .map(s => s.getGeometry())
+            .filter((g): g is LineString => g instanceof LineString)
+            .map(g => {
+                const [a, b] = g.getCoordinates();
+                return Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
+            });
+    };
+
+    it('holds the same pixel length while the ring is comfortably large', () => {
+        // 40 km at resolutions 40 and 10 is 1000 px and 4000 px across — far above the
+        // cap either way, so the ties keep their constant 10 px.
+        for (const resolution of [40, 10]) {
+            const ties = tiePx(40_000, resolution);
+            expect(ties.length).toBeGreaterThan(0);
+            ties.forEach(t => expect(t).toBeCloseTo(10, 6));
+        }
+    });
+
+    it('shrinks the ties once the ring is small on screen', () => {
+        // 100 px across is exactly the boundary — DECORATION_MAX_SHARE_CLOSED of it is
+        // the tie's own 10 px, so nothing is taken off. 2 km at resolution 40 is 50 px,
+        // inside it, and the ties come down to a tenth of that.
+        expect(tiePx(4_000, 40)[0]).toBeCloseTo(10, 6);
+
+        const ties = tiePx(2_000, 40);
+        expect(ties.length).toBeGreaterThan(0);
+        ties.forEach(t => expect(t).toBeCloseTo(50 * 0.1, 6));
+    });
+
+    it('drops the ties entirely once they would be a few pixels', () => {
+        // 400 m at resolution 40 is 10 px across — the cap puts a tie at 1 px, which is
+        // fuzz on the outline rather than a symbol. The outline is still drawn.
+        expect(tiePx(400, 40)).toHaveLength(0);
+        const f = new Feature(new Polygon([[[0, 0], [0, 400], [400, 400], [400, 0], [0, 0]]]));
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        expect((getStyle(TacticalGraphicName.StrongPoint, f, 40) as Style[]).length).toBeGreaterThan(0);
     });
 });
