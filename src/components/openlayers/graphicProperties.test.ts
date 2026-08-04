@@ -163,11 +163,14 @@ describe('route traffic arrows scale with the configured line width', () => {
         expect(arrow).toBe(Math.max(1, lineWidth / 2));
     });
 
-    it('keeps the arrow at 2px for the default line width, so nothing shifted', () => {
-        // The whole change has to be a visual no-op at the shipped default.
+    it('pins the concrete widths at the shipped default', () => {
+        // Literals on purpose: reading DEFAULT_LINE_WIDTH here would make the
+        // assertion tautological, and the point is that changing the shipped
+        // default has to be a deliberate act with a visible diff. Was 4/2 until
+        // the default came down to 2 on 2026-08-04.
         const widths = strokeWidths(routeControlMeasureStyle(TacticalGraphicName.Route)(routeFeature(), 10));
-        expect(widths[0]).toBe(4);
-        expect(widths[widths.length - 1]).toBe(2);
+        expect(widths[0]).toBe(2);
+        expect(widths[widths.length - 1]).toBe(1);
     });
 
     it('never floors the arrow to nothing', () => {

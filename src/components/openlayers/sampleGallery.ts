@@ -54,6 +54,96 @@ import {supportsHostility} from './graphicFieldRegistry';
 import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
+import ms from 'milsymbol';
+import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
+
+/**
+ * A different unit symbol in the centre of each security operation.
+ *
+ * Cover, Guard and Screen otherwise draw the same generic land unit, which makes
+ * three graphics that already look alike harder still to tell apart in a
+ * catalogue. It also demonstrates the per-graphic provider — the global one is set
+ * once for the whole app and cannot, by itself, give two Screens different
+ * symbols.
+ *
+ * **Illustrative, not doctrinal.** These are the MIL-STD-2525E land-unit function
+ * IDs for reconnaissance, armoured cavalry and armour, in ascending combat power
+ * to match the three tasks; FM 1-02.2 does not prescribe which unit performs
+ * which, and a real deployment supplies its own. They were picked by rendering the
+ * symbol-set-10 entity range and reading the icons, since milsymbol carries no
+ * entity names to look them up by.
+ */
+const SAMPLE_UNIT_FUNCTION_ID: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.Screen]: '121300', // single diagonal — reconnaissance
+    [TacticalGraphicName.Guard]: '121000', // oval with a diagonal — armoured cavalry
+    [TacticalGraphicName.Cover]: '120500', // oval — armour
+};
+
+/**
+ * Bigger than the library's 25px default, because a sample sits in a dense grid
+ * where the default reads as a speck.
+ *
+ * Returned per symbol as `{src, sizePx}` rather than set through
+ * `setSecurityOperationSymbolSize`, which is global — the gallery has no business
+ * resizing the centre symbol for the rest of the host's application.
+ */
+const SAMPLE_UNIT_SIZE_PX = 50;
+
+/**
+ * Swaps the entity digits of the doctrinal SIDC, positions 11-16.
+ *
+ * Everything before them — version, context, the *standard identity* the library
+ * derived from this graphic's hostility, symbol set — is kept, so a hostile sample
+ * still frames as hostile.
+ */
+function sampleUnitProvider(name: TacticalGraphicName): SecurityOperationSymbolProvider | undefined {
+    const functionId = SAMPLE_UNIT_FUNCTION_ID[name];
+    if (!functionId) return undefined;
+    return ({sidc}) => {
+        const unit = sidc.slice(0, 10) + functionId + sidc.slice(16);
+        // `size` here is the SVG's internal resolution — 2x for a crisp HiDPI
+        // render. `sizePx` is what it actually draws at.
+        const svg = new ms.Symbol(unit, {size: SAMPLE_UNIT_SIZE_PX * 2}).asSVG();
+        return {
+            src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+            sizePx: SAMPLE_UNIT_SIZE_PX,
+        };
+    };
+}
+
+/**
+ * Graphics whose style hangs a repeating decoration off the drawn path — obstacle
+ * teeth, fortified merlons, the FLOT and line-of-contact scallops, a strong point's
+ * cross ties.
+ *
+ * They are drawn larger than the rest of the sweep. Those decorations are sized in
+ * screen pixels and are dropped below `DECORATION_MIN_PX`, and at the size the other
+ * samples use — 11 px for an area, 35 px for a line — the cap puts them at one or two
+ * pixels, so every one of these rendered as a plain line or rectangle and the eleven
+ * of them became indistinguishable from each other. A sample that cannot show its own
+ * decoration is not a sample of anything.
+ */
+const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleLine,
+    TacticalGraphicName.ObstacleBelt,
+    TacticalGraphicName.ObstacleGroup,
+    TacticalGraphicName.ObstacleZone,
+    TacticalGraphicName.ObstacleFreeArea,
+    TacticalGraphicName.ObstacleRestrictedArea,
+    TacticalGraphicName.FortifiedLine,
+    TacticalGraphicName.FortifiedArea,
+    TacticalGraphicName.StrongPoint,
+    TacticalGraphicName.ForwardLineOfOwnTroops,
+    TacticalGraphicName.LineOfContact,
+]);
+
+/**
+ * How much larger. Empirical, and only loosely predictable: growing these samples
+ * grows the packed layout, which the sweep then frames with a fit, which gives some
+ * of the gain back. Measured rather than derived — see the note on the security
+ * operation symbol in `measureSample` for the same effect.
+ */
+const DECORATED_SAMPLE_SCALE = 3;
 
 /** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
 export const HALF = 30_600;
@@ -178,6 +268,10 @@ export function applyHostility(
 export function clearAllGraphics(manager: TacticalGraphicsManager): void {
     manager.renderingVectorSource.clear();
     manager.graphicControllers.length = 0;
+    // The controllers are gone, so their zoom subscriptions have to go too. Without
+    // this every sweep left its predecessor's listeners re-deriving graphics that
+    // were no longer on the map.
+    manager.releaseAllGraphics();
 }
 
 /**
@@ -218,6 +312,9 @@ export function drawProvenSamples(
         const handler = getController(name, layout.resolution);
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
+        if (handler instanceof SecurityOperationsController) {
+            handler.setSymbolProvider(sampleUnitProvider(name));
+        }
         handler.getFeatures().forEach(f => {
             f.set('graphicName', name);
             f.set('symbolId', symbolId);
@@ -228,6 +325,13 @@ export function drawProvenSamples(
             applyBaseGeometry(handler, name, cx, cy, symbolId);
             if (hostility) applyHostility(handler, name, hostility);
             manager.graphicControllers.push(handler);
+            // The sweep used to skip this, so every sample it drew was pinned in map
+            // units and grew and shrank with the zoom — most visibly the security
+            // operations, whose whole geometry is a screen-pixel constant times the
+            // resolution. Drawing by hand always subscribed; the sweep did not, which
+            // is why the same graphic behaved differently depending on how it got
+            // onto the map.
+            manager.watchResolution(handler);
             source.addFeature(titleFeature([cx, titleY], getDisplayName(name)));
             drawn++;
         } catch (e) {
@@ -528,6 +632,31 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
         if (geometry) extend(extent, geometry.getExtent());
     });
     if (isEmpty(extent)) return null;
+
+    // A security operation's centre symbol is a Point with an Icon style, and a
+    // point has no extent — so the measured box counted the arms and the labels and
+    // nothing at all for the symbol between them. Cells came out too small and the
+    // caption landed on top of the symbol: invisible while the symbol was the
+    // library's 25px default, obvious at the size the sweep asks for.
+    //
+    // The multiplier is empirical, and has to be. Two things stop it being derived:
+    //
+    //   - The symbol is screen-fixed — an `Icon` is sized in pixels — while the
+    //     cell is map-fixed. `drawProvenSamples` frames the finished layout with a
+    //     fit, which lands on a coarser resolution than the one the boxes were
+    //     measured at, so every map-unit reservation shrinks in pixels while the
+    //     symbol does not.
+    //   - Growing the boxes reflows the packer, which moves that fit again.
+    //     Clearance is not monotonic in this number: ×2, ×2.5 and ×3 measured
+    //     3.7px, 1.9px and 7.5px of clear space respectively.
+    //
+    // ×3.5 of the symbol's half-width measures 13px, enough headroom that a reflow
+    // cannot eat it. Re-measure if the symbol size or the layout constants change.
+    if (handler instanceof SecurityOperationsController) {
+        const half = SAMPLE_UNIT_SIZE_PX * 1.75 * resolution;
+        extend(extent, [-half, -half, half, half]);
+    }
+
     return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
 }
 
@@ -539,16 +668,18 @@ export function applyBaseGeometry(
     cy: number,
     symbolId: string,
 ): void {
+    const grow = DECORATED_GRAPHICS.has(name) ? DECORATED_SAMPLE_SCALE : 1;
     if (handler instanceof MissionTaskController) {
-        handler.graphic.updateGeom({size: HALF, center: [cx, cy], rotation: 0});
+        handler.graphic.updateGeom({size: HALF * grow, center: [cx, cy], rotation: 0});
     } else if (handler instanceof SecurityOperationsController) {
         handler.setBaseFeature(pointFeature([cx, cy], symbolId, name));
     } else if (handler instanceof PolygonGraphicController) {
-        const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy) : pentagonRing(cx, cy);
+        const half = HALF * grow;
+        const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy, half) : pentagonRing(cx, cy, half);
         handler.setBaseFeature(polygonFeature(ring, symbolId, name));
     } else if (handler instanceof LineGraphicController) {
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts), symbolId, name));
+        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts, LINE_HALF * grow), symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }
@@ -560,35 +691,35 @@ export function applyBaseGeometry(
  * Line vertices centred on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
-function lineCoords(cx: number, cy: number, pts: number): Coordinate[] {
-    if (pts <= 2) return [[cx - LINE_HALF, cy], [cx + LINE_HALF, cy]];
+function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
+    if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
     return [
-        [cx - LINE_HALF, cy + LINE_HALF * 0.2],
-        [cx, cy - LINE_HALF * 0.2],
-        [cx + LINE_HALF, cy + LINE_HALF * 0.2],
+        [cx - half, cy + half * 0.2],
+        [cx, cy - half * 0.2],
+        [cx + half, cy + half * 0.2],
     ];
 }
 
 /** Closed 5-sided ring (point-up pentagon) inscribed in the cell. */
-function pentagonRing(cx: number, cy: number): Coordinate[] {
+function pentagonRing(cx: number, cy: number, half = HALF): Coordinate[] {
     const ring: Coordinate[] = [];
     for (let k = 0; k < 5; k++) {
         const a = -Math.PI / 2 + (k * 2 * Math.PI) / 5;
-        ring.push([cx + HALF * Math.cos(a), cy + HALF * Math.sin(a)]);
+        ring.push([cx + half * Math.cos(a), cy + half * Math.sin(a)]);
     }
     ring.push(ring[0]);
     return ring;
 }
 
 /** Closed rectangle ring (4 corners) inscribed in the cell. */
-function rectRing(cx: number, cy: number): Coordinate[] {
-    const hy = HALF * 0.68;
+function rectRing(cx: number, cy: number, half = HALF): Coordinate[] {
+    const hy = half * 0.68;
     return [
-        [cx - HALF, cy - hy],
-        [cx + HALF, cy - hy],
-        [cx + HALF, cy + hy],
-        [cx - HALF, cy + hy],
-        [cx - HALF, cy - hy],
+        [cx - half, cy - hy],
+        [cx + half, cy - hy],
+        [cx + half, cy + hy],
+        [cx - half, cy + hy],
+        [cx - half, cy - hy],
     ];
 }
 
