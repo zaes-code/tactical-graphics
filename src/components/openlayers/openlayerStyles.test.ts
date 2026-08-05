@@ -17,7 +17,7 @@
  * accessor that should honour it, editor chrome included.
  */
 import Feature from 'ol/Feature';
-import {LineString, Point, Polygon} from 'ol/geom';
+import {LineString, MultiLineString, Point, Polygon} from 'ol/geom';
 import CircleStyle from 'ol/style/Circle';
 import {Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
@@ -39,7 +39,15 @@ import {
 } from '@zaes/tactical-graphics';
 
 import {
+    arcMissionTaskStyleFunc,
+    baseDefenseZoneLabelStyleFn,
     defaultDrawStyleFunc,
+    exfiltrateStyleFunc,
+    featureGraphicLabelScale,
+    featureLabelScale,
+    maxGraphicLabelScale,
+    ratioLockedLabelScale,
+    retroGradeTaskStyleFunc,
     getColorByHostility,
     getDefaultLineColor,
     getDoctrinalHostilityColor,
@@ -1087,5 +1095,236 @@ describe('strong point cross ties', () => {
         const f = new Feature(new Polygon([[[0, 0], [0, 400], [400, 400], [400, 0], [0, 0]]]));
         writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
         expect((getStyle(TacticalGraphicName.StrongPoint, f, 40) as Style[]).length).toBeGreaterThan(0);
+    });
+});
+
+/**
+ * The size-proportional label scales track the graphic instead of the zoom, which is
+ * what makes a resized Breach or Secure keep its letter in proportion. Nothing used to
+ * stop that growth, so a large or zoomed-in graphic rendered a letter of unbounded
+ * height. These hold the ceiling — the same one the zoom-anchored scales already had,
+ * so "B" tops out where "EX" does.
+ */
+describe('size-proportional label scales are capped', () => {
+    /** A feature stamping `graphicSize` metres, drawn at `drawRes` metres per pixel. */
+    const sized = (graphicSize: number, drawRes = 10) => {
+        const f = new Feature(new Point([0, 0]));
+        f.set('graphicSize', graphicSize);
+        f.set('drawingResolution', drawRes);
+        return f;
+    };
+
+    it('still tracks the graphic below the cap', () => {
+        // 20 px of graphicSize is under the block family's floor; doubling it to 40 px is
+        // still inside the ceiling, so the label doubles with it.
+        const small = featureGraphicLabelScale(sized(200), 10);
+        const twice = featureGraphicLabelScale(sized(400), 10);
+        expect(twice).toBeLessThan(maxGraphicLabelScale());
+        expect(twice).toBeCloseTo(small * 2, 6);
+    });
+
+    it('stops growing once the graphic gets large', () => {
+        const cap = maxGraphicLabelScale();
+        expect(featureGraphicLabelScale(sized(50_000), 10)).toBeCloseTo(cap, 6);
+        expect(ratioLockedLabelScale(sized(50_000), 10)).toBeCloseTo(cap, 6);
+    });
+
+    it('stops growing on zoom-in too, not just on resize', () => {
+        const cap = maxGraphicLabelScale();
+        [10, 1, 0.1].forEach(res => {
+            expect(featureGraphicLabelScale(sized(2_000), res)).toBeLessThanOrEqual(cap + 1e-9);
+            expect(ratioLockedLabelScale(sized(2_000), res)).toBeLessThanOrEqual(cap + 1e-9);
+        });
+    });
+
+    it('tops out exactly where a zoom-anchored label does', () => {
+        // Both families render the same 24px font as the retrograde/exfiltrate labels,
+        // so sharing the ceiling means sharing the rendered glyph height.
+        const zoomAnchoredMax = featureLabelScale(sized(0, 1000), 1);
+        expect(maxGraphicLabelScale()).toBeCloseTo(zoomAnchoredMax, 6);
+    });
+
+    it('moves with the configured label size, so it is a ratio and not a pixel count', () => {
+        const doctrinal = maxGraphicLabelScale();
+        const enlarged = getDefaultLabelSize() * 1.5;   // 24 px — inside MAX_LABEL_SIZE
+        configureTacticalGraphics(new TacticalGraphicsConfig({labelSize: enlarged}));
+        expect(maxGraphicLabelScale()).toBeCloseTo(doctrinal * 1.5, 6);
+    });
+
+    it('caps BaseDefenseZone\'s "BDZ" too, formula of its own notwithstanding', () => {
+        // It does not go through either shared fn — its scale is `radiusPx / 45`
+        // — so the ceiling has to be applied at the call site.
+        const huge = new Feature(new Point([0, 0]));
+        huge.set('graphicSize', 100_000);
+        const styles = baseDefenseZoneLabelStyleFn()(huge, 10) as Style[];
+        expect(styles[0].getText()!.getScale()).toBeCloseTo(maxGraphicLabelScale(), 6);
+    });
+
+    it('leaves an unstamped feature on the zoom-anchored scale', () => {
+        const bare = new Feature(new Point([0, 0]));
+        bare.set('drawingResolution', 10);
+        expect(featureGraphicLabelScale(bare, 10)).toBeCloseTo(featureLabelScale(bare, 10), 6);
+        expect(ratioLockedLabelScale(bare, 10)).toBeCloseTo(featureLabelScale(bare, 10), 6);
+    });
+});
+
+/**
+ * DIS / EX and the retrograde cane arrows (Delay, Withdraw, Withdraw Under Pressure,
+ * Retirement) carry their label in a gap cut into the line. It used to render
+ * horizontally whatever the line did; it now lies along the line — but always the way
+ * up that reads, never mirrored by the direction the user happened to draw in.
+ */
+describe('gap labels lie along their line and stay upright', () => {
+    const RISING = [[0, 0], [1000, 500]];
+    const FALLING_REVERSED = [[1000, 500], [0, 0]];
+
+    const rotationOf = (style: StyleFunction, name: TacticalGraphicName, drawn: number[][]) => {
+        // Sub-line 0 is the one the gap is cut from; the second is the arrowhead, which
+        // both style functions pass through untouched.
+        const f = new Feature(new MultiLineString([drawn, [[1000, 500], [900, 560]]]));
+        writeGraphicProperties([f], name, {label: ''});
+        const styles = style(f, 10) as Style[];
+        const text = styles.find(s => s.getText?.()?.getText?.());
+        expect(text).toBeDefined();
+        return text!.getText()!.getRotation()!;
+    };
+
+    const CASES: [string, StyleFunction, TacticalGraphicName][] = [
+        ['retrograde', retroGradeTaskStyleFunc('DIS'), TacticalGraphicName.Disengage],
+        ['exfiltrate', exfiltrateStyleFunc('EX'), TacticalGraphicName.Exfiltrate],
+    ];
+
+    CASES.forEach(([label, style, name]) => {
+        it(`${label}: matches the angle of the segment it sits in`, () => {
+            // OL rotation is clockwise-positive, so a segment rising to the right is
+            // a negative rotation of the same size.
+            expect(rotationOf(style, name, RISING)).toBeCloseTo(-Math.atan2(500, 1000), 6);
+        });
+
+        it(`${label}: reads the same way up whichever way the line was drawn`, () => {
+            expect(rotationOf(style, name, FALLING_REVERSED))
+                .toBeCloseTo(rotationOf(style, name, RISING), 6);
+        });
+
+        it(`${label}: never tips past vertical, so it is never upside down`, () => {
+            const drawings = [
+                RISING, FALLING_REVERSED,
+                [[0, 0], [-1000, 500]], [[0, 0], [-1000, -500]],
+                [[0, 0], [500, -1000]], [[0, 0], [-500, 1000]],
+            ];
+            drawings.forEach(drawn =>
+                expect(Math.abs(rotationOf(style, name, drawn))).toBeLessThanOrEqual(Math.PI / 2 + 1e-9));
+        });
+    });
+});
+
+/**
+ * The arc circles' label gap. It used to be a fixed slice of the circle, which is
+ * the only thing a generator with no glyph to measure can do — and the wrong thing
+ * once the label stops growing with the graphic. `arcMissionTaskStyleFunc` cuts it
+ * from the rendered text instead.
+ */
+describe('arc mission-task circles cut their label gap from the glyph', () => {
+    const CENTRE: [number, number] = [0, 0];
+    const STEP_DEG = 1.6;   // matches the generator: 100 samples over 160°
+
+    /** One arc of a circle of radius `r`, sampled the way the generator samples it. */
+    const arc = (fromDeg: number, toDeg: number, r: number): number[][] => {
+        const n = Math.round(Math.abs(toDeg - fromDeg) / STEP_DEG);
+        const out: number[][] = [];
+        for (let i = 0; i <= n; i++) {
+            const a = ((fromDeg + ((toDeg - fromDeg) * i) / n) * Math.PI) / 180;
+            out.push([r * Math.cos(a), r * Math.sin(a)]);
+        }
+        return out;
+    };
+
+    /**
+     * A Secure as the holder publishes it: arcs running right up to the label axis
+     * (`labelGapDegrees: 0`), an arrowhead, and the stamps the style reads.
+     */
+    const circle = (radiusMap: number, drawRes = 10) => {
+        const f = new Feature(new MultiLineString([
+            arc(0, 175, radiusMap),
+            arc(205, 360, radiusMap),
+            [[radiusMap, 0], [radiusMap * 0.9, radiusMap * 0.1]],   // stand-in arrowhead
+        ]));
+        writeGraphicProperties([f], TacticalGraphicName.Secure, {label: ''});
+        f.set('graphicCenter', CENTRE);
+        f.set('graphicLabelPoint', [radiusMap, 0]);
+        f.set('graphicSize', radiusMap);
+        f.set('drawingResolution', drawRes);
+        return f;
+    };
+
+    const drawnLines = (f: Feature, resolution: number): number[][][] => {
+        const styles = arcMissionTaskStyleFunc(TacticalGraphicName.Secure, true)(f, resolution) as Style[];
+        const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
+        return geom.getCoordinates();
+    };
+
+    /** Straight-line distance between the two arc ends that face the label, in px. */
+    const gapPx = (radiusMap: number, resolution: number) => {
+        const lines = drawnLines(circle(radiusMap), resolution);
+        const upperStart = lines[0][0];
+        const lowerEnd = lines[1][lines[1].length - 1];
+        return Math.hypot(upperStart[0] - lowerEnd[0], upperStart[1] - lowerEnd[1]) / resolution;
+    };
+
+    /** Height of the rendered letter, in px — what the gap has to clear here. */
+    const glyphPx = (radiusMap: number, resolution: number) =>
+        24 * ratioLockedLabelScale(circle(radiusMap), resolution) * 0.72;
+
+    it('opens a hole that clears the letter, and not much more', () => {
+        const gap = gapPx(1_000, 10);
+        const glyph = glyphPx(1_000, 10);
+        expect(gap).toBeGreaterThan(glyph);
+        expect(gap).toBeLessThan(glyph + 14);   // 5 px clearance a side, plus rounding
+    });
+
+    it('stops widening once the label stops growing — the whole point', () => {
+        // Both circles are past the label-scale cap, so they render the same letter.
+        // A fixed angular gap would have doubled the hole along with the radius.
+        expect(glyphPx(20_000, 10)).toBeCloseTo(glyphPx(40_000, 10), 6);
+        expect(gapPx(40_000, 10)).toBeCloseTo(gapPx(20_000, 10), 0);
+    });
+
+    it('still tracks the letter below the cap', () => {
+        // 30 px and 60 px of radius, both under the 80 px where the label scale
+        // caps out. Half the radius, half the letter, half the hole — bar the
+        // fixed 5 px of clearance a side, which is why the 10 comes off first.
+        const small = gapPx(300, 10) - 10;
+        const large = gapPx(600, 10) - 10;
+        expect(large).toBeCloseTo(small * 2, 0);
+    });
+
+    it('holds the gap in screen pixels as the map zooms', () => {
+        // Above the cap the letter is a constant number of pixels, so the hole is too.
+        const gaps = [10, 5, 2.5].map(res => gapPx(20_000, res));
+        gaps.forEach(g => expect(g).toBeCloseTo(gaps[0], 0));
+    });
+
+    it('cuts both arcs, and only the ends that face the label', () => {
+        const lines = drawnLines(circle(1_000), 10);
+        const angle = (p: number[]) => (Math.atan2(p[1], p[0]) * 180) / Math.PI;
+        // Label-side ends pulled back off the axis…
+        expect(angle(lines[0][0])).toBeGreaterThan(0.5);
+        expect(angle(lines[1][lines[1].length - 1])).toBeLessThan(-0.5);
+        // …and the arrowhead-side ends left exactly where the generator put them.
+        expect(angle(lines[0][lines[0].length - 1])).toBeCloseTo(175, 1);
+        expect(angle(lines[1][0])).toBeCloseTo(-155, 1);
+    });
+
+    it('passes everything that is not an arc through untouched', () => {
+        const lines = drawnLines(circle(1_000), 10);
+        expect(lines[2]).toEqual([[1_000, 0], [900, 100]]);
+    });
+
+    it('draws the circle unchanged when the holder stamped no label anchor', () => {
+        const f = circle(1_000);
+        f.unset('graphicLabelPoint');
+        const lines = drawnLines(f, 10);
+        expect(lines[0][0][0]).toBeCloseTo(1_000, 6);
+        expect(lines[0][0][1]).toBeCloseTo(0, 6);
     });
 });
