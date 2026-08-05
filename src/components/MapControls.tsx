@@ -794,6 +794,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
         name === TacticalGraphicName.BaseDefenseZone ||
         name === TacticalGraphicName.TacticalTurn ||
         name === TacticalGraphicName.Turn ||
+        name === TacticalGraphicName.Envelopment ||
         name === TacticalGraphicName.WeaponSensorRangeFanSector ||
         name === TacticalGraphicName.WeaponSensorRangeFanCircular// ||
         // name === TacticalGraphicName.TargetReferencePoint ||
