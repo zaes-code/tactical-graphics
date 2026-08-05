@@ -1142,11 +1142,12 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
         const ux = dx / len;
         const uy = dy / len;
 
-        // Gap proportional to arrowhead wing-to-wing span + 5px fixed (like Penetration).
-        const [awx0, awy0] = arrowCoords[0]; // leftWing
-        const [awx1, awy1] = arrowCoords[2]; // rightWing
-        const ww = Math.sqrt((awx1 - awx0) ** 2 + (awy1 - awy0) ** 2);
-        const gapHalf = ww * 0.35 + 5 * resolution;
+        // A flat 10 screen pixels a side — the same rule breach and bypass use.
+        // It was `wingWidth * 0.35 + 5px`, off the arrowhead's metric span, so the
+        // hole grew with the graphic while the "IN" stayed capped by
+        // `maxGraphicLabelScale()`. @see envelopmentGraphicStyleFunc
+        const GAP_PX = 10;
+        const gapHalf = GAP_PX * resolution;
         const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
         const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
 
