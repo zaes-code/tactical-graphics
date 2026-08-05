@@ -1,6 +1,7 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
-import {Feature} from 'geojson';
+import * as turf from '@turf/turf';
+import {Feature, MultiLineString} from 'geojson';
 import {
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
@@ -33,6 +34,55 @@ const secureFeature = (): Feature => ({
 describe('registry', () => {
     it('registers graphics', () => {
         expect(listTacticalGraphicNames().length).toBeGreaterThan(150);
+    });
+});
+
+/**
+ * The retrograde tasks are a base line, an arrowhead and a half-circle "cane"
+ * hook, all three built by `getCaneArrow`.
+ *
+ * The hook used to be constructed at **absolute compass bearings** — its arc
+ * centre pinned due north of the start, the sweep a fixed 180°–360° with an
+ * `end[0] >= start[0]` flip for lines drawn right-to-left. The line and the
+ * arrowhead follow the drawn coordinates, so rotating one of these graphics
+ * turned those two and left the hook pointing wherever it had always pointed.
+ *
+ * These assert the hook's placement is a function of the line's bearing, which
+ * is the property that was missing. They fail against the absolute construction.
+ */
+describe('the retrograde cane hook follows its line', () => {
+    const START: [number, number] = [-77.0, 38.9];
+
+    /** A retirement drawn from START along `bearing`; returns its arc and tip. */
+    const cane = (bearing: number) => {
+        const end = turf.destination(START, 5, bearing, {units: 'kilometers'}).geometry.coordinates;
+        const {graphic} = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [START, end]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Retirement, size: 1500}},
+        });
+        const parts = (graphic.geometry as MultiLineString).coordinates;
+        return {end, arc: parts[parts.length - 1]};
+    };
+
+    /** Where the hook's free end sits, as an angle off the line's own bearing. */
+    const hookOffset = (bearing: number): number => {
+        const {end, arc} = cane(bearing);
+        const delta = turf.bearing(START, arc[arc.length - 1]) - turf.bearing(START, end);
+        return ((delta % 360) + 360) % 360;
+    };
+
+    const reference = hookOffset(90);
+
+    it.each([0, 45, 180, 270, 315])('holds the hook at the same relative angle on bearing %s', b => {
+        // Shortest angular distance, so 359° and 1° read as 2° apart.
+        const spread = Math.abs((((hookOffset(b) - reference) % 360) + 540) % 360 - 180);
+        expect(spread).toBeLessThan(2);
+    });
+
+    it('starts the arc at the line start, so its far end is the offset handle', () => {
+        const {arc} = cane(37);
+        expect(turf.distance(START, arc[0], {units: 'meters'})).toBeLessThan(1);
     });
 });
 
