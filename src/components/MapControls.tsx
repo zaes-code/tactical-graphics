@@ -762,6 +762,8 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.ForwardPassageOfLines, TacticalGraphicName.RearwardPassageOfLines,
         TacticalGraphicName.FerryCrossing, TacticalGraphicName.PassageLane,
         TacticalGraphicName.TacticalFix,
+        // Table 5-19 obstacle effects — drawn exactly like the mission tasks above.
+        TacticalGraphicName.Block, TacticalGraphicName.Disrupt, TacticalGraphicName.Fix,
         TacticalGraphicName.AttackByFire, TacticalGraphicName.SupportByFire,
         TacticalGraphicName.Exfiltrate,
         TacticalGraphicName.ReliefInPlace,
@@ -791,6 +793,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
         name === TacticalGraphicName.FightingPosition ||
         name === TacticalGraphicName.BaseDefenseZone ||
         name === TacticalGraphicName.TacticalTurn ||
+        name === TacticalGraphicName.Turn ||
         name === TacticalGraphicName.WeaponSensorRangeFanSector ||
         name === TacticalGraphicName.WeaponSensorRangeFanCircular// ||
         // name === TacticalGraphicName.TargetReferencePoint ||
