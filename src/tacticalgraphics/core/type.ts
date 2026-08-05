@@ -287,6 +287,12 @@ export function getLabel(name: TacticalGraphicName) {
         // task and '' for the table 5-19 twin, with no per-name branch.
         case TacticalGraphicName.TacticalFix:
             return 'F';
+        // Envelopment's "E" used to be a literal inside the movement label
+        // style. Now that it is point-anchored its label comes through
+        // `getMissionTaskStyleFn(getLabel(name))` like every other one, so the
+        // letter has to be named here or the graphic draws without it.
+        case TacticalGraphicName.Envelopment:
+            return 'E';
 
         // offensive line
         case TacticalGraphicName.PhaseLine:
