@@ -1142,11 +1142,12 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
         const ux = dx / len;
         const uy = dy / len;
 
-        // Gap proportional to arrowhead wing-to-wing span + 5px fixed (like Penetration).
-        const [awx0, awy0] = arrowCoords[0]; // leftWing
-        const [awx1, awy1] = arrowCoords[2]; // rightWing
-        const ww = Math.sqrt((awx1 - awx0) ** 2 + (awy1 - awy0) ** 2);
-        const gapHalf = ww * 0.35 + 5 * resolution;
+        // A flat 10 screen pixels a side — the same rule breach and bypass use.
+        // It was `wingWidth * 0.35 + 5px`, off the arrowhead's metric span, so the
+        // hole grew with the graphic while the "IN" stayed capped by
+        // `maxGraphicLabelScale()`. @see envelopmentGraphicStyleFunc
+        const GAP_PX = 10;
+        const gapHalf = GAP_PX * resolution;
         const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
         const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
 
@@ -1216,11 +1217,15 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
         const lcx = x0 + (x1 - x0) * 0.25;
         const lcy = y0 + (y1 - y0) * 0.25;
         const ux = dx / len, uy = dy / len;
-        // Gap proportional to arrowhead wing-to-wing span + 5px fixed (same as Infiltration).
-        const [awx0, awy0] = arrowCoords[0]; // leftWing
-        const [awx1, awy1] = arrowCoords[2]; // rightWing
-        const ww = Math.sqrt((awx1 - awx0) ** 2 + (awy1 - awy0) ** 2);
-        const gapHalf = ww * 0.35 + 5 * resolution;
+        // A flat 10 screen pixels a side — the same rule breach and bypass use.
+        //
+        // It used to be `wingWidth * 0.35 + 5px`, taken from the arrowhead's
+        // wing-to-wing span. That span is metric, so the hole grew with the
+        // graphic while the "E" is capped by `maxGraphicLabelScale()`: draw a
+        // large envelopment and the gap ran away from the letter it was meant to
+        // clear. A gap belongs to the label, not to the shape around it.
+        const GAP_PX = 10;
+        const gapHalf = GAP_PX * resolution;
         const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
         const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
 
@@ -4849,11 +4854,100 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
     }
 }
 
+/**
+ * The crossed runways, written as SVG path data in **map units** — so at scale 1
+ * the symbol is a fixed ~400 km across, on every polygon and at every zoom.
+ */
+const AIRFIELD_SVG = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
+/** Half-extents of the path above, in its own unscaled units. */
+const AIRFIELD_HALF_W = 200000;
+const AIRFIELD_HALF_H = 120000;
+/**
+ * Share of the area's shorter side the symbol spans. Matches the fit-to-polygon
+ * cap the area's own text block uses, so symbol and text agree about how much
+ * room a polygon offers.
+ */
+const AIRFIELD_FIT_SHARE = 0.8;
+
+/**
+ * Points along the two runway strokes, in unscaled path units, used to test the
+ * symbol against the polygon outline. Endpoints alone are not enough: both arms
+ * pass through the centre, so a notch can cut a stroke without containing either
+ * of its ends.
+ */
+const AIRFIELD_SAMPLES: Coordinate[] = (() => {
+    const segments: [Coordinate, Coordinate][] = [
+        [[-AIRFIELD_HALF_W, 0], [AIRFIELD_HALF_W, 0]],
+        [[-AIRFIELD_HALF_W, -AIRFIELD_HALF_H], [AIRFIELD_HALF_W, AIRFIELD_HALF_H]],
+    ];
+    const STEPS = 8;
+    const pts: Coordinate[] = [];
+    for (const [a, b] of segments) {
+        for (let i = 0; i <= STEPS; i++) {
+            const t = i / STEPS;
+            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+    }
+    return pts;
+})();
+
+/**
+ * Ray-cast point-in-polygon.
+ *
+ * Deliberately hand-rolled: a style function receives **projected EPSG:3857
+ * metres**, and turf expects geographic degrees, so `booleanPointInPolygon`
+ * would quietly give wrong answers here. @see conventions.md
+ */
+function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        const straddles = (yi > pt[1]) !== (yj > pt[1]);
+        if (straddles && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
+
+/**
+ * How much to scale the crossed-runway symbol so it is proportional to the area
+ * it marks rather than a fixed number of metres — a USA-sized airfield used to
+ * carry the same ~400 km cross as a runway-sized one, which read as a tiny "x".
+ *
+ * Two stages, because the bounding box is not the polygon:
+ *
+ *  1. Fit the bounding box — the largest uniform scale keeping the cross within
+ *     `AIRFIELD_FIT_SHARE` of the **shorter** side, so the 5:3 shape is kept.
+ *  2. Shrink until it is inside the *actual* outline. Areas may be concave, and
+ *     a bounding-box fit will happily push an arm out through the notch of an
+ *     L-shape. `AreaGraphicBase` stamps `polygonRing`, so the real edges are here.
+ */
+function airfieldSymbolScale(f: FeatureLike, center: Coordinate): number {
+    const extW = f.get('polygonExtentWidth') as number | undefined;
+    const extH = f.get('polygonExtentHeight') as number | undefined;
+    // Not stamped yet (first render, or a holder that never set a base) — keep
+    // the historical fixed size rather than collapsing the symbol to nothing.
+    if (!extW || !extH) return 1;
+
+    let scale = AIRFIELD_FIT_SHARE * Math.min(extW / (AIRFIELD_HALF_W * 2), extH / (AIRFIELD_HALF_H * 2));
+
+    const ring = f.get('polygonRing') as Coordinate[] | undefined;
+    if (!ring || ring.length < 3) return scale;
+
+    const fits = (s: number) =>
+        AIRFIELD_SAMPLES.every(p => pointInRing([center[0] + p[0] * s, center[1] + p[1] * s], ring));
+
+    // Bounded so it can never run away: 0.9^30 ≈ 0.04 of the bbox fit. Anything
+    // still outside at that point is a degenerate polygon, not a sizing problem.
+    for (let i = 0; i < 30 && !fits(scale); i++) scale *= 0.9;
+    return scale;
+}
+
 export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFunction {
     return (f, res) => {
         let styles = getAreaLabelStyles(f, res, fullLabel, dateLabel, 0, 36);
-        const svg = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
-        let {geometry} = svgToOpenLayersGeometry(svg, (f.getGeometry() as Point).getCoordinates());
+        const center = (f.getGeometry() as Point).getCoordinates();
+        let {geometry} = svgToOpenLayersGeometry(AIRFIELD_SVG, center, airfieldSymbolScale(f, center));
         styles.push(new Style({
             geometry: geometry,
             // The crossed runways are the symbol's own line work, not an

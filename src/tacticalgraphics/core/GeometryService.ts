@@ -1502,19 +1502,26 @@ class GeometryService {
         let baseCoords = base.geometry.coordinates;
         let start = baseCoords[0];
         let end = baseCoords[1];
-        // Half-circle "cane" always opens downward (bulges north) regardless of
-        // whether the base line was drawn left-to-right or right-to-left. Place
-        // the arc's center horizontally opposite to `end` so the arc sits on the
-        // far side of `start` from the arrow tip.
-        // The cane's half-circle sits above `start` with its center directly north of it.
-        // The arc bulges horizontally AWAY from the arrow tip, producing "C___>" when drawn
-        // left-to-right and "<___Ↄ" when drawn right-to-left. Arc coords are ordered so
-        // `start` is first and the free top endpoint (used as the offset handle) is last.
-        const center = turf.destination(turf.point(start), arrowSize, 0, {units: 'meters'});
-        const endIsEast = end[0] >= start[0];
-        let arcCoords = endIsEast
-            ? turf.lineArc(center, arrowSize, 180, 360, {units: 'meters'}).geometry.coordinates
-            : turf.lineArc(center, arrowSize, 0, 180, {units: 'meters'}).geometry.coordinates.slice().reverse();
+
+        // The half-circle "cane" hangs off `start`, opposite the arrow tip, so
+        // the symbol reads "C___>" whichever way the line runs.
+        //
+        // Everything here is expressed **relative to the line's bearing**. It
+        // used to be absolute — the arc's centre was pinned due north of `start`
+        // and the sweep used fixed compass bearings, with an `end[0] >= start[0]`
+        // test to flip it east/west. That held the hook at a fixed compass
+        // orientation, so rotating the graphic turned the base line and the
+        // arrowhead (both derived from the coordinates) while the hook stayed
+        // put. The east/west flip and the matching `.reverse()` are gone with it:
+        // once the construction follows the bearing, the hook lands on the
+        // correct side on its own, and the arc already starts at `start`.
+        //
+        // Centre sits one radius off the line at `start`; the arc sweeps the half
+        // that bulges backwards, away from the tip. Its far end is the free point
+        // the holder uses as the offset (width) handle.
+        const bearing = turf.bearing(start, end);
+        const center = turf.destination(turf.point(start), arrowSize, bearing - 90, {units: 'meters'});
+        let arcCoords = turf.lineArc(center, arrowSize, bearing + 90, bearing + 270, {units: 'meters'}).geometry.coordinates;
 
         let arrowHeadCoords = this.computeArrowheadPoints(start, end, Math.abs(arrowSize), 45);
         return turf.multiLineString([baseCoords, arrowHeadCoords, arcCoords]);

@@ -41,6 +41,7 @@ import {
 import {
     arcMissionTaskStyleFunc,
     baseDefenseZoneLabelStyleFn,
+    getAirfieldStyle,
     blockStyleFunc,
     clearStyleFunc,
     tacticalFixStyleFunc,
@@ -100,6 +101,75 @@ afterEach(resetTacticalGraphicsConfig);
  * halves, and each has a positive control: without those, deleting the letter
  * for everybody would still pass.
  */
+/**
+ * The airfield's crossed runways are SVG path data in **map units**, so at scale
+ * 1 they are a fixed ~400 km across whatever the area's size — which is why a
+ * state-sized airfield used to carry a tiny "x" and a small one was swamped.
+ *
+ * `AreaGraphicBase` stamps the polygon's extent and its ring onto the label
+ * feature, which is the feature these styles run on.
+ */
+describe('the airfield symbol is sized from its polygon', () => {
+    const rect = (halfW: number, halfH: number): number[][] => [
+        [-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH], [-halfW, -halfH],
+    ];
+
+    /** Renders the symbol on an area of the given half-extents and reports its size. */
+    const crossOn = (halfW: number, halfH: number, ring: number[][] = rect(halfW, halfH), at: number[] = [0, 0]) => {
+        const f = new Feature(new Point(at));
+        f.set('polygonExtentWidth', halfW * 2);
+        f.set('polygonExtentHeight', halfH * 2);
+        f.set('polygonRing', ring);
+
+        const out = getAirfieldStyle('', '')(f, 1);
+        const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
+        const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
+        const [minX, minY, maxX, maxY] = geom.getExtent();
+        return {width: maxX - minX, height: maxY - minY};
+    };
+
+    it('grows with the area instead of staying a fixed number of metres', () => {
+        const small = crossOn(500_000, 500_000);
+        const big = crossOn(5_000_000, 5_000_000);
+        expect(big.width / small.width).toBeCloseTo(10, 1);
+    });
+
+    it('fits inside 80% of the shorter side, so a wide thin area still contains it', () => {
+        const {width, height} = crossOn(1_000_000, 300_000);
+        expect(width).toBeLessThanOrEqual(2_000_000 * 0.8);
+        expect(height).toBeLessThanOrEqual(600_000 * 0.8);
+        // Height is the binding constraint here — it must actually be used, or
+        // the cross would be fitted to the width and overflow top and bottom.
+        expect(height).toBeGreaterThan(600_000 * 0.5);
+    });
+
+    it('shrinks further to stay inside a concave outline', () => {
+        // Same bounding box as the square, with a notch bitten out of the upper
+        // right. Sized so the square case is NOT bbox-limited — otherwise both
+        // rings shrink for the same reason and the notch proves nothing. The
+        // rising arm of the cross ends at (800k, 480k), which lands in the notch.
+        const notched: number[][] = [
+            [-1_000_000, -1_000_000], [1_000_000, -1_000_000], [1_000_000, 200_000],
+            [400_000, 200_000], [400_000, 1_000_000], [-1_000_000, 1_000_000], [-1_000_000, -1_000_000],
+        ];
+        const square = crossOn(1_000_000, 1_000_000);
+        // The square fits the bbox rule outright, so it is the control.
+        expect(square.width).toBeCloseTo(1_600_000, -1);
+        expect(crossOn(1_000_000, 1_000_000, notched).width).toBeLessThan(square.width);
+    });
+
+    it('keeps the historical fixed size when the polygon extent has not been stamped', () => {
+        // First render, or a holder that never set a base. Falling through to a
+        // zero scale would make the symbol vanish rather than merely misfit.
+        const bare = new Feature(new Point([0, 0]));
+        const out = getAirfieldStyle('', '')(bare, 1);
+        const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
+        const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
+        const [minX, , maxX] = geom.getExtent();
+        expect(maxX - minX).toBeCloseTo(400_000, -1);
+    });
+});
+
 describe('the table 5-19 obstacle effects draw no letter and no gap', () => {
     const RES = 1;
     const straight = () => new Feature(new LineString([[0, 0], [400, 0]]));
