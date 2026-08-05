@@ -17,7 +17,7 @@
  * accessor that should honour it, editor chrome included.
  */
 import Feature from 'ol/Feature';
-import {LineString, MultiLineString, Point, Polygon} from 'ol/geom';
+import {GeometryCollection, LineString, MultiLineString, Point, Polygon} from 'ol/geom';
 import CircleStyle from 'ol/style/Circle';
 import {Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
@@ -41,6 +41,10 @@ import {
 import {
     arcMissionTaskStyleFunc,
     baseDefenseZoneLabelStyleFn,
+    blockStyleFunc,
+    clearStyleFunc,
+    tacticalFixStyleFunc,
+    turnStyleFunc,
     defaultDrawStyleFunc,
     exfiltrateStyleFunc,
     featureGraphicLabelScale,
@@ -83,6 +87,100 @@ import {
 // Every test starts from the shipped defaults; the overrides below are global.
 beforeEach(resetTacticalGraphicsConfig);
 afterEach(resetTacticalGraphicsConfig);
+
+/**
+ * The FM 1-02.2 table 5-19 obstacle effects are drawn by the same style functions
+ * as the Chapter 6 tactical mission tasks they twin, passing an empty label.
+ *
+ * Suppressing the letter is only half of it. Three of these four carve the gap
+ * from something other than the measured glyph — `clearStyleFunc` from a flat
+ * `GAP_PX`, `blockStyleFunc` from the width *plus* 4px of padding a side,
+ * `turnStyleFunc` from the width plus `TURN_LABEL_PAD_PX` — so an empty label
+ * left a hole in the line work with nothing in it. Each case below asserts both
+ * halves, and each has a positive control: without those, deleting the letter
+ * for everybody would still pass.
+ */
+describe('the table 5-19 obstacle effects draw no letter and no gap', () => {
+    const RES = 1;
+    const straight = () => new Feature(new LineString([[0, 0], [400, 0]]));
+
+    const textsOf = (styles: Style[]) =>
+        styles.map(s => s.getText()?.getText()).filter((t): t is string => typeof t === 'string' && t.length > 0);
+
+    const outlineOf = (styles: Style[]) =>
+        styles.map(s => s.getGeometry()).find((g): g is MultiLineString => g instanceof MultiLineString);
+
+    const run = (fn: StyleFunction, feature: Feature = straight()) => {
+        const out = fn(feature, RES);
+        return (Array.isArray(out) ? out : out ? [out] : []) as Style[];
+    };
+
+    it('block: "B" splits the shaft in two, no label leaves it whole', () => {
+        const withLetter = run(blockStyleFunc('B'));
+        expect(textsOf(withLetter)).toContain('B');
+        expect(outlineOf(withLetter)!.getCoordinates()).toHaveLength(2);
+
+        const bare = run(blockStyleFunc(''));
+        expect(textsOf(bare)).toHaveLength(0);
+        expect(outlineOf(bare)!.getCoordinates()).toHaveLength(1);
+    });
+
+    it('disrupt: the flat GAP_PX cut the prong even with an empty label', () => {
+        // clearStyleFunc reads the trident off a MultiLineString and takes
+        // sub-line 4 as the prong the label sits on, so the shape has to have
+        // at least five.
+        const trident = () =>
+            new Feature(new MultiLineString([
+                [[0, 0], [100, 0]],
+                [[0, 50], [100, 50]],
+                [[0, -50], [100, -50]],
+                [[0, -50], [0, 50]],
+                [[100, 0], [400, 0]], // sub-line 4 — the prong that carries the "D"
+            ]));
+
+        const withLetter = run(clearStyleFunc('D', 0.75), trident());
+        expect(textsOf(withLetter)).toContain('D');
+        const cut = outlineOf(withLetter)!.getCoordinates().length;
+
+        const bare = run(clearStyleFunc('', 0.75), trident());
+        expect(textsOf(bare)).toHaveLength(0);
+        // One sub-line fewer: the prong survives in one piece instead of two.
+        expect(outlineOf(bare)!.getCoordinates()).toHaveLength(cut - 1);
+    });
+
+    it('fix: the "F" was a hardcoded literal, so it needed a parameter', () => {
+        expect(textsOf(run(tacticalFixStyleFunc('F')))).toContain('F');
+        expect(textsOf(run(tacticalFixStyleFunc()))).toContain('F'); // default keeps the published signature
+        expect(textsOf(run(tacticalFixStyleFunc('')))).toHaveLength(0);
+    });
+
+    it('turn: the curve is trimmed back for a "T" and left whole without one', () => {
+        // Two halves meeting at the arc-length midpoint, which is what the
+        // holder hands the style function (it passes labelGap: 0 and lets the
+        // renderer do the cutting).
+        const halves = () =>
+            new Feature(new GeometryCollection([new MultiLineString([
+                [[0, 0], [200, 0]],
+                [[400, 0], [200, 0]],
+            ])]));
+
+        const lengthsOf = (styles: Style[]) =>
+            styles
+                .map(s => s.getGeometry())
+                .filter((g): g is LineString => g instanceof LineString)
+                .map(g => g.getLength());
+
+        const trimmed = lengthsOf(run(turnStyleFunc(TacticalGraphicName.TacticalTurn), halves()));
+        const whole = lengthsOf(run(turnStyleFunc(TacticalGraphicName.Turn), halves()));
+
+        expect(trimmed).toHaveLength(2);
+        expect(whole).toHaveLength(2);
+        // Each half runs 200 units; the twin keeps all of it, the mission task
+        // gives up TURN_LABEL_PAD_PX plus half the glyph at either side.
+        whole.forEach(l => expect(l).toBeCloseTo(200));
+        trimmed.forEach(l => expect(l).toBeLessThan(200));
+    });
+});
 
 describe('the doctrinal palette is what an unconfigured consumer gets', () => {
     it('uses the FM 1-02.2 affiliation colours', () => {

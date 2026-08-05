@@ -28,6 +28,8 @@ const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Canalize]: 0.3,
     [TacticalGraphicName.Clear]: 0.3,
     [TacticalGraphicName.TacticalDisrupt]: 0.3,
+    // The table 5-19 twin behaves exactly as the mission task it copies.
+    [TacticalGraphicName.Disrupt]: 0.3,
 };
 
 /**
@@ -41,6 +43,7 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Penetration]: 1 / 3,
     // Handle is the end of the crossbar, drawn at 1 × size by `getBlockArrow`.
     [TacticalGraphicName.TacticalBlock]: 1,
+    [TacticalGraphicName.Block]: 1,
     // Handle is an arrowhead wing, `size × sin 45°` off the base line.
     [TacticalGraphicName.Exploitation]: Math.SQRT2,
 };
@@ -60,6 +63,7 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
  */
 const DEFAULT_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalBlock]: 60,
+    [TacticalGraphicName.Block]: 60,
 };
 
 
@@ -106,6 +110,9 @@ export class Block implements LineGraphic {
                     return supportByFireStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalBlock:
                 case TacticalGraphicName.Penetration:
+                // The table 5-19 twin: getLabel returns '' for it, and
+                // blockStyleFunc reads that as "no letter, no gap".
+                case TacticalGraphicName.Block:
                     return blockStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.Bypass:
                 case TacticalGraphicName.Canalize:
@@ -114,6 +121,7 @@ export class Block implements LineGraphic {
                 case TacticalGraphicName.Clear:
                     return clearStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.TacticalDisrupt:
+                case TacticalGraphicName.Disrupt:
                     // 0.75 places the D at the centre of the middle trident
                     // prong (which spans 0.5 → 1.0 of the user's base line).
                     return clearStyleFunc(getLabel(name), 0.75)(feature, resolution);
