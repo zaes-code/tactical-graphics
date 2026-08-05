@@ -207,11 +207,35 @@ export class PointDropController extends MissionTaskController {
     onDrawStartFunc = (e: DrawEvent) => this.drop(e);
     onDrawEndFunc = (e: DrawEvent) => this.drop(e);
 
+    // Both take their argument and ignore it. Declaring them argument-less reads
+    // more honestly, but then a subclass that *does* want the gesture cannot
+    // override them — see DroppedEditableController below.
+
     /** Not resizable: the symbol has one size and the style function caps it. */
-    handleResize(): void {
+    handleResize(_deltaSize: number): void {
     }
 
     /** Not rotatable: these symbols have a single doctrinal orientation. */
-    handleRotate(): void {
+    handleRotate(_deltaAngle: number): void {
+    }
+}
+
+/**
+ * Dropped with a single click, then fully editable — the combination
+ * `PointDropController` and `MissionTaskController` each give only half of.
+ *
+ * `PointDropController` exists for the crossed mission tasks, which have one
+ * doctrinal size and orientation, so it deliberately no-ops resize and rotate.
+ * Envelopment wants that placement gesture without those restrictions: a click
+ * puts it down complete, and the handles then set its length, its aim and the
+ * radius of its half circle. Restoring the two gestures is all this adds.
+ */
+export class DroppedEditableController extends PointDropController {
+    handleResize(deltaSize: number): void {
+        this.graphic.updateGeom({size: this.graphic.size * deltaSize});
+    }
+
+    handleRotate(deltaAngle: number): void {
+        this.graphic.updateGeom({rotation: this.graphic.rotation + deltaAngle});
     }
 }
