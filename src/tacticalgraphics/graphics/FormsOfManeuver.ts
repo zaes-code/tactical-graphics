@@ -432,21 +432,25 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
     }
 
     /**
-     * `[apex, lineEnd, centre]` — the order `EnvelopmentGraphicBase.setBandRange`
+     * `[arrowTip, lineEnd, centre]` — the order `EnvelopmentGraphicBase.setBandRange`
      * relies on, matching Turn's `[bend, tip, centre]` contract. The centre is
      * split onto the inert feature by `publishHandles`, which preserves order.
      *
-     * The apex is the top of the half circle, so dragging it sets the radius and,
-     * once it crosses the approach, flips the flank. The line end sets length and
-     * aim together. There is deliberately no handle on the start of the run: it
-     * is where the "E" stacks, and a dot under the label reads as clutter.
+     * The circle handle sits on the **arrow tip**, at `size + 2 * radius` along
+     * the axis: the arc's far end, which is where the arrowhead's point already
+     * is. Being on the axis it cannot encode the radius by its offset, so the
+     * drag reads its distance *along* the approach instead — see
+     * `EnvelopmentGraphicBase.setBandRange`. The line end sets length and aim
+     * together. There is deliberately no handle on the start of the run: it is
+     * where the "E" stacks, and a dot under the label reads as clutter.
      */
     generateHandles(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
-        const {mid, radius, side, angle} = this.circle(base, opts);
+        const size = opts?.size ?? 1;
+        const {radius, angle} = this.circle(base, opts);
         const [, end] = this.axis(base, opts);
-        const apex = geometryService.translateCoordinates(mid, radius, angle + side * Math.PI / 2);
-        return this.asMultiPointFeature([apex, end, center]);
+        const tip = geometryService.translateCoordinates(center, size + 2 * radius, angle);
+        return this.asMultiPointFeature([tip, end, center]);
     }
 
     /**
