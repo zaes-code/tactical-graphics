@@ -27,7 +27,7 @@ import {Boundary} from './graphics/Boundary';
 import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {DroppedEditableController, MissionTaskController, PointDropController} from './controllers/MissionTaskController';
+import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
@@ -95,12 +95,11 @@ const turn = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-// Envelopment follows Turn's shape model — point-anchored, with a second handle
-// for the half circle's radius riding the manager's per-handle drag hook — but
-// is placed with a single click rather than a centre-to-edge drag, so it goes
-// down as one finished piece. `DroppedEditableController` is that pairing.
+// Envelopment follows Turn exactly: point-anchored, drawn centre-to-edge so the
+// first click places it and the second sizes it, with a second handle for the
+// half circle's radius riding the manager's per-handle drag hook.
 const envelopment = (name: TacticalGraphicName, res: number) => {
-    const controller = new DroppedEditableController(new EnvelopmentGraphicBase(name, res * 40, res), res * 40);
+    const controller = new MissionTaskController(new EnvelopmentGraphicBase(name, res, res));
     controller.editStretches = true;
     return controller;
 };
