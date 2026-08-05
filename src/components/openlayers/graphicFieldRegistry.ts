@@ -216,8 +216,6 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // show the site symbol and a DTG, never an identifier, so the shape plus its
     // date is the whole amplifier set.
     [TacticalGraphicName.FerryCrossing]: SHAPE_ONLY,
-    [TacticalGraphicName.TacticalFix]: MOV,
-    [TacticalGraphicName.TacticalTurn]: MOV,
     // Passage lane (Table 5-16): FM example shows a DTG ("at 0600 Zulu 12 FEB 2007").
     [TacticalGraphicName.PassageLane]: SHAPE_AND_DTG,
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
@@ -249,6 +247,16 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FordDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.InfiltrationLane]: MOV,
 
+    // ── Countermobility obstacle effects (FM 1-02.2 table 5-19) ──────────────
+    // Chapter 5 by category, but drawn as exact copies of the Chapter 6 mission
+    // tasks they twin, letter aside. Shape-only for the same reason those two
+    // moved off MOV: none of blockStyleFunc / clearStyleFunc / tacticalFixStyleFunc /
+    // turnStyleFunc reads an amplifier, so any field here would be inert.
+    [TacticalGraphicName.Block]: SHAPE_ONLY,
+    [TacticalGraphicName.Disrupt]: SHAPE_ONLY,
+    [TacticalGraphicName.Fix]: SHAPE_ONLY,
+    [TacticalGraphicName.Turn]: SHAPE_ONLY,
+
     // ── Tactical mission tasks (Chapter 6) ───────────────────────────────────
     // FM 1-02.2 §6-2: "tactical mission task symbols … do not use modifiers or
     // amplifiers."  All confirmed Chapter 6 entries → MISSION_TASK (= SHAPE_ONLY).
@@ -258,6 +266,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Canalize]: MISSION_TASK,
     [TacticalGraphicName.Clear]: MISSION_TASK,
     [TacticalGraphicName.TacticalDisrupt]: MISSION_TASK,
+    // These two sat on MOV, which switched on an identifier that nothing draws:
+    // tacticalFixStyleFunc and getMissionTaskStyleFn render the doctrinal letter
+    // and the line work, never labels.label. It was a dialog input that changed
+    // nothing on the map — the trap the OBSTACLE_LINE note below describes — and
+    // it disagreed with their two siblings directly above.
+    [TacticalGraphicName.TacticalFix]: MISSION_TASK,
+    [TacticalGraphicName.TacticalTurn]: MISSION_TASK,
     [TacticalGraphicName.Penetration]: MISSION_TASK,
     // Exploitation is a Chapter 5 offensive planning symbol (Table 5-10); keep identifier.
     [TacticalGraphicName.Exploitation]: SHAPE_ONLY,
@@ -455,8 +470,25 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
  */
 const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
 
+/**
+ * The four FM 1-02.2 table 5-19 obstacle effects, each an exact copy of the
+ * Chapter 6 tactical mission task of the same doctrinal name apart from the
+ * letter. They are Chapter 5, so the category derivation would switch hostility
+ * on and a hostile one would draw red — but a twin that renders differently
+ * from what it twins is not a twin. Kept separate from the set above because
+ * the reason is different: line of contact has nothing to change, these have
+ * something to change and must not.
+ */
+const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Block,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.Fix,
+    TacticalGraphicName.Turn,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
-    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks && !BOTH_IDENTITIES_AT_ONCE.has(name);
+    if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
+    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
 
 // ── Public accessor ───────────────────────────────────────────────────────────

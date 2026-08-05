@@ -79,6 +79,9 @@ const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,
     TacticalGraphicName.TacticalFix,
+    // The table 5-19 twins of the two above, same behaviour.
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.Fix,
     TacticalGraphicName.Breach,
     TacticalGraphicName.Bypass,
     TacticalGraphicName.Canalize,
