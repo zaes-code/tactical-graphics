@@ -87,6 +87,14 @@ export interface TacticalGraphicProperties {
      * other way. Unitless on purpose — it survives a resize.
      */
     bend?: number;
+    /**
+     * Half the gap left in the circle for the label, in **degrees of arc**. Only
+     * the arc-and-arrowhead mission tasks read it — Secure, Isolate, Retain,
+     * Occupy, Control, Contain, Cordon and Search, Area Defense. Omit it for the
+     * doctrinal 15°; pass 0 if you intend to cut the gap yourself from the label
+     * as you render it, which is what this library's OpenLayers layer does.
+     */
+    labelGapDegrees?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
 }
@@ -155,6 +163,7 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         radius: props.radius,
         rotation: props.rotation,
         bend: props.bend,
+        labelGapDegrees: props.labelGapDegrees,
         width: Number.isFinite(width) ? width : undefined,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,

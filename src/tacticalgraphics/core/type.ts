@@ -184,6 +184,19 @@ export type MovementGraphicOptions = MovementOptions;
 export interface PointGraphicOptions extends BaseGraphicOptions {
     size: number;
     rotation: number;
+    /**
+     * Half the gap left in the circle for the one-letter label, in **degrees of
+     * arc**, for the arc-and-arrowhead mission tasks (Secure, Isolate, Retain,
+     * Occupy, Control, Contain, Cordon and Search).
+     *
+     * Omit it and the generator leaves its own doctrinal default, so a consumer
+     * reading the raw GeoJSON gets a circle with a legible hole in it. A renderer
+     * that measures its own glyph passes `0` and cuts the gap at draw time —
+     * which is what the OpenLayers layer does, for the same reason `Turn` takes a
+     * `labelGap`: an angular gap is a constant *fraction* of the circle, and the
+     * label it makes room for is not.
+     */
+    labelGapDegrees?: number;
 }
 
 /** @deprecated Use EncirclementOptions instead */
