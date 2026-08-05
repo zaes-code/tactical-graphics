@@ -296,6 +296,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Point-anchored bowed arrow with a draggable bend — see Turn.ts.
     [TacticalGraphicName.TacticalTurn]:  turn,
 
+    // ── Countermobility obstacle effects (FM 1-02.2 table 5-19) ────────────
+    // Visual twins of the Chapter 6 mission tasks of the same doctrinal name,
+    // differing only in that they draw no letter, so each takes the identical
+    // controller. They do not share one factory: Turn is point-anchored while
+    // the other three are drawn as a two-point line.
+    [TacticalGraphicName.Block]:    block,
+    [TacticalGraphicName.Disrupt]:  block,
+    [TacticalGraphicName.Fix]:      line(2),
+    [TacticalGraphicName.Turn]:     turn,
+
     // ── Circular area graphics ─────────────────────────────────────────────
     [TacticalGraphicName.FreeFireAreaCircular]:                  circularArea,
     [TacticalGraphicName.NoFireAreaCircular]:                    circularArea,
