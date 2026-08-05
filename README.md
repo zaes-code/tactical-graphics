@@ -101,6 +101,8 @@ properties: {
         radius: 300,              // arrow width / circle radius
         size: 1000,               // generic size scalar (point graphics)
         rotation: 45,             // degrees (point graphics)
+        bend: 0.8,                // Turn only — how sharply it turns, × size
+        labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
     },
 }
 ```
@@ -467,6 +469,16 @@ import {getLabel} from '@zaes/tactical-graphics';
 getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
 getLabel('FinalProtectiveFire'); // → 'FPF'
 ```
+
+**Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain, Occupy, Control, Contain, Cordon and Search and Area Defense are two arcs of one circle with a one-letter label in the hole between them. The generator leaves 15° of arc either side of the label, which is the best it can do with no glyph to measure — so on a large circle the hole is bigger than the letter needs.
+
+If you measure your own text, set `labelGapDegrees: 0` and the arcs run right up to the label axis; cut the gap yourself from the rendered glyph. That is what this package's OpenLayers layer does, and why its circles hug their letters at every size:
+
+```ts
+tacticalGraphic: {name: 'Secure', size: 1000, rotation: 0, labelGapDegrees: 0}
+```
+
+Note the gap is **tangential**: a horizontal label sitting due east of the circle needs clearance for its *height*, not its width.
 
 ---
 
