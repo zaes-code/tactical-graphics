@@ -3,6 +3,7 @@ import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
 import {Feature} from "ol";
 import {
+    arcMissionTaskStyleFunc,
     baseDefenseZoneLabelStyleFn,
     createCenterBaseFeature,
     createFeature,
@@ -108,6 +109,32 @@ const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.TacticalTurn,
 ];
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+
+/**
+ * The mission tasks drawn as two arcs of one circle with a one-letter label in
+ * the gap between them.
+ *
+ * They ask the generator for **no** label gap and cut their own from the
+ * rendered glyph — the same bargain `Turn` strikes, and for the same reason: the
+ * generator can only express the gap as a slice of the circle, which grows with
+ * the graphic, while the label inside it is capped. A 30° hole that fits a
+ * letter on a small circle is four times too big on a large one.
+ *
+ * `AreaDefense` is in the set too, and is the only member whose teeth are solid
+ * polygons rather than open outlines — `arcMissionTaskStyleFunc` fills those
+ * separately, which is why it replaces the fill-and-stroke style this class used
+ * to give it.
+ */
+const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+];
 /**
  * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
  * arrowhead edge, as a fraction of that arrow's half-length `r`. Expressed against
@@ -116,7 +143,7 @@ const RATIO_LOCKED_MIN_RADIUS_PX = 50;
  */
 const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import {Fill, Stroke, Style} from "ol/style";
+import {Stroke, Style} from "ol/style";
 import {LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
@@ -158,18 +185,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             // Restoring rebuilds through `getController(name, drawingResolution)`, so the
             // resolution has to ride on the base feature too — it is the only one saved.
             this.base.set('drawingResolution', drawingResolution);
-        }
-        if (name === TacticalGraphicName.AreaDefense) {
-            this.graphic.setStyle((feature, resolution) => {
-                let color = readHostilityColor(feature);
-                return new Style({
-                    fill: new Fill({color: color}),
-                    stroke: new Stroke({
-                        color: color,
-                        width: LINE_WIDTH(),
-                    }),
-                })
-            })
         }
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc());
@@ -308,6 +323,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
                 }));
             });
         }
+        // The arc circles draw their own line work so the gap for the letter can
+        // be measured off the glyph instead of being a fixed slice of the circle.
+        if (ARC_GAP_MISSION_TASKS.includes(name)) {
+            this.graphic.setStyle(arcMissionTaskStyleFunc(name, RATIO_LOCKED_MISSION_TASKS.has(name)));
+        }
         this.label.setStyle((feature, resolution) => {
             return getMissionTaskStyleFn(getLabel(name))(feature, resolution);
         })
@@ -343,7 +363,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * @see TurnGraphicBase
      */
     protected generatorOptions(): Record<string, unknown> {
-        return {};
+        // Zero, not "a bit smaller": the arcs run right up to the label axis and
+        // `arcMissionTaskStyleFunc` takes back exactly what the glyph needs.
+        // @see ARC_GAP_MISSION_TASKS
+        return ARC_GAP_MISSION_TASKS.includes(this.name) ? {labelGapDegrees: 0} : {};
     }
 
     /** The subset of `generatorOptions` that a restore has to carry. */
@@ -377,6 +400,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // geodesically and Mercator does not preserve the midpoint.
         const centre = this.base.getGeometry()?.getCoordinates();
         if (centre) this.graphic.set('graphicCenter', centre);
+        // …and where the label sits, for the styles that have to open a hole for
+        // it. Which direction that is differs per graphic — Contain's is due
+        // west, everyone else's is along the rotation axis — so the anchor is
+        // published rather than re-derived from `rotation`.
+        const labelPoint = labels instanceof Point ? labels.getCoordinates() : undefined;
+        if (labelPoint) this.graphic.set('graphicLabelPoint', labelPoint);
 
         // Store the graphic's bounding box on the label feature so edge-anchored
         // label styles (e.g. PositionAreaArtillery's four PAA labels) can compute
