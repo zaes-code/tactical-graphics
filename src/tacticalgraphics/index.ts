@@ -72,6 +72,13 @@ export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth} from './graphic
  * does, or the handle drifts off the curve at the extremes.
  */
 export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend} from './graphics/Turn';
+/** Envelopment's half-circle radius, exported for the same reason as Turn's bend. */
+export {
+    ENVELOPMENT_DEFAULT_BEND,
+    ENVELOPMENT_MIN_BEND,
+    ENVELOPMENT_MAX_BEND,
+    clampEnvelopmentBend,
+} from './graphics/FormsOfManeuver';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 

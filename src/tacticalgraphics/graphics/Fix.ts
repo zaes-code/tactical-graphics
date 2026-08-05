@@ -13,8 +13,14 @@ const FIX_TRIANGLE_WIDTH_RATIO = 15 / 145;
 const FIX_TRIANGLE_HEIGHT_RATIO = 20 / 145;
 
 export class Fix extends TacticalGraphicsBase<PointGraphicOptions> {
-    name: string = TacticalGraphicName.TacticalFix;
+    name: string;
     type: string = 'Point';
+
+    /** Mission task or table 5-19 obstacle effect — same zigzag, "F" aside. @see Block */
+    constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalFix) {
+        super();
+        this.name = name;
+    }
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let [p0, p1] = base.geometry.coordinates;

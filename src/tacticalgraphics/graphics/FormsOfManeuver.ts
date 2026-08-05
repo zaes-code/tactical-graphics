@@ -1,9 +1,10 @@
 import * as turf from '@turf/turf';
 import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
-import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName} from "../core/type";
-import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
+import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
+import {Feature, LineString, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
+import {toRadians} from "../core/math";
 
 // ─── Solid movement arrow variants ───────────────────────────────────────────
 // These share the SupportingAttack shape; identity is established by name/label.
@@ -337,54 +338,150 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 }
 
-export class Envelopment extends MovementGraphicBase {
-    name: string = TacticalGraphicName.Envelopment;
+/** Half-circle radius as a signed multiple of `size`. The sign picks the flank. */
+export const ENVELOPMENT_DEFAULT_BEND = 0.45;
+/**
+ * Bounds on that radius. Below the floor the hook stops reading as a half circle
+ * and collapses onto the line; above the ceiling it dwarfs the approach it is
+ * supposed to hang off.
+ */
+export const ENVELOPMENT_MIN_BEND = 0.12;
+export const ENVELOPMENT_MAX_BEND = 1.2;
+/** Arrowhead length as a fraction of `size`, when `headSize` is not supplied. */
+const ENVELOPMENT_HEAD_RATIO = 0.3;
+/** Arc sampling density — enough that the half circle reads smooth at any zoom. */
+const ENVELOPMENT_ARC_STEPS = 48;
 
-    /** The head is tangent to the end of the arc, so its point is already on the last vertex. */
-    protected tipOverhang: number = 0;
+/** Keeps the half circle inside the range the shape stays readable over. */
+export function clampEnvelopmentBend(bend: number): number {
+    const magnitude = Math.min(ENVELOPMENT_MAX_BEND, Math.max(ENVELOPMENT_MIN_BEND, Math.abs(bend)));
+    return bend < 0 ? -magnitude : magnitude;
+}
+
+/**
+ * Envelopment — a straight approach that hooks into a half circle and ends in an
+ * open arrowhead.
+ *
+ * **Point-anchored**, like Turn. It used to be drawn as a multi-vertex line whose
+ * *last segment* was the half circle's diameter, which meant the user set the
+ * circle's radius and its angle by where they happened to put the final vertex:
+ * the shape could be assembled wrong, and the arrowhead could end up anywhere
+ * rather than on the approach's own axis.
+ *
+ * Now the circle is derived, not drawn. The base point is the midpoint of the
+ * straight run, `size` is its half-length, `rotation` aims it, and `bend` is the
+ * circle's radius as a signed multiple of `size` — the sign choosing which flank
+ * it sweeps round, so an envelopment can go either way about the enemy.
+ *
+ * Because the diameter always lies **along** the approach, the far end of the arc
+ * — and so the arrowhead — falls on the line's own continuation by construction.
+ * That is a property of the geometry now, not something the user has to achieve
+ * by hand.
+ *
+ * Emitted as MultiLineString `[straightRun, arc, arrowHead]`, the same shape the
+ * renderer already expected.
+ */
+export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
+    name: string = TacticalGraphicName.Envelopment;
+    type: string = 'Point';
 
     /**
-     * `[p0, tip]` — no width handle.
+     * One point of the graphic, given as local coordinates **relative to the base
+     * point**: `u` along the approach, `v` to its left.
      *
-     * `radius` sizes nothing but the arrowhead here; the shape follows entirely
-     * from the two endpoints (the arc's radius is half their separation), so a
-     * width handle has nothing meaningful to drag and only adds a third dot
-     * beside the head. Emitting fewer than three points is how a generator says
-     * "no width" — see `MovementGraphicBase.updateGeometry` in the OpenLayers
-     * sample, which drops the offset handle entirely when it sees two.
+     * Every vertex goes through here, from the *same* origin, and that is the
+     * whole trick. Chaining translations instead — centre to the line's end, then
+     * to the circle's centre, then out to the arc — accumulates the
+     * latitude-dependent scaling each hop applies, and the arc lands beside the
+     * line rather than on it. Measured at 13.7 km off a 4739 km run before this,
+     * which reads as the circle crossing under the line at the joint.
+     *
+     * With one origin, any point at `v = 0` resolves to the identical call as the
+     * line's own end, so the joint is exact by construction rather than by
+     * tolerance.
      */
-    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+    private at(center: Position, angle: number, u: number, v: number): Position {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return center;
+        return geometryService.translateCoordinates(center, distance, angle + Math.atan2(v, u));
     }
 
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const P0 = baseCoords[baseCoords.length - 2]; // arc start = end of straight part
-        const P1 = baseCoords[baseCoords.length - 1]; // arc end = last user point
-
-        // Straight part: all base points except the last.
-        // Must have ≥ 2 positions for a valid GeoJSON LineString; duplicate P0 if needed.
-        const rawStraight = baseCoords.slice(0, -1);
-        const straightPart = rawStraight.length >= 2 ? rawStraight : [P0, P0];
-
-        // Clockwise semicircular arc from P0 to P1
-        const center = geometryService.getMidpoint(P0, P1);
-        const arcRadius = turf.distance(P0, P1, { units: 'meters' }) / 2;
-        const rotation = Math.atan2(P0[1] - center[1], P0[0] - center[0]) * 180 / Math.PI;
-        const arc = geometryService.createCircularArc(center, rotation, arcRadius, 0, -180, 64);
-
-        // Open arrowhead tangent to the end of the arc
-        const arrowHead = geometryService.computeArrowheadPoints(arc[arc.length - 2], arc[arc.length - 1], radius, 45);
-
-        return this.asMultiLineStringFeature([straightPart, arc, arrowHead]);
+    /** The approach's local geometry: half-length, circle radius and which flank. */
+    private frame(base: Feature<Point>, opts?: TurnOptions): {center: Position; angle: number; size: number; radius: number; side: number} {
+        const size = opts?.size ?? 1;
+        const bend = clampEnvelopmentBend(opts?.bend ?? ENVELOPMENT_DEFAULT_BEND);
+        return {
+            center: base.geometry.coordinates,
+            angle: toRadians(opts?.rotation ?? 0),
+            size,
+            radius: Math.abs(bend) * size,
+            side: Math.sign(bend) || 1,
+        };
     }
 
-    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.25, radius));
+    /** `[start, end]` of the straight run, centred on the base point. */
+    private axis(base: Feature<Point>, opts?: TurnOptions): [Position, Position] {
+        const {center, angle, size} = this.frame(base, opts);
+        return [this.at(center, angle, -size, 0), this.at(center, angle, size, 0)];
+    }
+
+    /**
+     * The half circle, from the line's end round to the point the arrowhead sits
+     * on. Its centre is one radius past the line's end, so sweeping φ from π to 0
+     * starts at `u = size` and finishes at `u = size + 2 * radius` — both on the
+     * approach's own axis, whatever direction the graphic is aimed.
+     */
+    private arc(base: Feature<Point>, opts?: TurnOptions): Position[] {
+        const {center, angle, size, radius, side} = this.frame(base, opts);
+        const pts: Position[] = [];
+        for (let i = 0; i <= ENVELOPMENT_ARC_STEPS; i++) {
+            const phi = Math.PI * (1 - i / ENVELOPMENT_ARC_STEPS);
+            pts.push(this.at(center, angle, size + radius + radius * Math.cos(side * phi), radius * Math.sin(side * phi)));
+        }
+        return pts;
+    }
+
+    generateGraphics(base: Feature<Point>, opts?: TurnOptions): Feature<MultiLineString> {
+        const size = opts?.size ?? 1;
+        const [start, end] = this.axis(base, opts);
+        const arc = this.arc(base, opts);
+        const headSize = opts?.headSize ?? size * ENVELOPMENT_HEAD_RATIO;
+        const arrowHead = geometryService.computeArrowheadPoints(arc[arc.length - 2], arc[arc.length - 1], headSize, 45);
+        return this.asMultiLineStringFeature([[start, end], arc, arrowHead]);
+    }
+
+    /**
+     * `[arrowTip, lineEnd, centre]` — the order `EnvelopmentGraphicBase.setBandRange`
+     * relies on, matching Turn's `[bend, tip, centre]` contract. The centre is
+     * split onto the inert feature by `publishHandles`, which preserves order.
+     *
+     * The circle handle sits on the **arrow tip**, at `size + 2 * radius` along
+     * the axis: the arc's far end, which is where the arrowhead's point already
+     * is. Being on the axis it cannot encode the radius by its offset, so the
+     * drag reads its distance *along* the approach instead — see
+     * `EnvelopmentGraphicBase.setBandRange`. The line end sets length and aim
+     * together. There is deliberately no handle on the start of the run: it is
+     * where the "E" stacks, and a dot under the label reads as clutter.
+     */
+    generateHandles(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
+        const {center, angle, size, radius} = this.frame(base, opts);
+        return this.asMultiPointFeature([
+            this.at(center, angle, size + 2 * radius, 0),
+            this.at(center, angle, size, 0),
+            center,
+        ]);
+    }
+
+    /**
+     * A quarter of the way along the straight run — the same place
+     * `envelopmentGraphicStyleFunc` opens its gap, so the "E" lands in the hole
+     * left for it rather than beside one. Expressed off the centre so it stays
+     * exact: the run spans `2 * size`, so a quarter along is `0.5 * size` back
+     * from the middle.
+     */
+    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<Point> {
+        const {center, angle, size} = this.frame(base, opts);
+        return this.asPointFeature(this.at(center, angle, -size * 0.5, 0));
     }
 }
 
