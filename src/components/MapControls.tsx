@@ -772,9 +772,6 @@ function getPointHint(name: TacticalGraphicName): string | null {
     const onePoint: TacticalGraphicName[] = [
         TacticalGraphicName.Destroy, TacticalGraphicName.Interdict,
         TacticalGraphicName.Neutralize, TacticalGraphicName.Suppress,
-        // Dropped whole like the four above, but unlike them it stays editable
-        // afterwards — length, aim and the half circle's radius.
-        TacticalGraphicName.Envelopment,
     ];
     if (onePoint.includes(name)) return '1 point (click to place)';
     if (twoPoint.includes(name)) return '2 points';
@@ -797,6 +794,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
         name === TacticalGraphicName.BaseDefenseZone ||
         name === TacticalGraphicName.TacticalTurn ||
         name === TacticalGraphicName.Turn ||
+        name === TacticalGraphicName.Envelopment ||
         name === TacticalGraphicName.WeaponSensorRangeFanSector ||
         name === TacticalGraphicName.WeaponSensorRangeFanCircular// ||
         // name === TacticalGraphicName.TargetReferencePoint ||
