@@ -4,8 +4,19 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
 
 export class Block extends TacticalGraphicsBase<PointGraphicOptions> {
-    name: string = TacticalGraphicName.TacticalBlock;
+    name: string;
     type: string = 'Point';
+
+    /**
+     * Two names, one shape. FM 1-02.2 draws the Chapter 6 tactical mission task
+     * and the Chapter 5 table 5-19 obstacle effect identically apart from the
+     * "B", and that letter is a renderer concern (`blockStyleFunc`), so the
+     * geometry is shared outright. Defaults to the mission task, the older name.
+     */
+    constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalBlock) {
+        super();
+        this.name = name;
+    }
 
     /**
      * `getBlockArrow`'s raw path, `[...base, top, bottom]`. Shared by graphics,

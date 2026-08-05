@@ -1142,11 +1142,12 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
         const ux = dx / len;
         const uy = dy / len;
 
-        // Gap proportional to arrowhead wing-to-wing span + 5px fixed (like Penetration).
-        const [awx0, awy0] = arrowCoords[0]; // leftWing
-        const [awx1, awy1] = arrowCoords[2]; // rightWing
-        const ww = Math.sqrt((awx1 - awx0) ** 2 + (awy1 - awy0) ** 2);
-        const gapHalf = ww * 0.35 + 5 * resolution;
+        // A flat 10 screen pixels a side — the same rule breach and bypass use.
+        // It was `wingWidth * 0.35 + 5px`, off the arrowhead's metric span, so the
+        // hole grew with the graphic while the "IN" stayed capped by
+        // `maxGraphicLabelScale()`. @see envelopmentGraphicStyleFunc
+        const GAP_PX = 10;
+        const gapHalf = GAP_PX * resolution;
         const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
         const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
 
@@ -1216,11 +1217,15 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
         const lcx = x0 + (x1 - x0) * 0.25;
         const lcy = y0 + (y1 - y0) * 0.25;
         const ux = dx / len, uy = dy / len;
-        // Gap proportional to arrowhead wing-to-wing span + 5px fixed (same as Infiltration).
-        const [awx0, awy0] = arrowCoords[0]; // leftWing
-        const [awx1, awy1] = arrowCoords[2]; // rightWing
-        const ww = Math.sqrt((awx1 - awx0) ** 2 + (awy1 - awy0) ** 2);
-        const gapHalf = ww * 0.35 + 5 * resolution;
+        // A flat 10 screen pixels a side — the same rule breach and bypass use.
+        //
+        // It used to be `wingWidth * 0.35 + 5px`, taken from the arrowhead's
+        // wing-to-wing span. That span is metric, so the hole grew with the
+        // graphic while the "E" is capped by `maxGraphicLabelScale()`: draw a
+        // large envelopment and the gap ran away from the letter it was meant to
+        // clear. A gap belongs to the label, not to the shape around it.
+        const GAP_PX = 10;
+        const gapHalf = GAP_PX * resolution;
         const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
         const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
 
@@ -1684,52 +1689,59 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
             dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        // 4) carve a central gap in that opening side
-        const GAP_PX = 10; // px gap on each side of the dot
-        const gapMap = GAP_PX * resolution; // map-unit gap
-        const gapRatio = gapMap / segLen;
+        if (!textLabel) {
+            // The table 5-19 obstacle effect carries no letter. GAP_PX below is
+            // a flat constant rather than a measured label width, so an empty
+            // label still cuts a 20px hole in the prong. Push the segment whole.
+            outlineSegments.push([p1, p2]);
+        } else {
+            // 4) carve a central gap in that opening side
+            const GAP_PX = 10; // px gap on each side of the dot
+            const gapMap = GAP_PX * resolution; // map-unit gap
+            const gapRatio = gapMap / segLen;
 
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
+            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
+            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
 
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
+            // keep the two side pieces of that segment
+            outlineSegments.push([p1, gapA], [gapB, p2]);
 
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-        let rotation = -Math.atan2(dy, dx);
+            // 5) compute the center of the gap for the dot
+            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
+            let rotation = -Math.atan2(dy, dx);
 
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
+            // Keep text upright
+            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
+                rotation += Math.PI;
+            }
+            // Normalize to [-π, π)
+            if (rotation > Math.PI) rotation -= 2 * Math.PI;
+            // 6) build styles for the echelon in the middle
+            const labelScale = featureGraphicLabelScale(f, resolution);
+            const textStyle = new Style({
+                geometry: new Point(midGap),
+                text: new Text({
+                    text: textLabel,
+                    font: 'bold 24px sans-serif',
+                    fill: new Fill({color: getLabelFillColor()}),
+                    rotation: rotation,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    // `textBaseline: 'middle'` centres the font's *em box* on the
+                    // anchor, not the capital's ink, so the letter renders high and
+                    // the line looks as if it passes below centre. Measured on the
+                    // rendered glyph, the error is 2.2 px per unit of label scale
+                    // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
+                    // artefact, hence proportional. OL applies `offsetY` in raw
+                    // screen pixels and does **not** multiply it by `scale`, so the
+                    // scale has to be applied here.
+                    offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
+                    scale: labelScale,
+                    stroke: getHaloStroke(),
+                }),
+            });
+            styles.push(textStyle);
         }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-        // 6) build styles for the echelon in the middle
-        const labelScale = featureGraphicLabelScale(f, resolution);
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: textLabel,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: rotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                // `textBaseline: 'middle'` centres the font's *em box* on the
-                // anchor, not the capital's ink, so the letter renders high and
-                // the line looks as if it passes below centre. Measured on the
-                // rendered glyph, the error is 2.2 px per unit of label scale
-                // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
-                // artefact, hence proportional. OL applies `offsetY` in raw
-                // screen pixels and does **not** multiply it by `scale`, so the
-                // scale has to be applied here.
-                offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
@@ -2792,51 +2804,59 @@ export function blockStyleFunc(label: string): StyleFunction {
             dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        // Gap: sized to fit the actually rendered label glyph plus 4px
-        // padding per side. getTextWidth returns screen pixels at the
-        // current OL text scale, so we convert to map units with
-        // `* resolution` — this keeps the gap tight around the label
-        // regardless of zoom or of how wide the graphic's front line is.
-        // Measure with the same 24px font that the text style renders.
-        const labelScale = featureGraphicLabelScale(f, resolution);
-        const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
-        const gapMap = (labelWidthPx / 2 + 4) * resolution;
-        const gapRatio = gapMap / segLen;
+        if (!label) {
+            // The table 5-19 obstacle effect carries no letter, so there is no
+            // hole to leave for one. The gap below is not label-width alone —
+            // it adds 4px of padding a side — so an empty label would still
+            // break the shaft around nothing. Push the segment unbroken.
+            outlineSegments.push([p1, p2]);
+        } else {
+            // Gap: sized to fit the actually rendered label glyph plus 4px
+            // padding per side. getTextWidth returns screen pixels at the
+            // current OL text scale, so we convert to map units with
+            // `* resolution` — this keeps the gap tight around the label
+            // regardless of zoom or of how wide the graphic's front line is.
+            // Measure with the same 24px font that the text style renders.
+            const labelScale = featureGraphicLabelScale(f, resolution);
+            const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
+            const gapMap = (labelWidthPx / 2 + 4) * resolution;
+            const gapRatio = gapMap / segLen;
 
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-        let rotation = -Math.atan2(dy, dx);
+            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
+            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
+            let rotation = -Math.atan2(dy, dx);
 
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
+            // Keep text upright
+            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
+                rotation += Math.PI;
+            }
+            // Normalize to [-π, π)
+            if (rotation > Math.PI) rotation -= 2 * Math.PI;
+
+            // keep the two side pieces of that segment
+            outlineSegments.push([p1, gapA], [gapB, p2]);
+
+            // 5) compute the center of the gap for the dot
+            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
+
+            // 6) build styles for the label in the middle.
+            // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
+            // ratio-locked block-family graphics render with matching label sizes.
+            const textStyle = new Style({
+                geometry: new Point(midGap),
+                text: new Text({
+                    text: label,
+                    font: 'bold 24px sans-serif',
+                    fill: new Fill({color: getLabelFillColor()}),
+                    stroke: getHaloStroke(),
+                    rotation: rotation,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    scale: labelScale,
+                }),
+            });
+            styles.push(textStyle);
         }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the label in the middle.
-        // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
-        // ratio-locked block-family graphics render with matching label sizes.
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                rotation: rotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: labelScale,
-            }),
-        });
-        styles.push(textStyle);
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
@@ -3265,6 +3285,64 @@ const DECORATION_MAX_SHARE_OPEN = 0.05;
 /** Below this many screen pixels a decoration is dropped rather than drawn. */
 const DECORATION_MIN_PX = 3;
 
+/**
+ * Length of a solid arrowhead, in screen pixels.
+ *
+ * 15 is Fix's own head at its minimum draw: `FIX_TRIANGLE_WIDTH_RATIO` is `15/145`
+ * and `LineGraphicBase` enforces a 145 px minimum first segment, so a freshly
+ * drawn Fix has always carried a 15 px head. It is the one calibrated value among
+ * the three solid heads, so the others adopt it.
+ */
+const SOLID_ARROWHEAD_PX = 15;
+
+/**
+ * The share of its graphic's on-screen length an arrowhead may occupy before it
+ * starts shrinking with the shape.
+ *
+ * Much larger than `DECORATION_MAX_SHARE_OPEN`, and deliberately so. That share is
+ * small because a tooth or a merlon **repeats** along the path, so one of them a
+ * twentieth of the line long is already a lot of ink. An arrowhead appears once,
+ * at the end, and a head a quarter of a short graphic still reads correctly — a
+ * 5% cap would shrink it on any graphic under 300 px, which is most of them.
+ */
+const ARROWHEAD_MAX_SHARE = 0.25;
+
+/**
+ * Redraws a generator-emitted solid arrowhead at a fixed screen size.
+ *
+ * The generators build their heads in metres — Fix's off the drawn line's length,
+ * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
+ * — so resizing the graphic resized the head, and Turn's swelled on screen as you
+ * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
+ *
+ * Kept in the style layer rather than re-derived into the geometry, per the house
+ * rule that a zoom-invariant size is `px * resolution` computed at draw time. The
+ * generators still emit their own heads, so a consumer reading the raw GeoJSON
+ * gets a complete symbol — the same split `labelGapDegrees` uses.
+ *
+ * Scaled **about the tip**, because the tip is the meaningful point: it is where
+ * the arrow lands, and the generator has already put it in the right place.
+ *
+ * Returns null when the head would fall under `DECORATION_MIN_PX`, letting the
+ * plain geometry stand rather than drawing a smudge.
+ */
+function screenSizedArrowHead(head: Polygon, path: Coordinate[], resolution: number): Polygon | null {
+    const ring = head.getCoordinates()[0];
+    if (!ring || ring.length < 3) return null;
+    const [tip, left, right] = ring;
+    const baseMid: Coordinate = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+    const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
+    if (currentLength === 0) return null;
+
+    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
+    const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
+    if (wantedPx < DECORATION_MIN_PX) return null;
+
+    const factor = (wantedPx * resolution) / currentLength;
+    return new Polygon([ring.map(p =>
+        [tip[0] + (p[0] - tip[0]) * factor, tip[1] + (p[1] - tip[1]) * factor] as Coordinate)]);
+}
+
 /** The point at a distance along a polyline, with the unit direction there. */
 function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
     let remaining = Math.max(0, distance);
@@ -3612,15 +3690,35 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
 
 function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = readHostilityColor(f);
-        return new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        });
+        const color = readHostilityColor(f);
+        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
+        const geom = f.getGeometry();
+        // One geometry-less style used to cover the whole collection. The two
+        // arrowheads have to be drawn separately now so they can be re-sized to
+        // screen pixels rather than following the dragged `size`.
+        if (!(geom instanceof GeometryCollection)) {
+            return new Style({fill: new Fill({color}), stroke: lineStroke});
+        }
+        const subs = geom.getGeometries();
+        const line = subs.find(g => g instanceof LineString) as LineString | undefined;
+        const path = line?.getCoordinates() ?? [];
+
+        const styles: Style[] = [];
+        for (const sub of subs) {
+            if (sub instanceof Polygon) {
+                const head = screenSizedArrowHead(sub, path, resolution);
+                if (head) {
+                    styles.push(new Style({
+                        geometry: head,
+                        fill: new Fill({color}),
+                        stroke: new Stroke({color, width: LINE_WIDTH()}),
+                    }));
+                }
+            } else {
+                styles.push(new Style({geometry: sub, stroke: lineStroke}));
+            }
+        }
+        return styles;
     };
 }
 
@@ -3631,34 +3729,46 @@ function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  * length so it grows/shrinks with the graphic and matches the block-family
  * label size at the 100px minimum.
  */
-export function tacticalFixStyleFunc(): StyleFunction {
-    return (f, resolution) => tacticalFixStyleFromLabels(readGraphicLabels(f))(f, resolution);
+/**
+ * @param label the doctrinal letter. Defaults to "F" so the published signature
+ *   stays source-compatible; the table 5-19 obstacle effect passes '' and gets
+ *   the same zigzag with no glyph.
+ */
+export function tacticalFixStyleFunc(label: string = 'F'): StyleFunction {
+    return (f, resolution) => tacticalFixStyleFromLabels(label, readGraphicLabels(f))(f, resolution);
 }
 
-function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
+function tacticalFixStyleFromLabels(label: string, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
         const styles: Style[] = [];
         const color = readHostilityColor(f);
-        styles.push(new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        }));
+        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
 
         const geom = f.getGeometry();
         let lineCoords: Coordinate[] | undefined;
         if (geom instanceof GeometryCollection) {
-            for (const sub of geom.getGeometries()) {
-                if (sub instanceof LineString) {
-                    lineCoords = sub.getCoordinates();
-                    break;
+            const subs = geom.getGeometries();
+            const line = subs.find(g => g instanceof LineString) as LineString | undefined;
+            lineCoords = line?.getCoordinates();
+            // The arrowhead is drawn separately from the zigzag so it can hold a
+            // screen size instead of following the drawn line's length.
+            for (const sub of subs) {
+                if (sub instanceof Polygon) {
+                    const head = screenSizedArrowHead(sub, lineCoords ?? [], resolution);
+                    if (head) {
+                        styles.push(new Style({
+                            geometry: head,
+                            fill: new Fill({color}),
+                            stroke: new Stroke({color, width: LINE_WIDTH()}),
+                        }));
+                    }
+                } else {
+                    styles.push(new Style({geometry: sub, stroke: lineStroke}));
                 }
             }
-        } else if (geom instanceof LineString) {
-            lineCoords = geom.getCoordinates();
+        } else {
+            styles.push(new Style({fill: new Fill({color}), stroke: lineStroke}));
+            if (geom instanceof LineString) lineCoords = geom.getCoordinates();
         }
         if (!lineCoords || lineCoords.length < 2) return styles;
 
@@ -3683,6 +3793,10 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
         const len = Math.hypot(dx, dy);
         if (len === 0) return styles;
 
+        // Everything past here builds the letter. Unlike the block family this
+        // one cuts no gap for it, so the twin just stops.
+        if (!label) return styles;
+
         let rotation = -Math.atan2(dy, dx);
         if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
@@ -3698,7 +3812,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
         styles.push(new Style({
             geometry: new Point(labelAnchor),
             text: new Text({
-                text: 'F',
+                text: label,
                 font: 'bold 24px sans-serif',
                 fill: new Fill({color: getLabelFillColor()}),
                 stroke: getHaloStroke(),
@@ -4825,11 +4939,100 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
     }
 }
 
+/**
+ * The crossed runways, written as SVG path data in **map units** — so at scale 1
+ * the symbol is a fixed ~400 km across, on every polygon and at every zoom.
+ */
+const AIRFIELD_SVG = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
+/** Half-extents of the path above, in its own unscaled units. */
+const AIRFIELD_HALF_W = 200000;
+const AIRFIELD_HALF_H = 120000;
+/**
+ * Share of the area's shorter side the symbol spans. Matches the fit-to-polygon
+ * cap the area's own text block uses, so symbol and text agree about how much
+ * room a polygon offers.
+ */
+const AIRFIELD_FIT_SHARE = 0.8;
+
+/**
+ * Points along the two runway strokes, in unscaled path units, used to test the
+ * symbol against the polygon outline. Endpoints alone are not enough: both arms
+ * pass through the centre, so a notch can cut a stroke without containing either
+ * of its ends.
+ */
+const AIRFIELD_SAMPLES: Coordinate[] = (() => {
+    const segments: [Coordinate, Coordinate][] = [
+        [[-AIRFIELD_HALF_W, 0], [AIRFIELD_HALF_W, 0]],
+        [[-AIRFIELD_HALF_W, -AIRFIELD_HALF_H], [AIRFIELD_HALF_W, AIRFIELD_HALF_H]],
+    ];
+    const STEPS = 8;
+    const pts: Coordinate[] = [];
+    for (const [a, b] of segments) {
+        for (let i = 0; i <= STEPS; i++) {
+            const t = i / STEPS;
+            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+    }
+    return pts;
+})();
+
+/**
+ * Ray-cast point-in-polygon.
+ *
+ * Deliberately hand-rolled: a style function receives **projected EPSG:3857
+ * metres**, and turf expects geographic degrees, so `booleanPointInPolygon`
+ * would quietly give wrong answers here. @see conventions.md
+ */
+function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        const straddles = (yi > pt[1]) !== (yj > pt[1]);
+        if (straddles && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
+
+/**
+ * How much to scale the crossed-runway symbol so it is proportional to the area
+ * it marks rather than a fixed number of metres — a USA-sized airfield used to
+ * carry the same ~400 km cross as a runway-sized one, which read as a tiny "x".
+ *
+ * Two stages, because the bounding box is not the polygon:
+ *
+ *  1. Fit the bounding box — the largest uniform scale keeping the cross within
+ *     `AIRFIELD_FIT_SHARE` of the **shorter** side, so the 5:3 shape is kept.
+ *  2. Shrink until it is inside the *actual* outline. Areas may be concave, and
+ *     a bounding-box fit will happily push an arm out through the notch of an
+ *     L-shape. `AreaGraphicBase` stamps `polygonRing`, so the real edges are here.
+ */
+function airfieldSymbolScale(f: FeatureLike, center: Coordinate): number {
+    const extW = f.get('polygonExtentWidth') as number | undefined;
+    const extH = f.get('polygonExtentHeight') as number | undefined;
+    // Not stamped yet (first render, or a holder that never set a base) — keep
+    // the historical fixed size rather than collapsing the symbol to nothing.
+    if (!extW || !extH) return 1;
+
+    let scale = AIRFIELD_FIT_SHARE * Math.min(extW / (AIRFIELD_HALF_W * 2), extH / (AIRFIELD_HALF_H * 2));
+
+    const ring = f.get('polygonRing') as Coordinate[] | undefined;
+    if (!ring || ring.length < 3) return scale;
+
+    const fits = (s: number) =>
+        AIRFIELD_SAMPLES.every(p => pointInRing([center[0] + p[0] * s, center[1] + p[1] * s], ring));
+
+    // Bounded so it can never run away: 0.9^30 ≈ 0.04 of the bbox fit. Anything
+    // still outside at that point is a degenerate polygon, not a sizing problem.
+    for (let i = 0; i < 30 && !fits(scale); i++) scale *= 0.9;
+    return scale;
+}
+
 export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFunction {
     return (f, res) => {
         let styles = getAreaLabelStyles(f, res, fullLabel, dateLabel, 0, 36);
-        const svg = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
-        let {geometry} = svgToOpenLayersGeometry(svg, (f.getGeometry() as Point).getCoordinates());
+        const center = (f.getGeometry() as Point).getCoordinates();
+        let {geometry} = svgToOpenLayersGeometry(AIRFIELD_SVG, center, airfieldSymbolScale(f, center));
         styles.push(new Style({
             geometry: geometry,
             // The crossed runways are the symbol's own line work, not an
@@ -5383,14 +5586,22 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
         // in metres drifted against it: wider than the "T" zoomed in, tighter
         // than it zoomed out. Measuring here is the only way the two agree at
         // every zoom. @see conventions.md, "a gap follows what it makes room for"
+        // No letter, no gap: TURN_LABEL_PAD_PX is added on top of the measured
+        // width, so an empty label would still leave 10px of curve missing.
         const scale = featureLabelScale(f, resolution);
-        const halfGap = (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution;
+        const halfGap = label ? (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution : 0;
 
         const styles: Style[] = [];
+        // The curve, for capping the head against the graphic's own on-screen size.
+        const curve = geom.getGeometries()
+            .filter((g): g is MultiLineString => g instanceof MultiLineString)
+            .flatMap(g => g.getCoordinates().flat());
         for (const sub of geom.getGeometries()) {
             if (sub instanceof Polygon) {
-                // The arrowhead — filled, and never trimmed.
-                styles.push(new Style({geometry: sub, fill: new Fill({color}), stroke}));
+                // The arrowhead — filled, never trimmed, and held at a screen size
+                // rather than the metres the generator baked in at draw time.
+                const head = screenSizedArrowHead(sub, curve, resolution);
+                if (head) styles.push(new Style({geometry: head, fill: new Fill({color}), stroke}));
                 continue;
             }
             if (!(sub instanceof MultiLineString)) {
@@ -5403,7 +5614,12 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
             // shared inner end.
             const halves = sub.getCoordinates();
             halves.forEach((half, i) => {
-                const trimmed = i === 0 ? trimFromEnd(half, halfGap) : trimFromEnd(half.slice().reverse(), halfGap).reverse();
+                const trimmed =
+                    halfGap > 0
+                        ? i === 0
+                            ? trimFromEnd(half, halfGap)
+                            : trimFromEnd(half.slice().reverse(), halfGap).reverse()
+                        : half;
                 if (trimmed.length >= 2) styles.push(new Style({geometry: new LineString(trimmed), stroke}));
             });
         }

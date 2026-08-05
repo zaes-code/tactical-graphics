@@ -25,7 +25,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {writeGraphicProperties} from "../graphicProperties";
@@ -70,7 +70,9 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.ProbableLineOfDeployment:
                     return probableLineOfDeploymentStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalFix:
-                    return tacticalFixStyleFunc()(feature, resolution);
+                case TacticalGraphicName.Fix:
+                    // 'F' for the mission task, '' for the table 5-19 twin.
+                    return tacticalFixStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.FerryCrossing:
                     return ferryCrossingStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.DirectionOfMainAttack:
@@ -135,11 +137,12 @@ export class LineGraphicBase implements LineGraphic {
             }
         }
 
-        // TacticalFix: 145px minimum line length — 50px for the F-labelled
-        // first segment, 45px for the three triangles, 50px for the trailing
-        // segment leading into the arrowhead.
+        // Fix: 145px minimum line length — 50px for the F-labelled first
+        // segment, 45px for the three triangles, 50px for the trailing segment
+        // leading into the arrowhead. The table 5-19 twin draws no "F" but the
+        // geometry is otherwise identical, so it takes the same floor.
         if (
-            this.graphicName === TacticalGraphicName.TacticalFix &&
+            (this.graphicName === TacticalGraphicName.TacticalFix || this.graphicName === TacticalGraphicName.Fix) &&
             this.resolution &&
             !this.enforcingMinLength
         ) {

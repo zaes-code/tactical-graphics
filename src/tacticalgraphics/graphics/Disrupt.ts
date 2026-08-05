@@ -4,8 +4,14 @@ import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
 
 export class Disrupt extends TacticalGraphicsBase<PointGraphicOptions> {
-    name: string = TacticalGraphicName.TacticalDisrupt;
+    name: string;
     type: string = 'Point';
+
+    /** Mission task or table 5-19 obstacle effect — same trident, "D" aside. @see Block */
+    constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalDisrupt) {
+        super();
+        this.name = name;
+    }
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         return geometryService.getDisruptGraphic(base.geometry.coordinates, opts.size);
