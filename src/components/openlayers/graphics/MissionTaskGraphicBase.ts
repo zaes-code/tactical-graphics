@@ -107,6 +107,7 @@ const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Secure,
     ...CROSSED_MISSION_TASKS,
     TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.Turn,
 ];
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
 
@@ -196,7 +197,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         // Turn is a GeometryCollection — stroked curve plus filled arrowhead —
         // so it needs a fill as well as a stroke, and not the default blue one.
-        if (name === TacticalGraphicName.TacticalTurn) {
+        if (name === TacticalGraphicName.TacticalTurn || name === TacticalGraphicName.Turn) {
             this.graphic.setStyle(turnStyleFunc(name));
         }
         // MovementToContact: shift the zigzag "contact" side arrows outward so

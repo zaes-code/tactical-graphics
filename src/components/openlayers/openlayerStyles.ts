@@ -1684,52 +1684,59 @@ export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFuncti
             dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        // 4) carve a central gap in that opening side
-        const GAP_PX = 10; // px gap on each side of the dot
-        const gapMap = GAP_PX * resolution; // map-unit gap
-        const gapRatio = gapMap / segLen;
+        if (!textLabel) {
+            // The table 5-19 obstacle effect carries no letter. GAP_PX below is
+            // a flat constant rather than a measured label width, so an empty
+            // label still cuts a 20px hole in the prong. Push the segment whole.
+            outlineSegments.push([p1, p2]);
+        } else {
+            // 4) carve a central gap in that opening side
+            const GAP_PX = 10; // px gap on each side of the dot
+            const gapMap = GAP_PX * resolution; // map-unit gap
+            const gapRatio = gapMap / segLen;
 
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
+            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
+            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
 
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
+            // keep the two side pieces of that segment
+            outlineSegments.push([p1, gapA], [gapB, p2]);
 
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-        let rotation = -Math.atan2(dy, dx);
+            // 5) compute the center of the gap for the dot
+            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
+            let rotation = -Math.atan2(dy, dx);
 
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
+            // Keep text upright
+            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
+                rotation += Math.PI;
+            }
+            // Normalize to [-π, π)
+            if (rotation > Math.PI) rotation -= 2 * Math.PI;
+            // 6) build styles for the echelon in the middle
+            const labelScale = featureGraphicLabelScale(f, resolution);
+            const textStyle = new Style({
+                geometry: new Point(midGap),
+                text: new Text({
+                    text: textLabel,
+                    font: 'bold 24px sans-serif',
+                    fill: new Fill({color: getLabelFillColor()}),
+                    rotation: rotation,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    // `textBaseline: 'middle'` centres the font's *em box* on the
+                    // anchor, not the capital's ink, so the letter renders high and
+                    // the line looks as if it passes below centre. Measured on the
+                    // rendered glyph, the error is 2.2 px per unit of label scale
+                    // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
+                    // artefact, hence proportional. OL applies `offsetY` in raw
+                    // screen pixels and does **not** multiply it by `scale`, so the
+                    // scale has to be applied here.
+                    offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
+                    scale: labelScale,
+                    stroke: getHaloStroke(),
+                }),
+            });
+            styles.push(textStyle);
         }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-        // 6) build styles for the echelon in the middle
-        const labelScale = featureGraphicLabelScale(f, resolution);
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: textLabel,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: rotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                // `textBaseline: 'middle'` centres the font's *em box* on the
-                // anchor, not the capital's ink, so the letter renders high and
-                // the line looks as if it passes below centre. Measured on the
-                // rendered glyph, the error is 2.2 px per unit of label scale
-                // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
-                // artefact, hence proportional. OL applies `offsetY` in raw
-                // screen pixels and does **not** multiply it by `scale`, so the
-                // scale has to be applied here.
-                offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
@@ -2792,51 +2799,59 @@ export function blockStyleFunc(label: string): StyleFunction {
             dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        // Gap: sized to fit the actually rendered label glyph plus 4px
-        // padding per side. getTextWidth returns screen pixels at the
-        // current OL text scale, so we convert to map units with
-        // `* resolution` — this keeps the gap tight around the label
-        // regardless of zoom or of how wide the graphic's front line is.
-        // Measure with the same 24px font that the text style renders.
-        const labelScale = featureGraphicLabelScale(f, resolution);
-        const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
-        const gapMap = (labelWidthPx / 2 + 4) * resolution;
-        const gapRatio = gapMap / segLen;
+        if (!label) {
+            // The table 5-19 obstacle effect carries no letter, so there is no
+            // hole to leave for one. The gap below is not label-width alone —
+            // it adds 4px of padding a side — so an empty label would still
+            // break the shaft around nothing. Push the segment unbroken.
+            outlineSegments.push([p1, p2]);
+        } else {
+            // Gap: sized to fit the actually rendered label glyph plus 4px
+            // padding per side. getTextWidth returns screen pixels at the
+            // current OL text scale, so we convert to map units with
+            // `* resolution` — this keeps the gap tight around the label
+            // regardless of zoom or of how wide the graphic's front line is.
+            // Measure with the same 24px font that the text style renders.
+            const labelScale = featureGraphicLabelScale(f, resolution);
+            const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
+            const gapMap = (labelWidthPx / 2 + 4) * resolution;
+            const gapRatio = gapMap / segLen;
 
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-        let rotation = -Math.atan2(dy, dx);
+            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
+            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
+            let rotation = -Math.atan2(dy, dx);
 
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
+            // Keep text upright
+            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
+                rotation += Math.PI;
+            }
+            // Normalize to [-π, π)
+            if (rotation > Math.PI) rotation -= 2 * Math.PI;
+
+            // keep the two side pieces of that segment
+            outlineSegments.push([p1, gapA], [gapB, p2]);
+
+            // 5) compute the center of the gap for the dot
+            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
+
+            // 6) build styles for the label in the middle.
+            // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
+            // ratio-locked block-family graphics render with matching label sizes.
+            const textStyle = new Style({
+                geometry: new Point(midGap),
+                text: new Text({
+                    text: label,
+                    font: 'bold 24px sans-serif',
+                    fill: new Fill({color: getLabelFillColor()}),
+                    stroke: getHaloStroke(),
+                    rotation: rotation,
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    scale: labelScale,
+                }),
+            });
+            styles.push(textStyle);
         }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the label in the middle.
-        // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
-        // ratio-locked block-family graphics render with matching label sizes.
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                rotation: rotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: labelScale,
-            }),
-        });
-        styles.push(textStyle);
 
         const outlineStyle = new Style({
             geometry: new MultiLineString(outlineSegments),
@@ -3631,11 +3646,16 @@ function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  * length so it grows/shrinks with the graphic and matches the block-family
  * label size at the 100px minimum.
  */
-export function tacticalFixStyleFunc(): StyleFunction {
-    return (f, resolution) => tacticalFixStyleFromLabels(readGraphicLabels(f))(f, resolution);
+/**
+ * @param label the doctrinal letter. Defaults to "F" so the published signature
+ *   stays source-compatible; the table 5-19 obstacle effect passes '' and gets
+ *   the same zigzag with no glyph.
+ */
+export function tacticalFixStyleFunc(label: string = 'F'): StyleFunction {
+    return (f, resolution) => tacticalFixStyleFromLabels(label, readGraphicLabels(f))(f, resolution);
 }
 
-function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
+function tacticalFixStyleFromLabels(label: string, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
         const styles: Style[] = [];
         const color = readHostilityColor(f);
@@ -3683,6 +3703,10 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
         const len = Math.hypot(dx, dy);
         if (len === 0) return styles;
 
+        // Everything past here builds the letter. Unlike the block family this
+        // one cuts no gap for it, so the twin just stops.
+        if (!label) return styles;
+
         let rotation = -Math.atan2(dy, dx);
         if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
@@ -3698,7 +3722,7 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
         styles.push(new Style({
             geometry: new Point(labelAnchor),
             text: new Text({
-                text: 'F',
+                text: label,
                 font: 'bold 24px sans-serif',
                 fill: new Fill({color: getLabelFillColor()}),
                 stroke: getHaloStroke(),
@@ -5383,8 +5407,10 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
         // in metres drifted against it: wider than the "T" zoomed in, tighter
         // than it zoomed out. Measuring here is the only way the two agree at
         // every zoom. @see conventions.md, "a gap follows what it makes room for"
+        // No letter, no gap: TURN_LABEL_PAD_PX is added on top of the measured
+        // width, so an empty label would still leave 10px of curve missing.
         const scale = featureLabelScale(f, resolution);
-        const halfGap = (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution;
+        const halfGap = label ? (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution : 0;
 
         const styles: Style[] = [];
         for (const sub of geom.getGeometries()) {
@@ -5403,7 +5429,12 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
             // shared inner end.
             const halves = sub.getCoordinates();
             halves.forEach((half, i) => {
-                const trimmed = i === 0 ? trimFromEnd(half, halfGap) : trimFromEnd(half.slice().reverse(), halfGap).reverse();
+                const trimmed =
+                    halfGap > 0
+                        ? i === 0
+                            ? trimFromEnd(half, halfGap)
+                            : trimFromEnd(half.slice().reverse(), halfGap).reverse()
+                        : half;
                 if (trimmed.length >= 2) styles.push(new Style({geometry: new LineString(trimmed), stroke}));
             });
         }
