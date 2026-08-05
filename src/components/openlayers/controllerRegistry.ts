@@ -9,7 +9,12 @@
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
-import {CircularAreaGraphicBase, MissionTaskGraphicBase, TurnGraphicBase} from './graphics/MissionTaskGraphicBase';
+import {
+    CircularAreaGraphicBase,
+    EnvelopmentGraphicBase,
+    MissionTaskGraphicBase,
+    TurnGraphicBase,
+} from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 // import {SearchArea} from './graphics/SearchArea';
@@ -86,6 +91,15 @@ const missionTask = (name: TacticalGraphicName, res: number) => {
 // pan the map — and the bend handle rides the manager's per-handle drag hook.
 const turn = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new TurnGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Envelopment follows Turn exactly: point-anchored, drawn centre-to-edge so the
+// first click places it and the second sizes it, with a second handle for the
+// half circle's radius riding the manager's per-handle drag hook.
+const envelopment = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new EnvelopmentGraphicBase(name, res, res));
     controller.editStretches = true;
     return controller;
 };
@@ -296,6 +310,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Point-anchored bowed arrow with a draggable bend — see Turn.ts.
     [TacticalGraphicName.TacticalTurn]:  turn,
 
+    // ── Countermobility obstacle effects (FM 1-02.2 table 5-19) ────────────
+    // Visual twins of the Chapter 6 mission tasks of the same doctrinal name,
+    // differing only in that they draw no letter, so each takes the identical
+    // controller. They do not share one factory: Turn is point-anchored while
+    // the other three are drawn as a two-point line.
+    [TacticalGraphicName.Block]:    block,
+    [TacticalGraphicName.Disrupt]:  block,
+    [TacticalGraphicName.Fix]:      line(2),
+    [TacticalGraphicName.Turn]:     turn,
+
     // ── Circular area graphics ─────────────────────────────────────────────
     [TacticalGraphicName.FreeFireAreaCircular]:                  circularArea,
     [TacticalGraphicName.NoFireAreaCircular]:                    circularArea,
@@ -327,7 +351,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),
     [TacticalGraphicName.Pursuit]:            missionTask,
-    [TacticalGraphicName.Envelopment]:        movement(),
+    [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
     [TacticalGraphicName.Infiltration]:       movement(),

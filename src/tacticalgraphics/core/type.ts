@@ -281,6 +281,18 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.TacticalDisrupt:
         case TacticalGraphicName.Delay:
             return 'D';
+        // The "F" used to exist only as a literal inside tacticalFixStyleFunc,
+        // so this returned '' for a graphic that visibly draws one. Naming it
+        // here lets the holder pass getLabel(name) and get 'F' for the mission
+        // task and '' for the table 5-19 twin, with no per-name branch.
+        case TacticalGraphicName.TacticalFix:
+            return 'F';
+        // Envelopment's "E" used to be a literal inside the movement label
+        // style. Now that it is point-anchored its label comes through
+        // `getMissionTaskStyleFn(getLabel(name))` like every other one, so the
+        // letter has to be named here or the graphic draws without it.
+        case TacticalGraphicName.Envelopment:
+            return 'E';
 
         // offensive line
         case TacticalGraphicName.PhaseLine:
@@ -740,6 +752,15 @@ export enum TacticalGraphicName {
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',
 
+    // FM 1-02.2 table 5-19 obstacle effects. Each is the visual twin of the
+    // Chapter 6 tactical mission task of the same doctrinal name above, minus
+    // the letter — the manual gives all four names both senses and numbers them
+    // "1. … 2. …" in its own glossary.
+    Block = 'Block',
+    Disrupt = 'Disrupt',
+    Fix = 'Fix',
+    Turn = 'Turn',
+
     DirectionOfMainAttack = 'DirectionOfMainAttack',
     DirectionOfSupportingAttack = 'DirectionOfSupportingAttack',
     DirectionOfMainAttackFeint = 'DirectionOfMainAttackFeint',
@@ -817,6 +838,9 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.TacticalBlock]: 'block',
     [TacticalGraphicName.TacticalDisrupt]: 'disrupt',
     [TacticalGraphicName.TacticalFix]: 'fix',
+    // Without this the menu reads "tactical turn" beside a "turn" in the next
+    // category, while its three siblings show the bare doctrinal word in both.
+    [TacticalGraphicName.TacticalTurn]: 'turn',
 
     [TacticalGraphicName.FortifiedLine]: 'fortified/trench line',
 

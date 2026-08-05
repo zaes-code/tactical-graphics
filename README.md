@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**207 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**211 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -491,7 +491,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 195 supported names.
+the 199 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -626,8 +626,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Assault Crossing | Mobility and Countermobility Control Measures |
+| Block | Mobility and Countermobility Control Measures |
 | Bridge | Mobility and Countermobility Control Measures |
+| Disrupt | Mobility and Countermobility Control Measures |
 | Ferry Crossing | Mobility and Countermobility Control Measures |
+| Fix | Mobility and Countermobility Control Measures |
 | Ford, Difficult | Mobility and Countermobility Control Measures |
 | Ford, Easy | Mobility and Countermobility Control Measures |
 | Gap | Mobility and Countermobility Control Measures |
@@ -646,6 +649,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Turn | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
@@ -737,25 +741,21 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
-| Block | Mobility and Countermobility Control Measures |
-| Disrupt | Mobility and Countermobility Control Measures |
-| Double Apron Fence | Mobility and Countermobility Control Measures |
-| Double Fence | Mobility and Countermobility Control Measures |
-| Double Strand Concertina | Mobility and Countermobility Control Measures |
 | Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
 | Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
-| Fix | Mobility and Countermobility Control Measures |
 | Halted Convoy | Mobility and Countermobility Control Measures |
-| High Wire Fence | Mobility and Countermobility Control Measures |
-| Low Wire Fence | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
-| Single Concertina | Mobility and Countermobility Control Measures |
-| Single Fence | Mobility and Countermobility Control Measures |
-| Triple Strand Concertina | Mobility and Countermobility Control Measures |
-| Turn | Mobility and Countermobility Control Measures |
-| Unspecified | Mobility and Countermobility Control Measures |
+| Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, High Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Low Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Single Concertina | Mobility and Countermobility Control Measures |
+| Wire, Single Fence | Mobility and Countermobility Control Measures |
+| Wire, Triple Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |

@@ -147,17 +147,12 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     // [TacticalGraphicName.AntiTankDitchCompleted]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
     // [TacticalGraphicName.AntiTankDitchUnderConstruction]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
     // [TacticalGraphicName.AntiTankDitchReinforced]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.Block]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.Disrupt]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.DoubleApronFence]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.DoubleFence]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.DoubleStrandConcertina]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Block]:                            TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Disrupt]:                          TacticalGraphicCategory.MobilityAndCountermobility,
     // [TacticalGraphicName.ExplosivesPlanned]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
     // [TacticalGraphicName.ExplosivesSafe]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
     // [TacticalGraphicName.ExplosivesArmedButPassable]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.Fix]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.HighWireFence]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.LowWireFence]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Fix]:                              TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleBelt]:                     TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleFreeArea]:                 TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleGroup]:                    TacticalGraphicCategory.MobilityAndCountermobility,
@@ -165,11 +160,23 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ObstacleRestrictedArea]:           TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleZone]:                     TacticalGraphicCategory.MobilityAndCountermobility,
     // [TacticalGraphicName.RoadblockComplete]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.SingleConcertina]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.SingleFence]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.TripleStrandConcertina]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.Turn]:                            TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
-    // [TacticalGraphicName.Unspecified]:                            TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Turn]:                             TacticalGraphicCategory.MobilityAndCountermobility,
+    // Wire obstacles — the tracker names every one `wire, …`, so the members
+    // carry a `Wire` prefix and sort together here rather than scattering
+    // through the list under D, H, S and T. `WireUnspecified` in particular was
+    // a bare `Unspecified`, which said nothing about what it was unspecified
+    // about. The names must keep matching the tracker's: `gen-proven-graphics.py`
+    // resolves a row by stripping non-alphanumerics and lowercasing, so
+    // `wire, double apron fence` → `wiredoubleapronfence` → `WireDoubleApronFence`.
+    // [TacticalGraphicName.WireDoubleApronFence]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireDoubleFence]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireDoubleStrandConcertina]:       TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireHighWireFence]:                TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireLowWireFence]:                 TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireSingleConcertina]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireSingleFence]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireTripleStrandConcertina]:       TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireUnspecified]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
 
     // Mobility OK
     [TacticalGraphicName.AssaultCrossing]:                  TacticalGraphicCategory.MobilityAndCountermobility,
