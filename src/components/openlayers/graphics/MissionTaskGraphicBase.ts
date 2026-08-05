@@ -62,7 +62,17 @@ const TURN_TIP_HANDLE = 1;
 /** Envelopment's arrowhead length in screen pixels at the drawing zoom. @see TURN_ARROWHEAD_PX */
 const ENVELOPMENT_ARROWHEAD_PX = 22;
 /** Index of the line-end handle in `Envelopment.generateHandles`' output. */
-const ENVELOPMENT_TIP_HANDLE = 1;
+const ENVELOPMENT_LINE_HANDLE = 1;
+/**
+ * How far off the approach the cursor must be, as a share of the circle's own
+ * radius, before a drag counts as a decision to swap flanks.
+ *
+ * The circle handle sits *on* the axis, so its perpendicular offset is zero at
+ * rest. Reading the raw sign would let a pixel of jitter flip the graphic back
+ * and forth while the user is only trying to lengthen the hook; requiring a
+ * deliberate move to one side keeps the flip available without that.
+ */
+const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
 
 /**
  * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing
@@ -702,6 +712,26 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = ENVELOPMENT_ARROWHEAD_PX * (drawingResolution ?? 1);
+        // The "E" lies along the approach rather than standing upright on the
+        // screen. The rotation has to be read per render, not baked in here:
+        // `this.rotation` changes every time the line-end handle is dragged, and
+        // the closure keeps the style honest because the label feature's geometry
+        // is re-set on the same update, which is what triggers the redraw.
+        this.label.setStyle((feature, resolution) =>
+            getMissionTaskStyleFn(getLabel(name), this.labelRotation())(feature, resolution));
+    }
+
+    /**
+     * The "E"'s rotation in OpenLayers' convention: clockwise radians, hence the
+     * negated planar angle. Flipped through 180° when the approach points left,
+     * so the letter never renders upside down — the same upright rule
+     * `getRotation` applies to the retrograde and exfiltrate labels.
+     */
+    private labelRotation(): number {
+        let r = -(this.rotation * Math.PI) / 180;
+        if (r > Math.PI / 2 || r < -Math.PI / 2) r += Math.PI;
+        if (r > Math.PI) r -= 2 * Math.PI;
+        return r;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -717,7 +747,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
 
     /**
      * Drags one of Envelopment's two shape handles, in the order
-     * `Envelopment.generateHandles` emits them: `[apex, lineEnd]`, the centre
+     * `Envelopment.generateHandles` emits them: `[arrowTip, lineEnd]`, the centre
      * having been split onto the inert feature by `publishHandles`.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
@@ -726,7 +756,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         const dx = coordinate[0] - centre[0];
         const dy = coordinate[1] - centre[1];
 
-        if (handleIndex === ENVELOPMENT_TIP_HANDLE) {
+        if (handleIndex === ENVELOPMENT_LINE_HANDLE) {
             // The line's end carries both of the approach's inputs: how long it
             // runs and which way it points. `bend` is unitless and rides along,
             // so the circle keeps its proportion through a resize.
@@ -737,16 +767,22 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
             return;
         }
 
-        // Apex: the cursor's signed perpendicular distance from the approach,
-        // over `size`. The apex sits at `(size + radius)` along the axis and
-        // `radius` off it, so the perpendicular component *is* the radius —
-        // which is why the handle tracks the pointer exactly, and why dragging
-        // it across the approach flips which flank the envelopment sweeps.
-        // CCW perpendicular, matching the generator's `angle + side * π/2`.
+        // Arrow tip. It sits at `size + 2 * radius` along the approach and
+        // nothing off it, so — unlike Turn's bend handle — the perpendicular
+        // offset cannot carry the radius. The two components split the job:
+        // distance *along* the axis past the line's end is the circle's
+        // diameter, and the side the cursor strays to picks the flank.
         const theta = (this.rotation * Math.PI) / 180;
-        const perpX = -Math.sin(theta);
-        const perpY = Math.cos(theta);
-        this.bend = clampEnvelopmentBend((dx * perpX + dy * perpY) / this.size);
+        const along = dx * Math.cos(theta) + dy * Math.sin(theta);
+        const perp = dx * -Math.sin(theta) + dy * Math.cos(theta);
+
+        const radius = Math.max(0, (along - this.size) / 2);
+        // Hold the current flank unless the drag commits to the other one, so a
+        // handle resting on the axis cannot flip on jitter alone.
+        const current = Math.sign(this.bend) || 1;
+        const side = Math.abs(perp) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perp) : current;
+
+        this.bend = clampEnvelopmentBend((side || 1) * (radius / this.size));
         this.updateGeometry();
     }
 }
