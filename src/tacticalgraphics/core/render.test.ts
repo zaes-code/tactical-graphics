@@ -353,3 +353,54 @@ describe('README stays honest about the registry', () => {
         expect(Number(quoted![1])).toBe(listTacticalGraphicNames().length);
     });
 });
+
+/**
+ * The arc-and-arrowhead circles leave a hole for their one-letter label. It is a
+ * *fraction of the circle*, which is the best a generator can do with no glyph to
+ * measure — but a renderer that can measure one asks for none and cuts its own.
+ */
+describe('labelGapDegrees on the arc mission tasks', () => {
+    /** Bearings of an arc's two ends, relative to the label axis, in degrees. */
+    const arcEnds = (feature: Feature, subLine: number): [number, number] => {
+        const {graphic} = renderTacticalGraphic(feature);
+        const geom = graphic.geometry as {type: string; coordinates: number[][][]};
+        const centre = (feature.geometry as {coordinates: number[]}).coordinates;
+        const line = geom.coordinates[subLine];
+        // Planar angle about the centre, 0 = east — the frame `createCircularArc`
+        // works in. Longitude has to be scaled by cos(lat) first: a degree of it
+        // is not a degree of latitude anywhere but the equator, and without the
+        // correction a 15° arc end reads as 19°.
+        const lonScale = Math.cos((centre[1] * Math.PI) / 180);
+        const at = (p: number[]) => (Math.atan2(p[1] - centre[1], (p[0] - centre[0]) * lonScale) * 180) / Math.PI;
+        return [at(line[0]), at(line[line.length - 1])];
+    };
+
+    const secureWith = (labelGapDegrees?: number): Feature => ({
+        type: 'Feature',
+        geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
+        properties: {tacticalGraphic: {name: TacticalGraphicName.Secure, size: 1000, rotation: 0, labelGapDegrees}},
+    });
+
+    it('defaults to a 15° half-gap, so a raw-GeoJSON consumer gets a legible hole', () => {
+        const [upperStart] = arcEnds(secureWith(), 0);
+        const [, lowerEnd] = arcEnds(secureWith(), 1);
+        expect(upperStart).toBeCloseTo(15, 0);
+        expect(lowerEnd).toBeCloseTo(-15, 0);
+    });
+
+    it('runs the arcs to the label axis when asked for none', () => {
+        const [upperStart] = arcEnds(secureWith(0), 0);
+        const [, lowerEnd] = arcEnds(secureWith(0), 1);
+        expect(Math.abs(upperStart)).toBeLessThan(0.5);
+        expect(Math.abs(lowerEnd)).toBeLessThan(0.5);
+    });
+
+    it('leaves the arrowhead gap alone — only the label side moves', () => {
+        for (const gap of [undefined, 0]) {
+            const [, upperEnd] = arcEnds(secureWith(gap), 0);
+            const [lowerStart] = arcEnds(secureWith(gap), 1);
+            expect(upperEnd).toBeCloseTo(175, 0);
+            expect(lowerStart).toBeCloseTo(-155, 0);
+        }
+    });
+});
