@@ -3,7 +3,8 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
+import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
@@ -270,6 +271,28 @@ function labelZoomMultiplier(drawRes: number | undefined, resolution: number): n
 }
 
 /**
+ * Ceiling shared by every *size-proportional* label scale — the block family's
+ * `featureGraphicLabelScale` and the ratio-locked mission tasks'
+ * `ratioLockedLabelScale`.
+ *
+ * Both formulas track the graphic's rendered size with nothing stopping them, so
+ * a large or zoomed-in graphic grew a letter of unbounded height: a Breach drawn
+ * 400 px wide rendered its "B" at ~90 px. The zoom-anchored scales never did
+ * that — `featureLabelScale` and `getLineLabelScale` both stop at 1.5× the
+ * configured label size, which is why "EX", "DIS" and the Lines labels stay
+ * readable-but-sane at every altitude.
+ *
+ * This is that same ceiling, so a size-proportional label tops out exactly where
+ * a zoom-anchored one does. It is a multiple of the *configured* label size, not
+ * an absolute pixel count, so raising `labelSize` in the config raises the cap
+ * with it. Note the families that share it also share the 24 px font literal, so
+ * "1.5" means 36 px of glyph for them and 24 px for anything on `fontStyle`.
+ */
+export function maxGraphicLabelScale(): number {
+    return (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * MAX_LABEL_ZOOM_MULTIPLIER;
+}
+
+/**
  * Unified label scale for all graphics.
  * - Uses drawingResolution stored on the feature (set at creation time) to anchor the
  *   label size: at drawing zoom the text is exactly defaultLabelSize px; when zoomed
@@ -292,6 +315,9 @@ export function featureLabelScale(feature: FeatureLike, resolution: number): num
  * - `graphicSizePx = graphicSize / resolution`, so the label grows with both
  *   user resize (graphicSize map units) and zoom-in (resolution shrinks).
  * - `K` keeps the rendered label well under the graphic's perpendicular extent.
+ * - The result is capped at `maxGraphicLabelScale()` so the growth stops where a
+ *   zoom-anchored label's does; past that the letter only gets smaller relative
+ *   to the graphic, never larger on screen.
  */
 const GRAPHIC_LABEL_FRACTION = 0.5;
 export function featureGraphicLabelScale(feature: FeatureLike, resolution: number): number {
@@ -299,7 +325,7 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
     if (graphicSize && graphicSize > 0) {
         const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
         const graphicSizePx = graphicSize / resolution;
-        return sizeFactor * GRAPHIC_LABEL_FRACTION * graphicSizePx / BASE_FONT_SIZE_PX;
+        return Math.min(maxGraphicLabelScale(), sizeFactor * GRAPHIC_LABEL_FRACTION * graphicSizePx / BASE_FONT_SIZE_PX);
     }
     return featureLabelScale(feature, resolution);
 }
@@ -2463,14 +2489,16 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
         // 5) compute the center of the gap for the dot
         const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
 
-        // 6) build styles for the echelon in the middle
+        // 6) build styles for the echelon in the middle. The label lies along the
+        // segment whose gap holds it — `getRotation` flips it through 180° when
+        // that segment points left, so it never renders upside down.
         const textStyle = new Style({
             geometry: new Point(midGap),
             text: new Text({
                 text: label,
                 font: labelFont,
                 fill: new Fill({color: getLabelFillColor()}),
-                rotation: 0,
+                rotation: getRotation(p1, p2),
                 textAlign: 'center',
                 textBaseline: 'middle',
                 scale: labelScale,
@@ -2545,10 +2573,13 @@ export function exfiltrateStyleFunc(label: string): StyleFunction {
             new Style({
                 geometry: new Point(midGap),
                 text: new Text({
+                    // Lies along the first segment, the one the gap is cut from.
+                    // `getRotation` adds 180° for a right-to-left segment, so the
+                    // "EX" reads the right way up whichever way the route was drawn.
                     text: label,
                     font: labelFont,
                     fill: new Fill({color: getLabelFillColor()}),
-                    rotation: 0,
+                    rotation: getRotation(p1, p2),
                     textAlign: 'center',
                     textBaseline: 'middle',
                     scale: labelScale,
@@ -3657,11 +3688,12 @@ function tacticalFixStyleFromLabels(labels: GraphicLabels): StyleFunction {
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
 
         // Sized to render ~22.5px tall at the 145px min line length, matching
-        // the block-family label size at minimum.
+        // the block-family label size at minimum — and capped at the same
+        // ceiling they are, so a long Fix does not grow an outsized "F".
         const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
         const lenPx = len / resolution;
         const K = 0.10;
-        const scale = sizeFactor * K * lenPx / BASE_FONT_SIZE_PX;
+        const scale = Math.min(maxGraphicLabelScale(), sizeFactor * K * lenPx / BASE_FONT_SIZE_PX);
 
         styles.push(new Style({
             geometry: new Point(labelAnchor),
@@ -3700,10 +3732,11 @@ export function defaultStyleFunc(): StyleFunction {
  * is read from `feature.get('graphicSize')` — `MissionTaskGraphicBase`
  * stamps it on the label feature each time the geometry updates.
  *
- * Scale formula: `radiusPx / SCALE_DIVISOR`. With divisor 30, a 60 px
- * radius circle gets a scale of ≈ 2.0 → "BDZ" renders ~48 px tall, which
- * fits comfortably inside the circle. Lower the divisor for a larger
- * label, raise it for a smaller one.
+ * Scale formula: `radiusPx / SCALE_DIVISOR`, floored so a tiny circle still
+ * renders something and capped at `maxGraphicLabelScale()` like every other
+ * size-proportional label. Lower the divisor for a larger label, raise it for a
+ * smaller one; past a ~68 px radius the cap is what decides, so the divisor
+ * only shapes how the label grows on the way there.
  */
 export function baseDefenseZoneLabelStyleFn(): StyleFunction {
     return (feature, resolution) => {
@@ -3711,7 +3744,7 @@ export function baseDefenseZoneLabelStyleFn(): StyleFunction {
         const size = feature.get('graphicSize') as number | undefined;
         const radiusPx = size && size > 0 ? size / resolution : 0;
         const SCALE_DIVISOR = 45;
-        const scale = Math.max(0.1, radiusPx / SCALE_DIVISOR);
+        const scale = Math.min(maxGraphicLabelScale(), Math.max(0.1, radiusPx / SCALE_DIVISOR));
         return [new Style({
             geometry: geom,
             text: new Text({
@@ -4976,6 +5009,148 @@ export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFuncti
  * string or the measured width won't match the drawn glyph.
  */
 export const RATIO_LOCKED_LABEL_FONT = 'bold 24px sans-serif';
+/** Declared px size of `RATIO_LOCKED_LABEL_FONT`, for glyph-height math. */
+const RATIO_LOCKED_LABEL_FONT_PX = 24;
+
+/** Clearance between the label's glyph box and each arc end, in screen pixels. */
+const ARC_LABEL_CLEARANCE_PX = 5;
+/**
+ * Widest the label gap may open, in degrees of arc either side of the label.
+ * Only reached when the circle is small enough that the letter genuinely spans
+ * that much of it; past this the arcs would stop reading as a circle at all, so
+ * the letter is allowed to overhang instead.
+ */
+const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
+
+/** Smallest angle between two directions, in radians — always in [0, π]. */
+function angleBetween(a: number, b: number): number {
+    const d = Math.abs(a - b) % (2 * Math.PI);
+    return d > Math.PI ? 2 * Math.PI - d : d;
+}
+
+/**
+ * Trims the end of one arc that runs into the label, back to `halfGap` radians
+ * clear of the label axis. Whichever end is nearer the axis is the one cut, so
+ * this works for an arc that approaches the label from either side.
+ *
+ * The cut lands **exactly** on the gap edge rather than on the nearest sample:
+ * the generator's arcs are 100 points over 160°, and at a large radius one 1.6°
+ * step is several pixels — enough for the two sides of the gap to look uneven.
+ *
+ * Angles are measured about the projected centre, and radii are never assumed:
+ * a geodesic circle is not quite a circle in EPSG:3857, so anything that
+ * reconstructed a point from `graphicSize` would drift off the drawn arc.
+ */
+function cutArcAtLabel(pts: Coordinate[], centre: Coordinate, axis: number, halfGap: number): Coordinate[] {
+    if (pts.length < 2) return pts;
+    const angleAt = (p: Coordinate) => Math.atan2(p[1] - centre[1], p[0] - centre[0]);
+    const clearance = (p: Coordinate) => angleBetween(angleAt(p), axis);
+
+    const fromStart = clearance(pts[0]) <= clearance(pts[pts.length - 1]);
+    const seq = fromStart ? pts : [...pts].reverse();
+
+    let i = 0;
+    while (i < seq.length && clearance(seq[i]) < halfGap) i++;
+    if (i === 0) return pts;        // already clear of the label
+    if (i >= seq.length) return []; // the whole arc is inside the gap
+
+    const before = clearance(seq[i - 1]);
+    const after = clearance(seq[i]);
+    const t = after > before ? (halfGap - before) / (after - before) : 0;
+    const edge: Coordinate = [
+        seq[i - 1][0] + t * (seq[i][0] - seq[i - 1][0]),
+        seq[i - 1][1] + t * (seq[i][1] - seq[i - 1][1]),
+    ];
+    const kept = [edge, ...seq.slice(i)];
+    return fromStart ? kept : kept.reverse();
+}
+
+/** Every sub-line of a MultiLineString / GeometryCollection of them, in order. */
+function flattenLineWork(geom: Geometry | RenderFeature | undefined): Coordinate[][] {
+    if (geom instanceof MultiLineString) return geom.getCoordinates() as Coordinate[][];
+    if (geom instanceof LineString) return [geom.getCoordinates() as Coordinate[]];
+    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenLineWork(g));
+    return [];
+}
+
+/** The filled rings alongside that line work — AreaDefense's teeth, and nothing else today. */
+function flattenFilledRings(geom: Geometry | RenderFeature | undefined): Coordinate[][][] {
+    if (geom instanceof Polygon) return [geom.getCoordinates() as Coordinate[][]];
+    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenFilledRings(g));
+    return [];
+}
+
+/**
+ * The arc-and-arrowhead mission tasks — Secure, Isolate, Retain, Occupy,
+ * Control, Contain, Cordon and Search — with the gap for their one-letter label
+ * **cut from the rendered glyph** rather than left as a fixed slice of the
+ * circle.
+ *
+ * The generator is asked for no gap at all (`labelGapDegrees: 0`), so its two
+ * arcs run right up to the label axis and this function takes back exactly what
+ * the letter needs. A fixed angular gap could not do that: 30° of a 100 px
+ * circle is a comfortable hole around a 22 px letter, and 30° of a 400 px circle
+ * is a hole four times too big around the *same* letter, since the label scale
+ * is capped. @see maxGraphicLabelScale
+ *
+ * **The gap is tangential, so it comes off the glyph's height as much as its
+ * width.** The label is drawn horizontally wherever it sits on the circle: with
+ * the label due east the letter's *height* is what runs along the arc, and with
+ * it due north, its width. Projecting the glyph box onto the tangent covers both
+ * and everything between — measuring the width alone left the east/west labels,
+ * which is most of them, sitting in a hole far wider than the letter.
+ *
+ * Sub-lines `[0]` and `[1]` are the two arcs (`MissionTask.labelGapArcs`);
+ * everything after them — arrowheads, teeth, radials — is drawn untouched.
+ */
+export function arcMissionTaskStyleFunc(name: TacticalGraphicName, ratioLocked: boolean): StyleFunction {
+    const label = getLabel(name);
+    return (feature, resolution) => {
+        const lines = flattenLineWork(feature.getGeometry());
+        if (!lines.length) return [];
+
+        const centre = feature.get('graphicCenter') as Coordinate | undefined;
+        const labelPoint = feature.get('graphicLabelPoint') as Coordinate | undefined;
+        const radius = centre && labelPoint ? Math.hypot(labelPoint[0] - centre[0], labelPoint[1] - centre[1]) : 0;
+
+        if (centre && labelPoint && radius > 0 && label) {
+            const axis = Math.atan2(labelPoint[1] - centre[1], labelPoint[0] - centre[0]);
+            const scale = ratioLocked ? ratioLockedLabelScale(feature, resolution) : featureLabelScale(feature, resolution);
+            const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
+            const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
+
+            const halfWidthPx = getTextWidth(label, font, scale) / 2;
+            const halfHeightPx = (fontPx * scale * CAP_HEIGHT_FRACTION) / 2;
+            // Half-extent of the glyph box along the tangent at the label.
+            const tangentHalfPx =
+                halfWidthPx * Math.abs(Math.sin(axis)) + halfHeightPx * Math.abs(Math.cos(axis)) + ARC_LABEL_CLEARANCE_PX;
+            const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * resolution) / radius);
+
+            for (const i of [0, 1]) {
+                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], centre, axis, halfGap);
+            }
+        }
+
+        const color = readHostilityColor(feature);
+        const stroke = new Stroke({color, width: LINE_WIDTH()});
+        const styles: Style[] = [];
+
+        const drawn = lines.filter(line => line.length >= 2);
+        if (drawn.length) styles.push(new Style({geometry: new MultiLineString(drawn), stroke}));
+
+        // AreaDefense's teeth are solid polygons rather than open outlines; every
+        // other member of the family has none, so this costs them nothing.
+        const rings = flattenFilledRings(feature.getGeometry());
+        if (rings.length) {
+            styles.push(new Style({
+                geometry: new MultiPolygon(rings),
+                fill: new Fill({color}),
+                stroke,
+            }));
+        }
+        return styles;
+    };
+}
 
 /**
  * Label height as a fraction of the graphic's `graphicSize` on screen. Lower
@@ -4989,12 +5164,17 @@ const RATIO_LOCKED_LABEL_FRACTION = 0.3;
  * Scale of a ratio-locked mission task's label. Exported because the graphic
  * style functions that open a gap for that label have to size the gap from the
  * same number the label is drawn at.
+ *
+ * Capped at `maxGraphicLabelScale()`, the same ceiling the block family's
+ * `featureGraphicLabelScale` stops at — a big circle keeps its one-letter label
+ * at a readable size instead of scaling it up without limit. The cap applies to
+ * the gap math for free, since both read this one number.
  */
 export function ratioLockedLabelScale(feature: FeatureLike, resolution: number): number {
     const radius = feature.get('graphicSize') as number | undefined;
     if (radius && radius > 0) {
         const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        return sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (radius / resolution) / BASE_FONT_SIZE_PX;
+        return Math.min(maxGraphicLabelScale(), sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (radius / resolution) / BASE_FONT_SIZE_PX);
     }
     return featureLabelScale(feature, resolution);
 }
