@@ -3285,6 +3285,64 @@ const DECORATION_MAX_SHARE_OPEN = 0.05;
 /** Below this many screen pixels a decoration is dropped rather than drawn. */
 const DECORATION_MIN_PX = 3;
 
+/**
+ * Length of a solid arrowhead, in screen pixels.
+ *
+ * 15 is Fix's own head at its minimum draw: `FIX_TRIANGLE_WIDTH_RATIO` is `15/145`
+ * and `LineGraphicBase` enforces a 145 px minimum first segment, so a freshly
+ * drawn Fix has always carried a 15 px head. It is the one calibrated value among
+ * the three solid heads, so the others adopt it.
+ */
+const SOLID_ARROWHEAD_PX = 15;
+
+/**
+ * The share of its graphic's on-screen length an arrowhead may occupy before it
+ * starts shrinking with the shape.
+ *
+ * Much larger than `DECORATION_MAX_SHARE_OPEN`, and deliberately so. That share is
+ * small because a tooth or a merlon **repeats** along the path, so one of them a
+ * twentieth of the line long is already a lot of ink. An arrowhead appears once,
+ * at the end, and a head a quarter of a short graphic still reads correctly — a
+ * 5% cap would shrink it on any graphic under 300 px, which is most of them.
+ */
+const ARROWHEAD_MAX_SHARE = 0.25;
+
+/**
+ * Redraws a generator-emitted solid arrowhead at a fixed screen size.
+ *
+ * The generators build their heads in metres — Fix's off the drawn line's length,
+ * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
+ * — so resizing the graphic resized the head, and Turn's swelled on screen as you
+ * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
+ *
+ * Kept in the style layer rather than re-derived into the geometry, per the house
+ * rule that a zoom-invariant size is `px * resolution` computed at draw time. The
+ * generators still emit their own heads, so a consumer reading the raw GeoJSON
+ * gets a complete symbol — the same split `labelGapDegrees` uses.
+ *
+ * Scaled **about the tip**, because the tip is the meaningful point: it is where
+ * the arrow lands, and the generator has already put it in the right place.
+ *
+ * Returns null when the head would fall under `DECORATION_MIN_PX`, letting the
+ * plain geometry stand rather than drawing a smudge.
+ */
+function screenSizedArrowHead(head: Polygon, path: Coordinate[], resolution: number): Polygon | null {
+    const ring = head.getCoordinates()[0];
+    if (!ring || ring.length < 3) return null;
+    const [tip, left, right] = ring;
+    const baseMid: Coordinate = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+    const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
+    if (currentLength === 0) return null;
+
+    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
+    const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
+    if (wantedPx < DECORATION_MIN_PX) return null;
+
+    const factor = (wantedPx * resolution) / currentLength;
+    return new Polygon([ring.map(p =>
+        [tip[0] + (p[0] - tip[0]) * factor, tip[1] + (p[1] - tip[1]) * factor] as Coordinate)]);
+}
+
 /** The point at a distance along a polyline, with the unit direction there. */
 function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
     let remaining = Math.max(0, distance);
@@ -3632,15 +3690,35 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
 
 function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
     return (f, resolution) => {
-        let color = readHostilityColor(f);
-        return new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        });
+        const color = readHostilityColor(f);
+        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
+        const geom = f.getGeometry();
+        // One geometry-less style used to cover the whole collection. The two
+        // arrowheads have to be drawn separately now so they can be re-sized to
+        // screen pixels rather than following the dragged `size`.
+        if (!(geom instanceof GeometryCollection)) {
+            return new Style({fill: new Fill({color}), stroke: lineStroke});
+        }
+        const subs = geom.getGeometries();
+        const line = subs.find(g => g instanceof LineString) as LineString | undefined;
+        const path = line?.getCoordinates() ?? [];
+
+        const styles: Style[] = [];
+        for (const sub of subs) {
+            if (sub instanceof Polygon) {
+                const head = screenSizedArrowHead(sub, path, resolution);
+                if (head) {
+                    styles.push(new Style({
+                        geometry: head,
+                        fill: new Fill({color}),
+                        stroke: new Stroke({color, width: LINE_WIDTH()}),
+                    }));
+                }
+            } else {
+                styles.push(new Style({geometry: sub, stroke: lineStroke}));
+            }
+        }
+        return styles;
     };
 }
 
@@ -3664,26 +3742,33 @@ function tacticalFixStyleFromLabels(label: string, labels: GraphicLabels): Style
     return (f, resolution) => {
         const styles: Style[] = [];
         const color = readHostilityColor(f);
-        styles.push(new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        }));
+        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
 
         const geom = f.getGeometry();
         let lineCoords: Coordinate[] | undefined;
         if (geom instanceof GeometryCollection) {
-            for (const sub of geom.getGeometries()) {
-                if (sub instanceof LineString) {
-                    lineCoords = sub.getCoordinates();
-                    break;
+            const subs = geom.getGeometries();
+            const line = subs.find(g => g instanceof LineString) as LineString | undefined;
+            lineCoords = line?.getCoordinates();
+            // The arrowhead is drawn separately from the zigzag so it can hold a
+            // screen size instead of following the drawn line's length.
+            for (const sub of subs) {
+                if (sub instanceof Polygon) {
+                    const head = screenSizedArrowHead(sub, lineCoords ?? [], resolution);
+                    if (head) {
+                        styles.push(new Style({
+                            geometry: head,
+                            fill: new Fill({color}),
+                            stroke: new Stroke({color, width: LINE_WIDTH()}),
+                        }));
+                    }
+                } else {
+                    styles.push(new Style({geometry: sub, stroke: lineStroke}));
                 }
             }
-        } else if (geom instanceof LineString) {
-            lineCoords = geom.getCoordinates();
+        } else {
+            styles.push(new Style({fill: new Fill({color}), stroke: lineStroke}));
+            if (geom instanceof LineString) lineCoords = geom.getCoordinates();
         }
         if (!lineCoords || lineCoords.length < 2) return styles;
 
@@ -5507,10 +5592,16 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
         const halfGap = label ? (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution : 0;
 
         const styles: Style[] = [];
+        // The curve, for capping the head against the graphic's own on-screen size.
+        const curve = geom.getGeometries()
+            .filter((g): g is MultiLineString => g instanceof MultiLineString)
+            .flatMap(g => g.getCoordinates().flat());
         for (const sub of geom.getGeometries()) {
             if (sub instanceof Polygon) {
-                // The arrowhead — filled, and never trimmed.
-                styles.push(new Style({geometry: sub, fill: new Fill({color}), stroke}));
+                // The arrowhead — filled, never trimmed, and held at a screen size
+                // rather than the metres the generator baked in at draw time.
+                const head = screenSizedArrowHead(sub, curve, resolution);
+                if (head) styles.push(new Style({geometry: head, fill: new Fill({color}), stroke}));
                 continue;
             }
             if (!(sub instanceof MultiLineString)) {
