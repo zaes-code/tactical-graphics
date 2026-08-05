@@ -9,7 +9,12 @@
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
-import {CircularAreaGraphicBase, MissionTaskGraphicBase, TurnGraphicBase} from './graphics/MissionTaskGraphicBase';
+import {
+    CircularAreaGraphicBase,
+    EnvelopmentGraphicBase,
+    MissionTaskGraphicBase,
+    TurnGraphicBase,
+} from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 // import {SearchArea} from './graphics/SearchArea';
@@ -22,7 +27,7 @@ import {Boundary} from './graphics/Boundary';
 import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
+import {DroppedEditableController, MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
@@ -86,6 +91,16 @@ const missionTask = (name: TacticalGraphicName, res: number) => {
 // pan the map — and the bend handle rides the manager's per-handle drag hook.
 const turn = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new TurnGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Envelopment follows Turn's shape model — point-anchored, with a second handle
+// for the half circle's radius riding the manager's per-handle drag hook — but
+// is placed with a single click rather than a centre-to-edge drag, so it goes
+// down as one finished piece. `DroppedEditableController` is that pairing.
+const envelopment = (name: TacticalGraphicName, res: number) => {
+    const controller = new DroppedEditableController(new EnvelopmentGraphicBase(name, res * 40, res), res * 40);
     controller.editStretches = true;
     return controller;
 };
@@ -337,7 +352,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),
     [TacticalGraphicName.Pursuit]:            missionTask,
-    [TacticalGraphicName.Envelopment]:        movement(),
+    [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
     [TacticalGraphicName.Infiltration]:       movement(),

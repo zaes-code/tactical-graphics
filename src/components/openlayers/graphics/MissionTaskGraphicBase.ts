@@ -21,11 +21,19 @@ import {
     getTextWidth,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
+    envelopmentGraphicStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
-import {clampTurnBend, getLabel, TacticalGraphicName, TURN_DEFAULT_BEND} from '@zaes/tactical-graphics';
+import {
+    clampEnvelopmentBend,
+    clampTurnBend,
+    ENVELOPMENT_DEFAULT_BEND,
+    getLabel,
+    TacticalGraphicName,
+    TURN_DEFAULT_BEND,
+} from '@zaes/tactical-graphics';
 
 /**
  * Turn's arrowhead length in screen pixels at the drawing zoom. Baked into
@@ -50,6 +58,11 @@ const TURN_ARROWHEAD_PX = 26;
 const TURN_LABEL_GAP_METRES = 0;
 /** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
 const TURN_TIP_HANDLE = 1;
+
+/** Envelopment's arrowhead length in screen pixels at the drawing zoom. @see TURN_ARROWHEAD_PX */
+const ENVELOPMENT_ARROWHEAD_PX = 22;
+/** Index of the line-end handle in `Envelopment.generateHandles`' output. */
+const ENVELOPMENT_TIP_HANDLE = 1;
 
 /**
  * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing
@@ -108,6 +121,7 @@ const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
     ...CROSSED_MISSION_TASKS,
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Turn,
+    TacticalGraphicName.Envelopment,
 ];
 const RATIO_LOCKED_MIN_RADIUS_PX = 50;
 
@@ -199,6 +213,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // so it needs a fill as well as a stroke, and not the default blue one.
         if (name === TacticalGraphicName.TacticalTurn || name === TacticalGraphicName.Turn) {
             this.graphic.setStyle(turnStyleFunc(name));
+        }
+        // Envelopment is point-anchored like Turn but still emits the same
+        // MultiLineString the line-drawn version did, so its style function is
+        // unchanged — only how the geometry gets built moved.
+        if (name === TacticalGraphicName.Envelopment) {
+            this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
         // MovementToContact: shift the zigzag "contact" side arrows outward so
         // they don't touch the big arrow's arrowhead edge. B→A
@@ -662,6 +682,71 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
         this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
+        this.updateGeometry();
+    }
+}
+
+/**
+ * Envelopment — the same point-anchored model as Turn, with `bend` standing for
+ * the half circle's radius rather than a curve's depth.
+ *
+ * @see Envelopment in the core library for why the circle is derived from the
+ * approach rather than drawn: it is what puts the arrowhead on the line's own
+ * continuation and stops the user assembling the circle wrong.
+ */
+export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
+    /** @see ENVELOPMENT_DEFAULT_BEND */
+    bend: number = ENVELOPMENT_DEFAULT_BEND;
+    private readonly headSize: number;
+
+    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
+        super(name, size, drawingResolution);
+        this.headSize = ENVELOPMENT_ARROWHEAD_PX * (drawingResolution ?? 1);
+    }
+
+    protected generatorOptions(): Record<string, unknown> {
+        return {bend: this.bend, headSize: this.headSize};
+    }
+
+    protected persistedGeometryState(): GraphicGeometryState {
+        // `headSize` is derived from `drawingResolution`, which the renderer bag
+        // already carries. `bend` is portable — it is the shape, not a rendering
+        // choice, and another view would need it to draw the same hook.
+        return {bend: this.bend};
+    }
+
+    /**
+     * Drags one of Envelopment's two shape handles, in the order
+     * `Envelopment.generateHandles` emits them: `[apex, lineEnd]`, the centre
+     * having been split onto the inert feature by `publishHandles`.
+     */
+    setBandRange(handleIndex: number, coordinate: Coordinate): void {
+        const centre = this.base.getGeometry()?.getCoordinates();
+        if (!centre || this.size <= 0) return;
+        const dx = coordinate[0] - centre[0];
+        const dy = coordinate[1] - centre[1];
+
+        if (handleIndex === ENVELOPMENT_TIP_HANDLE) {
+            // The line's end carries both of the approach's inputs: how long it
+            // runs and which way it points. `bend` is unitless and rides along,
+            // so the circle keeps its proportion through a resize.
+            const reach = Math.hypot(dx, dy);
+            if (reach <= 0) return;
+            this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+            this.updateGeom({size: reach});
+            return;
+        }
+
+        // Apex: the cursor's signed perpendicular distance from the approach,
+        // over `size`. The apex sits at `(size + radius)` along the axis and
+        // `radius` off it, so the perpendicular component *is* the radius —
+        // which is why the handle tracks the pointer exactly, and why dragging
+        // it across the approach flips which flank the envelopment sweeps.
+        // CCW perpendicular, matching the generator's `angle + side * π/2`.
+        const theta = (this.rotation * Math.PI) / 180;
+        const perpX = -Math.sin(theta);
+        const perpY = Math.cos(theta);
+        this.bend = clampEnvelopmentBend((dx * perpX + dy * perpY) / this.size);
         this.updateGeometry();
     }
 }
