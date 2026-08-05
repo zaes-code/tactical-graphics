@@ -54,8 +54,14 @@ export function clampTurnBend(bend: number): number {
  *   `[1]` Polygon arrowhead
  */
 export class Turn extends TacticalGraphicsBase<TurnOptions> {
-    name: string = TacticalGraphicName.TacticalTurn;
+    name: string;
     type: string = 'Point';
+
+    /** Mission task or table 5-19 obstacle effect — same bowed arrow, "T" aside. @see Block */
+    constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalTurn) {
+        super();
+        this.name = name;
+    }
 
     /** The bowed curve, start → arrow end, in EPSG:4326. */
     private curve(base: Feature<Point>, opts?: TurnOptions): Position[] {
@@ -92,9 +98,18 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         ];
     }
 
-    /** Half the gap left for the label, in metres. */
+    /**
+     * Half the gap left for the label, in metres.
+     *
+     * The table 5-19 obstacle effect has no "T", so it gets no hole to put one
+     * in. The OpenLayers path passes `labelGap: 0` for both names and so never
+     * reaches the default, but a consumer taking the raw GeoJSON would
+     * otherwise get a break in an unbroken curve.
+     */
     private halfGap(opts?: TurnOptions): number {
-        return opts?.labelGap ?? (opts?.size ?? 1) * LABEL_GAP_RATIO;
+        if (opts?.labelGap !== undefined) return opts.labelGap;
+        if (this.name === TacticalGraphicName.Turn) return 0;
+        return (opts?.size ?? 1) * LABEL_GAP_RATIO;
     }
 
     generateGraphics(base: Feature<Point>, opts?: TurnOptions): Feature<GeometryCollection> {

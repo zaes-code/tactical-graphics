@@ -107,6 +107,23 @@ describe('sweeping with a hostility', () => {
         expect(supportsHostility(TacticalGraphicName.LineOfContact)).toBe(false);
         expect(others).not.toContain(TacticalGraphicName.LineOfContact);
     });
+
+    it('skips the table 5-19 obstacle effects, which twin a mission task', () => {
+        // Chapter 5 by category, so the derivation above would switch hostility
+        // on for them. But each is drawn as an exact copy of the Chapter 6
+        // mission task of the same doctrinal name, letter aside, and a twin
+        // that goes red where its original stays black is not a twin.
+        const twins = [
+            TacticalGraphicName.Block,
+            TacticalGraphicName.Disrupt,
+            TacticalGraphicName.Fix,
+            TacticalGraphicName.Turn,
+        ];
+        twins.forEach(name => {
+            expect(supportsHostility(name)).toBe(false);
+            expect(others).not.toContain(name);
+        });
+    });
 });
 
 /**
