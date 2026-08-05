@@ -4,8 +4,48 @@ import {Coordinate, PointGraphicOptions, TacticalGraphicName} from "../core/type
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
 
+/**
+ * Half the gap the arc-and-arrowhead circles leave for their one-letter label,
+ * in degrees, when the caller supplies no `labelGapDegrees`. 15° each side of
+ * the label axis — a 30° hole, which is what these graphics have always drawn.
+ *
+ * It is a *fraction of the circle*, so it grows with the graphic while the label
+ * inside it does not. That is fine for a static GeoJSON consumer, which has no
+ * glyph to measure, and wrong for a live renderer, which does: the OpenLayers
+ * layer passes 0 here and cuts the gap from the rendered text instead.
+ */
+export const DEFAULT_LABEL_GAP_DEGREES = 15;
+/** Nothing sensible is left of the circle past this. */
+const MAX_LABEL_GAP_DEGREES = 60;
+
+/** Resolved half-gap for the label, in degrees. @see DEFAULT_LABEL_GAP_DEGREES */
+function labelGapDegrees(opts: PointGraphicOptions): number {
+    const requested = opts.labelGapDegrees ?? DEFAULT_LABEL_GAP_DEGREES;
+    return Math.max(0, Math.min(MAX_LABEL_GAP_DEGREES, requested));
+}
+
 export abstract class MissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
     type: string = "Point";
+
+    /**
+     * The two arcs the arc-and-arrowhead circles are built from: an upper one
+     * running from the label gap round to 175°, and a lower one from 205° back
+     * to the label gap. The two holes are what the family reads as — the label
+     * sits in one, the arrowhead ends in the other.
+     *
+     * One helper rather than seven copies of the same two calls, because the
+     * label-side ends are the thing `labelGapDegrees` moves and they have to
+     * move together. **Sub-lines `[0]` and `[1]` of the emitted geometry are
+     * these two arcs, in this order** — `arcMissionTaskStyleFunc` cuts the gap
+     * by trimming exactly those two, and reordering them breaks it.
+     */
+    protected labelGapArcs(center: Position, opts: PointGraphicOptions): {upperArch: Position[]; lowerArch: Position[]} {
+        const gap = labelGapDegrees(opts);
+        return {
+            upperArch: geometryService.createCircularArc(center, opts.rotation, opts.size, gap, 175, 100),
+            lowerArch: geometryService.createCircularArc(center, opts.rotation, opts.size, 205, 360 - gap, 100),
+        };
+    }
 
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
         let center = base.geometry.coordinates;
@@ -25,9 +65,8 @@ export class Control extends MissionTask {
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let center = base.geometry.coordinates;
-        let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        let {size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let lowerArrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
         let upperArrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(upperArch[upperArch.length - 2], upperArch[upperArch.length - 1], size / 4, 45);
         return this.asMultiLineStringFeature([upperArch, lowerArch, lowerArrowHeadCoords, upperArrowHeadCoords]);
@@ -41,8 +80,7 @@ export class CordonAndSearch extends MissionTask {
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let center = base.geometry.coordinates;
         let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
         let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
@@ -61,8 +99,7 @@ export class Isolate extends MissionTask {
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let center = base.geometry.coordinates;
         let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
         let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
@@ -81,8 +118,7 @@ export class Retain extends MissionTask {
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let center = base.geometry.coordinates;
         let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
         let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size / 2.5, 6);
         let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size / 2.5, 5);
@@ -99,9 +135,8 @@ export class Secure extends MissionTask {
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let center = base.geometry.coordinates;
-        let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        let {size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
         return this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]);
     }
@@ -113,8 +148,12 @@ export class Contain extends MissionTask {
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let center = base.geometry.coordinates;
         let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 165, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 195, 270, 100);
+        // Contain is a half-circle, and its label sits due west at 180° rather
+        // than at the rotation axis — so the gap opens either side of 180, not
+        // either side of 0. Same knob, different centre.
+        const gap = labelGapDegrees(opts);
+        const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 180 - gap, 100);
+        const lowerArch = geometryService.createCircularArc(center, rotation, size, 180 + gap, 270, 100);
         let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size / 2.5, 7);
 
         // The center radial sits at ~180° (due-west of centre) — exactly where
@@ -145,9 +184,8 @@ export class Occupy extends MissionTask {
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let center = base.geometry.coordinates;
-        let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        let {size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
         let reverseArrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], -size / 4, 45);
         return this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords, reverseArrowHeadCoords]);
@@ -160,8 +198,7 @@ export class AreaDefense extends MissionTask {
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let center = base.geometry.coordinates;
         let {rotation, size} = opts;
-        const upperArch = geometryService.createCircularArc(center, rotation, size, 15, 175, 100);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
         let upperArrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(upperArch[upperArch.length - 2], upperArch[upperArch.length - 1], size / 4, 45);
 
