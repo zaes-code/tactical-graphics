@@ -718,21 +718,53 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // the closure keeps the style honest because the label feature's geometry
         // is re-set on the same update, which is what triggers the redraw.
         this.label.setStyle((feature, resolution) =>
-            getMissionTaskStyleFn(getLabel(name), this.labelRotation())(feature, resolution));
+            getMissionTaskStyleFn(getLabel(name), this.projectedRotation)(feature, resolution));
+
+        // `updateGeometry` is an arrow property on the base, not a method, so it
+        // cannot be overridden — wrap it instead. Every path that rebuilds the
+        // graphic goes through it, so the label is re-anchored on draw, resize,
+        // rotate, translate and both handle drags alike.
+        const rebuild = this.updateGeometry;
+        this.updateGeometry = () => {
+            rebuild();
+            this.reanchorLabel();
+        };
     }
 
+    /** The approach's bearing **as drawn**, in OpenLayers' clockwise radians. */
+    private projectedRotation = 0;
+
     /**
-     * The "E"'s rotation in OpenLayers' convention: clockwise radians, hence the
-     * negated planar angle. Flipped through 180° when the approach points left,
-     * so the letter never renders upside down — the same upright rule
-     * `getRotation` applies to the retrograde and exfiltrate labels.
+     * Re-anchors the "E" onto the line the renderer actually draws.
+     *
+     * The generator works in EPSG:4326 and the renderer in EPSG:3857, whose y is
+     * **not** linear in latitude — so a label the generator places exactly on its
+     * axis lands slightly off the straight segment drawn between that axis's
+     * reprojected endpoints. It measured 3.5 km off a 4739 km run, which is a
+     * fraction of a pixel zoomed out and grows linearly as you zoom in: the "E"
+     * visibly drifts off the line. Nothing was moving; the error was there all
+     * along and only zoom made it legible.
+     *
+     * Both the anchor and the rotation are therefore taken from the projected
+     * segment. 0.25 is the same fraction `envelopmentGraphicStyleFunc` opens its
+     * gap at, measured on the same coordinates, so the letter and its hole cannot
+     * drift apart at any zoom.
      */
-    private labelRotation(): number {
-        let r = -(this.rotation * Math.PI) / 180;
+    private reanchorLabel = (): void => {
+        const geom = this.graphic.getGeometry();
+        if (!(geom instanceof MultiLineString)) return;
+        const run = geom.getCoordinates()[0];
+        if (!run || run.length < 2) return;
+        const [a, b] = [run[0], run[run.length - 1]];
+        this.label.setGeometry(new Point([a[0] + (b[0] - a[0]) * 0.25, a[1] + (b[1] - a[1]) * 0.25]));
+
+        // Upright rule, as `getRotation` applies to the retrograde labels: flip
+        // through 180° when the approach points left so the "E" is never inverted.
+        let r = -Math.atan2(b[1] - a[1], b[0] - a[0]);
         if (r > Math.PI / 2 || r < -Math.PI / 2) r += Math.PI;
         if (r > Math.PI) r -= 2 * Math.PI;
-        return r;
-    }
+        this.projectedRotation = r;
+    };
 
     protected generatorOptions(): Record<string, unknown> {
         return {bend: this.bend, headSize: this.headSize};
