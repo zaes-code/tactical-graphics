@@ -272,14 +272,20 @@ let securityOperationGraphics = [
 ]
 securityOperationGraphics.forEach(name => TacticalGraphicsRegistry.register(new SecurityOperation(name)));
 
-TacticalGraphicsRegistry.register(new Block());
+// Block, Disrupt, Fix and Turn are each registered twice. FM 1-02.2 gives all
+// four names both a Chapter 6 tactical mission task and a Chapter 5 table 5-19
+// obstacle effect, drawn identically bar the doctrinal letter — and the letter
+// is added by the renderer, not here, so one generator serves both names.
+// register() keys off generator.name and throws on a duplicate, so this has to
+// be two instances rather than one registered twice.
+[TacticalGraphicName.TacticalBlock, TacticalGraphicName.Block].forEach(n => TacticalGraphicsRegistry.register(new Block(n)));
 TacticalGraphicsRegistry.register(new Breach());
 TacticalGraphicsRegistry.register(new Bypass());
 TacticalGraphicsRegistry.register(new Canalize());
 TacticalGraphicsRegistry.register(new Clear());
-TacticalGraphicsRegistry.register(new Disrupt());
-TacticalGraphicsRegistry.register(new Fix());
-TacticalGraphicsRegistry.register(new Turn());
+[TacticalGraphicName.TacticalDisrupt, TacticalGraphicName.Disrupt].forEach(n => TacticalGraphicsRegistry.register(new Disrupt(n)));
+[TacticalGraphicName.TacticalFix, TacticalGraphicName.Fix].forEach(n => TacticalGraphicsRegistry.register(new Fix(n)));
+[TacticalGraphicName.TacticalTurn, TacticalGraphicName.Turn].forEach(n => TacticalGraphicsRegistry.register(new Turn(n)));
 TacticalGraphicsRegistry.register(new Penetration());
 TacticalGraphicsRegistry.register(new Exploitation());
 
