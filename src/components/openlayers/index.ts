@@ -13,10 +13,10 @@
  * reason — one controller renders a unit symbol with it.
  *
  * ```ts
- * import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
+ * import {TacticalGraphicName} from '@zaes/tactical-graphics';
  * import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
  *
- * const manager = new TacticalGraphicsManager(map, source);
+ * const manager = new TacticalGraphicsManager(map);   // it brings its own vector layer
  * manager.startDrawing(TacticalGraphicName.PhaseLine);
  * ```
  *
@@ -100,10 +100,9 @@ export {
 } from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
-// the base — and `restoreTacticalGraphics` rebuilds them editable. Each record carries
-// two objects: `tacticalGraphic` (the portable description any renderer understands) and
-// `renderer` (this renderer's bookkeeping, chiefly the drawing resolution decoration
-// sizes were derived from). Keep both; see persistence.ts for why.
+// the base — and `restoreTacticalGraphics` rebuilds them editable. A record carries one
+// object, `tacticalGraphic`: the portable description any renderer understands, and
+// everything needed to rebuild. No viewport state travels with it; see persistence.ts.
 export {
     SNAPSHOT_VERSION,
     applyRestoredGeometry,
@@ -114,7 +113,6 @@ export type {
     RestoreFailure,
     RestoreReport,
     SerializeOptions,
-    TacticalGraphicRendererState,
     TacticalGraphicsSnapshot,
 } from './persistence';
 
