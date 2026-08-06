@@ -218,6 +218,22 @@ style functions read all follow from it.
 This method was previously called `handleDrawTacticalGraphic`. That name still works
 — it delegates to `startDrawing` — but it is deprecated.
 
+### The radius read-out
+
+While a circular graphic is drawn or resized, the renderer draws a hashed line from its
+centre out along the gesture, labelled with the distance — metres below a kilometre,
+kilometres above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
+ends, and it never reaches `serializeTacticalGraphics` or a restored map.
+
+It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
+mission tasks, the range fans. Graphics whose radius is real but not a dimension you could
+measure on the drawn shape are deliberately excluded: Ambush is a hooked arrow, Turn and
+Tactical Turn are bowed arrows.
+
+That same list decides whether the Feature Properties dialog shows a **Radius** read-out,
+so a graphic can never report a radius in one place and not the other. Both are read-outs,
+not inputs — a graphic is sized by dragging it.
+
 ### Driving one graphic yourself
 
 Skip the manager's draw interaction when you are placing graphics from data rather
