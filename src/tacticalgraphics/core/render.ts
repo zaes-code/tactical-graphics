@@ -57,8 +57,7 @@ export interface TacticalGraphicProperties {
     endDate?: string;
     minAltitude?: string;
     maxAltitude?: string;
-    /** Corridor half-width, in metres, as a string. */
-    width?: string;
+
     eff?: string;
     grid?: string;
     /** Weapon designation. Today only FinalProtectiveFire renders this. */
@@ -73,12 +72,28 @@ export interface TacticalGraphicProperties {
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
-     * Size scalar in **metres**, meaning varies by graphic (arrowhead spread,
-     * perpendicular offset, ...). Defaults are applied per graphic when omitted.
+     * Radius in **metres**: how far the symbol reaches from its own centre. The circle
+     * radius for the arc mission tasks and circular areas, and the half-length of a
+     * point-anchored arrow. Defaults are applied per graphic when omitted.
+     *
+     * **Caveat, see `ai/decisions.md`:** six generators — Direction, FieldsOfFire,
+     * PassageLane, FerryCrossing, Bridge, AreaGraphic — still consume this as metres per
+     * *screen pixel* and multiply it by a pixel count of their own. For those, a value in
+     * metres comes out ~20x too large. Known, recorded, not yet fixed.
      */
-    size?: number;
-    /** Radius in **metres** for circular and point-based graphics. */
     radius?: number;
+    /**
+     * **Full** width in metres, measured across a drawn line: rail to rail on an
+     * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
+     * and what a properties dialog shows.
+     *
+     * Full, not half — the generators work in half-widths (the perpendicular offset
+     * from the centreline), so `toGraphicOptions` halves it on the way in and the
+     * holders double it on the way out. The doubling is kept inside the library
+     * precisely so a consumer never has to know about it: you send the width you
+     * would measure on the map.
+     */
+    width?: number;
     /** Rotation in degrees, for point-based graphics. */
     rotation?: number;
     /**
@@ -153,18 +168,21 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
 
 /** Maps the public property bag onto the internal generator option bag. */
 function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
-    const width = props.width !== undefined && props.width !== '' ? Number(props.width) : undefined;
+    // Public field -> internal generator option. The two disagree on names by design:
+    // generators still speak `size` / `radius`, and renaming 200-odd call sites inside
+    // them buys nothing a consumer can see. This is the one place the mapping lives.
     const options = {
         hostility: props.hostility,
         status: props.status,
         echelon: props.echelon,
         direction: props.direction,
-        size: props.size,
-        radius: props.radius,
+        size: props.radius,     // public `radius` is the generators' `size`
+        // Public `width` is a full width; the generators' `radius` is the half-width
+        // offset from the centreline. This is the only place the factor of two lives.
+        radius: props.width !== undefined ? props.width / 2 : undefined,
         rotation: props.rotation,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,
-        width: Number.isFinite(width) ? width : undefined,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
     };

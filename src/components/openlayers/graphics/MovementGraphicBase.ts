@@ -114,7 +114,7 @@ export class MovementGraphicBase implements LineGraphic {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         // `radius` travels with the amplifiers — a bare write would drop the offset.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {radius: this.offset});
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
     };
 
     updateGeometry = () => {
@@ -148,7 +148,8 @@ export class MovementGraphicBase implements LineGraphic {
         // drawing resolution. Published after the offset-handle test above so the write
         // covers the feature set that actually exists.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
-            radius: this.offset,
+            // Stamped as a full width; `offset` is the half-width the generator takes.
+            width: this.offset * 2,
         });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {
