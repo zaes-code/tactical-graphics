@@ -129,8 +129,8 @@ tacticalGraphic: {
     decorationSize: 300,      // how big to draw a line graphic's decorations — an
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
-    width: 300,               // perpendicular HALF-width from a drawn line — the offset
-                              // of an axis-of-advance's rails from its centreline
+    width: 600,               // FULL width across a drawn line — rail to rail on an axis
+                              // of advance, edge to edge on a corridor
     rotation: 45,             // degrees (point graphics)
     bend: 0.8,                // Turn only — how sharply it turns, × radius
     labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
@@ -144,6 +144,57 @@ Save it, `POST` it, put it in PostGIS, diff it in git — then render it back wi
 The rendered output carries the same `properties.tacticalGraphic` plus a `role` of
 `graphic`, `label` or `handle`, so your styling code can read a graphic's amplifiers
 straight off the feature it is drawing.
+
+### Sizing a graphic
+
+Three fields size a graphic, and which one applies depends on what the symbol *is*. They
+are all in meters and none of them overlap — a graphic reads one.
+
+| Field | Means | Graphics |
+|---|---|---|
+| `radius` | reach from the symbol's own centre | circles and point-anchored symbols |
+| `width` | **full** width across a drawn line | axes of advance, corridors |
+| `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
+
+**`radius` — a circle, sized from its centre:**
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
+    properties: {tacticalGraphic: {name: 'Secure', radius: 5000, rotation: 0}},
+});                                             // a 5 km circle → 10 km across
+```
+
+**`width` — rail to rail across a drawn line.** Full width, not half: send the number you
+would measure on the map, and the library halves it internally to offset each rail.
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
+    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
+});                                             // rails 300 m either side of the centreline
+```
+
+**`decorationSize` — the ornament on a line, not a reach.** A direction of attack is its
+drawn line plus an arrowhead; there is no centre to take a radius of, which is why this is
+its own field.
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
+    properties: {tacticalGraphic: {name: 'DirectionOfSupportingAttack', decorationSize: 400}},
+});
+```
+
+> **Known issue.** The generators that read `decorationSize` still treat it as meters per
+> *screen pixel* and multiply by a pixel count of their own, so a value in meters comes out
+> around 20x too large. Eleven graphics are affected; see `ai/decisions.md`. Pass a value
+> around 1/20 of the size you want until that is fixed.
+
+Omit any of them and the graphic falls back to its own default.
 
 ### Which base geometry does a graphic need?
 
