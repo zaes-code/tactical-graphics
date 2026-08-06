@@ -18,7 +18,7 @@ function schemaFields(): Set<string> {
         src.indexOf('export interface TacticalGraphicProperties'),
         src.indexOf('/** Which part of a rendered graphic a feature represents. */'),
     );
-    return new Set([...body.matchAll(/^\s{4}(\w+)\??:/gm)].map(m => m[1]));
+    return new Set(Array.from(body.matchAll(/^\s{4}(\w+)\??:/gm), m => m[1]));
 }
 
 /** Field names in the README's `tacticalGraphic: { ... }` catalogue block. */
@@ -26,13 +26,13 @@ function readmeFields(): Set<string> {
     const md = read('README.md');
     const start = md.indexOf('tacticalGraphic: {\n    // Required');
     const block = md.slice(start, md.indexOf('\n}\n```', start));
-    return new Set([...block.matchAll(/^\s{4}(\w+):/gm)].map(m => m[1]));
+    return new Set(Array.from(block.matchAll(/^\s{4}(\w+):/gm), m => m[1]));
 }
 
 describe('the README documents the schema that exists', () => {
     it('documents no field the schema does not have', () => {
         const schema = schemaFields();
-        const documented = [...readmeFields()];
+        const documented = Array.from(readmeFields());
         expect(documented.length).toBeGreaterThan(5);
         expect(documented.filter(f => !schema.has(f))).toEqual([]);
     });
