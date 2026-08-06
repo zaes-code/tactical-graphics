@@ -24,13 +24,13 @@ describe('setLabel keeps the geometry state', () => {
         expect(readGraphicGeometryState(c.getFeatures()[0]).width).toBe(18000);
     });
 
-    it('line graphic keeps its stamped radius', () => {
+    it('line graphic keeps its stamped decoration size', () => {
         const g = new LineGraphicBase(TacticalGraphicName.PassageLane, 1200);
         g.setBaseFeature(line() as never);
-        const before = readGraphicGeometryState(g.getFeatures()[0]).radius;
+        const before = readGraphicGeometryState(g.getFeatures()[0]).decorationSize;
         expect(before).toBeGreaterThan(0);
 
         g.setLabel({label: 'PL-1'});
-        expect(readGraphicGeometryState(g.getFeatures()[0]).radius).toBe(before);
+        expect(readGraphicGeometryState(g.getFeatures()[0]).decorationSize).toBe(before);
     });
 });

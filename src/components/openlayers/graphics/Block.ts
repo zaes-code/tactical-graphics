@@ -162,7 +162,7 @@ export class Block implements LineGraphic {
         // A ratio-locked name re-derives `size` from the base length on restore and
         // ignores this; the rest have no other record of the size they were built with.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
         });
     };
 

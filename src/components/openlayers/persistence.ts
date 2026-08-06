@@ -121,7 +121,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'width', 'rotation', 'bend'] as const;
+const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -292,9 +292,10 @@ export function applyRestoredGeometry(
         // half-width (movement, air corridor), `radius` for the ones whose number is a
         // reach or a decoration size. After the geometry — `setOffset` regenerates, and
         // there is nothing to regenerate from until the base is set.
-        // `setOffset` takes the holder's own number: a half-width for the width family,
-        // the raw scalar for the rest. `width` is stored full, so halve it back.
-        const scalar = state.width !== undefined ? state.width / 2 : state.radius;
+        // `setOffset` takes the holder's own number, and a holder owns exactly one of the
+        // three: a half-width for the width family (stored full, so halve it back), a
+        // decoration size for the line families, a radius for anything with a centre.
+        const scalar = state.width !== undefined ? state.width / 2 : (state.decorationSize ?? state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         return;
     }
@@ -355,6 +356,7 @@ export function restoreTacticalGraphics(
 
             const state: GraphicGeometryState = {
                 radius: bag.radius as number | undefined,
+                decorationSize: bag.decorationSize as number | undefined,
                 width: bag.width as number | undefined,
                 rotation: bag.rotation as number | undefined,
                 bend: bag.bend as number | undefined,

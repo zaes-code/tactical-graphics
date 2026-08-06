@@ -76,12 +76,26 @@ export interface TacticalGraphicProperties {
      * radius for the arc mission tasks and circular areas, and the half-length of a
      * point-anchored arrow. Defaults are applied per graphic when omitted.
      *
-     * **Caveat, see `ai/decisions.md`:** six generators — Direction, FieldsOfFire,
-     * PassageLane, FerryCrossing, Bridge, AreaGraphic — still consume this as metres per
-     * *screen pixel* and multiply it by a pixel count of their own. For those, a value in
-     * metres comes out ~20x too large. Known, recorded, not yet fixed.
+     * Only for graphics that *have* a centre. A line graphic's arrowhead or teeth are
+     * sized by `decorationSize`, which is a different quantity that was briefly and
+     * wrongly folded in here.
      */
     radius?: number;
+    /**
+     * How large to draw the decorations a line graphic carries — an arrowhead's barb
+     * length, a passage lane's teeth, the offset of a bridge's labels.
+     *
+     * Separate from `radius` because it is not a reach from anywhere:
+     * `DirectionOfSupportingAttack` is a MultiLineString of the drawn line plus an
+     * arrowhead, and there is no centre to take a radius of. The two were briefly one
+     * field, which made `radius` mean two unrelated things depending on the graphic.
+     *
+     * **Caveat, see `ai/decisions.md`:** the generators that read this still consume it as
+     * metres per *screen pixel* and multiply by a pixel count of their own, so a value in
+     * metres comes out ~20x too large. That is the open item this field's existence makes
+     * findable rather than hidden inside `radius`.
+     */
+    decorationSize?: number;
     /**
      * **Full** width in metres, measured across a drawn line: rail to rail on an
      * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
@@ -176,7 +190,9 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         status: props.status,
         echelon: props.echelon,
         direction: props.direction,
-        size: props.radius,     // public `radius` is the generators' `size`
+        // Both land on the generators' `size`, which is the one slot they offer; a given
+        // graphic reads it as one or the other and never sets both.
+        size: props.radius ?? props.decorationSize,
         // Public `width` is a full width; the generators' `radius` is the half-width
         // offset from the centreline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
