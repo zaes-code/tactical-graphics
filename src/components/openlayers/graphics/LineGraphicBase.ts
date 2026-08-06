@@ -242,9 +242,9 @@ export class LineGraphicBase implements LineGraphic {
 
         // Persist the *effective* metre value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
-        // zoom it happens to be at. `radius` is the schema's name for this scalar.
+        // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
-            radius: this.graphicSize(),
+            decorationSize: this.graphicSize(),
         });
     };
 
@@ -253,7 +253,7 @@ export class LineGraphicBase implements LineGraphic {
         // Stamping fires a `change` event on each feature, which re-renders them.
         // Geometry state travels with the amplifiers — a bare write drops the stamped
         // `radius` and the graphic stops describing itself. @see AirCorridor.setLabel
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {radius: this.graphicSize()});
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {decorationSize: this.graphicSize()});
     };
 
 }

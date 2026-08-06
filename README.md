@@ -124,7 +124,11 @@ tacticalGraphic: {
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own centre:
-                              // circle radius, or a point-anchored arrow's half-length
+                              // circle radius, or a point-anchored arrow's half-length.
+                              // Only for graphics that HAVE a centre.
+    decorationSize: 300,      // how big to draw a line graphic's decorations — an
+                              // arrowhead's barb length, a passage lane's teeth. Not a
+                              // reach from anywhere, which is why it isn't `radius`.
     width: 300,               // perpendicular HALF-width from a drawn line — the offset
                               // of an axis-of-advance's rails from its centreline
     rotation: 45,             // degrees (point graphics)
