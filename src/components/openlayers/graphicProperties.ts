@@ -41,7 +41,7 @@ const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
  * security-operation `scale` that is only interpretable when multiplied by it — are not
  * here. They live under the snapshot's `renderer` object; see `persistence.ts`.
  */
-export type GraphicGeometryState = Pick<TacticalGraphicProperties, 'size' | 'radius' | 'rotation' | 'bend'>;
+export type GraphicGeometryState = Pick<TacticalGraphicProperties, 'radius' | 'width' | 'rotation' | 'bend'>;
 
 /** Feature property naming which part of a graphic a feature is. */
 export const ROLE_KEY = 'role' as const;
@@ -118,10 +118,10 @@ export function writeGraphicProperties(
 export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryState {
     const bag = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
     if (!bag) return {};
-    const {size, radius, rotation, bend} = bag;
+    const {radius, width, rotation, bend} = bag;
     const state: GraphicGeometryState = {};
-    if (size !== undefined) state.size = size;
     if (radius !== undefined) state.radius = radius;
+    if (width !== undefined) state.width = width;
     if (rotation !== undefined) state.rotation = rotation;
     if (bend !== undefined) state.bend = bend;
     return state;
