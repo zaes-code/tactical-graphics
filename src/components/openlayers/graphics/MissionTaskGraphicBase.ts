@@ -8,6 +8,7 @@ import {
     createCenterBaseFeature,
     createFeature,
     createHandleFeature,
+    createMeasureFeature,
     createInertHandleFeature,
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
@@ -117,17 +118,23 @@ const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
 ]);
 
 /**
- * Graphics whose `size` is floored so the symbol is recognisable from the first
- * cursor move. A superset of the ratio-locked set — Turn takes the floor
- * without taking the label treatment.
+ * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
+ * move.
+ *
+ * **The arc mission-task circles are deliberately absent.** Contain, Control, Isolate,
+ * Occupy, Retain and Secure used to take this floor, which stopped them being resized
+ * below a 100px diameter — while Cordon and Search and Area Defense, built from the same
+ * arcs, were never in the list and so had always been free to go small. Users hit the
+ * inconsistency directly: a circle that refuses to shrink reads as a broken handle, not
+ * a rule. Their label still scales from `graphicSize`, so a small circle gets a small
+ * letter rather than one bursting out of it.
+ *
+ * What stays: the crossed four, which are fixed-size badges placed by a single click and
+ * never resized — the floor is what gives them a size at all; and Turn / TacticalTurn /
+ * Envelopment, which are curves rather than circles and collapse into an unreadable kink
+ * without it.
  */
 const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Contain,
-    TacticalGraphicName.Control,
-    TacticalGraphicName.Isolate,
-    TacticalGraphicName.Occupy,
-    TacticalGraphicName.Retain,
-    TacticalGraphicName.Secure,
     ...CROSSED_MISSION_TASKS,
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Turn,
@@ -170,6 +177,7 @@ const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {Stroke, Style} from "ol/style";
 import {LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
+import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
@@ -194,6 +202,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     /** The centre dot — visual anchor only. @see publishHandles */
     centerHandle: Feature<MultiPoint> = <Feature<MultiPoint>>createInertHandleFeature();
     graphic: Feature = createFeature();
+    /**
+     * The radius read-out. Empty unless a gesture is in progress — @see showMeasure.
+     */
+    measure: Feature = createMeasureFeature();
     label: Feature = assignRole(new Feature(), 'label');
     name: TacticalGraphicName;
 
@@ -495,8 +507,79 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.centerHandle.setGeometry(new MultiPoint(coords.filter(onCenter)));
     }
 
+    /**
+     * Arms or disarms the radius read-out.
+     *
+     * Armed by the controller for the duration of a draw or resize gesture and disarmed
+     * when it ends, so the hashed line is a live measurement rather than decoration.
+     * Off by default, which is what keeps it out of a restored map and out of the sample
+     * gallery — both drive `updateGeom` without any gesture.
+     */
+    showMeasure(active: boolean, anchor?: Coordinate): void {
+        this.measuring = active;
+        if (anchor) this.measureAnchor = anchor;
+        if (!active) this.measureAnchor = undefined;
+        this.refreshMeasure();
+    }
+
+    private measuring = false;
+    /**
+     * Where the gesture actually is — the cursor while drawing, the dragged point while
+     * resizing. The line is drawn to whichever handle is nearest it, so the read-out
+     * follows the handle the user has hold of rather than whichever one the generator
+     * happened to emit first.
+     */
+    private measureAnchor: Coordinate | undefined;
+
+    /**
+     * Redraws the line from the centre handle to the edit handle, or clears it when
+     * disarmed.
+     *
+     * Anchored on the two handles rather than on `center` + `size` so it lands exactly
+     * where the user is dragging: the edit handle is the thing under the cursor, and a
+     * line drawn to a computed bearing instead would sit beside it on any graphic whose
+     * handle is not due east.
+     */
+    private refreshMeasure(): void {
+        const edge = this.measureEdge();
+        // Same list the properties dialog reads, so a graphic can never report a radius
+        // in one place and not the other. @see RADIUS_GRAPHICS
+        if (!getGraphicFields(this.name).radius) {
+            this.measure.setGeometry(undefined);
+            return;
+        }
+        if (!this.measuring || !edge || !this.center) {
+            this.measure.setGeometry(undefined);
+            return;
+        }
+        this.measure.setGeometry(new LineString([this.center, edge]));
+    }
+
+    /**
+     * Where the line ends: the radius projected along the direction of the gesture.
+     *
+     * Not the handle coordinate itself. A circular graphic carries one rim handle whose
+     * bearing is derived from `rotation`, and for these graphics that lands roughly
+     * opposite the cursor — measured at 155° out — so drawing to it puts the read-out on
+     * the far side of the circle from the hand moving it. Projecting `size` along
+     * centre→anchor keeps the line under the cursor while staying exactly one radius
+     * long, which is the number the label reports.
+     *
+     * Falls back to the first handle before any gesture has supplied an anchor.
+     */
+    private measureEdge(): Coordinate | undefined {
+        const handles = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
+        const anchor = this.measureAnchor;
+        if (!anchor || !this.center || !this.size) return handles[0];
+        const dx = anchor[0] - this.center[0];
+        const dy = anchor[1] - this.center[1];
+        const len = Math.hypot(dx, dy);
+        if (len === 0) return handles[0];
+        return [this.center[0] + (dx / len) * this.size, this.center[1] + (dy / len) * this.size];
+    }
+
     getFeatures(): Feature[] {
-        return [this.graphic, this.label, this.handles, this.centerHandle, this.base];
+        return [this.graphic, this.label, this.handles, this.centerHandle, this.measure, this.base];
     }
 
     /**
@@ -510,7 +593,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     protected publishGeometryState(extra?: GraphicGeometryState): void {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            size: this.size,
+            radius: this.size,
             rotation: this.rotation,
             ...this.persistedGeometryState(),
             ...extra,
@@ -538,6 +621,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.center = center || this.center;
         this.base.getGeometry()!.setCoordinates(this.center);
         this.updateGeometry();
+        this.refreshMeasure();
     }
 
     setSymbolId(symbolId: string) {
@@ -610,7 +694,7 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         // Geometry inputs travel with the amplifiers — a bare write drops them.
-        writeGraphicProperties(this.getFeatures(), this.name, labels, {size: this.size, rotation: this.rotation});
+        writeGraphicProperties(this.getFeatures(), this.name, labels, {radius: this.size, rotation: this.rotation});
     };
 
 
