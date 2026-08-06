@@ -61,7 +61,7 @@ export class RetrogradeTask implements LineGraphic {
         // rebuild, not just on a width drag, so a graphic the user never touched still
         // describes itself.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
         });
     };
 
@@ -86,10 +86,10 @@ export class RetrogradeTask implements LineGraphic {
         this.size = offset;
         this.updateGeometry();
         // `size` here is the width the user dragged, not a construction-time constant,
-        // so it has to be saved. Persisted as `radius` — the schema's name for an
-        // offset-style scalar — to keep it distinct from a generator `size` default.
+        // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
+        // decoration, and is not a reach from any centre. @see TacticalGraphicProperties.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
         });
     }
 

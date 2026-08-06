@@ -59,7 +59,7 @@ export class Exfiltrate implements LineGraphic {
         // so a restore replays a distance instead of re-deriving one from whatever zoom
         // the loading session happens to be at.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
         });
     };
 
