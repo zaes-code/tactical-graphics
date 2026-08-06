@@ -57,7 +57,7 @@ export class AirCorridor extends MovementGraphicBase {
         // is the one offset graphic that would round-trip without this. Published anyway
         // so restoring never depends on re-parsing a formatted string.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
-            radius: this.offset,
+            width: this.offset * 2,
         });
     };
 
@@ -72,14 +72,20 @@ export class AirCorridor extends MovementGraphicBase {
      * corridor silently resized from a misread number.
      */
     setLabel = (labels: GraphicLabels) => {
-        const requested = parseCorridorWidth(labels.width);
-        if (requested !== null && labels.width !== formatCorridorWidth(this.offset * 2)) {
+        // A width typed into the dialog resizes the corridor. Full width in, half-width
+        // offset out — the factor of two is the library's business, not the user's.
+        const requested = labels.width;
+        if (requested !== undefined && Number.isFinite(requested) && requested > 0 && requested !== this.offset * 2) {
             this.offset = requested / 2;
             this.updateGeometry();
-            labels = {...labels, width: formatCorridorWidth(this.offset * 2)};
+            labels = {...labels, width: this.offset * 2};
         }
         this.graphicLabels = labels;
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels);
+        // Carry the geometry state through. `writeGraphicProperties` replaces the bag
+        // wholesale, so a write that omits `width` erases the width the user dragged —
+        // and nothing recomputes it until the next `updateGeometry`, so a save taken
+        // straight after editing an amplifier would lose it.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
     };
 
     /**
@@ -98,7 +104,7 @@ export class AirCorridor extends MovementGraphicBase {
         // `offset` is the circle radius, so the corridor spans twice that. The
         // generator consumes the same number as turf metres when it builds the
         // rails, so this is the width of the shape as actually drawn.
-        this.setLabel({...this.graphicLabels, width: formatCorridorWidth(offset * 2)});
+        this.setLabel({...this.graphicLabels, width: offset * 2});
     }
 
 }

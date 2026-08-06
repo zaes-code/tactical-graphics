@@ -22,6 +22,13 @@ export interface MissionTaskGraphic extends TacticalGraphic {
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
 
+    /**
+     * Arms the radius read-out — the hashed centre-to-edge line with the size in km —
+     * for the duration of a draw or resize gesture. Optional so a host's own holder can
+     * skip it; the controller no-ops when it is absent.
+     */
+    showMeasure?(active: boolean, anchor?: Coordinate): void;
+
     /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
     setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
@@ -103,6 +110,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
     onDrawStartFunc = (e: DrawEvent) => {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
+        this.graphic.showMeasure?.(true);
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
@@ -113,6 +121,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
             const rotationAngleRad = Math.atan2(dy, dx);
             this.rotationAngleDeg = (rotationAngleRad * 180) / Math.PI;
 
+            // Armed here, immediately before the size lands: arming at drawstart alone
+            // is not enough, because the holder has no size yet at that point.
+            this.graphic.showMeasure?.(true, this.currentMouseCoord);
             this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
 
         });
@@ -123,6 +134,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const radius = circleGeom.getRadius();
 
         this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.showMeasure?.(false);
     };
 
     onPointerMove = (evt: any) => {
@@ -130,8 +142,16 @@ export class MissionTaskController implements TacticalGraphicHandler {
     };
 
     handleResize(deltaSize: number): void {
+        // Armed here rather than on pointer-down: a resize gesture only becomes one once
+        // it actually changes the size. The manager disarms it on pointer-up.
+        this.graphic.showMeasure?.(true);
         const size = this.graphic.size * deltaSize;
         this.graphic.updateGeom({size});
+    }
+
+    /** Ends the read-out. Called by the manager when a drag finishes. @see showMeasure */
+    endGesture(): void {
+        this.graphic.showMeasure?.(false);
     }
 
     handleRotate(deltaAngle: number): void {

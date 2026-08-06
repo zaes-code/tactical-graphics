@@ -133,7 +133,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // Stamping fires a `change` event on each feature, which re-renders them.
         // Carries the geometry inputs through: a bare write here would drop the
         // `size`/`rotation` `updateGeometry` just published.
-        writeGraphicProperties(this.getFeatures(), this.name, labels, {size: this.size, rotation: this.rotation});
+        writeGraphicProperties(this.getFeatures(), this.name, labels, {radius: this.size, rotation: this.rotation});
     };
 
     /**

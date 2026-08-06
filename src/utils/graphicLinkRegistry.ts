@@ -38,7 +38,12 @@ export interface GraphicLabels {
     endDate?: string;
     minAltitude?: string;
     maxAltitude?: string;
-    width?: string;
+    /**
+     * Full width in metres, edge to edge. The same field the geometry schema uses —
+     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
+     * width rather than a string mirror of it that has to be kept in step.
+     */
+    width?: number;
     eff?: string;
     grid?: string;
     weapon?: string;

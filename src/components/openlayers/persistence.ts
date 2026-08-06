@@ -10,49 +10,39 @@
  * it rotates, resizes and modifies exactly as before. So a snapshot holds **only the
  * base feature**.
  *
- * ## Two objects, drawn along one line
+ * ## One object: the graphic describes itself
  *
  * ```jsonc
  * "properties": {
  *   "tacticalGraphic": { "name": …, amplifiers…, "size": …, "rotation": … },
- *   "renderer":        { "drawingResolution": 1200, "scale": 1.7 },
  *   "role": "base", "symbolId": "…", "graphicName": "…"
  * }
  * ```
  *
  * `tacticalGraphic` is the **portable description of the symbol** — the same object the
  * map-agnostic `renderTacticalGraphic` consumes. Everything in it is metres, degrees or
- * text: meaningful to any renderer, in any language, forever.
+ * text: meaningful to any renderer, in any language, forever. There is nothing else,
+ * and that is the contract: a record carrying only this bag rebuilds exactly.
  *
- * `renderer` is **this renderer's bookkeeping**. Both members are viewport quantities
- * that a different renderer could not act on:
+ * ## Why there is no viewport state in the file
  *
- * - `drawingResolution` — metres per *screen pixel* when the graphic was drawn.
- * - `scale` — a multiplier applied to screen-pixel arrow lengths by the security
- *   operation holders. It has no meaning except multiplied by the resolution, which is
- *   precisely why it belongs beside it rather than in the doctrinal bag.
+ * `getController(name, res)` derives decoration sizes from the map resolution —
+ * `20 * res` arrowheads, `res * 20` block widths, `CENTER_PADDING_PX * res` gaps. By the
+ * time the generator sees one it is a distance in **metres**, and a distance is portable;
+ * the metres-per-pixel it came from is not. So holders stamp the derived value into
+ * `tacticalGraphic` on every rebuild, and a restore replays the distance rather than
+ * re-deriving one from whatever zoom the loading session happens to be at.
  *
- * The line is: *would this still mean something to a Cesium view, or to a consumer
- * reading the file in Python?* If yes it is a graphic property; if it only means
- * something to an OpenLayers session, it is renderer state.
+ * The other half is the minimum-length floors (`LineGraphicBase`, `Block`), which
+ * *modify base geometry* against a screen-pixel constant. Right on a draw, wrong on a
+ * restore — suspended for the rebuild, see `suspendMinimumLength`.
  *
- * Grouping them also makes the failure mode honest. As a loose sibling field,
- * `drawingResolution` was easy to drop while transforming the GeoJSON on the way to a
- * database, and dropping it does not fail loudly — it silently rebuilds every graphic at
- * the wrong proportions. One object is one obvious thing to keep, and restore refuses a
- * record without it rather than guessing.
+ * Security operations are the deliberate exception: they hold a constant on-screen size,
+ * so restore re-anchors them to the **live** view resolution.
  *
  * Pass `includeDerived` to additionally emit the rendered `graphic` and `label`
  * features. Restore ignores them; they are there for consumers that only want to draw
  * the shape without this library.
- *
- * ## Why the drawing resolution matters at all
- *
- * `getController(name, resolution)` bakes that resolution into decoration sizes —
- * `20 * res` arrowheads, `res * 20` block widths, `CENTER_PADDING_PX * res` gaps.
- * Rebuilding with the *current* view resolution instead of the saved one produces a
- * graphic of visibly the wrong proportions, and nothing about it looks like a bug in
- * the loader.
  *
  * ## Order matters when restoring
  *
@@ -101,24 +91,6 @@ export const SNAPSHOT_VERSION = 1;
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
 
-/**
- * Renderer bookkeeping that sits *beside* a graphic rather than inside it, because none
- * of it would mean anything to a different renderer. See the note at the top of the file.
- */
-export interface TacticalGraphicRendererState {
-    /**
-     * Metres per screen pixel when the graphic was drawn. Required: decoration sizes are
-     * derived from it at construction, so rebuilding without it gets the proportions
-     * wrong rather than failing.
-     */
-    drawingResolution: number;
-    /**
-     * Security operations only (Cover / Guard / Screen). Multiplies screen-pixel arrow
-     * lengths, so it is only interpretable together with `drawingResolution`.
-     */
-    scale?: number;
-}
-
 /** A GeoJSON FeatureCollection plus the version of the layout its properties use. */
 export interface TacticalGraphicsSnapshot extends FeatureCollection {
     tacticalGraphicsVersion: number;
@@ -149,7 +121,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['size', 'radius', 'rotation', 'bend'] as const;
+const GEOMETRY_KEYS = ['radius', 'width', 'rotation', 'bend'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -195,18 +167,8 @@ function collectProperties(handler: TacticalGraphicHandler): Record<string, unkn
         }
     }
 
-    const renderer: Partial<TacticalGraphicRendererState> = {
-        drawingResolution: findProp<number>(handler, 'drawingResolution'),
-    };
-    // Read live off the holder rather than from a feature: `scale` is renderer state, so
-    // it is deliberately not stamped into the doctrinal bag, and nothing else needs it.
-    if (handler instanceof SecurityOperationsController) {
-        renderer.scale = handler.graphic.getScale();
-    }
-
     return {
         tacticalGraphic: {...bag, name},
-        renderer,
         role: 'base',
         // Mirrors `tacticalGraphic.name` for the OL-side dialog, which reads this
         // property directly. Restore prefers `tacticalGraphic.name`; this is a fallback
@@ -272,7 +234,6 @@ export function applyRestoredGeometry(
     handler: TacticalGraphicHandler,
     base: Feature,
     state: GraphicGeometryState,
-    renderer?: Partial<TacticalGraphicRendererState>,
 ): void {
     if (handler instanceof MissionTaskController) {
         const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
@@ -285,7 +246,7 @@ export function applyRestoredGeometry(
         }
         handler.graphic.updateGeom({
             center: coords as Coordinate,
-            size: state.size,
+            size: state.radius,
             rotation: state.rotation,
         });
         return;
@@ -294,7 +255,6 @@ export function applyRestoredGeometry(
     if (handler instanceof SecurityOperationsController) {
         handler.setBaseFeature(base as Feature<Point>);
         if (state.rotation !== undefined) handler.graphic.setRotation(state.rotation);
-        if (renderer?.scale !== undefined) handler.graphic.setScale(renderer.scale);
         // The centre symbol needs nothing here any more. `setBaseFeature` positions
         // it, and its style is a StyleFunction installed in the controller's
         // constructor. This used to place the icon by hand and rebuild the symbol
@@ -311,10 +271,31 @@ export function applyRestoredGeometry(
     }
 
     if (handler instanceof LineGraphicController) {
-        handler.setBaseFeature(base as Feature<LineString>);
-        // The width drag, for the graphics that have one. After the geometry: `setOffset`
-        // regenerates, and there is nothing to regenerate from until the base is set.
-        if (state.radius !== undefined) handler.setOffset?.(state.radius);
+        // Minimum-length floors modify base geometry against a screen-pixel constant.
+        // Correct while drawing, wrong here: this geometry is already final, so
+        // re-applying a larger floor lengthens the line the user drew. Suspended for the
+        // rebuild only, so draw and modify keep the protection.
+        //
+        // Duck-typed rather than instanceof: `LineGraphicBase` and `Block` both carry
+        // the flag and neither shares a base class with the other, so a name check here
+        // would silently miss whichever one a future holder copies.
+        const holder = handler.graphic as {suspendMinimumLength?: boolean};
+        const guarded = typeof holder.suspendMinimumLength === 'boolean';
+        if (guarded) holder.suspendMinimumLength = true;
+        try {
+            handler.setBaseFeature(base as Feature<LineString>);
+        } finally {
+            if (guarded) holder.suspendMinimumLength = false;
+        }
+        // The holder's own scalar, replayed. A line holder stamps whichever of the two it
+        // owns and never both: `width` for the families whose number is a perpendicular
+        // half-width (movement, air corridor), `radius` for the ones whose number is a
+        // reach or a decoration size. After the geometry — `setOffset` regenerates, and
+        // there is nothing to regenerate from until the base is set.
+        // `setOffset` takes the holder's own number: a half-width for the width family,
+        // the raw scalar for the rest. `width` is stored full, so halve it back.
+        const scalar = state.width !== undefined ? state.width / 2 : state.radius;
+        if (scalar !== undefined) handler.setOffset?.(scalar);
         return;
     }
 
@@ -357,15 +338,15 @@ export function restoreTacticalGraphics(
         let handler: TacticalGraphicHandler | undefined;
         let added: Feature[] = [];
         try {
-            const renderer = (props.renderer ?? {}) as Partial<TacticalGraphicRendererState>;
-            const drawingResolution = renderer.drawingResolution;
-            if (!drawingResolution || drawingResolution <= 0) {
-                throw new Error(
-                    'missing renderer.drawingResolution — the graphic would rebuild at the wrong scale',
-                );
+            // The current view resolution, and nothing from the file. Holders seed their
+            // decoration sizes from it, then the stamped metre values in `tacticalGraphic`
+            // overwrite them — so which resolution this is does not affect the result.
+            const resolution = manager.map.getView().getResolution();
+            if (!resolution || resolution <= 0) {
+                throw new Error('no resolution available to build the controller with');
             }
 
-            handler = getController(name, drawingResolution);
+            handler = getController(name, resolution);
             handler.setSymbolId(symbolId);
             handler.getFeatures().forEach(f => {
                 f.set('graphicName', name);
@@ -373,8 +354,8 @@ export function restoreTacticalGraphics(
             });
 
             const state: GraphicGeometryState = {
-                size: bag.size as number | undefined,
                 radius: bag.radius as number | undefined,
+                width: bag.width as number | undefined,
                 rotation: bag.rotation as number | undefined,
                 bend: bag.bend as number | undefined,
             };
@@ -405,7 +386,24 @@ export function restoreTacticalGraphics(
             if (holder.setLabel) holder.setLabel(labels);
             else writeGraphicProperties(handler.getFeatures(), name, labels, state);
 
-            applyRestoredGeometry(handler, handler.graphic.base, state, renderer);
+            applyRestoredGeometry(handler, handler.graphic.base, state);
+
+            // Re-anchor a security operation to the *current* zoom.
+            //
+            // Every size in that holder is a screen-pixel constant times the live map
+            // resolution, and `updateResolution` recomputes all of them together — which
+            // is why it holds a constant on-screen size while you zoom. The resolution it
+            // was drawn at therefore means nothing to it, and seeding the controller with
+            // the saved one leaves the graphic at the wrong on-screen size until the user
+            // happens to zoom and a `change:resolution` fires. Restoring at a different
+            // zoom than the graphic was drawn at is the normal case, not the exception.
+            //
+            // After `applyRestoredGeometry`, not before: `updateResolution` rebuilds from
+            // the base geometry and the scale, and neither is on the holder until then.
+            if (handler instanceof SecurityOperationsController) {
+                const current = manager.map.getView().getResolution();
+                if (current && current > 0) handler.graphic.updateResolution(current);
+            }
 
             // Re-read: the offset handle only exists once there is geometry.
             added = handler.getFeatures();
