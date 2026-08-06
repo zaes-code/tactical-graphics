@@ -113,8 +113,6 @@ tacticalGraphic: {
     maxAltitude: '2000',
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
-    corridorWidth: '600',     // air corridors — FULL width, as shown in a dialog.
-                              // Display only; the geometry comes from `width`.
 
     // Symbology — affects color and dash pattern.
     hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
