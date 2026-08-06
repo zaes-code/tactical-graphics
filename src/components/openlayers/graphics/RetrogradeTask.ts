@@ -54,6 +54,15 @@ export class RetrogradeTask implements LineGraphic {
 
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        // Persist the *effective* metre value, not the viewport factor it came from.
+        // `size` starts life as `20 x drawingResolution`, but what the generator actually
+        // consumed is a distance in metres — and that is what a snapshot can carry and a
+        // restore can replay without knowing anything about zoom. Stamped on every
+        // rebuild, not just on a width drag, so a graphic the user never touched still
+        // describes itself.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            radius: this.size,
+        });
     };
 
 

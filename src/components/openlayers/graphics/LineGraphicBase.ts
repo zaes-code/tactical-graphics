@@ -28,7 +28,7 @@ import {
 import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
-import {writeGraphicProperties} from "../graphicProperties";
+import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
@@ -115,6 +115,20 @@ export class LineGraphicBase implements LineGraphic {
 
     private enforcingMinLength = false;
 
+    /**
+     * Suspends the minimum-length guards below while a snapshot is rebuilt.
+     *
+     * Those guards *modify the base geometry*, and their floors are screen-pixel
+     * constants times the map resolution. On a draw or a vertex modify that is right —
+     * they stop a gesture producing a line too short for the symbol to fit in. On a
+     * restore it is not: the geometry is already final and was already valid, so
+     * re-running the guard at a different resolution silently extends the drawn line.
+     *
+     * Set by `applyRestoredGeometry` for the duration of the rebuild only, so draw and
+     * modify keep the protection.
+     */
+    suspendMinimumLength = false;
+
     setBaseFeature(base: Feature<LineString>): void {
         // AviationDirectionOfAttack carries a bow-tie baked into geometry near
         // the start of the line. Enforce a minimum first-segment length so the
@@ -127,6 +141,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             this.graphicName === TacticalGraphicName.AviationDirectionOfAttack &&
             this.resolution &&
+            !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
             this.enforcingMinLength = true;
@@ -144,6 +159,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             (this.graphicName === TacticalGraphicName.TacticalFix || this.graphicName === TacticalGraphicName.Fix) &&
             this.resolution &&
+            !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
             this.enforcingMinLength = true;
@@ -188,23 +204,56 @@ export class LineGraphicBase implements LineGraphic {
         geom.setCoordinates(newCoords);
     }
 
+    /**
+     * The `size` scalar handed to the generator, in metres.
+     *
+     * Starts as the draw-time resolution — one screen pixel's worth of ground — and is
+     * replaced outright by a restored value. Most graphics in this family ignore `size`
+     * (PhaseLine and friends are pure line work), but the ones that read it — PassageLane,
+     * FieldsOfFire, FerryCrossing — would otherwise rebuild at whatever resolution the
+     * restoring session happened to be at.
+     */
+    private sizeOverride: number | undefined;
+
+    private graphicSize(): number {
+        return this.sizeOverride ?? this.resolution ?? 0;
+    }
+
+    /**
+     * Replays a stamped `size`. Named for the `LineGraphic` hook restore already calls;
+     * no graphic in this family has a draggable width handle, so nothing else reaches it.
+     */
+    setOffset(size: number) {
+        this.sizeOverride = size;
+        this.updateGraphic();
+    }
+
     updateGraphic = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.resolution}
+            {size: this.graphicSize()}
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphics.setGeometry(graphic);
         this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+
+        // Persist the *effective* metre value rather than the viewport factor it came
+        // from, so a restore replays a distance instead of re-deriving one from whatever
+        // zoom it happens to be at. `radius` is the schema's name for this scalar.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
+            radius: this.graphicSize(),
+        });
     };
 
     setLabel = (labels: GraphicLabels): void => {
         this.graphicLabel = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels);
+        // Geometry state travels with the amplifiers — a bare write drops the stamped
+        // `radius` and the graphic stops describing itself. @see AirCorridor.setLabel
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {radius: this.graphicSize()});
     };
 
 }

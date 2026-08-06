@@ -37,6 +37,8 @@ export type GraphicFieldSet = {
     altitude2: boolean;
     /** Width field (Airspace Area). */
     width: boolean;
+    /** Circle radius in metres — the graphics a user resizes by a radius. */
+    radius: boolean;
     /** Grids field (Airspace Coordination Area). */
     grids: boolean;
     /** Used for FinalProtectiveFire */
@@ -58,7 +60,7 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
@@ -74,6 +76,7 @@ function f(
         altitude1: false,
         altitude2: false,
         width: false,
+        radius: false,
         grids: false,
         weapon: false,
         rangeFan: false,
@@ -493,7 +496,61 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
 
 // ── Public accessor ───────────────────────────────────────────────────────────
 
+/**
+ * The graphics a user sizes by dragging a radius — every name routed through
+ * `MissionTaskController`. They are the ones whose `radius` is a real reach from the
+ * centre rather than a decoration scalar, so they are the only ones worth showing it for.
+ *
+ * Listed rather than derived from the controller registry to keep this module free of
+ * the holder imports that registry pulls in; the compiler checks every name.
+ *
+ * Routed through that controller but deliberately absent — sized by a radius internally,
+ * but not drawn as a circle, so the number is not a dimension a reader would recognise
+ * on the shape in front of them:
+ *
+ * - **Ambush** — a hooked arrow.
+ * - **Turn** and **TacticalTurn** — bowed arrows; the radius belongs to the curve that
+ *   generates them, not to anything with an edge you could measure to.
+ *
+ * `MissionTaskGraphicBase.refreshMeasure` reads this same set, so a name left out here
+ * loses its measure line as well as its modal row. That coupling is deliberate — the two
+ * report the same quantity, and a graphic showing a radius in one place but not the other
+ * would read as a bug.
+ */
+const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.BaseDefenseZone,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.FightingPosition,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.MovementToContact,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.PositionAreaArtilleryCircular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+    TacticalGraphicName.Pursuit,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.TargetAreaCircular,
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+]);
+
 export function getGraphicFields(name: TacticalGraphicName): GraphicFieldSet {
     const base = GRAPHIC_FIELDS[name] ?? f(true, false, false, false, false);
-    return {...base, hostility: supportsHostility(name)};
+    // Both are decided centrally rather than per entry — same reasoning as `hostility`.
+    return {...base, hostility: supportsHostility(name), radius: RADIUS_GRAPHICS.has(name)};
 }

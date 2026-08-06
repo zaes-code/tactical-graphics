@@ -286,6 +286,10 @@ export class TacticalGraphicsManager {
             handleDragEvent: this.handleDragEvent,
             handleUpEvent: (): boolean => {
                 this.lastPointerPosition = null;
+                // The drag is over, so any live measurement read-out goes with it. Done
+                // here rather than in the controller because this is the one place every
+                // drag gesture ends, however it started.
+                (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
                 this.activeController = undefined;
                 return false;
             },
@@ -353,6 +357,14 @@ export class TacticalGraphicsManager {
 
     handleDragEvent = (evt: MapBrowserEvent): void => {
         if (!this.lastPointerPosition || !this.activeController) return;
+
+        // Feed the drag position to any radius read-out, so its line follows the handle
+        // under the cursor. The controller has no coordinate of its own during a resize —
+        // only a scale delta — so it has to come from here. `handleUpEvent` disarms it.
+        if (this.isResizing()) {
+            (this.activeController as {graphic?: {showMeasure?: (a: boolean, c?: Coordinate) => void}})
+                .graphic?.showMeasure?.(true, evt.coordinate);
+        }
 
         // handle point vs linestring vs polygon vs circular graphics differently.
         let geomType = this.activeController.geomHandleType;
@@ -688,7 +700,14 @@ export class TacticalGraphicsManager {
         this.setInteractionMode(InteractionType.view);
     };
 
-    handleDrawTacticalGraphic = (name: TacticalGraphicName) => {
+    /**
+     * Puts the map into draw mode for one graphic: the user clicks out the base
+     * geometry, and this builds, styles and wires up everything that follows from
+     * it. The primary verb of this package.
+     *
+     * @see handleDrawTacticalGraphic for the former name, kept as an alias.
+     */
+    startDrawing = (name: TacticalGraphicName) => {
         if (this.draw) this.map.removeInteraction(this.draw);
 
         // create a new source for drawing, this can be modified per application
@@ -753,6 +772,20 @@ export class TacticalGraphicsManager {
             this.stopDrawing(tacticalGraphicHandler, false);
         });
     };
+
+    /**
+     * The former name of {@link startDrawing}, kept so the rename is not a breaking
+     * change for anyone already calling it.
+     *
+     * It delegates rather than aliasing the field (`= this.startDrawing`), so a host
+     * that overrides `startDrawing` is still the one that runs through this door.
+     *
+     * @deprecated Call {@link startDrawing} instead. `handleDraw…` read like an
+     * internal event handler, which is what a `handleX` name means everywhere else
+     * in this codebase — but this is the public entry point a host calls to begin a
+     * draw, and it pairs with the private `stopDrawing`.
+     */
+    handleDrawTacticalGraphic = (name: TacticalGraphicName) => this.startDrawing(name);
 
     addModifyInteraction = () => {
         // Only allow the base feature (linestring/polygon) for a tactical graphic to be modified

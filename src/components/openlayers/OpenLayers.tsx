@@ -129,7 +129,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
 
     const handleDrawTacticalGraphic = () => {
         setInteractionMode(InteractionType.drawing);
-        tacticalGraphicManager.current?.handleDrawTacticalGraphic(selectedShape.current);
+        tacticalGraphicManager.current?.startDrawing(selectedShape.current);
     };
 
     const setSelectedShape = (value: TacticalGraphicName) => {

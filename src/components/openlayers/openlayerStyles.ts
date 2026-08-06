@@ -455,6 +455,73 @@ export const createCenterBaseFeature = (): Feature<Point> => {
 export const HANDLE_Z_INDEX = 1000;
 
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
+/**
+ * A distance for a user to read, from metres.
+ *
+ * Metres below a kilometre — a 400 m radius shown as "0.4 km" is both harder to read and
+ * less precise than the number it came from. Above that, kilometres: one decimal while
+ * the figure is small enough for it to mean something, whole numbers beyond 10 km where
+ * it is noise.
+ *
+ * Exported so the measure line and the properties dialog cannot drift apart; they are
+ * reporting the same quantity and a user will compare them.
+ */
+export const formatDistance = (metres: number): string => {
+    if (metres < 1000) return `${Math.round(metres)} m`;
+    const km = metres / 1000;
+    return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
+};
+
+/**
+ * The radius read-out shown while a circular graphic is drawn or resized: a hashed line
+ * from centre to edge with the radius in km on it.
+ *
+ * Editor chrome, not symbology — `role: 'handle'` keeps it out of `serializeTacticalGraphics`
+ * and out of anything that counts rendered graphics. It draws only when the holder has put
+ * a geometry on it, and the holder clears that when the gesture ends, so it never appears
+ * in the sample gallery or a restored map.
+ *
+ * Dashes are in screen pixels via `resolution`, so the hatching stays the same density at
+ * every zoom. The distance is measured in EPSG:3857 metres — Euclidean, no turf.
+ */
+export const createMeasureFeature = () => {
+    const feature = new Feature();
+    assignRole(feature, 'handle');
+    feature.set('measure', true);
+
+    feature.setStyle(f => {
+        const geom = f.getGeometry() as LineString | undefined;
+        const coords = geom?.getCoordinates();
+        if (!coords || coords.length < 2) return new Style({});
+
+        const [a, b] = coords;
+        const text = formatDistance(Math.hypot(b[0] - a[0], b[1] - a[1]));
+
+        // `placement: 'line'` lays the text along the geometry, so it picks up the
+        // line's own angle and stays upright-relative to it as the user swings the
+        // handle around — no rotation to compute, and none to keep in step.
+        // `lineDash` is in canvas pixels, so the hatching holds its density at any zoom.
+        return new Style({
+            // The inert-handle colour: this is a passive read-out, the same class of
+            // chrome as the centre dot you cannot drag — not a live handle.
+            stroke: new Stroke({color: getInertHandleColor(), width: LINE_WIDTH(), lineDash: [8, 6]}),
+            text: new Text({
+                text,
+                font: fontStyle,
+                placement: 'line',
+                // The label colour, not the handle colour: this reads as an amplifier on
+                // the graphic, and a host that re-themes its labels expects this to move
+                // with them. @see getLabelFillColor
+                fill: new Fill({color: getLabelFillColor()}),
+                stroke: getHaloStroke(),
+                textBaseline: 'bottom',
+                offsetY: -4,
+            }),
+        });
+    });
+    return feature;
+};
+
 export const createHandleFeature = () => {
     let feature = new Feature();
 
@@ -650,7 +717,7 @@ function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graph
         const infoLines: string[] = [];
         const corridorName = graphicLabel.label?.trim();
         if (corridorName)               infoLines.push(`NAME:       ${corridorName}`);
-        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${formatWidthAmplifier(graphicLabel.width)}`);
+        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(graphicLabel.width))}`);
         if (graphicLabel.minAltitude)   infoLines.push(`MIN ALT:    ${graphicLabel.minAltitude}`);
         if (graphicLabel.maxAltitude)   infoLines.push(`MAX ALT:    ${graphicLabel.maxAltitude}`);
         if (graphicLabel.startDate)     infoLines.push(`DTG START:  ${graphicLabel.startDate}`);
