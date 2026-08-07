@@ -557,10 +557,15 @@ export class MobileDefense extends MovementGraphicBase {
         const topArc = halfEllipse(1, 48);
         const bottomArc = halfEllipse(-1, 48);
 
-        // Arrow head sits exactly where the p1-side gap begins (top arc's endpoint),
-        // pointing along the arc's tangent. No shaft.
-        const arrowTip = topArc[topArc.length - 1];
-        const arrowPrev = topArc[topArc.length - 2];
+        // Arrow head sits exactly where the p1-side gap begins, pointing along that arc's
+        // tangent. No shaft.
+        //
+        // The ellipse itself is symmetric about its major axis, so *this* is the graphic's
+        // asymmetry: which arc the arrow leaves from. Mirroring swaps it to the other one,
+        // which is the whole flip — nothing else needs reflecting.
+        const arrowArc = opts?.mirrored ? bottomArc : topArc;
+        const arrowTip = arrowArc[arrowArc.length - 1];
+        const arrowPrev = arrowArc[arrowArc.length - 2];
         const arrowHead: Position[] = geometryService.computeArrowheadPoints(arrowPrev, arrowTip, radius, 45);
 
         // Outward-facing triangles with both base vertices lying on the arc, and
