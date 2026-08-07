@@ -686,7 +686,13 @@ export class TacticalGraphicsManager {
         // The threshold is Envelopment's reasoning: a deliberate move to one side flips it,
         // a pixel of jitter across the line does not.
         if (this.activeController.setMirrored && Math.abs(perpendicularDistance) > MIRROR_FLIP_MIN_PX * this.map.getView().getResolution()!) {
-            this.activeController.setMirrored(perpendicularDistance >= 0);
+            // Negative, not positive. `widthAxis` is the line's left normal, and an
+            // unmirrored cane already hangs on that side — so a *positive* perpendicular
+            // is the side it is on, and reading it as "mirrored" flipped the graphic the
+            // moment the user dragged along the side it was already on. Measured: the
+            // handle sat 41px above the line, dragging further up gave a growing positive
+            // perpendicular, and the cane flipped underneath.
+            this.activeController.setMirrored(perpendicularDistance < 0);
         }
     }
 
