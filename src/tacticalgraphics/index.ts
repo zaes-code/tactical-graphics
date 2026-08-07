@@ -137,4 +137,4 @@ export {
 } from './core/config';
 export {WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from './graphics/WireObstacle';
 export type {WireStyle} from './graphics/WireObstacle';
-export {EXPLOSIVES_DASHED} from './graphics/ExplosivesReadiness';
+export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
