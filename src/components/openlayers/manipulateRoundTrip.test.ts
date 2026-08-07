@@ -45,7 +45,7 @@ const SCREEN_SIZED = ['Cover', 'Guard', 'Screen'];
  * resolution differs from the drawing one. Recorded in ai/decisions.md rather than
  * silently skipped; excluded here so the rest of the sweep stays a usable signal.
  */
-const KNOWN_FAILING = ['Turn', 'TacticalTurn', 'Envelopment', 'Encirclement'];
+const KNOWN_FAILING: string[] = [];
 
 const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
     .filter(n => !['AxisOfAttack', ...SCREEN_SIZED, ...KNOWN_FAILING].includes(String(n)));

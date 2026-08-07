@@ -244,6 +244,13 @@ export function applyRestoredGeometry(
         if (state.bend !== undefined && handler.graphic instanceof TurnGraphicBase) {
             handler.graphic.bend = clampTurnBend(state.bend);
         }
+        // Arrowhead size, for the holders that carry one. Seeded from the drawing
+        // resolution when the graphic was made and stamped since, because a restore has
+        // no drawing resolution to re-derive it from. Before `updateGeom`, which reads it.
+        const withHead = handler.graphic as {headSize?: number};
+        if (state.decorationSize !== undefined && typeof withHead.headSize === 'number') {
+            withHead.headSize = state.decorationSize;
+        }
         // Same reasoning as the line families: a minimum-size floor is a draw-time
         // affordance, and re-applying it here scales the restored graphic by the ratio
         // between the drawing resolution and this session's.
@@ -277,6 +284,10 @@ export function applyRestoredGeometry(
 
     if (handler instanceof PolygonGraphicController) {
         handler.setBaseFeature(base as Feature<Polygon>);
+        // Encirclement's triangles are sized from a stamped distance. Without this the
+        // area families re-derive it from the loading session's resolution.
+        const holder = handler.graphic as {setOffset?: (n: number) => void};
+        if (state.decorationSize !== undefined) holder.setOffset?.(state.decorationSize);
         return;
     }
 
