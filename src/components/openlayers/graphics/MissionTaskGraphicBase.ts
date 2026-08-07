@@ -728,7 +728,12 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
 export class TurnGraphicBase extends MissionTaskGraphicBase {
     /** @see TURN_DEFAULT_BEND */
     bend: number = TURN_DEFAULT_BEND;
-    private readonly headSize: number;
+    /**
+     * Arrowhead size in metres. Seeded from the drawing resolution and then **stamped**,
+     * because a restore no longer has that resolution to rebuild it from — the snapshot
+     * carries the derived distance instead. @see persistedGeometryState
+     */
+    headSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
@@ -740,11 +745,11 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
     }
 
     protected persistedGeometryState(): GraphicGeometryState {
-        // `headSize` is deliberately absent: it is derived from
-        // `drawingResolution`, which the renderer bag already carries, so a
-        // restore rebuilds it through `getController(name, res)`. `bend` is
-        // portable — a Cesium view would need it to draw the same curve.
-        return {bend: this.bend};
+        // `headSize` used to be omitted, on the grounds that a restore rebuilt it from
+        // the `renderer` bag's `drawingResolution`. That bag is gone, so it has to travel
+        // as what it is — a distance in metres. `bend` is portable either way: a Cesium
+        // view would need it to draw the same curve.
+        return {bend: this.bend, decorationSize: this.headSize};
     }
 
     /**
@@ -803,7 +808,8 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
     bend: number = ENVELOPMENT_DEFAULT_BEND;
-    private readonly headSize: number;
+    /** Arrowhead size in metres — stamped, not re-derived. @see TurnGraphicBase.headSize */
+    headSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
@@ -870,7 +876,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // `headSize` is derived from `drawingResolution`, which the renderer bag
         // already carries. `bend` is portable — it is the shape, not a rendering
         // choice, and another view would need it to draw the same hook.
-        return {bend: this.bend};
+        return {bend: this.bend, decorationSize: this.headSize};
     }
 
     /**
