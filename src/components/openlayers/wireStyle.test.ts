@@ -81,6 +81,20 @@ describe('wireObstacleStyleFunc', () => {
         expect(railY(TacticalGraphicName.WireDoubleApronFence)).toBe(0);
     });
 
+    // High wire fence is low wire fence plus an overline, so it carries two wires - one
+    // under the marks and one over - where low wire fence carries only the lower.
+    it('gives high wire fence a wire above and below its marks', () => {
+        const railYs = (name: TacticalGraphicName) =>
+            (styleOf(name, LONG, 1).map(s => s.getGeometry()).filter(g => g instanceof LineString) as LineString[])
+                .map(g => g.getCoordinates()[0][1])
+                .sort((a, b) => a - b);
+        const high = railYs(TacticalGraphicName.WireHighWireFence);
+        expect(high.length).toBe(2);
+        expect(high[0]).toBeLessThan(0);
+        expect(high[1]).toBeGreaterThan(0);
+        expect(railYs(TacticalGraphicName.WireLowWireFence).length).toBe(1);
+    });
+
     // 5 px between the two X's of a pair - the gap the user specified, in screen pixels at
     // any zoom, which is what asserting it at two resolutions proves.
     it('spaces the double fence pair 5 px apart', () => {
