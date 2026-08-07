@@ -138,6 +138,15 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
     [TacticalGraphicName.Abatis]:                           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleApronFence]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireLowWireFence]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireHighWireFence]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleConcertina]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireTripleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
     // Convoy Symbols OK
     // Excluded — see ai/excluded-graphics.md
     // [TacticalGraphicName.HaltedConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
