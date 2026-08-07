@@ -41,6 +41,13 @@ export enum InteractionType {
  */
 const MIN_RESIZE_ORIGIN_PX = 8;
 
+/**
+ * How far off the line, in screen pixels, a drag has to be before it counts as choosing a
+ * side. Below this the graphic keeps the side it had, so jitter across the axis cannot
+ * flip it back and forth. @see TacticalGraphicHandler.setMirrored
+ */
+const MIRROR_FLIP_MIN_PX = 6;
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -631,6 +638,16 @@ export class TacticalGraphicsManager {
         const scaleFactor = this.activeController.offsetScale ?? .5;
         const baseWidth = Math.abs(perpendicularDistance) * scaleFactor;
         this.activeController.setOffset?.(baseWidth);
+
+        // One handle, two jobs: the magnitude above set the width, the sign sets the side.
+        // Read separately and never from the raw signed value — using the signed number for
+        // both would make a flip jump the width at the same moment.
+        //
+        // The threshold is Envelopment's reasoning: a deliberate move to one side flips it,
+        // a pixel of jitter across the line does not.
+        if (this.activeController.setMirrored && Math.abs(perpendicularDistance) > MIRROR_FLIP_MIN_PX * this.map.getView().getResolution()!) {
+            this.activeController.setMirrored(perpendicularDistance >= 0);
+        }
     }
 
     handleDragForLineAndPolygon(evt: MapBrowserEvent, controller: TacticalGraphicHandler) {
