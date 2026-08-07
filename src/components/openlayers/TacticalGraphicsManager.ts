@@ -463,7 +463,10 @@ export class TacticalGraphicsManager {
 
         const resolution = this.map.getView().getResolution() ?? 1;
         if (Math.abs(perpendicular) < MIRROR_PAST_AXIS_MIN_PX * resolution) return;
-        controller.setMirrored(perpendicular >= 0);
+        // Negative, matching the line families. A graphic's unmirrored feature sits on the
+        // positive side of its own axis — abatis's chevron above its route, Pursuit's hook
+        // below its line — so dragging to the negative side is what moves it across.
+        controller.setMirrored(perpendicular < 0);
     }
 
     handleCircleDrag = (evt: MapBrowserEvent) => {
