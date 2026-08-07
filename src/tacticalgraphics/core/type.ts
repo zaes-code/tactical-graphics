@@ -21,6 +21,8 @@ export interface BaseGraphicOptions {
     size?: number;
     /** Rotation in degrees. */
     rotation?: number;
+    /** @see TacticalGraphicProperties.mirrored */
+    mirrored?: boolean;
     /** Generic radius used by circular/movement graphics. */
     radius?: number;
 }
@@ -748,6 +750,23 @@ export enum TacticalGraphicName {
     ObstacleFreeArea = 'ObstacleFreeArea',
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
+    Abatis = 'Abatis',
+    ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
+    ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
+    ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',
+    RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
+    AntiTankDitchUnderConstruction = 'AntiTankDitchUnderConstruction',
+    AntiTankDitchCompleted = 'AntiTankDitchCompleted',
+    AntiTankDitchReinforcedWithMines = 'AntiTankDitchReinforcedWithMines',
+    WireUnspecified = 'WireUnspecified',
+    WireSingleFence = 'WireSingleFence',
+    WireDoubleFence = 'WireDoubleFence',
+    WireDoubleApronFence = 'WireDoubleApronFence',
+    WireLowWireFence = 'WireLowWireFence',
+    WireHighWireFence = 'WireHighWireFence',
+    WireSingleConcertina = 'WireSingleConcertina',
+    WireDoubleStrandConcertina = 'WireDoubleStrandConcertina',
+    WireTripleStrandConcertina = 'WireTripleStrandConcertina',
     ObstacleLine = 'ObstacleLine',
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',
@@ -824,6 +843,22 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
+    [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 'Explosives, State of Readiness 2 (Armed but Passable)',
+    [TacticalGraphicName.WireUnspecified]: 'Wire, Unspecified',
+    [TacticalGraphicName.WireSingleFence]: 'Wire, Single Fence',
+    [TacticalGraphicName.WireDoubleFence]: 'Wire, Double Fence',
+    [TacticalGraphicName.WireDoubleApronFence]: 'Wire, Double Apron Fence',
+    [TacticalGraphicName.WireLowWireFence]: 'Wire, Low Wire Fence',
+    [TacticalGraphicName.WireHighWireFence]: 'Wire, High Wire Fence',
+    [TacticalGraphicName.WireSingleConcertina]: 'Wire, Single Concertina',
+    [TacticalGraphicName.WireDoubleStrandConcertina]: 'Wire, Double Strand Concertina',
+    [TacticalGraphicName.WireTripleStrandConcertina]: 'Wire, Triple Strand Concertina',
     // [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: 'attack helicopter axis of advance',
     [TacticalGraphicName.AviationAxisOfAdvance]: 'airborne or aviation axis of advance',
     // [TacticalGraphicName.SupportingAxisOfAdvance]: 'supporting axis of advance',

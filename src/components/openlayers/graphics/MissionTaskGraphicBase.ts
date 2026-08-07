@@ -23,6 +23,7 @@ import {
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
+    barSymbolStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
@@ -239,6 +240,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // Envelopment is point-anchored like Turn but still emits the same
         // MultiLineString the line-drawn version did, so its style function is
         // unchanged — only how the geometry gets built moved.
+        // The readiness states differ only in which bar is dashed - a stroke property,
+        // so it cannot live in the geometry.
+        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable || name === TacticalGraphicName.RoadblockCompleteExecuted) {
+            this.graphic.setStyle(barSymbolStyleFunc(name));
+        }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
@@ -421,7 +427,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
             this.base,
-            {size: this.size, rotation: this.rotation, ...this.generatorOptions()}
+            {size: this.size, rotation: this.rotation, mirrored: this.mirrored, ...this.generatorOptions()}
         );
         if (!tacticalGraphic) return;
 
@@ -522,6 +528,33 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.refreshMeasure();
     }
 
+    /**
+     * Suspends the minimum-size floor below while a snapshot is rebuilt.
+     *
+     * The floor is `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution`, and on a restore
+     * that resolution is the *current* view's, not the one the graphic was drawn at. So
+     * restoring zoomed out clamped the size up by exactly the ratio between them — the
+     * crossed four, Turn, TacticalTurn and Envelopment all came back 4x too large in a
+     * 4x-resolution session. The floor is a draw-time affordance; on restore the size is
+     * already final. @see LineGraphicBase.suspendMinimumLength for the twin.
+     */
+    suspendMinimumSize = false;
+
+    /**
+     * Which side an asymmetric point-anchored graphic hangs its hook on — Pursuit's
+     * semicircle and P-line. Reflected in the graphic's own local frame, so it survives
+     * rotation. Stamped and replayed like any other geometry input.
+     */
+    mirrored: boolean = false;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGeometry();
+        this.publishGeometryState();
+    }
+
     private measuring = false;
     /**
      * Where the gesture actually is — the cursor while drawing, the dragged point while
@@ -595,6 +628,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
             radius: this.size,
             rotation: this.rotation,
+            mirrored: this.mirrored,
             ...this.persistedGeometryState(),
             ...extra,
         });
@@ -610,7 +644,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (MIN_SIZED_MISSION_TASKS.includes(this.name)) {
+        if (MIN_SIZED_MISSION_TASKS.includes(this.name) && !this.suspendMinimumSize) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
                 const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
@@ -716,7 +750,12 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
 export class TurnGraphicBase extends MissionTaskGraphicBase {
     /** @see TURN_DEFAULT_BEND */
     bend: number = TURN_DEFAULT_BEND;
-    private readonly headSize: number;
+    /**
+     * Arrowhead size in metres. Seeded from the drawing resolution and then **stamped**,
+     * because a restore no longer has that resolution to rebuild it from — the snapshot
+     * carries the derived distance instead. @see persistedGeometryState
+     */
+    headSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
@@ -728,11 +767,11 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
     }
 
     protected persistedGeometryState(): GraphicGeometryState {
-        // `headSize` is deliberately absent: it is derived from
-        // `drawingResolution`, which the renderer bag already carries, so a
-        // restore rebuilds it through `getController(name, res)`. `bend` is
-        // portable — a Cesium view would need it to draw the same curve.
-        return {bend: this.bend};
+        // `headSize` used to be omitted, on the grounds that a restore rebuilt it from
+        // the `renderer` bag's `drawingResolution`. That bag is gone, so it has to travel
+        // as what it is — a distance in metres. `bend` is portable either way: a Cesium
+        // view would need it to draw the same curve.
+        return {bend: this.bend, decorationSize: this.headSize};
     }
 
     /**
@@ -791,7 +830,8 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
     bend: number = ENVELOPMENT_DEFAULT_BEND;
-    private readonly headSize: number;
+    /** Arrowhead size in metres — stamped, not re-derived. @see TurnGraphicBase.headSize */
+    headSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
@@ -858,7 +898,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // `headSize` is derived from `drawingResolution`, which the renderer bag
         // already carries. `bend` is portable — it is the shape, not a rendering
         // choice, and another view would need it to draw the same hook.
-        return {bend: this.bend};
+        return {bend: this.bend, decorationSize: this.headSize};
     }
 
     /**
