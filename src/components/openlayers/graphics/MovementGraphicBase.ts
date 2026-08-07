@@ -58,6 +58,20 @@ export class MovementGraphicBase implements LineGraphic {
      */
     protected hasOffsetHandle: boolean = true;
 
+    /**
+     * Which side an asymmetric movement graphic hangs its arrow on — MobileDefense's,
+     * which leaves from one of the two ellipse arcs. Driven by the sign of the same
+     * offset drag that sets the width. @see TacticalGraphicHandler.setMirrored
+     */
+    mirrored: boolean = false;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean) {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGeometry();
+    }
+
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
         this.offset = offset;
         this.graphicName = name;
@@ -122,7 +136,7 @@ export class MovementGraphicBase implements LineGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: decorationMetres(this.graphicName, this.resolution)}
+            {radius: this.offset, size: decorationMetres(this.graphicName, this.resolution), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
 
@@ -151,6 +165,7 @@ export class MovementGraphicBase implements LineGraphic {
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
             // Stamped as a full width; `offset` is the half-width the generator takes.
             width: this.offset * 2,
+            mirrored: this.mirrored,
         });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {
