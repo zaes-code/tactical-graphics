@@ -67,4 +67,31 @@ describe('wireObstacleStyleFunc', () => {
     it('still draws Unspecified when its marks scale away', () => {
         expect(styleOf(TacticalGraphicName.WireUnspecified, new MultiLineString([[[0, 0], [80, 0]]]), 20).length).toBeGreaterThan(0);
     });
+
+    // The wire sits under the marks for low wire fence and through their middle elsewhere,
+    // which is the only thing separating it from double apron fence.
+    it('hangs the low wire fence rail under its marks', () => {
+        const railY = (name: TacticalGraphicName) => {
+            const styles = styleOf(name, LONG, 1);
+            const rail = styles.map(s => s.getGeometry()).find(g => g instanceof LineString) as LineString;
+            return rail.getCoordinates()[0][1];
+        };
+        expect(railY(TacticalGraphicName.WireLowWireFence)).toBeLessThan(0);
+        expect(railY(TacticalGraphicName.WireDoubleApronFence)).toBe(0);
+    });
+
+    // 5 px between the two X's of a pair - the gap the user specified, in screen pixels at
+    // any zoom, which is what asserting it at two resolutions proves.
+    it('spaces the double fence pair 5 px apart', () => {
+        const gapPx = (resolution: number) => {
+            const styles = styleOf(TacticalGraphicName.WireDoubleFence, new MultiLineString([[[0, 0], [100000, 0]]]), resolution);
+            const marks = (styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString).getCoordinates();
+            // Marks come out as pairs of strokes per X; the 3rd stroke starts the 2nd X.
+            const firstRight = Math.max(marks[0][0][0], marks[0][1][0]);
+            const secondLeft = Math.min(marks[2][0][0], marks[2][1][0]);
+            return (secondLeft - firstRight) / resolution;
+        };
+        expect(gapPx(10)).toBeCloseTo(5, 4);
+        expect(gapPx(40)).toBeCloseTo(5, 4);
+    });
 });
