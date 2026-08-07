@@ -45,14 +45,21 @@ export const ANTI_TANK_DITCH_STYLES: Partial<Record<TacticalGraphicName, AntiTan
 /**
  * Tooth base width in screen pixels - the unit the whole pattern is built from.
  *
- * Sized up from 18 for the reinforced state's sake: with the teeth touching, the notch a
- * mine nests in is bounded by the two tooth edges, so the mine can only be about a quarter
- * of a tooth wide. At 18 px that left the mines as specks.
+ * Sized up twice for the reinforced state's sake. With the teeth touching, the notch a mine
+ * nests in is bounded by the two tooth edges, so the mine is about a sixth of a tooth wide
+ * and the white gap holding it clear is narrower still. At 18 px the mines were specks; at
+ * 24 the gap was thinner than the stroke drawing it and the notch filled in solid.
  */
-export const ANTI_TANK_TOOTH_PX = 24;
+export const ANTI_TANK_TOOTH_PX = 30;
 
-/** Tooth height, as a multiple of its base width. */
-export const ANTI_TANK_HEIGHT_RATIO = 0.8;
+/**
+ * Tooth height, as a multiple of its base width.
+ *
+ * Read off the plate, where the teeth are visibly wider than tall. It is not only a look:
+ * with the teeth touching, the notch between two of them is where a mine sits, and a
+ * steeper tooth pinches that notch shut. At 0.8 the mines had nowhere legible to go.
+ */
+export const ANTI_TANK_HEIGHT_RATIO = 0.6;
 
 export class AntiTankDitch extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string;
