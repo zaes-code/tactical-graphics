@@ -138,3 +138,5 @@ export {
 export {WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from './graphics/WireObstacle';
 export type {WireStyle} from './graphics/WireObstacle';
 export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
+export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_DITCH_TEETH} from './graphics/AntiTankDitch';
+export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
