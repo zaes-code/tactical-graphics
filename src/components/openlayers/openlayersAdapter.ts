@@ -88,6 +88,14 @@ export interface TacticalGraphicHandler {
      * latches it at pointer-down against the base.
      */
     handleVertexDrag?(vertexIndex: number, coordinate: Coordinate): void;
+
+    /**
+     * Base vertex that moves the whole graphic rather than reshaping it, if any.
+     *
+     * The manager skips it under a reshape drag, so it is inert except in translate mode —
+     * where the ordinary translate path already moves everything, grabbed point included.
+     */
+    anchorVertex?: number;
 }
 
 /**
