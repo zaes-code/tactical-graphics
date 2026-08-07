@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4027,9 +4027,6 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
 }
 
 
-/** Mark width in screen pixels — the unit the whole density ladder is built from. */
-const WIRE_MARK_PX = 14;
-
 /**
  * The nine wire obstacles: a stroked route carrying repeating marks, in screen pixels.
  *
@@ -4064,10 +4061,13 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
         // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
         // the user cannot find what they drew.
+        // Low wire fence hangs its wire under the marks - the X's sit on it, underlined -
+        // where every other graphic runs it through their middle.
+        const railDrop = style.railUnder ? -height / 2 : 0;
         if (style.rail || width <= 0) {
             for (let s = 0; s < strands; s++)
                 {
-                    const off = offsetOf(s);
+                    const off = offsetOf(s) + railDrop;
                     const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
                     styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
                 }
@@ -4075,11 +4075,13 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         if (width <= 0) return styles;
 
         const total = pathLength(path);
-        const period = (style.perGroup + style.gap) * width;
+        const innerGap = (style.innerGap ?? 0) * width;
+        const step = width + innerGap;
+        const period = style.perGroup * width + (style.perGroup - 1) * innerGap + style.gap * width;
         const marks: Coordinate[][] = [];
         for (let start = period / 2; start < total; start += period) {
             for (let i = 0; i < style.perGroup; i++) {
-                const d = start + i * width;
+                const d = start + i * step;
                 if (d + width / 2 > total) break;
                 const at = walkPath(path, d);
                 if (!at) continue;
