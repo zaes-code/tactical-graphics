@@ -54,6 +54,27 @@ describe('per-handle vertex dragging', () => {
         expect(coordsOf(c)).toEqual(before);
     });
 
+    it('the apex moves the whole graphic, keeping the V rigid', () => {
+        const c = build(TacticalGraphicName.FieldsOfFire);
+        const before = coordsOf(c);
+        c.handleVertexDrag!(1, [130_000, -20_000]);   // drag the apex
+        const after = coordsOf(c);
+        const dx = 130_000 - before[1][0];
+        const dy = -20_000 - before[1][1];
+        // Every vertex shifted by the same delta — the shape is unchanged, only placed.
+        after.forEach((p, i) => {
+            expect(p[0]).toBe(before[i][0] + dx);
+            expect(p[1]).toBe(before[i][1] + dy);
+        });
+    });
+
+    it('publishes three handles: two ends and an apex', () => {
+        const c = build(TacticalGraphicName.FieldsOfFire);
+        expect(c.anchorVertex).toBe(1);
+        const handles = c.graphic.getFeatures().find(f => f.get('role') === 'handle')?.getGeometry();
+        expect((handles as unknown as {getCoordinates(): number[][]}).getCoordinates().length).toBeGreaterThanOrEqual(3);
+    });
+
     it('leaves the rest of the line family alone', () => {
         for (const name of [TacticalGraphicName.PhaseLine, TacticalGraphicName.ObstacleLine,
                             TacticalGraphicName.PassageLane, TacticalGraphicName.Route]) {

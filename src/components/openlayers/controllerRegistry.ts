@@ -67,10 +67,10 @@ const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
  * `minVertices` is a *visual* floor, not an editing convenience: a fields-of-fire V stops
  * reading as one the moment its two segments straighten into a line.
  */
-const vertexLine = (maxPts: number, minVertices: number) => (name: TacticalGraphicName, res: number) => {
+const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) => (name: TacticalGraphicName, res: number) => {
     const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
     controller.editStretches = true;
-    return controller.enableVertexDragging(minVertices);
+    return controller.enableVertexDragging(minVertices, anchorVertex);
 };
 
 const block = (name: TacticalGraphicName, res: number) =>
@@ -276,7 +276,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FerryCrossing]:                    line(2),
     [TacticalGraphicName.PassageLane]:                      line(2),
     [TacticalGraphicName.TacticalFix]:                              line(2),
-    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3),
+    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>
