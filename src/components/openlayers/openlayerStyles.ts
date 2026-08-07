@@ -4054,24 +4054,21 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         const scale = decorationScale(path, false, resolution, WIRE_MARK_PX * style.height);
         const width = WIRE_MARK_PX * scale * resolution;
         const height = width * style.height;
-        const strands = style.strands ?? 1;
-        const spread = height * 0.9;
-        const offsetOf = (s: number) => (strands === 1 ? 0 : (s - (strands - 1) / 2) * spread);
+        // Where each wire sits relative to the marks. Low wire fence and single concertina
+        // hang one underneath so the marks sit on it; high wire fence and triple strand add
+        // a second on top; double strand puts its second one straight through the middle,
+        // striking the O through. Everything else runs a single wire through the centre.
+        const railOffset = {under: -height / 2, centre: 0, over: height / 2};
 
         // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
         // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
         // the user cannot find what they drew.
-        // Where the wire sits relative to the marks. Low wire fence hangs it underneath so
-        // the X's sit on it; high wire fence adds a second one on top, overlining them.
-        // Everything else runs a single wire through their middle.
-        const railDrops = style.railUnder ? (style.railOver ? [-height / 2, height / 2] : [-height / 2]) : [0];
         if (style.rail || width <= 0) {
-            for (const drop of railDrops)
-                for (let s = 0; s < strands; s++) {
-                    const off = offsetOf(s) + drop;
-                    const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
-                    styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
-                }
+            for (const at of style.railsAt ?? ['centre']) {
+                const off = railOffset[at];
+                const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
+                styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
+            }
         }
         if (width <= 0) return styles;
 
@@ -4088,22 +4085,21 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
                 if (!at) continue;
                 const [tx, ty] = at.tangent;
                 const [nx, ny] = [-ty, tx];
-                for (let s = 0; s < strands; s++) {
-                    const off = offsetOf(s);
-                    const cx = at.point[0] + nx * off;
-                    const cy = at.point[1] + ny * off;
-                    const corner = (u: number, v: number): Coordinate => [cx + tx * u + nx * v, cy + ty * u + ny * v];
-                    if (style.mark === 'cross') {
-                        marks.push([corner(-width / 2, height / 2), corner(width / 2, -height / 2)]);
-                        marks.push([corner(-width / 2, -height / 2), corner(width / 2, height / 2)]);
-                    } else {
-                        const loop: Coordinate[] = [];
-                        for (let a = 0; a <= 180; a += 20) {
-                            const t = (a * Math.PI) / 180;
-                            loop.push(corner(-Math.cos(t) * width * 0.5, Math.sin(t) * height * 0.7));
-                        }
-                        marks.push(loop);
+                const corner = (u: number, v: number): Coordinate => [
+                    at.point[0] + tx * u + nx * v,
+                    at.point[1] + ty * u + ny * v,
+                ];
+                if (style.mark === 'cross') {
+                    marks.push([corner(-width / 2, height / 2), corner(width / 2, -height / 2)]);
+                    marks.push([corner(-width / 2, -height / 2), corner(width / 2, height / 2)]);
+                } else {
+                    // The concertina O, closed: 360 lands back on 0 so the ring joins up.
+                    const ring: Coordinate[] = [];
+                    for (let a = 0; a <= 360; a += 20) {
+                        const t = (a * Math.PI) / 180;
+                        ring.push(corner((Math.cos(t) * width) / 2, (Math.sin(t) * height) / 2));
                     }
+                    marks.push(ring);
                 }
             }
         }
