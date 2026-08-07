@@ -26,16 +26,64 @@ import {
     BASE_FONT_SIZE_PX,
     DEFAULT_PALETTE,
     getDefaultLabelSize,
-    getDefaultLineColorOverride,
-    getDefaultLineWidth,
-    getDrawMarkerColorOverride,
-    getDrawMarkerOutlineColorOverride,
-    getHandleColorOverride,
-    getHostilityColorOverride,
-    getInertHandleColorOverride,
-    getLabelFillColorOverride,
-    getLabelHaloColorOverride,
 } from '@zaes/tactical-graphics';
+/**
+ * The colour table, the line weight and the three label-scale formulas now live in the
+ * map-agnostic half (`core/symbology.ts`) — none of them mentions OpenLayers, and a
+ * second renderer that cannot reach them has to reinvent the palette and then drift from
+ * it. Imported here and re-exported below, so this module's public surface is unchanged
+ * and there is exactly one implementation of each.
+ *
+ * The three scale functions are aliased on import because this module exports
+ * feature-reading wrappers of the same names.
+ */
+import {
+    graphicLabelScale as graphicLabelScaleOf,
+    labelScale as labelScaleOf,
+    ratioLockedLabelScale as ratioLockedLabelScaleOf,
+} from '@zaes/tactical-graphics';
+import {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+    withOpacity,
+} from '@zaes/tactical-graphics';
+
+export {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+};
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
 
@@ -62,19 +110,6 @@ function measureCtx(): Pick<CanvasRenderingContext2D, 'font' | 'measureText'> {
 }
 
 const centerCoordinates = [0, 0];
-const TEXT_RESOLUTION_FALLBACK = 3000; // used as fallback when drawingResolution is not stored
-export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
-
-/**
- * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
- * area outlines, arrows, and custom-rendered graphics all use this width.
- * Backed by the live config — call it fresh from inside a style function
- * rather than caching the result, the same rule as `getDefaultLabelSize()`.
- */
-export const LINE_WIDTH = (): number => getDefaultLineWidth();
-
-/** Text-halo stroke width — independent of LINE_WIDTH by design. */
-const HALO_WIDTH = 4;
 
 /** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
 const OBSTACLE_LABEL_GAP_PX = 8;
@@ -132,51 +167,6 @@ export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
  */
 export function readHostilityColor(feature: FeatureLike): string {
     return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
-}
-
-/** Default stroke/fill colour for graphics with no specific hostility colour. */
-export function getDefaultLineColor(): string {
-    return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
-}
-
-/** Text label fill colour. Follows the default line colour unless overridden on its own. */
-export function getLabelFillColor(): string {
-    return getLabelFillColorOverride() ?? getDefaultLineColor();
-}
-
-/** Text label halo (outline) colour — contrast against the map background. */
-export function getLabelHaloColor(): string {
-    return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
-}
-
-/**
- * ## Editor chrome
- *
- * The affordances a user edits a graphic with — handle dots, the inert centre, the draw
- * marker. Not part of any symbol: they say "you can drag this", and that meaning must
- * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
- * graphic's handles the same red as its own strokes, so they stopped reading as handles
- * at all.
- */
-
-/** Draggable handle dots. Renderers apply their own opacity on top. */
-export function getHandleColor(): string {
-    return getHandleColorOverride() ?? DEFAULT_PALETTE.handleColor;
-}
-
-/** Handle dots that exist but cannot be dragged in the current mode. */
-export function getInertHandleColor(): string {
-    return getInertHandleColorOverride() ?? DEFAULT_PALETTE.inertHandleColor;
-}
-
-/** The marker and sketch line shown while a graphic is being drawn. */
-export function getDrawMarkerColor(): string {
-    return getDrawMarkerColorOverride() ?? DEFAULT_PALETTE.drawMarkerColor;
-}
-
-/** That marker's outline. */
-export function getDrawMarkerOutlineColor(): string {
-    return getDrawMarkerOutlineColorOverride() ?? DEFAULT_PALETTE.drawMarkerOutlineColor;
 }
 
 /** Radius in px of the dot under the cursor while drawing. */
@@ -257,77 +247,24 @@ export function getHaloStroke(): Stroke {
 }
 
 /**
- * Readability clamp on the zoom multiplier of `featureLabelScale`. Same range as
- * `getLineLabelScale`: without the cap a graphic drawn from high altitude grows its
- * label without bound as the user zooms in past the drawing zoom; without the floor
- * the label shrinks to nothing zoomed out.
- */
-const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
-const MAX_LABEL_ZOOM_MULTIPLIER = 1.5;
-
-function labelZoomMultiplier(drawRes: number | undefined, resolution: number): number {
-    const zoom = drawRes && drawRes > 0 ? drawRes / resolution : Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution);
-    return Math.min(MAX_LABEL_ZOOM_MULTIPLIER, Math.max(MIN_LABEL_ZOOM_MULTIPLIER, zoom));
-}
-
-/**
- * Ceiling shared by every *size-proportional* label scale — the block family's
- * `featureGraphicLabelScale` and the ratio-locked mission tasks'
- * `ratioLockedLabelScale`.
- *
- * Both formulas track the graphic's rendered size with nothing stopping them, so
- * a large or zoomed-in graphic grew a letter of unbounded height: a Breach drawn
- * 400 px wide rendered its "B" at ~90 px. The zoom-anchored scales never did
- * that — `featureLabelScale` and `getLineLabelScale` both stop at 1.5× the
- * configured label size, which is why "EX", "DIS" and the Lines labels stay
- * readable-but-sane at every altitude.
- *
- * This is that same ceiling, so a size-proportional label tops out exactly where
- * a zoom-anchored one does. It is a multiple of the *configured* label size, not
- * an absolute pixel count, so raising `labelSize` in the config raises the cap
- * with it. Note the families that share it also share the 24 px font literal, so
- * "1.5" means 36 px of glyph for them and 24 px for anything on `fontStyle`.
- */
-export function maxGraphicLabelScale(): number {
-    return (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * MAX_LABEL_ZOOM_MULTIPLIER;
-}
-
-/**
- * Unified label scale for all graphics.
- * - Uses drawingResolution stored on the feature (set at creation time) to anchor the
- *   label size: at drawing zoom the text is exactly defaultLabelSize px; when zoomed
- *   out (higher resolution) the label shrinks proportionally.
- * - Falls back to a sqrt curve when drawingResolution is not available.
- * - Either way the zoom multiplier is clamped to [0.3, 1.5] of defaultLabelSize so the
- *   label stays readable at every altitude instead of tracking the world scale forever.
+ * Zoom-anchored label scale — the default, and the one that does **not** react to a
+ * resize. Reads `drawingResolution` off the feature and hands the formula to the
+ * map-agnostic `labelScale`.
  */
 export function featureLabelScale(feature: FeatureLike, resolution: number): number {
-    const drawRes = feature.get('drawingResolution') as number | undefined;
-    const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    return sizeFactor * labelZoomMultiplier(drawRes, resolution);
+    return labelScaleOf(feature.get('drawingResolution') as number | undefined, resolution);
 }
 
 /**
- * Label scale proportional to the graphic's perpendicular size on screen.
- * Falls back to `featureLabelScale` for features that do not stamp `graphicSize`.
- *
- * Formula: `scale = sizeFactor × K × (graphicSizePx / BASE_FONT_SIZE_PX)`.
- * - `graphicSizePx = graphicSize / resolution`, so the label grows with both
- *   user resize (graphicSize map units) and zoom-in (resolution shrinks).
- * - `K` keeps the rendered label well under the graphic's perpendicular extent.
- * - The result is capped at `maxGraphicLabelScale()` so the growth stops where a
- *   zoom-anchored label's does; past that the letter only gets smaller relative
- *   to the graphic, never larger on screen.
+ * Size-proportional label scale: grows with both user resize and zoom-in. Requires
+ * the feature to stamp `graphicSize`; falls back to `featureLabelScale` otherwise.
  */
-const GRAPHIC_LABEL_FRACTION = 0.5;
 export function featureGraphicLabelScale(feature: FeatureLike, resolution: number): number {
-    const graphicSize = feature.get('graphicSize') as number | undefined;
-    if (graphicSize && graphicSize > 0) {
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        const graphicSizePx = graphicSize / resolution;
-        return Math.min(maxGraphicLabelScale(), sizeFactor * GRAPHIC_LABEL_FRACTION * graphicSizePx / BASE_FONT_SIZE_PX);
-    }
-    return featureLabelScale(feature, resolution);
+    return graphicLabelScaleOf(
+        feature.get('graphicSize') as number | undefined,
+        feature.get('drawingResolution') as number | undefined,
+        resolution,
+    );
 }
 
 /**
@@ -5558,15 +5495,6 @@ export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFuncti
     };
 }
 
-/**
- * The font literal every ratio-locked mission-task label renders with. Anything
- * that measures one of those labels (`getTextWidth`) has to pass this same
- * string or the measured width won't match the drawn glyph.
- */
-export const RATIO_LOCKED_LABEL_FONT = 'bold 24px sans-serif';
-/** Declared px size of `RATIO_LOCKED_LABEL_FONT`, for glyph-height math. */
-const RATIO_LOCKED_LABEL_FONT_PX = 24;
-
 /** Clearance between the label's glyph box and each arc end, in screen pixels. */
 const ARC_LABEL_CLEARANCE_PX = 5;
 /**
@@ -5708,30 +5636,19 @@ export function arcMissionTaskStyleFunc(name: TacticalGraphicName, ratioLocked: 
 }
 
 /**
- * Label height as a fraction of the graphic's `graphicSize` on screen. Lower
- * than `GRAPHIC_LABEL_FRACTION` because mission tasks store a radius where the
- * block family stores a perpendicular size — 0.3 here lines the two families up
- * at their respective minimums. @see getRatioLockedMissionTaskStyleFn
- */
-const RATIO_LOCKED_LABEL_FRACTION = 0.3;
-
-/**
  * Scale of a ratio-locked mission task's label. Exported because the graphic
  * style functions that open a gap for that label have to size the gap from the
  * same number the label is drawn at.
  *
- * Capped at `maxGraphicLabelScale()`, the same ceiling the block family's
- * `featureGraphicLabelScale` stops at — a big circle keeps its one-letter label
- * at a readable size instead of scaling it up without limit. The cap applies to
- * the gap math for free, since both read this one number.
+ * The formula is `ratioLockedLabelScale` in `core/symbology.ts`; this reads the
+ * two inputs off the feature.
  */
 export function ratioLockedLabelScale(feature: FeatureLike, resolution: number): number {
-    const radius = feature.get('graphicSize') as number | undefined;
-    if (radius && radius > 0) {
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        return Math.min(maxGraphicLabelScale(), sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (radius / resolution) / BASE_FONT_SIZE_PX);
-    }
-    return featureLabelScale(feature, resolution);
+    return ratioLockedLabelScaleOf(
+        feature.get('graphicSize') as number | undefined,
+        feature.get('drawingResolution') as number | undefined,
+        resolution,
+    );
 }
 
 /**
@@ -5755,8 +5672,6 @@ const CROSSED_HASH_DASH = [12, 8];
  * an X would end up with a visibly wider gap than a cross for the same number.
  */
 const CROSSED_LABEL_CLEARANCE_PX = 7;
-/** Cap height of the label font as a fraction of its declared px size. */
-const CAP_HEIGHT_FRACTION = 0.72;
 
 /**
  * Screen half-width a crossed mission task always renders at — 100 px across,
@@ -6650,90 +6565,11 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
 }
 
 /**
- * The four affiliation colours, straight from FM 1-02.2. One set, used in every mode —
- * see the palette note above `getDefaultLineColor` for why there is no longer a second.
- *
- * A host re-tints these through `configureTacticalGraphics({hostilityColors})` rather
- * than by editing this table.
+ * The affiliation colour table, the doctrinal lookup and `withOpacity` now live in the
+ * map-agnostic half (`core/symbology.ts`) and are re-exported from the import block at
+ * the top of this file. Nothing about "hostile line work is red" is an OpenLayers fact,
+ * and a second renderer that cannot reach the table has to restate it.
  */
-const HOSTILITY_COLORS = {
-    friend: 'rgba(0, 0, 255, 1)',
-    hostile: 'rgba(255, 0, 0, 1)',
-    neutral: 'rgba(0, 128, 0, 1)',
-    pending: 'rgba(255, 255, 0, 1)',
-} as const;
-
-/**
- * Affiliations that draw as another one. Doctrine gives assumed-friend the friendly
- * blue and suspect/joker the pending yellow, so an override on the affiliation a host
- * actually thinks about (`friend`, `pending`) carries to its alias without their having
- * to name both. An override on the alias itself still wins, for a host that wants them
- * distinguishable.
- */
-const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphicHostility>> = {
-    [TacticalGraphicHostility.assumedFriend]: TacticalGraphicHostility.friend,
-    [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
-};
-
-/**
- * The doctrinal FM 1-02.2 colour for an affiliation, **ignoring any config override**.
- * `undefined` for `unknown`, whose colour is `getDefaultLineColor()` rather than an
- * affiliation colour of its own.
- *
- * Exported because it is a *pure* answer to "what would this be with no override" —
- * something a settings UI needs and cannot get from `getColorByHostility`, which reads
- * the live config. Reading the live config to render a control that edits the live
- * config renders one frame stale: clearing an override re-renders before the host has
- * republished, so the cleared value is still what comes back.
- */
-export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility): string | undefined {
-    switch (HOSTILITY_ALIASES[hostility] ?? hostility) {
-        case TacticalGraphicHostility.friend:
-            return HOSTILITY_COLORS.friend;
-        case TacticalGraphicHostility.hostileFaker:
-            return HOSTILITY_COLORS.hostile;
-        case TacticalGraphicHostility.neutral:
-            return HOSTILITY_COLORS.neutral;
-        case TacticalGraphicHostility.pending:
-            return HOSTILITY_COLORS.pending;
-        default:
-            return undefined;
-    }
-}
-
-export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
-    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
-    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
-    if (override) return override;
-
-    return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
-};
-
-function withOpacity(color: string, alpha: number): string {
-    // rgb()/rgba()
-    const rgb = color.match(
-        /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)/,
-    );
-    if (rgb) {
-        const [, r, g, b] = rgb;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    // #rgb / #rgba / #rrggbb / #rrggbbaa — the default line color is hex, so
-    // hatch/fill helpers that tint it must handle this form too.
-    const hex = color.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
-    if (hex) {
-        let h = hex[1];
-        if (h.length <= 4) h = h.split('').map(c => c + c).join(''); // #rgb(a) → #rrggbb(aa)
-        const r = parseInt(h.slice(0, 2), 16);
-        const g = parseInt(h.slice(2, 4), 16);
-        const b = parseInt(h.slice(4, 6), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    console.warn('Unrecognized color for withOpacity:', color);
-    return color;
-}
 
 export function createDiagonalHatchPattern(
     hostility: TacticalGraphicHostility,
