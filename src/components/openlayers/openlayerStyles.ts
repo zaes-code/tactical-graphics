@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, EXPLOSIVES_DASHED} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4039,14 +4039,17 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  */
 
 /**
- * The three demolition readiness states: a pair of parallel bars, dashed per the plate.
+ * The bar symbols: parallel leaning bars, dashed per the plate.
  *
- * The shape is identical across all three - `EXPLOSIVES_DASHED` is the entire difference,
- * and it lives beside the generator so a second renderer reads the same table. Dashing
- * cannot be expressed in the geometry, which is why this is a style function at all: a
+ * Two graphics use it - the three demolition readiness states (a pair) and roadblock
+ * complete (two overlapping crosses, four bars, all solid).
+ *
+ * `BAR_SYMBOL_DASHES` is the entire difference between the readiness states, and it lives
+ * beside the generator so a second renderer reads the same table. Dashing cannot be
+ * expressed in the geometry, which is why this is a style function at all: a
  * MultiLineString has one stroke for every part.
  */
-export function explosivesReadinessStyleFunc(name: TacticalGraphicName): StyleFunction {
+export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => {
         const geom = f.getGeometry();
         if (!(geom instanceof MultiLineString)) return [];
@@ -4054,13 +4057,13 @@ export function explosivesReadinessStyleFunc(name: TacticalGraphicName): StyleFu
         if (bars.length < 2) return [];
 
         const color = readHostilityColor(f);
-        const dashed = EXPLOSIVES_DASHED[name] ?? [false, false];
+        const dashed = BAR_SYMBOL_DASHES[name] ?? [];
         // Pixels, not map units. OL's lineDash is canvas pixels, so multiplying by
         // resolution made the dash [200, 140] px on a bar ~50 px long - the whole bar fell
         // inside one "on" segment and every state rendered solid. Matches dashStyle().
         const dash = [12, 8];
 
-        return bars.slice(0, 2).map(
+        return bars.map(
             (bar, i) =>
                 new Style({
                     geometry: new LineString(bar),

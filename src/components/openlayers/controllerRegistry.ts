@@ -319,6 +319,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: explosivesReadiness,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: explosivesReadiness,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: explosivesReadiness,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: explosivesReadiness,
     [TacticalGraphicName.WireUnspecified]:                 line(),
     [TacticalGraphicName.WireSingleFence]:                 line(),
     [TacticalGraphicName.WireDoubleFence]:                 line(),

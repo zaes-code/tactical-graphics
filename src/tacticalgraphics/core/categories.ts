@@ -141,6 +141,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,

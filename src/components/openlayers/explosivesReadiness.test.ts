@@ -2,7 +2,7 @@ import Feature from 'ol/Feature';
 import MultiLineString from 'ol/geom/MultiLineString';
 import Point from 'ol/geom/Point';
 import {TacticalGraphicName, renderTacticalGraphic} from '@zaes/tactical-graphics';
-import {explosivesReadinessStyleFunc} from './openlayerStyles';
+import {barSymbolStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import {getController} from './controllerRegistry';
 import {PointDropController} from './controllers/MissionTaskController';
@@ -25,7 +25,7 @@ const render = (name: TacticalGraphicName, radius = 600, rotation = 0) =>
 /** Which bars the style function dashes, leading bar first. */
 const dashes = (name: TacticalGraphicName) => {
     const bars = render(name).graphic.geometry.coordinates;
-    const styles = explosivesReadinessStyleFunc(name)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
+    const styles = barSymbolStyleFunc(name)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
     return styles.map(s => !!s.getStroke().getLineDash());
 };
 
@@ -95,14 +95,14 @@ describe('explosives states of readiness', () => {
 
     it('survives geometry it cannot draw', () => {
         for (const name of NAMES) {
-            expect(() => explosivesReadinessStyleFunc(name)(new Feature({geometry: new MultiLineString([])}) as any, 20)).not.toThrow();
-            expect(() => explosivesReadinessStyleFunc(name)(new Feature({geometry: new Point([0, 0])}) as any, 20)).not.toThrow();
+            expect(() => barSymbolStyleFunc(name)(new Feature({geometry: new MultiLineString([])}) as any, 20)).not.toThrow();
+            expect(() => barSymbolStyleFunc(name)(new Feature({geometry: new Point([0, 0])}) as any, 20)).not.toThrow();
         }
     });
 
     /**
      * Through the *holder*, not the style function. Every assertion above called
-     * `explosivesReadinessStyleFunc` directly, which is how a dash length of
+     * `barSymbolStyleFunc` directly, which is how a dash length of
      * `[10 * resolution, 7 * resolution]` shipped: OL's lineDash is canvas pixels, so at a
      * real resolution the dash became 200 px on a bar 50 px long and every state rendered
      * solid. Calling the function proves the flag; only drawing proves the dash.
@@ -137,5 +137,76 @@ describe('explosives states of readiness', () => {
         const rotation = controller.graphic.rotation;
         controller.handleRotate(45);
         expect(controller.graphic.rotation).toBe(rotation);
+    });
+});
+
+describe('roadblock complete (executed)', () => {
+    const NAME = TacticalGraphicName.RoadblockCompleteExecuted;
+    const geom = (): number[][][] => {
+        const out: any = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [0, 0]},
+            properties: {tacticalGraphic: {name: NAME, radius: 1000}},
+        } as any);
+        return out.graphic.geometry.coordinates;
+    };
+
+    it('draws two overlapping crosses - four bars, a leaning pair each way', () => {
+        const bars = geom();
+        expect(bars.length).toBe(4);
+        const lean = (b: number[][]) => Math.sign(b[1][1] - b[0][1]) * Math.sign(b[1][0] - b[0][0]);
+        // Two bars lean one way, two the other. A symbol whose bars all lean together is
+        // two parallel pairs, not a pair of crosses.
+        const leans = bars.map(lean);
+        expect(leans.filter(l => l > 0).length).toBe(2);
+        expect(leans.filter(l => l < 0).length).toBe(2);
+    });
+
+    it('keeps the crosses level and side by side', () => {
+        const bars = geom();
+        // Within each lean, the pair shares its Y range - displaced east/west, not
+        // perpendicular, which would set one cross diagonally above the other.
+        for (const [i, j] of [[0, 1], [2, 3]]) {
+            expect(bars[i][0][1]).toBeCloseTo(bars[j][0][1], 9);
+            expect(bars[i][1][1]).toBeCloseTo(bars[j][1][1], 9);
+            expect(bars[i][0][0]).toBeLessThan(bars[j][0][0]);
+        }
+    });
+
+    // Read off the plate: `1 + SEPARATION_RATIO / cos45`. Too wide and it stops reading as
+    // one overlapping symbol and becomes two separate X's, which is what 0.42 gave.
+    it('matches the plate proportions', () => {
+        const all = geom().flat();
+        const xs = all.map(c => c[0]);
+        const ys = all.map(c => c[1]);
+        const aspect = (Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys));
+        expect(aspect).toBeGreaterThan(1.2);
+        expect(aspect).toBeLessThan(1.36);
+    });
+
+    it('draws every bar solid', () => {
+        const bars = geom();
+        const styles = barSymbolStyleFunc(NAME)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
+        expect(styles.length).toBe(4);
+        for (const st of styles) expect(st.getStroke().getLineDash()).toBeFalsy();
+    });
+
+    it('is dropped by a single click, resizable, never rotated', () => {
+        const controller: any = getController(NAME, 20);
+        expect(controller).toBeInstanceOf(PointDropController);
+        expect(controller.type).toBe('Point');
+        const size = controller.graphic.size;
+        controller.handleResize(400);
+        expect(controller.graphic.size).not.toBe(size);
+        const rotation = controller.graphic.rotation;
+        controller.handleRotate(45);
+        expect(controller.graphic.rotation).toBe(rotation);
+    });
+
+    it('carries affiliation and nothing else', () => {
+        const fields = getGraphicFields(NAME);
+        expect(fields.hostility).toBe(true);
+        expect(fields.identifier1).toBe(false);
+        expect(fields.status).toBe(false);
     });
 });

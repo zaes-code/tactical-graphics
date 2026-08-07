@@ -90,8 +90,12 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOption
     }
 }
 
-/** Which of the two bars are hashed, **left bar first**. */
-export const EXPLOSIVES_DASHED: Partial<Record<TacticalGraphicName, [boolean, boolean]>> = {
+/**
+ * Which bars a bar symbol hashes, indexed in the order the generator emits them - **left
+ * first** within each lean. A name absent from the table draws every bar solid, which is
+ * what roadblock complete relies on.
+ */
+export const BAR_SYMBOL_DASHES: Partial<Record<TacticalGraphicName, boolean[]>> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: [true, true],
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: [true, false],
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: [false, false],
