@@ -119,6 +119,8 @@ export class TacticalGraphicsManager {
      * grabbed, and the feature alone cannot say.
      */
     private activeHandleIndex: number = -1;
+    /** @see handleVertexDrag — index into the base geometry, latched at pointer-down. */
+    private activeBaseVertex: number = -1;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -344,6 +346,13 @@ export class TacticalGraphicsManager {
             Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
         // Only a handle set carries per-vertex meaning; anything else is -1.
         this.activeHandleIndex = feature.get('handle') ? this.nearestVertexIndex(feature, evt.coordinate) : -1;
+        // Latched against the *base*, because handle indices and base vertices do not line
+        // up once `visiblePathHandles` has dropped the redundant ones. Held for the whole
+        // gesture so the vertex cannot change hands mid-drag.
+        this.activeBaseVertex =
+            feature.get('handle') && this.activeController.handleVertexDrag
+                ? this.nearestBaseVertexIndex(this.activeController, evt.coordinate)
+                : -1;
 
         this.lastPointerPosition = evt.coordinate;
 
@@ -472,6 +481,15 @@ export class TacticalGraphicsManager {
             case InteractionType.resize:
                 if (!this.activeFeature) return;
 
+                // A graphic whose shape *is* its vertex positions drags the grabbed one
+                // rather than scaling about a centre. Opt-in: only controllers that
+                // implement the hook reach it, so nothing else changes behaviour.
+                if (this.activeController.handleVertexDrag && this.activeBaseVertex >= 0) {
+                    this.activeController.handleVertexDrag(this.activeBaseVertex, evt.coordinate);
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
+
                 if (this.activeFeature.get('offsetHandler')) {
                     this.handleOffset(evt);
                 } else {
@@ -507,6 +525,22 @@ export class TacticalGraphicsManager {
      * feature is not a MultiPoint. Coordinates are EPSG:3857 metres, so plain
      * Euclidean math is correct here — no turf.
      */
+    /** Nearest vertex of a controller's base line to `coordinate`, or -1. */
+    private nearestBaseVertexIndex(controller: TacticalGraphicHandler, coordinate: Coordinate): number {
+        const geometry = controller.graphic?.base?.getGeometry();
+        if (!(geometry instanceof LineString)) return -1;
+        let best = -1;
+        let bestDistanceSq = Infinity;
+        geometry.getCoordinates().forEach((vertex, index) => {
+            const d = Math.pow(vertex[0] - coordinate[0], 2) + Math.pow(vertex[1] - coordinate[1], 2);
+            if (d < bestDistanceSq) {
+                bestDistanceSq = d;
+                best = index;
+            }
+        });
+        return best;
+    }
+
     private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
         const geometry = feature.getGeometry();
         if (!(geometry instanceof MultiPoint)) return -1;

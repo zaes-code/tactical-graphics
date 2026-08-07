@@ -60,6 +60,19 @@ const mobileDefense = (name: TacticalGraphicName, res: number) => {
 const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
 
+/**
+ * A line graphic whose shape is the arrangement of its own vertices, so an edit-mode drag
+ * moves the grabbed one instead of scaling the whole graphic.
+ *
+ * `minVertices` is a *visual* floor, not an editing convenience: a fields-of-fire V stops
+ * reading as one the moment its two segments straighten into a line.
+ */
+const vertexLine = (maxPts: number, minVertices: number) => (name: TacticalGraphicName, res: number) => {
+    const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
+    controller.editStretches = true;
+    return controller.enableVertexDragging(minVertices);
+};
+
 const block = (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new Block(name, res * 20, res), 2, name);
 
@@ -263,7 +276,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FerryCrossing]:                    line(2),
     [TacticalGraphicName.PassageLane]:                      line(2),
     [TacticalGraphicName.TacticalFix]:                              line(2),
-    [TacticalGraphicName.FieldsOfFire]:                     line(3),
+    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>
