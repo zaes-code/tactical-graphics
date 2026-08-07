@@ -4047,8 +4047,8 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
 
         const style = WIRE_STYLES[name] ?? DEFAULT_WIRE_STYLE;
         const color = readHostilityColor(f);
-        const labels = readGraphicLabels(f);
-        const stroke = () => new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
+        // No lineDash: none of the nine has a planned form, so there is no status to read.
+        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
         const styles: Style[] = [];
 
         const scale = decorationScale(path, false, resolution, WIRE_MARK_PX * style.height);
