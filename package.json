@@ -59,6 +59,11 @@
       "import": "./dist/ol/esm/components/openlayers/index.js",
       "require": "./dist/ol/cjs/components/openlayers/index.js"
     },
+    "./maplibre": {
+      "types": "./dist/mlb/types/components/maplibre/index.d.ts",
+      "import": "./dist/mlb/esm/components/maplibre/index.js",
+      "require": "./dist/mlb/cjs/components/maplibre/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -88,10 +93,14 @@
     "@types/geojson": "^7946.0.16"
   },
   "peerDependencies": {
+    "maplibre-gl": ">=4",
     "milsymbol": ">=3",
     "ol": ">=9"
   },
   "peerDependenciesMeta": {
+    "maplibre-gl": {
+      "optional": true
+    },
     "milsymbol": {
       "optional": true
     },
@@ -116,6 +125,7 @@
     "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.57.1",
     "eslint-plugin-unused-imports": "^4.2.0",
+    "maplibre-gl": "^6.2.0",
     "milsymbol": "^3.0.2",
     "ol": "^10.5.0",
     "ol-ext": "^4.0.27",

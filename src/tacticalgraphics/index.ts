@@ -140,3 +140,65 @@ export type {WireStyle} from './graphics/WireObstacle';
 export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
 export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from './graphics/AntiTankDitch';
 export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
+
+/**
+ * ## Symbology — colours, line weight and label scale
+ *
+ * The doctrinal colour table and the three label-scale formulas, resolved against the
+ * live config. These lived in `openlayerStyles.ts` until the MapLibre work, which made
+ * the problem obvious: not one of them mentions OpenLayers, and a second renderer that
+ * cannot reach them has to reinvent the palette and then drift from it.
+ *
+ * The OpenLayers layer re-exports every name here, so its surface is unchanged and there
+ * is one implementation of each.
+ */
+export {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    graphicLabelScale,
+    labelScale,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+    ratioLockedLabelScale,
+    withOpacity,
+} from './core/symbology';
+
+/**
+ * ## Paint lists — what a symbol looks like, as data
+ *
+ * `renderTacticalGraphic` says where a graphic is; a paint list says how it is drawn.
+ * The decorations this library synthesises at render time — obstacle teeth, the gap cut
+ * around a mission task's letter, a screen-sized arrowhead — live in 128 places inside
+ * OpenLayers style functions today, so a raw-GeoJSON consumer gets a skeleton. A paint
+ * function returns those marks as plain data that any renderer can paint.
+ *
+ * @see ai/maplibre-renderer.md
+ */
+export {HANDLE_Z_INDEX, mapPaintGeometry, paintGeometryPositions} from './core/paint';
+export type {
+    CircleSpec,
+    FillSpec,
+    Paint,
+    PaintColor,
+    PaintContext,
+    PaintFeature,
+    PaintFunction,
+    ProjectedGeometry,
+    ProjectedPosition,
+    StrokeSpec,
+    TextSpec,
+} from './core/paint';
