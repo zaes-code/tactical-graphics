@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES, ANTI_TANK_DITCH_STYLES, ANTI_TANK_DITCH_TEETH} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4049,6 +4049,40 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  * expressed in the geometry, which is why this is a style function at all: a
  * MultiLineString has one stroke for every part.
  */
+
+/**
+ * The three anti-tank ditches: triangular teeth, outlined or filled, with mines between
+ * them on the reinforced state.
+ *
+ * Fill is the entire difference between "under construction" and "completed", and a
+ * MultiLineString cannot carry one - so the generator emits closed rings in a fixed order
+ * (teeth first, then mines) and this turns them into filled Polygons or plain strokes.
+ * `ANTI_TANK_DITCH_STYLES` lives beside the generator so a second renderer reads the same
+ * table rather than reinventing which state is solid.
+ */
+export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return f => {
+        const geom = f.getGeometry();
+        if (!(geom instanceof MultiLineString)) return [];
+        const rings = geom.getCoordinates();
+        if (!rings.length) return [];
+
+        const color = readHostilityColor(f);
+        const {filled} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
+
+        return rings.map((ring, i) => {
+            // Mines are always solid - they are mines, not an outline of one - so the fill
+            // flag only governs the teeth.
+            const solid = filled || i >= ANTI_TANK_DITCH_TEETH;
+            return new Style({
+                geometry: solid ? new Polygon([ring]) : new LineString(ring),
+                stroke: new Stroke({color, width: LINE_WIDTH()}),
+                fill: solid ? new Fill({color}) : undefined,
+            });
+        });
+    };
+}
+
 export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => {
         const geom = f.getGeometry();

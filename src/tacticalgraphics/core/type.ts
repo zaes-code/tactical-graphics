@@ -755,6 +755,9 @@ export enum TacticalGraphicName {
     ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
     ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',
     RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
+    AntiTankDitchUnderConstruction = 'AntiTankDitchUnderConstruction',
+    AntiTankDitchCompleted = 'AntiTankDitchCompleted',
+    AntiTankDitchReinforcedWithMines = 'AntiTankDitchReinforcedWithMines',
     WireUnspecified = 'WireUnspecified',
     WireSingleFence = 'WireSingleFence',
     WireDoubleFence = 'WireDoubleFence',
@@ -840,6 +843,9 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
+    [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
     [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',
