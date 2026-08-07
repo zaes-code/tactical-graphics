@@ -75,6 +75,36 @@ export interface TacticalGraphicHandler {
     // graphics whose handles each mean something different (the range fans, one
     // rim per band). Present means "do this instead of a uniform resize".
     handleBandResize?(bandIndex: number, coordinate: Coordinate): void;
+
+    /**
+     * Moves the base vertex at `vertexIndex` to `coordinate`.
+     *
+     * For graphics whose shape is the positions of its own vertices — the legs of a
+     * fields-of-fire V — rather than a size scaled about a centre. Present means "drag
+     * this vertex instead of resizing the whole graphic".
+     *
+     * The index is into the **base geometry**, not the handle feature: `visiblePathHandles`
+     * drops handles that would be redundant, so the two do not line up. The manager
+     * latches it at pointer-down against the base.
+     */
+    handleVertexDrag?(vertexIndex: number, coordinate: Coordinate): void;
+
+    /**
+     * Base vertex that moves the whole graphic rather than reshaping it, if any.
+     *
+     * The manager skips it under a reshape drag, so it is inert except in translate mode —
+     * where the ordinary translate path already moves everything, grabbed point included.
+     */
+    anchorVertex?: number;
+
+    /**
+     * Hangs an asymmetric graphic's hook on the other side of its line.
+     *
+     * Driven by the **sign** of the same perpendicular distance that sets the width from
+     * its magnitude, so one handle carries both: how far out you drag sets the width, which
+     * side you drag to sets the side.
+     */
+    setMirrored?(mirrored: boolean): void;
 }
 
 /**
