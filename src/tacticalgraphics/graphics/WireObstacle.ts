@@ -6,43 +6,59 @@ import * as turf from '@turf/turf';
 /**
  * The wire obstacles of FM 1-02.2 table 5-19 (constructed obstacle symbols).
  *
- * All nine are the same thing — a drawn line carrying a repeating decoration — so they
- * share one generator and differ only in `WIRE_STYLES`. Adding the tenth should be a row
- * in that table, not a class.
+ * All nine are one thing - a drawn route carrying a repeating mark - so they share a
+ * generator and differ only by a row in `WIRE_STYLES`. Adding the tenth should be a row,
+ * not a class, for the same reason `Phaseline` backs every simple line graphic.
  *
- * **First stab.** The doctrinal text names these but the extracted `FM_1-02.2.txt` has no
- * figures, so the decorations follow standard military symbology rather than a measured
- * read of the plates: posts for fences, loops for concertina, count for strand. Expect to
- * refine spacing and proportion against the PDF.
+ * The barbed-wire family is an **X mark**, not a fence post: the symbol is the wire, and
+ * the graphics separate by *density* rather than by shape. Reading the ladder in
+ * `perGroup` / `gap` top to bottom is the whole distinction between them:
+ *
+ * ```
+ * unspecified        X X X X X X X X X       (no rail - the marks are the symbol)
+ * single fence    ---X-------X-------X---
+ * double fence    --XX-----XX-----XX-----
+ * double apron    -X--X--X--X--X--X--X---
+ * ```
+ *
+ * `gap` counts *spaces*, one space being the width of a mark, so the ladder holds at any
+ * size: the marks and the gaps scale together.
  */
 
 /** What a wire graphic repeats along its line. */
 interface WireStyle {
-    /** `post` = a tick across the line; `loop` = a concertina coil. */
-    mark: 'post' | 'loop' | 'cross';
-    /** How many parallel rails the line is drawn as. */
-    rails: number;
-    /** Mark height, as a multiple of the decoration size. */
+    /** `cross` = the barbed-wire X; `loop` = a concertina coil. */
+    mark: 'cross' | 'loop';
+    /** Is the wire itself drawn? Unspecified is the one that is not. */
+    rail: boolean;
+    /** Marks per group, drawn touching. */
+    perGroup: number;
+    /** Spaces between groups, one space = one mark width. */
+    gap: number;
+    /** Mark height, as a multiple of the mark width. */
     height: number;
-    /** Spacing between marks, as a multiple of the decoration size. */
-    pitch: number;
-    /** Diagonal stays either side of each post — the apron fences. */
-    apron?: boolean;
+    /** Parallel strands, spread about the drawn line. Concertina only. */
+    strands?: number;
 }
 
 const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
-    [TacticalGraphicName.WireUnspecified]:          {mark: 'cross', rails: 1, height: 0.7, pitch: 2.2},
-    [TacticalGraphicName.WireSingleFence]:          {mark: 'post', rails: 1, height: 1.0, pitch: 2.0},
-    [TacticalGraphicName.WireDoubleFence]:          {mark: 'post', rails: 2, height: 1.0, pitch: 2.0},
-    [TacticalGraphicName.WireDoubleApronFence]:     {mark: 'post', rails: 1, height: 1.0, pitch: 2.6, apron: true},
-    [TacticalGraphicName.WireLowWireFence]:         {mark: 'post', rails: 1, height: 0.55, pitch: 1.6},
-    [TacticalGraphicName.WireHighWireFence]:        {mark: 'post', rails: 1, height: 1.6, pitch: 2.4},
-    [TacticalGraphicName.WireSingleConcertina]:     {mark: 'loop', rails: 1, height: 1.0, pitch: 1.8},
-    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'loop', rails: 2, height: 1.0, pitch: 1.8},
-    [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'loop', rails: 3, height: 1.0, pitch: 1.8},
+    // Specified by the user, 2026-08-07. The ladder is deliberate: one mark, rising density.
+    [TacticalGraphicName.WireUnspecified]: {mark: 'cross', rail: false, perGroup: 1, gap: 1.0, height: 1},
+    [TacticalGraphicName.WireSingleFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 1},
+    [TacticalGraphicName.WireDoubleFence]: {mark: 'cross', rail: true, perGroup: 2, gap: 3.5, height: 1},
+    [TacticalGraphicName.WireDoubleApronFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1},
+
+    // NOT YET SPECIFIED - extrapolated, and the likeliest thing here to be wrong. The two
+    // fences take the single-fence pattern and separate on mark height, which is what
+    // "low" and "high" name; the concertinas keep coils, separating on strand count.
+    [TacticalGraphicName.WireLowWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 0.55},
+    [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 1.6},
+    [TacticalGraphicName.WireSingleConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 1},
+    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 2},
+    [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 3},
 };
 
-const DEFAULT_STYLE: WireStyle = {mark: 'post', rails: 1, height: 1, pitch: 2};
+const DEFAULT_STYLE: WireStyle = {mark: 'cross', rail: true, perGroup: 1, gap: 6, height: 1};
 
 export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string;
@@ -62,9 +78,8 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
         if (coords.length < 2) return this.asMultiLineStringFeature([coords]);
 
         const style = this.style();
-        const unit = Math.max(opts?.size ?? 1, 1);
-        const height = unit * style.height;
-        const pitch = unit * style.pitch;
+        const width = Math.max(opts?.size ?? 1, 1);
+        const height = width * style.height;
         const line = turf.lineString(coords);
         const length = turf.length(line, {units: 'meters'});
         const parts: Position[][] = [];
@@ -77,42 +92,44 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
             const ahead = turf.along(line, Math.min(clamped + 1, length), {units: 'meters'});
             const back = turf.along(line, Math.max(clamped - 1, 0), {units: 'meters'});
             const bearing = turf.bearing(back, ahead);
-            return turf.destination(p, Math.abs(across), bearing + (across > 0 ? -90 : 90), {units: 'meters'})
-                .geometry.coordinates as Position;
+            return turf.destination(p, Math.abs(across), bearing + (across > 0 ? -90 : 90), {units: 'meters'}).geometry
+                .coordinates as Position;
         };
 
-        // Rails: the wire itself. Two or three run parallel, spread about the drawn line.
-        const gap = height * 0.55;
-        for (let r = 0; r < style.rails; r++) {
-            const offset = style.rails === 1 ? 0 : (r - (style.rails - 1) / 2) * gap;
-            const rail: Position[] = [];
-            for (let d = 0; d <= length; d += Math.max(length / 64, 1)) rail.push(at(d, offset));
-            rail.push(at(length, offset));
-            parts.push(rail);
+        const strands = style.strands ?? 1;
+        const spread = height * 0.9;
+        const offsetOf = (s: number) => (strands === 1 ? 0 : (s - (strands - 1) / 2) * spread);
+
+        // The wire itself. Unspecified omits it: there, the marks *are* the symbol.
+        if (style.rail) {
+            for (let s = 0; s < strands; s++) {
+                const rail: Position[] = [];
+                const step = Math.max(length / 64, 1);
+                for (let d = 0; d < length; d += step) rail.push(at(d, offsetOf(s)));
+                rail.push(at(length, offsetOf(s)));
+                parts.push(rail);
+            }
         }
 
-        // Marks, repeated along the line.
-        const railSpan = style.rails === 1 ? 0 : (style.rails - 1) * gap;
-        for (let d = pitch / 2; d < length; d += pitch) {
-            if (style.mark === 'post') {
-                parts.push([at(d, railSpan / 2 + height), at(d, -railSpan / 2 - height * 0.15)]);
-                if (style.apron) {
-                    parts.push([at(d, height), at(d - height, -height * 0.6)]);
-                    parts.push([at(d, height), at(d + height, -height * 0.6)]);
-                }
-            } else if (style.mark === 'cross') {
-                parts.push([at(d - height * 0.6, height * 0.6), at(d + height * 0.6, -height * 0.6)]);
-                parts.push([at(d - height * 0.6, -height * 0.6), at(d + height * 0.6, height * 0.6)]);
-            } else {
-                // Concertina coil: a loop standing off each rail.
-                for (let r = 0; r < style.rails; r++) {
-                    const offset = style.rails === 1 ? 0 : (r - (style.rails - 1) / 2) * gap;
-                    const loop: Position[] = [];
-                    for (let a = 0; a <= 180; a += 20) {
-                        const t = (a * Math.PI) / 180;
-                        loop.push(at(d - Math.cos(t) * height * 0.5, offset + Math.sin(t) * height * 0.7));
+        // Groups of marks, repeating. The rail crosses each mark through its middle.
+        const period = (style.perGroup + style.gap) * width;
+        for (let start = period / 2; start < length; start += period) {
+            for (let i = 0; i < style.perGroup; i++) {
+                const d = start + i * width;
+                if (d + width / 2 > length) break;
+                for (let s = 0; s < strands; s++) {
+                    const off = offsetOf(s);
+                    if (style.mark === 'cross') {
+                        parts.push([at(d - width / 2, off + height / 2), at(d + width / 2, off - height / 2)]);
+                        parts.push([at(d - width / 2, off - height / 2), at(d + width / 2, off + height / 2)]);
+                    } else {
+                        const loop: Position[] = [];
+                        for (let a = 0; a <= 180; a += 20) {
+                            const t = (a * Math.PI) / 180;
+                            loop.push(at(d - Math.cos(t) * width * 0.5, off + Math.sin(t) * height * 0.7));
+                        }
+                        parts.push(loop);
                     }
-                    parts.push(loop);
                 }
             }
         }
