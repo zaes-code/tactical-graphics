@@ -4061,13 +4061,14 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
         // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
         // the user cannot find what they drew.
-        // Low wire fence hangs its wire under the marks - the X's sit on it, underlined -
-        // where every other graphic runs it through their middle.
-        const railDrop = style.railUnder ? -height / 2 : 0;
+        // Where the wire sits relative to the marks. Low wire fence hangs it underneath so
+        // the X's sit on it; high wire fence adds a second one on top, overlining them.
+        // Everything else runs a single wire through their middle.
+        const railDrops = style.railUnder ? (style.railOver ? [-height / 2, height / 2] : [-height / 2]) : [0];
         if (style.rail || width <= 0) {
-            for (let s = 0; s < strands; s++)
-                {
-                    const off = offsetOf(s) + railDrop;
+            for (const drop of railDrops)
+                for (let s = 0; s < strands; s++) {
+                    const off = offsetOf(s) + drop;
                     const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
                     styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
                 }

@@ -38,9 +38,12 @@ export interface WireStyle {
     innerGap?: number;
     /**
      * Run the wire along the bottom of the marks instead of through their middle - the X's
-     * sit on it, underlined. Low wire fence is the one that reads this way.
+     * sit on it, underlined. Low wire fence reads this way; high wire fence adds `railOver`
+     * on top of it.
      */
     railUnder?: boolean;
+    /** A second wire along the top of the marks - the X's are overlined as well. */
+    railOver?: boolean;
     /** Mark height, as a multiple of the mark width. */
     height: number;
     /** Parallel strands, spread about the drawn line. Concertina only. */
@@ -67,11 +70,11 @@ export const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
     [TacticalGraphicName.WireDoubleFence]: {mark: 'cross', rail: true, perGroup: 2, gap: 3.5, innerGap: PX(5), height: 1},
     [TacticalGraphicName.WireDoubleApronFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1},
 
-    // NOT YET SPECIFIED - extrapolated, and the likeliest thing here to be wrong. The two
-    // fences take the single-fence pattern and separate on mark height, which is what
-    // "low" and "high" name; the concertinas keep coils, separating on strand count.
     [TacticalGraphicName.WireLowWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railUnder: true},
-    [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 1.6},
+    [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railUnder: true, railOver: true},
+    
+    // NOT YET SPECIFIED - extrapolated. The concertinas keep coils, separating on strand
+    // count; nothing here has been read against the plates.
     [TacticalGraphicName.WireSingleConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 1},
     [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 2},
     [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 3},
