@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
-import {assignRole} from '../graphicProperties';
+import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 // Graphics that lock the perpendicular size to a fixed fraction of the base length
 // so the user can only rotate and resize, not change the aspect ratio. The value
@@ -85,6 +85,16 @@ export class Block implements LineGraphic {
     /** @see LineGraphic.offsetScale — read off the controller by the manager. */
     offsetScale?: number;
     private ratioLock: number | undefined;
+    /**
+     * Suspends the `MIN_BASE_PX` floor below while a snapshot is rebuilt.
+     *
+     * That floor *extends the base geometry*, and it is a screen-pixel constant times
+     * the map resolution — right on a draw (it keeps a barely-dragged graphic legible)
+     * and wrong on a restore, where the geometry is already final and re-applying a
+     * larger floor silently lengthens the line the user drew. Set by
+     * `applyRestoredGeometry` for the rebuild only. @see LineGraphicBase for the twin.
+     */
+    suspendMinimumLength = false;
     // Minimum base-length in screen pixels at the drawing zoom — forces the
     // graphic to render at a recognisable size from the moment the user starts
     // drawing, even if the cursor hasn't moved far from the first click.
@@ -147,6 +157,13 @@ export class Block implements LineGraphic {
         let handleCoords = (handles as MultiPoint).getCoordinates();
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+
+        // Persist the *effective* metre value rather than the viewport factor behind it.
+        // A ratio-locked name re-derives `size` from the base length on restore and
+        // ignores this; the rest have no other record of the size they were built with.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            decorationSize: this.size,
+        });
     };
 
     setSymbolId = (symbolId: string) => {
@@ -170,7 +187,7 @@ export class Block implements LineGraphic {
                 const minLen = Block.MIN_BASE_PX * drawingRes;
 
                 let workingCoords: number[][] = coords;
-                if (len > 0 && len < minLen) {
+                if (len > 0 && len < minLen && !this.suspendMinimumLength) {
                     const ux = dx / len;
                     const uy = dy / len;
                     workingCoords = [start, [start[0] + ux * minLen, start[1] + uy * minLen]];

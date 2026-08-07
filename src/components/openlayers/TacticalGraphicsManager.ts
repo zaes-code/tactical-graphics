@@ -41,6 +41,21 @@ export enum InteractionType {
  */
 const MIN_RESIZE_ORIGIN_PX = 8;
 
+/**
+ * How far off the line, in screen pixels, a drag has to be before it counts as choosing a
+ * side. Below this the graphic keeps the side it had, so jitter across the axis cannot
+ * flip it back and forth. @see TacticalGraphicHandler.setMirrored
+ */
+const MIRROR_FLIP_MIN_PX = 6;
+
+/**
+ * How far past its own axis, in screen pixels, a handle has to be dragged before a
+ * point-anchored graphic flips. Much larger than `MIRROR_FLIP_MIN_PX`: on these graphics a
+ * handle drag normally means rotate, so the flip has to be a deliberate excursion rather
+ * than anything a rotation could brush past.
+ */
+const MIRROR_PAST_AXIS_MIN_PX = 40;
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -119,6 +134,8 @@ export class TacticalGraphicsManager {
      * grabbed, and the feature alone cannot say.
      */
     private activeHandleIndex: number = -1;
+    /** @see handleVertexDrag — index into the base geometry, latched at pointer-down. */
+    private activeBaseVertex: number = -1;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -286,6 +303,10 @@ export class TacticalGraphicsManager {
             handleDragEvent: this.handleDragEvent,
             handleUpEvent: (): boolean => {
                 this.lastPointerPosition = null;
+                // The drag is over, so any live measurement read-out goes with it. Done
+                // here rather than in the controller because this is the one place every
+                // drag gesture ends, however it started.
+                (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
                 this.activeController = undefined;
                 return false;
             },
@@ -340,6 +361,13 @@ export class TacticalGraphicsManager {
             Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
         // Only a handle set carries per-vertex meaning; anything else is -1.
         this.activeHandleIndex = feature.get('handle') ? this.nearestVertexIndex(feature, evt.coordinate) : -1;
+        // Latched against the *base*, because handle indices and base vertices do not line
+        // up once `visiblePathHandles` has dropped the redundant ones. Held for the whole
+        // gesture so the vertex cannot change hands mid-drag.
+        this.activeBaseVertex =
+            feature.get('handle') && this.activeController.handleVertexDrag
+                ? this.nearestBaseVertexIndex(this.activeController, evt.coordinate)
+                : -1;
 
         this.lastPointerPosition = evt.coordinate;
 
@@ -353,6 +381,14 @@ export class TacticalGraphicsManager {
 
     handleDragEvent = (evt: MapBrowserEvent): void => {
         if (!this.lastPointerPosition || !this.activeController) return;
+
+        // Feed the drag position to any radius read-out, so its line follows the handle
+        // under the cursor. The controller has no coordinate of its own during a resize —
+        // only a scale delta — so it has to come from here. `handleUpEvent` disarms it.
+        if (this.isResizing()) {
+            (this.activeController as {graphic?: {showMeasure?: (a: boolean, c?: Coordinate) => void}})
+                .graphic?.showMeasure?.(true, evt.coordinate);
+        }
 
         // handle point vs linestring vs polygon vs circular graphics differently.
         let geomType = this.activeController.geomHandleType;
@@ -399,6 +435,40 @@ export class TacticalGraphicsManager {
         }
     };
 
+    /**
+     * Flips an asymmetric point-anchored graphic when a handle is dragged well past the
+     * far side of its own long axis.
+     *
+     * Rotate is the primary meaning of a handle drag on these graphics, so the flip has to
+     * be a gesture rotate cannot produce. It is measured **in resize/edit mode only**,
+     * where the rotation is held still and the cursor is therefore free to sit off the
+     * axis — during a rotate the axis follows the cursor, so the perpendicular is always
+     * ~0 and no such test could work.
+     *
+     * The threshold is generous for the same reason `MIRROR_FLIP_MIN_PX` exists on the
+     * line graphics: crossing the axis is easy to do by accident, going a long way past it
+     * is not.
+     */
+    private mirrorIfDraggedPastAxis(evt: MapBrowserEvent, center: number[]) {
+        const controller = this.activeController;
+        if (!controller?.setMirrored) return;
+
+        const rotationDeg = (controller.graphic as {rotation?: number}).rotation ?? 0;
+        // Planar angle, 0 = east, matching how these generators build their local frames.
+        const axis = (rotationDeg * Math.PI) / 180;
+        const dx = evt.coordinate[0] - center[0];
+        const dy = evt.coordinate[1] - center[1];
+        // Perpendicular component of the cursor about the graphic's own axis.
+        const perpendicular = -dx * Math.sin(axis) + dy * Math.cos(axis);
+
+        const resolution = this.map.getView().getResolution() ?? 1;
+        if (Math.abs(perpendicular) < MIRROR_PAST_AXIS_MIN_PX * resolution) return;
+        // Negative, matching the line families. A graphic's unmirrored feature sits on the
+        // positive side of its own axis — abatis's chevron above its route, Pursuit's hook
+        // below its line — so dragging to the negative side is what moves it across.
+        controller.setMirrored(perpendicular < 0);
+    }
+
     handleCircleDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
         let center = this.activeController.getBaseGeometry() as number[];
@@ -428,6 +498,7 @@ export class TacticalGraphicsManager {
                 if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
                     this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
                 } else {
+                    this.mirrorIfDraggedPastAxis(evt, center);
                     // Calculate distance to center for scaling
                     this.handleResize(evt);
                 }
@@ -459,6 +530,31 @@ export class TacticalGraphicsManager {
             case InteractionType.modify:
             case InteractionType.resize:
                 if (!this.activeFeature) return;
+
+                // A graphic whose shape *is* its vertex positions reshapes in **modify**
+                // mode only. Resize keeps its usual meaning — scale the whole graphic
+                // about its centre — because a user who picked "resize" asked for that,
+                // not for one corner to move.
+                //
+                // The anchor is skipped here: it moves the graphic, and moving is what
+                // translate mode is for. That leaves it inert under a reshape, the same
+                // contract the inert centre dot has on point-anchored graphics.
+                const anchor = this.activeController.anchorVertex;
+                const reshaping = this.isModifying() && !!this.activeController.handleVertexDrag;
+
+                // Grabbing the anchor under a reshape does **nothing**. Falling through
+                // would hand it to `handleResize`, so the one handle meant for moving the
+                // graphic would silently scale it instead — worse than it being inert.
+                if (reshaping && anchor !== undefined && this.activeBaseVertex === anchor) {
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
+
+                if (reshaping && this.activeBaseVertex >= 0) {
+                    this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
 
                 if (this.activeFeature.get('offsetHandler')) {
                     this.handleOffset(evt);
@@ -495,6 +591,22 @@ export class TacticalGraphicsManager {
      * feature is not a MultiPoint. Coordinates are EPSG:3857 metres, so plain
      * Euclidean math is correct here — no turf.
      */
+    /** Nearest vertex of a controller's base line to `coordinate`, or -1. */
+    private nearestBaseVertexIndex(controller: TacticalGraphicHandler, coordinate: Coordinate): number {
+        const geometry = controller.graphic?.base?.getGeometry();
+        if (!(geometry instanceof LineString)) return -1;
+        let best = -1;
+        let bestDistanceSq = Infinity;
+        geometry.getCoordinates().forEach((vertex, index) => {
+            const d = Math.pow(vertex[0] - coordinate[0], 2) + Math.pow(vertex[1] - coordinate[1], 2);
+            if (d < bestDistanceSq) {
+                bestDistanceSq = d;
+                best = index;
+            }
+        });
+        return best;
+    }
+
     private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
         const geometry = feature.getGeometry();
         if (!(geometry instanceof MultiPoint)) return -1;
@@ -569,6 +681,22 @@ export class TacticalGraphicsManager {
         const scaleFactor = this.activeController.offsetScale ?? .5;
         const baseWidth = Math.abs(perpendicularDistance) * scaleFactor;
         this.activeController.setOffset?.(baseWidth);
+
+        // One handle, two jobs: the magnitude above set the width, the sign sets the side.
+        // Read separately and never from the raw signed value — using the signed number for
+        // both would make a flip jump the width at the same moment.
+        //
+        // The threshold is Envelopment's reasoning: a deliberate move to one side flips it,
+        // a pixel of jitter across the line does not.
+        if (this.activeController.setMirrored && Math.abs(perpendicularDistance) > MIRROR_FLIP_MIN_PX * this.map.getView().getResolution()!) {
+            // Negative, not positive. `widthAxis` is the line's left normal, and an
+            // unmirrored cane already hangs on that side — so a *positive* perpendicular
+            // is the side it is on, and reading it as "mirrored" flipped the graphic the
+            // moment the user dragged along the side it was already on. Measured: the
+            // handle sat 41px above the line, dragging further up gave a growing positive
+            // perpendicular, and the cane flipped underneath.
+            this.activeController.setMirrored(perpendicularDistance < 0);
+        }
     }
 
     handleDragForLineAndPolygon(evt: MapBrowserEvent, controller: TacticalGraphicHandler) {
@@ -688,7 +816,14 @@ export class TacticalGraphicsManager {
         this.setInteractionMode(InteractionType.view);
     };
 
-    handleDrawTacticalGraphic = (name: TacticalGraphicName) => {
+    /**
+     * Puts the map into draw mode for one graphic: the user clicks out the base
+     * geometry, and this builds, styles and wires up everything that follows from
+     * it. The primary verb of this package.
+     *
+     * @see handleDrawTacticalGraphic for the former name, kept as an alias.
+     */
+    startDrawing = (name: TacticalGraphicName) => {
         if (this.draw) this.map.removeInteraction(this.draw);
 
         // create a new source for drawing, this can be modified per application
@@ -753,6 +888,20 @@ export class TacticalGraphicsManager {
             this.stopDrawing(tacticalGraphicHandler, false);
         });
     };
+
+    /**
+     * The former name of {@link startDrawing}, kept so the rename is not a breaking
+     * change for anyone already calling it.
+     *
+     * It delegates rather than aliasing the field (`= this.startDrawing`), so a host
+     * that overrides `startDrawing` is still the one that runs through this door.
+     *
+     * @deprecated Call {@link startDrawing} instead. `handleDraw…` read like an
+     * internal event handler, which is what a `handleX` name means everywhere else
+     * in this codebase — but this is the public entry point a host calls to begin a
+     * draw, and it pairs with the private `stopDrawing`.
+     */
+    handleDrawTacticalGraphic = (name: TacticalGraphicName) => this.startDrawing(name);
 
     addModifyInteraction = () => {
         // Only allow the base feature (linestring/polygon) for a tactical graphic to be modified

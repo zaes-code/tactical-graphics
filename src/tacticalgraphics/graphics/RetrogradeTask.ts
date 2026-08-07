@@ -13,7 +13,7 @@ export class RetrogradeTask extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        return geometryService.getCaneArrow(base, opts.size, opts.size);
+        return geometryService.getCaneArrow(base, opts.size, opts.size, opts.mirrored ?? false);
     }
 
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {

@@ -17,15 +17,15 @@ import {
     Paper,
     Select,
     SelectChangeEvent,
-} from '@mui/material';
+    Typography,} from '@mui/material';
 import {Coordinate} from 'ol/coordinate';
 import VectorSource from 'ol/source/Vector';
 import VectorLayer from 'ol/layer/Vector';
 import Style from 'ol/style/Style';
-import {getColorByHostility} from './openlayers/openlayerStyles';
+import {formatDistance, getColorByHostility} from './openlayers/openlayerStyles';
 import {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
 import {GraphicLabels, GraphicLinkRegistry, RangeFanConfig} from '../utils/graphicLinkRegistry';
-import {readGraphicLabels, writeGraphicProperties} from './openlayers/graphicProperties';
+import {GraphicGeometryState, readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './openlayers/graphicProperties';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
@@ -73,6 +73,8 @@ interface TacticalGraphicProperties {
 }
 
 const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tacticalGraphicsManager}) => {
+    /** Geometry read-outs (metres) for the selected graphic. @see readGraphicGeometryState */
+    const [measured, setMeasured] = useState<GraphicGeometryState>({});
     const [selectedFeature, setSelectedFeature] = useState<Feature | any | null>(null);
     const [dialogPosition, setDialogPosition] = useState({x: 0, y: 0});
     const [isDragging, setIsDragging] = useState(false);
@@ -112,6 +114,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
 
                     const graphicLabels = readGraphicLabels(feature);
                     const fields = getGraphicFields(feature.get('graphicName') as TacticalGraphicName);
+                    // Read-only: the geometry inputs the user set by dragging. Read off
+                    // the feature rather than carried in `pendingChanges`, since nothing
+                    // in this dialog can change them.
+                    setMeasured(readGraphicGeometryState(feature));
 
                     // Build labels containing only fields enabled for this graphic type.
                     // This prevents disabled fields from accumulating stale values.
@@ -137,7 +143,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                     if (fields.direction) filteredLabels.direction = graphicLabels.direction;
                     if (fields.dtg1) filteredLabels.startDate = graphicLabels.startDate ?? nowDtg();
                     if (fields.dtg2) filteredLabels.endDate = graphicLabels.endDate ?? nowDtg();
-                    if (fields.width) filteredLabels.width = graphicLabels.width;
+                    
                     if (fields.altitude1) filteredLabels.minAltitude = graphicLabels.minAltitude;
                     if (fields.altitude2) filteredLabels.maxAltitude = graphicLabels.maxAltitude;
                     if (fields.weapon) filteredLabels.weapon = graphicLabels.weapon ?? '';
@@ -649,24 +655,25 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                     </Box>
                                 )}
 
-                                {fields.width && (
+                                {/*
+                                  * Width and radius are read-outs, not inputs: the user
+                                  * sizes a graphic by dragging it, and the hashed measure
+                                  * line reports the number live while they do. Showing
+                                  * them here as text closes the loop — you can check the
+                                  * figure you dragged to — without a second way to set it
+                                  * that would have to be kept in step with the geometry.
+                                  */}
+                                {fields.width && measured.width !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
-                                        <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="width-input">Width</InputLabel>
-                                            <OutlinedInput
-                                                id="width-input"
-                                                label="Width"
-                                                inputProps={{inputMode: 'numeric'}}
-                                                value={pendingChanges.labels.width ?? ''}
-                                                onChange={e => {
-                                                    const v = e.target.value.replace(/[^0-9]/g, '');
-                                                    setPendingChanges(prev => ({
-                                                        ...prev,
-                                                        labels: {...prev.labels, width: v},
-                                                    }));
-                                                }}
-                                            />
-                                        </FormControl>
+                                        <Typography variant="caption" color="text.secondary">Width</Typography>
+                                        <Typography id="width-readout" variant="body2">{formatDistance(measured.width)}</Typography>
+                                    </Box>
+                                )}
+
+                                {fields.radius && measured.radius !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">Radius</Typography>
+                                        <Typography id="radius-readout" variant="body2">{formatDistance(measured.radius)}</Typography>
                                     </Box>
                                 )}
 

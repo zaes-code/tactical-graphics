@@ -137,6 +137,23 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.RestrictiveFireLine]:              TacticalGraphicCategory.Lines,
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
+    [TacticalGraphicName.Abatis]:                           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchCompleted]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleApronFence]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireLowWireFence]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireHighWireFence]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleConcertina]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireTripleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
     // Convoy Symbols OK
     // Excluded — see ai/excluded-graphics.md
     // [TacticalGraphicName.HaltedConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,

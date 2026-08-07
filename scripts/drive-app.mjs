@@ -148,12 +148,14 @@ const main = async () => {
 
     // Pin the library config to its defaults before the app boots.
     //
-    // The route checks below tell an arrow shaft from the route line by stroke
-    // width — 2 vs 4 — which only holds while `lineWidth` is its default 4. That
-    // is a host setting now, persisted in this key by the settings panel, so a
-    // developer who once dragged the slider would get confusing failures here
-    // rather than in their own app. A fresh Playwright context happens to start
-    // with empty storage, which made this work by accident; state it outright.
+    // `lineWidth` is a host setting, persisted in this key by the settings panel, so
+    // a developer who once dragged the slider would otherwise get failures here
+    // rather than in their own app. A fresh Playwright context happens to start with
+    // empty storage, which made this work by accident; state it outright.
+    //
+    // The route checks no longer *depend* on the value — they discriminate by
+    // geometry identity, not stroke width (@see readRouteFigure) — but label
+    // scaling and decoration sizing still read the config, so pin it regardless.
     await page.addInitScript(() => localStorage.setItem('tg_graphicsSettings', '{}'));
 
     console.log(`\nDriving ${URL}\n`);
@@ -281,7 +283,22 @@ const main = async () => {
     const {mid: routeMid} = await drawLine(page, box, 0.45);
     await page.waitForTimeout(DRAW_END_GUARD_MS);
 
-    /** Style geometry types + texts + dashes for the Route's styled feature. */
+    /**
+     * Style geometry types + texts + dashes for the Route's styled feature.
+     *
+     * The route line is told apart from the arrow shafts by **geometry identity**,
+     * not by stroke width. `routeControlMeasureStyleFromLabels` draws the line on
+     * the feature's own geometry object (`geometry: geom`) and builds every shaft a
+     * fresh `LineString`, so `style.getGeometry() === feature.getGeometry()` picks
+     * out the line exactly, at any configured width.
+     *
+     * This used to compare widths against a hardcoded 2 — "the route line is
+     * thicker, shafts are ROUTE_ARROW_WIDTH". That silently stopped discriminating
+     * when the default `lineWidth` went 4 -> 2: `routeArrowWidth()` is
+     * `max(1, LINE_WIDTH() / 2)`, so shafts became 1 and the *route line* became
+     * the thing matching `=== 2`. Three checks then failed against correct code —
+     * the hostile-line colour read back `null` because nothing was wider than 2.
+     */
     const readRouteFigure = () =>
         page.evaluate(() => {
             const {map, manager} = window.__tacticalGraphics;
@@ -292,29 +309,26 @@ const main = async () => {
             if (!feature) return null;
             const result = feature.getStyle()(feature, resolution);
             const styles = Array.isArray(result) ? result : result ? [result] : [];
+
+            const own = feature.getGeometry();
+            const isRouteLine = s => !!own && s.getGeometry?.() === own;
+            const shaftStyles = styles.filter(
+                s => !isRouteLine(s) && s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.(),
+            );
+            const headStyles = styles.filter(s => s.getGeometry?.()?.getType?.() === 'Polygon' && s.getFill?.());
+
             return {
-                heads: styles.filter(s => s.getGeometry?.()?.getType?.() === 'Polygon' && s.getFill?.()).length,
-                // The route line is itself a stroked LineString, so shafts are
-                // told apart by their thinner ROUTE_ARROW_WIDTH.
-                shafts: styles.filter(
-                    s => s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.()?.getWidth?.() === 2,
-                ).length,
+                heads: headStyles.length,
+                shafts: shaftStyles.length,
                 texts: styles.map(s => s.getText?.()?.getText?.()).filter(t => typeof t === 'string'),
                 dashes: styles.map(s => s.getStroke?.()?.getLineDash?.()).filter(Boolean),
                 // Colour of the traffic figure vs. colour of the route line —
                 // the amplifier block is black, only the line answers to hostility.
                 figureColors: [
-                    ...styles
-                        .filter(s => s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.()?.getWidth?.() === 2)
-                        .map(s => s.getStroke().getColor()),
-                    ...styles
-                        .filter(s => s.getGeometry?.()?.getType?.() === 'Polygon' && s.getFill?.())
-                        .map(s => s.getFill().getColor()),
+                    ...shaftStyles.map(s => s.getStroke().getColor()),
+                    ...headStyles.map(s => s.getFill().getColor()),
                 ],
-                lineColor:
-                    styles
-                        .filter(s => s.getStroke?.()?.getWidth?.() > 2)
-                        .map(s => s.getStroke().getColor())[0] ?? null,
+                lineColor: styles.filter(isRouteLine).map(s => s.getStroke?.()?.getColor?.())[0] ?? null,
             };
         });
 

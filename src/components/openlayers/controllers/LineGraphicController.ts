@@ -113,6 +113,40 @@ export class LineGraphicController implements TacticalGraphicHandler {
      */
     editStretches: boolean = false;
 
+    /**
+     * Whether an edit-mode drag moves the grabbed vertex rather than scaling the whole
+     * graphic. Off by default: the line family is overwhelmingly "a drawn path plus
+     * decorations", where a uniform resize is what a user expects. On for the graphics
+     * whose shape *is* the arrangement of their vertices — a fields-of-fire V, where the
+     * legs' angle and length are the content.
+     *
+     * `handleVertexDrag` is only declared when this is set, because the manager routes on
+     * the method's presence.
+     */
+    dragsVertices: boolean = false;
+
+    /**
+     * Moves base vertex `index` to `coordinate`. @see TacticalGraphicHandler.handleVertexDrag
+     *
+     * Guarded by `minimumVertices`: a fields-of-fire V stops reading as one the moment it
+     * straightens into a line, and the same is true of any graphic drawn from segments, so
+     * a drag can move a vertex but never remove one.
+     */
+    handleVertexDrag?(index: number, coordinate: Coordinate): void;
+
+    /** Fewest vertices this graphic still reads correctly at. @see handleVertexDrag */
+    minimumVertices: number = 2;
+
+    /**
+     * Base vertex that **moves the whole graphic** instead of reshaping it — the apex of a
+     * fields-of-fire V.
+     *
+     * Expressed as a translate so the grabbed point lands under the cursor, which is what
+     * makes it feel like the centre dot on a point-anchored graphic rather than a corner
+     * that drags the shape inside out. `undefined` means every vertex reshapes.
+     */
+    anchorVertex: number | undefined;
+
     constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
         this.graphic = graphic;
         this.maxPoints = maxPoints;
@@ -166,6 +200,15 @@ export class LineGraphicController implements TacticalGraphicHandler {
         this.graphic.setBaseFeature(resized);
     }
 
+    /**
+     * Hangs the graphic's hook on the other side. Forwarded to the holder when it has one;
+     * a symmetric graphic has nothing to mirror and simply ignores it.
+     * @see TacticalGraphicHandler.setMirrored
+     */
+    setMirrored(mirrored: boolean): void {
+        (this.graphic as {setMirrored?: (m: boolean) => void}).setMirrored?.(mirrored);
+    }
+
     setOffset(offset: number): void {
         this.graphic.setOffset?.(offset);
     }
@@ -205,6 +248,36 @@ export class LineGraphicController implements TacticalGraphicHandler {
 
     setBaseFeature(base: Feature<LineString>) {
         this.graphic.setBaseFeature(base);
+    }
+
+    /**
+     * Turns on vertex dragging. Called from the registry for the graphics that want it;
+     * assigning the method here rather than always declaring it is what lets the manager
+     * route on presence and leave every other line graphic exactly as it was.
+     */
+    enableVertexDragging(minimumVertices = 2, anchorVertex?: number): this {
+        this.dragsVertices = true;
+        this.minimumVertices = minimumVertices;
+        this.anchorVertex = anchorVertex;
+        this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
+            const geom = this.graphic.base.getGeometry();
+            if (!geom) return;
+            const coords = geom.getCoordinates();
+            if (index < 0 || index >= coords.length) return;
+            if (coords.length < this.minimumVertices) return;
+
+            // The anchor drags the graphic, not its own vertex: shift every coordinate by
+            // however far the anchor had to move to reach the cursor.
+            const isAnchor = this.anchorVertex !== undefined && index === this.anchorVertex;
+            const dx = coordinate[0] - coords[index][0];
+            const dy = coordinate[1] - coords[index][1];
+            const moved = coords.map((c, i) =>
+                isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
+            );
+            const next = new Feature(new LineString(moved));
+            this.graphic.setBaseFeature(next as Feature<LineString>);
+        };
+        return this;
     }
 
     getSymbolId(): string {
