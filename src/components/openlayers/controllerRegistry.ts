@@ -128,19 +128,15 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
  * `editStretches` stays off: there is nothing to stretch.
  */
 /**
- * Dropped whole on one click like the crossed tasks, but resizable: the user moves and
- * scales it, and there is no vertex to drag, so the shape's integrity is never at risk.
- * `res * 50` is Suppress's default size - the starting point the three were specified from.
+ * Dropped whole on a single click like the crossed tasks, and resizable afterwards - the
+ * user places it, then scales it if they need to. There is no vertex to drag, so the
+ * shape's integrity is never at risk, and rotation stays off: `PointDropController`
+ * no-ops it and the generator ignores it besides.
+ *
+ * `res * 50` is Suppress's default size, the starting point these were specified from.
  */
-const explosivesReadiness = (name: TacticalGraphicName, res: number) => {
-    const controller = new MissionTaskController(new MissionTaskGraphicBase(name, res * 50, res));
-    controller.editStretches = true;
-    // Fixed heading: the symbol does not rotate. The generator ignores rotation too, which
-    // is what actually holds it - the resize drag derives an angle from the pointer and
-    // would otherwise turn the graphic as a side effect of scaling it.
-    controller.handleRotate = () => undefined;
-    return controller;
-};
+const explosivesReadiness = (name: TacticalGraphicName, res: number) =>
+    new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50, true);
 
 const crossedTask = (name: TacticalGraphicName, res: number) =>
     new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
