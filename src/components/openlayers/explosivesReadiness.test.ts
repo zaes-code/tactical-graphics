@@ -29,7 +29,7 @@ describe('explosives states of readiness', () => {
     // the only thing worth asserting hard. Straight off the FM 1-02.2 table 5-19 plates.
     it('dashes each state the way the plate does', () => {
         expect(dashes(PLANNED)).toEqual([true, true]);
-        expect(dashes(SAFE)).toEqual([false, true]);
+        expect(dashes(SAFE)).toEqual([true, false]); // left hashed, right solid
         expect(dashes(ARMED)).toEqual([false, false]);
     });
 
@@ -58,14 +58,34 @@ describe('explosives states of readiness', () => {
         expect(fields.hostility).toBe(true);
     });
 
-    it('scales with radius and turns with rotation', () => {
-        const span = (r: number, rot = 0) => {
-            const all = render(ARMED, r, rot).graphic.geometry.coordinates.flat();
-            const xs = all.map((c: number[]) => c[0]);
+    it('scales with radius', () => {
+        const span = (r: number) => {
+            const xs = render(ARMED, r).graphic.geometry.coordinates.flat().map((c: number[]) => c[0]);
             return Math.max(...xs) - Math.min(...xs);
         };
         expect(span(1200)).toBeGreaterThan(span(600));
-        expect(span(600, 90)).not.toBeCloseTo(span(600, 0), 6);
+    });
+
+    // Fixed heading. This is not just "no rotate gesture": MissionTaskController's resize
+    // drag derives an angle from the pointer and feeds it back as rotation, so a graphic
+    // that honoured rotation would turn as a side effect of being scaled.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s ignores rotation entirely', (_l, name) => {
+        const at = (rot: number) => JSON.stringify(render(name, 600, rot).graphic.geometry.coordinates);
+        expect(at(90)).toEqual(at(0));
+        expect(at(217)).toEqual(at(0));
+    });
+
+    // The plate has both bars spanning the same vertical extent - they are displaced
+    // horizontally, not perpendicular to their own heading, which would stagger them.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s starts and ends both bars at the same Y', (_l, name) => {
+        const [left, right] = render(name).graphic.geometry.coordinates;
+        expect(left[0][1]).toBeCloseTo(right[0][1], 9);
+        expect(left[1][1]).toBeCloseTo(right[1][1], 9);
+        // ...and the left bar really is the left one, which is what EXPLOSIVES_DASHED indexes.
+        expect(left[0][0]).toBeLessThan(right[0][0]);
+        // Diagonal, not vertical or horizontal.
+        expect(left[1][1]).toBeGreaterThan(left[0][1]);
+        expect(left[1][0]).toBeGreaterThan(left[0][0]);
     });
 
     it('survives geometry it cannot draw', () => {

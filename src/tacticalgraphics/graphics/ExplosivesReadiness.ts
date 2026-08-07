@@ -21,8 +21,14 @@ import * as turf from '@turf/turf';
  * style function decides how each is stroked.
  */
 
-/** Distance between the two bars, as a fraction of their length. */
-const SEPARATION_RATIO = 0.32;
+/** Horizontal distance between the two bars, as a fraction of their span. */
+const SEPARATION_RATIO = 0.42;
+
+/**
+ * The bars' fixed heading. They are drawn as a leaning pair on the plate, and the symbol
+ * does not rotate - see the class comment.
+ */
+const BAR_BEARING = 45;
 
 export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string;
@@ -33,23 +39,34 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOption
         this.name = name;
     }
 
-    /** The two bars, leading one first. Both are plain two-point segments. */
+    /**
+     * The two bars, **left one first** - `EXPLOSIVES_DASHED` is indexed the same way, and
+     * state of readiness 1 is the one that cares: its left bar is hashed and its right solid.
+     *
+     * The pair is displaced east and west, not perpendicular to the bars. Offsetting
+     * perpendicular staggers them along the bearing, so one bar ends higher than the other;
+     * the plate has both spanning the same vertical extent, which only a horizontal
+     * displacement gives.
+     *
+     * `opts.rotation` is deliberately ignored. The symbol has a fixed heading, and the
+     * controller's resize drag derives an angle from the pointer - so honouring rotation
+     * here would let a resize quietly turn the graphic.
+     */
     private bars(base: Feature<Point>, opts: PointGraphicOptions): Position[][] {
         const centre = turf.point(base.geometry.coordinates);
-        const length = Math.max(opts?.size ?? 1, 1);
-        const rotation = opts?.rotation ?? 0;
-        const half = length / 2;
-        const gap = (length * SEPARATION_RATIO) / 2;
+        const span = Math.max(opts?.size ?? 1, 1);
+        const half = span / 2;
+        const gap = (span * SEPARATION_RATIO) / 2;
 
-        // Each bar runs along the rotation axis, displaced perpendicular to it.
-        const bar = (side: number): Position[] => {
-            const anchor = turf.destination(centre, gap, rotation + 90 * side, {units: 'meters'});
+        const bar = (bearingToAnchor: number): Position[] => {
+            const anchor = turf.destination(centre, gap, bearingToAnchor, {units: 'meters'});
             return [
-                turf.destination(anchor, half, rotation, {units: 'meters'}).geometry.coordinates as Position,
-                turf.destination(anchor, half, rotation + 180, {units: 'meters'}).geometry.coordinates as Position,
+                turf.destination(anchor, half, BAR_BEARING + 180, {units: 'meters'}).geometry.coordinates as Position,
+                turf.destination(anchor, half, BAR_BEARING, {units: 'meters'}).geometry.coordinates as Position,
             ];
         };
-        return [bar(1), bar(-1)];
+        // 270 = due west, 90 = due east: same latitude, so both bars share their Y range.
+        return [bar(270), bar(90)];
     }
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
@@ -73,9 +90,9 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOption
     }
 }
 
-/** Which of the two bars are dashed, leading bar first. */
+/** Which of the two bars are hashed, **left bar first**. */
 export const EXPLOSIVES_DASHED: Partial<Record<TacticalGraphicName, [boolean, boolean]>> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: [true, true],
-    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: [false, true],
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: [true, false],
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: [false, false],
 };
