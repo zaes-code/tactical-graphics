@@ -509,8 +509,9 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * on the shape in front of them:
  *
  * - **Ambush** — a hooked arrow.
- * - **Turn** and **TacticalTurn** — bowed arrows; the radius belongs to the curve that
- *   generates them, not to anything with an edge you could measure to.
+ * - **Turn**, **TacticalTurn**, **Envelopment**, **Pursuit** — bowed or hooked arrows;
+ *   the radius belongs to the curve that generates them, not to anything with an edge a
+ *   reader could measure to.
  *
  * `MissionTaskGraphicBase.refreshMeasure` reads this same set, so a name left out here
  * loses its measure line as well as its modal row. That coupling is deliberate — the two
@@ -530,7 +531,6 @@ const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.CordonAndSearch,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.DeadSpaceAreaCircular,
-    TacticalGraphicName.Envelopment,
     TacticalGraphicName.FightingPosition,
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
@@ -540,7 +540,6 @@ const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Occupy,
     TacticalGraphicName.PositionAreaArtilleryCircular,
     TacticalGraphicName.PurpleKillBoxCircular,
-    TacticalGraphicName.Pursuit,
     TacticalGraphicName.RestrictiveFireAreaCircular,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
