@@ -481,11 +481,27 @@ export class TacticalGraphicsManager {
             case InteractionType.resize:
                 if (!this.activeFeature) return;
 
-                // A graphic whose shape *is* its vertex positions drags the grabbed one
-                // rather than scaling about a centre. Opt-in: only controllers that
-                // implement the hook reach it, so nothing else changes behaviour.
-                if (this.activeController.handleVertexDrag && this.activeBaseVertex >= 0) {
-                    this.activeController.handleVertexDrag(this.activeBaseVertex, evt.coordinate);
+                // A graphic whose shape *is* its vertex positions reshapes in **modify**
+                // mode only. Resize keeps its usual meaning — scale the whole graphic
+                // about its centre — because a user who picked "resize" asked for that,
+                // not for one corner to move.
+                //
+                // The anchor is skipped here: it moves the graphic, and moving is what
+                // translate mode is for. That leaves it inert under a reshape, the same
+                // contract the inert centre dot has on point-anchored graphics.
+                const anchor = this.activeController.anchorVertex;
+                const reshaping = this.isModifying() && !!this.activeController.handleVertexDrag;
+
+                // Grabbing the anchor under a reshape does **nothing**. Falling through
+                // would hand it to `handleResize`, so the one handle meant for moving the
+                // graphic would silently scale it instead — worse than it being inert.
+                if (reshaping && anchor !== undefined && this.activeBaseVertex === anchor) {
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
+
+                if (reshaping && this.activeBaseVertex >= 0) {
+                    this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
                     this.lastPointerPosition = evt.coordinate;
                     break;
                 }
