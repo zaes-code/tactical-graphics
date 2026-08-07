@@ -244,11 +244,21 @@ export function applyRestoredGeometry(
         if (state.bend !== undefined && handler.graphic instanceof TurnGraphicBase) {
             handler.graphic.bend = clampTurnBend(state.bend);
         }
-        handler.graphic.updateGeom({
-            center: coords as Coordinate,
-            size: state.radius,
-            rotation: state.rotation,
-        });
+        // Same reasoning as the line families: a minimum-size floor is a draw-time
+        // affordance, and re-applying it here scales the restored graphic by the ratio
+        // between the drawing resolution and this session's.
+        const holder = handler.graphic as {suspendMinimumSize?: boolean};
+        const guarded = typeof holder.suspendMinimumSize === 'boolean';
+        if (guarded) holder.suspendMinimumSize = true;
+        try {
+            handler.graphic.updateGeom({
+                center: coords as Coordinate,
+                size: state.radius,
+                rotation: state.rotation,
+            });
+        } finally {
+            if (guarded) holder.suspendMinimumSize = false;
+        }
         return;
     }
 

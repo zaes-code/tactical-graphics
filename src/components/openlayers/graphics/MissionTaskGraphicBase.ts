@@ -522,6 +522,18 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.refreshMeasure();
     }
 
+    /**
+     * Suspends the minimum-size floor below while a snapshot is rebuilt.
+     *
+     * The floor is `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution`, and on a restore
+     * that resolution is the *current* view's, not the one the graphic was drawn at. So
+     * restoring zoomed out clamped the size up by exactly the ratio between them — the
+     * crossed four, Turn, TacticalTurn and Envelopment all came back 4x too large in a
+     * 4x-resolution session. The floor is a draw-time affordance; on restore the size is
+     * already final. @see LineGraphicBase.suspendMinimumLength for the twin.
+     */
+    suspendMinimumSize = false;
+
     private measuring = false;
     /**
      * Where the gesture actually is — the cursor while drawing, the dragged point while
@@ -610,7 +622,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (MIN_SIZED_MISSION_TASKS.includes(this.name)) {
+        if (MIN_SIZED_MISSION_TASKS.includes(this.name) && !this.suspendMinimumSize) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
                 const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
