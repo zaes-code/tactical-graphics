@@ -135,3 +135,5 @@ export {
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
 } from './core/config';
+export {WIRE_STYLES, DEFAULT_WIRE_STYLE} from './graphics/WireObstacle';
+export type {WireStyle} from './graphics/WireObstacle';

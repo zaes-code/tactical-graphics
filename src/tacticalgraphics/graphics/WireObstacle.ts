@@ -26,7 +26,7 @@ import * as turf from '@turf/turf';
  */
 
 /** What a wire graphic repeats along its line. */
-interface WireStyle {
+export interface WireStyle {
     /** `cross` = the barbed-wire X; `loop` = a concertina coil. */
     mark: 'cross' | 'loop';
     /** Is the wire itself drawn? Unspecified is the one that is not. */
@@ -41,7 +41,7 @@ interface WireStyle {
     strands?: number;
 }
 
-const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
+export const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
     // Specified by the user, 2026-08-07. The ladder is deliberate: one mark, rising density.
     [TacticalGraphicName.WireUnspecified]: {mark: 'cross', rail: false, perGroup: 1, gap: 1.0, height: 1},
     [TacticalGraphicName.WireSingleFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 1},
@@ -58,7 +58,7 @@ const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
     [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 3},
 };
 
-const DEFAULT_STYLE: WireStyle = {mark: 'cross', rail: true, perGroup: 1, gap: 6, height: 1};
+export const DEFAULT_WIRE_STYLE: WireStyle = {mark: 'cross', rail: true, perGroup: 1, gap: 6, height: 1};
 
 export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string;
@@ -70,76 +70,31 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
     }
 
     private style(): WireStyle {
-        return WIRE_STYLES[this.name as TacticalGraphicName] ?? DEFAULT_STYLE;
+        return WIRE_STYLES[this.name as TacticalGraphicName] ?? DEFAULT_WIRE_STYLE;
     }
 
+    /**
+     * The drawn route, and only that.
+     *
+     * The marks are *not* here. They are screen-space decorations, so they are synthesised
+     * in `wireObstacleStyleFunc` from the `WIRE_STYLES` row, exactly as the fortified line
+     * synthesises its merlons and the obstacle line its teeth. Baking them here froze them
+     * in metres at the drawing zoom, which made a wire obstacle grow to absurdity a few
+     * zoom levels in.
+     *
+     * The cost, taken deliberately: all nine now return identical GeoJSON, so the *name* is
+     * what distinguishes them to a non-OpenLayers consumer. `WIRE_STYLES` is exported so a
+     * second renderer can read the same ladder rather than reinvent it.
+     */
     generateGraphics(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiLineString> {
         const coords = base.geometry.coordinates;
-        const style = this.style();
-        const width = Math.max(opts?.size ?? 1, 1);
-        const height = width * style.height;
 
-        // Between the first map click and the second, the draw interaction hands us a
-        // one-point sketch — and then a zero-length two-point one — on every pointer move.
+        // Between the first map click and the second the draw interaction hands us a
+        // one-point sketch, then a zero-length two-point one, on every pointer move.
         // Returning `[coords]` there emitted a *one-point LineString*, which is not a line:
         // OL draws nothing and stricter GeoJSON consumers throw. Emit no parts instead.
         if (coords.length < 2) return this.asMultiLineStringFeature([]);
-        const line = turf.lineString(coords);
-        const length = turf.length(line, {units: 'meters'});
-        if (length <= 0) return this.asMultiLineStringFeature([]);
-        const parts: Position[][] = [];
-
-        /** A point `along` metres down the line, offset `across` metres to its left. */
-        const at = (along: number, across: number): Position => {
-            const clamped = Math.min(Math.max(along, 0), length);
-            const p = turf.along(line, clamped, {units: 'meters'});
-            if (across === 0) return p.geometry.coordinates as Position;
-            const ahead = turf.along(line, Math.min(clamped + 1, length), {units: 'meters'});
-            const back = turf.along(line, Math.max(clamped - 1, 0), {units: 'meters'});
-            const bearing = turf.bearing(back, ahead);
-            return turf.destination(p, Math.abs(across), bearing + (across > 0 ? -90 : 90), {units: 'meters'}).geometry
-                .coordinates as Position;
-        };
-
-        const strands = style.strands ?? 1;
-        const spread = height * 0.9;
-        const offsetOf = (s: number) => (strands === 1 ? 0 : (s - (strands - 1) / 2) * spread);
-
-        // The wire itself. Unspecified omits it: there, the marks *are* the symbol.
-        if (style.rail) {
-            for (let s = 0; s < strands; s++) {
-                const rail: Position[] = [];
-                const step = Math.max(length / 64, 1);
-                for (let d = 0; d < length; d += step) rail.push(at(d, offsetOf(s)));
-                rail.push(at(length, offsetOf(s)));
-                parts.push(rail);
-            }
-        }
-
-        // Groups of marks, repeating. The rail crosses each mark through its middle.
-        const period = (style.perGroup + style.gap) * width;
-        for (let start = period / 2; start < length; start += period) {
-            for (let i = 0; i < style.perGroup; i++) {
-                const d = start + i * width;
-                if (d + width / 2 > length) break;
-                for (let s = 0; s < strands; s++) {
-                    const off = offsetOf(s);
-                    if (style.mark === 'cross') {
-                        parts.push([at(d - width / 2, off + height / 2), at(d + width / 2, off - height / 2)]);
-                        parts.push([at(d - width / 2, off - height / 2), at(d + width / 2, off + height / 2)]);
-                    } else {
-                        const loop: Position[] = [];
-                        for (let a = 0; a <= 180; a += 20) {
-                            const t = (a * Math.PI) / 180;
-                            loop.push(at(d - Math.cos(t) * width * 0.5, off + Math.sin(t) * height * 0.7));
-                        }
-                        parts.push(loop);
-                    }
-                }
-            }
-        }
-
-        return this.asMultiLineStringFeature(parts);
+        return this.asMultiLineStringFeature([coords]);
     }
 
     generateHandles(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiPoint> {
