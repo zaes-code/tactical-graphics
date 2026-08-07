@@ -65,14 +65,20 @@ export class Abatis extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     /**
-     * `[edge, centre]` — the MissionTask convention, edge first: `handles[0]` drives
-     * rotate and resize, `handles[1]` drives translate. The edge handle is the trailing
-     * end of the route, which is the furthest point from the centre and so the steadiest
-     * thing to scale against.
+     * `[edge, centre, apex]` — the MissionTask convention first: `handles[0]` drives rotate
+     * and resize, `handles[1]` drives translate. The edge handle is the trailing end of the
+     * route, the furthest point from the centre and so the steadiest thing to scale
+     * against.
+     *
+     * The apex is third and exists to be *seen*. Flipping the chevron means dragging a
+     * handle across the route, and without a dot on the tip there is nothing telling a
+     * user that the chevron is the thing that moves — the gesture is discoverable only by
+     * accident. It sits furthest off the axis, so it is also the easiest handle to carry
+     * across and back.
      */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
         const path = this.path(base, opts);
-        return this.asMultiPointFeature([path[path.length - 1], base.geometry.coordinates]);
+        return this.asMultiPointFeature([path[path.length - 1], base.geometry.coordinates, path[1]]);
     }
 
     generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
