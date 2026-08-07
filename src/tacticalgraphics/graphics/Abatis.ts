@@ -1,76 +1,81 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
-import {BaseGraphicOptions, TacticalGraphicName} from '../core/type';
-import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojson';
+import {PointGraphicOptions, TacticalGraphicName} from '../core/type';
+import {Feature, MultiLineString, MultiPoint, Point, Position} from 'geojson';
 import * as turf from '@turf/turf';
 
-/**
- * Where along the drawn line the chevron sits, as a fraction from the start.
- * FM 1-02.2 draws it near the leading end rather than centred.
- */
-const APEX_FRACTION = 0.22;
+/** Overall length of the route, as a multiple of the chevron's height. */
+const LENGTH_RATIO = 6;
 
-/** Chevron half-width along the line, as a multiple of its height. */
-const HALF_WIDTH_RATIO = 0.9;
+/** Half the chevron's span along the route, as a multiple of its height. */
+const HALF_SPAN_RATIO = 0.85;
 
 /**
  * Abatis — "an obstacle constructed by the felling and interlacing of trees across a
- * route" (FM 1-02.2). Drawn as the route with a single chevron rising from it.
+ * route" (FM 1-02.2).
  *
- * The chevron is the whole symbol, so it is what `decorationSize` scales and what
- * `mirrored` flips: it points to one side of the route or the other, never along it.
- * Everything is built from the line's own bearing, so both survive rotation.
+ * **One open polyline, not a line with a triangle on it.** The route runs *into* the
+ * chevron and out the other side rather than continuing beneath it: drawing the base line
+ * straight through would close the chevron into a triangle, which is a different symbol.
+ * The plate starts with the chevron, so it sits at the leading end with the route running
+ * away from it.
+ *
+ * Point-anchored: dropped whole and resized whole. `radius` is the chevron's height and
+ * everything else is a ratio of it, so one number scales the symbol. `mirrored` puts the
+ * chevron below the route instead of above; both are built in the graphic's own rotated
+ * frame, so they survive rotation.
  */
-export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
+export class Abatis extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Abatis;
-    type: string = 'LineString';
+    type: string = 'Point';
 
-    /** Apex of the chevron, and the two feet where it meets the route. */
-    private chevron(base: Feature<LineString>, opts?: BaseGraphicOptions): Position[] {
-        const coords = base.geometry.coordinates;
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-        const height = Math.max(opts?.size ?? 1, 1);
-        const halfWidth = height * HALF_WIDTH_RATIO;
-
-        const bearing = turf.bearing(turf.point(start), turf.point(end));
-        const length = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
-        const apexAlong = length * APEX_FRACTION;
-
-        const on = (along: number): Position =>
-            turf.destination(turf.point(start), Math.max(along, 0), bearing, {units: 'meters'})
-                .geometry.coordinates as Position;
-
-        // Perpendicular, relative to the bearing — never a compass direction, so the
-        // chevron keeps its side when the graphic is rotated.
-        const side = opts?.mirrored ? 90 : -90;
-        const footBack = on(apexAlong - halfWidth);
-        const footFwd = on(apexAlong + halfWidth);
-        const apex = turf.destination(turf.point(on(apexAlong)), height, bearing + side, {units: 'meters'})
-            .geometry.coordinates as Position;
-
-        return [footBack, apex, footFwd];
+    /** Local (x along the route, y across it) → geographic, honouring rotation. */
+    private local(center: Position, rotation: number, x: number, y: number): Position {
+        const dist = Math.hypot(x, y);
+        if (dist === 0) return [center[0], center[1]];
+        const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
+        let bearing = 90 - (planarDeg + rotation);
+        bearing = ((bearing % 360) + 360) % 360;
+        return turf.destination(turf.point(center), dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
     }
 
-    generateGraphics(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiLineString> {
-        const coords = base.geometry.coordinates;
-        if (coords.length < 2) return this.asMultiLineStringFeature([coords]);
-        return this.asMultiLineStringFeature([coords, this.chevron(base, opts)]);
+    /** The whole symbol as one open path, left to right in its local frame. */
+    private path(base: Feature<Point>, opts: PointGraphicOptions): Position[] {
+        const center = base.geometry.coordinates;
+        const {rotation} = opts;
+        // `size` is the radius the controller drags — centre to the edge handle, which is
+        // the trailing end of the route. So the route spans 2 x size, and the chevron's
+        // height follows from that rather than the other way round.
+        const height = Math.max(opts.size, 1) / (LENGTH_RATIO / 2);
+        const halfSpan = height * HALF_SPAN_RATIO;
+        const length = height * LENGTH_RATIO;
+        const m = opts.mirrored ? -1 : 1;
+        const at = (x: number, y: number) => this.local(center, rotation, x, y);
+
+        const startX = -length / 2;
+        return [
+            at(startX, 0),                       // foot of the leading leg
+            at(startX + halfSpan, m * height),   // apex
+            at(startX + halfSpan * 2, 0),        // foot of the trailing leg
+            at(length / 2, 0),                   // the route running away
+        ];
+    }
+
+    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        return this.asMultiLineStringFeature([this.path(base, opts)]);
     }
 
     /**
-     * `[apex, ...vertices]` — apex first.
-     *
-     * The retrograde holder publishes `handles[0]` as its offset handle, which is what
-     * gives this graphic its resize and, through the sign of that same drag, its mirror.
-     * Putting the apex there means the handle is the thing the user is actually sizing.
+     * `[edge, centre]` — the MissionTask convention, edge first: `handles[0]` drives
+     * rotate and resize, `handles[1]` drives translate. The edge handle is the trailing
+     * end of the route, which is the furthest point from the centre and so the steadiest
+     * thing to scale against.
      */
-    generateHandles(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiPoint> {
-        const coords = base.geometry.coordinates;
-        if (coords.length < 2) return this.asMultiPointFeature(coords);
-        return this.asMultiPointFeature([this.chevron(base, opts)[1], ...coords]);
+    generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        const path = this.path(base, opts);
+        return this.asMultiPointFeature([path[path.length - 1], base.geometry.coordinates]);
     }
 
-    generateLabels(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiPoint> {
+    generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature([]);
     }
 }
