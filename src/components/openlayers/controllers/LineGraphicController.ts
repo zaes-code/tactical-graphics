@@ -113,6 +113,30 @@ export class LineGraphicController implements TacticalGraphicHandler {
      */
     editStretches: boolean = false;
 
+    /**
+     * Whether an edit-mode drag moves the grabbed vertex rather than scaling the whole
+     * graphic. Off by default: the line family is overwhelmingly "a drawn path plus
+     * decorations", where a uniform resize is what a user expects. On for the graphics
+     * whose shape *is* the arrangement of their vertices — a fields-of-fire V, where the
+     * legs' angle and length are the content.
+     *
+     * `handleVertexDrag` is only declared when this is set, because the manager routes on
+     * the method's presence.
+     */
+    dragsVertices: boolean = false;
+
+    /**
+     * Moves base vertex `index` to `coordinate`. @see TacticalGraphicHandler.handleVertexDrag
+     *
+     * Guarded by `minimumVertices`: a fields-of-fire V stops reading as one the moment it
+     * straightens into a line, and the same is true of any graphic drawn from segments, so
+     * a drag can move a vertex but never remove one.
+     */
+    handleVertexDrag?(index: number, coordinate: Coordinate): void;
+
+    /** Fewest vertices this graphic still reads correctly at. @see handleVertexDrag */
+    minimumVertices: number = 2;
+
     constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
         this.graphic = graphic;
         this.maxPoints = maxPoints;
@@ -205,6 +229,28 @@ export class LineGraphicController implements TacticalGraphicHandler {
 
     setBaseFeature(base: Feature<LineString>) {
         this.graphic.setBaseFeature(base);
+    }
+
+    /**
+     * Turns on vertex dragging. Called from the registry for the graphics that want it;
+     * assigning the method here rather than always declaring it is what lets the manager
+     * route on presence and leave every other line graphic exactly as it was.
+     */
+    enableVertexDragging(minimumVertices = 2): this {
+        this.dragsVertices = true;
+        this.minimumVertices = minimumVertices;
+        this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
+            const geom = this.graphic.base.getGeometry();
+            if (!geom) return;
+            const coords = geom.getCoordinates();
+            if (index < 0 || index >= coords.length) return;
+            if (coords.length < this.minimumVertices) return;
+
+            const moved = coords.map((c, i) => (i === index ? [coordinate[0], coordinate[1]] : c));
+            const next = new Feature(new LineString(moved));
+            this.graphic.setBaseFeature(next as Feature<LineString>);
+        };
+        return this;
     }
 
     getSymbolId(): string {
