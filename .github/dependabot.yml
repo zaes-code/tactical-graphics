@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  # Production dependencies only.
+  #
+  # Everything this repo was being alerted on lives under `react-scripts`, `@craco/craco`
+  # and jest - build and test tooling that never leaves the machine. `npm audit --omit=dev`
+  # reports zero: what ships is `@turf/turf` and `@types/geojson`, with `ol` and
+  # `milsymbol` as optional peers, so no consumer of the package is exposed to any of it.
+  #
+  # The dev-tooling alerts were not actionable either. `npm audit fix` made the tree worse,
+  # and for most of them the "fix" npm offers is `react-scripts@0.0.0` - a downgrade that
+  # destroys the build. An `overrides` block does clear them (zero high, zero critical) but
+  # broke `npm start`, so it is not carried here. The real remedy is leaving CRA for Vite;
+  # until then these are noise, and silencing the noise is the point of this file.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-type: production
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+
+  # Keep the Pages workflow's actions current. These do run - in CI, with repo credentials -
+  # so they are worth watching even though they are not shipped code.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
