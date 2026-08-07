@@ -1,0 +1,49 @@
+/* Dark-mode tint for the MapLibre basemap.
+
+   Scoped to `.maplibregl-canvas` — the map's own WebGL canvas — and NOT to the
+   container, because the tactical graphics are painted onto a sibling overlay
+   canvas inside that same container. Widening this selector to the container
+   would invert the graphics along with the tiles, which is exactly the bug the
+   OpenLayers side shipped for months before `className: 'tg-graphics'` split its
+   canvases. See ai/decisions.md, 2026-07-30. Don't widen it.
+
+   Same filter values as `map.css` uses for OpenLayers, so the two engines' dark
+   basemaps are the same colour and a side-by-side capture compares symbols
+   rather than tints. */
+.map-container--dark .maplibregl-canvas {
+    filter: invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%);
+}
+
+/* The graphics overlay. Sits above the WebGL canvas and below the controls, and
+   never takes pointer events — the MapLibre canvas underneath keeps them, so
+   panning and zooming behave exactly as they do on a bare map. Draw and edit
+   gestures are read from the map's own handlers, not from this element. */
+.tg-maplibre-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ── MapLibre chrome — matched to the OpenLayers dark theme in map.css ─────── */
+.maplibregl-ctrl-attrib {
+    background: rgba(22, 27, 34, 0.85) !important;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #8b949e;
+}
+
+.maplibregl-ctrl-attrib a {
+    color: #3fb950 !important;
+}
+
+.maplibregl-ctrl-scale {
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid #30363d;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    color: #8b949e;
+    font-size: 11px;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
