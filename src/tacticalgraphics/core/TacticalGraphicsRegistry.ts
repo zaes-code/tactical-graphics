@@ -52,6 +52,11 @@ import {
 import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan";
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
+import {Abatis} from "../graphics/Abatis";
+import {WireObstacle} from "../graphics/WireObstacle";
+import {ExplosivesReadiness} from "../graphics/ExplosivesReadiness";
+import {RoadblockComplete} from "../graphics/RoadblockComplete";
+import {AntiTankDitch} from "../graphics/AntiTankDitch";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
 export class TacticalGraphicsRegistry {
@@ -75,6 +80,26 @@ export class TacticalGraphicsRegistry {
 }
 
 // movement graphics
+TacticalGraphicsRegistry.register(new Abatis());
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireUnspecified));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireSingleFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleApronFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireLowWireFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireHighWireFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireSingleConcertina));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleStrandConcertina));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripleStrandConcertina));
+
+// The three demolition readiness states: one shape, dashed differently. See the class.
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesPlannedStateOfReadiness));
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness1Safe));
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable));
+TacticalGraphicsRegistry.register(new RoadblockComplete());
+TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchUnderConstruction));
+TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchCompleted));
+TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchReinforcedWithMines));
+
 TacticalGraphicsRegistry.register(new AttackHelicopterAxisOfAdvance());
 TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());
 TacticalGraphicsRegistry.register(new MainAttack());

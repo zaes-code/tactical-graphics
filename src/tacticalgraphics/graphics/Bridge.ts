@@ -45,7 +45,7 @@ export class Bridge extends TacticalGraphicsBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         let size: number = opts?.size || 20;
-        return this.asMultiPointFeature(geometryService.getBridgeLabelPoints(base.geometry.coordinates, size * 15));
+        return this.asMultiPointFeature(geometryService.getBridgeLabelPoints(base.geometry.coordinates, size));
     }
 
 }

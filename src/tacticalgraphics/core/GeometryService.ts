@@ -1498,7 +1498,16 @@ class GeometryService {
         return mirrored;
     }
 
-    getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowSize: number,) => {
+    /**
+     * @param mirrored Hangs the hook on the other side of the line.
+     *
+     * Expressed as a multiplier on the bearing-relative offsets, never as a compass test.
+     * An earlier version flipped on `end[0] >= start[0]`, which pinned the hook to a
+     * compass direction: rotating the graphic turned the base line and the arrowhead —
+     * both derived from the coordinates — while the hook stayed put. Everything here
+     * stays relative to the line's own bearing so the side survives rotation.
+     */
+    getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowSize: number, mirrored = false) => {
         let baseCoords = base.geometry.coordinates;
         let start = baseCoords[0];
         let end = baseCoords[1];
@@ -1520,8 +1529,19 @@ class GeometryService {
         // that bulges backwards, away from the tip. Its far end is the free point
         // the holder uses as the offset (width) handle.
         const bearing = turf.bearing(start, end);
-        const center = turf.destination(turf.point(start), arrowSize, bearing - 90, {units: 'meters'});
-        let arcCoords = turf.lineArc(center, arrowSize, bearing + 90, bearing + 270, {units: 'meters'}).geometry.coordinates;
+        // The centre sits one radius off the line, on whichever side the user chose.
+        const side = mirrored ? 1 : -1;
+        const center = turf.destination(turf.point(start), arrowSize, bearing + side * 90, {units: 'meters'});
+
+        // `lineArc` sweeps clockwise from the first bearing to the second, so the mirror is
+        // not "negate both ends" — that asks for a backwards sweep and returns a different,
+        // smaller segment. It is the same 180 degrees taken from the opposite start, then
+        // reversed so the arc still *begins* at `start`: its far end is the point the holder
+        // uses as the offset handle, and swapping the ends would move the handle.
+        const arc = mirrored
+            ? turf.lineArc(center, arrowSize, bearing - 270, bearing - 90, {units: 'meters'})
+            : turf.lineArc(center, arrowSize, bearing + 90, bearing + 270, {units: 'meters'});
+        let arcCoords = mirrored ? [...arc.geometry.coordinates].reverse() : arc.geometry.coordinates;
 
         let arrowHeadCoords = this.computeArrowheadPoints(start, end, Math.abs(arrowSize), 45);
         return turf.multiLineString([baseCoords, arrowHeadCoords, arcCoords]);
