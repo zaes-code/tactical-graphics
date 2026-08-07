@@ -4,6 +4,7 @@ import MultiLineString from 'ol/geom/MultiLineString';
 import Point from 'ol/geom/Point';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {wireObstacleStyleFunc} from './openlayerStyles';
+import {getGraphicFields} from './graphicFieldRegistry';
 
 const NAMES = Object.values(TacticalGraphicName).filter(n => String(n).startsWith('Wire')) as TacticalGraphicName[];
 
@@ -93,5 +94,24 @@ describe('wireObstacleStyleFunc', () => {
         };
         expect(gapPx(10)).toBeCloseTo(5, 4);
         expect(gapPx(40)).toBeCloseTo(5, 4);
+    });
+
+    // No planned form, so no dash - and no status control in the dialog offering one.
+    it('never dashes, whatever status is set', () => {
+        for (const name of NAMES) {
+            const f = new Feature({geometry: LONG});
+            f.set('tacticalGraphic', {name, status: 'planned'});
+            for (const st of wireObstacleStyleFunc(name)(f as any, 20) as any[])
+                expect(st.getStroke()?.getLineDash() ?? null).toBeNull();
+        }
+    });
+
+    it('offers neither status nor identifier fields, but does offer hostility', () => {
+        for (const name of NAMES) {
+            const fields = getGraphicFields(name);
+            expect(fields.status).toBe(false);
+            expect(fields.identifier1).toBe(false);
+            expect(fields.hostility).toBe(true);
+        }
     });
 });
