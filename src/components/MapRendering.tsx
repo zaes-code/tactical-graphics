@@ -1,7 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import '../styles/map.css';
 import OpenLayersMap from './openlayers/OpenLayers';
-import {AppBar, Box, IconButton, Toolbar, Typography} from '@mui/material';
+import MapLibreMap from './maplibre/MapLibre';
+import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
@@ -22,6 +23,27 @@ const LS_SETTINGS = 'tg_graphicsSettings';
 /** Superseded by the single JSON blob above; read once so an existing user keeps their values. */
 const LS_LEGACY_LABELSIZE = 'tg_defaultLabelSize';
 const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
+const LS_ENGINE = 'tg_mapEngine';
+
+/**
+ * Which renderer draws the map.
+ *
+ * The library's whole Layer 1 / Layer 2 split exists so this can be a choice: the
+ * geometry and the config are map-agnostic, and only the painting is not. This
+ * picker is what makes that claim checkable rather than aspirational — the two
+ * views take the same props and read the same config singleton, so anything that
+ * differs between them is a renderer bug.
+ */
+export type MapEngine = 'openlayers' | 'maplibre';
+
+const ENGINE_LABELS: Record<MapEngine, string> = {
+    openlayers: 'OpenLayers',
+    maplibre: 'MapLibre',
+};
+
+function loadEngine(): MapEngine {
+    return localStorage.getItem(LS_ENGINE) === 'maplibre' ? 'maplibre' : 'openlayers';
+}
 
 /**
  * The demo's colours for a dark basemap — **the app's, not the library's.**
@@ -88,6 +110,7 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [engine, setEngine] = useState<MapEngine>(loadEngine);
     const [settings, setSettings] = useState<TacticalGraphicsConfigOptions>(() => {
         // Applied here as well as in the effect below so the very first render already
         // has the right config — the effect does not run until after it.
@@ -111,6 +134,16 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             });
             return next as TacticalGraphicsConfigOptions;
         });
+    };
+
+    /**
+     * `null` when the user clicks the already-selected button — `ToggleButtonGroup`
+     * reports a deselect, and honouring it would leave the app with no map at all.
+     */
+    const handleEngineChange = (_: React.MouseEvent<HTMLElement>, next: MapEngine | null) => {
+        if (!next) return;
+        localStorage.setItem(LS_ENGINE, next);
+        setEngine(next);
     };
 
     const handleHostilityColorChange = (hostility: TacticalGraphicHostility, color: string | undefined) => {
@@ -167,6 +200,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         </Typography>
                     </Typography>
 
+                    <ToggleButtonGroup
+                        value={engine}
+                        exclusive
+                        onChange={handleEngineChange}
+                        size="small"
+                        aria-label="map engine"
+                    >
+                        {(Object.keys(ENGINE_LABELS) as MapEngine[]).map(value => (
+                            <ToggleButton key={value} value={value} aria-label={ENGINE_LABELS[value]} sx={{px: 1.5, py: 0.25, fontSize: '0.75rem'}}>
+                                {ENGINE_LABELS[value]}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+
                     <IconButton
                         onClick={() => setSettingsOpen(true)}
                         size="small"
@@ -180,8 +227,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 </Toolbar>
             </AppBar>
 
+            {/*
+              * `key` on each view, and only one mounted at a time.
+              *
+              * Both engines attach to a container div and own it for their lifetime. Without
+              * a distinct key React reuses the same DOM node across the swap, and the
+              * incoming map initialises against a container the outgoing one has not
+              * finished tearing down — MapLibre in particular leaves its canvas behind.
+              * Remounting is also what makes the comparison honest: each engine starts from
+              * a clean map at the same centre and zoom.
+              */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
-                <OpenLayersMap darkMode={darkMode} graphicsSettings={settings}/>
+                {engine === 'openlayers'
+                    ? <OpenLayersMap key="openlayers" darkMode={darkMode} graphicsSettings={settings}/>
+                    : <MapLibreMap key="maplibre" darkMode={darkMode} graphicsSettings={settings}/>}
             </Box>
 
             <SettingsModal
