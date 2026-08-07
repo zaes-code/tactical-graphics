@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4024,6 +4024,108 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
 
         return styles;
     };
+}
+
+
+/** Mark width in screen pixels — the unit the whole density ladder is built from. */
+const WIRE_MARK_PX = 14;
+
+/**
+ * The nine wire obstacles: a stroked route carrying repeating marks, in screen pixels.
+ *
+ * The marks live here rather than in the geometry because they are a *decoration* — the
+ * same reason the fortified merlons and the obstacle teeth do. They go through
+ * `decorationScale`, so they shrink once they would swamp a short line and drop out
+ * entirely below `DECORATION_MIN_PX`, leaving the plain wire behind.
+ *
+ * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
+ */
+export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return (f, resolution) => {
+        const geom = f.getGeometry();
+        if (!geom) return [];
+        const path: Coordinate[] =
+            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
+        if (path.length < 2) return [];
+
+        const style = WIRE_STYLES[name] ?? DEFAULT_WIRE_STYLE;
+        const color = readHostilityColor(f);
+        const labels = readGraphicLabels(f);
+        const stroke = () => new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
+        const styles: Style[] = [];
+
+        const scale = decorationScale(path, false, resolution, WIRE_MARK_PX * style.height);
+        const width = WIRE_MARK_PX * scale * resolution;
+        const height = width * style.height;
+        const strands = style.strands ?? 1;
+        const spread = height * 0.9;
+        const offsetOf = (s: number) => (strands === 1 ? 0 : (s - (strands - 1) / 2) * spread);
+
+        // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
+        // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
+        // the user cannot find what they drew.
+        if (style.rail || width <= 0) {
+            for (let s = 0; s < strands; s++)
+                {
+                    const off = offsetOf(s);
+                    const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
+                    styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
+                }
+        }
+        if (width <= 0) return styles;
+
+        const total = pathLength(path);
+        const period = (style.perGroup + style.gap) * width;
+        const marks: Coordinate[][] = [];
+        for (let start = period / 2; start < total; start += period) {
+            for (let i = 0; i < style.perGroup; i++) {
+                const d = start + i * width;
+                if (d + width / 2 > total) break;
+                const at = walkPath(path, d);
+                if (!at) continue;
+                const [tx, ty] = at.tangent;
+                const [nx, ny] = [-ty, tx];
+                for (let s = 0; s < strands; s++) {
+                    const off = offsetOf(s);
+                    const cx = at.point[0] + nx * off;
+                    const cy = at.point[1] + ny * off;
+                    const corner = (u: number, v: number): Coordinate => [cx + tx * u + nx * v, cy + ty * u + ny * v];
+                    if (style.mark === 'cross') {
+                        marks.push([corner(-width / 2, height / 2), corner(width / 2, -height / 2)]);
+                        marks.push([corner(-width / 2, -height / 2), corner(width / 2, height / 2)]);
+                    } else {
+                        const loop: Coordinate[] = [];
+                        for (let a = 0; a <= 180; a += 20) {
+                            const t = (a * Math.PI) / 180;
+                            loop.push(corner(-Math.cos(t) * width * 0.5, Math.sin(t) * height * 0.7));
+                        }
+                        marks.push(loop);
+                    }
+                }
+            }
+        }
+        if (marks.length) styles.push(new Style({geometry: new MultiLineString(marks), stroke: stroke()}));
+        return styles;
+    };
+}
+
+/** The point `dist` metres along `path`, with the unit tangent there. */
+function walkPath(path: Coordinate[], dist: number): {point: Coordinate; tangent: [number, number]} | null {
+    let acc = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const [a, b] = [path[i], path[i + 1]];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        if (acc + seg >= dist) {
+            const t = (dist - acc) / seg;
+            return {
+                point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+                tangent: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg],
+            };
+        }
+        acc += seg;
+    }
+    return null;
 }
 
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
