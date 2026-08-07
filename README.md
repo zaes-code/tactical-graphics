@@ -4,11 +4,11 @@ Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrow
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers or anything else that reads GeoJSON.
 
-This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in metres.
+This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in meters.
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**211 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**228 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -29,21 +29,23 @@ Two entry points ship, and you can use either on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
-| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [centre symbol](#the-centre-symbol-on-security-operations) |
+| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
 
 ```bash
 npm install ol             # only if you want the OpenLayers entry point
-npm install milsymbol      # only for the centre symbol on Cover / Guard / Screen
+npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
 ```
 
 Both are peer dependencies and both are optional, so installing the package for
 its geometry alone pulls in neither. Nothing in this package imports `milsymbol`
 — you hand it in, once, if you want it. See
-[The centre symbol on security operations](#the-centre-symbol-on-security-operations).
+[Security operations: the center symbol](#security-operations-the-center-symbol).
 
 ---
 
 ## Quick start
+
+Describe a graphic on a GeoJSON feature, call one function, get GeoJSON back:
 
 ```ts
 import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
@@ -59,63 +61,138 @@ const {graphic, labels, handles} = renderTacticalGraphic({
             name: TacticalGraphicName.MainAxisOfAdvance,
             label: '1-508 IN',
             hostility: 'Friend',
-            radius: 300,
+            width: 300,
         },
     },
 });
 ```
 
-`graphic` is a `MultiLineString` — the drawn symbol. `labels` is a `MultiPoint` of anchor points for text. `handles` is a `MultiPoint` of grab points an editor can expose as drag handles — usually the drawn vertices, plus shape or width points for the graphics that have them. A generator may also leave a vertex out when a handle there would be redundant or would sit under the symbol's own label.
+You get three pieces back:
+
+| | What it is |
+|---|---|
+| `graphic` | the drawn symbol — a `MultiLineString` here |
+| `labels` | a `MultiPoint` of anchor points for text. Anchors only; you own the typography |
+| `handles` | a `MultiPoint` of grab points an editor can expose as drag handles — usually the drawn vertices, plus shape or width points for the graphics that have them. A generator may leave a vertex out when a handle there would be redundant or would sit under the symbol's own label |
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
 
+If you want it drawn, styled and editable on an OpenLayers map instead, that is the
+[OpenLayers entry point](#openlayers--styled-drawable-editable) — three lines.
+
 ---
 
-## The properties object
+## The `tacticalGraphic` object
 
-Everything the library needs lives under `properties.tacticalGraphic`. Only `name` is required; each graphic ignores the fields that don't apply to it.
+Everything the library needs lives in one object on the feature's `properties`:
 
 ```ts
-properties: {
-    tacticalGraphic: {
-        // Required — which graphic to draw.
-        name: 'MainAxisOfAdvance',
-
-        // Amplifiers — text rendered on the graphic.
-        label: '1-508 IN',        // primary designation
-        secondId: 'TF RAIDER',    // secondary designation
-        startDate: '021200ZJUN26',
-        endDate: '021800ZJUN26',
-        minAltitude: '500',
-        maxAltitude: '2000',
-        weapon: 'M252 81mm',      // FinalProtectiveFire only
-        grid: '18SUJ2345',
-
-        // Symbology — affects colour and dash pattern.
-        hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
-        status: 'present',        // present | planned  (planned ⇒ dashed)
-        echelon: 'battalion',
-        direction: 'ONE_WAY',     // route graphics
-
-        // Geometry, in metres.
-        radius: 300,              // arrow width / circle radius
-        size: 1000,               // generic size scalar (point graphics)
-        rotation: 45,             // degrees (point graphics)
-        bend: 0.8,                // Turn only — how sharply it turns, × size
-        labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
+{
+    type: 'Feature',
+    geometry: {/* LineString, Point or Polygon — which one depends on the graphic */},
+    properties: {
+        tacticalGraphic: {/* every field below goes in here */},
     },
 }
 ```
 
-Because the config rides on the feature, a tactical graphic is **just GeoJSON**. Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with `renderTacticalGraphic()`.
+Only `name` is required. Each graphic ignores the fields that don't apply to it, so
+there is no per-graphic options type to look up:
 
-The rendered output carries the same `properties.tacticalGraphic` plus a `role` of `graphic`, `label`, or `handle`, so your styling code can read a graphic's amplifiers straight off the feature it's drawing.
+```ts
+tacticalGraphic: {
+    // Required — which graphic to draw.
+    name: 'MainAxisOfAdvance',
 
----
+    // Amplifiers — text rendered on the graphic.
+    label: '1-508 IN',        // primary designation
+    secondId: 'TF RAIDER',    // secondary designation
+    startDate: '021200ZJUN26',
+    endDate: '021800ZJUN26',
+    minAltitude: '500',
+    maxAltitude: '2000',
+    weapon: 'M252 81mm',      // FinalProtectiveFire only
+    grid: '18SUJ2345',
 
-## Which geometry does a graphic need?
+    // Symbology — affects color and dash pattern.
+    hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
+    status: 'present',        // present | planned  (planned ⇒ dashed)
+    echelon: 'battalion',
+    direction: 'ONE_WAY',     // route graphics
 
-Each graphic expects one base geometry type. Pass the wrong one and you get a clear error rather than a broken shape.
+    // Geometry, in meters.
+    radius: 1000,             // how far the symbol reaches from its own center:
+                              // circle radius, or a point-anchored arrow's half-length.
+                              // Only for graphics that HAVE a center.
+    decorationSize: 300,      // how big to draw a line graphic's decorations — an
+                              // arrowhead's barb length, a passage lane's teeth. Not a
+                              // reach from anywhere, which is why it isn't `radius`.
+    width: 600,               // FULL width across a drawn line — rail to rail on an axis
+                              // of advance, edge to edge on a corridor
+    rotation: 45,             // degrees (point graphics)
+    bend: 0.8,                // Turn only — how sharply it turns, × radius
+    labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
+}
+```
+
+Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
+Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
+`renderTacticalGraphic()`.
+
+The rendered output carries the same `properties.tacticalGraphic` plus a `role` of
+`graphic`, `label` or `handle`, so your styling code can read a graphic's amplifiers
+straight off the feature it is drawing.
+
+### Sizing a graphic
+
+Three fields size a graphic, and which one applies depends on what the symbol *is*. They
+are all in meters and none of them overlap — a graphic reads one.
+
+| Field | Means | Graphics |
+|---|---|---|
+| `radius` | reach from the symbol's own center | circles and point-anchored symbols |
+| `width` | **full** width across a drawn line | axes of advance, corridors |
+| `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
+
+**`radius` — a circle, sized from its center:**
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
+    properties: {tacticalGraphic: {name: 'Secure', radius: 5000, rotation: 0}},
+});                                             // a 5 km circle → 10 km across
+```
+
+**`width` — rail to rail across a drawn line.** Full width, not half: send the number you
+would measure on the map, and the library halves it internally to offset each rail.
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
+    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
+});                                             // rails 300 m either side of the centreline
+```
+
+**`decorationSize` — the ornament on a line, not a reach.** A direction of attack is its
+drawn line plus an arrowhead; there is no center to take a radius of, which is why this is
+its own field.
+
+```ts
+renderTacticalGraphic({
+    type: 'Feature',
+    geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
+    properties: {tacticalGraphic: {name: 'DirectionOfSupportingAttack', decorationSize: 400}},
+});
+```
+
+Omit any of them and the graphic falls back to its own default.
+
+### Which base geometry does a graphic need?
+
+Each graphic expects one geometry type. Pass the wrong one and you get a clear error
+rather than a broken shape.
 
 | Base geometry | Graphics | Example |
 |---|---|---|
@@ -127,11 +204,11 @@ Each graphic expects one base geometry type. Pass the wrong one and you get a cl
 renderTacticalGraphic({
     type: 'Feature',
     geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
-    properties: {tacticalGraphic: {name: 'Secure', size: 1000, rotation: 0}},
+    properties: {tacticalGraphic: {name: 'Secure', radius: 1000, rotation: 0}},
 });
 ```
 
-Discover what's available at runtime:
+Discover what is available at run time:
 
 ```ts
 import {listTacticalGraphicNames, GRAPHIC_CATEGORIES, getDisplayName} from '@zaes/tactical-graphics';
@@ -145,188 +222,165 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 ## Rendering
 
-`toFeatureCollection()` flattens a render into a `FeatureCollection` you can hand straight to a map. It returns the `graphic` and `label` features by default; ask for `handle` too when you're building an editor.
-
 ### OpenLayers — styled, drawable, editable
 
-`@zaes/tactical-graphics/openlayers` is the renderer the demo uses. It carries
-the doctrinal styling — standard identity colours, dashed planned status,
-echelon glyphs, amplifier placement — plus draw and edit interactions:
+`@zaes/tactical-graphics/openlayers` is the renderer the demo uses. It carries the
+doctrinal styling — standard identity colors, dashed planned status, echelon glyphs,
+amplifier placement — plus draw and edit interactions.
+
+Three objects appear in every OpenLayers snippet below. This is all they are:
+
+```ts
+import Map from 'ol/Map';
+import View from 'ol/View';
+import {fromLonLat} from 'ol/proj';
+import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
+
+// `map` — your own ol/Map. Nothing about it is special; the manager attaches to it.
+const map = new Map({
+    target: 'map',
+    view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 12}),
+});
+
+// `manager` — takes the map and nothing else. It creates its own vector layer,
+// adds it to the map, and owns every graphic drawn through it.
+const manager = new TacticalGraphicsManager(map);
+
+// `source` — that layer's ol/source/Vector, exposed for the things you do directly
+// to features: add your own, or repaint them all after a config change.
+const source = manager.renderingVectorSource;
+```
+
+Then drawing a graphic is one call. The user clicks out the base geometry, and the
+manager builds, styles and wires it up:
 
 ```ts
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
 
-const manager = new TacticalGraphicsManager(map, source);
 manager.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
 ```
 
-Or drive one graphic yourself, without the manager:
+That is the whole managed path — draw, modify, rotate, resize and the properties the
+style functions read all follow from it.
+
+This method was previously called `handleDrawTacticalGraphic`. That name still works
+— it delegates to `startDrawing` — but it is deprecated.
+
+### The radius read-out
+
+While a circular graphic is drawn or resized, the renderer draws a hashed line from its
+center out along the gesture, labeled with the distance — meters below a kilometer,
+kilometers above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
+ends, and it never reaches `serializeTacticalGraphics` or a restored map.
+
+It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
+mission tasks, the range fans. Graphics whose radius is real but not a dimension you could
+measure on the drawn shape are deliberately excluded: Ambush is a hooked arrow, Turn and
+Tactical Turn are bowed arrows.
+
+That same list decides whether the Feature Properties dialog shows a **Radius** read-out,
+so a graphic can never report a radius in one place and not the other. Both are read-outs,
+not inputs — a graphic is sized by dragging it.
+
+### Driving one graphic yourself
+
+Skip the manager's draw interaction when you are placing graphics from data rather
+than from a user's clicks. You build the base feature; the controller does the rest:
 
 ```ts
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
 
-const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution());
-handler.setBaseFeature(drawnFeature);          // your LineString / Polygon / Point
+const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
+handler.setBaseFeature(drawnFeature);          // your own LineString / Point / Polygon feature
 source.addFeatures(handler.getFeatures());     // graphic + labels + handles
+manager.watchResolution(handler);              // see below — not optional
+
 writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
     label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
 });
 ```
 
-Set amplifiers through `writeGraphicProperties`, never `feature.set` —
-`ol/Object.set` fires `propertychange` without calling `changed()`, so the map
-can keep drawing the old label.
+Two rules apply to anything built this way:
 
-### The centre symbol on security operations
+**Set amplifiers through `writeGraphicProperties`, never `feature.set`.**
+`ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
+keep drawing the old label.
 
-Cover, Guard and Screen draw a single-point 2525E unit symbol between their two
-arms. That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job,
-not this library's — so this library **never imports milsymbol**. It asks a
-provider, and you register one:
+**`manager.watchResolution(handler)` is not optional.** Some graphics — every
+security operation — have geometry that is a screen-pixel constant times the map
+resolution, so without a `change:resolution` subscription they are pinned in meters
+and grow and shrink as you zoom. The manager does this for you when the user draws,
+and `restoreTacticalGraphics` does it on load; a graphic you build yourself needs it
+doing. Pair it with `unwatchResolution` when you remove the graphic, or the listener
+outlives its features.
 
-```ts
-import ms from 'milsymbol';
-import {useMilsymbolSecurityOperationSymbols} from '@zaes/tactical-graphics/openlayers';
+### OpenLayers — geometry only
 
-useMilsymbolSecurityOperationSymbols(ms);   // once, at startup
-```
-
-Register nothing and the arms and labels draw with an empty centre — no error,
-no missing module. That is what makes `milsymbol` an *actually* optional peer
-dependency: a consumer who wants the geometry, or the other 200-odd graphics,
-never resolves it.
-
-The SIDC handed to the provider is derived from the graphic's own `hostility`,
-so a hostile Screen gets a hostile-framed symbol. `securityOperationSidc(hostility)`
-exposes the same doctrinal code if you want to build on it.
-
-#### Making the symbol bigger
+If you would rather keep your own styling, skip the subpath entirely.
+`renderTacticalGraphic` emits EPSG:4326, so reproject on read:
 
 ```ts
-import {setSecurityOperationSymbolSize} from '@zaes/tactical-graphics/openlayers';
+import GeoJSON from 'ol/format/GeoJSON';
+import {renderTacticalGraphic, toFeatureCollection} from '@zaes/tactical-graphics';
 
-setSecurityOperationSymbolSize(40);   // CSS px, default 25, clamped to [8, 96]
+const features = new GeoJSON().readFeatures(
+    toFeatureCollection(renderTacticalGraphic(feature)),
+    {dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'},
+);
+source.addFeatures(features);
 ```
 
-Global, and it takes effect on the next render — bump the features' revision if
-some are already drawn:
+### Any GeoJSON renderer
+
+`toFeatureCollection()` flattens a render into a standard `FeatureCollection`, so any
+renderer that reads GeoJSON can consume it — filter on `properties.role`
+(`graphic` / `label` / `handle`) to style each part. It returns the `graphic` and
+`label` features by default; ask for `handle` too when you are building an editor.
+
+OpenLayers is the reference implementation because that is where the full
+MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry
+but style it themselves.
+
+### Drawing the label text
+
+`labels` gives you **anchor points**, not rendered text. Read the text from the
+properties, or from `getLabel()` for graphics whose abbreviation is fixed by doctrine:
 
 ```ts
-source.forEachFeature(f => f.changed());
+import {getLabel} from '@zaes/tactical-graphics';
+
+getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
+getLabel('FinalProtectiveFire'); // → 'FPF'
 ```
 
-To size **one** symbol rather than all of them, return `{src, sizePx}` from its
-provider — that wins over the global size and leaves it untouched.
+**Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain,
+Occupy, Control, Contain, Cordon and Search and Area Defense are two arcs of one
+circle with a one-letter label in the hole between them. The generator leaves 15° of
+arc either side of the label, which is the best it can do with no glyph to measure —
+so on a large circle the hole is bigger than the letter needs.
+
+If you measure your own text, set `labelGapDegrees: 0` and the arcs run right up to
+the label axis; cut the gap yourself from the rendered glyph. That is what this
+package's OpenLayers layer does, and why its circles hug their letters at every size:
 
 ```ts
-handler.setSymbolProvider(({sidc}) => ({src: mySvgDataUri(sidc, 48), sizePx: 48}));
+tacticalGraphic: {name: 'Secure', radius: 1000, rotation: 0, labelGapDegrees: 0}
 ```
 
-**Not** milsymbol's own `size` option. That sets the SVG's internal resolution;
-the `Icon` built around it still draws at the library's size, so
-`useMilsymbolSecurityOperationSymbols(ms, {size: 40})` changes the sharpness and
-nothing you can see. The size belongs to the library because the library is what
-builds the `Icon` around a provider that returns a `src` string — a provider
-returning a whole `Style` bypasses this and owns its own sizing.
+The gap is **tangential**: a horizontal label sitting due east of the circle needs
+clearance for its *height*, not its width.
 
-#### Choosing the symbol
+---
 
-Register a provider of your own instead of `useMilsymbolSecurityOperationSymbols`.
-It can return four things, in ascending order of control:
+## Configuring colors and sizes
 
-| Return | You get |
-|---|---|
-| a **string** | used as an image `src`, drawn at the library's size |
-| **`{src, sizePx}`** | a `src` plus its own on-screen size, for this symbol only |
-| an **`ol` `Style`** | used verbatim — no `Icon` is built, so sizing and anchoring are yours |
-| **`undefined`** | no centre symbol |
+Everything re-styleable lives on one all-optional config. Omit a field and you get
+the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of this.
 
-```ts
-setSecurityOperationSymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
-```
-
-It is global — one call configures the whole application — and it is handed the
-graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
-
-That is as far as the global provider goes. It also receives `labels`, but these
-three graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing
-else), so two Screens look identical to it. To vary those, give the individual
-graphic its own provider with `setSymbolProvider` — it wins over the global one,
-and `undefined` puts the graphic back on it.
-
-#### Worked example: three security operations, three units
-
-```ts
-import ms from 'milsymbol';
-import Feature from 'ol/Feature';
-import Point from 'ol/geom/Point';
-import {fromLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
-
-// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard
-// identity the library derived from `hostility` survives the swap and a hostile
-// graphic stays hostile-framed whichever unit goes in.
-const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
-
-const UNIT = {
-    [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
-    [TacticalGraphicName.Guard]:  '121000',   // oval + diagonal  — armoured cavalry
-    [TacticalGraphicName.Cover]:  '120500',   // oval             — armour
-};
-
-function placeSecurityOperation(name, lonLat, hostility = TacticalGraphicHostility.friend) {
-    const handler = getController(name, map.getView().getResolution()!);
-    handler.setSymbolId(crypto.randomUUID());
-
-    // This graphic's own provider, overriding whatever is registered globally.
-    // `size` is the SVG's internal resolution — 2x for a crisp HiDPI render;
-    // `sizePx` is what it actually draws at, overriding the library's size for
-    // this symbol alone. Return a bare string instead to take the library's.
-    handler.setSymbolProvider(({sidc}) => {
-        const unit = sidc.slice(0, 10) + UNIT[name] + sidc.slice(16);
-        const svg = new ms.Symbol(unit, {size: UNIT_SIZE_PX * 2}).asSVG();
-        return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
-    });
-
-    handler.setBaseFeature(new Feature(new Point(fromLonLat(lonLat))));
-
-    // `hostility` is the only amplifier these three take. There is no user label:
-    // the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S.
-    // `label: ''` is here only because the type requires the field.
-    writeGraphicProperties(handler.getFeatures(), name, {label: '', hostility});
-
-    source.addFeatures(handler.getFeatures());
-    manager.watchResolution(handler);
-    return handler;
-}
-
-placeSecurityOperation(TacticalGraphicName.Screen, [-77.10, 38.89]);
-placeSecurityOperation(TacticalGraphicName.Guard,  [-77.04, 38.89], TacticalGraphicHostility.hostileFaker);
-placeSecurityOperation(TacticalGraphicName.Cover,  [-76.98, 38.89]);
-```
-
-`manager.watchResolution(handler)` is not optional. A security operation's geometry
-is a screen-pixel constant times the map resolution, so without a
-`change:resolution` subscription it is pinned in metres and grows and shrinks as
-you zoom. `TacticalGraphicsManager` does this for you when the user draws, and
-`restoreTacticalGraphics` does it on load; a graphic you build yourself needs it
-doing.
-
-The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
-performs which security task, so substitute your own. The demo's **Draw all
-samples** button uses exactly this mechanism.
-
-### Configuring colours and sizes
-
-Everything re-styleable lives on one all-optional config. Omit a field and you
-get the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of
-this.
-
-It lives in the **root** entry point, not the OpenLayers one: none of it is
-specific to a renderer, so a second view inherits it rather than reinventing it,
-and you configure the library once however many views you have open.
+It lives in the **root** entry point, not the OpenLayers one: none of it is specific
+to a renderer, so a second view inherits it rather than reinventing it, and you
+configure the library once however many views you have open.
 
 ```ts
 import {TacticalGraphicHostility, configureTacticalGraphics} from '@zaes/tactical-graphics';
@@ -344,13 +398,15 @@ source.forEachFeature(f => f.changed());   // repaint what is already drawn
 ```
 
 That last line matters: OpenLayers caches its render per feature revision, so a
-config change does not reach features already on the map until something bumps
-their revision.
+config change does not reach features already on the map until something bumps their
+revision.
 
-**There is one palette: `DEFAULT_PALETTE`.** The library takes colours, not
-themes. It cannot see your basemap — or your projector, or your darkened
-operations floor — so it never picks a colour set for you. If your app has more
-than one look, keep the sets yourself and send whichever is current:
+### There is one palette
+
+The library takes colors, not themes. It cannot see your basemap — or your projector,
+or your darkened operations floor — so it never picks a color set for you. There is
+one default, `DEFAULT_PALETTE`. If your app has more than one look, keep the sets
+yourself and send whichever is current:
 
 ```ts
 import {configureTacticalGraphics, DEFAULT_PALETTE} from '@zaes/tactical-graphics';
@@ -367,49 +423,33 @@ configureTacticalGraphics(dark ? MY_DARK_PALETTE : DEFAULT_PALETTE);
 source.forEachFeature(f => f.changed());
 ```
 
-Spread `DEFAULT_PALETTE` into your set as above. `configureTacticalGraphics`
-merges, so a set that names only the colours it changes can never undo the
-previous one — going back to light has to actively re-send the light values, not
-merely stop sending the dark ones.
+Spread `DEFAULT_PALETTE` into your set as above. `configureTacticalGraphics` merges,
+so a set that names only the colors it changes can never undo the previous one —
+going back to light has to actively re-send the light values, not merely stop sending
+the dark ones.
 
-`DEFAULT_PALETTE` covers the *unaffiliated* neutrals — the default line colour,
-the label text that follows it, the halo behind that text — and the editor chrome
-(handle dots, the inert centre, the draw marker). It deliberately carries no
-`hostilityColors`: the four affiliation colours are doctrine, and shifting them
-for a display setting makes a symbol read differently depending on how the app is
+`DEFAULT_PALETTE` covers the *unaffiliated* neutrals — the default line color, the
+label text that follows it, the halo behind that text — and the editor chrome (handle
+dots, the inert center, the draw marker). It deliberately carries no
+`hostilityColors`: the four affiliation colors are doctrine, and shifting them for a
+display setting makes a symbol read differently depending on how the app is
 configured. Pass `hostilityColors` yourself if you disagree.
 
-Building your own settings UI? Use `getDoctrinalHostilityColor(hostility)` for
-the swatch, not `getColorByHostility`. The latter reads the live config, so a
-control that edits an override renders one frame stale — clearing an override
-shows you the value you just cleared. The former is a pure function of the enum.
+Building your own settings UI? Use `getDoctrinalHostilityColor(hostility)` for the
+swatch, not `getColorByHostility`. The latter reads the live config, so a control that
+edits an override renders one frame stale — clearing an override shows you the value
+you just cleared. The former is a pure function of the enum.
 
-### OpenLayers — geometry only
+---
 
-If you would rather keep your own styling, skip the subpath entirely.
-`renderTacticalGraphic` emits EPSG:4326, so reproject on read:
-
-```ts
-import GeoJSON from 'ol/format/GeoJSON';
-
-const features = new GeoJSON().readFeatures(
-    toFeatureCollection(renderTacticalGraphic(feature)),
-    {dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'},
-);
-source.addFeatures(features);
-```
-
-### Saving and restoring a whole map
+## Saving and restoring a whole map
 
 `serializeTacticalGraphics` writes every graphic the manager holds to GeoJSON, and
-`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols, the
-same objects, ready to rotate, resize and modify:
+`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols,
+the same objects, ready to rotate, resize and modify:
 
 ```ts
-import {
-    serializeTacticalGraphics,
-    restoreTacticalGraphics,
-} from '@zaes/tactical-graphics/openlayers';
+import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
 
 const snapshot = serializeTacticalGraphics(manager);   // one feature per graphic
 await db.save(JSON.stringify(snapshot));
@@ -418,67 +458,154 @@ await db.save(JSON.stringify(snapshot));
 const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
 ```
 
-A snapshot holds **one feature per graphic** — the base geometry the user drew. Everything
-else is derived and regenerates on load. Each record carries two objects:
+A snapshot holds **one feature per graphic** — the base geometry the user drew.
+Everything else is derived and regenerates on load. A record is the same
+`tacticalGraphic` object described [above](#the-tacticalgraphic-object), and nothing
+else:
 
 ```jsonc
 "properties": {
     // The portable description of the symbol — what renderTacticalGraphic consumes.
-    // Metres, degrees and text: meaningful to any renderer, in any language.
-    "tacticalGraphic": {"name": "MovementToContact", "size": 30600, "rotation": 45,
+    // Meters, degrees and text: meaningful to any renderer, in any language.
+    "tacticalGraphic": {"name": "MovementToContact", "radius": 30600, "rotation": 45,
                         "label": "", "hostility": "Pending"},
-
-    // This renderer's bookkeeping. Viewport quantities another renderer cannot act on.
-    "renderer": {"drawingResolution": 1200, "scale": 1.7},
 
     "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
 }
 ```
 
-The split is portability. `tacticalGraphic` is metres, degrees and text — meaningful to any
-renderer. `renderer` holds quantities that only mean something to an OpenLayers session:
+**That is the whole record.** Transform it, store it in PostGIS, write it by hand —
+as long as `tacticalGraphic` survives, the graphic rebuilds exactly. There is no
+companion object to keep, and no viewport state to lose.
 
-| | |
+A graphic that fails to restore is reported in `failed` and rolled back on its own,
+so one bad record cannot cost you the rest of the map.
+
+---
+
+## Security operations: the center symbol
+
+Cover, Guard and Screen draw a single-point 2525E unit symbol between their two arms.
+That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this
+library's — so this library **never imports milsymbol**. It asks a provider, and you
+register one:
+
+```ts
+import ms from 'milsymbol';
+import {useMilsymbolSecurityOperationSymbols} from '@zaes/tactical-graphics/openlayers';
+
+useMilsymbolSecurityOperationSymbols(ms);   // once, at startup
+```
+
+Register nothing and the arms and labels draw with an empty center — no error, no
+missing module. That is what makes `milsymbol` an *actually* optional peer
+dependency: a consumer who wants the geometry, or the other 200-odd graphics, never
+resolves it.
+
+The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
+hostile Screen gets a hostile-framed symbol. `securityOperationSidc(hostility)`
+exposes the same doctrinal code if you want to build on it.
+
+### Sizing the symbol
+
+```ts
+import {setSecurityOperationSymbolSize} from '@zaes/tactical-graphics/openlayers';
+
+setSecurityOperationSymbolSize(40);        // CSS px, default 25, clamped to [8, 96]
+source.forEachFeature(f => f.changed());   // takes effect on the next render
+```
+
+**Not** milsymbol's own `size` option. That sets the SVG's internal resolution; the
+`Icon` built around it still draws at the library's size, so
+`useMilsymbolSecurityOperationSymbols(ms, {size: 40})` changes the sharpness and
+nothing you can see. The size belongs to the library because the library is what
+builds the `Icon` around a provider that returns a `src` string — a provider
+returning a whole `Style` bypasses this and owns its own sizing.
+
+To size **one** symbol rather than all of them, return `{src, sizePx}` from its
+provider. That wins over the global size and leaves it untouched.
+
+### Choosing the symbol
+
+Register a provider of your own instead of `useMilsymbolSecurityOperationSymbols`.
+It can return four things, in ascending order of control:
+
+| Return | You get |
 |---|---|
-| `drawingResolution` | metres per **screen pixel** when the graphic was drawn. Always present. |
-| `scale` | security operations only (Cover / Guard / Screen). Multiplies screen-pixel arrow lengths, so it is only interpretable together with the resolution. |
-
-**Keep the `renderer` object if you transform the GeoJSON on the way to storage.**
-Decoration sizes are derived from `drawingResolution` when a graphic is built, so
-rebuilding at the current view resolution instead of the saved one silently produces the
-wrong proportions — it does not fail loudly. Restore refuses a record without it rather
-than guessing.
-
-A graphic that fails to restore is reported in `failed` and rolled back on its own, so
-one bad record cannot cost you the rest of the map.
-
-Pass `{includeDerived: true}` to also emit the rendered `graphic` and `label` features
-for consumers that only want to draw the shape. Restore ignores them.
-
-### Any GeoJSON renderer
-
-The output is a standard `FeatureCollection`, so any renderer that reads GeoJSON can consume it — filter on `properties.role` (`graphic` / `label` / `handle`) to style each part. OpenLayers is the reference implementation because that is where the full MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry but style it themselves.
-
-### Drawing the label text
-
-`labels` gives you **anchor points**, not rendered text — you own the typography. Read the text from the properties, or from `getLabel()` for graphics whose abbreviation is fixed by doctrine:
+| a **string** | used as an image `src`, drawn at the library's size |
+| **`{src, sizePx}`** | a `src` plus its own on-screen size, for this symbol only |
+| an **`ol` `Style`** | used verbatim — no `Icon` is built, so sizing and anchoring are yours |
+| **`undefined`** | no center symbol |
 
 ```ts
-import {getLabel} from '@zaes/tactical-graphics';
-
-getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
-getLabel('FinalProtectiveFire'); // → 'FPF'
+setSecurityOperationSymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
 ```
 
-**Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain, Occupy, Control, Contain, Cordon and Search and Area Defense are two arcs of one circle with a one-letter label in the hole between them. The generator leaves 15° of arc either side of the label, which is the best it can do with no glyph to measure — so on a large circle the hole is bigger than the letter needs.
+It is global — one call configures the whole application — and it is handed the
+graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
 
-If you measure your own text, set `labelGapDegrees: 0` and the arcs run right up to the label axis; cut the gap yourself from the rendered glyph. That is what this package's OpenLayers layer does, and why its circles hug their letters at every size:
+That is as far as the global provider goes. It also receives `labels`, but these three
+graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing else), so
+two Screens look identical to it. To vary those, give the individual graphic its own
+provider with `handler.setSymbolProvider` — it wins over the global one, and
+`undefined` puts the graphic back on it.
+
+### Worked example: three security operations, three units
+
+Placed programmatically, each with its own unit symbol. Uses the `map`, `source` and
+`manager` from [the setup above](#openlayers--styled-drawable-editable).
 
 ```ts
-tacticalGraphic: {name: 'Secure', size: 1000, rotation: 0, labelGapDegrees: 0}
+import ms from 'milsymbol';
+import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import {fromLonLat} from 'ol/proj';
+import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+
+// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard
+// identity the library derived from `hostility` survives the swap, and a hostile
+// graphic stays hostile-framed whichever unit goes in.
+const UNIT = {
+    [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
+    [TacticalGraphicName.Guard]: '121000',    // oval + diagonal  — armored cavalry
+    [TacticalGraphicName.Cover]: '120500',    // oval             — armor
+};
+const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
+
+function placeSecurityOperation(name, lonLat, hostility = TacticalGraphicHostility.friend) {
+    const handler = getController(name, map.getView().getResolution()!);
+    handler.setSymbolId(crypto.randomUUID());
+
+    // This graphic's own provider, overriding whatever is registered globally.
+    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI
+    // render. `sizePx` is what it actually draws at. Return a bare string instead
+    // to take the library's size.
+    handler.setSymbolProvider(({sidc}) => {
+        const unit = sidc.slice(0, 10) + UNIT[name] + sidc.slice(16);
+        const svg = new ms.Symbol(unit, {size: UNIT_SIZE_PX * 2}).asSVG();
+        return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
+    });
+
+    handler.setBaseFeature(new Feature(new Point(fromLonLat(lonLat))));
+
+    // `hostility` is the only amplifier these three take. There is no user label:
+    // the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S.
+    // `label: ''` is here only because the type requires the field.
+    writeGraphicProperties(handler.getFeatures(), name, {label: '', hostility});
+
+    source.addFeatures(handler.getFeatures());
+    manager.watchResolution(handler);   // required — the geometry is screen-pixel sized
+}
+
+placeSecurityOperation(TacticalGraphicName.Screen, [-77.10, 38.89]);
+placeSecurityOperation(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker);
+placeSecurityOperation(TacticalGraphicName.Cover, [-76.98, 38.89]);
 ```
 
-Note the gap is **tangential**: a horizontal label sitting due east of the circle needs clearance for its *height*, not its width.
+The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
+performs which security task, so substitute your own. The demo's **Draw all samples**
+button uses exactly this mechanism.
 
 ---
 
@@ -491,7 +618,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 199 supported names.
+the 216 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -500,19 +627,22 @@ Graphic "Secure" expects a Point base geometry, got LineString.
 
 ## Coordinate systems
 
-The library is projection-agnostic in one specific way: **it works entirely in EPSG:4326**, and hands you EPSG:4326 back. Reproject at your renderer's boundary, not before you call it.
+The library is projection-agnostic in one specific way: **it works entirely in
+EPSG:4326**, and hands you EPSG:4326 back. Reproject at your renderer's boundary, not
+before you call it.
 
-Sizes (`radius`, `size`) are in **metres**, and range-fan band ranges are in **kilometres**.
+Sizes (`radius`, `size`) are in **meters**, and range-fan band ranges are in
+**kilometers**.
 
 ---
 
 ## Supported graphics
 
-The graphics below are **fully implemented and verified** — each can be drawn, labelled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
-(The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
+(The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
 | Graphic | Category |
 |---|---|
@@ -621,14 +751,21 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
 | Restrictive Fire Line | Lines |
+| Abatis | Mobility and Countermobility Control Measures |
 | Alternate Supply Route | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
 | Assault Crossing | Mobility and Countermobility Control Measures |
 | Block | Mobility and Countermobility Control Measures |
 | Bridge | Mobility and Countermobility Control Measures |
 | Disrupt | Mobility and Countermobility Control Measures |
+| Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
 | Ferry Crossing | Mobility and Countermobility Control Measures |
 | Fix | Mobility and Countermobility Control Measures |
 | Ford, Difficult | Mobility and Countermobility Control Measures |
@@ -645,11 +782,21 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
+| Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, High Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Low Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Single Concertina | Mobility and Countermobility Control Measures |
+| Wire, Single Fence | Mobility and Countermobility Control Measures |
+| Wire, Triple Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
@@ -737,25 +884,8 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Limited Access Area | Areas |
-| Abatis | Mobility and Countermobility Control Measures |
-| Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
-| Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
-| Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
-| Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
-| Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
-| Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
-| Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
-| Wire, Double Fence | Mobility and Countermobility Control Measures |
-| Wire, Double Strand Concertina | Mobility and Countermobility Control Measures |
-| Wire, High Wire Fence | Mobility and Countermobility Control Measures |
-| Wire, Low Wire Fence | Mobility and Countermobility Control Measures |
-| Wire, Single Concertina | Mobility and Countermobility Control Measures |
-| Wire, Single Fence | Mobility and Countermobility Control Measures |
-| Wire, Triple Strand Concertina | Mobility and Countermobility Control Measures |
-| Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |

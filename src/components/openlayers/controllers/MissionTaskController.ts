@@ -22,6 +22,16 @@ export interface MissionTaskGraphic extends TacticalGraphic {
 
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
 
+    /**
+     * Arms the radius read-out — the hashed centre-to-edge line with the size in km —
+     * for the duration of a draw or resize gesture. Optional so a host's own holder can
+     * skip it; the controller no-ops when it is absent.
+     */
+    showMeasure?(active: boolean, anchor?: Coordinate): void;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored?(mirrored: boolean): void;
+
     /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
     setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
@@ -103,6 +113,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
     onDrawStartFunc = (e: DrawEvent) => {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
+        this.graphic.showMeasure?.(true);
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
@@ -113,6 +124,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
             const rotationAngleRad = Math.atan2(dy, dx);
             this.rotationAngleDeg = (rotationAngleRad * 180) / Math.PI;
 
+            // Armed here, immediately before the size lands: arming at drawstart alone
+            // is not enough, because the holder has no size yet at that point.
+            this.graphic.showMeasure?.(true, this.currentMouseCoord);
             this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
 
         });
@@ -123,6 +137,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const radius = circleGeom.getRadius();
 
         this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.showMeasure?.(false);
     };
 
     onPointerMove = (evt: any) => {
@@ -130,8 +145,21 @@ export class MissionTaskController implements TacticalGraphicHandler {
     };
 
     handleResize(deltaSize: number): void {
+        // Armed here rather than on pointer-down: a resize gesture only becomes one once
+        // it actually changes the size. The manager disarms it on pointer-up.
+        this.graphic.showMeasure?.(true);
         const size = this.graphic.size * deltaSize;
         this.graphic.updateGeom({size});
+    }
+
+    /** Ends the read-out. Called by the manager when a drag finishes. @see showMeasure */
+    endGesture(): void {
+        this.graphic.showMeasure?.(false);
+    }
+
+    /** Forwarded to the holder. @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        this.graphic.setMirrored?.(mirrored);
     }
 
     handleRotate(deltaAngle: number): void {
@@ -189,7 +217,12 @@ export class PointDropController extends MissionTaskController {
     /** The size every instance is dropped at, in map units. */
     private readonly fixedSize: number;
 
-    constructor(graphic: MissionTaskGraphic, fixedSize: number) {
+    /**
+     * `resizable` opts back into the inherited resize. The crossed tasks are fixed-size
+     * symbols and leave it off; the explosives readiness states are dropped the same way
+     * but the user scales them afterwards, which is the only difference between them.
+     */
+    constructor(graphic: MissionTaskGraphic, fixedSize: number, private readonly resizable: boolean = false) {
         super(graphic);
         this.fixedSize = fixedSize;
     }
@@ -207,8 +240,9 @@ export class PointDropController extends MissionTaskController {
     onDrawStartFunc = (e: DrawEvent) => this.drop(e);
     onDrawEndFunc = (e: DrawEvent) => this.drop(e);
 
-    /** Not resizable: the symbol has one size and the style function caps it. */
-    handleResize(): void {
+    /** Fixed size unless the graphic opted in: the style function caps the rest. */
+    handleResize(deltaSize: number): void {
+        if (this.resizable) super.handleResize(deltaSize);
     }
 
     /** Not rotatable: these symbols have a single doctrinal orientation. */

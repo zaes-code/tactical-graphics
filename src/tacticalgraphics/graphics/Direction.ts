@@ -11,7 +11,7 @@ export class DirectionOfSupportingAttack extends TacticalGraphicsBase<MovementGr
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let size: number = opts?.size || 20;
         let baseCoords = base.geometry.coordinates;
-        let arrowCoords: Position[] = geometryService.computeArrowheadPoints(baseCoords[baseCoords.length - 2], baseCoords[baseCoords.length - 1], size * 20, 45)
+        let arrowCoords: Position[] = geometryService.computeArrowheadPoints(baseCoords[baseCoords.length - 2], baseCoords[baseCoords.length - 1], size, 45)
         return this.asMultiLineStringFeature([baseCoords, arrowCoords]);
     }
 
@@ -44,7 +44,7 @@ export class DirectionOfMainAttack extends TacticalGraphicsBase<MovementGraphicO
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let size: number = opts?.size || 20;
         let baseCoords = base.geometry.coordinates;
-        let arrowCoords: Position[] = geometryService.createDirectionOfMainAttackArrow(baseCoords, size * 20);
+        let arrowCoords: Position[] = geometryService.createDirectionOfMainAttackArrow(baseCoords, size);
         return this.asMultiLineStringFeature([baseCoords, arrowCoords]);
     }
 
@@ -77,7 +77,7 @@ export class DirectionOfMainAttackFeint extends TacticalGraphicsBase<MovementGra
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let size: number = opts?.size || 20;
         let baseCoords = base.geometry.coordinates;
-        let arrowCoords: Position[][] = geometryService.createDirectionOfFeintAttackArrow(baseCoords, size * 20);
+        let arrowCoords: Position[][] = geometryService.createDirectionOfFeintAttackArrow(baseCoords, size);
         return this.asMultiLineStringFeature([baseCoords, ...arrowCoords]);
     }
 
@@ -109,7 +109,7 @@ export class AviationDirectionOfAttack extends TacticalGraphicsBase<MovementGrap
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let size: number = opts?.size || 20;
         let baseCoords = base.geometry.coordinates;
-        let arrowCoords: Position[] = geometryService.computeArrowheadPoints(baseCoords[baseCoords.length - 2], baseCoords[baseCoords.length - 1], size * 20, 45);
+        let arrowCoords: Position[] = geometryService.computeArrowheadPoints(baseCoords[baseCoords.length - 2], baseCoords[baseCoords.length - 1], size, 45);
         const bowtieLines = this.createBowtie(baseCoords, size);
         return this.asMultiLineStringFeature([baseCoords, arrowCoords, ...bowtieLines]);
     }
@@ -129,9 +129,11 @@ export class AviationDirectionOfAttack extends TacticalGraphicsBase<MovementGrap
     private createBowtie(baseCoords: Position[], size: number): Position[][] {
         const P0 = baseCoords[0];
         const P1 = baseCoords[1];
-        const centerDist = 50 * size;
-        const halfWidth = 10 * size;
-        const halfHeight = 10 * size;
+        // Was 50/10/10 x a 20px unit; `size` now *is* that unit's worth of metres,
+        // so the same shape is 2.5 / 0.5 / 0.5 x it.
+        const centerDist = 2.5 * size;
+        const halfWidth = 0.5 * size;
+        const halfHeight = 0.5 * size;
 
         const segMeters = turf.distance(turf.point(P0), turf.point(P1), {units: 'meters'});
         if (segMeters === 0) return [];

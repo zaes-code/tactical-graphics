@@ -57,8 +57,7 @@ export interface TacticalGraphicProperties {
     endDate?: string;
     minAltitude?: string;
     maxAltitude?: string;
-    /** Corridor half-width, in metres, as a string. */
-    width?: string;
+
     eff?: string;
     grid?: string;
     /** Weapon designation. Today only FinalProtectiveFire renders this. */
@@ -73,12 +72,50 @@ export interface TacticalGraphicProperties {
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
-     * Size scalar in **metres**, meaning varies by graphic (arrowhead spread,
-     * perpendicular offset, ...). Defaults are applied per graphic when omitted.
+     * Radius in **metres**: how far the symbol reaches from its own centre. The circle
+     * radius for the arc mission tasks and circular areas, and the half-length of a
+     * point-anchored arrow. Defaults are applied per graphic when omitted.
+     *
+     * Only for graphics that *have* a centre. A line graphic's arrowhead or teeth are
+     * sized by `decorationSize`, which is a different quantity that was briefly and
+     * wrongly folded in here.
      */
-    size?: number;
-    /** Radius in **metres** for circular and point-based graphics. */
     radius?: number;
+    /**
+     * How large to draw the decorations a line graphic carries — an arrowhead's barb
+     * length, a passage lane's teeth, the offset of a bridge's labels.
+     *
+     * Separate from `radius` because it is not a reach from anywhere:
+     * `DirectionOfSupportingAttack` is a MultiLineString of the drawn line plus an
+     * arrowhead, and there is no centre to take a radius of. The two were briefly one
+     * field, which made `radius` mean two unrelated things depending on the graphic.
+     *
+     * **Caveat, see `ai/decisions.md`:** the generators that read this still consume it as
+     * metres per *screen pixel* and multiply by a pixel count of their own, so a value in
+     * metres comes out ~20x too large. That is the open item this field's existence makes
+     * findable rather than hidden inside `radius`.
+     */
+    decorationSize?: number;
+    /**
+     * **Full** width in metres, measured across a drawn line: rail to rail on an
+     * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
+     * and what a properties dialog shows.
+     *
+     * Full, not half — the generators work in half-widths (the perpendicular offset
+     * from the centreline), so `toGraphicOptions` halves it on the way in and the
+     * holders double it on the way out. The doubling is kept inside the library
+     * precisely so a consumer never has to know about it: you send the width you
+     * would measure on the map.
+     */
+    width?: number;
+    /**
+     * Hangs an asymmetric graphic's hook on the other side of its drawn line.
+     *
+     * Portable user intent, not renderer state: a Cesium view needs it to draw the same
+     * symbol. Expressed relative to the line's own bearing, so it survives rotation —
+     * see `GeometryService.getCaneArrow` for the compass-pinned version this replaced.
+     */
+    mirrored?: boolean;
     /** Rotation in degrees, for point-based graphics. */
     rotation?: number;
     /**
@@ -153,18 +190,24 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
 
 /** Maps the public property bag onto the internal generator option bag. */
 function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
-    const width = props.width !== undefined && props.width !== '' ? Number(props.width) : undefined;
+    // Public field -> internal generator option. The two disagree on names by design:
+    // generators still speak `size` / `radius`, and renaming 200-odd call sites inside
+    // them buys nothing a consumer can see. This is the one place the mapping lives.
     const options = {
         hostility: props.hostility,
         status: props.status,
         echelon: props.echelon,
         direction: props.direction,
-        size: props.size,
-        radius: props.radius,
+        // Both land on the generators' `size`, which is the one slot they offer; a given
+        // graphic reads it as one or the other and never sets both.
+        size: props.radius ?? props.decorationSize,
+        // Public `width` is a full width; the generators' `radius` is the half-width
+        // offset from the centreline. This is the only place the factor of two lives.
+        radius: props.width !== undefined ? props.width / 2 : undefined,
         rotation: props.rotation,
+        mirrored: props.mirrored,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,
-        width: Number.isFinite(width) ? width : undefined,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
     };
