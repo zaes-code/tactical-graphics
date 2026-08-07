@@ -29,6 +29,9 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
 
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored?(mirrored: boolean): void;
+
     /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
     setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
@@ -152,6 +155,11 @@ export class MissionTaskController implements TacticalGraphicHandler {
     /** Ends the read-out. Called by the manager when a drag finishes. @see showMeasure */
     endGesture(): void {
         this.graphic.showMeasure?.(false);
+    }
+
+    /** Forwarded to the holder. @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        this.graphic.setMirrored?.(mirrored);
     }
 
     handleRotate(deltaAngle: number): void {
