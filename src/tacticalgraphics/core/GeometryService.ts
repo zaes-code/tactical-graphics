@@ -1529,9 +1529,19 @@ class GeometryService {
         // that bulges backwards, away from the tip. Its far end is the free point
         // the holder uses as the offset (width) handle.
         const bearing = turf.bearing(start, end);
+        // The centre sits one radius off the line, on whichever side the user chose.
         const side = mirrored ? 1 : -1;
         const center = turf.destination(turf.point(start), arrowSize, bearing + side * 90, {units: 'meters'});
-        let arcCoords = turf.lineArc(center, arrowSize, bearing - side * 90, bearing - side * 270, {units: 'meters'}).geometry.coordinates;
+
+        // `lineArc` sweeps clockwise from the first bearing to the second, so the mirror is
+        // not "negate both ends" — that asks for a backwards sweep and returns a different,
+        // smaller segment. It is the same 180 degrees taken from the opposite start, then
+        // reversed so the arc still *begins* at `start`: its far end is the point the holder
+        // uses as the offset handle, and swapping the ends would move the handle.
+        const arc = mirrored
+            ? turf.lineArc(center, arrowSize, bearing - 270, bearing - 90, {units: 'meters'})
+            : turf.lineArc(center, arrowSize, bearing + 90, bearing + 270, {units: 'meters'});
+        let arcCoords = mirrored ? [...arc.geometry.coordinates].reverse() : arc.geometry.coordinates;
 
         let arrowHeadCoords = this.computeArrowheadPoints(start, end, Math.abs(arrowSize), 45);
         return turf.multiLineString([baseCoords, arrowHeadCoords, arcCoords]);

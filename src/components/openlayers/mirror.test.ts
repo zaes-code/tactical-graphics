@@ -44,11 +44,29 @@ const geoFeature = (name: TacticalGraphicName, mirrored: boolean): GeoJSONFeatur
 });
 
 describe('mirroring the asymmetric line graphics', () => {
-    it.each(MIRRORABLE.map(n => [String(n), n] as const))('%s draws a different shape mirrored', (_l, name) => {
-        const plain = renderTacticalGraphic(geoFeature(name, false));
-        const flipped = renderTacticalGraphic(geoFeature(name, true));
-        const of = (r: typeof plain) => JSON.stringify((r.graphic.geometry as MultiLineString).coordinates);
-        expect(of(flipped)).not.toEqual(of(plain));
+    /**
+     * "Different from the unmirrored one" is too weak — the first attempt at this reversed
+     * the arc's sweep as well as its centre, which asks turf for a backwards sweep and
+     * returns a *different, smaller* segment. That passed a difference check while looking
+     * obviously wrong on screen. A mirror has to be the same arc reflected: same number of
+     * points, same distance off the line, opposite side.
+     */
+    it.each(MIRRORABLE.map(n => [String(n), n] as const))('%s mirrors rather than merely differing', (_l, name) => {
+        const arcOf = (mirrored: boolean) =>
+            (renderTacticalGraphic(geoFeature(name, mirrored)).graphic.geometry as MultiLineString).coordinates[2];
+        const plain = arcOf(false);
+        const flipped = arcOf(true);
+
+        expect(flipped).toHaveLength(plain.length);
+
+        // The base line runs due east at latitude 38.9, so "off the line" is latitude.
+        const offsets = (arc: number[][]) => arc.map(c => c[1] - 38.9);
+        const worst = (arc: number[][]) => Math.max(...offsets(arc).map(Math.abs));
+        expect(worst(flipped)).toBeCloseTo(worst(plain), 6);
+
+        // Opposite sides: the extreme excursion changes sign.
+        const extreme = (arc: number[][]) => offsets(arc).reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0);
+        expect(Math.sign(extreme(flipped))).toBe(-Math.sign(extreme(plain)));
     });
 
     it.each(MIRRORABLE.map(n => [String(n), n] as const))('%s keeps its side through an import', (_l, name) => {
