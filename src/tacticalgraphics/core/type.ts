@@ -750,6 +750,7 @@ export enum TacticalGraphicName {
     ObstacleFreeArea = 'ObstacleFreeArea',
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
+    Abatis = 'Abatis',
     ObstacleLine = 'ObstacleLine',
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',

@@ -303,6 +303,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Exploitation]: block,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
+    // Abatis borrows the retrograde holder for its offset handle: that is what carries
+    // both the resize and, through the sign of the same drag, the mirror.
+    [TacticalGraphicName.Abatis]:                 retrograde,
     [TacticalGraphicName.Delay]:                  retrograde,
     [TacticalGraphicName.Withdraw]:               retrograde,
     [TacticalGraphicName.WithdrawUnderPressure]:  retrograde,
