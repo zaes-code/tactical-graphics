@@ -5,6 +5,7 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 
 /** Graphics whose shape + label are verified — the "Draw all samples" set. */
 export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
+    TacticalGraphicName.Abatis,
     TacticalGraphicName.AirCorridor,
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
@@ -200,6 +201,15 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.WeaponSensorRangeFanCircular,
     TacticalGraphicName.WeaponSensorRangeFanSector,
     TacticalGraphicName.WeaponsFreeZone,
+    TacticalGraphicName.WireDoubleApronFence,
+    TacticalGraphicName.WireDoubleFence,
+    TacticalGraphicName.WireDoubleStrandConcertina,
+    TacticalGraphicName.WireHighWireFence,
+    TacticalGraphicName.WireLowWireFence,
+    TacticalGraphicName.WireSingleConcertina,
+    TacticalGraphicName.WireSingleFence,
+    TacticalGraphicName.WireTripleStrandConcertina,
+    TacticalGraphicName.WireUnspecified,
     TacticalGraphicName.Withdraw,
     TacticalGraphicName.WithdrawUnderPressure,
 ];

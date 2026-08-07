@@ -9,9 +9,22 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * generator and differ only by a row in `WIRE_STYLES`. Adding the tenth should be a row,
  * not a class, for the same reason `Phaseline` backs every simple line graphic.
  *
- * The barbed-wire family is an **X mark**, not a fence post: the symbol is the wire, and
- * the graphics separate by *density* rather than by shape. Reading the ladder in
- * `perGroup` / `gap` top to bottom is the whole distinction between them:
+ * Two axes separate the nine, and between them they account for every row:
+ *
+ * - **The mark.** Barbed wire is an `X`, concertina an `O`. Nothing else about it varies.
+ * - **Where the wire runs.** Through the marks' middle, under them, over them, or a
+ *   combination. `railsAt` says which, and it is the whole difference between low and high
+ *   wire fence, and between all three concertinas.
+ *
+ * So the last six are the same three patterns twice over, once per mark:
+ *
+ * ```
+ * low wire fence    X X X X X   under            single concertina   O O O O O   under
+ * high wire fence   X X X X X   under + over     triple concertina   O O O O O   under + over
+ *                                                double concertina   O O O O O   under + centre
+ * ```
+ *
+ * The first three are barbed wire separated by *density* alone - `perGroup` and `gap`:
  *
  * ```
  * unspecified        X X X X X X X X X       (no rail - the marks are the symbol)
@@ -24,30 +37,25 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * size: the marks and the gaps scale together.
  */
 
+/** Where a wire runs relative to the marks it carries. */
+export type WireRail = 'under' | 'centre' | 'over';
+
 /** What a wire graphic repeats along its line. */
 export interface WireStyle {
-    /** `cross` = the barbed-wire X; `loop` = a concertina coil. */
-    mark: 'cross' | 'loop';
+    /** `cross` = the barbed-wire X; `oval` = the concertina O. */
+    mark: 'cross' | 'oval';
     /** Is the wire itself drawn? Unspecified is the one that is not. */
     rail: boolean;
-    /** Marks per group, drawn touching. */
+    /** Which wires are drawn, and where. Defaults to a single one through the middle. */
+    railsAt?: WireRail[];
+    /** Marks per group, drawn touching unless `innerGap` says otherwise. */
     perGroup: number;
     /** Spaces between groups, one space = one mark width. */
     gap: number;
     /** Spaces between the marks *inside* a group. 0 means they touch. */
     innerGap?: number;
-    /**
-     * Run the wire along the bottom of the marks instead of through their middle - the X's
-     * sit on it, underlined. Low wire fence reads this way; high wire fence adds `railOver`
-     * on top of it.
-     */
-    railUnder?: boolean;
-    /** A second wire along the top of the marks - the X's are overlined as well. */
-    railOver?: boolean;
     /** Mark height, as a multiple of the mark width. */
     height: number;
-    /** Parallel strands, spread about the drawn line. Concertina only. */
-    strands?: number;
 }
 
 /**
@@ -64,20 +72,20 @@ const PX = (px: number) => px / WIRE_MARK_PX;
 export const WIRE_MARK_PX = 14;
 
 export const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
-    // Specified by the user, 2026-08-07. The ladder is deliberate: one mark, rising density.
+    // Barbed wire, separated by density alone.
     [TacticalGraphicName.WireUnspecified]: {mark: 'cross', rail: false, perGroup: 1, gap: PX(16), height: 1},
     [TacticalGraphicName.WireSingleFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 6.0, height: 1},
     [TacticalGraphicName.WireDoubleFence]: {mark: 'cross', rail: true, perGroup: 2, gap: 3.5, innerGap: PX(5), height: 1},
     [TacticalGraphicName.WireDoubleApronFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1},
 
-    [TacticalGraphicName.WireLowWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railUnder: true},
-    [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railUnder: true, railOver: true},
-    
-    // NOT YET SPECIFIED - extrapolated. The concertinas keep coils, separating on strand
-    // count; nothing here has been read against the plates.
-    [TacticalGraphicName.WireSingleConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 1},
-    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 2},
-    [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'loop', rail: true, perGroup: 1, gap: 0.8, height: 1, strands: 3},
+    // The last two fences keep double apron's spacing and move the wire off centre.
+    [TacticalGraphicName.WireLowWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under']},
+    [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'over']},
+
+    // Concertina: the same three patterns with an O in place of the X.
+    [TacticalGraphicName.WireSingleConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under']},
+    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'centre']},
+    [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'over']},
 };
 
 export const DEFAULT_WIRE_STYLE: WireStyle = {mark: 'cross', rail: true, perGroup: 1, gap: 6, height: 1};
@@ -89,10 +97,6 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
     constructor(name: TacticalGraphicName) {
         super();
         this.name = name;
-    }
-
-    private style(): WireStyle {
-        return WIRE_STYLES[this.name as TacticalGraphicName] ?? DEFAULT_WIRE_STYLE;
     }
 
     /**

@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**211 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**221 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -751,6 +751,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
 | Restrictive Fire Line | Lines |
+| Abatis | Mobility and Countermobility Control Measures |
 | Alternate Supply Route | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
@@ -780,6 +781,15 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
+| Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Fence | Mobility and Countermobility Control Measures |
+| Wire, Double Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, High Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Low Wire Fence | Mobility and Countermobility Control Measures |
+| Wire, Single Concertina | Mobility and Countermobility Control Measures |
+| Wire, Single Fence | Mobility and Countermobility Control Measures |
+| Wire, Triple Strand Concertina | Mobility and Countermobility Control Measures |
+| Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
@@ -867,7 +877,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Limited Access Area | Areas |
-| Abatis | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
@@ -877,15 +886,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
-| Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
-| Wire, Double Fence | Mobility and Countermobility Control Measures |
-| Wire, Double Strand Concertina | Mobility and Countermobility Control Measures |
-| Wire, High Wire Fence | Mobility and Countermobility Control Measures |
-| Wire, Low Wire Fence | Mobility and Countermobility Control Measures |
-| Wire, Single Concertina | Mobility and Countermobility Control Measures |
-| Wire, Single Fence | Mobility and Countermobility Control Measures |
-| Wire, Triple Strand Concertina | Mobility and Countermobility Control Measures |
-| Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |
