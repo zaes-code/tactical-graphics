@@ -137,6 +137,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.RestrictiveFireLine]:              TacticalGraphicCategory.Lines,
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
+    [TacticalGraphicName.Abatis]:                           TacticalGraphicCategory.MobilityAndCountermobility,
     // Convoy Symbols OK
     // Excluded — see ai/excluded-graphics.md
     // [TacticalGraphicName.HaltedConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
