@@ -53,13 +53,16 @@ export const ANTI_TANK_DITCH_STYLES: Partial<Record<TacticalGraphicName, AntiTan
 export const ANTI_TANK_TOOTH_PX = 30;
 
 /**
- * Tooth height, as a multiple of its base width.
+ * Tooth height, as a multiple of its base width - `sqrt(3) / 2`, which makes the teeth
+ * equilateral.
  *
- * Read off the plate, where the teeth are visibly wider than tall. It is not only a look:
- * with the teeth touching, the notch between two of them is where a mine sits, and a
- * steeper tooth pinches that notch shut. At 0.8 the mines had nowhere legible to go.
+ * It is the steepest the teeth have been, and steepness is what pinches shut the notch a
+ * mine nests in. It stays workable only because the teeth are 30 px: the notch's half-angle
+ * sine is exactly 0.5 for an equilateral tooth, so a mine centred at 0.72 of the tooth
+ * height clears the edges either side by about 4.7 px, wider than the stroke that draws
+ * them. Shrink `ANTI_TANK_TOOTH_PX` and the mines close up again.
  */
-export const ANTI_TANK_HEIGHT_RATIO = 0.6;
+export const ANTI_TANK_HEIGHT_RATIO = Math.sqrt(3) / 2;
 
 export class AntiTankDitch extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string;

@@ -47,6 +47,21 @@ describe('anti-tank ditches', () => {
         }
     });
 
+    // Equilateral, on every state. The ratio is also what governs how open the notch
+    // between two teeth is, so a "tidy" round number here silently squeezes the mines.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s draws equilateral teeth', (_l, name) => {
+        const ringOf = (st: any) => {
+            const g = st.getGeometry();
+            return g instanceof Polygon ? g.getCoordinates()[0] : (g as LineString).getCoordinates();
+        };
+        const tooth = decorations(name).find(st => ringOf(st).length === 4);
+        const [a1, b1, apex] = ringOf(tooth);
+        const side = (p: number[], q: number[]) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+        const base = side(a1, b1);
+        expect(side(b1, apex)).toBeCloseTo(base, 6);
+        expect(side(apex, a1)).toBeCloseTo(base, 6);
+    });
+
     // Fill is the whole distinction between the first two states; the geometry is identical.
     it('outlines under construction and fills completed', () => {
         for (const st of decorations(UNDER)) {
@@ -98,9 +113,15 @@ describe('anti-tank ditches', () => {
     });
 
     // Pixel-constant, the reason the teeth moved into the style function at all.
+    //
+    // Measured on a long route on purpose. `decorationScale` caps the teeth against the
+    // shape's own on-screen size, so on a short one they legitimately shrink as you zoom
+    // out - an earlier version of this test straddled that cap and read the cap engaging
+    // as a loss of pixel-constancy.
     it('keeps teeth the same size on screen across zoom levels', () => {
         const toothPx = (resolution: number) => {
-            const st = decorations(DONE, resolution)[0];
+            const geom = new MultiLineString([[[0, 0], [40000, 0]]]);
+            const st = styleOf(DONE, geom, resolution).slice(1)[0];
             const ring = (st.getGeometry() as Polygon).getCoordinates()[0];
             return Math.hypot(ring[1][0] - ring[0][0], ring[1][1] - ring[0][1]) / resolution;
         };
