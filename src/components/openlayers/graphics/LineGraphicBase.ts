@@ -29,6 +29,7 @@ import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
+import {decorationMetres} from './decorationPx';
 
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
@@ -216,7 +217,9 @@ export class LineGraphicBase implements LineGraphic {
     private sizeOverride: number | undefined;
 
     private graphicSize(): number {
-        return this.sizeOverride ?? this.resolution ?? 0;
+        // Per-name, because this holder serves 41 graphics and they do not all bake a
+        // decoration of the same size. @see decorationMetres
+        return this.sizeOverride ?? decorationMetres(this.graphicName, this.resolution ?? 0);
     }
 
     /**
