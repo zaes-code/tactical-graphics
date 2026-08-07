@@ -1,7 +1,6 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {BaseGraphicOptions, TacticalGraphicName} from '../core/type';
-import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojson';
-import * as turf from '@turf/turf';
+import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
 
 /**
  * The wire obstacles of FM 1-02.2 table 5-19 (constructed obstacle symbols).
