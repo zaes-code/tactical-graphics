@@ -22,11 +22,7 @@ import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {Position} from 'geojson';
-import {
-    BASE_FONT_SIZE_PX,
-    DEFAULT_PALETTE,
-    getDefaultLabelSize,
-} from '@zaes/tactical-graphics';
+import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The colour table, the line weight and the three label-scale formulas now live in the
  * map-agnostic half (`core/symbology.ts`) — none of them mentions OpenLayers, and a
