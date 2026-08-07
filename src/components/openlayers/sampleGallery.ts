@@ -144,6 +144,9 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.WireSingleConcertina,
     TacticalGraphicName.WireDoubleStrandConcertina,
     TacticalGraphicName.WireTripleStrandConcertina,
+    TacticalGraphicName.AntiTankDitchUnderConstruction,
+    TacticalGraphicName.AntiTankDitchCompleted,
+    TacticalGraphicName.AntiTankDitchReinforcedWithMines,
 ]);
 
 /**
