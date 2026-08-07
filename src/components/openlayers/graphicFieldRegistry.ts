@@ -88,6 +88,8 @@ function f(
 
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
+/** Affiliation is the only thing these carry - the wire obstacles. */
+const HOSTILITY_ONLY = f(false, false, false, false, true);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
 /** Generic line: identifier + start/end date at both ends. */
 const GENERIC_LINE = f(true, false, false, false, true);
@@ -292,15 +294,15 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Retrograde / enabling operations (Chapter 5) ─────────────────────────
     // FM Table 5-12 note: "W and W1 are optional amplifiers" for retrograde tasks.
     [TacticalGraphicName.Abatis]: SHAPE_ONLY,
-    [TacticalGraphicName.WireUnspecified]: SHAPE_ONLY,
-    [TacticalGraphicName.WireSingleFence]: SHAPE_ONLY,
-    [TacticalGraphicName.WireDoubleFence]: SHAPE_ONLY,
-    [TacticalGraphicName.WireDoubleApronFence]: SHAPE_ONLY,
-    [TacticalGraphicName.WireLowWireFence]: SHAPE_ONLY,
-    [TacticalGraphicName.WireHighWireFence]: SHAPE_ONLY,
-    [TacticalGraphicName.WireSingleConcertina]: SHAPE_ONLY,
-    [TacticalGraphicName.WireDoubleStrandConcertina]: SHAPE_ONLY,
-    [TacticalGraphicName.WireTripleStrandConcertina]: SHAPE_ONLY,
+    [TacticalGraphicName.WireUnspecified]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireSingleFence]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireDoubleFence]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireDoubleApronFence]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireLowWireFence]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireHighWireFence]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireSingleConcertina]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireDoubleStrandConcertina]: HOSTILITY_ONLY,
+    [TacticalGraphicName.WireTripleStrandConcertina]: HOSTILITY_ONLY,
     [TacticalGraphicName.Delay]: SHAPE_ONLY,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
