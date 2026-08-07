@@ -18,6 +18,7 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
+import {decorationMetres} from './decorationPx';
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -121,7 +122,7 @@ export class MovementGraphicBase implements LineGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: this.resolution}
+            {radius: this.offset, size: decorationMetres(this.graphicName, this.resolution)}
         );
         if (!tacticalGraphic) return;
 
