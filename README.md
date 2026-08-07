@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**221 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**228 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -756,10 +756,16 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Alternate Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Alternate Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
+| Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
 | Assault Crossing | Mobility and Countermobility Control Measures |
 | Block | Mobility and Countermobility Control Measures |
 | Bridge | Mobility and Countermobility Control Measures |
 | Disrupt | Mobility and Countermobility Control Measures |
+| Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
+| Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
 | Ferry Crossing | Mobility and Countermobility Control Measures |
 | Fix | Mobility and Countermobility Control Measures |
 | Ford, Difficult | Mobility and Countermobility Control Measures |
@@ -776,6 +782,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
@@ -877,15 +884,8 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Limited Access Area | Areas |
-| Anti-Tank Ditch - Completed | Mobility and Countermobility Control Measures |
-| Anti-Tank Ditch - Under Construction | Mobility and Countermobility Control Measures |
-| Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Mobility and Countermobility Control Measures |
-| Explosives, Planned State Of Readiness | Mobility and Countermobility Control Measures |
-| Explosives, State Of Readiness 1 (safe) | Mobility and Countermobility Control Measures |
-| Explosives, State Of Readiness 2 (armed But Passable) | Mobility and Countermobility Control Measures |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |

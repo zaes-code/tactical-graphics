@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES, ANTI_TANK_DITCH_STYLES, ANTI_TANK_DITCH_TEETH} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES, ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4051,35 +4051,95 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  */
 
 /**
- * The three anti-tank ditches: triangular teeth, outlined or filled, with mines between
- * them on the reinforced state.
+ * The three anti-tank ditches: triangular teeth along the drawn route, with a mine nested
+ * in each notch on the reinforced state.
  *
- * Fill is the entire difference between "under construction" and "completed", and a
- * MultiLineString cannot carry one - so the generator emits closed rings in a fixed order
- * (teeth first, then mines) and this turns them into filled Polygons or plain strokes.
- * `ANTI_TANK_DITCH_STYLES` lives beside the generator so a second renderer reads the same
- * table rather than reinventing which state is solid.
+ * Teeth are screen-sized and capped by `decorationScale`, like the wire marks and the
+ * fortified merlons - so they hold their size at every zoom and drop out on a route too
+ * short to carry them, leaving the bare line.
+ *
+ * They **touch**: consecutive bases share a corner, and the notch between two teeth is what
+ * a mine sits in. The run is centred on the route and always starts and ends with a tooth,
+ * because a mine with no tooth beside it has no notch to nest in.
+ *
+ * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
  */
 export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return f => {
+    return (f, resolution) => {
         const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const rings = geom.getCoordinates();
-        if (!rings.length) return [];
+        if (!geom) return [];
+        const path: Coordinate[] =
+            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
+        if (path.length < 2) return [];
 
         const color = readHostilityColor(f);
-        const {filled} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
+        const {filled, mines} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
+        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
+        const styles: Style[] = [new Style({geometry: new LineString(path), stroke: stroke()})];
 
-        return rings.map((ring, i) => {
-            // Mines are always solid - they are mines, not an outline of one - so the fill
-            // flag only governs the teeth.
-            const solid = filled || i >= ANTI_TANK_DITCH_TEETH;
-            return new Style({
-                geometry: solid ? new Polygon([ring]) : new LineString(ring),
-                stroke: new Stroke({color, width: LINE_WIDTH()}),
-                fill: solid ? new Fill({color}) : undefined,
-            });
-        });
+        const scale = decorationScale(path, false, resolution, ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO);
+        const width = ANTI_TANK_TOOTH_PX * scale * resolution;
+        if (width <= 0) return styles;
+
+        const depth = width * ANTI_TANK_HEIGHT_RATIO;
+        const total = pathLength(path);
+
+        // The route is divided into equal slots, each holding one tooth. On the reinforced
+        // state the slots alternate tooth, mine, tooth, mine, tooth - so the slot count is
+        // forced odd, which is what makes the run start and end with a tooth. A mine at
+        // either end would have no tooth beside it.
+        let slots = Math.floor(total / width);
+        if (mines && slots % 2 === 0) slots -= 1;
+        if (slots < 1 || (mines && slots < 3)) return styles;
+
+        // Centre the run, so the pattern sits on the route rather than flush to one end.
+        const lead = (total - slots * width) / 2;
+
+        /** A point `along` the route, `off` metres to the tooth side of it. */
+        const at = (along: number, off: number): Coordinate | null => {
+            const p = walkPath(path, Math.min(Math.max(along, 0), total));
+            if (!p) return null;
+            const [tx, ty] = p.tangent;
+            return [p.point[0] - ty * off, p.point[1] + tx * off];
+        };
+
+        // A mine fills its own slot rather than nesting in the notch between two teeth.
+        // Nesting is what the wording suggests, but with the teeth touching *and* filled the
+        // disc merges into them and the whole run reads as one black band - the plate keeps
+        // the mines legible by giving them their own place in the sequence.
+        const radius = width * 0.34;
+
+        for (let i = 0; i < slots; i++) {
+            const isMine = mines && i % 2 === 1;
+            if (!isMine) {
+                const a = at(lead + i * width, 0);
+                const b = at(lead + (i + 1) * width, 0);
+                const apex = at(lead + (i + 0.5) * width, -depth);
+                if (!a || !b || !apex) continue;
+                const ring = [a, b, apex, a];
+                styles.push(
+                    new Style({
+                        geometry: filled ? new Polygon([ring]) : new LineString(ring),
+                        stroke: stroke(),
+                        fill: filled ? new Fill({color}) : undefined,
+                    }),
+                );
+                continue;
+            }
+
+            // Tangent to the route from below, so the mine hangs off it as the teeth do.
+            const centre = at(lead + (i + 0.5) * width, -radius);
+            if (!centre) continue;
+            const ring: Coordinate[] = [];
+            for (let d = 0; d <= 360; d += 20) {
+                const t = (d * Math.PI) / 180;
+                ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
+            }
+            // Mines are mines, not outlines of one - always solid, whatever the teeth do.
+            styles.push(new Style({geometry: new Polygon([ring]), stroke: stroke(), fill: new Fill({color})}));
+        }
+
+        return styles;
     };
 }
 
