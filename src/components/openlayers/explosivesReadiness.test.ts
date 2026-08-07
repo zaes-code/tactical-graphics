@@ -12,6 +12,9 @@ const SAFE = TacticalGraphicName.ExplosivesStateOfReadiness1Safe;
 const ARMED = TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable;
 const NAMES = [PLANNED, SAFE, ARMED];
 
+/** Screen pixels the symbol is dropped at - keep in step with controllerRegistry. */
+const EXPLOSIVES_DEFAULT_PX = 100;
+
 const render = (name: TacticalGraphicName, radius = 600, rotation = 0) =>
     renderTacticalGraphic({
         type: 'Feature',
@@ -107,11 +110,11 @@ describe('explosives states of readiness', () => {
     it.each(NAMES.map(n => [String(n), n] as const))('%s dashes visibly at map scale', (_l, name) => {
         const res = 20;
         const handler: any = getController(name, res);
-        handler.graphic.updateGeom({size: res * 50, center: [500000, 2000000], rotation: 0});
+        handler.graphic.updateGeom({size: res * EXPLOSIVES_DEFAULT_PX, center: [500000, 2000000], rotation: 0});
         const graphic = handler.getFeatures().find((f: any) => f.get('role') === 'graphic');
         const styles = (graphic.getStyle() as any)(graphic, res);
 
-        const barPx = (res * 50) / res;
+        const barPx = EXPLOSIVES_DEFAULT_PX;
         for (const st of styles) {
             const dash = st.getStroke().getLineDash();
             if (!dash) continue;

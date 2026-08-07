@@ -133,10 +133,11 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
  * shape's integrity is never at risk, and rotation stays off: `PointDropController`
  * no-ops it and the generator ignores it besides.
  *
- * `res * 50` is Suppress's default size, the starting point these were specified from.
+ * `res * 100` — twice Suppress's `res * 50`, which was only the starting point these were
+ * specified from, not the size they landed on.
  */
 const explosivesReadiness = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50, true);
+    new PointDropController(new MissionTaskGraphicBase(name, res * 100, res), res * 100, true);
 
 const crossedTask = (name: TacticalGraphicName, res: number) =>
     new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
