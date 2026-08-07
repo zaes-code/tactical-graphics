@@ -48,6 +48,14 @@ const MIN_RESIZE_ORIGIN_PX = 8;
  */
 const MIRROR_FLIP_MIN_PX = 6;
 
+/**
+ * How far past its own axis, in screen pixels, a handle has to be dragged before a
+ * point-anchored graphic flips. Much larger than `MIRROR_FLIP_MIN_PX`: on these graphics a
+ * handle drag normally means rotate, so the flip has to be a deliberate excursion rather
+ * than anything a rotation could brush past.
+ */
+const MIRROR_PAST_AXIS_MIN_PX = 40;
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -427,6 +435,37 @@ export class TacticalGraphicsManager {
         }
     };
 
+    /**
+     * Flips an asymmetric point-anchored graphic when a handle is dragged well past the
+     * far side of its own long axis.
+     *
+     * Rotate is the primary meaning of a handle drag on these graphics, so the flip has to
+     * be a gesture rotate cannot produce. It is measured **in resize/edit mode only**,
+     * where the rotation is held still and the cursor is therefore free to sit off the
+     * axis — during a rotate the axis follows the cursor, so the perpendicular is always
+     * ~0 and no such test could work.
+     *
+     * The threshold is generous for the same reason `MIRROR_FLIP_MIN_PX` exists on the
+     * line graphics: crossing the axis is easy to do by accident, going a long way past it
+     * is not.
+     */
+    private mirrorIfDraggedPastAxis(evt: MapBrowserEvent, center: number[]) {
+        const controller = this.activeController;
+        if (!controller?.setMirrored) return;
+
+        const rotationDeg = (controller.graphic as {rotation?: number}).rotation ?? 0;
+        // Planar angle, 0 = east, matching how these generators build their local frames.
+        const axis = (rotationDeg * Math.PI) / 180;
+        const dx = evt.coordinate[0] - center[0];
+        const dy = evt.coordinate[1] - center[1];
+        // Perpendicular component of the cursor about the graphic's own axis.
+        const perpendicular = -dx * Math.sin(axis) + dy * Math.cos(axis);
+
+        const resolution = this.map.getView().getResolution() ?? 1;
+        if (Math.abs(perpendicular) < MIRROR_PAST_AXIS_MIN_PX * resolution) return;
+        controller.setMirrored(perpendicular >= 0);
+    }
+
     handleCircleDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
         let center = this.activeController.getBaseGeometry() as number[];
@@ -456,6 +495,7 @@ export class TacticalGraphicsManager {
                 if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
                     this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
                 } else {
+                    this.mirrorIfDraggedPastAxis(evt, center);
                     // Calculate distance to center for scaling
                     this.handleResize(evt);
                 }
