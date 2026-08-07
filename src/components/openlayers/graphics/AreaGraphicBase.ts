@@ -7,6 +7,7 @@ import openlayersAdapter from '../openlayersAdapter';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
+import {decorationMetres} from './decorationPx';
 
 export class AreaGraphicBase implements PolygonGraphic {
     // open layers related
@@ -93,7 +94,7 @@ export class AreaGraphicBase implements PolygonGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.size, hostility: this.graphicLabels.hostility},
+            {size: decorationMetres(this.graphicName, this.size), hostility: this.graphicLabels.hostility},
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
