@@ -187,11 +187,6 @@ renderTacticalGraphic({
 });
 ```
 
-> **Known issue.** The generators that read `decorationSize` still treat it as meters per
-> *screen pixel* and multiply by a pixel count of their own, so a value in meters comes out
-> around 20x too large. Eleven graphics are affected; see `ai/decisions.md`. Pass a value
-> around 1/20 of the size you want until that is fixed.
-
 Omit any of them and the graphic falls back to its own default.
 
 ### Which base geometry does a graphic need?
