@@ -18,6 +18,7 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
+import {decorationMetres} from './decorationPx';
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -56,6 +57,20 @@ export class MovementGraphicBase implements LineGraphic {
      * render from the number of handle points the generator returned.
      */
     protected hasOffsetHandle: boolean = true;
+
+    /**
+     * Which side an asymmetric movement graphic hangs its arrow on — MobileDefense's,
+     * which leaves from one of the two ellipse arcs. Driven by the sign of the same
+     * offset drag that sets the width. @see TacticalGraphicHandler.setMirrored
+     */
+    mirrored: boolean = false;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean) {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGeometry();
+    }
 
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
         this.offset = offset;
@@ -114,14 +129,14 @@ export class MovementGraphicBase implements LineGraphic {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         // `radius` travels with the amplifiers — a bare write would drop the offset.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {radius: this.offset});
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
     };
 
     updateGeometry = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: this.resolution}
+            {radius: this.offset, size: decorationMetres(this.graphicName, this.resolution), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
 
@@ -148,7 +163,9 @@ export class MovementGraphicBase implements LineGraphic {
         // drawing resolution. Published after the offset-handle test above so the write
         // covers the feature set that actually exists.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
-            radius: this.offset,
+            // Stamped as a full width; `offset` is the half-width the generator takes.
+            width: this.offset * 2,
+            mirrored: this.mirrored,
         });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {

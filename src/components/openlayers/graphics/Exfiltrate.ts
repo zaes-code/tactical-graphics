@@ -5,6 +5,7 @@ import {createBaseFeature, createFeature, createHandleFeature, exfiltrateStyleFu
 import {MultiPoint} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 /**
  * Holder for Exfiltrate.
@@ -53,7 +54,23 @@ export class Exfiltrate implements LineGraphic {
             this.base.getGeometry()?.getCoordinates()[0],
             this.hidesStartHandle,
         )));
+
+        // Persist the *effective* metre value rather than the viewport factor behind it,
+        // so a restore replays a distance instead of re-deriving one from whatever zoom
+        // the loading session happens to be at.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            decorationSize: this.size,
+        });
     };
+
+    /**
+     * Replays a stamped size. This graphic has no width handle — the hook exists so
+     * restore, which calls `setOffset` for the whole line family, can hand the size back.
+     */
+    setOffset(size: number) {
+        this.size = size;
+        this.updateGeometry();
+    }
 
     getBaseGraphicFeature = (): Feature<LineString> => this.base;
 

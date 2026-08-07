@@ -47,6 +47,15 @@ export class ReliefInPlace implements LineGraphic {
         const handleCoords = (handles as MultiPoint).getCoordinates();
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        // Persist the *effective* metre value, not the viewport factor it came from.
+        // `size` starts life as `20 x drawingResolution`, but what the generator actually
+        // consumed is a distance in metres — and that is what a snapshot can carry and a
+        // restore can replay without knowing anything about zoom. Stamped on every
+        // rebuild, not just on a width drag, so a graphic the user never touched still
+        // describes itself.
+        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+            decorationSize: this.size,
+        });
     };
 
     getBaseGraphicFeature = (): Feature<LineString> => this.base;
@@ -65,10 +74,10 @@ export class ReliefInPlace implements LineGraphic {
         this.size = offset;
         this.updateGeometry();
         // `size` here is the width the user dragged, not a construction-time constant,
-        // so it has to be saved. Persisted as `radius` — the schema's name for an
-        // offset-style scalar — to keep it distinct from a generator `size` default.
+        // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
+        // decoration, and is not a reach from any centre. @see TacticalGraphicProperties.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
         });
     }
 

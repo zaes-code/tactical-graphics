@@ -135,6 +135,18 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.StrongPoint,
     TacticalGraphicName.ForwardLineOfOwnTroops,
     TacticalGraphicName.LineOfContact,
+    TacticalGraphicName.WireUnspecified,
+    TacticalGraphicName.WireSingleFence,
+    TacticalGraphicName.WireDoubleFence,
+    TacticalGraphicName.WireDoubleApronFence,
+    TacticalGraphicName.WireLowWireFence,
+    TacticalGraphicName.WireHighWireFence,
+    TacticalGraphicName.WireSingleConcertina,
+    TacticalGraphicName.WireDoubleStrandConcertina,
+    TacticalGraphicName.WireTripleStrandConcertina,
+    TacticalGraphicName.AntiTankDitchUnderConstruction,
+    TacticalGraphicName.AntiTankDitchCompleted,
+    TacticalGraphicName.AntiTankDitchReinforcedWithMines,
 ]);
 
 /**

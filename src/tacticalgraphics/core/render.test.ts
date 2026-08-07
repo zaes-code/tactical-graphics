@@ -20,7 +20,7 @@ const axisFeature = (): Feature => ({
             name: TacticalGraphicName.MainAxisOfAdvance,
             label: '1-508 IN',
             hostility: TacticalGraphicHostility.friend,
-            radius: 300,
+            width: 300,
         },
     },
 });
@@ -28,7 +28,7 @@ const axisFeature = (): Feature => ({
 const secureFeature = (): Feature => ({
     type: 'Feature',
     geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
-    properties: {tacticalGraphic: {name: TacticalGraphicName.Secure, size: 1000, rotation: 0}},
+    properties: {tacticalGraphic: {name: TacticalGraphicName.Secure, radius: 1000, rotation: 0}},
 });
 
 describe('registry', () => {
@@ -59,7 +59,7 @@ describe('the retrograde cane hook follows its line', () => {
         const {graphic} = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'LineString', coordinates: [START, end]},
-            properties: {tacticalGraphic: {name: TacticalGraphicName.Retirement, size: 1500}},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Retirement, radius: 1500}},
         });
         const parts = (graphic.geometry as MultiLineString).coordinates;
         return {end, arc: parts[parts.length - 1]};
@@ -181,7 +181,7 @@ describe('toFeatureCollection', () => {
 const pointTask = (name: TacticalGraphicName): Feature => ({
     type: 'Feature',
     geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
-    properties: {tacticalGraphic: {name, size: 1000, rotation: 0}},
+    properties: {tacticalGraphic: {name, radius: 1000, rotation: 0}},
 });
 
 describe('crossed mission tasks', () => {
@@ -274,7 +274,7 @@ describe('Turn', () => {
     it('sizes the arrowhead off headSize, so a resize leaves it alone', () => {
         const headSpan = (size: number) => {
             const f = pointTask(TacticalGraphicName.TacticalTurn);
-            (f.properties as any).tacticalGraphic.size = size;
+            (f.properties as any).tacticalGraphic.radius = size;
             (f.properties as any).tacticalGraphic.headSize = 300;
             const [, head] = (renderTacticalGraphic(f, {headSize: 300} as any).graphic.geometry as any).geometries;
             const ring = head.coordinates[0] as number[][];
@@ -323,7 +323,7 @@ describe('decorated graphics emit the drawn shape', () => {
     const area = (name: TacticalGraphicName): Feature => ({
         type: 'Feature',
         geometry: {type: 'Polygon', coordinates: [RING]},
-        properties: {tacticalGraphic: {name, size: 30}},
+        properties: {tacticalGraphic: {name, radius: 30}},
     });
 
     it.each([
@@ -343,7 +343,7 @@ describe('decorated graphics emit the drawn shape', () => {
         const geometry = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'LineString', coordinates: drawn},
-            properties: {tacticalGraphic: {name: TacticalGraphicName.ObstacleLine, size: 30}},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.ObstacleLine, radius: 30}},
         }).graphic.geometry as any;
         expect(geometry.type).toBe('LineString');
         expect(geometry.coordinates).toEqual(drawn);
@@ -362,7 +362,7 @@ describe('decorated graphics emit the drawn shape', () => {
         const geometry = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'LineString', coordinates: drawn},
-            properties: {tacticalGraphic: {name, size: 30}},
+            properties: {tacticalGraphic: {name, radius: 30}},
         }).graphic.geometry as any;
         expect(geometry.type).toBe(type);
         expect(geometry.coordinates).toEqual(drawn);
@@ -372,7 +372,7 @@ describe('decorated graphics emit the drawn shape', () => {
         const geometry = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'Polygon', coordinates: [RING]},
-            properties: {tacticalGraphic: {name: TacticalGraphicName.FortifiedArea, size: 30}},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.FortifiedArea, radius: 30}},
         }).graphic.geometry as any;
         expect(geometry.type).toBe('Polygon');
         expect(geometry.coordinates[0]).toEqual(RING);
@@ -428,7 +428,7 @@ describe('labelGapDegrees on the arc mission tasks', () => {
     const secureWith = (labelGapDegrees?: number): Feature => ({
         type: 'Feature',
         geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
-        properties: {tacticalGraphic: {name: TacticalGraphicName.Secure, size: 1000, rotation: 0, labelGapDegrees}},
+        properties: {tacticalGraphic: {name: TacticalGraphicName.Secure, radius: 1000, rotation: 0, labelGapDegrees}},
     });
 
     it('defaults to a 15° half-gap, so a raw-GeoJSON consumer gets a legible hole', () => {

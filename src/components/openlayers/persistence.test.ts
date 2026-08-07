@@ -8,7 +8,8 @@
  */
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
-import {Point} from 'ol/geom';
+import {LineString, Point} from 'ol/geom';
+import type Geometry from 'ol/geom/Geometry';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
@@ -23,6 +24,16 @@ import {restoreTacticalGraphics, serializeTacticalGraphics, SNAPSHOT_VERSION} fr
 
 /** The resolution graphics are "drawn" at. Baked into every decoration size. */
 const RES = 1200;
+/**
+ * The resolution the map is showing when a snapshot is *restored* — deliberately not
+ * `RES`, because restoring at the zoom you drew at is the exceptional case, not the
+ * normal one.
+ *
+ * Deliberately **larger** than `RES` (restoring zoomed out). The minimum-length guards
+ * only extend a line when the restore-time floor exceeds the drawn length, so a smaller
+ * value would let those tests pass whether or not the guard is suspended.
+ */
+const VIEW_RES = RES * 4;
 const CX = 500_000;
 const CY = 2_000_000;
 
@@ -38,7 +49,15 @@ function fakeManager() {
     return {
         renderingVectorSource: new VectorSource(),
         graphicControllers: [] as TacticalGraphicHandler[],
-        map: {getView: () => ({on: (event: string) => resolutionListeners.push(event)})},
+        // `getResolution` is the *current* view resolution, deliberately different from
+        // the RES graphics were drawn at: restore re-anchors a security operation to the
+        // live zoom, and the two being equal would let that pass without doing anything.
+        map: {
+            getView: () => ({
+                on: (event: string) => resolutionListeners.push(event),
+                getResolution: () => VIEW_RES,
+            }),
+        },
         // Restore subscribes through the manager now rather than reaching for the view
         // itself, so the stand-in has to offer the same three methods. They record
         // instead of subscribing — `resolutionListeners` is what the assertions read.
@@ -113,6 +132,12 @@ function roundTrip(from: TacticalGraphicsManager) {
 }
 
 /** One graphic per holder family — the families are what differ, not the 198 names. */
+/** Cover / Guard / Screen — the fixed-on-screen family, which restores differently. */
+const handlerIsSecurityOperation = (name: TacticalGraphicName): boolean =>
+    name === TacticalGraphicName.Cover ||
+    name === TacticalGraphicName.Guard ||
+    name === TacticalGraphicName.Screen;
+
 const FAMILIES: [label: string, name: TacticalGraphicName][] = [
     ['line', TacticalGraphicName.PhaseLine],
     ['polygon', TacticalGraphicName.ObjectiveArea],
@@ -160,6 +185,26 @@ describe('every holder family round-trips', () => {
             .find(f => f.get('role') === 'graphic')?.getGeometry();
 
         expect(after?.getType()).toBe(before?.getType());
+
+        if (handlerIsSecurityOperation(name)) {
+            // A security operation is sized in screen pixels x the *live* map
+            // resolution, so restoring it at a different zoom must come back a
+            // different size in metres — that is exactly what holding a constant
+            // on-screen size means. Assert the relationship rather than equality:
+            // same centre, width scaled by precisely the resolution ratio.
+            const width = (g?: Geometry) => {
+                const e = g?.getExtent() ?? [0, 0, 0, 0];
+                return e[2] - e[0];
+            };
+            const centre = (g?: Geometry) => {
+                const e = g?.getExtent() ?? [0, 0, 0, 0];
+                return (e[0] + e[2]) / 2;
+            };
+            expect(width(after) / width(before)).toBeCloseTo(VIEW_RES / RES, 6);
+            expect(centre(after)).toBeCloseTo(centre(before), 3);
+            return;
+        }
+
         expectMetresClose([...(after?.getExtent() ?? [])], [...(before?.getExtent() ?? [])]);
     });
 });
@@ -176,26 +221,24 @@ describe('the snapshot', () => {
         expect(snapshot.tacticalGraphicsVersion).toBe(SNAPSHOT_VERSION);
     });
 
-    it('files renderer state under `renderer`, apart from the doctrinal bag', () => {
+    it('carries no renderer bag — the graphic is described by `tacticalGraphic` alone', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.TacticalBlock);
         const [feature] = serializeTacticalGraphics(from).features;
 
-        expect(feature.properties?.renderer).toEqual({drawingResolution: RES});
-        // The portable bag must not carry viewport quantities.
+        // The whole point: a reader needs nothing but the portable bag.
+        expect(feature.properties).not.toHaveProperty('renderer');
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('drawingResolution');
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
     });
 
-    it('keeps a security operation scale in `renderer`, not in the graphic', () => {
+    it('writes no viewport quantity for a security operation either', () => {
         const from = fakeManager();
         const handler = build(from, TacticalGraphicName.Cover) as SecurityOperationsController;
         handler.graphic.setScale(1.9);
 
         const [feature] = serializeTacticalGraphics(from).features;
-        const renderer = feature.properties?.renderer as {drawingResolution: number; scale: number};
-        expect(renderer.drawingResolution).toBe(RES);
-        expect(renderer.scale).toBeCloseTo(1.9, 6);
+        expect(feature.properties).not.toHaveProperty('renderer');
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
     });
 
@@ -245,7 +288,7 @@ describe('editable state survives', () => {
         expectMetresClose(restored.graphic.center, [CX, CY]);
     });
 
-    it('keeps a security operation’s rotation and scale', () => {
+    it('keeps a security operation’s rotation — but no longer its scale', () => {
         const from = fakeManager();
         const handler = build(from, TacticalGraphicName.Cover) as SecurityOperationsController;
         handler.graphic.setRotation(0.7);
@@ -255,8 +298,14 @@ describe('editable state survives', () => {
         expect(report.failed).toEqual([]);
 
         const restored = to.graphicControllers[0] as SecurityOperationsController;
+        // Rotation is degrees — portable, and it lives in the doctrinal bag.
         expect(restored.graphic.getRotation()).toBeCloseTo(0.7, 6);
-        expect(restored.graphic.getScale()).toBeCloseTo(1.8, 6);
+        // `scale` does not survive any more, and that is deliberate: it lived in the
+        // `renderer` bag an earlier design carried. Nothing in the app sets it
+        // (SecurityOperationsController.handleResize is a no-op), so this only costs a
+        // host that called setScale programmatically. Asserted rather than left
+        // untested so the loss is visible if that ever stops being acceptable.
+        expect(restored.graphic.getScale()).not.toBeCloseTo(1.8, 6);
     });
 
     it('keeps a movement graphic’s dragged width', () => {
@@ -297,30 +346,61 @@ describe('editable state survives', () => {
     });
 });
 
-describe('the drawing resolution is load-bearing, not incidental', () => {
-    it('rebuilds a different shape when the wrong resolution is used', () => {
+describe('the drawing resolution is no longer load-bearing', () => {
+    it('rebuilds the same shape whatever resolution it is handed', () => {
         const from = fakeManager();
         const original = build(from, TacticalGraphicName.TacticalBlock);
         const trueExtent = original.graphic.getFeatures()
             .find(f => f.get('role') === 'graphic')!.getGeometry()!.getExtent();
 
-        // Same snapshot, but the saved resolution replaced by the "current view" one —
-        // the mistake this field exists to prevent.
+        // The inverse of what this suite used to assert. Every holder now sizes itself
+        // from the geometry it was drawn on, so feeding restore a wildly wrong
+        // resolution must change nothing — that is what makes the snapshot portable.
         const snapshot = serializeTacticalGraphics(from);
-        (snapshot.features[0].properties!.renderer as {drawingResolution: number})
-            .drawingResolution = RES * 4;
+        snapshot.features[0].properties!.renderer = {drawingResolution: RES * 4};
 
         const to = fakeManager();
         expect(restoreTacticalGraphics(to, snapshot).restored).toBe(1);
-        const wrongExtent = to.graphicControllers[0].graphic.getFeatures()
+        const rebuilt = to.graphicControllers[0].graphic.getFeatures()
             .find(f => f.get('role') === 'graphic')!.getGeometry()!.getExtent();
 
-        // Not a tolerance comparison: the point is that these are visibly different.
-        expect(Math.abs(wrongExtent[2] - wrongExtent[0]))
-            .not.toBeCloseTo(Math.abs(trueExtent[2] - trueExtent[0]), 0);
+        expect(Math.abs(rebuilt[2] - rebuilt[0]))
+            .toBeCloseTo(Math.abs(trueExtent[2] - trueExtent[0]), 3);
     });
 
-    it('refuses a record with no drawing resolution rather than guessing', () => {
+    /**
+     * The families list uses PhaseLine for the line case, which has no minimum-length
+     * guard — so nothing above covers the two graphics that do. Their guards *modify
+     * base geometry* against a screen-pixel floor, which on a restore at a different
+     * zoom would silently extend the drawn line.
+     */
+    it.each([
+        ['aviation direction of attack', TacticalGraphicName.AviationDirectionOfAttack],
+        ['tactical fix', TacticalGraphicName.TacticalFix],
+        ['fix', TacticalGraphicName.Fix],
+    ])('%s keeps its drawn base geometry through a restore', (_label, name) => {
+        const from = fakeManager();
+        const original = build(from, name);
+        const {to, report} = roundTrip(from);
+
+        expect(report.failed).toEqual([]);
+        // Not "close enough": the guard extends the first segment, so any drift here is
+        // the graphic quietly growing a longer line than the user drew.
+        expectMetresClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
+    });
+
+    it('still enforces the minimum length on a fresh draw', () => {
+        // The guard must survive the restore exemption — it is what stops a click-click
+        // producing a line too short for the symbol to fit in.
+        const handler = getController(TacticalGraphicName.Fix, RES);
+        const tiny = new Feature(new LineString([[CX, CY], [CX + 10, CY]]));
+        handler.setBaseFeature(tiny as never);
+
+        const drawn = (handler.graphic.base.getGeometry() as LineString).getLength();
+        expect(drawn).toBeGreaterThan(10);
+    });
+
+    it('restores a record carrying nothing but the portable bag', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.PhaseLine);
         const snapshot = serializeTacticalGraphics(from);
@@ -328,8 +408,11 @@ describe('the drawing resolution is load-bearing, not incidental', () => {
 
         const to = fakeManager();
         const report = restoreTacticalGraphics(to, snapshot);
-        expect(report.restored).toBe(0);
-        expect(report.failed[0].error).toMatch(/drawingResolution/);
+        // Restore used to refuse this outright rather than guess. It no longer has to
+        // guess: the holder derives its size from the base geometry, so a record with
+        // nothing but `tacticalGraphic` is complete.
+        expect(report.failed).toEqual([]);
+        expect(report.restored).toBe(1);
     });
 });
 

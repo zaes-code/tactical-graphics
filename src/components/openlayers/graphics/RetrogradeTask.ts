@@ -16,6 +16,20 @@ import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicP
 export class RetrogradeTask implements LineGraphic {
     rotation: number = 0;
     size: number = 1;
+    /**
+     * Which side of the drawn line the cane hangs on. User intent, so it is stamped and
+     * replayed — and expressed relative to the line's bearing, so it survives rotation.
+     * @see GeometryService.getCaneArrow
+     */
+    mirrored: boolean = false;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean) {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGeometry();
+        this.publish();
+    }
     name: TacticalGraphicName;
 
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
@@ -43,7 +57,7 @@ export class RetrogradeTask implements LineGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
             this.base,
-            {size: this.size}
+            {size: this.size, mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
 
@@ -54,6 +68,13 @@ export class RetrogradeTask implements LineGraphic {
 
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        // Persist the *effective* metre value, not the viewport factor it came from.
+        // `size` starts life as `20 x drawingResolution`, but what the generator actually
+        // consumed is a distance in metres — and that is what a snapshot can carry and a
+        // restore can replay without knowing anything about zoom. Stamped on every
+        // rebuild, not just on a width drag, so a graphic the user never touched still
+        // describes itself.
+        this.publish();
     };
 
 
@@ -77,10 +98,16 @@ export class RetrogradeTask implements LineGraphic {
         this.size = offset;
         this.updateGeometry();
         // `size` here is the width the user dragged, not a construction-time constant,
-        // so it has to be saved. Persisted as `radius` — the schema's name for an
-        // offset-style scalar — to keep it distinct from a generator `size` default.
+        // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
+        // decoration, and is not a reach from any centre. @see TacticalGraphicProperties.
+        this.publish();
+    }
+
+    /** Republishes the amplifiers with the geometry state beside them. */
+    private publish() {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
+            decorationSize: this.size,
+            mirrored: this.mirrored,
         });
     }
 
