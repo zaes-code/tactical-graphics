@@ -47,7 +47,7 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     if (f.altitude2) labels.maxAltitude = '2000';
     if (f.grids) labels.grid = '18SUJ2345';
     if (f.weapon) labels.weapon = 'M252 81mm';
-    return labels as GraphicLabels;
+    return labels as unknown as GraphicLabels;
 }
 
 const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
