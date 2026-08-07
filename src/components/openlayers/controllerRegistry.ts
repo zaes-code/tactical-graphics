@@ -135,6 +135,10 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
 const explosivesReadiness = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new MissionTaskGraphicBase(name, res * 50, res));
     controller.editStretches = true;
+    // Fixed heading: the symbol does not rotate. The generator ignores rotation too, which
+    // is what actually holds it - the resize drag derives an angle from the pointer and
+    // would otherwise turn the graphic as a side effect of scaling it.
+    controller.handleRotate = () => undefined;
     return controller;
 };
 
