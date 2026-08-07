@@ -292,6 +292,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Retrograde / enabling operations (Chapter 5) ─────────────────────────
     // FM Table 5-12 note: "W and W1 are optional amplifiers" for retrograde tasks.
     [TacticalGraphicName.Abatis]: SHAPE_ONLY,
+    // Affiliation only; getGraphicFields derives hostility from supportsHostility().
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: SHAPE_ONLY,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: SHAPE_ONLY,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: SHAPE_ONLY,
     // The wire obstacles: no identifier, no dates, and no status - none of them has a
     // planned form to dash, so offering the control would put a setting in the dialog that
     // changes nothing on the map. Hostility is not declared here at all; getGraphicFields

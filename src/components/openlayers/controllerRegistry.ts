@@ -127,6 +127,17 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
  *
  * `editStretches` stays off: there is nothing to stretch.
  */
+/**
+ * Dropped whole on one click like the crossed tasks, but resizable: the user moves and
+ * scales it, and there is no vertex to drag, so the shape's integrity is never at risk.
+ * `res * 50` is Suppress's default size - the starting point the three were specified from.
+ */
+const explosivesReadiness = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new MissionTaskGraphicBase(name, res * 50, res));
+    controller.editStretches = true;
+    return controller;
+};
+
 const crossedTask = (name: TacticalGraphicName, res: number) =>
     new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
 
@@ -304,6 +315,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     [TacticalGraphicName.Abatis]:                 missionTask,
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: explosivesReadiness,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: explosivesReadiness,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: explosivesReadiness,
     [TacticalGraphicName.WireUnspecified]:                 line(),
     [TacticalGraphicName.WireSingleFence]:                 line(),
     [TacticalGraphicName.WireDoubleFence]:                 line(),
