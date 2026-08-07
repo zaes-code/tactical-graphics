@@ -54,6 +54,7 @@ import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
 import {WireObstacle} from "../graphics/WireObstacle";
+import {ExplosivesReadiness} from "../graphics/ExplosivesReadiness";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
 export class TacticalGraphicsRegistry {
@@ -87,6 +88,11 @@ TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireHighW
 TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireSingleConcertina));
 TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleStrandConcertina));
 TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripleStrandConcertina));
+
+// The three demolition readiness states: one shape, dashed differently. See the class.
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesPlannedStateOfReadiness));
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness1Safe));
+TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable));
 
 TacticalGraphicsRegistry.register(new AttackHelicopterAxisOfAdvance());
 TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());

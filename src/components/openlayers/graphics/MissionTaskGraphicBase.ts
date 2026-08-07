@@ -23,6 +23,7 @@ import {
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
+    explosivesReadinessStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
@@ -239,6 +240,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // Envelopment is point-anchored like Turn but still emits the same
         // MultiLineString the line-drawn version did, so its style function is
         // unchanged — only how the geometry gets built moved.
+        // The readiness states differ only in which bar is dashed - a stroke property,
+        // so it cannot live in the geometry.
+        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable) {
+            this.graphic.setStyle(explosivesReadinessStyleFunc(name));
+        }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
