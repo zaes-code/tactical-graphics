@@ -121,7 +121,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend'] as const;
+const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend', 'mirrored'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -244,11 +244,29 @@ export function applyRestoredGeometry(
         if (state.bend !== undefined && handler.graphic instanceof TurnGraphicBase) {
             handler.graphic.bend = clampTurnBend(state.bend);
         }
-        handler.graphic.updateGeom({
-            center: coords as Coordinate,
-            size: state.radius,
-            rotation: state.rotation,
-        });
+        // Arrowhead size, for the holders that carry one. Seeded from the drawing
+        // resolution when the graphic was made and stamped since, because a restore has
+        // no drawing resolution to re-derive it from. Before `updateGeom`, which reads it.
+        const withHead = handler.graphic as {headSize?: number};
+        if (state.decorationSize !== undefined && typeof withHead.headSize === 'number') {
+            withHead.headSize = state.decorationSize;
+        }
+        // Same reasoning as the line families: a minimum-size floor is a draw-time
+        // affordance, and re-applying it here scales the restored graphic by the ratio
+        // between the drawing resolution and this session's.
+        if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
+        const holder = handler.graphic as {suspendMinimumSize?: boolean};
+        const guarded = typeof holder.suspendMinimumSize === 'boolean';
+        if (guarded) holder.suspendMinimumSize = true;
+        try {
+            handler.graphic.updateGeom({
+                center: coords as Coordinate,
+                size: state.radius,
+                rotation: state.rotation,
+            });
+        } finally {
+            if (guarded) holder.suspendMinimumSize = false;
+        }
         return;
     }
 
@@ -267,6 +285,10 @@ export function applyRestoredGeometry(
 
     if (handler instanceof PolygonGraphicController) {
         handler.setBaseFeature(base as Feature<Polygon>);
+        // Encirclement's triangles are sized from a stamped distance. Without this the
+        // area families re-derive it from the loading session's resolution.
+        const holder = handler.graphic as {setOffset?: (n: number) => void};
+        if (state.decorationSize !== undefined) holder.setOffset?.(state.decorationSize);
         return;
     }
 
@@ -297,6 +319,8 @@ export function applyRestoredGeometry(
         // decoration size for the line families, a radius for anything with a centre.
         const scalar = state.width !== undefined ? state.width / 2 : (state.decorationSize ?? state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
+        // Which side the hook hangs on — user intent, so it has to come back.
+        if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
         return;
     }
 
@@ -360,6 +384,7 @@ export function restoreTacticalGraphics(
                 width: bag.width as number | undefined,
                 rotation: bag.rotation as number | undefined,
                 bend: bag.bend as number | undefined,
+                mirrored: bag.mirrored as boolean | undefined,
             };
 
             // Seed the base geometry onto the holder's *own* base feature before anything

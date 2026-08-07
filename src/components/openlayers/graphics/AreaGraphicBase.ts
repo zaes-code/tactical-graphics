@@ -24,6 +24,10 @@ export class AreaGraphicBase implements PolygonGraphic {
     constructor(name: TacticalGraphicName, size?: number, drawingResolution?: number) {
         this.graphicName = name;
         if (size) this.size = size;
+        // Seeded from the drawing resolution; replaced by a stamped value on restore, so
+        // the decoration does not get re-derived from whatever zoom the loading session
+        // happens to be at. @see setOffset
+        this.decorationSize = decorationMetres(name, this.size);
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
             this.labels.set('drawingResolution', drawingResolution);
@@ -33,9 +37,33 @@ export class AreaGraphicBase implements PolygonGraphic {
         this.labels.setStyle(getAreaLabelStylesFn(name));
         this.graphic.setStyle((feature, resolution) => getStyle(this.graphicName, feature, resolution));
 
-        writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);
+        writeGraphicProperties(this.getFeatures(), name, this.graphicLabels, this.stampedGeometry());
     }
 
+
+    /** Decoration size in metres — Encirclement's triangles. Stamped, then replayed. */
+    decorationSize: number = 0;
+
+    /**
+     * Only Encirclement's generator reads the decoration scalar. Stamping it on the other
+     * area graphics puts a number in the bag that nothing consumes and that then has to
+     * survive a round trip it has no business being part of.
+     */
+    private stampedGeometry(): {decorationSize?: number} {
+        return this.graphicName === TacticalGraphicName.Encirclement
+            ? {decorationSize: this.decorationSize}
+            : {};
+    }
+
+    /** Replays a stamped decoration size. Named for the hook restore already calls. */
+    setOffset(size: number) {
+        this.decorationSize = size;
+        this.setBaseFeature(this.base);
+        // Republish. Restore applies amplifiers before geometry inputs, so the bag still
+        // holds the value this holder was constructed with until something writes the new
+        // one — `setBaseFeature` regenerates the shape but stamps nothing.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, this.graphicLabels, this.stampedGeometry());
+    }
 
     setLabel = (labels: GraphicLabels) => {
         if (this.graphicName === TacticalGraphicName.Encirclement) {
@@ -46,14 +74,14 @@ export class AreaGraphicBase implements PolygonGraphic {
                 // receives the new hostility and picks the correct geometry path.
                 this.graphicLabels = labels;
                 this.setBaseFeature(this.base);
-                writeGraphicProperties(this.getFeatures(), this.graphicName, labels);
+                writeGraphicProperties(this.getFeatures(), this.graphicName, labels, this.stampedGeometry());
                 return;
             }
         }
 
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels);
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, this.stampedGeometry());
     };
 
     setSymbolId = (symbolId: string) => {
@@ -94,7 +122,7 @@ export class AreaGraphicBase implements PolygonGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: decorationMetres(this.graphicName, this.size), hostility: this.graphicLabels.hostility},
+            {size: this.decorationSize, hostility: this.graphicLabels.hostility},
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;

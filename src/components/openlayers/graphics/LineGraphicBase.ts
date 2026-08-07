@@ -13,6 +13,8 @@ import {
     defaultLineStyle,
     finalProtectiveFireStyleFunc,
     fortifiedLineStyleFunc,
+    wireObstacleStyleFunc,
+    antiTankDitchStyleFunc,
     forwardLineOfOwnTroopsStyleFunc,
     lineOfContactStyleFunc,
     linearSmokeTargetStyleFunc,
@@ -83,8 +85,22 @@ export class LineGraphicBase implements LineGraphic {
                     return directionArrowStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.ObstacleLine:
                     return obstacleLineStyle(name)(feature, resolution);
+                case TacticalGraphicName.AntiTankDitchUnderConstruction:
+                case TacticalGraphicName.AntiTankDitchCompleted:
+                case TacticalGraphicName.AntiTankDitchReinforcedWithMines:
+                    return antiTankDitchStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.WireUnspecified:
+                case TacticalGraphicName.WireSingleFence:
+                case TacticalGraphicName.WireDoubleFence:
+                case TacticalGraphicName.WireDoubleApronFence:
+                case TacticalGraphicName.WireLowWireFence:
+                case TacticalGraphicName.WireHighWireFence:
+                case TacticalGraphicName.WireSingleConcertina:
+                case TacticalGraphicName.WireDoubleStrandConcertina:
+                case TacticalGraphicName.WireTripleStrandConcertina:
+                    return wireObstacleStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.LinearTarget:
                     return linearTargetStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.LinearSmokeTarget:

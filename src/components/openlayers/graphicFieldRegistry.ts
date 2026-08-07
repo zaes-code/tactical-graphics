@@ -291,6 +291,28 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Retrograde / enabling operations (Chapter 5) ─────────────────────────
     // FM Table 5-12 note: "W and W1 are optional amplifiers" for retrograde tasks.
+    [TacticalGraphicName.Abatis]: SHAPE_ONLY,
+    // Affiliation only; getGraphicFields derives hostility from supportsHostility().
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: SHAPE_ONLY,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: SHAPE_ONLY,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: SHAPE_ONLY,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: SHAPE_ONLY,
+    // The wire obstacles: no identifier, no dates, and no status - none of them has a
+    // planned form to dash, so offering the control would put a setting in the dialog that
+    // changes nothing on the map. Hostility is not declared here at all; getGraphicFields
+    // derives it from supportsHostility(), and these qualify by not being mission tasks.
+    [TacticalGraphicName.WireUnspecified]: SHAPE_ONLY,
+    [TacticalGraphicName.WireSingleFence]: SHAPE_ONLY,
+    [TacticalGraphicName.WireDoubleFence]: SHAPE_ONLY,
+    [TacticalGraphicName.WireDoubleApronFence]: SHAPE_ONLY,
+    [TacticalGraphicName.WireLowWireFence]: SHAPE_ONLY,
+    [TacticalGraphicName.WireHighWireFence]: SHAPE_ONLY,
+    [TacticalGraphicName.WireSingleConcertina]: SHAPE_ONLY,
+    [TacticalGraphicName.WireDoubleStrandConcertina]: SHAPE_ONLY,
+    [TacticalGraphicName.WireTripleStrandConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.Delay]: SHAPE_ONLY,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
@@ -509,8 +531,9 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * on the shape in front of them:
  *
  * - **Ambush** — a hooked arrow.
- * - **Turn** and **TacticalTurn** — bowed arrows; the radius belongs to the curve that
- *   generates them, not to anything with an edge you could measure to.
+ * - **Turn**, **TacticalTurn**, **Envelopment**, **Pursuit** — bowed or hooked arrows;
+ *   the radius belongs to the curve that generates them, not to anything with an edge a
+ *   reader could measure to.
  *
  * `MissionTaskGraphicBase.refreshMeasure` reads this same set, so a name left out here
  * loses its measure line as well as its modal row. That coupling is deliberate — the two
@@ -530,7 +553,6 @@ const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.CordonAndSearch,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.DeadSpaceAreaCircular,
-    TacticalGraphicName.Envelopment,
     TacticalGraphicName.FightingPosition,
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
@@ -540,7 +562,6 @@ const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Occupy,
     TacticalGraphicName.PositionAreaArtilleryCircular,
     TacticalGraphicName.PurpleKillBoxCircular,
-    TacticalGraphicName.Pursuit,
     TacticalGraphicName.RestrictiveFireAreaCircular,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,

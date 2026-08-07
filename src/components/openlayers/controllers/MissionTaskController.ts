@@ -29,6 +29,9 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
 
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored?(mirrored: boolean): void;
+
     /** Range fans only — drag one band's ring. @see RangeFanGraphicBase */
     setBandRange?(bandIndex: number, coordinate: Coordinate): void;
 }
@@ -154,6 +157,11 @@ export class MissionTaskController implements TacticalGraphicHandler {
         this.graphic.showMeasure?.(false);
     }
 
+    /** Forwarded to the holder. @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        this.graphic.setMirrored?.(mirrored);
+    }
+
     handleRotate(deltaAngle: number): void {
         let rotation = this.graphic.rotation + deltaAngle;
         this.graphic.updateGeom({rotation});
@@ -209,7 +217,12 @@ export class PointDropController extends MissionTaskController {
     /** The size every instance is dropped at, in map units. */
     private readonly fixedSize: number;
 
-    constructor(graphic: MissionTaskGraphic, fixedSize: number) {
+    /**
+     * `resizable` opts back into the inherited resize. The crossed tasks are fixed-size
+     * symbols and leave it off; the explosives readiness states are dropped the same way
+     * but the user scales them afterwards, which is the only difference between them.
+     */
+    constructor(graphic: MissionTaskGraphic, fixedSize: number, private readonly resizable: boolean = false) {
         super(graphic);
         this.fixedSize = fixedSize;
     }
@@ -227,8 +240,9 @@ export class PointDropController extends MissionTaskController {
     onDrawStartFunc = (e: DrawEvent) => this.drop(e);
     onDrawEndFunc = (e: DrawEvent) => this.drop(e);
 
-    /** Not resizable: the symbol has one size and the style function caps it. */
-    handleResize(): void {
+    /** Fixed size unless the graphic opted in: the style function caps the rest. */
+    handleResize(deltaSize: number): void {
+        if (this.resizable) super.handleResize(deltaSize);
     }
 
     /** Not rotatable: these symbols have a single doctrinal orientation. */

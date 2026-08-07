@@ -29,6 +29,21 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Gap]: 15,
     [TacticalGraphicName.AssaultCrossing]: 15,
     [TacticalGraphicName.Encirclement]: 20,
+
+    // The wire obstacles. Their mark width is the unit the whole density ladder is built
+    // from — gaps are counted in mark widths — so this one number sets both the size of
+    // the X and the spacing between groups. Omitting them was not a missing tuning value
+    // but a bug: the fallback below is 1 px, so every wire graphic drew a one-pixel X and
+    // looked like a bare line until you zoomed several levels in.
+    [TacticalGraphicName.WireUnspecified]: 14,
+    [TacticalGraphicName.WireSingleFence]: 14,
+    [TacticalGraphicName.WireDoubleFence]: 14,
+    [TacticalGraphicName.WireDoubleApronFence]: 14,
+    [TacticalGraphicName.WireLowWireFence]: 14,
+    [TacticalGraphicName.WireHighWireFence]: 14,
+    [TacticalGraphicName.WireSingleConcertina]: 14,
+    [TacticalGraphicName.WireDoubleStrandConcertina]: 14,
+    [TacticalGraphicName.WireTripleStrandConcertina]: 14,
 };
 
 /**

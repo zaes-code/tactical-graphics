@@ -265,12 +265,20 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // Horizontal line: from (−2.4r, +r) to (0, +r) — ends at the top of
         // the semicircle.
         const lineLen = 2.4 * r;
+        // Mirroring flips **the hook only** — the P-line, its label and the arrowhead's
+        // anchor all stay put, exactly as the cane graphics keep their route and move just
+        // the cane. Reflecting the whole construction moved the line too, which read as
+        // the graphic jumping rather than the hook changing hands.
         const line: Position[] = [local(-lineLen, r), local(0, r)];
 
         // Semicircle: bulges east, from top (+r) clockwise through east (+r, 0)
         // to bottom (−r). Center is the graphic's center; planar angles go
         // 90° → −90° (decreasing = clockwise).
-        const arc: Position[] = geometryService.createCircularArc(center, rotation, r, 90, -90, 48);
+        // Both sweeps start at the line's end (+r) and finish at the arrowhead (-r); the
+        // mirror is which way round they get there — east through 0, or west through 180.
+        const arc: Position[] = opts.mirrored
+            ? geometryService.createCircularArc(center, rotation, r, 90, 270, 48)
+            : geometryService.createCircularArc(center, rotation, r, 90, -90, 48);
 
         // Arrowhead at the end of the arc (bottom), pointing in the tangent
         // direction at that point (≈ −x at rotation 0 — i.e., back toward
@@ -307,24 +315,35 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
 
-        const edge = geometryService.createCircularArc(center, rotation, r, 0, 1, 1)[0];
+        // Both handles sit at an **end** of the drawn path: the arrowhead tip where the
+        // hook finishes, and the free end of the P-line. The first used to be the middle
+        // of the semicircle — geometrically convenient, since it is one radius out and so
+        // drives resize cleanly, but it reads as a dot floating on the curve rather than
+        // something you can take hold of. The tip is also one radius from the centre, so
+        // resize behaves identically.
+        const at = (x: number, y: number): Position => {
+            const dist = Math.hypot(x, y);
+            if (dist === 0) return [center[0], center[1]];
+            const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
+            let bearing = 90 - (planarDeg + rotation);
+            bearing = ((bearing % 360) + 360) % 360;
+            return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
+        };
 
-        // P-line start at local (−2.4r, +r), rotated with the graphic.
-        const x = -2.4 * r, y = r;
-        const dist = Math.hypot(x, y);
-        const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
-        let bearing = 90 - (planarDeg + rotation);
-        bearing = ((bearing % 360) + 360) % 360;
-        const lineStart = turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
+        const arrowTip = at(0, -r);
+        const lineStart = at(-2.4 * r, r);
 
-        return this.asMultiPointFeature([edge, lineStart]);
+        return this.asMultiPointFeature([arrowTip, lineStart]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
-        // "P" label sits at the midpoint of the horizontal line: (−1.2r, +r).
+        // "P" label sits at the midpoint of the horizontal line: (−1.2r, ±r).
         // The label position rotates with the graphic, but the label text
         // itself is rendered un-rotated (see MissionTaskGraphicBase →
         // getMissionTaskStyleFn with rotation = 0).
+        //
+        // It has to take the same reflection as the line it names, or a mirrored graphic
+        // leaves its "P" floating where the line used to be.
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
@@ -539,10 +558,15 @@ export class MobileDefense extends MovementGraphicBase {
         const topArc = halfEllipse(1, 48);
         const bottomArc = halfEllipse(-1, 48);
 
-        // Arrow head sits exactly where the p1-side gap begins (top arc's endpoint),
-        // pointing along the arc's tangent. No shaft.
-        const arrowTip = topArc[topArc.length - 1];
-        const arrowPrev = topArc[topArc.length - 2];
+        // Arrow head sits exactly where the p1-side gap begins, pointing along that arc's
+        // tangent. No shaft.
+        //
+        // The ellipse itself is symmetric about its major axis, so *this* is the graphic's
+        // asymmetry: which arc the arrow leaves from. Mirroring swaps it to the other one,
+        // which is the whole flip — nothing else needs reflecting.
+        const arrowArc = opts?.mirrored ? bottomArc : topArc;
+        const arrowTip = arrowArc[arrowArc.length - 1];
+        const arrowPrev = arrowArc[arrowArc.length - 2];
         const arrowHead: Position[] = geometryService.computeArrowheadPoints(arrowPrev, arrowTip, radius, 45);
 
         // Outward-facing triangles with both base vertices lying on the arc, and
