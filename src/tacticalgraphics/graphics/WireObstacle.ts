@@ -75,13 +75,18 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiLineString> {
         const coords = base.geometry.coordinates;
-        if (coords.length < 2) return this.asMultiLineStringFeature([coords]);
-
         const style = this.style();
         const width = Math.max(opts?.size ?? 1, 1);
         const height = width * style.height;
+
+        // Between the first map click and the second, the draw interaction hands us a
+        // one-point sketch — and then a zero-length two-point one — on every pointer move.
+        // Returning `[coords]` there emitted a *one-point LineString*, which is not a line:
+        // OL draws nothing and stricter GeoJSON consumers throw. Emit no parts instead.
+        if (coords.length < 2) return this.asMultiLineStringFeature([]);
         const line = turf.lineString(coords);
         const length = turf.length(line, {units: 'meters'});
+        if (length <= 0) return this.asMultiLineStringFeature([]);
         const parts: Position[][] = [];
 
         /** A point `along` metres down the line, offset `across` metres to its left. */
