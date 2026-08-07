@@ -291,6 +291,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Retrograde / enabling operations (Chapter 5) ─────────────────────────
     // FM Table 5-12 note: "W and W1 are optional amplifiers" for retrograde tasks.
+    [TacticalGraphicName.Abatis]: SHAPE_ONLY,
     [TacticalGraphicName.Delay]: SHAPE_ONLY,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
