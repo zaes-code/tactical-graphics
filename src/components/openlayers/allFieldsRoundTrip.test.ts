@@ -78,7 +78,7 @@ describe(`every field a graphic offers survives a round trip (${NAMES.length} na
         const report = restoreTacticalGraphics(to, serializeTacticalGraphics(from));
         expect(report.failed).toEqual([]);
 
-        const got = readGraphicLabels(to.graphicControllers[0].graphic.base) as Record<string, unknown>;
+        const got = readGraphicLabels(to.graphicControllers[0].graphic.base) as unknown as Record<string, unknown>;
         for (const [key, value] of Object.entries(wanted)) {
             expect({field: key, value: got[key]}).toEqual({field: key, value});
         }
