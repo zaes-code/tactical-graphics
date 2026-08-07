@@ -108,6 +108,14 @@ export interface TacticalGraphicProperties {
      * would measure on the map.
      */
     width?: number;
+    /**
+     * Hangs an asymmetric graphic's hook on the other side of its drawn line.
+     *
+     * Portable user intent, not renderer state: a Cesium view needs it to draw the same
+     * symbol. Expressed relative to the line's own bearing, so it survives rotation —
+     * see `GeometryService.getCaneArrow` for the compass-pinned version this replaced.
+     */
+    mirrored?: boolean;
     /** Rotation in degrees, for point-based graphics. */
     rotation?: number;
     /**
@@ -197,6 +205,7 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         // offset from the centreline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
         rotation: props.rotation,
+        mirrored: props.mirrored,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,
         bands: props.rangeFan?.bands,

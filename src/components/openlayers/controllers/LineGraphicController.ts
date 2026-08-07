@@ -200,6 +200,15 @@ export class LineGraphicController implements TacticalGraphicHandler {
         this.graphic.setBaseFeature(resized);
     }
 
+    /**
+     * Hangs the graphic's hook on the other side. Forwarded to the holder when it has one;
+     * a symmetric graphic has nothing to mirror and simply ignores it.
+     * @see TacticalGraphicHandler.setMirrored
+     */
+    setMirrored(mirrored: boolean): void {
+        (this.graphic as {setMirrored?: (m: boolean) => void}).setMirrored?.(mirrored);
+    }
+
     setOffset(offset: number): void {
         this.graphic.setOffset?.(offset);
     }
