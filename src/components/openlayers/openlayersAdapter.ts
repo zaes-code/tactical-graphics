@@ -96,6 +96,15 @@ export interface TacticalGraphicHandler {
      * where the ordinary translate path already moves everything, grabbed point included.
      */
     anchorVertex?: number;
+
+    /**
+     * Hangs an asymmetric graphic's hook on the other side of its line.
+     *
+     * Driven by the **sign** of the same perpendicular distance that sets the width from
+     * its magnitude, so one handle carries both: how far out you drag sets the width, which
+     * side you drag to sets the side.
+     */
+    setMirrored?(mirrored: boolean): void;
 }
 
 /**
