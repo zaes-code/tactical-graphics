@@ -421,7 +421,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
             this.base,
-            {size: this.size, rotation: this.rotation, ...this.generatorOptions()}
+            {size: this.size, rotation: this.rotation, mirrored: this.mirrored, ...this.generatorOptions()}
         );
         if (!tacticalGraphic) return;
 
@@ -534,6 +534,21 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     suspendMinimumSize = false;
 
+    /**
+     * Which side an asymmetric point-anchored graphic hangs its hook on — Pursuit's
+     * semicircle and P-line. Reflected in the graphic's own local frame, so it survives
+     * rotation. Stamped and replayed like any other geometry input.
+     */
+    mirrored: boolean = false;
+
+    /** @see TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGeometry();
+        this.publishGeometryState();
+    }
+
     private measuring = false;
     /**
      * Where the gesture actually is — the cursor while drawing, the dragged point while
@@ -607,6 +622,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
             radius: this.size,
             rotation: this.rotation,
+            mirrored: this.mirrored,
             ...this.persistedGeometryState(),
             ...extra,
         });

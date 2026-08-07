@@ -254,6 +254,7 @@ export function applyRestoredGeometry(
         // Same reasoning as the line families: a minimum-size floor is a draw-time
         // affordance, and re-applying it here scales the restored graphic by the ratio
         // between the drawing resolution and this session's.
+        if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
         const holder = handler.graphic as {suspendMinimumSize?: boolean};
         const guarded = typeof holder.suspendMinimumSize === 'boolean';
         if (guarded) holder.suspendMinimumSize = true;
