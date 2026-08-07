@@ -128,4 +128,38 @@ describe('wireObstacleStyleFunc', () => {
             expect(fields.hostility).toBe(true);
         }
     });
+
+    // The failure this missed for two rounds: every test above draws a straight line, and
+    // on a straight line a wrong offset is still parallel. A bend is what separates a true
+    // parallel from a per-segment one - the under-wire and over-wire visibly splayed.
+    //
+    // Parallelism is asserted per *segment*, not per vertex. Two true parallels meet their
+    // corners on the bisector, so their miter vertices sit further apart than the lines
+    // themselves - measuring vertex to vertex reports a gap that is correct and looks wrong.
+    it.each([
+        ['high wire fence', TacticalGraphicName.WireHighWireFence],
+        ['triple strand concertina', TacticalGraphicName.WireTripleStrandConcertina],
+    ])('keeps %s rails parallel around a bend', (_l, name) => {
+        const bent = new MultiLineString([[[0, 0], [4000, 0], [7000, 3000], [11000, 3000]]]);
+        const rails = (wireObstacleStyleFunc(name)(new Feature({geometry: bent}) as any, 1) as any[])
+            .map(st => st.getGeometry())
+            .filter(g => g instanceof LineString) as LineString[];
+        expect(rails.length).toBe(2);
+
+        const [a, b] = rails.map(r => r.getCoordinates());
+        expect(a.length).toBe(b.length);
+
+        const seps: number[] = [];
+        for (let i = 0; i + 1 < a.length; i++) {
+            const [ax, ay] = [a[i + 1][0] - a[i][0], a[i + 1][1] - a[i][1]];
+            const [bx, by] = [b[i + 1][0] - b[i][0], b[i + 1][1] - b[i][1]];
+            const [la, lb] = [Math.hypot(ax, ay), Math.hypot(bx, by)];
+            // Same heading: the cross product of the two unit directions is zero.
+            expect((ax / la) * (by / lb) - (ay / la) * (bx / lb)).toBeCloseTo(0, 9);
+            // Perpendicular distance from b's segment to a's line - constant if parallel.
+            seps.push(Math.abs(((b[i][0] - a[i][0]) * -ay + (b[i][1] - a[i][1]) * ax) / la));
+        }
+        for (const sep of seps) expect(sep).toBeCloseTo(seps[0], 6);
+        expect(seps[0]).toBeGreaterThan(0);
+    });
 });

@@ -4064,11 +4064,8 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
         // the user cannot find what they drew.
         if (style.rail || width <= 0) {
-            for (const at of style.railsAt ?? ['centre']) {
-                const off = railOffset[at];
-                const strand = off === 0 ? path : offsetPath(path, off < 0 ? -1 : 1, Math.abs(off));
-                styles.push(new Style({geometry: new LineString(strand), stroke: stroke()}));
-            }
+            for (const at of style.railsAt ?? ['centre'])
+                styles.push(new Style({geometry: new LineString(parallelPath(path, railOffset[at])), stroke: stroke()}));
         }
         if (width <= 0) return styles;
 
@@ -4107,6 +4104,46 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
         return styles;
     };
 }
+
+
+/**
+ * A true parallel of `path`, `d` metres to its left (negative for its right).
+ *
+ * Offsets each vertex along the *bisector* of its two segments, lengthened by
+ * `1 / cos(half-angle)` - the standard miter. The shared `offsetPath` takes the direction
+ * at the vertex instead, which is one of the two adjoining segments, so on a bend its two
+ * sides stop being parallel: the under-wire and over-wire of a high wire fence visibly
+ * splayed. That function is left alone because the FLOT and line-of-contact scallops are
+ * built on its behaviour.
+ *
+ * The miter is capped: at a hairpin `1 / cos(half-angle)` runs away to infinity, and an
+ * uncapped spike is worse than a slightly pinched corner.
+ */
+function parallelPath(path: Coordinate[], d: number): Coordinate[] {
+    if (!d || path.length < 2) return path;
+
+    const normals: Coordinate[] = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+        const [dx, dy] = [path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]];
+        const len = Math.hypot(dx, dy) || 1;
+        normals.push([-dy / len, dx / len]);
+    }
+
+    return path.map((p, i) => {
+        const a = normals[Math.max(i - 1, 0)];
+        const b = normals[Math.min(i, normals.length - 1)];
+        const [mx, my] = [a[0] + b[0], a[1] + b[1]];
+        const m = Math.hypot(mx, my);
+        // Doubling back on itself: no bisector to speak of, so take the segment normal.
+        if (m < 1e-9) return [p[0] + a[0] * d, p[1] + a[1] * d] as Coordinate;
+        // |a| = |b| = 1, so |a + b| = 2 cos(half-angle) and the miter factor is 2 / |a + b|.
+        const miter = Math.min(2 / m, MAX_MITER);
+        return [p[0] + (mx / m) * d * miter, p[1] + (my / m) * d * miter] as Coordinate;
+    });
+}
+
+/** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
+const MAX_MITER = 4;
 
 /** The point `dist` metres along `path`, with the unit tangent there. */
 function walkPath(path: Coordinate[], dist: number): {point: Coordinate; tangent: [number, number]} | null {
