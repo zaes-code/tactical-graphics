@@ -121,7 +121,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend'] as const;
+const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend', 'mirrored'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -318,6 +318,8 @@ export function applyRestoredGeometry(
         // decoration size for the line families, a radius for anything with a centre.
         const scalar = state.width !== undefined ? state.width / 2 : (state.decorationSize ?? state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
+        // Which side the hook hangs on — user intent, so it has to come back.
+        if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
         return;
     }
 
@@ -381,6 +383,7 @@ export function restoreTacticalGraphics(
                 width: bag.width as number | undefined,
                 rotation: bag.rotation as number | undefined,
                 bend: bag.bend as number | undefined,
+                mirrored: bag.mirrored as boolean | undefined,
             };
 
             // Seed the base geometry onto the holder's *own* base feature before anything

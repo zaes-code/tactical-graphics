@@ -21,6 +21,8 @@ export interface BaseGraphicOptions {
     size?: number;
     /** Rotation in degrees. */
     rotation?: number;
+    /** @see TacticalGraphicProperties.mirrored */
+    mirrored?: boolean;
     /** Generic radius used by circular/movement graphics. */
     radius?: number;
 }
