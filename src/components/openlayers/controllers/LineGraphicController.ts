@@ -137,6 +137,16 @@ export class LineGraphicController implements TacticalGraphicHandler {
     /** Fewest vertices this graphic still reads correctly at. @see handleVertexDrag */
     minimumVertices: number = 2;
 
+    /**
+     * Base vertex that **moves the whole graphic** instead of reshaping it — the apex of a
+     * fields-of-fire V.
+     *
+     * Expressed as a translate so the grabbed point lands under the cursor, which is what
+     * makes it feel like the centre dot on a point-anchored graphic rather than a corner
+     * that drags the shape inside out. `undefined` means every vertex reshapes.
+     */
+    anchorVertex: number | undefined;
+
     constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
         this.graphic = graphic;
         this.maxPoints = maxPoints;
@@ -236,9 +246,10 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * assigning the method here rather than always declaring it is what lets the manager
      * route on presence and leave every other line graphic exactly as it was.
      */
-    enableVertexDragging(minimumVertices = 2): this {
+    enableVertexDragging(minimumVertices = 2, anchorVertex?: number): this {
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
+        this.anchorVertex = anchorVertex;
         this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
             const geom = this.graphic.base.getGeometry();
             if (!geom) return;
@@ -246,7 +257,14 @@ export class LineGraphicController implements TacticalGraphicHandler {
             if (index < 0 || index >= coords.length) return;
             if (coords.length < this.minimumVertices) return;
 
-            const moved = coords.map((c, i) => (i === index ? [coordinate[0], coordinate[1]] : c));
+            // The anchor drags the graphic, not its own vertex: shift every coordinate by
+            // however far the anchor had to move to reach the cursor.
+            const isAnchor = this.anchorVertex !== undefined && index === this.anchorVertex;
+            const dx = coordinate[0] - coords[index][0];
+            const dy = coordinate[1] - coords[index][1];
+            const moved = coords.map((c, i) =>
+                isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
+            );
             const next = new Feature(new LineString(moved));
             this.graphic.setBaseFeature(next as Feature<LineString>);
         };
