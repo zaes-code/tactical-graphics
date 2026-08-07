@@ -751,6 +751,15 @@ export enum TacticalGraphicName {
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
     Abatis = 'Abatis',
+    WireUnspecified = 'WireUnspecified',
+    WireSingleFence = 'WireSingleFence',
+    WireDoubleFence = 'WireDoubleFence',
+    WireDoubleApronFence = 'WireDoubleApronFence',
+    WireLowWireFence = 'WireLowWireFence',
+    WireHighWireFence = 'WireHighWireFence',
+    WireSingleConcertina = 'WireSingleConcertina',
+    WireDoubleStrandConcertina = 'WireDoubleStrandConcertina',
+    WireTripleStrandConcertina = 'WireTripleStrandConcertina',
     ObstacleLine = 'ObstacleLine',
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',
@@ -827,6 +836,15 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.WireUnspecified]: 'Wire, Unspecified',
+    [TacticalGraphicName.WireSingleFence]: 'Wire, Single Fence',
+    [TacticalGraphicName.WireDoubleFence]: 'Wire, Double Fence',
+    [TacticalGraphicName.WireDoubleApronFence]: 'Wire, Double Apron Fence',
+    [TacticalGraphicName.WireLowWireFence]: 'Wire, Low Wire Fence',
+    [TacticalGraphicName.WireHighWireFence]: 'Wire, High Wire Fence',
+    [TacticalGraphicName.WireSingleConcertina]: 'Wire, Single Concertina',
+    [TacticalGraphicName.WireDoubleStrandConcertina]: 'Wire, Double Strand Concertina',
+    [TacticalGraphicName.WireTripleStrandConcertina]: 'Wire, Triple Strand Concertina',
     // [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: 'attack helicopter axis of advance',
     [TacticalGraphicName.AviationAxisOfAdvance]: 'airborne or aviation axis of advance',
     // [TacticalGraphicName.SupportingAxisOfAdvance]: 'supporting axis of advance',

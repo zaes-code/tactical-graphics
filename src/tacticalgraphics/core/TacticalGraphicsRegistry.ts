@@ -53,6 +53,7 @@ import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
+import {WireObstacle} from "../graphics/WireObstacle";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
 export class TacticalGraphicsRegistry {
@@ -77,6 +78,15 @@ export class TacticalGraphicsRegistry {
 
 // movement graphics
 TacticalGraphicsRegistry.register(new Abatis());
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireUnspecified));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireSingleFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleApronFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireLowWireFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireHighWireFence));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireSingleConcertina));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireDoubleStrandConcertina));
+TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripleStrandConcertina));
 
 TacticalGraphicsRegistry.register(new AttackHelicopterAxisOfAdvance());
 TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());
