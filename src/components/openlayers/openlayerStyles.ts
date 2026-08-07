@@ -4055,7 +4055,10 @@ export function explosivesReadinessStyleFunc(name: TacticalGraphicName): StyleFu
 
         const color = readHostilityColor(f);
         const dashed = EXPLOSIVES_DASHED[name] ?? [false, false];
-        const dash = [10 * resolution, 7 * resolution];
+        // Pixels, not map units. OL's lineDash is canvas pixels, so multiplying by
+        // resolution made the dash [200, 140] px on a bar ~50 px long - the whole bar fell
+        // inside one "on" segment and every state rendered solid. Matches dashStyle().
+        const dash = [12, 8];
 
         return bars.slice(0, 2).map(
             (bar, i) =>

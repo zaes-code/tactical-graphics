@@ -4,6 +4,8 @@ import Point from 'ol/geom/Point';
 import {TacticalGraphicName, renderTacticalGraphic} from '@zaes/tactical-graphics';
 import {explosivesReadinessStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
+import {getController} from './controllerRegistry';
+import {PointDropController} from './controllers/MissionTaskController';
 
 const PLANNED = TacticalGraphicName.ExplosivesPlannedStateOfReadiness;
 const SAFE = TacticalGraphicName.ExplosivesStateOfReadiness1Safe;
@@ -93,5 +95,44 @@ describe('explosives states of readiness', () => {
             expect(() => explosivesReadinessStyleFunc(name)(new Feature({geometry: new MultiLineString([])}) as any, 20)).not.toThrow();
             expect(() => explosivesReadinessStyleFunc(name)(new Feature({geometry: new Point([0, 0])}) as any, 20)).not.toThrow();
         }
+    });
+
+    /**
+     * Through the *holder*, not the style function. Every assertion above called
+     * `explosivesReadinessStyleFunc` directly, which is how a dash length of
+     * `[10 * resolution, 7 * resolution]` shipped: OL's lineDash is canvas pixels, so at a
+     * real resolution the dash became 200 px on a bar 50 px long and every state rendered
+     * solid. Calling the function proves the flag; only drawing proves the dash.
+     */
+    it.each(NAMES.map(n => [String(n), n] as const))('%s dashes visibly at map scale', (_l, name) => {
+        const res = 20;
+        const handler: any = getController(name, res);
+        handler.graphic.updateGeom({size: res * 50, center: [500000, 2000000], rotation: 0});
+        const graphic = handler.getFeatures().find((f: any) => f.get('role') === 'graphic');
+        const styles = (graphic.getStyle() as any)(graphic, res);
+
+        const barPx = (res * 50) / res;
+        for (const st of styles) {
+            const dash = st.getStroke().getLineDash();
+            if (!dash) continue;
+            // A dash longer than the bar it is drawn on is indistinguishable from solid.
+            expect(Math.max(...dash)).toBeLessThan(barPx / 2);
+        }
+    });
+
+    // One click drops it at a default size; resizing is a later, separate gesture.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s is dropped by a single click and stays resizable', (_l, name) => {
+        const controller: any = getController(name, 20);
+        expect(controller).toBeInstanceOf(PointDropController);
+        expect(controller.type).toBe('Point');
+
+        const before = controller.graphic.size;
+        controller.handleResize(500);
+        expect(controller.graphic.size).not.toBe(before);
+
+        // ...but never rotatable.
+        const rotation = controller.graphic.rotation;
+        controller.handleRotate(45);
+        expect(controller.graphic.rotation).toBe(rotation);
     });
 });
