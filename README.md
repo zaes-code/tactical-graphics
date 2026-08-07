@@ -121,9 +121,9 @@ tacticalGraphic: {
     direction: 'ONE_WAY',     // route graphics
 
     // Geometry, in meters.
-    radius: 1000,             // how far the symbol reaches from its own centre:
+    radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
-                              // Only for graphics that HAVE a centre.
+                              // Only for graphics that HAVE a center.
     decorationSize: 300,      // how big to draw a line graphic's decorations — an
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
@@ -150,11 +150,11 @@ are all in meters and none of them overlap — a graphic reads one.
 
 | Field | Means | Graphics |
 |---|---|---|
-| `radius` | reach from the symbol's own centre | circles and point-anchored symbols |
+| `radius` | reach from the symbol's own center | circles and point-anchored symbols |
 | `width` | **full** width across a drawn line | axes of advance, corridors |
 | `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
 
-**`radius` — a circle, sized from its centre:**
+**`radius` — a circle, sized from its center:**
 
 ```ts
 renderTacticalGraphic({
@@ -176,7 +176,7 @@ renderTacticalGraphic({
 ```
 
 **`decorationSize` — the ornament on a line, not a reach.** A direction of attack is its
-drawn line plus an arrowhead; there is no centre to take a radius of, which is why this is
+drawn line plus an arrowhead; there is no center to take a radius of, which is why this is
 its own field.
 
 ```ts
@@ -269,8 +269,8 @@ This method was previously called `handleDrawTacticalGraphic`. That name still w
 ### The radius read-out
 
 While a circular graphic is drawn or resized, the renderer draws a hashed line from its
-centre out along the gesture, labelled with the distance — metres below a kilometre,
-kilometres above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
+center out along the gesture, labeled with the distance — meters below a kilometer,
+kilometers above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
 ends, and it never reaches `serializeTacticalGraphics` or a restored map.
 
 It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
@@ -642,7 +642,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
-(The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labelled, and fully editable.)
+(The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
 | Graphic | Category |
 |---|---|
