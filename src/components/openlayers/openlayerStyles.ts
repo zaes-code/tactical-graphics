@@ -4051,6 +4051,13 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  */
 
 /**
+ * How far inside its notch an anti-tank mine is drawn, as a share of the largest disc that
+ * would fit. Drawn to the limit the disc meets the two teeth bounding it, and with the
+ * teeth filled the three merge into one black mass.
+ */
+const MINE_CLEARANCE = 0.5;
+
+/**
  * The three anti-tank ditches: triangular teeth along the drawn route, with a mine nested
  * in each notch on the reinforced state.
  *
@@ -4084,16 +4091,14 @@ export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction
         const depth = width * ANTI_TANK_HEIGHT_RATIO;
         const total = pathLength(path);
 
-        // The route is divided into equal slots, each holding one tooth. On the reinforced
-        // state the slots alternate tooth, mine, tooth, mine, tooth - so the slot count is
-        // forced odd, which is what makes the run start and end with a tooth. A mine at
-        // either end would have no tooth beside it.
-        let slots = Math.floor(total / width);
-        if (mines && slots % 2 === 0) slots -= 1;
-        if (slots < 1 || (mines && slots < 3)) return styles;
+        // Every slot holds a tooth, so consecutive teeth share a base corner and their bases
+        // run edge to edge along the route. Mines go in the notches *between* them, which is
+        // why the run cannot begin or end with one: a notch needs a tooth either side.
+        const teeth = Math.floor(total / width);
+        if (teeth < 1 || (mines && teeth < 2)) return styles;
 
         // Centre the run, so the pattern sits on the route rather than flush to one end.
-        const lead = (total - slots * width) / 2;
+        const lead = (total - teeth * width) / 2;
 
         /** A point `along` the route, `off` metres to the tooth side of it. */
         const at = (along: number, off: number): Coordinate | null => {
@@ -4103,40 +4108,49 @@ export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction
             return [p.point[0] - ty * off, p.point[1] + tx * off];
         };
 
-        // A mine fills its own slot rather than nesting in the notch between two teeth.
-        // Nesting is what the wording suggests, but with the teeth touching *and* filled the
-        // disc merges into them and the whole run reads as one black band - the plate keeps
-        // the mines legible by giving them their own place in the sequence.
-        const radius = width * 0.34;
+        for (let i = 0; i < teeth; i++) {
+            const a = at(lead + i * width, 0);
+            const b = at(lead + (i + 1) * width, 0);
+            const apex = at(lead + (i + 0.5) * width, -depth);
+            if (!a || !b || !apex) continue;
+            const ring = [a, b, apex, a];
+            styles.push(
+                new Style({
+                    geometry: filled ? new Polygon([ring]) : new LineString(ring),
+                    // A filled tooth is *not* also stroked. A stroke straddles the edge it
+                    // draws, so it inflates the shape by half a line width all round, and
+                    // two teeth sharing a base corner then overlap by a full stroke instead
+                    // of just meeting. The fill already states the shape exactly.
+                    stroke: filled ? undefined : stroke(),
+                    fill: filled ? new Fill({color}) : undefined,
+                }),
+            );
+        }
 
-        for (let i = 0; i < slots; i++) {
-            const isMine = mines && i % 2 === 1;
-            if (!isMine) {
-                const a = at(lead + i * width, 0);
-                const b = at(lead + (i + 1) * width, 0);
-                const apex = at(lead + (i + 0.5) * width, -depth);
-                if (!a || !b || !apex) continue;
-                const ring = [a, b, apex, a];
-                styles.push(
-                    new Style({
-                        geometry: filled ? new Polygon([ring]) : new LineString(ring),
-                        stroke: stroke(),
-                        fill: filled ? new Fill({color}) : undefined,
-                    }),
-                );
-                continue;
-            }
+        if (!mines) return styles;
 
-            // Tangent to the route from below, so the mine hangs off it as the teeth do.
-            const centre = at(lead + (i + 0.5) * width, -radius);
+        // The notch two touching teeth leave is an upward triangle: apex on the route where
+        // their bases meet, widening to a full tooth at the apex depth. So the mine's size
+        // is bounded, not chosen - a disc centred `mineDepth` down touches both edges at
+        // `mineDepth * sin(halfAngle)`. MINE_CLEARANCE holds it well inside that, because a
+        // disc drawn to the limit meets the teeth either side and the three merge into one
+        // black mass with the teeth being filled.
+        const halfAngleSin = width / 2 / Math.hypot(width / 2, depth);
+        const mineDepth = depth * 0.72;
+        const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
+
+        for (let i = 1; i < teeth; i++) {
+            const centre = at(lead + i * width, -mineDepth);
             if (!centre) continue;
             const ring: Coordinate[] = [];
             for (let d = 0; d <= 360; d += 20) {
                 const t = (d * Math.PI) / 180;
                 ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
             }
-            // Mines are mines, not outlines of one - always solid, whatever the teeth do.
-            styles.push(new Style({geometry: new Polygon([ring]), stroke: stroke(), fill: new Fill({color})}));
+            // Mines are mines, not outlines of one - always solid, whatever the teeth do,
+            // and unstroked for the same reason the filled teeth are: an outline would eat
+            // into the white gap that keeps the disc legible against the teeth beside it.
+            styles.push(new Style({geometry: new Polygon([ring]), fill: new Fill({color})}));
         }
 
         return styles;
