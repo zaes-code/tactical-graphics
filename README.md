@@ -618,7 +618,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 200 supported names.
+the 209 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```

@@ -304,6 +304,15 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     [TacticalGraphicName.Abatis]:                 missionTask,
+    [TacticalGraphicName.WireUnspecified]:                 line(),
+    [TacticalGraphicName.WireSingleFence]:                 line(),
+    [TacticalGraphicName.WireDoubleFence]:                 line(),
+    [TacticalGraphicName.WireDoubleApronFence]:            line(),
+    [TacticalGraphicName.WireLowWireFence]:                line(),
+    [TacticalGraphicName.WireHighWireFence]:               line(),
+    [TacticalGraphicName.WireSingleConcertina]:            line(),
+    [TacticalGraphicName.WireDoubleStrandConcertina]:      line(),
+    [TacticalGraphicName.WireTripleStrandConcertina]:      line(),
     [TacticalGraphicName.Delay]:                  retrograde,
     [TacticalGraphicName.Withdraw]:               retrograde,
     [TacticalGraphicName.WithdrawUnderPressure]:  retrograde,
