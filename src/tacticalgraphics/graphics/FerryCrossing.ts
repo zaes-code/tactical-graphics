@@ -9,7 +9,7 @@ export class FerryCrossing extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         let size: number = opts?.size || 20;
-        let arrowSize = 15 * size;
+        let arrowSize = size;
         let [p0, p1] = base.geometry.coordinates;
         const dir01 = geometryService.unitVector(p0, p1);
         const dir10 = geometryService.unitVector(p1, p0);

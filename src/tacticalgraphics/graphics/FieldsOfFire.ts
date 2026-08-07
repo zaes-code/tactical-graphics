@@ -11,13 +11,13 @@ export class FieldsOfFire extends TacticalGraphicsBase {
         if (base.geometry.coordinates.length < 2) return this.asMultiLineStringFeature([base.geometry.coordinates]);
 
         let size = opts?.size || 1;
-        let startArrow: Position[] = geometryService.computeArrowheadPoints(base.geometry.coordinates[1], base.geometry.coordinates[0], -size * 20, 135);
+        let startArrow: Position[] = geometryService.computeArrowheadPoints(base.geometry.coordinates[1], base.geometry.coordinates[0], -size, 135);
 
         let endArrow: Position[];
         if (base.geometry.coordinates.length == 2) {
-            endArrow = geometryService.computeArrowheadPoints(base.geometry.coordinates[0], base.geometry.coordinates[1], -size * 20, 135);
+            endArrow = geometryService.computeArrowheadPoints(base.geometry.coordinates[0], base.geometry.coordinates[1], -size, 135);
         } else {
-            endArrow = geometryService.computeArrowheadPoints(base.geometry.coordinates[1], base.geometry.coordinates[2], -size * 20, 135);
+            endArrow = geometryService.computeArrowheadPoints(base.geometry.coordinates[1], base.geometry.coordinates[2], -size, 135);
         }
 
         return this.asMultiLineStringFeature([

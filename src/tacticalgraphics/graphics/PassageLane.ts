@@ -9,7 +9,7 @@ export class PassageLane extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let size: number = opts?.size || 20;
-        return geometryService.passageLineGraphic(base.geometry.coordinates, size * 20);
+        return geometryService.passageLineGraphic(base.geometry.coordinates, size);
     }
 
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {

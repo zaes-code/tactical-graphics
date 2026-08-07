@@ -45,9 +45,9 @@ export class EncirclementArea extends TacticalGraphicsBase<EncirclementAreaOptio
         if (opts?.hostility === TacticalGraphicHostility.hostileFaker) {
             let {outlineSegments, labelPoints} = geometryService.generateLabelGaps(base.geometry, {
                 rotationRad: rotation,
-                gapSize: (40 * size) / 111320
+                gapSize: (2 * size) / 111320
             });
-            let triangles = geometryService.generateMultiLineStringTriangles(outlineSegments, size * 15, size * 20, size * 20);
+            let triangles = geometryService.generateMultiLineStringTriangles(outlineSegments, size * 0.75, size, size);
             return this.asGeometryCollectionFeature(
                 [
                     this.asMultiLineStringFeature([
@@ -59,7 +59,7 @@ export class EncirclementArea extends TacticalGraphicsBase<EncirclementAreaOptio
             );
         }
 
-        let triangles = geometryService.generatePolygonTriangles(base.geometry.coordinates, size * 15, size * 20, size * 20);
+        let triangles = geometryService.generatePolygonTriangles(base.geometry.coordinates, size * 0.75, size, size);
         return this.asMultiLineStringFeature([
             ...triangles,
             ...base.geometry.coordinates
