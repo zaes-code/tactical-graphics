@@ -8,7 +8,7 @@ import RenderFeature from 'ol/render/Feature';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from '@zaes/tactical-graphics';
+import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, EXPLOSIVES_DASHED} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -4037,6 +4037,36 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  *
  * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
  */
+
+/**
+ * The three demolition readiness states: a pair of parallel bars, dashed per the plate.
+ *
+ * The shape is identical across all three - `EXPLOSIVES_DASHED` is the entire difference,
+ * and it lives beside the generator so a second renderer reads the same table. Dashing
+ * cannot be expressed in the geometry, which is why this is a style function at all: a
+ * MultiLineString has one stroke for every part.
+ */
+export function explosivesReadinessStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return (f, resolution) => {
+        const geom = f.getGeometry();
+        if (!(geom instanceof MultiLineString)) return [];
+        const bars = geom.getCoordinates();
+        if (bars.length < 2) return [];
+
+        const color = readHostilityColor(f);
+        const dashed = EXPLOSIVES_DASHED[name] ?? [false, false];
+        const dash = [10 * resolution, 7 * resolution];
+
+        return bars.slice(0, 2).map(
+            (bar, i) =>
+                new Style({
+                    geometry: new LineString(bar),
+                    stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashed[i] ? dash : undefined}),
+                }),
+        );
+    };
+}
+
 export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => {
         const geom = f.getGeometry();

@@ -751,6 +751,9 @@ export enum TacticalGraphicName {
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
     Abatis = 'Abatis',
+    ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
+    ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
+    ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',
     WireUnspecified = 'WireUnspecified',
     WireSingleFence = 'WireSingleFence',
     WireDoubleFence = 'WireDoubleFence',
@@ -836,6 +839,9 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 'Explosives, State of Readiness 2 (Armed but Passable)',
     [TacticalGraphicName.WireUnspecified]: 'Wire, Unspecified',
     [TacticalGraphicName.WireSingleFence]: 'Wire, Single Fence',
     [TacticalGraphicName.WireDoubleFence]: 'Wire, Double Fence',
