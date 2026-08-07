@@ -60,20 +60,41 @@ describe('anti-tank ditches', () => {
         expect(decorations(UNDER).length).toBe(decorations(DONE).length);
     });
 
-    it('alternates tooth and mine, and never starts or ends with a mine', () => {
+    it('nests one mine per notch, never at either end', () => {
         const all = decorations(MINED);
         const isTooth = (st: any) => (st.getGeometry() as Polygon).getCoordinates()[0].length === 4;
-
-        // Strict alternation, starting and ending with a tooth. Asserting the *sequence*
-        // rather than the counts is what catches a mine landing at either end.
-        expect(all.map(isTooth)).toEqual(all.map((_, i) => i % 2 === 0));
-        expect(isTooth(all[0])).toBe(true);
-        expect(isTooth(all[all.length - 1])).toBe(true);
-        expect(all.length % 2).toBe(1);
-
+        const teeth = all.filter(isTooth);
         const mines = all.filter((st: any) => !isTooth(st));
-        expect(mines.length).toBe(all.filter(isTooth).length - 1);
+
+        // A notch needs a tooth either side, so there is exactly one fewer mine than tooth.
+        // Any other count means one landed past the end of the run.
+        expect(mines.length).toBe(teeth.length - 1);
+        expect(mines.length).toBeGreaterThan(0);
         for (const m of mines) expect(m.getFill()).toBeInstanceOf(Fill);
+
+        const midX = (st: any) => {
+            const xs = (st.getGeometry() as Polygon).getCoordinates()[0].map((c: number[]) => c[0]);
+            return (Math.min(...xs) + Math.max(...xs)) / 2;
+        };
+        // Each mine sits in the notch between the two teeth either side of it.
+        const sorted = [...mines].sort((a, b) => midX(a) - midX(b));
+        sorted.forEach((m, i) => {
+            expect(midX(m)).toBeGreaterThan(midX(teeth[i]));
+            expect(midX(m)).toBeLessThan(midX(teeth[i + 1]));
+        });
+    });
+
+    // Filled shapes are not also stroked. A stroke straddles its edge, so it inflates the
+    // shape by half a line width - two teeth sharing a base corner then overlap by a full
+    // stroke rather than meeting, and a stroked mine eats the gap keeping it legible.
+    it('does not stroke the shapes it fills', () => {
+        for (const st of decorations(DONE)) {
+            expect(st.getFill()).toBeInstanceOf(Fill);
+            expect(st.getStroke()).toBeFalsy();
+        }
+        for (const st of decorations(MINED)) expect(st.getStroke()).toBeFalsy();
+        // ...but an outlined tooth is all stroke, so it must keep one.
+        for (const st of decorations(UNDER)) expect(st.getStroke()).toBeTruthy();
     });
 
     // Pixel-constant, the reason the teeth moved into the style function at all.
