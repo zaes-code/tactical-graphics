@@ -52,6 +52,7 @@ import {
 import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan";
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
+import {Abatis} from "../graphics/Abatis";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
 export class TacticalGraphicsRegistry {
@@ -75,6 +76,8 @@ export class TacticalGraphicsRegistry {
 }
 
 // movement graphics
+TacticalGraphicsRegistry.register(new Abatis());
+
 TacticalGraphicsRegistry.register(new AttackHelicopterAxisOfAdvance());
 TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());
 TacticalGraphicsRegistry.register(new MainAttack());

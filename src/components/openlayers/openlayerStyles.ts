@@ -2555,7 +2555,10 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
         const labelScale = featureLabelScale(f, resolution);
         const labelWidthPx = getTextWidth(label, labelFont, labelScale);
         const GAP_PADDING_PX = 4;
-        const halfGapPx = labelWidthPx / 2 + GAP_PADDING_PX;
+        // A graphic in this family with no doctrinal letter — abatis — has nothing to
+        // carve space for, and the bare padding left a visible nick in an otherwise
+        // continuous route.
+        const halfGapPx = label ? labelWidthPx / 2 + GAP_PADDING_PX : 0;
         const gapMap = halfGapPx * resolution;
         const gapRatio = gapMap / segLen;
 
