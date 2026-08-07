@@ -297,6 +297,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: SHAPE_ONLY,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: SHAPE_ONLY,
     [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: SHAPE_ONLY,
     // The wire obstacles: no identifier, no dates, and no status - none of them has a
     // planned form to dash, so offering the control would put a setting in the dialog that
     // changes nothing on the map. Hostility is not declared here at all; getGraphicFields
