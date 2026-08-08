@@ -97,8 +97,21 @@ export type SpikeRenderMode = 'canvas' | 'native';
  */
 setWorkerUrl(`${process.env.PUBLIC_URL ?? ''}/maplibre-gl-worker.mjs`);
 
+/**
+ * Native layers, unless `?mlb=canvas` asks for the overlay.
+ *
+ * The default used to be the other way round, from the spike that compared the
+ * two. It never got flipped after native layers were chosen, so every user was
+ * getting the overlay — which redraws every graphic on **every frame**. With the
+ * sample gallery up that made the whole page unusable: a twelve-step zoom cost
+ * 6.1 s against 1.1 s on native, and it recovered the moment the graphics were
+ * cleared, which is exactly what a per-frame redraw looks like.
+ *
+ * The overlay is kept reachable because it is still the honest comparison for
+ * anything the native path cannot express.
+ */
 const INITIAL_MODE: SpikeRenderMode =
-    new URLSearchParams(window.location.search).get('mlb') === 'native' ? 'native' : 'canvas';
+    new URLSearchParams(window.location.search).get('mlb') === 'canvas' ? 'canvas' : 'native';
 
 /**
  * Writes a FeatureCollection to a `.geojson` file.

@@ -93,6 +93,8 @@ export class NativeLayerRenderer {
     lastFeatureCount = 0;
     /** How many times the geometry has been rebuilt since construction. */
     realiseCount = 0;
+    /** Set while a coalesced rebuild is pending. @see scheduleRealise */
+    private realisePending = false;
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
@@ -149,6 +151,37 @@ export class NativeLayerRenderer {
 
     add(graphic: MapLibreTacticalGraphic): void {
         this.graphics.push(graphic);
+        this.scheduleRealise();
+    }
+
+    /**
+     * Rebuilds once, after the current task finishes, however many times it is asked.
+     *
+     * `add` used to realise immediately, which made drawing N graphics cost N full
+     * rebuilds of all N — quadratic, and each one re-serialises every source and
+     * makes MapLibre re-tile it in the worker. Drawing the 213-graphic gallery ran
+     * 213 rebuilds and took 4.4 s; coalesced it is one rebuild.
+     *
+     * A microtask, not `requestAnimationFrame`: it still collapses a whole burst of
+     * adds into one rebuild, but it lands before the next paint and before anything
+     * that merely awaits — so a caller that adds and then reads the map sees the
+     * result, and no frame ever renders the intermediate state. `flush` is there for
+     * the synchronous case.
+     */
+    private scheduleRealise(): void {
+        if (this.realisePending) return;
+        this.realisePending = true;
+        Promise.resolve().then(() => {
+            if (!this.realisePending) return;
+            this.realisePending = false;
+            this.realise();
+        });
+    }
+
+    /** Runs any pending rebuild now. For a caller that cannot wait a microtask. */
+    flush(): void {
+        if (!this.realisePending) return;
+        this.realisePending = false;
         this.realise();
     }
 
@@ -175,7 +208,7 @@ export class NativeLayerRenderer {
 
     clear(): void {
         this.graphics.length = 0;
-        this.realise();
+        this.scheduleRealise();
     }
 
     get count(): number {
@@ -190,6 +223,8 @@ export class NativeLayerRenderer {
      * GeoJSON. Timed end to end.
      */
     realise(): void {
+        // A scheduled rebuild is now redundant — this one supersedes it.
+        this.realisePending = false;
         const started = performance.now();
         const resolution = resolutionOf(this.map);
         const context: PaintContext = {resolution, measureText: this.measureText};
