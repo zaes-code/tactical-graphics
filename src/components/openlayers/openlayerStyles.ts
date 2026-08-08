@@ -12,7 +12,6 @@ import {StyleFunction} from 'ol/style/Style';
 import {geometryService, BAR_SYMBOL_DASHES} from '@zaes/tactical-graphics';
 import {
     getLabel,
-    RouteDirection,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
@@ -22,7 +21,6 @@ import {
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
 import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
-import {Position} from 'geojson';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The colour table, the line weight and the three label-scale formulas now live in the
@@ -94,6 +92,7 @@ import {isEmpty} from '../../utils/isEmpty';
 import {
     antiTankDitchPaint,
     arcMissionTaskPaint,
+    directionArrowPaint,
     areaFillPaint,
     areaLabelStackPaint,
     groupOrSeriesOfTargetsLabelPaint,
@@ -111,6 +110,7 @@ import {
     obstacleAreaPaint,
     obstacleLinePaint,
     phaseLinePaint,
+    routeControlMeasurePaint,
 } from '@zaes/tactical-graphics';
 import {asStyleFunction} from './paintToOpenLayers';
 // Moved to its own leaf module so `paintToOpenLayers` can share it without an
@@ -1867,212 +1867,22 @@ function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: nu
  * 4 — at `lineWidth: 1` the "thinner" decoration came out *thicker* than the line it
  * decorates. Floors at 1 so it never vanishes, which also stops it from crossing over.
  */
-const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
 /** Centreline of the arrow row nearest the route. */
-const ROUTE_ARROW_BASE_PX = 14;
 /** Row-to-row pitch for the two-way pair. */
-const ROUTE_ARROW_ROW_PITCH_PX = 12;
-const ROUTE_ARROW_HEAD_LEN_PX = 10;
-const ROUTE_ARROW_HEAD_HALF_PX = 5;
 /** Clear space either side of the ALT word before its arrows start. */
-const ROUTE_ALT_GAP_PX = 5;
 /**
  * Shortest an alternating arm may be, head included. The plate draws each arm at
  * roughly two-thirds the width of the word between them, so a bare `ROUTE` — the
  * narrowest identifier there is — still gets an arm that reads as an arrow
  * rather than a head with a stub behind it.
  */
-const ROUTE_ALT_ARM_PX = 26;
 /** Shortest a traffic arrow may get when the identifier is short or empty. */
-const ROUTE_ARROW_MIN_SPAN_PX = 56;
 
-/**
- * One end of the route: the identifier, plus the traffic-direction figure for
- * everything except {@link RouteDirection.GENERAL}.
- *
- * `anchor` is the line endpoint; `a`→`b` is the segment whose bearing orients
- * the block. Offsets go through `offsetAbove` / `offsetBelow` so the block lands
- * on the same side of the line whichever way the user drew it.
- *
- * The whole block renders in the label colour — see the note on `color` below.
- */
-function routeEndStyles(
-    resolution: number,
-    label: string,
-    direction: RouteDirection,
-    atStart: boolean,
-    anchor: Coordinate,
-    a: Coordinate,
-    b: Coordinate,
-    labelScale: number,
-): Style[] {
-    const styles: Style[] = [];
-    // The traffic arrows are part of the amplifier block, not the control
-    // measure's line work, so they take the label colour and stay black on a
-    // hostile route — the same call `ALT` and the identifier make. Only the
-    // route line itself answers to `getColorByHostility`.
-    const color = getLabelFillColor();
-    const rotation = getRotation(a, b);
-    // getRotation returns -atan2(dy, dx) flipped to keep text upright, so
-    // negating it recovers the along-line unit vector in the same, upright
-    // direction the text reads.
-    const ux = Math.cos(-rotation);
-    const uy = Math.sin(-rotation);
 
-    /**
-     * How far along the line the whole block is pushed off `anchor`, in screen px.
-     * Set once the block's width is known; the figure is built symmetrically about
-     * zero and then slid inward by half its width so it sits **over** the route
-     * instead of straddling its end. Zero for GENERAL, which has no figure and
-     * keeps the endpoint-anchored identifier every other line graphic uses.
-     */
-    let shiftPx = 0;
-    /** Point `alongPx` screen px along the line from the row centred `upPx` above it. */
-    const at = (upPx: number, alongPx: number): Coordinate => {
-        const [cx, cy] = offsetAbove(anchor, a, b, resolution, upPx);
-        const d = (alongPx + shiftPx) * resolution;
-        return [cx + ux * d, cy + uy * d];
-    };
-
-    const s = labelScale;
-    const headLenPx = ROUTE_ARROW_HEAD_LEN_PX * s;
-    const headHalfPx = ROUTE_ARROW_HEAD_HALF_PX * s;
-
-    /** Shaft `fromPx`→`toPx` on row `rowPx`, with the solid head always at `toPx`. */
-    const arrow = (rowPx: number, fromPx: number, toPx: number) => {
-        const base = at(rowPx, toPx + (fromPx > toPx ? headLenPx : -headLenPx));
-        styles.push(new Style({
-            geometry: new LineString([at(rowPx, fromPx), at(rowPx, toPx)]),
-            stroke: new Stroke({color, width: routeArrowWidth()}),
-        }));
-        const tip = at(rowPx, toPx);
-        const left = offsetAbove(base, a, b, resolution, headHalfPx);
-        const right = offsetBelow(base, a, b, resolution, headHalfPx);
-        styles.push(new Style({
-            // Ring closed explicitly — an open ring renders inconsistently.
-            geometry: new Polygon([[tip, left, right, tip]]),
-            fill: new Fill({color}),
-        }));
-    };
-
-    const rows = direction === RouteDirection.TWO_WAY ? 2 : direction === RouteDirection.GENERAL ? 0 : 1;
-    const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * s;
-
-    if (rows > 0) {
-        const labelWidthPx = getTextWidth(label, fontStyle, s);
-        const altWidthPx = direction === RouteDirection.ALTERNATING ? getTextWidth('ALT', fontStyle, s) : 0;
-        // An alternating row has to hold ALT plus a full arrow on each side, so
-        // its floor is that content — never the label, which may be shorter.
-        const minSpanPx = altWidthPx > 0
-            ? altWidthPx + 2 * (ROUTE_ALT_GAP_PX + ROUTE_ALT_ARM_PX) * s
-            : ROUTE_ARROW_MIN_SPAN_PX * s;
-        const halfPx = Math.max(labelWidthPx, minSpanPx) / 2;
-
-        // Slide the block off the endpoint and onto the route. `ux`/`uy` point
-        // the way the text reads, which is inward at one end of the line and
-        // outward at the other, so the direction has to be taken from the
-        // segment rather than assumed.
-        const inward: Coordinate = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
-        shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
-
-        if (direction === RouteDirection.ONE_WAY) {
-            arrow(row(0), -halfPx, halfPx);
-        } else if (direction === RouteDirection.TWO_WAY) {
-            arrow(row(0), halfPx, -halfPx);   // lower row points back
-            arrow(row(1), -halfPx, halfPx);   // upper row points forward
-        } else {
-            // Both arms point away from the word, so each shaft runs outward.
-            const innerPx = altWidthPx / 2 + ROUTE_ALT_GAP_PX * s;
-            arrow(row(0), innerPx, halfPx);
-            arrow(row(0), -innerPx, -halfPx);
-            styles.push(new Style({
-                geometry: new Point(at(row(0), 0)),
-                text: new Text({
-                    text: 'ALT',
-                    font: fontStyle,
-                    // A text amplifier, so it stays in the label colour even when
-                    // the route's line work has gone red for a hostile identity.
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: s,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-    }
-
-    // Identifier clears the top arrow row; with no arrows it falls back to the
-    // plain 8 px every other line graphic uses.
-    const labelOffsetPx = rows > 0
-        ? row(rows - 1) + headHalfPx + 11 * s
-        : 8;
-    // Each endpoint is judged on its own segment — a route can start left-to-right
-    // and have its last leg turn back, so one shared flag would flip the wrong one.
-    const goesRight = b[0] >= a[0];
-    const endAlign: CanvasTextAlign = atStart
-        ? (goesRight ? 'left' : 'right')
-        : (goesRight ? 'right' : 'left');
-    styles.push(new Style({
-        // Through `at`, so the identifier rides the same inward shift as the
-        // figure it caps and the two stay registered with each other.
-        geometry: new Point(at(labelOffsetPx, 0)),
-        text: new Text({
-            text: label,
-            font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
-            rotation,
-            // Centre the identifier over the arrow figure it caps; with no arrows
-            // there is nothing to centre on, so run it inward off the endpoint.
-            textAlign: rows > 0 ? 'center' : endAlign,
-            textBaseline: 'bottom',
-            scale: labelScale,
-            stroke: getHaloStroke(),
-        }),
-    }));
-
-    return styles;
-}
-
+/** **Ported.** @see routePaints.ts, `routeControlMeasurePaint`. */
 export function routeControlMeasureStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => routeControlMeasureStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(routeControlMeasurePaint(name), name);
 }
-
-function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    const direction = labels.direction ?? RouteDirection.GENERAL;
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 2) return [];
-
-        const hostility = readHostility(f);
-        const color = getColorByHostility(hostility);
-        const labelScale = featureLabelScale(f, resolution);
-
-        const start = coords[0];
-        const afterStart = coords[1];
-        const end = coords[coords.length - 1];
-        const beforeEnd = coords[coords.length - 2];
-
-        const styles: Style[] = [
-            ...routeEndStyles(resolution, label, direction, true, start, start, afterStart, labelScale),
-            ...routeEndStyles(resolution, label, direction, false, end, beforeEnd, end, labelScale),
-        ];
-
-        // The route line is the only line work here, so it is the only thing that
-        // carries the hostility colour and the only thing that goes dashed when
-        // planned or suspected. The amplifier block above it stays black.
-        styles.push(new Style({
-            geometry: geom,
-            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
-        }));
-
-        return styles;
-    };
-}
-
 
 /** **Ported.** @see paintFunctions.ts, `defaultLinePaint`. */
 export function defaultLineStyle(name: TacticalGraphicName): StyleFunction {
@@ -3716,166 +3526,9 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
 const MAX_MITER = 4;
 
 
+/** **Ported.** @see linePaints.ts, `directionArrowPaint`. */
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => directionArrowStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const geom = f.getGeometry() as MultiLineString;
-        const allCoords = geom.getCoordinates();
-        const baseCoords = allCoords[0];
-        const arrowCoords = allCoords[1];
-        const styles: Style[] = [];
-
-        // Base line (dashes when planned).
-        styles.push(new Style({
-            geometry: new LineString(baseCoords),
-            stroke: new Stroke({
-                color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        }));
-
-        // Arrowhead + any extra shapes (feint dashes, main-attack polygon, etc.), solid.
-        if (allCoords.length > 1) {
-            styles.push(new Style({
-                geometry: new MultiLineString(allCoords.slice(1)),
-                stroke: new Stroke({color, width: LINE_WIDTH()}),
-            }));
-        }
-
-        // Fill the Aviation-direction-of-attack bow-tie triangles (closed rings
-        // appended at indices 2 and 3 by AviationDirectionOfAttack.generateGraphics).
-        if (name === TacticalGraphicName.AviationDirectionOfAttack && allCoords.length >= 4) {
-            styles.push(new Style({
-                geometry: new Polygon([allCoords[2]]),
-                fill: new Fill({color}),
-            }));
-            styles.push(new Style({
-                geometry: new Polygon([allCoords[3]]),
-                fill: new Fill({color}),
-            }));
-        }
-
-        if (baseCoords.length >= 2 && arrowCoords && arrowCoords.length >= 3) {
-            addDirectionArrowLabels(name, labels, baseCoords, arrowCoords, styles, resolution, f);
-        }
-
-        return styles;
-    };
-}
-
-/**
- * Draws the name / optional ENY prefix / DTG labels for a direction arrow.
- * Anchor is set just behind the arrowhead wing base so text never invades the
- * arrowhead. Text extends backward along the line via `textAlign` chosen per
- * local screen direction, keeping the labels away from the tip for both
- * left-to-right and right-to-left draws.
- */
-function addDirectionArrowLabels(
-    name: TacticalGraphicName,
-    labels: GraphicLabels,
-    baseCoords: Position[],
-    arrowCoords: Position[],
-    styles: Style[],
-    resolution: number,
-    feature: FeatureLike,
-): void {
-    const p1 = baseCoords[baseCoords.length - 2];
-    const p2 = baseCoords[baseCoords.length - 1];
-    const dx = p2[0] - p1[0];
-    const dy = p2[1] - p1[1];
-    const lineLen = Math.hypot(dx, dy);
-    if (lineLen === 0) return;
-    const ux = dx / lineLen;
-    const uy = dy / lineLen;
-
-    // Midpoint of the arrowhead's wing base (computeArrowheadPoints → [lw, tip, rw]).
-    const leftWing = arrowCoords[0];
-    const rightWing = arrowCoords[2];
-    const midWingBase: Coordinate = [
-        (leftWing[0] + rightWing[0]) / 2,
-        (leftWing[1] + rightWing[1]) / 2,
-    ];
-
-    // Anchor = short fixed clearance behind the wing base along the line.
-    const CLEARANCE_PX = 10;
-    const clearanceMap = CLEARANCE_PX * resolution;
-    const anchor: Coordinate = [
-        midWingBase[0] - ux * clearanceMap,
-        midWingBase[1] - uy * clearanceMap,
-    ];
-
-    const rotation = getRotation(p1, p2);
-    const labelScale = featureLabelScale(feature, resolution);
-    // The arrowhead is at p2; text must extend away from it in screen space.
-    const arrowGoesRight = p2[0] >= p1[0];
-    const textAlign: CanvasTextAlign = arrowGoesRight ? 'right' : 'left';
-
-    const nameText = getFullLabel(name, labels.label ?? '');
-    const dateText = getDateLabel(labels);
-    const isHostile = labels.hostility === TacticalGraphicHostility.hostileFaker;
-    const showEny = name === TacticalGraphicName.DirectionOfSupportingAttack && isHostile;
-
-    if (nameText) {
-        styles.push(new Style({
-            geometry: new Point(anchor),
-            text: new Text({
-                text: nameText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    if (showEny) {
-        const nameWidthPx = nameText ? getTextWidth(nameText, fontStyle, labelScale) : 0;
-        const ENY_GAP_PX = 36;
-        const enyBackMap = (nameWidthPx + ENY_GAP_PX) * resolution;
-        const enyAnchor: Coordinate = [
-            anchor[0] - ux * enyBackMap,
-            anchor[1] - uy * enyBackMap,
-        ];
-        styles.push(new Style({
-            geometry: new Point(enyAnchor),
-            text: new Text({
-                text: 'ENY',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    if (dateText) {
-        const DTG_OFFSET_PX = 20;
-        const dtgAnchor = offsetBelow(anchor, p1, p2, resolution, DTG_OFFSET_PX * labelScale);
-        styles.push(new Style({
-            geometry: new Point(dtgAnchor),
-            text: new Text({
-                text: dateText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
+    return asStyleFunction(directionArrowPaint(name), name);
 }
 
 export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): StyleFunction {
