@@ -95,6 +95,7 @@ import {
     airCorridorLabelPaint,
     airCorridorPaint,
     directionArrowPaint,
+    retrogradeTaskPaint,
     finalProtectiveFirePaint,
     linearSmokeTargetPaint,
     linearTargetPaint,
@@ -1835,83 +1836,9 @@ function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
     };
 }
 
+/** **Ported.** @see retrogradePaints.ts, `retrogradeTaskPaint`. */
 export function retroGradeTaskStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let baseLine = coords[0];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = 0;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 = .5;
-        const p1 = baseLine[0];
-        const p2 = baseLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a central gap sized to fit the label at current scale
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const labelWidthPx = getTextWidth(label, labelFont, labelScale);
-        const GAP_PADDING_PX = 4;
-        // A graphic in this family with no doctrinal letter — abatis — has nothing to
-        // carve space for, and the bare padding left a visible nick in an otherwise
-        // continuous route.
-        const halfGapPx = label ? labelWidthPx / 2 + GAP_PADDING_PX : 0;
-        const gapMap = halfGapPx * resolution;
-        const gapRatio = gapMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the echelon in the middle. The label lies along the
-        // segment whose gap holds it — `getRotation` flips it through 180° when
-        // that segment points left, so it never renders upside down.
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: labelFont,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: getRotation(p1, p2),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(retrogradeTaskPaint(label));
 }
 
 /**
