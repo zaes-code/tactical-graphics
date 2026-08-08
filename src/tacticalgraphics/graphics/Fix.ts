@@ -14,7 +14,14 @@ const FIX_TRIANGLE_HEIGHT_RATIO = 20 / 145;
 
 export class Fix extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string;
-    type: string = 'Point';
+    /**
+     * **LineString, not Point.** This generator is driven by a drawn line — its
+     * `generateGraphics` takes `Feature<LineString>` — and declaring `Point` made
+     * `renderTacticalGraphic` reject every base a consumer could give it. The
+     * OpenLayers holders never noticed because they call the registry directly and
+     * bypass that guard; the public entry point is the only reader of this field.
+     */
+    type: string = 'LineString';
 
     /** Mission task or table 5-19 obstacle effect — same zigzag, "F" aside. @see Block */
     constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalFix) {
