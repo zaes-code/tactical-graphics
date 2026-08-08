@@ -92,6 +92,11 @@ import {isEmpty} from '../../utils/isEmpty';
 import {
     arcMissionTaskPaint,
     areaFillPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
     encirclementPaint,
@@ -4648,364 +4653,65 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
         case TacticalGraphicName.NoFireAreaIrregular:
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        padding: [4, 8, 4, 8],
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         case TacticalGraphicName.PositionAreaArtilleryCircular:
         case TacticalGraphicName.PositionAreaArtilleryIrregular:
         case TacticalGraphicName.PositionAreaArtilleryRectangular:
-            // PAA shows four "PAA" labels anchored at the top, bottom, left, and
-            // right of the geometry's bounding box (stored on the label feature
-            // by the base classes).
-            return (feature: FeatureLike, resolution: number) => {
-                const minX = feature.get('polygonMinX') as number | undefined;
-                const minY = feature.get('polygonMinY') as number | undefined;
-                const maxX = feature.get('polygonMaxX') as number | undefined;
-                const maxY = feature.get('polygonMaxY') as number | undefined;
-                if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const cx = (minX + maxX) / 2;
-                const cy = (minY + maxY) / 2;
-                const positions: Array<[number, number]> = [
-                    [cx, maxY], // top edge midpoint
-                    [cx, minY], // bottom edge midpoint
-                    [minX, cy], // left edge midpoint
-                    [maxX, cy], // right edge midpoint
-                ];
-                const styles: Style[] = positions.map(pos => new Style({
-                    geometry: new Point(pos),
-                    text: new Text({
-                        text: 'PAA',
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                }));
-
-                // Name + DTG label centered on the label feature's anchor point
-                // (matches FreeFireArea's treatment).
-                const anchorPoint = feature.getGeometry() as Point;
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (anchorPoint && lines.length > 0) {
-                    styles.push(new Style({
-                        geometry: anchorPoint,
-                        text: new Text({
-                            text: lines.join('\n'),
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-
-                return styles;
-            };
+            return asStyleFunction(positionAreaArtilleryLabelPaint(name), name);
         case TacticalGraphicName.ObstacleFreeArea:
         case TacticalGraphicName.ObstacleRestrictedArea:
-            // Stacked inside the toothed ring: the free area's literal "FREE" over T (the
-            // designation) over W - W1 (the two DTGs, which `getDateLabel` already joins
-            // with the hyphen the plate shows). "FREE" is a line of its own rather than
-            // the `getLabel` prefix, which would set it beside the name instead of above
-            // it. One Text with newlines rather than a style per line, for the same
-            // reason the fire support areas use one: a fixed pixel offset between
-            // separate styles collides with text that grows on zoom.
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const lines = [
-                    name === TacticalGraphicName.ObstacleFreeArea ? 'FREE' : '',
-                    fullLabel.trim(),
-                    dateLabel.trim(),
-                ].filter(line => line.length > 0);
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale: featureLabelScale(feature, resolution),
-                    }),
-                })];
-            };
+            // "FREE" is a line of its own above the designation, not a `getLabel`
+            // prefix — a prefix would set it beside the name, and the plate stacks it.
+            return asStyleFunction(
+                areaLabelStackPaint(name, {
+                    before: name === TacticalGraphicName.ObstacleFreeArea ? ['FREE'] : [],
+                }),
+                name,
+            );
         case TacticalGraphicName.FireSupportAreaIrregular:
-            // FSA Irregular: stack "FSA" / name / DTG1 / DTG2 in a single Text
-            // centered at the polygon centroid. Using "\n" instead of separate
-            // styles keeps the line spacing tied to the font, so the lines
-            // don't drift apart and overlap when the user zooms in (the
-            // default getAreaLabelStyles uses a fixed 18px offsetY which
-            // collides with text growing past 18px at high zoom).
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const lines = [
-                    fullLabel.trim(),
-                    (labels.startDate ?? '').trim(),
-                    (labels.endDate ?? '').trim(),
-                ].filter(s => s && s.length > 0);
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         case TacticalGraphicName.FireSupportAreaRectangular:
         case TacticalGraphicName.FireSupportAreaCircular:
-        case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
-        case TacticalGraphicName.CriticalFriendlyZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
-        case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
-        case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.CallForFireZoneRectangular:
         case TacticalGraphicName.CallForFireZoneCircular:
-        case TacticalGraphicName.DeadSpaceAreaIrregular:
         case TacticalGraphicName.DeadSpaceAreaRectangular:
         case TacticalGraphicName.DeadSpaceAreaCircular:
-        case TacticalGraphicName.BlueKillBoxIrregular:
         case TacticalGraphicName.BlueKillBoxRectangular:
         case TacticalGraphicName.BlueKillBoxCircular:
-        case TacticalGraphicName.PurpleKillBoxIrregular:
         case TacticalGraphicName.PurpleKillBoxRectangular:
         case TacticalGraphicName.PurpleKillBoxCircular:
-            // FSA Rect / Circle (and ATI ZONE / CF ZONE / CENSOR ZONE / CFF
-            // ZONE / DA / BKB / PKB irregular, rect & circle variants — same
-            // layout, the prefix shown comes from getLabel(name)): "<PREFIX>"
-            // and name on separate lines, centered inside the shape. The two
-            // DTGs (W / W1) stack outside on the top-left of its bounding box,
-            // to the left of the left edge, top-aligned with the top edge.
-            // For the circle the bounding box is the imaginary square hugging
-            // the circle; for an irregular polygon it is the geometry's axis-
-            // aligned extent (stored on the label feature by AreaGraphicBase).
-            return (feature: FeatureLike, resolution: number) => {
-                const styles: Style[] = [];
-                const scale = featureLabelScale(feature, resolution);
-
-                const anchorPoint = feature.getGeometry() as Point;
-                const prefix = getLabel(name);
-                const nameLines = [prefix, (labels.label ?? '').trim()].filter(s => s && s.length > 0);
-                if (anchorPoint && nameLines.length > 0) {
-                    styles.push(new Style({
-                        geometry: anchorPoint,
-                        text: new Text({
-                            text: nameLines.join('\n'),
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-
-                const dtg1 = (labels.startDate ?? '').trim();
-                const dtg2 = (labels.endDate ?? '').trim();
-                let dtgAnchor: Coordinate | undefined;
-                const isIrregularZone =
-                    name === TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular ||
-                    name === TacticalGraphicName.CriticalFriendlyZoneIrregular ||
-                    name === TacticalGraphicName.CensorZoneIrregular ||
-                    name === TacticalGraphicName.CallForFireZoneIrregular ||
-                    name === TacticalGraphicName.DeadSpaceAreaIrregular ||
-                    name === TacticalGraphicName.BlueKillBoxIrregular ||
-                    name === TacticalGraphicName.PurpleKillBoxIrregular;
-                if (isIrregularZone) {
-                    // Irregular zones: anchor on the actual upper-leftmost
-                    // vertex of the polygon. Using the bounding-box corner
-                    // (polygonMinX / polygonMaxY) is misleading for irregular
-                    // shapes — that point can sit far away from the geometry.
-                    // "Upper-left vertex" = smallest X; ties broken by largest Y.
-                    const ring = feature.get('polygonRing') as Coordinate[] | undefined;
-                    if (ring && ring.length > 0) {
-                        let best = ring[0];
-                        for (let i = 1; i < ring.length; i++) {
-                            const v = ring[i];
-                            if (v[0] < best[0] || (v[0] === best[0] && v[1] > best[1])) {
-                                best = v;
-                            }
-                        }
-                        dtgAnchor = best;
-                    }
-                } else {
-                    // FSA / rect / circle: bounding-box corner is the right
-                    // anchor (a rectangle's top-left is a vertex, and a circle
-                    // has no vertices — the imaginary square hugging it works).
-                    const minX = feature.get('polygonMinX') as number | undefined;
-                    const maxY = feature.get('polygonMaxY') as number | undefined;
-                    if (minX !== undefined && maxY !== undefined) {
-                        dtgAnchor = [minX, maxY];
-                    }
-                }
-                if (dtgAnchor && (dtg1 || dtg2)) {
-                    const dtgText = [dtg1, dtg2].filter(s => s.length > 0).join('-\n');
-                    styles.push(new Style({
-                        geometry: new Point(dtgAnchor),
-                        text: new Text({
-                            text: dtgText,
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'right',
-                            textBaseline: 'top',
-                            offsetX: -10,
-                            scale,
-                        }),
-                    }));
-                }
-                return styles;
-            };
+            // Prefix over name, centred; the two DTGs outside the bounding box's
+            // upper-left. A rectangle's corner is a real vertex and a circle has none,
+            // so the box is the right anchor for both.
+            return asStyleFunction(zoneLabelPaint(name, false), name);
+        case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
+        case TacticalGraphicName.CriticalFriendlyZoneIrregular:
+        case TacticalGraphicName.CensorZoneIrregular:
+        case TacticalGraphicName.CallForFireZoneIrregular:
+        case TacticalGraphicName.DeadSpaceAreaIrregular:
+        case TacticalGraphicName.BlueKillBoxIrregular:
+        case TacticalGraphicName.PurpleKillBoxIrregular:
+            // Same layout, but the DTGs anchor on the real upper-left *vertex*: a
+            // bounding-box corner can sit far outside an irregular shape.
+            return asStyleFunction(zoneLabelPaint(name, true), name);
         case TacticalGraphicName.GroupOrSeriesOfTargets:
-            // Group/Series of Targets: name label sits ON the polygon's
-            // northern-most segment, centered along it and rotated to follow
-            // the segment direction. AreaGraphicBase parks the labels feature
-            // at that segment's midpoint, so feature.getGeometry() is already
-            // the anchor and labelSegmentA/B give the rotation axis.
-            return (feature: FeatureLike, resolution: number) => {
-                const a = feature.get('labelSegmentA') as Coordinate | undefined;
-                const b = feature.get('labelSegmentB') as Coordinate | undefined;
-                const point = feature.getGeometry() as Point;
-                if (!a || !b || !point || !fullLabel?.trim()) return [];
-                return [new Style({
-                    geometry: point,
-                    text: new Text({
-                        text: fullLabel.trim(),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        rotation: getRotation(a, b),
-                        scale: featureLabelScale(feature, resolution),
-                    }),
-                })];
-            };
+            return asStyleFunction(groupOrSeriesOfTargetsLabelPaint(name), name);
         case TacticalGraphicName.SmokeObscurant:
-            // Smoke obscurant labels: name / SMOKE / DTG1- / DTG2 stacked at the
-            // polygon centroid in a single Text so the line spacing tracks the
-            // font scale at every zoom. Present and Planned share the label
-            // layout — Planned just renders the outline dashed (handled in
-            // getStyle).
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const userName = (labels.label ?? '').trim();
-                const dtg1 = (labels.startDate ?? '').trim();
-                const dtg2 = (labels.endDate ?? '').trim();
-                const lines: string[] = [];
-                if (userName) lines.push(userName);
-                lines.push('SMOKE');
-                if (dtg1) lines.push(dtg2 ? `${dtg1}-` : dtg1);
-                if (dtg2) lines.push(dtg2);
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(smokeObscurantLabelPaint(), name);
         case TacticalGraphicName.FreeFireAreaCircular:
         case TacticalGraphicName.FreeFireAreaIrregular:
         case TacticalGraphicName.FreeFireAreaRectangular:
         case TacticalGraphicName.RestrictiveFireAreaCircular:
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
-            // All FireSupportCoordination polygon labels share the opaque-white
-            // halo treatment (matches LimitedAccessArea), and both lines render
-            // in a single Text via "\n" so their spacing scales with the font
-            // instead of drifting at different zoom levels. This only affects
-            // label rendering — hatch fill still applies to NoFireArea only.
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
         case TacticalGraphicName.LimitedAccessArea:
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        padding: [4, 8, 4, 8],
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         default:
             return getAreaLabelFn(fullLabel, dateLabel);
     }
