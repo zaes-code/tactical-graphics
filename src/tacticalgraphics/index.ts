@@ -192,6 +192,7 @@ export {HANDLE_Z_INDEX, mapPaintGeometry, paintFilledRings, paintGeometryMembers
 export type {
     CircleSpec,
     FillSpec,
+    HatchSpec,
     Paint,
     PaintColor,
     PaintContext,
@@ -240,5 +241,12 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {
+    encirclementPaint,
+    fortifiedAreaPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+} from './symbology/areaPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

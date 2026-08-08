@@ -89,7 +89,19 @@ import {isEmpty} from '../../utils/isEmpty';
  * ~1,600 tests that assert on this module's output become parity tests for it.
  * @see paintToOpenLayers.ts
  */
-import {arcMissionTaskPaint, areaFillPaint, areaOutlinePaint, defaultLinePaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
+import {
+    arcMissionTaskPaint,
+    areaFillPaint,
+    areaOutlinePaint,
+    defaultLinePaint,
+    encirclementPaint,
+    fortifiedAreaPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+    obstacleLinePaint,
+    phaseLinePaint,
+} from '@zaes/tactical-graphics';
 import {asStyleFunction} from './paintToOpenLayers';
 // Moved to its own leaf module so `paintToOpenLayers` can share it without an
 // import cycle back through this file. Re-exported: it is public API.
@@ -6256,54 +6268,7 @@ export function createDiagonalHatchPattern(
     return ctx.createPattern(canvas, 'repeat')!;
 }
 
-/**
- * The obstacle areas: belt, group and zone wear their teeth outward, the free and
- * restricted areas inward, and the restricted area alone carries a hatch fill.
- *
- * The geometry is the plain drawn ring — the crenellation is added here, in screen
- * pixels. @see obstacleRing
- */
-export function obstacleAreaStyles(feature: FeatureLike, resolution: number, opts: {outward: boolean, hatched?: boolean}): Style[] {
-    const geometry = feature.getGeometry();
-    if (!(geometry instanceof Polygon)) return [];
 
-    const hostility = readHostility(feature);
-    const color = getColorByHostility(hostility);
-    const toothed = geometry.getCoordinates().map(ring => obstacleRing(ring, resolution, opts.outward));
-
-    return [new Style({
-        geometry: new Polygon(toothed),
-        stroke: new Stroke({color, width: LINE_WIDTH()}),
-        fill: opts.hatched ? new Fill({color: createDiagonalHatchPattern(hostility, 8, 1)}) : undefined,
-    })];
-}
-
-export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
-    return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
-}
-
-/**
- * The fortified area: square merlons standing outward off the drawn ring, in screen
- * pixels. Same reasoning as the obstacle teeth, same winding correction — outward is a
- * property of the ring, not of the order its corners were clicked.
- */
-export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
-    const geometry = feature.getGeometry();
-    if (!(geometry instanceof Polygon)) return [];
-
-    const scale = decorationScale(geometry.getCoordinates()[0], true, resolution, FORTIFIED_HEIGHT_PX);
-    const merlonMap = FORTIFIED_MERLON_PX * scale * resolution;
-    const crenelMap = FORTIFIED_CRENEL_PX * scale * resolution;
-    const heightMap = FORTIFIED_HEIGHT_PX * scale * resolution;
-
-    const rings = geometry.getCoordinates().map(ring =>
-        castellatedPath(ring, merlonMap, crenelMap, heightMap, ringIsClockwise(ring) ? 1 : -1));
-
-    return [new Style({
-        geometry: new Polygon(rings),
-        stroke: new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()}),
-    })];
-}
 
 // FreeFireAreaCircular: present = solid stroke with no fill; planned = dashed
 // stroke with diagonal hatch fill. Mirrors the polygon FFA rendering so all
@@ -6330,87 +6295,38 @@ function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFuncti
     };
 }
 
-export function groupOrSeriesOfTargetsGraphicStyle(
-    labels: GraphicLabels,
-    feature: FeatureLike,
-    resolution: number,
-): Style[] {
-    const geom = feature.getGeometry();
-    if (!(geom instanceof Polygon)) return [];
-    const ring = geom.getCoordinates()[0];
-    if (!ring || ring.length < 2) return [];
 
-    const color = readHostilityColor(feature);
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-    const stroke = new Stroke({
-        color,
-        width: LINE_WIDTH(),
-        lineDash: isPlanned ? [12, 8] : undefined,
-    });
 
-    let bestIdx = 0;
-    let bestMidY = -Infinity;
-    for (let i = 0; i < ring.length - 1; i++) {
-        const midY = (ring[i][1] + ring[i + 1][1]) / 2;
-        if (midY > bestMidY) {
-            bestMidY = midY;
-            bestIdx = i;
-        }
-    }
+/**
+ * ## The ported area styles, as OpenLayers style functions
+ *
+ * Each is `asStyleFunction(...)` over a paint function in `areaPaints.ts`, so one
+ * implementation draws in both renderers.
+ *
+ * **The exported names are kept deliberately.** `openlayerStyles.test.ts` asserts
+ * on three of them — the obstacle teeth's winding correction, the shape-relative
+ * decoration cap, the fortified merlons — and `MissionTaskGraphicBase` calls a
+ * fourth for the circular no-fire areas. Deleting the exports would have deleted
+ * the coverage that proves the port did not change what these draw, which is the
+ * opposite of what the port is for.
+ */
 
-    const styles: Style[] = [];
-    const labelText = (labels.label ?? '').trim();
-    const scale = featureLabelScale(feature, resolution);
-    const labelWidthPx = labelText ? getTextWidth(labelText, fontStyle, scale) : 0;
-    const gapHalfMap = labelText ? (labelWidthPx / 2 + 6) * resolution : 0;
-
-    for (let i = 0; i < ring.length - 1; i++) {
-        const a = ring[i];
-        const b = ring[i + 1];
-        if (i === bestIdx && gapHalfMap > 0) {
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const segLen = Math.hypot(dx, dy);
-            if (segLen > 2 * gapHalfMap) {
-                const ux = dx / segLen, uy = dy / segLen;
-                const mx = (a[0] + b[0]) / 2;
-                const my = (a[1] + b[1]) / 2;
-                const gapStart: Coordinate = [mx - ux * gapHalfMap, my - uy * gapHalfMap];
-                const gapEnd: Coordinate = [mx + ux * gapHalfMap, my + uy * gapHalfMap];
-                styles.push(new Style({geometry: new LineString([a, gapStart]), stroke}));
-                styles.push(new Style({geometry: new LineString([gapEnd, b]), stroke}));
-                continue;
-            }
-        }
-        styles.push(new Style({geometry: new LineString([a, b]), stroke}));
-    }
-    return styles;
+/** Belt / group / zone (outward), free (inward), restricted (inward + hatched). */
+export function obstacleAreaStyles(feature: FeatureLike, resolution: number, opts: {outward: boolean; hatched?: boolean}): Style[] {
+    return asStyleFunction(obstacleAreaPaint(opts))(feature, resolution);
 }
 
-export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: number): Style {
-    return limitedAccessAreaStyleFromLabels(readGraphicLabels(feature), feature, resolution);
+export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number): Style[] {
+    return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
 }
 
-function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style {
-    const color = readHostilityColor(feature);
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
+export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
+    return asStyleFunction(fortifiedAreaPaint())(feature, resolution);
+}
 
-    const pattern = createDiagonalHatchPattern(
-        TacticalGraphicHostility.unknown,
-        16,
-        2                    // hatch thickness
-    );
-
-    return new Style({
-        fill: new Fill({
-            color: pattern ?? 'rgba(0,0,0,0)',
-        }),
-        stroke: new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined,
-        }),
-    });
+/** The limited-access family, including the circular no-fire area a mission-task holder draws. */
+export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: number): Style[] {
+    return asStyleFunction(limitedAccessAreaPaint())(feature, resolution);
 }
 
 export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolution: number) {
@@ -6421,74 +6337,45 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
-    if (name === TacticalGraphicName.Encirclement) return encirclementGraphicStyle(feature, resolution);
-    if (name === TacticalGraphicName.ObstacleRestrictedArea) return obstacleRestrictedZoneStyle(feature, resolution);
-    if (name === TacticalGraphicName.ObstacleFreeArea) return obstacleAreaStyles(feature, resolution, {outward: false});
-    if (name === TacticalGraphicName.FortifiedArea) return fortifiedAreaStyle(feature, resolution);
+    // ── Ported to the paint layer ────────────────────────────────────────────
+    // Every branch below is `asStyleFunction(...)` over a paint function, so the
+    // same implementation draws in OpenLayers and MapLibre. @see areaPaints.ts
+    if (name === TacticalGraphicName.ObstacleRestrictedArea) {
+        return asStyleFunction(obstacleAreaPaint({outward: false, hatched: true}), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.ObstacleFreeArea) {
+        return asStyleFunction(obstacleAreaPaint({outward: false}), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.FortifiedArea) {
+        return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
+    }
     if (
         name === TacticalGraphicName.ObstacleBelt ||
         name === TacticalGraphicName.ObstacleGroup ||
         name === TacticalGraphicName.ObstacleZone
-    ) return obstacleAreaStyles(feature, resolution, {outward: true});
-    if (name === TacticalGraphicName.LimitedAccessArea) return limitedAccessAreaStyleFromLabels(labels, feature, resolution);
+    ) {
+        return asStyleFunction(obstacleAreaPaint({outward: true}), name)(feature, resolution);
+    }
     if (
+        name === TacticalGraphicName.LimitedAccessArea ||
         name === TacticalGraphicName.NoFireAreaCircular ||
         name === TacticalGraphicName.NoFireAreaIrregular ||
         name === TacticalGraphicName.NoFireAreaRectangular ||
         name === TacticalGraphicName.WeaponsFreeZone
-    ) return limitedAccessAreaStyleFromLabels(labels, feature, resolution);
+    ) {
+        return asStyleFunction(limitedAccessAreaPaint(), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.GroupOrSeriesOfTargets) {
-        return groupOrSeriesOfTargetsGraphicStyle(labels, feature, resolution);
+        return asStyleFunction(groupOrSeriesOfTargetsPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.Encirclement) {
+        return asStyleFunction(encirclementPaint(), name)(feature, resolution);
     }
     // Everything else: the plain outline, dashed when planned. **Ported** — 60 of
     // the 75 area graphics reach this branch. @see paintFunctions.ts, `areaOutlinePaint`.
     return asStyleFunction(areaOutlinePaint(name), name)(feature, resolution);
 }
 
-export function encirclementGraphicStyle(feature: FeatureLike, resolution: number): Style[] | Style {
-    const hostility = readHostility(feature);
-    let geom = feature.getGeometry();
-    let styles = [
-        new Style({
-            stroke: new Stroke({
-                color: getColorByHostility(hostility),
-                width: LINE_WIDTH(),
-            }),
-        }),
-    ];
-
-    if (!geom || !(geom instanceof GeometryCollection)) {
-        return styles;
-    }
-
-    let geometries = geom.getGeometries();
-
-    geometries.forEach((geom) => {
-        if (!(geom instanceof MultiPoint)) return;
-
-        if (hostility === TacticalGraphicHostility.hostileFaker) {
-            styles.push(
-                new Style({
-                        geometry: new MultiPoint(geom.getCoordinates()),
-                        text: new Text({
-                            text: 'ENY',
-                            font: fontStyle,
-                            // Was getColorByHostility(unknown), which resolves to
-                            // the same #000000 by a confusing route. ENY is an
-                            // amplifier, and amplifiers are black.
-                            fill: new Fill({color: getLabelFillColor()}),
-                            placement: 'point',
-                            scale: featureLabelScale(feature, resolution),
-                        }),
-                    },
-                ));
-        }
-
-    });
-
-    return styles;
-
-}
 
 // --- CONFIGURATION CONSTANTS ---
 const GAP_WIDTH_PX = 40; // The desired width (in screen pixels) for each text gap

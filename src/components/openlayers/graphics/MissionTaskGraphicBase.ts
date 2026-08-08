@@ -25,7 +25,7 @@ import {
     envelopmentGraphicStyleFunc,
     barSymbolStyleFunc,
 } from "../openlayerStyles";
-import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
+import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
 import {
@@ -706,19 +706,14 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
             this.graphic.setStyle(freeFireAreaCircularStyleFunc());
         }
         // NoFireAreaCircular gets the always-hatched LimitedAccessArea fill.
-        // CircularArea generates the outline as a MultiLineString (no interior),
-        // so the style is forced onto a Polygon built from the ring so the hatch
-        // pattern actually fills the circle.
+        //
+        // `CircularArea` emits its outline as a MultiLineString — a ring with no
+        // declared interior — so a hatch applied to it has nothing to fill. That
+        // coercion used to happen here, which meant it existed for OpenLayers and
+        // not for any other renderer; it now lives in `limitedAccessAreaPaint`
+        // (`fillableGeometry`), so both engines close the ring the same way.
         if (name === TacticalGraphicName.NoFireAreaCircular) {
-            this.graphic.setStyle((feature, resolution) => {
-                const style = limitedAccessAreaStyleFunc(feature, resolution);
-                const geom = feature.getGeometry();
-                if (geom instanceof MultiLineString) {
-                    const rings = geom.getCoordinates();
-                    if (rings.length > 0) style.setGeometry(new Polygon(rings));
-                }
-                return style;
-            });
+            this.graphic.setStyle(limitedAccessAreaStyleFunc);
         }
 
         writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);

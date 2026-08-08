@@ -8,6 +8,7 @@ import {
     featureCollection,
     fillLayer,
     lineLayer,
+    renderHatchImage,
     symbolLayer,
 } from './paintToLayers';
 
@@ -176,6 +177,16 @@ export class NativeLayerRenderer {
 
         const buckets = bucketPaints(paints);
         let features = buckets.fills.length + buckets.circles.length + buckets.symbols.length;
+
+        // Register any hatch this frame needs. MapLibre has no pattern primitive —
+        // `fill-pattern` names an image — so the hatch the paint layer describes as
+        // parameters has to be rasterised and uploaded before a fill can use it.
+        // Idempotent: `hasImage` keeps this to once per distinct hatch per map.
+        for (const [id, spec] of Array.from(buckets.hatches)) {
+            if (this.map.hasImage(id)) continue;
+            const image = renderHatchImage(spec);
+            if (image) this.map.addImage(id, image, {pixelRatio: 1});
+        }
 
         this.setData('fills', buckets.fills);
         this.setData('circles', buckets.circles);
