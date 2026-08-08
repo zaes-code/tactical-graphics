@@ -33,6 +33,7 @@ import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obsta
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
+import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
@@ -324,6 +325,18 @@ const ROUTE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AlternateSupplyRoute,
 ];
 
+/** The eight air-coordinating corridors: one shape, eight doctrinal names. */
+const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AirCorridor,
+    TacticalGraphicName.LowLevelTransitRoute,
+    TacticalGraphicName.MinimumRiskRoute,
+    TacticalGraphicName.SafeLane,
+    TacticalGraphicName.SpecialCorridor,
+    TacticalGraphicName.StandardUseArmyAircraftFlightRoute,
+    TacticalGraphicName.TransitCorridor,
+    TacticalGraphicName.UnmannedAircraftCorridor,
+];
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -393,6 +406,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of ROUTE_GRAPHICS) {
         registry[name] = {graphic: routeControlMeasurePaint(name)};
+    }
+
+    for (const name of CORRIDOR_GRAPHICS) {
+        registry[name] = {graphic: airCorridorPaint(), label: airCorridorLabelPaint(name)};
     }
 
     registry[TacticalGraphicName.LinearTarget] = {graphic: linearTargetPaint(TacticalGraphicName.LinearTarget)};

@@ -3,7 +3,7 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import { Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
@@ -92,6 +92,8 @@ import {isEmpty} from '../../utils/isEmpty';
 import {
     antiTankDitchPaint,
     arcMissionTaskPaint,
+    airCorridorLabelPaint,
+    airCorridorPaint,
     directionArrowPaint,
     finalProtectiveFirePaint,
     linearSmokeTargetPaint,
@@ -592,211 +594,28 @@ export const createFeature = () => {
 };
 
 /**
- * Renders the AM (width) amplifier. The value is stored as bare metres — the
- * dialog's Width input accepts digits only — so the unit and the thousands
- * separators are presentation, added here. Anything non-numeric (free text
- * typed before this was a number, or an imported value) is shown verbatim.
+ * ## The air-coordinating corridors — ported
+ *
+ * `formatWidthAmplifier`, the ACP label-fitting scale and both style functions
+ * moved to `symbology/corridorPaints.ts`. Nothing about a corridor's layout is an
+ * OpenLayers fact; these are the adapters over the shared implementation.
  */
-function formatWidthAmplifier(value: string): string {
-    const metres = Number(value);
-    return value.trim() !== '' && Number.isFinite(metres) ? `${metres.toLocaleString('en-US')} M` : value;
-}
 
-/** Assumed circle radius when the real one is unknown. */
-const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
-/** Share of the circle's diameter the label may span. */
-const ACP_TEXT_FRACTION = 0.8;
-const PADDING = 4;
+/** **Ported.** @see corridorPaints.ts, `airCorridorLabelPaint`. */
+export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airCorridorLabelPaint(name), name);
+}
 
 /**
- * Scale for an "ACP n" label.
+ * **Ported.** @see corridorPaints.ts, `airCorridorPaint`.
  *
- * Two competing sizes, and the larger wins:
- *
- * - the **floor** — fitted to a fixed assumed circle and capped at the
- *   zoom-anchored scale. This is what the label used to do unconditionally, and
- *   it keeps a narrow corridor labelled instead of letting the text collapse to
- *   nothing when its circle is only a few pixels across.
- * - the **grown** size — fitted to the circle's real rendered radius and capped
- *   at the size-proportional scale, so a wide corridor gets a big label.
- *
- * Pass `circleRadiusPx` / `proportionalScale` only when the feature stamps
- * `graphicSize`; without them the floor applies alone, i.e. the old behaviour.
+ * Takes a resolution it does not use, because the holder calls it with the feature
+ * alone. The paint function needs a context, so one is built from a nominal value;
+ * nothing in the corridor's line work is resolution-dependent.
  */
-function getAcpLabelScale(
-    text: string,
-    font: string,
-    zoomScale: number,
-    circleRadiusPx?: number,
-    proportionalScale?: number,
-): number {
-    const textWidthAt1 = getTextWidth(text, font, 1);
-    const floor = Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - PADDING) / textWidthAt1);
+export const airCorridorCircleStyleFunc = (feature: FeatureLike, resolution = 1) =>
+    asStyleFunction(airCorridorPaint())(feature, resolution);
 
-    if (circleRadiusPx === undefined || proportionalScale === undefined) return floor;
-
-    const circleMaxWidth = Math.max(0, circleRadiusPx * 2 * ACP_TEXT_FRACTION - PADDING);
-    return Math.max(floor, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
-}
-
-export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => airCoordinatingCorridorStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graphicLabel: GraphicLabels): StyleFunction {
-    return (feature, resolution) => {
-        const geometry = feature.getGeometry() as MultiPoint;
-        const styles: Style[] = [];
-        const coords = geometry.getCoordinates();
-        const label = getFullLabel(name, graphicLabel.label ?? '');
-        const baseScale = featureLabelScale(feature, resolution);
-
-        // The ACP labels track the circle rather than the zoom. `graphicSize` is
-        // the corridor radius in map units, so dividing by the resolution gives
-        // the circle's rendered pixel radius; `featureGraphicLabelScale` grows
-        // the text from the same number, and the fit below keeps it inside.
-        const graphicSize = feature.get('graphicSize') as number | undefined;
-        const circleRadiusPx = graphicSize && graphicSize > 0 ? graphicSize / resolution : undefined;
-        const acpScale = featureGraphicLabelScale(feature, resolution);
-
-        // 🟡 Pull hostility color dynamically
-        const color = readHostilityColor(feature);
-
-        // ── Properties info block (above the graphic, upper-left) ──────────────
-        const infoLines: string[] = [];
-        const corridorName = graphicLabel.label?.trim();
-        if (corridorName)               infoLines.push(`NAME:       ${corridorName}`);
-        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(graphicLabel.width))}`);
-        if (graphicLabel.minAltitude)   infoLines.push(`MIN ALT:    ${graphicLabel.minAltitude}`);
-        if (graphicLabel.maxAltitude)   infoLines.push(`MAX ALT:    ${graphicLabel.maxAltitude}`);
-        if (graphicLabel.startDate)     infoLines.push(`DTG START:  ${graphicLabel.startDate}`);
-        if (graphicLabel.endDate)       infoLines.push(`DTG END:    ${graphicLabel.endDate}`);
-
-        if (infoLines.length > 0) {
-            // Anchor at the NW corner of the ACP bounding box (minX, maxY)
-            let minX = Infinity, maxY = -Infinity;
-            for (const [x, y] of coords) {
-                if (x < minX) minX = x;
-                if (y > maxY) maxY = y;
-            }
-            // Scale the pixel gap with baseScale so clearance stays proportional
-            // to both the text size and the corridor circles at every zoom level.
-            styles.push(new Style({
-                geometry: new Point([minX, maxY]),
-                text: new Text({
-                    text: infoLines.join('\n'),
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    textAlign: 'left',
-                    textBaseline: 'bottom',
-                    offsetY: -60 * baseScale,
-                    scale: baseScale,
-                }),
-            }));
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-
-            const labelText = `ACP ${i + 1}`;
-            const fittedScale = getAcpLabelScale(labelText, fontStyle, baseScale, circleRadiusPx, acpScale);
-
-            const [x0, y0] = coords[i];
-            const [x1, y1] = coords[i + 1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            styles.push(new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: label,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(feature, resolution),
-                }),
-            }));
-            styles.push(
-                new Style({
-                    geometry: new Point(coords[i]),
-                    stroke: new Stroke({
-                        color,
-                        width: LINE_WIDTH(),
-                    }),
-                    text: new Text({
-                        text: labelText,
-                        font: fontStyle,
-                        // Black, not `color`. FM 1-02.2 colours the *lines* of a
-                        // control measure by standard identity — the circle
-                        // stroke above — while text amplifiers stay black. See
-                        // table 5-3's enemy boundary in colour: red line, black
-                        // T/AS and B labels.
-                        fill: new Fill({color: getLabelFillColor()}),
-                        scale: fittedScale,
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                    }),
-                }),
-            );
-        }
-        // add the last node in the corridor
-        const fittedScale = getAcpLabelScale(`ACP ${coords.length}`, fontStyle, baseScale, circleRadiusPx, acpScale);
-        styles.push(
-            new Style({
-                geometry: new Point(coords[coords.length - 1]),
-                stroke: new Stroke({
-                    color,
-                    width: LINE_WIDTH(),
-                }),
-                text: new Text({
-                    text: `ACP ${coords.length}`,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    scale: fittedScale,
-                    stroke: getHaloStroke(),
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                }),
-            }),
-        );
-        return styles;
-    };
-}
-
-export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
-    const geometry = feature.getGeometry();
-    const color = readHostilityColor(feature);
-    const styles: Style[] = [];
-
-    if (geometry instanceof GeometryCollection) {
-        geometry.getGeometries().forEach(geom => {
-            if (geom instanceof Circle || geom instanceof Polygon) {
-                styles.push(
-                    new Style({
-                        geometry: geom,
-                        stroke: new Stroke({color, width: LINE_WIDTH()}),
-                        fill: undefined,
-                    }),
-                );
-            } else if (geom instanceof MultiLineString) {
-                styles.push(
-                    new Style({
-                        geometry: geom,
-                        stroke: new Stroke({
-                            color: color,
-                            width: LINE_WIDTH(),
-                        }),
-                        fill: undefined,
-                    }),
-                );
-            }
-        });
-    }
-    return styles;
-};
 
 function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coordinate, resolution: number, label: string, scaleMultiplier = 1, feature?: FeatureLike): Style {
     const [x1, y1] = start;
