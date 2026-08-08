@@ -93,6 +93,9 @@ import {
     antiTankDitchPaint,
     arcMissionTaskPaint,
     directionArrowPaint,
+    finalProtectiveFirePaint,
+    linearSmokeTargetPaint,
+    linearTargetPaint,
     areaFillPaint,
     areaLabelStackPaint,
     groupOrSeriesOfTargetsLabelPaint,
@@ -1889,163 +1892,20 @@ export function defaultLineStyle(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(defaultLinePaint(name), name);
 }
 
-/**
- * Linear target shape used by LinearTarget, LinearSmokeTarget, and
- * FinalProtectiveFire: a stretchable horizontal line with two perpendicular
- * end-caps (an "H" lying on its side). The name label sits above the center;
- * `belowLines` are stacked vertically below the center with single-line
- * spacing (LinearSmokeTarget passes ['SMOKE']; FPF passes ['FPF', secondId,
- * weapon]).
- *
- * Drawn from a 2-point base line; the two ends carry the perpendicular caps
- * and the user stretches the middle by dragging an endpoint.
- */
-function buildLinearTargetStyles(
-    f: FeatureLike,
-    resolution: number,
-    nameLabel: string,
-    belowLines: string[],
-    labels: GraphicLabels,
-): Style[] {
-    const geom = f.getGeometry() as LineString;
-    if (!geom) return [];
-    const coords = geom.getCoordinates();
-    if (!coords || coords.length < 2) return [];
 
-    const start = coords[0];
-    const end = coords[coords.length - 1];
-    const dx = end[0] - start[0];
-    const dy = end[1] - start[1];
-    const len = Math.hypot(dx, dy);
-    if (len === 0) return [];
-
-    const ux = dx / len;
-    const uy = dy / len;
-    // CCW perpendicular unit vector
-    const px = -uy;
-    const py = ux;
-
-    const drawRes = (f.get('drawingResolution') as number | undefined) ?? resolution;
-    const BAR_HALF_PX = 14;
-    const barHalfMap = BAR_HALF_PX * drawRes;
-
-    const startTop:    Coordinate = [start[0] + px * barHalfMap, start[1] + py * barHalfMap];
-    const startBottom: Coordinate = [start[0] - px * barHalfMap, start[1] - py * barHalfMap];
-    const endTop:      Coordinate = [end[0]   + px * barHalfMap, end[1]   + py * barHalfMap];
-    const endBottom:   Coordinate = [end[0]   - px * barHalfMap, end[1]   - py * barHalfMap];
-
-    const center: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
-
-    const hostility = readHostility(f);
-    const color = getColorByHostility(hostility);
-
-    const styles: Style[] = [];
-
-    styles.push(new Style({
-        geometry: new MultiLineString([
-            [start, end],
-            [startTop, startBottom],
-            [endTop, endBottom],
-        ]),
-        stroke: new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: dashStyle(labels),
-        }),
-    }));
-
-    const rotation = getRotation(start, end);
-    const labelScale = featureLabelScale(f, resolution);
-    const LABEL_GAP_PX = 8;
-    // textBaseline:'bottom' (used by the name label above) reserves descender
-    // space below the baseline, so a name with no descenders floats farther
-    // from the line than the anchor would suggest. The labels below use
-    // textBaseline:'top' which sits right at the anchor with no equivalent
-    // reserved space, so push the first below-line down by the same amount
-    // to match the visual gap above the line. Scales with text scale.
-    const DESCENDER_COMPENSATE_PX = 4;
-    // Vertical spacing between stacked below-line labels (FPF / secondId /
-    // weapon for FinalProtectiveFire). Drop this for tighter stacking, raise
-    // it for more breathing room. Scales with text scale at render time.
-    const LINE_HEIGHT_PX = 20;
-
-    if (nameLabel) {
-        const labelAnchor = offsetAbove(center, start, end, resolution, LABEL_GAP_PX);
-        styles.push(new Style({
-            geometry: new Point(labelAnchor),
-            text: new Text({
-                text: nameLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign: 'center',
-                textBaseline: 'bottom',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    for (let i = 0; i < belowLines.length; i++) {
-        const text = belowLines[i];
-        if (!text) continue;
-        const offsetPx =
-            LABEL_GAP_PX +
-            DESCENDER_COMPENSATE_PX * labelScale +
-            i * LINE_HEIGHT_PX * labelScale;
-        const anchor = offsetBelow(center, start, end, resolution, offsetPx);
-        styles.push(new Style({
-            geometry: new Point(anchor),
-            text: new Text({
-                text,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign: 'center',
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    return styles;
-}
-
+/** **Ported.** @see linearTargetPaints.ts. */
 export function linearTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => linearTargetStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(linearTargetPaint(name), name);
 }
 
-function linearTargetStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = getFullLabel(name, labels.label ?? '');
-        return buildLinearTargetStyles(f, resolution, nameLabel, [], labels);
-    };
-}
-
+/** **Ported.** @see linearTargetPaints.ts. */
 export function linearSmokeTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => linearSmokeTargetStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(linearSmokeTargetPaint(name), name);
 }
 
-function linearSmokeTargetStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = getFullLabel(name, labels.label ?? '');
-        return buildLinearTargetStyles(f, resolution, nameLabel, ['SMOKE'], labels);
-    };
-}
-
+/** **Ported.** @see linearTargetPaints.ts. */
 export function finalProtectiveFireStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => finalProtectiveFireStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function finalProtectiveFireStyleFromLabels(_name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = labels.label ?? '';
-        const secondId = labels.secondId ?? '';
-        const weapon = labels.weapon ?? '';
-        const belowLines = ['FPF', secondId, weapon].filter(s => s.length > 0);
-        return buildLinearTargetStyles(f, resolution, nameLabel, belowLines, labels);
-    };
+    return asStyleFunction(finalProtectiveFirePaint(), name);
 }
 
 /**

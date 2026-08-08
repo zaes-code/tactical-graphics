@@ -32,6 +32,7 @@ import {TacticalGraphicName} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
+import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
@@ -393,6 +394,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of ROUTE_GRAPHICS) {
         registry[name] = {graphic: routeControlMeasurePaint(name)};
     }
+
+    registry[TacticalGraphicName.LinearTarget] = {graphic: linearTargetPaint(TacticalGraphicName.LinearTarget)};
+    registry[TacticalGraphicName.LinearSmokeTarget] = {graphic: linearSmokeTargetPaint(TacticalGraphicName.LinearSmokeTarget)};
+    registry[TacticalGraphicName.FinalProtectiveFire] = {graphic: finalProtectiveFirePaint()};
 
     // Labels last, over whatever graphic painter was registered above. Every area
     // gets one: the bespoke layout if its family has one, the default otherwise.
