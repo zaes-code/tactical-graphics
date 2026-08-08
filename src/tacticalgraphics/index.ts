@@ -248,5 +248,14 @@ export {
     limitedAccessAreaPaint,
     obstacleAreaPaint,
 } from './symbology/areaPaints';
+export {
+    areaDateLabel,
+    areaDefaultLabelPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
+} from './symbology/areaLabelPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
