@@ -328,6 +328,29 @@ export interface PaintFeature {
      * quietly worked around.
      */
     echelon?: TacticalGraphicEchelon;
+
+    /**
+     * A range fan's bands, with every deflection already resolved to an absolute
+     * bearing.
+     *
+     * Stamped on the label feature by the holder, for the same reason as
+     * {@link PaintFeature.echelon}: it is derived state, not part of the graphic's
+     * saved description, and resolving it is the holder's job so a paint function
+     * never has to re-run the resolver.
+     *
+     * Typed structurally rather than importing `RangeFanBand` — `core/` must not
+     * depend on `symbology/`.
+     */
+    rangeFanBands?: Array<{
+        range: number;
+        label?: string;
+        altitude?: string;
+        resolvedLeftAz?: number;
+        resolvedRightAz?: number;
+    }>;
+
+    /** Which layout {@link PaintFeature.rangeFanBands} is packed in. */
+    rangeFanShape?: 'circular' | 'sector';
 }
 
 /**

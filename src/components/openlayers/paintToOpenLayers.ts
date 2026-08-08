@@ -276,6 +276,9 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
         // Stamped straight onto the feature by the properties dialog, never into the
         // bag — @see PaintFeature.echelon.
         echelon: feature.get('echelon') as TacticalGraphicEchelon | undefined,
+        // Stamped on the label feature by RangeFanGraphicBase — @see PaintFeature.
+        rangeFanBands: feature.get('rangeFanBands') as PaintFeature['rangeFanBands'],
+        rangeFanShape: feature.get('rangeFanShape') as PaintFeature['rangeFanShape'],
     };
 }
 

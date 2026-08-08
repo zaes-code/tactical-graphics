@@ -35,6 +35,7 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
 import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
@@ -643,6 +644,16 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
     registry[TacticalGraphicName.StrongPoint] = {graphic: strongPointPaint()};
     registry[TacticalGraphicName.UnexplodedExplosiveOrdnanceArea] = {graphic: unexplodedOrdnanceAreaPaint()};
+
+    registry[TacticalGraphicName.Boundary] = {graphic: boundaryPaint()};
+    // The fans' line work is a plain stroke; everything doctrinal about them is in
+    // the band labels.
+    for (const name of [
+        TacticalGraphicName.WeaponSensorRangeFanCircular,
+        TacticalGraphicName.WeaponSensorRangeFanSector,
+    ]) {
+        registry[name] = {graphic: plainOutlinePaint(), label: rangeFanLabelPaint(name)};
+    }
 
     for (const name of RETROGRADE_GRAPHICS) {
         registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};

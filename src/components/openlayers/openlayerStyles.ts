@@ -103,6 +103,8 @@ import {
     munitionFlightPathPaint,
     passageLanePaint,
     barSymbolPaint,
+    boundaryPaint,
+    rangeFanLabelPaint,
     battlePositionPaint,
     strongPointPaint,
     unexplodedOrdnanceAreaPaint,
@@ -1901,12 +1903,9 @@ const dashStyle = (labels: GraphicLabels) => {
     ) ? [12, 8] : undefined;
 };
 
-/**
- * Create a single feature with a style function
- * that draws labels at each segment midpoint with rotation.
- */
+/** **Ported.** @see boundaryPaints.ts, `boundaryPaint`. */
 export function boundariesStyleFunc(): StyleFunction {
-    return (f, resolution) => boundariesStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(boundaryPaint(), TacticalGraphicName.Boundary);
 }
 
 function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
@@ -2577,127 +2576,9 @@ function trimFromEnd(coords: number[][], distance: number): Coordinate[] {
     return kept;
 }
 
-/**
- * Label-style function for the doctrinal weapon/sensor range fans.
- *
- * MultiPoint vertex layout, written by `RangeFan.generateLabels` and
- * mirrored on the OL feature by `RangeFanGraphicBase.updateGeometry`:
- *   circular: [center, band1Mid, band2Mid, ...]
- *   sector:   [center, band1Mid, band1LeftAz, band1RightAz,
- *                       band2Mid, band2LeftAz, band2RightAz, ...]
- * The bands array stamped on the label feature carries the resolved
- * azimuth values for each sector band so this fn doesn't need to re-run
- * the resolver.
- */
-export function getRangeFanLabelStyleFn(
-    name: TacticalGraphicName,
-): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry();
-        if (!(geom instanceof MultiPoint)) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 2) return [];
-
-        const bands = feature.get('rangeFanBands') as
-            | Array<{
-                  range: number;
-                  label?: string;
-                  altitude?: string;
-                  /** Resolved absolute compass bearings — written by
-                   * RangeFanGraphicBase / RangeFan.generateLabels for the
-                   * style fn to print. The raw user-facing fields on each
-                   * band are deflections from the global center. */
-                  resolvedLeftAz?: number;
-                  resolvedRightAz?: number;
-              }>
-            | undefined;
-        if (!bands || bands.length === 0) return [];
-
-        const shape = feature.get('rangeFanShape') as 'circular' | 'sector' | undefined;
-        const isSector = shape === 'sector' && name === TacticalGraphicName.WeaponSensorRangeFanSector;
-        // Sector packs three vertices per band (mid + leftAz + rightAz);
-        // circular packs one (mid only).
-        const stride = isSector ? 3 : 1;
-
-        const scale = featureLabelScale(feature, resolution);
-        const fill = new Fill({color: getLabelFillColor()});
-        const styles: Style[] = [];
-
-        // Per-band labels. Layout per shape:
-        //   circular — user label (if any), then "MIN RG <km>",
-        //              then "ALT <altitude>" if entered.
-        //   sector   — user label (if any), then "RG <km>",
-        //              then "ALT <altitude>" if entered, plus per-band
-        //              azimuth labels at the arc edges.
-        // The auto range line renders even when no name is typed. Range
-        // values are stored in kilometers.
-        for (let i = 0; i < bands.length; i++) {
-            const midIdx = 1 + i * stride;
-            if (midIdx >= coords.length) break;
-            const band = bands[i];
-            const lines: string[] = [];
-            const labelText = band.label?.trim();
-            if (labelText) lines.push(labelText);
-            if (shape === 'circular') {
-                lines.push(`MIN RG ${formatKm(band.range)}`);
-            } else if (isSector) {
-                lines.push(`RG ${formatKm(band.range)}`);
-            }
-            const altText = band.altitude?.trim();
-            if (altText) lines.push(`ALT ${altText}`);
-            if (lines.length > 0) {
-                styles.push(new Style({
-                    geometry: new Point(coords[midIdx]),
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill,
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                }));
-            }
-
-            // Sector: per-band azimuth text at vertices (3i+2) and (3i+3).
-            // Format matches FM 1-02.2 examples ("315", "030").
-            if (isSector) {
-                const leftIdx = midIdx + 1;
-                const rightIdx = midIdx + 2;
-                if (leftIdx < coords.length && band.resolvedLeftAz !== undefined) {
-                    styles.push(new Style({
-                        geometry: new Point(coords[leftIdx]),
-                        text: new Text({
-                            text: formatAzimuth(band.resolvedLeftAz),
-                            font: fontStyle,
-                            fill,
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-                if (rightIdx < coords.length && band.resolvedRightAz !== undefined) {
-                    styles.push(new Style({
-                        geometry: new Point(coords[rightIdx]),
-                        text: new Text({
-                            text: formatAzimuth(band.resolvedRightAz),
-                            font: fontStyle,
-                            fill,
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-            }
-        }
-
-        return styles;
-    };
+/** **Ported.** @see boundaryPaints.ts, `rangeFanLabelPaint`. */
+export function getRangeFanLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(rangeFanLabelPaint(name), name);
 }
 
 function formatAzimuth(deg: number): string {
