@@ -230,6 +230,8 @@ export {
 export {
     PLANNED_DASH_PX,
     arcMissionTaskPaint,
+    areaFillPaint,
+    areaOutlinePaint,
     defaultLinePaint,
     formatFullLabel,
     getFullLabel,

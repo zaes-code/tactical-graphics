@@ -89,7 +89,7 @@ import {isEmpty} from '../../utils/isEmpty';
  * ~1,600 tests that assert on this module's output become parity tests for it.
  * @see paintToOpenLayers.ts
  */
-import {arcMissionTaskPaint, defaultLinePaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
+import {arcMissionTaskPaint, areaFillPaint, areaOutlinePaint, defaultLinePaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
 import {asStyleFunction} from './paintToOpenLayers';
 // Moved to its own leaf module so `paintToOpenLayers` can share it without an
 // import cycle back through this file. Re-exported: it is public API.
@@ -3613,17 +3613,9 @@ function tacticalFixStyleFromLabels(label: string, labels: GraphicLabels): Style
     };
 }
 
+/** **Ported.** @see paintFunctions.ts, `areaFillPaint`. */
 export function defaultStyleFunc(): StyleFunction {
-    return (f, resolution) => {
-        let color = readHostilityColor(f);
-        return new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-            }),
-        });
-    };
+    return asStyleFunction(areaFillPaint());
 }
 
 /**
@@ -6448,18 +6440,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.GroupOrSeriesOfTargets) {
         return groupOrSeriesOfTargetsGraphicStyle(labels, feature, resolution);
     }
-    // ✅ Pull hostility-based color if available
-    let color = readHostilityColor(feature);
-
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-
-    return new Style({
-        stroke: new Stroke({
-            color: color,
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined,
-        }),
-    });
+    // Everything else: the plain outline, dashed when planned. **Ported** — 60 of
+    // the 75 area graphics reach this branch. @see paintFunctions.ts, `areaOutlinePaint`.
+    return asStyleFunction(areaOutlinePaint(name), name)(feature, resolution);
 }
 
 export function encirclementGraphicStyle(feature: FeatureLike, resolution: number): Style[] | Style {
