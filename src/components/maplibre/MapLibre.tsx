@@ -16,6 +16,9 @@ import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import {drawSpikeSamples} from './spikeDriver';
+import {buildSampleGraphics} from './sampleGallery';
+import type {MapEngineHandle} from '../mapEngine';
+import {FULL_CAPABILITIES} from '../mapEngine';
 
 /**
  * The MapLibre half of the demo's engine picker.
@@ -33,7 +36,25 @@ interface Props {
     darkMode: boolean;
     /** The user's config overrides. Used as an invalidation trigger, not read directly. */
     graphicsSettings: TacticalGraphicsConfigOptions;
+    /** Hands the controls panel something to drive. @see mapEngine.ts */
+    onReady(handle: MapEngineHandle | null): void;
 }
+
+/**
+ * What this renderer can do today.
+ *
+ * Draw and edit are off because MapLibre ships no `Draw` / `Modify` equivalent and
+ * the five controllers' translate / rotate / resize / bend semantics have not been
+ * re-implemented. The panel greys those controls and shows the reason rather than
+ * hiding them — the gap is part of the status, and a button that silently does
+ * nothing is worse than one that says why it cannot.
+ */
+const MAPLIBRE_CAPABILITIES = {
+    ...FULL_CAPABILITIES,
+    draw: false,
+    edit: false,
+    unsupportedReason: 'MapLibre has no draw or edit interaction yet — it ships no Draw/Modify equivalent.',
+};
 
 /**
  * Where both engines open, so a capture of one lines up with a capture of the
@@ -79,7 +100,24 @@ setWorkerUrl(`${process.env.PUBLIC_URL ?? ''}/maplibre-gl-worker.mjs`);
 const INITIAL_MODE: SpikeRenderMode =
     new URLSearchParams(window.location.search).get('mlb') === 'native' ? 'native' : 'canvas';
 
-const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
+/**
+ * Writes a FeatureCollection to a `.geojson` file.
+ *
+ * A downloaded file rather than localStorage, matching the OpenLayers view: the
+ * question this answers is "what actually persisted?", and that is only answerable
+ * if you can open the thing and read it.
+ */
+function exportGraphics(snapshot: {type: string; features: unknown[]}): void {
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {type: 'application/geo+json'});
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'tactical-graphics.geojson';
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
+const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady}) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MapLibreMap | null>(null);
     const [, setReady] = useState(false);
@@ -137,7 +175,31 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
             // Only one draws at a time; the idle one simply holds no graphics.
             load();
             setReady(true);
+            onReady(handle);
         });
+
+        const handle: MapEngineHandle = {
+            capabilities: MAPLIBRE_CAPABILITIES,
+            // Both no-ops, and declared unsupported above so the panel greys them.
+            startDrawing: () => undefined,
+            setInteractionMode: () => undefined,
+            reset: () => renderer()?.clear(),
+            clearAll: () => renderer()?.clear(),
+            drawSamples: hostility => {
+                const target = renderer();
+                if (!target) return;
+                target.clear();
+                const {graphics} = buildSampleGraphics(hostility);
+                graphics.forEach(g => target.add(g));
+            },
+            exportGeoJson: () => exportGraphics(renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []}),
+            importGeoJson: async file => {
+                const target = renderer();
+                if (!target) return;
+                target.clear();
+                drawSpikeSamples(JSON.parse(await file.text()), g => target.add(g), resolutionOf(map));
+            },
+        };
 
         // Test hook for the driving scripts, mirroring the one OpenLayers.tsx
         // installs. Stripped from production builds; nothing in the app may read it.
@@ -145,6 +207,9 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
             // The fixture itself, so a probe can tile it up to gallery scale without
             // re-stating it. @see spikeSamples.ts
             (window as unknown as Record<string, unknown>).__spikeFixture = SPIKE_SAMPLES;
+            // Which paintable graphics the sweep could not build a base for — the
+            // remaining gaps, reported rather than silently skipped.
+            (window as unknown as Record<string, unknown>).__tacticalGraphicsSamples = () => buildSampleGraphics().report;
             (window as unknown as Record<string, unknown>).__tacticalGraphicsMapLibre = {
                 map,
                 resolutionOf: () => resolutionOf(map),
@@ -162,6 +227,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
         }
 
         return () => {
+            onReady(null);
             canvas?.destroy();
             native?.destroy();
             map.remove();

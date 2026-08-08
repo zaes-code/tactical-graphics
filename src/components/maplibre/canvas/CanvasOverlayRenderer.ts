@@ -1,3 +1,4 @@
+import type {FeatureCollection} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import type {Paint, PaintContext} from '@zaes/tactical-graphics';
 import {viewTransformOf} from '../projection';
@@ -99,6 +100,27 @@ export class CanvasOverlayRenderer {
         const graphic = buildTacticalGraphic(name, geometry, properties, drawingResolution);
         if (graphic) this.add(graphic);
         return graphic;
+    }
+
+    /**
+     * Every graphic as a plain GeoJSON FeatureCollection — one **base** feature
+     * each, the same shape `serializeTacticalGraphics` produces on the OpenLayers
+     * side.
+     *
+     * The base is all that is saved because everything else is derived: the
+     * geometry, the decorations and the labels all regenerate from
+     * `properties.tacticalGraphic`, which is the portable description any renderer
+     * consumes. Saving the drawn output instead would produce a picture rather than
+     * a graphic.
+     */
+    snapshot(): FeatureCollection {
+        return {
+            type: 'FeatureCollection',
+            features: this.graphics.map(g => ({
+                ...g.base,
+                properties: {...(g.base.properties ?? {}), role: 'base', symbolId: g.id, graphicName: g.name},
+            })),
+        };
     }
 
     clear(): void {
