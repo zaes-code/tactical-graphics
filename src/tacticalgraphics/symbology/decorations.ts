@@ -283,3 +283,114 @@ export function offsetBelow(
     const [x, y] = offsetAbove(anchor, a, b, resolution, offsetPx);
     return [2 * anchor[0] - x, 2 * anchor[1] - y];
 }
+
+/** Which way a ring winds. Decides which perpendicular points out of it. */
+export function ringIsClockwise(ring: ProjectedPosition[]): boolean {
+    let sum = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+        sum += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+    }
+    return sum > 0;
+}
+
+/** The point and unit direction `distance` along a path. */
+export function pathPointAt(path: ProjectedPosition[], distance: number): {point: ProjectedPosition; dir: ProjectedPosition} {
+    let remaining = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (length === 0) continue;
+        const dir: ProjectedPosition = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+        if (remaining <= length) {
+            return {point: [a[0] + dir[0] * remaining, a[1] + dir[1] * remaining], dir};
+        }
+        remaining -= length;
+    }
+    const a = path[path.length - 2];
+    const b = path[path.length - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return {point: b, dir: [(b[0] - a[0]) / length, (b[1] - a[1]) / length]};
+}
+
+/** Which perpendicular of a direction reads as "up" on screen. */
+export function upSign(dir: ProjectedPosition): number {
+    return dir[0] >= 0 ? 1 : -1;
+}
+
+/**
+ * Teeth around a closed ring, on the side asked for.
+ *
+ * **`outward` is a property of the ring, not of the order its corners were
+ * clicked.** A ring drawn anticlockwise has its outside on the other hand from one
+ * drawn clockwise, so the winding is measured and the side sign derived from it —
+ * without that, the same area drawn the other way round grows its teeth inward.
+ */
+export function obstacleRing(ring: ProjectedPosition[], resolution: number, outward: boolean): ProjectedPosition[] {
+    const {heightMap, baseMap, gapMap} = obstacleToothSize(ring, true, resolution);
+    if (heightMap <= 0) return ring;
+    const outwardIsLeft = ringIsClockwise(ring);
+    const sideSign = outward === outwardIsLeft ? 1 : -1;
+    return crenellatedPath(ring, heightMap, baseMap, gapMap, sideSign);
+}
+
+/** Square merlon dimensions, in screen pixels before `decorationScale`. */
+export const FORTIFIED_MERLON_PX = 15;
+export const FORTIFIED_CRENEL_PX = 15;
+export const FORTIFIED_HEIGHT_PX = 11;
+
+/**
+ * Square battlements standing off a path — the fortified line and area.
+ *
+ * Unlike {@link crenellatedPath}, which walks each segment independently, this
+ * distributes a **whole number** of merlons over the path's total length and
+ * stretches the spacing to fit. A closed ring has to come back to where it
+ * started, so a pattern that simply repeats at a fixed pitch leaves a ragged
+ * partial merlon at the join.
+ */
+export function castellatedPath(
+    path: ProjectedPosition[],
+    merlonMap: number,
+    crenelMap: number,
+    heightMap: number,
+    side: number | 'up',
+): ProjectedPosition[] {
+    const total = pathLength(path);
+    const pattern = merlonMap + crenelMap;
+    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
+
+    const count = Math.max(1, Math.round(total / pattern));
+    const spacing = total / count;
+    const merlon = spacing * (merlonMap / pattern);
+
+    const out: ProjectedPosition[] = [path[0]];
+    for (let i = 0; i < count; i++) {
+        const startAt = i * spacing + (spacing - merlon) / 2;
+        const left = pathPointAt(path, startAt);
+        const right = pathPointAt(path, startAt + merlon);
+        const sign = side === 'up' ? upSign(left.dir) : side;
+        const ln: ProjectedPosition = [-left.dir[1] * sign, left.dir[0] * sign];
+        const rn: ProjectedPosition = [-right.dir[1] * sign, right.dir[0] * sign];
+        out.push(
+            left.point,
+            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
+            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
+            right.point,
+        );
+    }
+    out.push(path[path.length - 1]);
+    return out;
+}
+
+/** A fortified ring's merlons, sized against the shape at this resolution. */
+export function fortifiedRing(ring: ProjectedPosition[], resolution: number): ProjectedPosition[] {
+    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX);
+    if (scale <= 0) return ring;
+    return castellatedPath(
+        ring,
+        FORTIFIED_MERLON_PX * scale * resolution,
+        FORTIFIED_CRENEL_PX * scale * resolution,
+        FORTIFIED_HEIGHT_PX * scale * resolution,
+        ringIsClockwise(ring) ? 1 : -1,
+    );
+}

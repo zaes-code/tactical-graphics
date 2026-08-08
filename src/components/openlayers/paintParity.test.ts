@@ -36,7 +36,10 @@ const RESOLUTION = 1000;
 /** A 400 km line — long enough to carry decorations at `RESOLUTION`. */
 const line = () => new LineString([[0, 0], [400_000, 0]]);
 
-function feature(name: TacticalGraphicName, geometry = line()): Feature {
+/** A 400 km square ring, for the area graphics. Closed, as a polygon ring must be. */
+const ring = () => new Polygon([[[0, 0], [400_000, 0], [400_000, 400_000], [0, 400_000], [0, 0]]]);
+
+function feature(name: TacticalGraphicName, geometry: LineString | Polygon = line()): Feature {
     const f = new Feature(geometry);
     f.set(TACTICAL_GRAPHIC_KEY, {name, label: 'X'});
     f.set('graphicName', name);
@@ -62,21 +65,49 @@ describe('the paint registry matches what OpenLayers routes', () => {
         for (const name of PAINTABLE_GRAPHICS) expect(live.has(name)).toBe(true);
     });
 
-    it('paints something for every registered line graphic', () => {
-        const lineLike = PAINTABLE_GRAPHICS.filter(
-            n => ![TacticalGraphicName.AreaDefense, ...arcNames()].includes(n),
-        );
-        expect(lineLike.length).toBeGreaterThan(0);
+    /**
+     * Every registered graphic must stroke *something* when handed a geometry of
+     * the kind it expects.
+     *
+     * Both a line and a ring are tried, and passing either counts. A paint function
+     * returns `[]` for a geometry type it does not handle — that is deliberate and
+     * correct — so requiring one specific type would just encode this test's guess
+     * about each graphic's family. What must never happen is a registered graphic
+     * that paints nothing for *any* input, which is the silent-blanking failure this
+     * whole file exists for.
+     *
+     * The arcs are excluded: they need a centre and a label anchor stamped on the
+     * feature, and `paintFunctions.test.ts` covers them properly with those.
+     */
+    it('strokes something for every registered graphic, given a geometry it accepts', () => {
+        const arcs = arcNames();
+        const candidates = PAINTABLE_GRAPHICS.filter(n => !arcs.includes(n) && n !== TacticalGraphicName.AreaDefense);
+        expect(candidates.length).toBeGreaterThan(20);
 
-        for (const name of lineLike) {
+        const blank: TacticalGraphicName[] = [];
+        for (const name of candidates) {
             const painters = getPaintFunction(name)!;
-            const paintFeature = toPaintFeature(feature(name))!;
-            const marks = painters.graphic(paintFeature, paintContext(RESOLUTION));
-            expect(marks.length).toBeGreaterThan(0);
-            // At least one mark must actually stroke — a graphic that produced only
-            // labels would render as floating text.
-            expect(marks.some(m => m.stroke)).toBe(true);
+            const strokes = [line(), ring()].some(geometry => {
+                const paintFeature = toPaintFeature(feature(name, geometry));
+                if (!paintFeature) return false;
+                return painters.graphic(paintFeature, paintContext(RESOLUTION)).some(m => m.stroke);
+            });
+            if (!strokes) blank.push(name);
         }
+        expect(blank).toEqual([]);
+    });
+
+    it('hatches the limited-access family and nothing else in it', () => {
+        // The hatch is the one piece of area symbology that needs a renderer to
+        // realise a pattern rather than a colour, so it is worth asserting it is
+        // actually asked for — a dropped `pattern` would render as a flat wash and
+        // look merely wrong rather than broken.
+        const hatched = getPaintFunction(TacticalGraphicName.LimitedAccessArea)!
+            .graphic(toPaintFeature(feature(TacticalGraphicName.LimitedAccessArea, ring()))!, paintContext(RESOLUTION));
+        expect(hatched.some(m => m.fill?.pattern?.kind === 'diagonal')).toBe(true);
+        // …and the flat colour is still set, because that is the documented fallback
+        // for a renderer that cannot build the pattern.
+        expect(hatched.find(m => m.fill)?.fill?.color).toBeTruthy();
     });
 });
 

@@ -10,7 +10,7 @@ import '../../styles/maplibre.css';
 import {AttributionControl, Map as MapLibreMap, ScaleControl, setWorkerUrl} from 'maplibre-gl';
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
-import {createBasemapStyle} from './basemapStyle';
+import {BASEMAP_LAYER_ID, basemapPaint, createBasemapStyle} from './basemapStyle';
 import {resolutionOf} from './projection';
 import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
@@ -89,7 +89,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
 
         const map = new MapLibreMap({
             container: containerRef.current,
-            style: createBasemapStyle(),
+            style: createBasemapStyle(darkMode),
             center: START_CENTER,
             zoom: START_ZOOM,
             // The paint model assumes a north-up, unpitched view: every screen-pixel
@@ -175,15 +175,22 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
     // Nothing to publish to the library — `MapRendering` is the single writer of the
     // config. This only needs to trigger a repaint, since the paint functions read
     // the config live but the overlay caches its last frame.
+    //
+    // Dark mode re-paints the **raster layer**, never the canvas: MapLibre draws
+    // every layer into one canvas, so a CSS filter meant for the tiles would invert
+    // the graphics too. @see basemapStyle.ts, DARK_RASTER_PAINT
     useEffect(() => {
-        mapRef.current?.triggerRepaint();
+        const map = mapRef.current;
+        if (!map || !map.getLayer(BASEMAP_LAYER_ID)) return;
+        const paint = basemapPaint(darkMode);
+        (Object.keys(paint) as (keyof typeof paint)[]).forEach(property => {
+            map.setPaintProperty(BASEMAP_LAYER_ID, property, paint[property]);
+        });
+        map.triggerRepaint();
     }, [graphicsSettings, darkMode]);
 
     return (
-        <div
-            ref={containerRef}
-            className={`map-container${darkMode ? ' map-container--dark' : ''}`}
-        />
+        <div ref={containerRef} className="map-container"/>
     );
 };
 

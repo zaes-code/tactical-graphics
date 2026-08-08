@@ -1,4 +1,4 @@
-import type {Paint, ProjectedGeometry, ProjectedPosition, StrokeSpec, TextSpec} from '@zaes/tactical-graphics';
+import type {FillSpec, HatchSpec, Paint, ProjectedGeometry, ProjectedPosition, StrokeSpec, TextSpec} from '@zaes/tactical-graphics';
 import {toScreen, type ViewTransform} from '../projection';
 
 /**
@@ -34,6 +34,42 @@ import {toScreen, type ViewTransform} from '../projection';
 function scaledFont(font: string, scale: number): string {
     if (scale === 1) return font;
     return font.replace(/(\d*\.?\d+)px/, (_, px: string) => `${parseFloat(px) * scale}px`);
+}
+
+/**
+ * A hatch spec as a `CanvasPattern`, cached on its own values.
+ *
+ * The overlay redraws every frame, so building the pattern per fill would rebuild
+ * it sixty times a second per hatched area. Falls back to the flat colour if a
+ * context cannot be had. @see FillSpec
+ */
+const hatchCache: Record<string, CanvasPattern> = {};
+
+function fillStyle(spec: FillSpec): string | CanvasPattern {
+    if (!spec.pattern) return spec.color;
+    const {kind, color, sizePx, lineWidthPx} = spec.pattern;
+    const key = `${kind}|${color}|${sizePx}|${lineWidthPx}`;
+    if (hatchCache[key]) return hatchCache[key];
+
+    const pattern = buildHatch(spec.pattern);
+    if (!pattern) return spec.color;
+    hatchCache[key] = pattern;
+    return pattern;
+}
+
+function buildHatch(spec: HatchSpec): CanvasPattern | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = spec.sizePx;
+    canvas.height = spec.sizePx;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.strokeStyle = spec.color;
+    ctx.lineWidth = spec.lineWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(0, spec.sizePx);
+    ctx.lineTo(spec.sizePx, 0);
+    ctx.stroke();
+    return ctx.createPattern(canvas, 'repeat');
 }
 
 function applyStroke(ctx: CanvasRenderingContext2D, stroke: StrokeSpec): void {
@@ -149,7 +185,7 @@ export function paintToCanvas(ctx: CanvasRenderingContext2D, paints: Paint[], vi
             ctx.beginPath();
             tracePath(ctx, geometry, view);
             if (fill) {
-                ctx.fillStyle = fill.color;
+                ctx.fillStyle = fillStyle(fill);
                 ctx.fill();
             }
             if (stroke) {
@@ -164,7 +200,7 @@ export function paintToCanvas(ctx: CanvasRenderingContext2D, paints: Paint[], vi
                 ctx.beginPath();
                 ctx.arc(x, y, circle.radiusPx, 0, 2 * Math.PI);
                 if (circle.fill) {
-                    ctx.fillStyle = circle.fill.color;
+                    ctx.fillStyle = fillStyle(circle.fill);
                     ctx.fill();
                 }
                 if (circle.stroke) {

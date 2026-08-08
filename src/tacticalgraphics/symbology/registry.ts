@@ -30,6 +30,13 @@
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {
+    encirclementPaint,
+    fortifiedAreaPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+} from './areaPaints';
+import {
     arcMissionTaskPaint,
     areaOutlinePaint,
     defaultLinePaint,
@@ -181,6 +188,26 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
             graphic: arcMissionTaskPaint(TacticalGraphicName.AreaDefense, false),
             label: missionTaskLabelPaint(TacticalGraphicName.AreaDefense),
         },
+
+        // ── The areas that draw something structural ──────────────────────────
+        // Teeth outward for the belt / group / zone, inward for the free and
+        // restricted areas, and the restricted area alone is hatched.
+        [TacticalGraphicName.ObstacleBelt]: {graphic: obstacleAreaPaint({outward: true})},
+        [TacticalGraphicName.ObstacleGroup]: {graphic: obstacleAreaPaint({outward: true})},
+        [TacticalGraphicName.ObstacleZone]: {graphic: obstacleAreaPaint({outward: true})},
+        [TacticalGraphicName.ObstacleFreeArea]: {graphic: obstacleAreaPaint({outward: false})},
+        [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
+
+        [TacticalGraphicName.FortifiedArea]: {graphic: fortifiedAreaPaint()},
+        [TacticalGraphicName.GroupOrSeriesOfTargets]: {graphic: groupOrSeriesOfTargetsPaint()},
+        [TacticalGraphicName.Encirclement]: {graphic: encirclementPaint()},
+
+        // One hatched fill under an affiliation-coloured outline.
+        [TacticalGraphicName.LimitedAccessArea]: {graphic: limitedAccessAreaPaint()},
+        [TacticalGraphicName.NoFireAreaCircular]: {graphic: limitedAccessAreaPaint()},
+        [TacticalGraphicName.NoFireAreaIrregular]: {graphic: limitedAccessAreaPaint()},
+        [TacticalGraphicName.NoFireAreaRectangular]: {graphic: limitedAccessAreaPaint()},
+        [TacticalGraphicName.WeaponsFreeZone]: {graphic: limitedAccessAreaPaint()},
     };
 
     for (const name of ARC_MISSION_TASKS) {

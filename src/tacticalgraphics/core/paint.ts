@@ -102,9 +102,40 @@ export interface StrokeSpec {
     join?: 'bevel' | 'round' | 'miter';
 }
 
-/** How to fill a closed geometry. */
+/**
+ * A repeating fill pattern.
+ *
+ * The hatched areas — obstacle-restricted, limited-access, the no-fire zones —
+ * are filled with diagonal hatching rather than a flat colour, and that is a
+ * **symbology** fact: FM 1-02.2 draws them that way, so it belongs here rather
+ * than in a renderer. Described as parameters, not as an image, because the two
+ * renderers realise it completely differently — a canvas builds a `CanvasPattern`,
+ * MapLibre needs a registered `fill-pattern` image.
+ *
+ * Sizes are screen pixels, and `color` already carries its final alpha.
+ */
+export interface HatchSpec {
+    /** Only diagonal hatching exists today; named so a second pattern can be added. */
+    kind: 'diagonal';
+    color: PaintColor;
+    /** Side of the repeating tile. */
+    sizePx: number;
+    /** Thickness of the hatch stroke. */
+    lineWidthPx: number;
+}
+
+/**
+ * How to fill a closed geometry.
+ *
+ * `color` is always meaningful. `pattern`, when present, is what the fill *should*
+ * be — but a renderer that cannot build one may fall back to `color` and still
+ * produce something sensible rather than nothing. That degradation path is why
+ * this is not a discriminated union: a hatched area drawn as a flat translucent
+ * wash is wrong-looking, and drawn as nothing is invisible.
+ */
 export interface FillSpec {
     color: PaintColor;
+    pattern?: HatchSpec;
 }
 
 /**
