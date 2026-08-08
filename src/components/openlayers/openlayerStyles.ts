@@ -94,7 +94,17 @@ import {
     arcMissionTaskPaint,
     airCorridorLabelPaint,
     airCorridorPaint,
+    attackHelicopterAxisLabelPaint,
+    aviationAxisLabelPaint,
+    axisOfAdvanceLabelPaint,
+    counterattackLabelPaint,
     directionArrowPaint,
+    envelopmentLabelPaint,
+    frontalAttackLabelPaint,
+    infiltrationLabelPaint,
+    mobileDefenseLabelPaint,
+    movementLabelPaint,
+    turningMovementLabelPaint,
     retrogradeTaskPaint,
     finalProtectiveFirePaint,
     linearSmokeTargetPaint,
@@ -119,6 +129,7 @@ import {
     routeControlMeasurePaint,
 } from '@zaes/tactical-graphics';
 import {asStyleFunction} from './paintToOpenLayers';
+import type {Paint, PaintContext, PaintFeature} from '@zaes/tactical-graphics';
 // Moved to its own leaf module so `paintToOpenLayers` can share it without an
 // import cycle back through this file. Re-exported: it is public API.
 import {getTextWidth} from './textMeasure';
@@ -1124,352 +1135,37 @@ function segmentProportionalScale(dx: number, dy: number, resolution: number): n
  * that draws labels at each segment midpoint with rotation.
  */
 export function movementGraphicPathStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => movementGraphicPathStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(movementLabelPaintFor(name), name);
 }
 
-function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        // Infiltration always shows "IN" near the tail — user label is ignored.
-        if (name === TacticalGraphicName.Infiltration) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: 'IN',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // Envelopment always shows "E" near the tail — user label is ignored.
-        if (name === TacticalGraphicName.Envelopment) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            return [new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: 'E',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // MobileDefense always shows "MD" at the p0 vertex — the tail of the
-        // ellipse, in the gap the two arcs leave open on that side — horizontal
-        // regardless of the graphic's rotation. Doctrinally the amplifier sits at
-        // the start of the graphic, not in its middle. User label is ignored.
-        if (name === TacticalGraphicName.MobileDefense) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 1) return [];
-            const [x0, y0] = coords[0];
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'MD',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation: 0,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // TurningMovement always shows "T" starting at the arrowhead base — user label is ignored.
-        if (name === TacticalGraphicName.TurningMovement) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            //const spanPx = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2) / resolution;
-            //const scale = featureLabelScale(f, resolution);//(spanPx * 0.7) / 24;
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'T',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // FrontalAttack always shows "A" starting at the arrowhead base — user label is ignored.
-        if (name === TacticalGraphicName.FrontalAttack) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            // const spanPx = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2) / resolution;
-            // const scale = (spanPx * 0.7) / 24;
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'A',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // AviationAxisOfAdvance: name + DTG on one line at the start of the arrow.
-        if (name === TacticalGraphicName.AviationAxisOfAdvance) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            const dx = x1 - x0, dy = y1 - y0;
-            let rotation = -Math.atan2(dy, dx);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ') || '';
-            if (!text) return [];
-            const spanPx = Math.sqrt(dx * dx + dy * dy) / resolution;
-            const scale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale,
-                }),
-            })];
-        }
-        if (name === TacticalGraphicName.AttackHelicopterAxisOfAdvance) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 4) return [];
-            const styles: Style[] = [];
+/**
+ * **Ported.** @see movementPaints.ts.
+ *
+ * The dispatch that used to be a 340-line switch in here is now a table: each
+ * member of the family names the paint function that draws its amplifier.
+ */
+const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: PaintFeature, c: PaintContext) => Paint[]>> = {
+    [TacticalGraphicName.Infiltration]: infiltrationLabelPaint,
+    [TacticalGraphicName.Envelopment]: envelopmentLabelPaint,
+    [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
+    [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
+    [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
+    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+};
 
-            // coords[0..1]: text label span; coords[2]: twist center; coords[3]: direction point
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            const [cx, cy] = coords[2];
-            const [dx3, dy3] = coords[3];
+/** The four that share the axis-of-advance layout, which needs its own name. */
+const AXIS_OF_ADVANCE_LABELS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.InfiltrationLane,
+];
 
-            // ── Text label (same as AviationAxisOfAdvance) ─────────────
-            const tdx = x1 - x0, tdy = y1 - y0;
-            let textRotation = -Math.atan2(tdy, tdx);
-            if (textRotation > Math.PI / 2 || textRotation < -Math.PI / 2) textRotation += Math.PI;
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ') || '';
-            if (text) {
-                const spanPx = Math.sqrt(tdx * tdx + tdy * tdy) / resolution;
-                const textScale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-                styles.push(new Style({
-                    geometry: new Point([x0, y0]),
-                    text: new Text({
-                        text,
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        rotation: textRotation,
-                        textAlign: 'left',
-                        textBaseline: 'middle',
-                        scale: textScale,
-                    }),
-                }));
-            }
-
-            // ── Attack helicopter symbol at twist point ────────────────
-            // Arrow direction: from direction point (coords[3]) toward twist center (coords[2])
-            const heading = Math.atan2(cy - dy3, cx - dx3);
-            // Symbol half-size: use the text label span as reference (= arrow radius in map units)
-            const s = Math.sqrt(tdx * tdx + tdy * tdy) * 0.5;
-
-            const color = (f as Feature).get?.('hostilityColor') || getDefaultLineColor();
-            const symbolStroke = new Stroke({ color, width: LINE_WIDTH() });
-            const symbolFill = new Fill({ color });
-
-            // Helper: offset from center by angle and distance
-            const off = (angle: number, dist: number): Coordinate =>
-                [cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist];
-
-            // Line parallel to arrowhead base (perpendicular to arrow heading),
-            // with arrowhead pointing in whichever perpendicular direction is "up" on screen.
-            // Pick the perpendicular that has a positive Y component (north = up in EPSG:3857).
-            let perpAngle = heading + Math.PI / 2;
-            if (Math.sin(perpAngle) < 0) perpAngle += Math.PI;
-
-            const stalkHalf = s * 1.0;
-            const lineTop = off(perpAngle, stalkHalf);
-            const lineBottom = off(perpAngle + Math.PI, stalkHalf);
-            const stalkLine = new LineString([lineBottom, lineTop]);
-            styles.push(new Style({ geometry: stalkLine, stroke: symbolStroke }));
-
-            // Small horizontal base at the bottom of the stalk (perpendicular to stalk = along heading)
-            const baseHalfWidth = s * 0.3;
-            const baseLeft: Coordinate = [
-                lineBottom[0] + Math.cos(heading) * baseHalfWidth,
-                lineBottom[1] + Math.sin(heading) * baseHalfWidth,
-            ];
-            const baseRight: Coordinate = [
-                lineBottom[0] - Math.cos(heading) * baseHalfWidth,
-                lineBottom[1] - Math.sin(heading) * baseHalfWidth,
-            ];
-            const baseLine = new LineString([baseLeft, baseRight]);
-            styles.push(new Style({ geometry: baseLine, stroke: symbolStroke }));
-
-            // Arrowhead (filled triangle) at top of the stalk
-            const arrowLen = s * 0.4;
-            const arrowHalfWidth = s * 0.2;
-            const arrowTip = off(perpAngle, stalkHalf + arrowLen);
-            // Arrowhead base wings are perpendicular to perpAngle (i.e. along the heading)
-            const arrowLeft: Coordinate = [
-                lineTop[0] + Math.cos(heading) * arrowHalfWidth,
-                lineTop[1] + Math.sin(heading) * arrowHalfWidth,
-            ];
-            const arrowRight: Coordinate = [
-                lineTop[0] - Math.cos(heading) * arrowHalfWidth,
-                lineTop[1] - Math.sin(heading) * arrowHalfWidth,
-            ];
-            const arrowHead = new Polygon([[arrowTip, arrowLeft, arrowRight, arrowTip]]);
-            styles.push(new Style({ geometry: arrowHead, fill: symbolFill, stroke: symbolStroke }));
-
-            return styles;
-        }
-        // Main/Supporting axis of advance: single "name DTG" label on the
-        // centerline, right-aligned just behind the arrowhead. Span (coords[0],
-        // coords[1]) runs along the last base segment with coords[1] sitting at
-        // the arrow tip anchor; we draw text anchored at coords[1] minus a
-        // small clearance, extending backward, rotated with the line. Scale
-        // tracks the arrow's radius span so text stays inside the channel.
-        if (name === TacticalGraphicName.MainAxisOfAdvance ||
-            name === TacticalGraphicName.MainAxisOfAdvanceFeint ||
-            name === TacticalGraphicName.SupportingAxisOfAdvance ||
-            name === TacticalGraphicName.InfiltrationLane) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [c0, c1] = coords;
-            const dx = c1[0] - c0[0], dy = c1[1] - c0[1];
-            const segLenMap = Math.hypot(dx, dy);
-            if (segLenMap === 0) return [];
-            const ux = dx / segLenMap, uy = dy / segLenMap;
-
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ');
-            if (!text) return [];
-
-            const rotation = getRotation(c0, c1);
-            const arrowGoesRight = c1[0] >= c0[0];
-            // InfiltrationLane label sits centered on the middle of the
-            // center-most segment; axis-of-advance labels sit right-aligned
-            // just behind the arrowhead.
-            const centerLabel = name === TacticalGraphicName.InfiltrationLane;
-            const textAlign: CanvasTextAlign = centerLabel
-                ? 'center'
-                : (arrowGoesRight ? 'right' : 'left');
-
-            const CLEARANCE_PX = 10;
-            const clearanceMap = CLEARANCE_PX * resolution;
-            const anchor: Coordinate = centerLabel
-                ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
-                : [c1[0] - ux * clearanceMap, c1[1] - uy * clearanceMap];
-
-            const spanPx = segLenMap / resolution;
-            const scale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-
-            return [new Style({
-                geometry: new Point(anchor),
-                text: new Text({
-                    text,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign,
-                    textBaseline: 'middle',
-                    scale,
-                }),
-            })];
-        }
-        // Counterattack: "CATK" left of segment midpoint, user name right — both on the
-        // last body segment (before the arrowhead). Bypasses movementGraphicStyles.
-        if (name === TacticalGraphicName.Counterattack) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            const catkText = label.label ? `CATK ${label.label}` : 'CATK';
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: catkText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        return movementGraphicStyles(label, f, resolution);
-    };
+function movementLabelPaintFor(name: TacticalGraphicName) {
+    if (AXIS_OF_ADVANCE_LABELS.includes(name)) return axisOfAdvanceLabelPaint(name);
+    return (MOVEMENT_LABEL_PAINTS[name] ?? movementLabelPaint)();
 }
 
 function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution: number) {
