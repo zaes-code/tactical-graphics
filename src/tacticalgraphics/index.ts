@@ -221,17 +221,22 @@ export {
     cutArcAtLabel,
     decorationScale,
     obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
     pathLength,
     textWidth,
     uprightRotation,
 } from './symbology/decorations';
 export {
+    PLANNED_DASH_PX,
     arcMissionTaskPaint,
+    defaultLinePaint,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
     obstacleLinePaint,
     phaseLinePaint,
 } from './symbology/paintFunctions';
+export type {DefaultLineOptions} from './symbology/paintFunctions';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
