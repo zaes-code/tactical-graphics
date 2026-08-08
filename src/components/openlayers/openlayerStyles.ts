@@ -3,8 +3,7 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
-import RenderFeature from 'ol/render/Feature';
+import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
@@ -82,28 +81,20 @@ export {
 };
 import {OSM} from 'ol/source';
 import {isEmpty} from '../../utils/isEmpty';
-
 /**
- * Scratch canvas for measuring text, created on first use rather than at module
- * load. This module is published as `@zaes/tactical-graphics/openlayers`, and a
- * top-level `document.createElement` makes it unimportable anywhere without a
- * DOM — a Next.js server render, a Node script, a jest suite in the `node`
- * environment. Every caller runs inside a StyleFunction, which by then has a
- * document; the fallback only matters if one is ever called without one, and
- * returning 0 widths beats throwing during import.
+ * The ported style functions, and the adapter that renders their output here.
+ *
+ * A ported function is deleted from this file and replaced by a one-line
+ * `asStyleFunction(...)` wrapper, so there is exactly one implementation and the
+ * ~1,600 tests that assert on this module's output become parity tests for it.
+ * @see paintToOpenLayers.ts
  */
-let textMeasureCtx: CanvasRenderingContext2D | null = null;
-const NO_MEASURE: Pick<CanvasRenderingContext2D, 'font' | 'measureText'> = {
-    font: '',
-    measureText: () => ({width: 0}) as TextMetrics,
-};
-
-function measureCtx(): Pick<CanvasRenderingContext2D, 'font' | 'measureText'> {
-    if (textMeasureCtx) return textMeasureCtx;
-    if (typeof document === 'undefined') return NO_MEASURE;
-    textMeasureCtx = document.createElement('canvas').getContext('2d');
-    return textMeasureCtx ?? NO_MEASURE;
-}
+import {arcMissionTaskPaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
+import {asStyleFunction} from './paintToOpenLayers';
+// Moved to its own leaf module so `paintToOpenLayers` can share it without an
+// import cycle back through this file. Re-exported: it is public API.
+import {getTextWidth} from './textMeasure';
+export {getTextWidth};
 
 const centerCoordinates = [0, 0];
 
@@ -921,9 +912,16 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
  * already-formatted label string. Every graphic routed through
  * `phaseLineStyle` shares this entry point.
  */
+/**
+ * **Ported.** The body lives in `tacticalgraphics/symbology/paintFunctions.ts` and
+ * this is the OpenLayers adapter over it, so the same implementation draws in both
+ * renderers. @see paintToOpenLayers.ts for why the port works this way round.
+ *
+ * `phaseLineStyle` above is kept: it takes an already-formatted label string and
+ * several other style functions call it directly.
+ */
 export function phaseLineStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (feature, resolution) =>
-        phaseLineStyle(feature, resolution, getFullLabel(name, readGraphicLabels(feature).label ?? ''));
+    return asStyleFunction(phaseLinePaint(name), name);
 }
 
 export function bridgeGraphicStyleFunc(): StyleFunction {
@@ -3587,98 +3585,11 @@ function centreSegmentIndex(coords: Coordinate[]): number {
     return Math.max(0, lengths.length - 1);
 }
 
+/** **Ported.** @see paintFunctions.ts, `obstacleLinePaint`. */
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(obstacleLinePaint(name), name);
 }
 
-function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        const coords = geom.getCoordinates();
-        const styles: Style[] = [];
-
-        if (coords.length < 2) return styles;
-
-        // ── 1. The centre-most drawn segment ──────────────────────────────
-        // The geometry *is* the drawn line now — the teeth are added below, in screen
-        // space — so its own segments are the drawn ones. While the teeth were baked in,
-        // every third vertex here was a tooth apex, and finding the middle of the drawn
-        // line meant carrying a copy of it on the feature.
-        const segIdx = centreSegmentIndex(coords);
-        const p1 = coords[segIdx];
-        const p2 = coords[segIdx + 1];
-
-        const segDx = p2[0] - p1[0];
-        const segDy = p2[1] - p1[1];
-        const segLength = Math.hypot(segDx, segDy);
-        if (segLength === 0) return styles;
-
-        const dir: Coordinate = [segDx / segLength, segDy / segLength];
-        const mid: Coordinate = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-
-        // ── 2. The side that is down ──────────────────────────────────────
-        // Both perpendiculars are equally "beside the line"; the one with a negative
-        // northing is the one below it on screen. Picking by the segment's own direction
-        // is what made the label change sides when the same line was drawn right-to-left
-        // — the direction of travel reverses, and every perpendicular derived from it
-        // with it. A vertical line has no lower side, so the tie breaks to the east.
-        let normal: Coordinate = [-dir[1], dir[0]];
-        if (normal[1] > 0 || (normal[1] === 0 && normal[0] < 0)) {
-            normal = [-normal[0], -normal[1]];
-        }
-
-        // ── 3. Stand off the line — a constant, in pixels ─────────────────
-        // The teeth take the upper side and the label the lower, so it has only the line
-        // itself to clear, and both terms are screen-sized: text does not scale with the
-        // map. This used to be a scan of the rendered geometry to discover how far
-        // map-unit teeth happened to reach, which is what sent the label a screen away on
-        // a line that doubled back over itself.
-        const obsScale = featureLabelScale(f, resolution);
-        const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
-        const offsetMap = (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * resolution;
-
-        const labelPoint: Coordinate = [
-            mid[0] + normal[0] * offsetMap,
-            mid[1] + normal[1] * offsetMap,
-        ];
-
-        // ── 4. Read along the segment, always upright ─────────────────────
-        let rotation = -Math.atan2(dir[1], dir[0]);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-
-        styles.push(new Style(
-            {
-                geometry: new Point(labelPoint), // dummy point
-                text: new Text({
-                    text: label,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: obsScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-
-        // The line, crenellated in screen space. The teeth take the upper side whichever
-        // way the line was drawn, and the label sits below, so the two never compete.
-        const {heightMap, baseMap, gapMap} = obstacleToothSize(coords, false, resolution);
-        const hostility = readHostility(f);
-        styles.push(new Style({
-            geometry: new LineString(crenellatedPath(coords, heightMap, baseMap, gapMap, 'up')),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        }));
-
-        return styles;
-    };
-}
 
 function getPointAlongSegment(coord1: number[], coord2: number[], ratio: number) {
     return [
@@ -5407,9 +5318,7 @@ export function airspaceCoordinationAreaStyle(
         if (allLines.length === 0) return [];
 
         // ── Measure widest line at scale = 1 ─────────────────────────────────
-        const ctx = measureCtx();
-        ctx.font = fontStyle;
-        const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
+        const maxLineWidth = Math.max(...allLines.map(l => (l ? getTextWidth(l, fontStyle, 1) : 0)));
 
         // ── Fit-to-polygon scale cap ──────────────────────────────────────────
         // Use the shorter bounding-box dimension so the block stays inside the
@@ -5491,73 +5400,9 @@ export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFuncti
     };
 }
 
-/** Clearance between the label's glyph box and each arc end, in screen pixels. */
-const ARC_LABEL_CLEARANCE_PX = 5;
-/**
- * Widest the label gap may open, in degrees of arc either side of the label.
- * Only reached when the circle is small enough that the letter genuinely spans
- * that much of it; past this the arcs would stop reading as a circle at all, so
- * the letter is allowed to overhang instead.
- */
-const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
 
-/** Smallest angle between two directions, in radians — always in [0, π]. */
-function angleBetween(a: number, b: number): number {
-    const d = Math.abs(a - b) % (2 * Math.PI);
-    return d > Math.PI ? 2 * Math.PI - d : d;
-}
 
-/**
- * Trims the end of one arc that runs into the label, back to `halfGap` radians
- * clear of the label axis. Whichever end is nearer the axis is the one cut, so
- * this works for an arc that approaches the label from either side.
- *
- * The cut lands **exactly** on the gap edge rather than on the nearest sample:
- * the generator's arcs are 100 points over 160°, and at a large radius one 1.6°
- * step is several pixels — enough for the two sides of the gap to look uneven.
- *
- * Angles are measured about the projected centre, and radii are never assumed:
- * a geodesic circle is not quite a circle in EPSG:3857, so anything that
- * reconstructed a point from `graphicSize` would drift off the drawn arc.
- */
-function cutArcAtLabel(pts: Coordinate[], centre: Coordinate, axis: number, halfGap: number): Coordinate[] {
-    if (pts.length < 2) return pts;
-    const angleAt = (p: Coordinate) => Math.atan2(p[1] - centre[1], p[0] - centre[0]);
-    const clearance = (p: Coordinate) => angleBetween(angleAt(p), axis);
 
-    const fromStart = clearance(pts[0]) <= clearance(pts[pts.length - 1]);
-    const seq = fromStart ? pts : [...pts].reverse();
-
-    let i = 0;
-    while (i < seq.length && clearance(seq[i]) < halfGap) i++;
-    if (i === 0) return pts;        // already clear of the label
-    if (i >= seq.length) return []; // the whole arc is inside the gap
-
-    const before = clearance(seq[i - 1]);
-    const after = clearance(seq[i]);
-    const t = after > before ? (halfGap - before) / (after - before) : 0;
-    const edge: Coordinate = [
-        seq[i - 1][0] + t * (seq[i][0] - seq[i - 1][0]),
-        seq[i - 1][1] + t * (seq[i][1] - seq[i - 1][1]),
-    ];
-    const kept = [edge, ...seq.slice(i)];
-    return fromStart ? kept : kept.reverse();
-}
-
-/** Every sub-line of a MultiLineString / GeometryCollection of them, in order. */
-function flattenLineWork(geom: Geometry | RenderFeature | undefined): Coordinate[][] {
-    if (geom instanceof MultiLineString) return geom.getCoordinates() as Coordinate[][];
-    if (geom instanceof LineString) return [geom.getCoordinates() as Coordinate[]];
-    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenLineWork(g));
-    return [];
-}
-
-/** The filled rings alongside that line work — AreaDefense's teeth, and nothing else today. */
-function flattenFilledRings(geom: Geometry | RenderFeature | undefined): Coordinate[][][] {
-    if (geom instanceof Polygon) return [geom.getCoordinates() as Coordinate[][]];
-    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenFilledRings(g));
-    return [];
-}
 
 /**
  * The arc-and-arrowhead mission tasks — Secure, Isolate, Retain, Occupy,
@@ -5583,52 +5428,7 @@ function flattenFilledRings(geom: Geometry | RenderFeature | undefined): Coordin
  * everything after them — arrowheads, teeth, radials — is drawn untouched.
  */
 export function arcMissionTaskStyleFunc(name: TacticalGraphicName, ratioLocked: boolean): StyleFunction {
-    const label = getLabel(name);
-    return (feature, resolution) => {
-        const lines = flattenLineWork(feature.getGeometry());
-        if (!lines.length) return [];
-
-        const centre = feature.get('graphicCenter') as Coordinate | undefined;
-        const labelPoint = feature.get('graphicLabelPoint') as Coordinate | undefined;
-        const radius = centre && labelPoint ? Math.hypot(labelPoint[0] - centre[0], labelPoint[1] - centre[1]) : 0;
-
-        if (centre && labelPoint && radius > 0 && label) {
-            const axis = Math.atan2(labelPoint[1] - centre[1], labelPoint[0] - centre[0]);
-            const scale = ratioLocked ? ratioLockedLabelScale(feature, resolution) : featureLabelScale(feature, resolution);
-            const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
-            const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
-
-            const halfWidthPx = getTextWidth(label, font, scale) / 2;
-            const halfHeightPx = (fontPx * scale * CAP_HEIGHT_FRACTION) / 2;
-            // Half-extent of the glyph box along the tangent at the label.
-            const tangentHalfPx =
-                halfWidthPx * Math.abs(Math.sin(axis)) + halfHeightPx * Math.abs(Math.cos(axis)) + ARC_LABEL_CLEARANCE_PX;
-            const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * resolution) / radius);
-
-            for (const i of [0, 1]) {
-                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], centre, axis, halfGap);
-            }
-        }
-
-        const color = readHostilityColor(feature);
-        const stroke = new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [];
-
-        const drawn = lines.filter(line => line.length >= 2);
-        if (drawn.length) styles.push(new Style({geometry: new MultiLineString(drawn), stroke}));
-
-        // AreaDefense's teeth are solid polygons rather than open outlines; every
-        // other member of the family has none, so this costs them nothing.
-        const rings = flattenFilledRings(feature.getGeometry());
-        if (rings.length) {
-            styles.push(new Style({
-                geometry: new MultiPolygon(rings),
-                fill: new Fill({color}),
-                stroke,
-            }));
-        }
-        return styles;
-    };
+    return asStyleFunction(arcMissionTaskPaint(name, ratioLocked), name);
 }
 
 /**
@@ -7014,9 +6814,7 @@ export function createAirCoordinatingAreaLabelStyle(
     // Measure the widest line so we can shift the left-aligned block to center it.
     // offsetX moves the anchor to the left edge of the block; the block then
     // extends rightward by maxLineWidth*scale, keeping it centered overall.
-    const ctx = measureCtx();
-    ctx.font = fontStyle;
-    const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
+    const maxLineWidth = Math.max(...allLines.map(l => (l ? getTextWidth(l, fontStyle, 1) : 0)));
     const offsetX = -(maxLineWidth * scale) / 2;
 
     return [new Style({
@@ -7061,9 +6859,3 @@ export function airCoordinatingAreaStyleFunc(identifier: string, labels: Graphic
     };
 }
 
-export function getTextWidth(text: string, font: string, scale: number): number {
-    const ctx = measureCtx();
-    ctx.font = font; // e.g. "bold 12px sans-serif"
-    const metrics = ctx.measureText(text);
-    return metrics.width * scale;
-}
