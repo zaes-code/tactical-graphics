@@ -40,12 +40,14 @@ import {
     ratioLockedLabelScale,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {
     centreSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
     textWidth,
     uprightRotation,
 } from './decorations';
@@ -346,3 +348,111 @@ export function missionTaskLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
     };
 }
 
+
+// ── 4. The default line — the fallback for most Lines-category graphics ───────
+
+/** Screen-pixel standoff between a default line and the labels above and below it. */
+const DEFAULT_LINE_LABEL_GAP_PX = 8;
+
+/** Dash pattern, in screen pixels, for a graphic whose status is `planned`. */
+export const PLANNED_DASH_PX = [12, 8];
+
+/**
+ * A line with its designation above each end and its date-time group below.
+ *
+ * The fallback every `line()`-routed graphic falls through to when it has no
+ * bespoke style — the largest single family in the registry.
+ *
+ * Two things it gets right that are easy to lose:
+ *
+ * - **Each endpoint picks its own alignment.** The first and last segments can run
+ *   in different directions — a line drawn left-to-right overall may turn back on
+ *   its final leg — so the side each label is pushed to is decided per endpoint,
+ *   not once for the whole line.
+ * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalises
+ *   against north; a plain counter-clockwise perpendicular flips when the same
+ *   line is drawn the other way and puts every label underneath.
+ *
+ * The date-time group renders only when *both* ends of the range are present —
+ * a lone start date reads as an error rather than as information.
+ */
+export interface DefaultLineOptions {
+    /**
+     * Dash the line whatever its status. ProbableLineOfDeployment is the only user:
+     * it is dashed in both the present and the anticipated form, so the dash carries
+     * no status meaning there and must not be conditional on one.
+     */
+    alwaysDashed?: boolean;
+    /**
+     * Render the date-time group below the line. Off for graphics whose doctrinal
+     * form has no DTG — again ProbableLineOfDeployment, which would otherwise start
+     * showing dates the moment a user filled the field in.
+     */
+    showDates?: boolean;
+}
+
+export function defaultLinePaint(
+    name: TacticalGraphicName,
+    options: DefaultLineOptions = {},
+): (f: PaintFeature, c: PaintContext) => Paint[] {
+    const {alwaysDashed = false, showDates = true} = options;
+    return (feature, context) => {
+        if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
+        const coords = feature.geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const identifier = getFullLabel(name, feature.properties.label ?? '');
+        const startDate = showDates ? feature.properties.startDate ?? '' : '';
+        const endDate = showDates ? feature.properties.endDate ?? '' : '';
+        const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
+
+        const start = coords[0];
+        const afterStart = coords[1];
+        const end = coords[coords.length - 1];
+        const beforeEnd = coords[coords.length - 2];
+
+        const scale = scaleOf(feature, context);
+        const gap = DEFAULT_LINE_LABEL_GAP_PX;
+        const res = context.resolution;
+
+        const startAlign: 'left' | 'right' = afterStart[0] >= start[0] ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = end[0] >= beforeEnd[0] ? 'right' : 'left';
+        const startRotation = uprightRotation(start, afterStart);
+        const endRotation = uprightRotation(end, beforeEnd);
+
+        const label = (
+            at: ProjectedPosition,
+            text: string,
+            rotation: number,
+            align: 'left' | 'right',
+            baseline: 'top' | 'bottom',
+        ): Paint => ({
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text,
+                font: fontStyle,
+                fill: getLabelFillColor(),
+                halo: halo(),
+                rotation,
+                align,
+                baseline,
+                scale,
+            },
+        });
+
+        const dashPx = alwaysDashed || feature.properties.status === TacticalGraphicStatus.planned
+            ? PLANNED_DASH_PX
+            : undefined;
+
+        return [
+            label(offsetAbove(start, start, afterStart, res, gap), identifier, startRotation, startAlign, 'bottom'),
+            label(offsetAbove(end, beforeEnd, end, res, gap), identifier, endRotation, endAlign, 'bottom'),
+            label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top'),
+            label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top'),
+            {
+                geometry: feature.geometry,
+                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
+            },
+        ];
+    };
+}
