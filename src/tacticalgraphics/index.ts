@@ -188,7 +188,7 @@ export {
  *
  * @see ai/maplibre-renderer.md
  */
-export {HANDLE_Z_INDEX, mapPaintGeometry, paintGeometryPositions} from './core/paint';
+export {HANDLE_Z_INDEX, mapPaintGeometry, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
 export type {
     CircleSpec,
     FillSpec,
@@ -198,6 +198,7 @@ export type {
     PaintFeature,
     PaintFunction,
     ProjectedGeometry,
+    ProjectedInputGeometry,
     ProjectedPosition,
     StrokeSpec,
     TextSpec,

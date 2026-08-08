@@ -25,6 +25,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {paintFilledRings, paintLineWork} from '../core/paint';
 import {
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
@@ -63,8 +64,13 @@ function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
     return feature.properties.hostility ?? TacticalGraphicHostility.unknown;
 }
 
+/**
+ * The colour a graphic's line work draws in: a host's already-resolved override
+ * if there is one, otherwise the affiliation's. `getColorByHostility` resolves
+ * `unknown` to the default line colour, so the unaffiliated case is covered too.
+ */
 function lineColorOf(feature: PaintFeature): string {
-    return getColorByHostility(hostilityOf(feature));
+    return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
 }
 
 /** The halo every label carries, so it stays legible over the basemap. */
@@ -266,7 +272,7 @@ const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
 export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: boolean): (f: PaintFeature, c: PaintContext) => Paint[] {
     const label = getLabel(name);
     return (feature, context) => {
-        const lines = flattenLines(feature);
+        const lines = paintLineWork(feature.geometry);
         if (!lines.length) return [];
 
         const centre = feature.graphicCenter;
@@ -292,13 +298,25 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
             }
         }
 
-        const drawn = lines.filter(line => line.length >= 2);
-        if (!drawn.length) return [];
+        const color = lineColorOf(feature);
+        const stroke = {color, widthPx: LINE_WIDTH()};
+        const paints: Paint[] = [];
 
-        return [{
-            geometry: {type: 'MultiLineString', coordinates: drawn},
-            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
-        }];
+        const drawn = lines.filter(line => line.length >= 2);
+        if (drawn.length) paints.push({geometry: {type: 'MultiLineString', coordinates: drawn}, stroke});
+
+        // AreaDefense's teeth are solid polygons rather than open outlines; every
+        // other member of the family has none, so this costs them nothing.
+        const rings = paintFilledRings(feature.geometry);
+        if (rings.length) {
+            paints.push({
+                geometry: {type: 'MultiPolygon', coordinates: rings},
+                fill: {color},
+                stroke,
+            });
+        }
+
+        return paints;
     };
 }
 
@@ -328,10 +346,3 @@ export function missionTaskLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
     };
 }
 
-/** Every sub-line of a feature's geometry, in order, as a mutable array. */
-function flattenLines(feature: PaintFeature): ProjectedPosition[][] {
-    const geometry = feature.geometry;
-    if (geometry.type === 'MultiLineString') return geometry.coordinates.map(line => [...line]);
-    if (geometry.type === 'LineString') return [[...geometry.coordinates]];
-    return [];
-}
