@@ -17,6 +17,8 @@ import {
 } from './securityOperationSymbol';
 import ms from 'milsymbol';
 import {isEmpty} from '../../utils/isEmpty';
+import type {FeatureCollection} from 'geojson';
+import {SPIKE_SAMPLES} from '../spikeSamples';
 
 // The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
 // Screen the way any consumer would — by handing over the milsymbol it already
@@ -68,10 +70,25 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
                 // so this is a handle on it rather than a copy.
                 setSecurityOperationSymbolSize,
                 getSecurityOperationSymbolSize,
+                // The MapLibre spike's fixture, restored through the ordinary
+                // persistence path. Both engines are handed the same GeoJSON, so a
+                // side-by-side capture compares renderers rather than test rigs.
+                drawSpikeSamples: (snapshot: FeatureCollection = SPIKE_SAMPLES) =>
+                    restoreTacticalGraphics(tacticalGraphicManager.current!, snapshot),
             };
         }
 
-        return () => olMap.setTarget(undefined);
+        return () => {
+            olMap.setTarget(undefined);
+            // Delete the hook, don't just drop the map. Until the engine picker existed
+            // this component never unmounted, so a stale `__tacticalGraphics` was
+            // unreachable — now it outlives its map and *shadows* the MapLibre hook,
+            // and a driving script that probes for it silently steers a dead map while
+            // screenshotting a live one. Cost an hour of reading correct code as broken.
+            if (process.env.NODE_ENV !== 'production') {
+                delete (window as unknown as Record<string, unknown>).__tacticalGraphics;
+            }
+        };
     }, []);
 
     // Swap tile source when dark mode changes
