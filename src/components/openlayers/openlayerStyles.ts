@@ -3,7 +3,7 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import { Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import { Geometry, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
@@ -103,6 +103,12 @@ import {
     munitionFlightPathPaint,
     passageLanePaint,
     barSymbolPaint,
+    battlePositionPaint,
+    strongPointPaint,
+    unexplodedOrdnanceAreaPaint,
+    exfiltratePaint,
+    reliefInPlacePaint,
+    turnPaint,
     baseDefenseZoneLabelPaint,
     movementToContactPaint,
     pursuitPaint,
@@ -1300,129 +1306,16 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
  * a multi-vertex route would lose every segment after the first — fine for the
  * cane arrows, which are fixed at two points, wrong here.
  */
+/** **Ported.** @see routedTaskPaints.ts, `exfiltratePaint`. */
 export function exfiltrateStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const lines = geom.getCoordinates();
-        const route = lines[0];
-        if (!route || route.length < 2) return [];
-
-        const hostility = readHostility(f);
-        // Everything after the route renders untouched — that is the arrowhead.
-        const outlineSegments: Coordinate[][] = lines.slice(1);
-
-        const p1 = route[0];
-        const p2 = route[1];
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // Gap sized to the rendered glyph plus 4px padding a side. getTextWidth
-        // returns screen pixels, so × resolution once to reach map units.
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const halfGapPx = getTextWidth(label, labelFont, labelScale) / 2 + 4;
-        const gapRatio = segLen > 0 ? (halfGapPx * resolution) / segLen : 0;
-
-        const midGap: Coordinate = [p1[0] + dx * 0.5, p1[1] + dy * 0.5];
-        if (gapRatio > 0 && gapRatio < 0.5) {
-            const at = (t: number): Coordinate => [p1[0] + dx * t, p1[1] + dy * t];
-            outlineSegments.push([p1, at(0.5 - gapRatio)]);
-            // The far side of the gap runs on through every remaining vertex, so a
-            // bent route stays connected.
-            outlineSegments.push([at(0.5 + gapRatio), ...route.slice(1)]);
-        } else {
-            // Label is wider than the segment holding it — render the route
-            // unbroken rather than opening a gap that swallows the segment.
-            outlineSegments.push(route);
-        }
-
-        return [
-            new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    // Lies along the first segment, the one the gap is cut from.
-                    // `getRotation` adds 180° for a right-to-left segment, so the
-                    // "EX" reads the right way up whichever way the route was drawn.
-                    text: label,
-                    font: labelFont,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: getRotation(p1, p2),
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-            new Style({
-                geometry: new MultiLineString(outlineSegments),
-                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-            }),
-        ];
-    };
+    return asStyleFunction(exfiltratePaint(label));
 }
 
 // ReliefInPlace: top line + curve + bottom line + arrowhead, with the "RIP"
 // label carved into a gap on the top line near the non-arrow end.
+/** **Ported.** @see routedTaskPaints.ts, `reliefInPlacePaint`. */
 export function reliefInPlaceStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 4) return [];
-
-        const topLine = coords[0];
-        const curve = coords[1];
-        const bottomLine = coords[2];
-        const bottomArrow = coords[3];
-        const topArrow = coords[4];
-
-        const hostility = readHostility(f);
-        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
-
-        const p1 = topLine[0];
-        const p2 = topLine[1];
-        const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-        if (segLen === 0) return [];
-
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const textWidthPx = getTextWidth(label, labelFont, labelScale);
-        const halfGapPx = textWidthPx / 2 + 4;
-        const gapRatio = (halfGapPx * resolution) / segLen;
-        const t = 0.2; // gap center at 20% along the top line (near p0)
-
-        const gapA: Coordinate = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t + gapRatio), p1[1] + dy * (t + gapRatio)];
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        let rotation = -Math.atan2(dy, dx);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-
-        return [
-            new Style({geometry: new LineString([p1, gapA]), stroke}),
-            new Style({geometry: new LineString([gapB, p2]), stroke}),
-            new Style({geometry: new LineString(curve as Coordinate[]), stroke}),
-            new Style({geometry: new LineString(bottomLine as Coordinate[]), stroke}),
-            new Style({geometry: new LineString(bottomArrow as Coordinate[]), stroke}),
-            ...(topArrow ? [new Style({geometry: new LineString(topArrow as Coordinate[]), stroke})] : []),
-            new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: label,
-                    font: labelFont,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-        ];
-    };
+    return asStyleFunction(reliefInPlacePaint(label));
 }
 
 /** **Ported.** @see blockPaints.ts, `breachPaint`. */
@@ -2653,60 +2546,9 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
  * covers both: OpenLayers strokes the sub-lines and fills the arrowhead.
  * The "T" comes off the separate label feature.
  */
+/** **Ported.** @see routedTaskPaints.ts, `turnPaint`. */
 export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
-    const label = getLabel(name);
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const stroke = new Stroke({color, width: LINE_WIDTH()});
-        const geom = f.getGeometry();
-        if (!(geom instanceof GeometryCollection)) {
-            return new Style({fill: new Fill({color}), stroke});
-        }
-
-        // Half the gap, in map units, from the glyph as it renders right now.
-        // The label's own scale is zoom-clamped to [0.3, 1.5], so a gap baked
-        // in metres drifted against it: wider than the "T" zoomed in, tighter
-        // than it zoomed out. Measuring here is the only way the two agree at
-        // every zoom. @see conventions.md, "a gap follows what it makes room for"
-        // No letter, no gap: TURN_LABEL_PAD_PX is added on top of the measured
-        // width, so an empty label would still leave 10px of curve missing.
-        const scale = featureLabelScale(f, resolution);
-        const halfGap = label ? (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution : 0;
-
-        const styles: Style[] = [];
-        // The curve, for capping the head against the graphic's own on-screen size.
-        const curve = geom.getGeometries()
-            .filter((g): g is MultiLineString => g instanceof MultiLineString)
-            .flatMap(g => g.getCoordinates().flat());
-        for (const sub of geom.getGeometries()) {
-            if (sub instanceof Polygon) {
-                // The arrowhead — filled, never trimmed, and held at a screen size
-                // rather than the metres the generator baked in at draw time.
-                const head = screenSizedArrowHead(sub, curve, resolution);
-                if (head) styles.push(new Style({geometry: head, fill: new Fill({color}), stroke}));
-                continue;
-            }
-            if (!(sub instanceof MultiLineString)) {
-                styles.push(new Style({geometry: sub, stroke}));
-                continue;
-            }
-            // `[curveBeforeLabel, curveAfterLabel]`, meeting exactly at the
-            // arc-length midpoint because the holder passes `labelGap: 0` and
-            // does the cutting here instead. Trim each half back from that
-            // shared inner end.
-            const halves = sub.getCoordinates();
-            halves.forEach((half, i) => {
-                const trimmed =
-                    halfGap > 0
-                        ? i === 0
-                            ? trimFromEnd(half, halfGap)
-                            : trimFromEnd(half.slice().reverse(), halfGap).reverse()
-                        : half;
-                if (trimmed.length >= 2) styles.push(new Style({geometry: new LineString(trimmed), stroke}));
-            });
-        }
-        return styles;
-    };
+    return asStyleFunction(turnPaint(getLabel(name)), name);
 }
 
 /** Padding either side of the "T", in screen pixels. */
@@ -3114,38 +2956,9 @@ function getGraphicGeometryData(
 }
 
 // Complete style function for OpenLayers
+/** **Ported.** @see echelonPaints.ts, `strongPointPaint` — the strong point. */
 function railroadStyleFunction(feature: FeatureLike, resolution: number) {
-    const geometry = feature.getGeometry();
-    // Default to π/2 so the echelon sits on the southernmost segment.
-    // The normal formula in getGraphicGeometryData is the inward normal, so the
-    // target direction is inverted: pointing north (π/2) selects the south-facing edge.
-    // ?? (not ||) ensures an explicit rotation of 0 (east) is still respected.
-    const rotation: number = feature.get('rotation') ?? Math.PI / 2;
-
-    const geoData = getGraphicGeometryData(geometry as Geometry, rotation, resolution);
-    if (!geoData) {
-        return [];
-    }
-
-    const styles = [];
-    const {outlineSegments, midGap, dx, dy} = geoData;
-    // 0 = east, π/2 = north, etc.
-    const hostility = readHostility(feature);
-    const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
-
-    // 6) build styles
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-    });
-    // Base layers
-    styles.push(outlineStyle);
-    const echelonStyles = createEchelonStyles(midGap, dx, dy, resolution, echelon, getColorByHostility(hostility), featureLabelScale(feature, resolution));
-    styles.push(...echelonStyles);
-    const crossTies = generateCrossTiesForPolygon(new MultiLineString(outlineSegments), resolution, getColorByHostility(hostility));
-    styles.push(...crossTies);
-
-    return styles;
+    return asStyleFunction(strongPointPaint())(feature, resolution);
 }
 
 /** Returns the echelon symbol's half-extent perpendicular to the segment, in screen pixels (unscaled). */
@@ -3348,35 +3161,9 @@ function createEchelonStyles(mid: Coordinate, dx: number, dy: number, resolution
     return styles;
 }
 
+/** **Ported.** @see echelonPaints.ts, `battlePositionPaint`. */
 export function battlePositionStyleFunction(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style[] {
-    const geometry = feature.getGeometry();
-    // Default to π/2 so the echelon sits on the southernmost segment.
-    // getGraphicGeometryData uses the inward normal, so pointing north (π/2) selects the south-facing edge.
-    const rotation: number = feature.get('rotation') ?? Math.PI / 2;
-    const geoData = getGraphicGeometryData(geometry as Geometry, rotation, resolution);
-    if (!geoData) {
-        return [];
-    }
-
-    const hostility = readHostility(feature);
-    const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
-    const {outlineSegments, midGap, dx, dy} = geoData;
-
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-
-    // 6) build styles
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({
-            color: getColorByHostility(hostility),
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined
-        }),
-    });
-
-    const echelonStyles = createEchelonStyles(midGap, dx, dy, resolution, echelon, getColorByHostility(hostility), featureLabelScale(feature, resolution));
-
-    return [outlineStyle, ...echelonStyles];
+    return asStyleFunction(battlePositionPaint())(feature, resolution) as Style[];
 }
 
 /**
@@ -3506,136 +3293,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
 // --- CONFIGURATION CONSTANTS ---
 const GAP_WIDTH_PX = 40; // The desired width (in screen pixels) for each text gap
 
-/**
- * Generates an array of OpenLayers styles for a polygon feature
- * with two text-labeled gaps along the most outward-facing segment.
- *
- * @param {import('ol/Feature').default} feature The feature to style.
- * @param {number} resolution The current map resolution.
- * @param {number[]} rotation The unit vector [dx, dy] representing the 'outward' direction.
- * @param {(hostility: string) => string} getColorByHostility Function to get color.
- * @returns {Style[]} An array of Style objects.
- */
+/** **Ported.** @see echelonPaints.ts, `unexplodedOrdnanceAreaPaint`. */
 function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: number) {
-// 1) Get the main ring coordinates
-    const geometry = feature.getGeometry() as Polygon;
-    const ring = geometry.getCoordinates()[0];
-
-    if (ring.length < 3) return [];
-
-    let rotation = feature.get('rotation') || 0;
-
-    const unitRot = [Math.cos(rotation), Math.sin(rotation)];
-    const color = readHostilityColor(feature);
-    const gapMapUnits = GAP_WIDTH_PX * resolution;
-
-    // --- NEW LOGIC: FINDING OPPOSITE SEGMENTS ---
-    let maxProjection = -Infinity;
-    let minProjection = Infinity;
-    let maxIndex = -1;
-    let minIndex = -1;
-
-    // 2) Iterate over all segments to find the ones defining the extent along the rotation axis
-    for (let i = 0; i < ring.length - 1; i++) {
-        const [x1, y1] = ring[i];
-        const [x2, y2] = ring[i + 1];
-
-        // Midpoint of the segment
-        const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2;
-
-        // Projection of the midpoint onto the rotation axis
-        // This tells us how far "out" this segment is along the rotation vector
-        const projection = midX * unitRot[0] + midY * unitRot[1];
-
-        if (projection > maxProjection) {
-            maxProjection = projection;
-            maxIndex = i;
-        }
-        if (projection < minProjection) {
-            minProjection = projection;
-            minIndex = i;
-        }
-    }
-
-    // Ensure we found two distinct segments
-    if (maxIndex === minIndex || maxIndex === -1 || minIndex === -1) {
-        // Fallback to a closed outline if opposite segments couldn't be found
-        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH()})})];
-    }
-
-    const segmentsToGap = [maxIndex, minIndex];
-    const styles = [];
-    const outlineSegments = [];
-
-    // 3) Process each segment (maxIndex and minIndex) to create the gap and label
-    for (let i = 0; i < ring.length - 1; i++) {
-        const p1 = ring[i];
-        const p2 = ring[i + 1];
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (segmentsToGap.includes(i)) {
-            // This is one of the two segments where we need a gap and a label
-
-            // Gap placement calculation (centered gap)
-            if (segLen < gapMapUnits) {
-                // Segment is too short, just add the full segment to the outline
-                outlineSegments.push([p1, p2]);
-                continue;
-            }
-
-            // Calculate the fraction (t-value) for the start and end of the gap
-            const centerT = 0.5; // Center of the segment
-            const halfGapRatio = (gapMapUnits / 2) / segLen;
-
-            const tStart = centerT - halfGapRatio;
-            const tEnd = centerT + halfGapRatio;
-
-            const tCenter = centerT; // Label is exactly at the midpoint
-
-            // Calculate the coordinates for the break points and the label
-            const breakPoint = (t: number) => [p1[0] + dx * t, p1[1] + dy * t];
-
-            const gapStart = breakPoint(tStart);
-            const gapEnd = breakPoint(tEnd);
-            const labelCoord = breakPoint(tCenter);
-
-            // Add the two line pieces around the gap
-            outlineSegments.push(
-                [p1, gapStart], // Piece before the gap
-                [gapEnd, p2],    // Piece after the gap
-            );
-
-            // Create the label style
-            const labelStyle = new Style({
-                geometry: new Point(labelCoord),
-                text: new Text({
-                    text: 'UXO',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    placement: 'point',
-                    scale: featureLabelScale(feature, resolution),
-                }),
-            });
-            styles.push(labelStyle);
-
-        } else {
-            // This is a normal perimeter segment, just add it to the outline
-            outlineSegments.push([p1, p2]);
-        }
-    }
-
-    // 4) Create the final perimeter style
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: color, width: LINE_WIDTH()}),
-    });
-    styles.push(outlineStyle);
-
-    return styles;
+    return asStyleFunction(unexplodedOrdnanceAreaPaint())(feature, resolution);
 }
 
 

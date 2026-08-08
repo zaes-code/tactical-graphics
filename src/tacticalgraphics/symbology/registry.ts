@@ -35,6 +35,8 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
+import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
@@ -629,6 +631,18 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     ]) {
         registry[name] = {graphic: plainOutlinePaint(), label: missionTaskLabelPaint(name)};
     }
+
+    // Turn's "T" comes off its own label feature, so the graphic painter takes the
+    // letter only to size the gap it cuts for it.
+    for (const name of [TacticalGraphicName.Turn, TacticalGraphicName.TacticalTurn]) {
+        registry[name] = {graphic: turnPaint(getLabel(name)), label: missionTaskLabelPaint(name)};
+    }
+    registry[TacticalGraphicName.ReliefInPlace] = {graphic: reliefInPlacePaint('RIP')};
+    registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
+
+    registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
+    registry[TacticalGraphicName.StrongPoint] = {graphic: strongPointPaint()};
+    registry[TacticalGraphicName.UnexplodedExplosiveOrdnanceArea] = {graphic: unexplodedOrdnanceAreaPaint()};
 
     for (const name of RETROGRADE_GRAPHICS) {
         registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};

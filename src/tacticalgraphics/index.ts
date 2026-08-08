@@ -281,5 +281,7 @@ export {
 export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
 export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
+export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
+export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
