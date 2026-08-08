@@ -69,4 +69,5 @@ export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} fro
 export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './corridorPaints';
 export {retrogradeTaskPaint} from './retrogradePaints';
 export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './movementPaints';
+export {blockPaint, breachPaint, clearPaint} from './blockPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

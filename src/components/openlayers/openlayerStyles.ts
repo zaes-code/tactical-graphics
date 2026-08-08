@@ -95,6 +95,9 @@ import {
     airCorridorLabelPaint,
     airCorridorPaint,
     attackHelicopterAxisLabelPaint,
+    blockPaint,
+    breachPaint,
+    clearPaint,
     aviationAxisLabelPaint,
     axisOfAdvanceLabelPaint,
     counterattackLabelPaint,
@@ -1198,98 +1201,9 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
  */
 const OPTICAL_CENTRE_PX_PER_SCALE = 2.2;
 
+/** **Ported.** @see blockPaints.ts, `clearPaint`. */
 export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let midLine = coords[4];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = 4;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // t1 is the fractional position along the mid line where the label
-        // sits (0 = start, 1 = end). Defaults to 0.6 for Clear; Disrupt passes
-        // 0.5 so the D label centers on the middle line.
-        const p1 = midLine[0];
-        const p2 = midLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (!textLabel) {
-            // The table 5-19 obstacle effect carries no letter. GAP_PX below is
-            // a flat constant rather than a measured label width, so an empty
-            // label still cuts a 20px hole in the prong. Push the segment whole.
-            outlineSegments.push([p1, p2]);
-        } else {
-            // 4) carve a central gap in that opening side
-            const GAP_PX = 10; // px gap on each side of the dot
-            const gapMap = GAP_PX * resolution; // map-unit gap
-            const gapRatio = gapMap / segLen;
-
-            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-            // keep the two side pieces of that segment
-            outlineSegments.push([p1, gapA], [gapB, p2]);
-
-            // 5) compute the center of the gap for the dot
-            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-            let rotation = -Math.atan2(dy, dx);
-
-            // Keep text upright
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-                rotation += Math.PI;
-            }
-            // Normalize to [-π, π)
-            if (rotation > Math.PI) rotation -= 2 * Math.PI;
-            // 6) build styles for the echelon in the middle
-            const labelScale = featureGraphicLabelScale(f, resolution);
-            const textStyle = new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: textLabel,
-                    font: 'bold 24px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    // `textBaseline: 'middle'` centres the font's *em box* on the
-                    // anchor, not the capital's ink, so the letter renders high and
-                    // the line looks as if it passes below centre. Measured on the
-                    // rendered glyph, the error is 2.2 px per unit of label scale
-                    // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
-                    // artefact, hence proportional. OL applies `offsetY` in raw
-                    // screen pixels and does **not** multiply it by `scale`, so the
-                    // scale has to be applied here.
-                    offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            });
-            styles.push(textStyle);
-        }
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-        return styles;
-    };
+    return asStyleFunction(clearPaint(textLabel, t1));
 }
 
 function getRotation(start: Coordinate, end: Coordinate) {
@@ -1675,205 +1589,14 @@ export function reliefInPlaceStyleFunc(label: string): StyleFunction {
     };
 }
 
+/** **Ported.** @see blockPaints.ts, `breachPaint`. */
 export function breachStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let verticalLine = coords[coords.length - 1];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = coords.length - 1;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 = .5;
-        const p1 = verticalLine[0];
-        const p2 = verticalLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a central gap in that opening side
-        const GAP_PX = 10; // px gap on each side of the dot
-        const gapMap = GAP_PX * resolution; // map-unit gap
-        const gapRatio = gapMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the echelon in the middle
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: 0,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: featureGraphicLabelScale(f, resolution),
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(breachPaint(label));
 }
 
+/** **Ported.** @see blockPaints.ts, `blockPaint`. */
 export function blockStyleFunc(label: string): StyleFunction {
-    return (f: FeatureLike, resolution: number) => {
-        const geom = f.getGeometry();
-        let coords;
-        if (!geom) return;
-
-        if (geom instanceof LineString) coords = geom.getCoordinates();
-        else if (geom instanceof MultiLineString) coords = geom.getCoordinates()[0];
-        else return;
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-        if (geom instanceof MultiLineString) {
-            outlineSegments.push(...geom.getCoordinates().slice(1, geom.getCoordinates().length));
-        }
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-
-        // Compute the total baseline vector (start → end)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        // Project each vertex onto that baseline to get cumulative "linear" distance
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen; // scalar projection
-        });
-
-        // 4️⃣ Normalize to 0 → baseLen range
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const normalizedProjections = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        // Find segment that crosses the projected midpoint (0.5)
-        const half = 0.5;
-        let midSegmentIndex = 0;
-        for (let i = 0; i < normalizedProjections.length - 1; i++) {
-            if (normalizedProjections[i] <= half && normalizedProjections[i + 1] >= half) {
-                midSegmentIndex = i;
-                break;
-            }
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push([coords[i], coords[i + 1]]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 =
-            (half - normalizedProjections[midSegmentIndex]) /
-            (normalizedProjections[midSegmentIndex + 1] - normalizedProjections[midSegmentIndex]);
-
-        const p1 = coords[midSegmentIndex];
-        const p2 = coords[midSegmentIndex + 1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (!label) {
-            // The table 5-19 obstacle effect carries no letter, so there is no
-            // hole to leave for one. The gap below is not label-width alone —
-            // it adds 4px of padding a side — so an empty label would still
-            // break the shaft around nothing. Push the segment unbroken.
-            outlineSegments.push([p1, p2]);
-        } else {
-            // Gap: sized to fit the actually rendered label glyph plus 4px
-            // padding per side. getTextWidth returns screen pixels at the
-            // current OL text scale, so we convert to map units with
-            // `* resolution` — this keeps the gap tight around the label
-            // regardless of zoom or of how wide the graphic's front line is.
-            // Measure with the same 24px font that the text style renders.
-            const labelScale = featureGraphicLabelScale(f, resolution);
-            const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
-            const gapMap = (labelWidthPx / 2 + 4) * resolution;
-            const gapRatio = gapMap / segLen;
-
-            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-            let rotation = -Math.atan2(dy, dx);
-
-            // Keep text upright
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-                rotation += Math.PI;
-            }
-            // Normalize to [-π, π)
-            if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-            // keep the two side pieces of that segment
-            outlineSegments.push([p1, gapA], [gapB, p2]);
-
-            // 5) compute the center of the gap for the dot
-            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-            // 6) build styles for the label in the middle.
-            // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
-            // ratio-locked block-family graphics render with matching label sizes.
-            const textStyle = new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: label,
-                    font: 'bold 24px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                }),
-            });
-            styles.push(textStyle);
-        }
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(blockPaint(label));
 }
 
 /**
