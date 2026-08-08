@@ -35,6 +35,7 @@ export {
     areaFillPaint,
     areaOutlinePaint,
     defaultLinePaint,
+    amplifierDash,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
@@ -61,4 +62,5 @@ export {
     zoneLabelPaint,
 } from './areaLabelPaints';
 
+export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

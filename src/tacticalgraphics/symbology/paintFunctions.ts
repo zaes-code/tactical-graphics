@@ -40,7 +40,7 @@ import {
     ratioLockedLabelScale,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {
     centreSegmentIndex,
     crenellatedPath,
@@ -356,6 +356,23 @@ const DEFAULT_LINE_LABEL_GAP_PX = 8;
 
 /** Dash pattern, in screen pixels, for a graphic whose status is `planned`. */
 export const PLANNED_DASH_PX = [12, 8];
+
+/**
+ * The dash a graphic takes from its amplifiers, or nothing.
+ *
+ * **Two conditions, not one.** A `planned` status dashes, and so does a *suspected*
+ * hostile — an affiliation the operator is not sure of is drawn broken, which is a
+ * doctrinal distinction rather than a status one. Reading only `status` silently
+ * loses the second, and the two look identical on the map, so nothing would flag it.
+ */
+export function amplifierDash(feature: PaintFeature): number[] | undefined {
+    const {status, hostility, confidence} = feature.properties;
+    const planned = status === TacticalGraphicStatus.planned;
+    const suspectedHostile =
+        hostility === TacticalGraphicHostility.hostileFaker
+        && confidence === TacticalGraphicConfidence.suspected;
+    return planned || suspectedHostile ? PLANNED_DASH_PX : undefined;
+}
 
 /**
  * A line with its designation above each end and its date-time group below.
