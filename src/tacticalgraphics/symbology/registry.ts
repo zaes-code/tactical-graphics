@@ -35,6 +35,7 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskPaint} from './missionTaskPaints';
 import {blockPaint, breachPaint, clearPaint} from './blockPaints';
 import {
     attackHelicopterAxisLabelPaint,
@@ -356,6 +357,28 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
  * The retrograde tasks. Each takes its own designation from `getLabel`, and abatis
  * deliberately has none — a graphic with no letter gets no gap cut for one.
  */
+/**
+ * The crossed mission tasks — two arms meeting at a one-letter designation,
+ * FM 1-02.2 table 6-1. Mirrors `CROSSED_MISSION_TASKS` in `MissionTaskGraphicBase`.
+ */
+const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+];
+
+/**
+ * The bar-stack symbols: the three explosives readiness states and the executed
+ * roadblock. `BAR_SYMBOL_DASHES` says which bar of each is broken.
+ */
+const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
+];
+
 const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
@@ -501,6 +524,18 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
+    }
+
+    // The four crossed tasks share one shape and differ only in their letter and in
+    // which arm is hashed, so both halves are parameterised by name alone.
+    for (const name of CROSSED_MISSION_TASKS) {
+        registry[name] = {graphic: crossedMissionTaskPaint(name), label: crossedMissionTaskLabelPaint(name)};
+    }
+
+    // The readiness states differ only in which bar is dashed — a stroke property, so
+    // it cannot live in the geometry and every one of them needs a paint function.
+    for (const name of BAR_SYMBOL_GRAPHICS) {
+        registry[name] = {graphic: barSymbolPaint(name)};
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
