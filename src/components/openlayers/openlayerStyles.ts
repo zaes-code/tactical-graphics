@@ -103,6 +103,7 @@ import {
     munitionFlightPathPaint,
     passageLanePaint,
     barSymbolPaint,
+    securityOperationLabelPaint,
     boundaryPaint,
     rangeFanLabelPaint,
     battlePositionPaint,
@@ -2599,53 +2600,9 @@ function getOffset(distance: number, rotation: number): [number, number] {
     return [offsetX, offsetY];
 }
 
+/** **Ported.** @see securityPaints.ts, `securityOperationLabelPaint`. */
 export function getSecurityOperationLabelStyle(textLabel: string, rotation: number = 0, position: 'left' | 'right' = 'left'): StyleFunction {
-    // Takes neither `feature` nor `resolution`: the label's size no longer
-    // depends on the zoom, and it carries no amplifiers to read off the feature.
-    return () => {
-        const orientation = position === 'left' ? 1 : -1;
-
-        // Constant on-screen size, deliberately NOT `featureLabelScale`.
-        //
-        // That helper returns `sizeFactor × (drawingResolution / resolution)`,
-        // which holds a label at a constant size in *map* units — so it doubles
-        // on screen every time you zoom in a level. Right for a label that
-        // belongs to geometry drawn in map units; wrong here, because every size
-        // in `SecurityOperationGraphicBase` is a pixel constant × the resolution
-        // and the whole graphic holds its on-screen size across a zoom. A label
-        // that grew while its arrows stayed put was the odd one out.
-        //
-        // This is exactly what `featureLabelScale` yields at the moment the
-        // graphic is drawn (`resolution === drawingResolution`), so the label
-        // keeps the size it has always had — it just stops growing from there.
-        const labelScale = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-
-        // The glyph is NOT rotated with the graphic, and `rotation` is spent only on
-        // the sub-pixel nudge below.
-        //
-        // Rotating it turned the C / G / S upside down as soon as the user swung the
-        // graphic past the horizontal, which is exactly what an amplifier must never
-        // do — a label is read by the operator, not by the symbol. The mission tasks
-        // already behave this way: `getMissionTaskStyleFn` takes a rotation and
-        // every caller, Retain included, leaves it at 0.
-        //
-        // The letter still travels with its own arm, because the label *anchor* is
-        // rotated about the centre in `SecurityOperationGraphicBase.placeCoordinates`.
-        // Position follows the graphic; orientation follows the screen.
-        const [offsetX, offsetY] = getOffset(0.5 * orientation, rotation);
-        return new Style({
-            text: new Text({
-                text: textLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textBaseline: 'middle',
-                scale: labelScale,
-                offsetX,
-                offsetY,
-                stroke: getHaloStroke(),
-            }),
-        });
-    };
+    return asStyleFunction(securityOperationLabelPaint(textLabel, rotation, position));
 }
 
 export const createFeatureWithDashedLines = () => {
