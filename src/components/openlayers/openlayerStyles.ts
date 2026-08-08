@@ -89,7 +89,7 @@ import {isEmpty} from '../../utils/isEmpty';
  * ~1,600 tests that assert on this module's output become parity tests for it.
  * @see paintToOpenLayers.ts
  */
-import {arcMissionTaskPaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
+import {arcMissionTaskPaint, defaultLinePaint, obstacleLinePaint, phaseLinePaint} from '@zaes/tactical-graphics';
 import {asStyleFunction} from './paintToOpenLayers';
 // Moved to its own leaf module so `paintToOpenLayers` can share it without an
 // import cycle back through this file. Re-exported: it is public API.
@@ -2051,129 +2051,10 @@ function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: G
     };
 }
 
-function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabel: string, startDateLabel: string, endDateLabel: string) {
-    const geom = f.getGeometry() as MultiPoint;
-    const coords = geom.getCoordinates();
 
-    const hostility = readHostility(f);
-    const styles: Style[] = [];
-
-    const start = coords[0];
-    const afterStart = coords[1];
-
-    const end = coords[coords.length - 1];
-    const beforeEnd = coords[coords.length - 2];
-
-    let startLabelCoordinate = offsetAbove(start, start, afterStart, resolution, 8);
-    let startDateLabelCoordinate = offsetBelow(start, start, afterStart, resolution, 8);
-    let endLabelCoordinate = offsetAbove(end, beforeEnd, end, resolution, 8);
-    let endDateLabelCoordinate = offsetBelow(end, beforeEnd, end, resolution, 8);
-
-    let startRotation = getRotation(start, afterStart);
-    let endRotation = getRotation(end, beforeEnd);
-
-    // After "keep upright" normalization, rotation is always ~0 for horizontal lines,
-    // so textAlign refers to screen-left/right regardless of drawing direction.
-    // Each endpoint is evaluated independently — the first and last segments can go
-    // different directions (e.g. L-to-R overall but last segment turns back R-to-L).
-    const startGoesRight = afterStart[0] >= start[0];
-    const endGoesRight   = end[0] >= beforeEnd[0];
-    const startAlign: CanvasTextAlign = startGoesRight ? 'left' : 'right';
-    const endAlign: CanvasTextAlign   = endGoesRight   ? 'right' : 'left';
-    const startScale = featureLabelScale(f, resolution);
-    const endScale = featureLabelScale(f, resolution);
-
-    styles.push(new Style(
-        {
-            geometry: new Point(startLabelCoordinate), // dummy point
-            text: new Text({
-                text: identifierLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: startAlign,
-                textBaseline: 'bottom',
-                scale: startScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endLabelCoordinate),
-            text: new Text({
-                text: identifierLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: endAlign,
-                textBaseline: 'bottom',
-                scale: endScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-
-    let dateLabel = (!isEmpty(startDateLabel) && !isEmpty(endDateLabel) ? `${startDateLabel} - ${endDateLabel}` : '');
-    styles.push(new Style(
-        {
-            geometry: new Point(startDateLabelCoordinate), // dummy point
-            text: new Text({
-                text: dateLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: startAlign,
-                textBaseline: 'top',
-                scale: startScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endDateLabelCoordinate),
-            text: new Text({
-                text: dateLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: endAlign,
-                textBaseline: 'top',
-                scale: endScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    const outlineStyle = new Style({
-        geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-    });
-    styles.push(outlineStyle);
-
-    return styles;
-}
-
+/** **Ported.** @see paintFunctions.ts, `defaultLinePaint`. */
 export function defaultLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => defaultLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function defaultLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    let identifierLabel = getFullLabel(name, labels.label);
-    let startDate = labels.startDate || '';
-    let endDate = labels.endDate || '';
-
-    return (f, resolution) => {
-        const styles = getDefaultLineStyles(f, resolution, identifierLabel, startDate, endDate);
-        if (labels.status && labels.status === TacticalGraphicStatus.planned) {
-            // Override the line stroke to always be dashed
-            styles.forEach(s => {
-                const stroke = s.getStroke?.();
-                if (stroke) stroke.setLineDash([12, 8]);
-            });
-        }
-        return styles;
-    };
+    return asStyleFunction(defaultLinePaint(name), name);
 }
 
 /**
@@ -2335,22 +2216,13 @@ function finalProtectiveFireStyleFromLabels(_name: TacticalGraphicName, labels: 
     };
 }
 
-/** ProbableLineOfDeployment is always dashed (present and anticipated). */
+/**
+ * ProbableLineOfDeployment is always dashed (present and anticipated), and carries
+ * no date-time group. **Ported.** @see paintFunctions.ts, `defaultLinePaint`.
+ */
 export function probableLineOfDeploymentStyleFunc(): StyleFunction {
-    return (f, resolution) => probableLineOfDeploymentStyleFromLabels(readGraphicLabels(f))(f, resolution);
-}
-
-function probableLineOfDeploymentStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    const identifierLabel = getFullLabel(TacticalGraphicName.ProbableLineOfDeployment, labels.label);
-    return (f, resolution) => {
-        const styles = getDefaultLineStyles(f, resolution, identifierLabel, '', '');
-        // Override the line stroke to always be dashed
-        styles.forEach(s => {
-            const stroke = s.getStroke?.();
-            if (stroke) stroke.setLineDash([12, 8]);
-        });
-        return styles;
-    };
+    const name = TacticalGraphicName.ProbableLineOfDeployment;
+    return asStyleFunction(defaultLinePaint(name, {alwaysDashed: true, showDates: false}), name);
 }
 
 /** Line of Contact: two mirrored half-circle waves — red on top, black on bottom. */

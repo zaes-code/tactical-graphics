@@ -22,18 +22,23 @@ export {
     cutArcAtLabel,
     decorationScale,
     obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
     pathLength,
     textWidth,
     uprightRotation,
 } from './decorations';
 
 export {
+    PLANNED_DASH_PX,
     arcMissionTaskPaint,
+    defaultLinePaint,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
     obstacleLinePaint,
     phaseLinePaint,
 } from './paintFunctions';
+export type {DefaultLineOptions} from './paintFunctions';
 
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

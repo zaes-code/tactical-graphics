@@ -237,3 +237,49 @@ export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition):
     if (rotation > Math.PI) rotation -= 2 * Math.PI;
     return rotation;
 }
+
+/**
+ * Offsets an anchor perpendicular to a segment, on the side that is **up on
+ * screen**, by a constant number of pixels.
+ *
+ * "Up" is normalised against the map's north rather than taken from the
+ * segment's direction of travel: a counter-clockwise perpendicular flips when the
+ * same line is drawn right-to-left, which put every label below the line instead
+ * of above it. A vertical segment has no up side, so the tie breaks east.
+ *
+ * The offset is `px × resolution`, so it is a constant screen distance at every
+ * zoom — the house rule for anything that has to clear a glyph.
+ */
+export function offsetAbove(
+    anchor: ProjectedPosition,
+    a: ProjectedPosition,
+    b: ProjectedPosition,
+    resolution: number,
+    offsetPx: number,
+): ProjectedPosition {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return anchor;
+
+    let nx = -dy / len;
+    let ny = dx / len;
+    if (ny < 0 || (ny === 0 && nx < 0)) {
+        nx = -nx;
+        ny = -ny;
+    }
+    const offsetMap = offsetPx * Math.abs(resolution);
+    return [anchor[0] + nx * offsetMap, anchor[1] + ny * offsetMap];
+}
+
+/** The mirror of {@link offsetAbove} through the anchor — the same distance, below. */
+export function offsetBelow(
+    anchor: ProjectedPosition,
+    a: ProjectedPosition,
+    b: ProjectedPosition,
+    resolution: number,
+    offsetPx: number,
+): ProjectedPosition {
+    const [x, y] = offsetAbove(anchor, a, b, resolution, offsetPx);
+    return [2 * anchor[0] - x, 2 * anchor[1] - y];
+}
