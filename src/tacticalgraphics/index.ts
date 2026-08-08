@@ -209,4 +209,28 @@ export type {
  * The renderer-agnostic style layer. Three of 69 style functions are ported so far;
  * `isPaintable` is how a renderer asks whether a graphic has one yet. @see ai/maplibre-renderer.md
  */
-export * from './symbology';
+export {
+    DECORATION_MIN_PX,
+    OBSTACLE_TOOTH_BASE_PX,
+    OBSTACLE_TOOTH_GAP_PX,
+    OBSTACLE_TOOTH_HEIGHT_PX,
+    angleBetween,
+    centreSegmentIndex,
+    crenellatedPath,
+    cutArcAtLabel,
+    decorationScale,
+    obstacleToothSize,
+    pathLength,
+    textWidth,
+    uprightRotation,
+} from './symbology/decorations';
+export {
+    arcMissionTaskPaint,
+    formatFullLabel,
+    getFullLabel,
+    missionTaskLabelPaint,
+    obstacleLinePaint,
+    phaseLinePaint,
+} from './symbology/paintFunctions';
+export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
+export type {GraphicPainters} from './symbology/registry';
