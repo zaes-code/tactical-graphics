@@ -67,4 +67,5 @@ export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './corridorPaints';
+export {retrogradeTaskPaint} from './retrogradePaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

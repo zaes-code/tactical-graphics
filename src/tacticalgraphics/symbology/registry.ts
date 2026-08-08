@@ -28,12 +28,13 @@
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
-import {TacticalGraphicName} from '../core/type';
+import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
+import {retrogradeTaskPaint} from './retrogradePaints';
 import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
@@ -337,6 +338,20 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.UnmannedAircraftCorridor,
 ];
 
+/**
+ * The retrograde tasks. Each takes its own designation from `getLabel`, and abatis
+ * deliberately has none — a graphic with no letter gets no gap cut for one.
+ */
+const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.Withdraw,
+    TacticalGraphicName.WithdrawUnderPressure,
+    TacticalGraphicName.Disengage,
+    TacticalGraphicName.Retirement,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+];
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -406,6 +421,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of ROUTE_GRAPHICS) {
         registry[name] = {graphic: routeControlMeasurePaint(name)};
+    }
+
+    for (const name of RETROGRADE_GRAPHICS) {
+        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};
     }
 
     for (const name of CORRIDOR_GRAPHICS) {
