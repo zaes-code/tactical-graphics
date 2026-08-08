@@ -36,6 +36,7 @@ import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} fro
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
+import {securityOperationLabelPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
 import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
@@ -419,6 +420,13 @@ const CIRCULAR_HATCHED_WHEN_PLANNED: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
 ];
 
+/** The three security operations, which share one shape and one label treatment. */
+const SECURITY_OPERATIONS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+];
+
 const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
@@ -653,6 +661,17 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         TacticalGraphicName.WeaponSensorRangeFanSector,
     ]) {
         registry[name] = {graphic: plainOutlinePaint(), label: rangeFanLabelPaint(name)};
+    }
+
+    // Cover, guard and screen. The line work paints; the centre symbol does not,
+    // because it is injected by the host and no renderer-agnostic description of it
+    // exists. A MapLibre view also cannot yet *build* one of these through the
+    // public API — the generator wants centerPadding, arrowLength, arrowDepth,
+    // arrowHeadLength and arrowHeadDegree, and none of the five is in
+    // TacticalGraphicProperties. Registered here so the paint half is done and the
+    // remaining gap is the schema one alone.
+    for (const name of SECURITY_OPERATIONS) {
+        registry[name] = {graphic: plainOutlinePaint(), label: securityOperationLabelPaint(getLabel(name))};
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
