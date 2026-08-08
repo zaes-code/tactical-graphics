@@ -43,4 +43,12 @@ export {
 } from './paintFunctions';
 export type {DefaultLineOptions} from './paintFunctions';
 
+export {
+    encirclementPaint,
+    fortifiedAreaPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+} from './areaPaints';
+
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

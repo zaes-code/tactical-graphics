@@ -1,18 +1,16 @@
-/* Dark-mode tint for the MapLibre basemap.
+/* NO dark-mode filter here, deliberately.
 
-   Scoped to `.maplibregl-canvas` — the map's own WebGL canvas — and NOT to the
-   container, because the tactical graphics are painted onto a sibling overlay
-   canvas inside that same container. Widening this selector to the container
-   would invert the graphics along with the tiles, which is exactly the bug the
-   OpenLayers side shipped for months before `className: 'tg-graphics'` split its
-   canvases. See ai/decisions.md, 2026-07-30. Don't widen it.
+   MapLibre composites every layer into a single canvas, so a CSS filter intended
+   for the basemap repaints the tactical graphics along with the tiles — washed-out,
+   inverted line work, and worst of all only under the native-layer renderer, since
+   the canvas overlay lives on a separate element and escapes it.
 
-   Same filter values as `map.css` uses for OpenLayers, so the two engines' dark
-   basemaps are the same colour and a side-by-side capture compares symbols
-   rather than tints. */
-.map-container--dark .maplibregl-canvas {
-    filter: invert(95%) hue-rotate(180deg) brightness(85%) contrast(90%);
-}
+   The OpenLayers view can use a filter because it gives its graphics their own
+   canvas (`className: 'tg-graphics'`, see map.css). MapLibre has no equivalent, so
+   dark mode is done properly instead: `raster-*` paint properties on the basemap
+   layer, which apply to that layer alone. See basemapStyle.ts, DARK_RASTER_PAINT.
+
+   Don't reintroduce a filter here. */
 
 /* The graphics overlay. Sits above the WebGL canvas and below the controls, and
    never takes pointer events — the MapLibre canvas underneath keeps them, so

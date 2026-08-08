@@ -62,7 +62,7 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
 }
 
 /** The affiliation a feature draws in. `unknown` resolves to the default line colour. */
-function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
+export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
     return feature.properties.hostility ?? TacticalGraphicHostility.unknown;
 }
 
@@ -71,17 +71,17 @@ function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * if there is one, otherwise the affiliation's. `getColorByHostility` resolves
  * `unknown` to the default line colour, so the unaffiliated case is covered too.
  */
-function lineColorOf(feature: PaintFeature): string {
+export function lineColorOf(feature: PaintFeature): string {
     return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
 }
 
 /** The halo every label carries, so it stays legible over the basemap. */
-function halo(): {color: string; widthPx: number} {
+export function halo(): {color: string; widthPx: number} {
     return {color: getLabelHaloColor(), widthPx: HALO_WIDTH};
 }
 
 /** Zoom-anchored label scale for a paint feature. */
-function scaleOf(feature: PaintFeature, context: PaintContext): number {
+export function scaleOf(feature: PaintFeature, context: PaintContext): number {
     return labelScale(feature.drawingResolution, context.resolution);
 }
 

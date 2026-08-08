@@ -1,4 +1,4 @@
-import type {FeatureCollection} from 'geojson';
+import type {Feature, FeatureCollection} from 'geojson';
 import {TACTICAL_GRAPHIC_KEY, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 /**
@@ -40,6 +40,38 @@ import {TACTICAL_GRAPHIC_KEY, TacticalGraphicHostility, TacticalGraphicName} fro
  */
 const SECURE_RADIUS_M = 1_400_000;
 
+/**
+ * A square ring for the area samples, `size` degrees across, centred on `at`.
+ *
+ * Closed explicitly — a polygon ring whose last point does not repeat its first
+ * is not a ring, and the difference only shows once something tries to fill it.
+ */
+function square(at: [number, number], size: number): number[][][] {
+    const [lon, lat] = at;
+    const h = size / 2;
+    return [[
+        [lon - h, lat - h],
+        [lon + h, lat - h],
+        [lon + h, lat + h],
+        [lon - h, lat + h],
+        [lon - h, lat - h],
+    ]];
+}
+
+/** One area sample: a square ring carrying nothing but its name. */
+function area(name: TacticalGraphicName, at: [number, number], size = 12): Feature {
+    return {
+        type: 'Feature',
+        geometry: {type: 'Polygon', coordinates: square(at, size)},
+        properties: {
+            role: 'base',
+            symbolId: `spike-${name}`,
+            graphicName: name,
+            [TACTICAL_GRAPHIC_KEY]: {name},
+        },
+    };
+}
+
 export const SPIKE_SAMPLES: FeatureCollection = {
     type: 'FeatureCollection',
     features: [
@@ -73,6 +105,18 @@ export const SPIKE_SAMPLES: FeatureCollection = {
                 },
             },
         },
+        // The area families, added when the special-case area styles were ported.
+        // Between them they exercise the three things an area can add to a plain
+        // ring: teeth pointing outward, teeth pointing inward under a hatch, and
+        // square merlons. The hatched pair matter most — a hatch is the one piece
+        // of area symbology a renderer has to *realise* (a CanvasPattern here, a
+        // registered `fill-pattern` image in MapLibre) rather than just colour in,
+        // so it is the sharpest test of whether the two engines really agree.
+        area(TacticalGraphicName.ObstacleZone, [10, 20]),
+        area(TacticalGraphicName.ObstacleRestrictedArea, [26, 20]),
+        area(TacticalGraphicName.LimitedAccessArea, [10, 2]),
+        area(TacticalGraphicName.FortifiedArea, [26, 2]),
+
         {
             type: 'Feature',
             geometry: {type: 'Point', coordinates: [-22, -14]},

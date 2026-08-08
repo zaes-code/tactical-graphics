@@ -5,6 +5,8 @@ import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, M
 import RenderFeature from 'ol/render/Feature';
 import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import type {
+    FillSpec,
+    HatchSpec,
     Paint,
     PaintContext,
     PaintFeature,
@@ -47,6 +49,51 @@ import {getTextWidth} from './textMeasure';
  * Every spec field maps 1:1 onto an OpenLayers style option, because the `Paint`
  * shapes were derived from what these 69 functions actually use.
  */
+
+/**
+ * A hatch spec as a `CanvasPattern`.
+ *
+ * Cached on the spec's own values: the pattern is rebuilt on every style call
+ * otherwise, and these run per feature per frame. A tiny record keyed on the four
+ * parameters — hosts use one or two hatches, so it stays small.
+ *
+ * Returns the flat colour when there is no DOM to build a canvas in, which keeps
+ * this module importable in Node. @see FillSpec — `color` is the documented
+ * fallback for exactly this.
+ */
+const hatchCache: Record<string, CanvasPattern> = {};
+
+function toFillColor(spec: FillSpec): string | CanvasPattern {
+    if (!spec.pattern) return spec.color;
+    if (typeof document === 'undefined') return spec.color;
+
+    const {kind, color, sizePx, lineWidthPx} = spec.pattern;
+    const key = `${kind}|${color}|${sizePx}|${lineWidthPx}`;
+    const cached = hatchCache[key];
+    if (cached) return cached;
+
+    const pattern = buildHatch(spec.pattern);
+    if (!pattern) return spec.color;
+    hatchCache[key] = pattern;
+    return pattern;
+}
+
+function buildHatch(spec: HatchSpec): CanvasPattern | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = spec.sizePx;
+    canvas.height = spec.sizePx;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.strokeStyle = spec.color;
+    ctx.lineWidth = spec.lineWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(0, spec.sizePx);
+    ctx.lineTo(spec.sizePx, 0);
+    ctx.stroke();
+
+    return ctx.createPattern(canvas, 'repeat');
+}
 
 function toStroke(spec: StrokeSpec): Stroke {
     return new Stroke({
@@ -91,11 +138,11 @@ export function paintToOlStyle(paint: Paint): Style {
         geometry: toOlGeometry(geometry),
         zIndex,
         stroke: stroke ? toStroke(stroke) : undefined,
-        fill: fill ? new Fill({color: fill.color}) : undefined,
+        fill: fill ? new Fill({color: toFillColor(fill)}) : undefined,
         image: circle
             ? new CircleStyle({
                 radius: circle.radiusPx,
-                fill: circle.fill ? new Fill({color: circle.fill.color}) : undefined,
+                fill: circle.fill ? new Fill({color: toFillColor(circle.fill)}) : undefined,
                 stroke: circle.stroke ? toStroke(circle.stroke) : undefined,
             })
             : undefined,

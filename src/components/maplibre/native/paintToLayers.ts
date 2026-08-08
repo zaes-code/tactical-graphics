@@ -1,6 +1,6 @@
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {mapPaintGeometry, type Paint, type ProjectedGeometry} from '@zaes/tactical-graphics';
+import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -50,6 +50,8 @@ export interface LayerBuckets {
     fills: Feature[];
     circles: Feature[];
     symbols: Feature[];
+    /** Hatch images this list needs registered, by id. @see renderHatchImage */
+    hatches: Map<string, HatchSpec>;
 }
 
 /** EPSG:3857 → lon/lat, for a geometry on its way into a MapLibre source. */
@@ -87,9 +89,46 @@ function renderedFontPx(font: string, scale: number): number {
     return (match ? parseFloat(match[1]) : 16) * scale;
 }
 
+/**
+ * A stable id for a hatch, used both as the MapLibre image name and as the
+ * property a `fill-pattern` expression reads.
+ *
+ * Derived from the spec's own values so two areas asking for the same hatch share
+ * one registered image, and two asking for different ones do not collide.
+ */
+export function hatchImageId(spec: HatchSpec): string {
+    return `tg-hatch-${spec.kind}-${spec.color}-${spec.sizePx}-${spec.lineWidthPx}`.replace(/[^a-z0-9-]/gi, '_');
+}
+
+/**
+ * Rasterises a hatch to RGBA bytes for `map.addImage`.
+ *
+ * MapLibre has no pattern primitive — a `fill-pattern` names an image in the
+ * style's sprite or one added at runtime — so the hatch this library describes as
+ * four parameters has to become actual pixels here. That is the whole difference
+ * between the two renderers on this feature: a canvas takes a `CanvasPattern`
+ * directly, MapLibre needs the tile drawn and uploaded first.
+ */
+export function renderHatchImage(spec: HatchSpec): ImageData | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = spec.sizePx;
+    canvas.height = spec.sizePx;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.strokeStyle = spec.color;
+    ctx.lineWidth = spec.lineWidthPx;
+    ctx.beginPath();
+    ctx.moveTo(0, spec.sizePx);
+    ctx.lineTo(spec.sizePx, 0);
+    ctx.stroke();
+
+    return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
+}
+
 /** Splits a paint list into per-layer-type GeoJSON features. */
 export function bucketPaints(paints: Paint[]): LayerBuckets {
-    const buckets: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: []};
+    const buckets: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
 
     for (const paint of paints) {
         const {geometry, stroke, fill, text, circle} = paint;
@@ -109,8 +148,16 @@ export function bucketPaints(paints: Paint[]): LayerBuckets {
             buckets.fills.push({
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
-                properties: {color: fill.color},
+                properties: {
+                    color: fill.color,
+                    // Empty string, not absent: `fill-pattern` needs a value for every
+                    // feature in the layer, and MapLibre treats an unknown image name
+                    // as "no pattern" — which is exactly the flat-colour fallback
+                    // `FillSpec` documents.
+                    pattern: fill.pattern ? hatchImageId(fill.pattern) : '',
+                },
             });
+            if (fill.pattern) buckets.hatches.set(hatchImageId(fill.pattern), fill.pattern);
         }
 
         if (circle) {
@@ -191,7 +238,13 @@ export function fillLayer(id: string, source: string): LayerSpecification {
         id,
         type: 'fill',
         source,
-        paint: {'fill-color': ['get', 'color']},
+        paint: {
+            'fill-color': ['get', 'color'],
+            // Data-driven, so one layer serves every hatch *and* the unhatched fills.
+            // An unregistered or empty name renders no pattern and the colour shows
+            // through, which is the documented degradation.
+            'fill-pattern': ['get', 'pattern'],
+        },
     } as LayerSpecification;
 }
 
