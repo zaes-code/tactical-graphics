@@ -66,35 +66,33 @@ describe('the paint registry matches what OpenLayers routes', () => {
     });
 
     /**
-     * Every registered graphic must stroke *something* when handed a geometry of
-     * the kind it expects.
+     * A paint function must never throw on a base of the wrong shape.
      *
-     * Both a line and a ring are tried, and passing either counts. A paint function
-     * returns `[]` for a geometry type it does not handle — that is deliberate and
-     * correct — so requiring one specific type would just encode this test's guess
-     * about each graphic's family. What must never happen is a registered graphic
-     * that paints nothing for *any* input, which is the silent-blanking failure this
-     * whole file exists for.
+     * **It is allowed to return nothing**, and many do: this test hands each graphic
+     * a hand-made LineString and Polygon, but a good number of paint functions
+     * consume the *generator's output* rather than the drawn base — a direction
+     * arrow reads a MultiLineString of route-plus-arrowhead, the arc mission tasks
+     * read a GeometryCollection. Feeding those a bare LineString correctly produces
+     * an empty list.
      *
-     * The arcs are excluded: they need a centre and a label anchor stamped on the
-     * feature, and `paintFunctions.test.ts` covers them properly with those.
+     * "Every registered graphic actually paints marks" is asserted in
+     * `maplibre/maplibreAdapter.test.ts`, which runs each name through
+     * `buildTacticalGraphic` and so through the real generator. That is the right
+     * place for it; an earlier version of this test tried to assert it from
+     * hand-made geometry and was wrong by construction.
      */
-    it('strokes something for every registered graphic, given a geometry it accepts', () => {
-        const arcs = arcNames();
-        const candidates = PAINTABLE_GRAPHICS.filter(n => !arcs.includes(n) && n !== TacticalGraphicName.AreaDefense);
-        expect(candidates.length).toBeGreaterThan(20);
-
-        const blank: TacticalGraphicName[] = [];
-        for (const name of candidates) {
+    it('never throws, whatever base geometry a paint function is handed', () => {
+        for (const name of PAINTABLE_GRAPHICS) {
             const painters = getPaintFunction(name)!;
-            const strokes = [line(), ring()].some(geometry => {
+            for (const geometry of [line(), ring()]) {
                 const paintFeature = toPaintFeature(feature(name, geometry));
-                if (!paintFeature) return false;
-                return painters.graphic(paintFeature, paintContext(RESOLUTION)).some(m => m.stroke);
-            });
-            if (!strokes) blank.push(name);
+                if (!paintFeature) continue;
+                expect(() => painters.graphic(paintFeature, paintContext(RESOLUTION))).not.toThrow();
+                if (painters.label) {
+                    expect(() => painters.label!(paintFeature, paintContext(RESOLUTION))).not.toThrow();
+                }
+            }
         }
-        expect(blank).toEqual([]);
     });
 
     it('hatches the limited-access family and nothing else in it', () => {
@@ -111,18 +109,6 @@ describe('the paint registry matches what OpenLayers routes', () => {
     });
 });
 
-/** The arc-and-arrowhead family, which needs a circle rather than a line. */
-function arcNames(): TacticalGraphicName[] {
-    return [
-        TacticalGraphicName.Contain,
-        TacticalGraphicName.Control,
-        TacticalGraphicName.CordonAndSearch,
-        TacticalGraphicName.Isolate,
-        TacticalGraphicName.Occupy,
-        TacticalGraphicName.Retain,
-        TacticalGraphicName.Secure,
-    ];
-}
 
 describe('toPaintFeature understands every geometry the generators emit', () => {
     it.each([
