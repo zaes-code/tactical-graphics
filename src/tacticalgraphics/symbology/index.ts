@@ -50,6 +50,8 @@ export {
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
     obstacleAreaPaint,
+    freeFireAreaCircularPaint,
+    plainOutlinePaint,
 } from './areaPaints';
 
 export {
@@ -71,4 +73,7 @@ export {retrogradeTaskPaint} from './retrogradePaints';
 export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './movementPaints';
 export {blockPaint, breachPaint, clearPaint} from './blockPaints';
 export {CROSSED_HALF_WIDTH_PX, barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskLabelScale, crossedMissionTaskPaint} from './missionTaskPaints';
+export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
+export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
+export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

@@ -35,6 +35,9 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
+import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
+import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 import {barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskPaint} from './missionTaskPaints';
 import {blockPaint, breachPaint, clearPaint} from './blockPaints';
 import {
@@ -64,6 +67,8 @@ import {
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
     obstacleAreaPaint,
+    freeFireAreaCircularPaint,
+    plainOutlinePaint,
 } from './areaPaints';
 import {
     arcMissionTaskPaint,
@@ -379,6 +384,30 @@ const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
+/**
+ * The circular areas whose holder installs no style of its own — a bare ring in
+ * the affiliation's colour.
+ */
+const CIRCULAR_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+    TacticalGraphicName.TargetAreaCircular,
+];
+
+/** The circular areas that dash their ring and hatch their interior when planned. */
+const CIRCULAR_HATCHED_WHEN_PLANNED: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.PositionAreaArtilleryCircular,
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+];
+
 const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
@@ -538,6 +567,29 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: barSymbolPaint(name)};
     }
 
+    // The circular fire-support areas. Four of them dash and hatch when planned;
+    // the rest are a bare ring. Their labels come from the zone tables below, which
+    // already list the circular variants — they were skipped only because no graphic
+    // painter was registered for them to hang off.
+    for (const name of CIRCULAR_AREA_GRAPHICS) {
+        registry[name] = {graphic: plainOutlinePaint()};
+    }
+    for (const name of CIRCULAR_HATCHED_WHEN_PLANNED) {
+        registry[name] = {graphic: freeFireAreaCircularPaint()};
+    }
+
+    registry[TacticalGraphicName.CoordinatedFireLine] = {graphic: coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine)};
+    registry[TacticalGraphicName.EngineerWorkLine] = {graphic: engineerWorkLinePaint(TacticalGraphicName.EngineerWorkLine)};
+    registry[TacticalGraphicName.MunitionFlightPath] = {graphic: munitionFlightPathPaint()};
+    registry[TacticalGraphicName.ForwardLineOfOwnTroops] = {graphic: forwardLineOfOwnTroopsPaint()};
+    registry[TacticalGraphicName.LineOfContact] = {graphic: lineOfContactPaint()};
+    registry[TacticalGraphicName.FieldsOfFire] = {graphic: fieldsOfFirePaint()};
+    registry[TacticalGraphicName.PassageLane] = {graphic: passageLanePaint()};
+    // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
+    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
+    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};
+    registry[TacticalGraphicName.FerryCrossing] = {graphic: arrowheadedLinePaint()};
+
     for (const name of RETROGRADE_GRAPHICS) {
         registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};
     }
@@ -552,7 +604,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     // Labels last, over whatever graphic painter was registered above. Every area
     // gets one: the bespoke layout if its family has one, the default otherwise.
-    for (const name of [...DEFAULT_AREA_GRAPHICS, ...SPECIAL_AREA_GRAPHICS]) {
+    for (const name of [
+        ...DEFAULT_AREA_GRAPHICS,
+        ...SPECIAL_AREA_GRAPHICS,
+        ...CIRCULAR_AREA_GRAPHICS,
+        ...CIRCULAR_HATCHED_WHEN_PLANNED,
+    ]) {
         const entry = registry[name];
         if (entry) entry.label = areaLabelPainterFor(name) ?? areaDefaultLabelPaint(name);
     }
