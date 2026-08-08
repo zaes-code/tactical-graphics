@@ -3,7 +3,7 @@ import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
 import RenderFeature from 'ol/render/Feature';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName} from '@zaes/tactical-graphics';
 import type {
     FillSpec,
     HatchSpec,
@@ -273,6 +273,9 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
         // *resolved* colour here. Carried so a feature coloured by that route keeps
         // its colour; paint functions fall back to the affiliation when it is absent.
         hostilityColor: feature.get('hostilityColor') as string | undefined,
+        // Stamped straight onto the feature by the properties dialog, never into the
+        // bag — @see PaintFeature.echelon.
+        echelon: feature.get('echelon') as TacticalGraphicEchelon | undefined,
     };
 }
 

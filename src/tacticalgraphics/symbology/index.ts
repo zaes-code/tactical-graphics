@@ -85,4 +85,6 @@ export {
 export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
+export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
+export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
