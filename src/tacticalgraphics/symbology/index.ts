@@ -65,4 +65,5 @@ export {
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
+export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
