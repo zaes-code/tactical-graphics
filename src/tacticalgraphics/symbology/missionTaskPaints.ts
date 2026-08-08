@@ -13,6 +13,8 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {
     CAP_HEIGHT_FRACTION,
+    fontStyle,
+    maxGraphicLabelScale,
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
@@ -24,7 +26,7 @@ import {
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {BAR_SYMBOL_DASHES} from '../graphics/ExplosivesReadiness';
 import {textWidth} from './decorations';
-import {lineColorOf} from './paintFunctions';
+import {lineColorOf, scaleOf} from './paintFunctions';
 
 type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -206,5 +208,167 @@ export function barSymbolPaint(name: TacticalGraphicName): MissionTaskPaint {
             geometry: {type: 'LineString' as const, coordinates: bar},
             stroke: {color, widthPx: LINE_WIDTH(), dashPx: dashed[i] ? CROSSED_HASH_DASH : undefined},
         }));
+    };
+}
+
+/** Padding either side of Pursuit's "P" within the gap cut for it, in pixels. */
+const PURSUIT_GAP_PADDING_PX = 4;
+
+/**
+ * Pursuit: the horizontal line split around its midpoint so the "P" always has
+ * breathing room, with the arc, arrowhead and crossbar drawn whole.
+ *
+ * Sub-line layout, from `Pursuit.generateGraphics`: `[0]` horizontal, `[1]` arc,
+ * `[2]` arrowhead, `[3]` crossbar.
+ *
+ * The gap is measured from the **rendered** glyph and converted to map units, so
+ * it matches the letter at every zoom. A line shorter than the label is not split
+ * at all — two stubs either side of a letter that overflows them both is worse
+ * than a line running behind it.
+ */
+export function pursuitPaint(name: TacticalGraphicName): MissionTaskPaint {
+    const label = getLabel(name);
+    return (feature, context) => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiLineString') return [];
+        const lines = geometry.coordinates;
+
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH()};
+        const paints: Paint[] = [];
+
+        const horizontal = lines[0];
+        if (horizontal && horizontal.length === 2) {
+            const [a, b] = horizontal;
+            const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const dx = b[0] - a[0];
+            const dy = b[1] - a[1];
+            const len = Math.hypot(dx, dy);
+            const scale = scaleOf(feature, context);
+            const halfGap =
+                (textWidth(context, label, fontStyle, scale) / 2 + PURSUIT_GAP_PADDING_PX) * context.resolution;
+
+            if (len > 2 * halfGap) {
+                const ux = dx / len;
+                const uy = dy / len;
+                paints.push({
+                    geometry: {type: 'LineString', coordinates: [a, [mid[0] - ux * halfGap, mid[1] - uy * halfGap]]},
+                    stroke,
+                });
+                paints.push({
+                    geometry: {type: 'LineString', coordinates: [[mid[0] + ux * halfGap, mid[1] + uy * halfGap], b]},
+                    stroke,
+                });
+            } else {
+                paints.push({geometry: {type: 'LineString', coordinates: horizontal}, stroke});
+            }
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+            paints.push({geometry: {type: 'LineString', coordinates: lines[i]}, stroke});
+        }
+        return paints;
+    };
+}
+
+/**
+ * How far movement to contact's zigzag "contact" arrows sit off the big arrow's
+ * arrowhead edge, as a fraction of that arrow's half-length.
+ *
+ * Expressed against the **graphic** rather than the screen: the arrow is baked in
+ * metres, so a constant screen offset slid the side arrows across it as the map
+ * zoomed. Both forms are "zoom-invariant"; only one of them is in the same frame
+ * as the thing it has to stay clear of.
+ */
+const SIDE_ARROW_GAP_RATIO = 0.12;
+
+/**
+ * Movement to contact: the big arrow, with the two pairs of side arrows nudged
+ * outward so they do not touch its arrowhead edges.
+ *
+ * **Nothing here may depend on the resolution.** Everything this draws is
+ * proportional to the graphic; reaching for the zoom is the bug this function
+ * used to have.
+ *
+ * The arrow's half-length is recovered from the geometry rather than from a
+ * stamped size: the tip sits at local `(+r, 0)` and the two tail-fin tips at
+ * `(-r, ±0.5r)`, so the tip and the fins' midpoint are exactly `2r` apart. That
+ * follows a resize for free.
+ */
+export function movementToContactPaint(): MissionTaskPaint {
+    return feature => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiLineString') return [];
+        const rawLines = geometry.coordinates;
+
+        const tip = rawLines[0]?.[0];
+        const finA = rawLines[0]?.[3];
+        const finB = rawLines[1]?.[0];
+        let gap = 0;
+        if (tip && finA && finB) {
+            const midFins = [(finA[0] + finB[0]) / 2, (finA[1] + finB[1]) / 2];
+            const r = Math.hypot(tip[0] - midFins[0], tip[1] - midFins[1]) / 2;
+            gap = SIDE_ARROW_GAP_RATIO * r;
+        }
+
+        const perpShift = (from: ProjectedPosition, to: ProjectedPosition, ccw: boolean): [number, number] => {
+            const dx = to[0] - from[0];
+            const dy = to[1] - from[1];
+            const len = Math.hypot(dx, dy);
+            if (len === 0) return [0, 0];
+            const sign = ccw ? 1 : -1;
+            return [((sign * -dy) / len) * gap, ((sign * dx) / len) * gap];
+        };
+
+        // The upper edge runs B→A, whose counter-clockwise perpendicular points out
+        // of the arrow; the lower edge runs I→A, whose clockwise one does.
+        const [upperDx, upperDy] = rawLines[0]?.length >= 2 ? perpShift(rawLines[0][1], rawLines[0][0], true) : [0, 0];
+        const [lowerDx, lowerDy] = rawLines[1]?.length >= 4 ? perpShift(rawLines[1][2], rawLines[1][3], false) : [0, 0];
+        const shift = (line: ProjectedPosition[], dx: number, dy: number): ProjectedPosition[] =>
+            line.map(p => [p[0] + dx, p[1] + dy] as ProjectedPosition);
+
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH()};
+        return rawLines.map((line, i) => ({
+            geometry: {
+                type: 'LineString' as const,
+                coordinates: i === 2 || i === 3 ? shift(line, upperDx, upperDy)
+                    : i === 4 || i === 5 ? shift(line, lowerDx, lowerDy)
+                    : line,
+            },
+            stroke,
+        }));
+    };
+}
+
+/**
+ * Divisor that turns the base defence zone circle's pixel radius into a label
+ * scale. Lower for a larger label; past a ~68 px radius the cap decides, so this
+ * only shapes how the label grows on the way there.
+ */
+const BDZ_SCALE_DIVISOR = 45;
+/** Floor, so a circle dragged small still shows something rather than nothing. */
+const BDZ_MIN_SCALE = 0.1;
+
+/**
+ * The base defence zone's hardcoded "BDZ", scaled off the circle's radius rather
+ * than off the zoom — so it grows and shrinks with the graphic it names.
+ */
+export function baseDefenseZoneLabelPaint(): MissionTaskPaint {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'Point') return [];
+        const size = feature.graphicSize;
+        const radiusPx = size && size > 0 ? size / context.resolution : 0;
+        const scale = Math.min(maxGraphicLabelScale(), Math.max(BDZ_MIN_SCALE, radiusPx / BDZ_SCALE_DIVISOR));
+        return [{
+            geometry: feature.geometry,
+            text: {
+                text: 'BDZ',
+                font: fontStyle,
+                fill: getLabelFillColor(),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'middle',
+                scale,
+            },
+        }];
     };
 }

@@ -38,7 +38,14 @@ import {retrogradeTaskPaint} from './retrogradePaints';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
-import {barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskPaint} from './missionTaskPaints';
+import {
+    barSymbolPaint,
+    baseDefenseZoneLabelPaint,
+    crossedMissionTaskLabelPaint,
+    crossedMissionTaskPaint,
+    movementToContactPaint,
+    pursuitPaint,
+} from './missionTaskPaints';
 import {blockPaint, breachPaint, clearPaint} from './blockPaints';
 import {
     attackHelicopterAxisLabelPaint,
@@ -72,6 +79,7 @@ import {
 } from './areaPaints';
 import {
     arcMissionTaskPaint,
+    areaFillPaint,
     areaOutlinePaint,
     defaultLinePaint,
     missionTaskLabelPaint,
@@ -589,6 +597,38 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
     registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};
     registry[TacticalGraphicName.FerryCrossing] = {graphic: arrowheadedLinePaint()};
+
+    registry[TacticalGraphicName.Pursuit] = {
+        graphic: pursuitPaint(TacticalGraphicName.Pursuit),
+        label: missionTaskLabelPaint(TacticalGraphicName.Pursuit),
+    };
+    registry[TacticalGraphicName.MovementToContact] = {
+        graphic: movementToContactPaint(),
+        label: missionTaskLabelPaint(TacticalGraphicName.MovementToContact),
+    };
+    // Its label is the one hardcoded string in the family, and it tracks the circle
+    // rather than the zoom.
+    registry[TacticalGraphicName.BaseDefenseZone] = {
+        graphic: plainOutlinePaint(),
+        label: baseDefenseZoneLabelPaint(),
+    };
+    // Shape-only symbols: the position bracket and its arrows *are* the graphic, and
+    // there is no letter to render. @see FM 1-02.2 table 6-1
+    for (const name of [TacticalGraphicName.AttackByFire, TacticalGraphicName.SupportByFire]) {
+        registry[name] = {graphic: plainOutlinePaint()};
+    }
+    // Exploitation runs through the block holder but installs no style of its own, so
+    // it takes that holder's fallback — filled, not merely outlined.
+    registry[TacticalGraphicName.Exploitation] = {graphic: areaFillPaint()};
+    // The point-anchored tasks with no bespoke line work: a plain ring and the
+    // family's centred designation.
+    for (const name of [
+        TacticalGraphicName.Abatis,
+        TacticalGraphicName.Ambush,
+        TacticalGraphicName.FightingPosition,
+    ]) {
+        registry[name] = {graphic: plainOutlinePaint(), label: missionTaskLabelPaint(name)};
+    }
 
     for (const name of RETROGRADE_GRAPHICS) {
         registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};

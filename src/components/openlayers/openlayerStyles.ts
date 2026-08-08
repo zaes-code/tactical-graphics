@@ -103,6 +103,9 @@ import {
     munitionFlightPathPaint,
     passageLanePaint,
     barSymbolPaint,
+    baseDefenseZoneLabelPaint,
+    movementToContactPaint,
+    pursuitPaint,
     CROSSED_HALF_WIDTH_PX,
     crossedMissionTaskLabelPaint,
     crossedMissionTaskLabelScale,
@@ -1867,26 +1870,19 @@ export function defaultStyleFunc(): StyleFunction {
  * smaller one; past a ~68 px radius the cap is what decides, so the divisor
  * only shapes how the label grows on the way there.
  */
+/** **Ported.** @see missionTaskPaints.ts, `baseDefenseZoneLabelPaint`. */
 export function baseDefenseZoneLabelStyleFn(): StyleFunction {
-    return (feature, resolution) => {
-        const geom = feature.getGeometry() as Point;
-        const size = feature.get('graphicSize') as number | undefined;
-        const radiusPx = size && size > 0 ? size / resolution : 0;
-        const SCALE_DIVISOR = 45;
-        const scale = Math.min(maxGraphicLabelScale(), Math.max(0.1, radiusPx / SCALE_DIVISOR));
-        return [new Style({
-            geometry: geom,
-            text: new Text({
-                text: 'BDZ',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale,
-                stroke: getHaloStroke(),
-            }),
-        })];
-    };
+    return asStyleFunction(baseDefenseZoneLabelPaint());
+}
+
+/** **Ported.** @see missionTaskPaints.ts, `pursuitPaint`. */
+export function pursuitStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(pursuitPaint(name), name);
+}
+
+/** **Ported.** @see missionTaskPaints.ts, `movementToContactPaint`. */
+export function movementToContactStyleFunc(): StyleFunction {
+    return asStyleFunction(movementToContactPaint());
 }
 
 /**
