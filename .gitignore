@@ -48,3 +48,8 @@ docs/~$*
 # Python bytecode (from scripts/*.py)
 __pycache__/
 *.pyc
+
+# Copied from node_modules by scripts/copy-maplibre-worker.js — a build artefact,
+# not vendored source. See that script for why MapLibre needs it served.
+/public/maplibre-gl-worker.mjs
+/public/maplibre-gl-shared.mjs
