@@ -9,7 +9,7 @@ import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
 // The wire and anti-tank tables moved with their paint functions — they describe
 // what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
-import {geometryService, BAR_SYMBOL_DASHES} from '@zaes/tactical-graphics';
+import {geometryService} from '@zaes/tactical-graphics';
 import {
     getLabel,
     TacticalGraphicConfidence,
@@ -95,6 +95,11 @@ import {
     airCorridorLabelPaint,
     airCorridorPaint,
     attackHelicopterAxisLabelPaint,
+    barSymbolPaint,
+    CROSSED_HALF_WIDTH_PX,
+    crossedMissionTaskLabelPaint,
+    crossedMissionTaskLabelScale,
+    crossedMissionTaskPaint,
     blockPaint,
     breachPaint,
     clearPaint,
@@ -2517,28 +2522,9 @@ export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction
     return asStyleFunction(antiTankDitchPaint(name), name);
 }
 
+/** **Ported.** @see missionTaskPaints.ts, `barSymbolPaint`. */
 export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const bars = geom.getCoordinates();
-        if (bars.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const dashed = BAR_SYMBOL_DASHES[name] ?? [];
-        // Pixels, not map units. OL's lineDash is canvas pixels, so multiplying by
-        // resolution made the dash [200, 140] px on a bar ~50 px long - the whole bar fell
-        // inside one "on" segment and every state rendered solid. Matches dashStyle().
-        const dash = [12, 8];
-
-        return bars.map(
-            (bar, i) =>
-                new Style({
-                    geometry: new LineString(bar),
-                    stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashed[i] ? dash : undefined}),
-                }),
-        );
-    };
+    return asStyleFunction(barSymbolPaint(name), name);
 }
 
 /** **Ported.** @see obstaclePaints.ts, `wireObstaclePaint`. */
@@ -3391,72 +3377,17 @@ export function ratioLockedLabelScale(feature: FeatureLike, resolution: number):
 }
 
 /**
- * Which of the two crossed arms renders hashed, by sub-line index into
- * `CrossedMissionTask.generateGraphics` output. Absent = both solid.
- */
-const CROSSED_HASHED_ARM: Partial<Record<TacticalGraphicName, number>> = {
-    // The "/" stroke of the X.
-    [TacticalGraphicName.Suppress]: 0,
-    // The diagonal; the horizontal stays solid.
-    [TacticalGraphicName.Neutralize]: 1,
-};
-
-/** Hash pattern of a doctrinally-broken arm, in screen pixels. */
-const CROSSED_HASH_DASH = [12, 8];
-/**
- * Clearance in screen pixels between the label's glyph box and the arm ends
- * that stop short of it. Added *along the arm*, past where the arm leaves the
- * box — not as padding on the box itself. Padding the box inflates on the
- * diagonals (a 45° ray exits a box grown by `p` some `p × √2` further out), so
- * an X would end up with a visibly wider gap than a cross for the same number.
- */
-const CROSSED_LABEL_CLEARANCE_PX = 7;
-
-/**
- * Screen half-width a crossed mission task always renders at — 100 px across,
- * at **every** zoom level.
+ * Re-exported from the map-agnostic half — see `symbology/missionTaskPaints.ts`.
  *
- * These are badges, not areas. They mark a point; nothing about them describes
- * ground extent, so there is no size for the map scale to be right about. The
- * symbol is therefore pinned to the screen outright rather than merely capped:
- * it neither grows on zoom-in nor recedes on zoom-out.
- *
- * That makes the stored `size` irrelevant to what is drawn — the style function
- * divides it straight back out. It still matters as the thing `size` and
- * `resolution` are compared *through*, and as what a non-OpenLayers renderer
- * would fall back on, so it is still saved.
+ * The controller seeds a graphic's stored size from `CROSSED_HALF_WIDTH_PX`, and the
+ * scale is the one the label renders at, so both have to be the same number the
+ * paint function uses.
  */
-export const CROSSED_HALF_WIDTH_PX = 50;
+export {CROSSED_HALF_WIDTH_PX, crossedMissionTaskLabelScale};
 
-/**
- * Label scale for the crossed mission tasks: the ratio-locked family's formula
- * driven off the fixed half-width, so the letter is the same size as the line
- * work is — constant. Exported because the graphic style has to reproduce it to
- * size the gap the letter sits in.
- */
-export function crossedMissionTaskLabelScale(): number {
-    const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    return sizeFactor * RATIO_LOCKED_LABEL_FRACTION * CROSSED_HALF_WIDTH_PX / BASE_FONT_SIZE_PX;
-}
-
-/**
- * The one-letter label of a crossed mission task. Same treatment as
- * `getRatioLockedMissionTaskStyleFn`, but at a constant screen size.
- */
+/** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskLabelPaint`. */
 export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): StyleFunction {
-    const textLabel = getLabel(name);
-    return (feature: FeatureLike) => [new Style({
-        geometry: feature.getGeometry() as Point,
-        text: new Text({
-            text: textLabel,
-            font: RATIO_LOCKED_LABEL_FONT,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: crossedMissionTaskLabelScale(),
-            stroke: getHaloStroke(),
-            textAlign: 'center',
-            textBaseline: 'middle',
-        }),
-    })];
+    return asStyleFunction(crossedMissionTaskLabelPaint(name), name);
 }
 
 /**
@@ -3479,96 +3410,9 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  *
  * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
  */
+/** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskPaint`. */
 export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
-    const label = getLabel(name);
-    const hashedArm = CROSSED_HASHED_ARM[name];
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const lines = geom.getCoordinates();
-        if (lines.length < 2) return [];
-
-        const color = readHostilityColor(feature);
-        const strokeFor = (hashed: boolean) => new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: hashed ? CROSSED_HASH_DASH : undefined,
-        });
-
-        // The symbol's centre, as stamped by the holder — the same projected
-        // point the label feature is drawn at.
-        //
-        // **Not the arms' midpoint.** The generator walks out from the centre
-        // with `turf.destination`, which is geodesic; Mercator then stretches
-        // the northern end of a diagonal arm more than the southern one, so the
-        // projected midpoint sits a little north of the true centre. That error
-        // is fixed in map units, so on screen it grew on zoom-in — and since the
-        // geometry is scaled about this point while the label is not, the letter
-        // visibly drifted out of its own gap as you zoomed.
-        const stamped = feature.get('graphicCenter') as number[] | undefined;
-        const [a0, a1] = lines[0];
-        const cx = stamped?.[0] ?? (a0[0] + a1[0]) / 2;
-        const cy = stamped?.[1] ?? (a0[1] + a1[1]) / 2;
-
-        // Scale the symbol about its centre so its half-width is always
-        // `CROSSED_HALF_WIDTH_PX` on screen. `k` is the ratio between the
-        // half-width the geometry was built at and the one we want, so the
-        // stored `size` cancels out entirely and the result is the same number
-        // of pixels at every zoom. No clamp: it grows the geometry on zoom-out
-        // just as it shrinks it on zoom-in.
-        const size = feature.get('graphicSize') as number | undefined;
-        const k = size && size > 0 ? (CROSSED_HALF_WIDTH_PX * resolution) / size : 1;
-        const pinned = (p: number[]): Coordinate => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
-
-        // Half-extents of the label's glyph box, in map units. The scale is the
-        // one the label itself uses — constant, like everything else here.
-        const scale = crossedMissionTaskLabelScale();
-        const halfW = (getTextWidth(label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * resolution;
-        const halfH = (24 * scale * CAP_HEIGHT_FRACTION / 2) * resolution;
-        const clearance = CROSSED_LABEL_CLEARANCE_PX * resolution;
-
-        const styles: Style[] = [];
-        for (let i = 0; i < 2; i++) {
-            const start = pinned(lines[i][0]);
-            const end = pinned(lines[i][1]);
-            const dx = end[0] - start[0];
-            const dy = end[1] - start[1];
-            const len = Math.hypot(dx, dy);
-            const stroke = strokeFor(i === hashedArm);
-            if (len === 0) continue;
-            const ux = dx / len;
-            const uy = dy / len;
-            // Where this direction leaves the label's box: whichever of the two
-            // half-extents it reaches first. A near-horizontal arm therefore
-            // clears the glyph's width, a near-vertical one its height. The
-            // clearance is then added *along the arm*, so every arm stops the
-            // same distance from the glyph whatever angle it comes in at.
-            const boxExit = Math.min(
-                Math.abs(ux) > 1e-9 ? halfW / Math.abs(ux) : Infinity,
-                Math.abs(uy) > 1e-9 ? halfH / Math.abs(uy) : Infinity,
-            );
-            const gap = boxExit + clearance;
-            if (!isFinite(gap) || gap * 2 >= len) {
-                styles.push(new Style({geometry: new LineString([start, end]), stroke}));
-                continue;
-            }
-            styles.push(new Style({
-                geometry: new LineString([start, [cx - ux * gap, cy - uy * gap]]),
-                stroke,
-            }));
-            styles.push(new Style({
-                geometry: new LineString([[cx + ux * gap, cy + uy * gap], end]),
-                stroke,
-            }));
-        }
-
-        // Arrowheads are never hashed — FM 1-02.2 draws Interdict's heads solid
-        // even where the arm they sit on is broken.
-        for (let i = 2; i < lines.length; i++) {
-            styles.push(new Style({geometry: new LineString(lines[i].map(pinned)), stroke: strokeFor(false)}));
-        }
-        return styles;
-    };
+    return asStyleFunction(crossedMissionTaskPaint(name), name);
 }
 
 /**
