@@ -231,6 +231,27 @@ export function fromOlGeometry(geometry: Geometry | RenderFeature | undefined): 
  * `writeGraphicProperties` sets and what survives a save, and the loose key is
  * what the demo's draw path stamps.
  */
+/**
+ * The graphic's extent, from the four keys `AreaGraphicBase` stamps on its label
+ * feature. All four or nothing — a partial extent would place a corner anchor
+ * somewhere arbitrary, which is worse than not placing it.
+ */
+function readBounds(feature: FeatureLike): PaintFeature['bounds'] {
+    const minX = feature.get('polygonMinX') as number | undefined;
+    const minY = feature.get('polygonMinY') as number | undefined;
+    const maxX = feature.get('polygonMaxX') as number | undefined;
+    const maxY = feature.get('polygonMaxY') as number | undefined;
+    if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return undefined;
+    return {minX, minY, maxX, maxY};
+}
+
+/** The segment a label lies along, from the pair `AreaGraphicBase` stamps. */
+function readLabelSegment(feature: FeatureLike): PaintFeature['labelSegment'] {
+    const a = feature.get('labelSegmentA') as ProjectedPosition | undefined;
+    const b = feature.get('labelSegmentB') as ProjectedPosition | undefined;
+    return a && b ? [a, b] : undefined;
+}
+
 export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName): PaintFeature | undefined {
     const geometry = fromOlGeometry(feature.getGeometry());
     if (!geometry) return undefined;
@@ -245,6 +266,9 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
         drawingResolution: feature.get('drawingResolution') as number | undefined,
         graphicCenter: feature.get('graphicCenter') as ProjectedPosition | undefined,
         graphicLabelPoint: feature.get('graphicLabelPoint') as ProjectedPosition | undefined,
+        bounds: readBounds(feature),
+        ring: feature.get('polygonRing') as ProjectedPosition[] | undefined,
+        labelSegment: readLabelSegment(feature),
         // The demo's properties dialog, sample sweep and basemap re-colour all stamp a
         // *resolved* colour here. Carried so a feature coloured by that route keeps
         // its colour; paint functions fall back to the affiliation when it is absent.

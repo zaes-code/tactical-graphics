@@ -30,6 +30,14 @@
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {
+    areaDefaultLabelPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
+} from './areaLabelPaints';
+import {
     encirclementPaint,
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
@@ -172,6 +180,106 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.WeaponEngagementZone,
 ];
 
+
+/**
+ * The zone families that share one label layout: prefix over name centred, the two
+ * date-time groups outside the shape's upper-left.
+ *
+ * Split by variant because the date anchor differs. A rectangle's corner is a real
+ * vertex and a circle has none, so both use the bounding box; an irregular polygon's
+ * bounding-box corner can sit far outside the shape, so those use the real vertex.
+ */
+const ZONE_GRAPHICS_BOXED: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+];
+
+const ZONE_GRAPHICS_IRREGULAR: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
+    TacticalGraphicName.CriticalFriendlyZoneIrregular,
+    TacticalGraphicName.CensorZoneIrregular,
+    TacticalGraphicName.CallForFireZoneIrregular,
+    TacticalGraphicName.DeadSpaceAreaIrregular,
+    TacticalGraphicName.BlueKillBoxIrregular,
+    TacticalGraphicName.PurpleKillBoxIrregular,
+];
+
+/** The families whose label is a plain centred stack of designation over dates. */
+const STACK_LABEL_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.NoFireAreaIrregular,
+    TacticalGraphicName.FireSupportAreaIrregular,
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.FreeFireAreaIrregular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.RestrictiveFireAreaIrregular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.LimitedAccessArea,
+    TacticalGraphicName.ObstacleRestrictedArea,
+];
+
+/** The areas registered with a structural graphic painter, which still need labels. */
+const SPECIAL_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ObstacleBelt,
+    TacticalGraphicName.ObstacleGroup,
+    TacticalGraphicName.ObstacleZone,
+    TacticalGraphicName.ObstacleFreeArea,
+    TacticalGraphicName.ObstacleRestrictedArea,
+    TacticalGraphicName.FortifiedArea,
+    TacticalGraphicName.GroupOrSeriesOfTargets,
+    TacticalGraphicName.Encirclement,
+    TacticalGraphicName.LimitedAccessArea,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.NoFireAreaIrregular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.WeaponsFreeZone,
+];
+
+/**
+ * The label painter for an area graphic, mirroring `getAreaLabelStylesFromLabels`.
+ *
+ * `undefined` means "no bespoke layout", and the caller falls back to
+ * {@link areaDefaultLabelPaint} exactly as the OpenLayers switch's `default:` branch
+ * does. Keeping the fallback at the call site rather than in here makes the two
+ * structures line up, which matters while the routing lives in two places.
+ *
+ * Not covered yet, and so still falling through to the default: the eleven
+ * air-coordinating zones, the three airspace-coordination areas, and the airfield.
+ * Each has its own dedicated function with layout this table cannot express.
+ */
+function areaLabelPainterFor(name: TacticalGraphicName) {
+    if (ZONE_GRAPHICS_BOXED.includes(name)) return zoneLabelPaint(name, false);
+    if (ZONE_GRAPHICS_IRREGULAR.includes(name)) return zoneLabelPaint(name, true);
+    if (STACK_LABEL_GRAPHICS.includes(name)) return areaLabelStackPaint(name);
+    if (name === TacticalGraphicName.ObstacleFreeArea) return areaLabelStackPaint(name, {before: ['FREE']});
+    if (name === TacticalGraphicName.GroupOrSeriesOfTargets) return groupOrSeriesOfTargetsLabelPaint(name);
+    if (name === TacticalGraphicName.SmokeObscurant) return smokeObscurantLabelPaint();
+    if (
+        name === TacticalGraphicName.PositionAreaArtilleryCircular ||
+        name === TacticalGraphicName.PositionAreaArtilleryIrregular ||
+        name === TacticalGraphicName.PositionAreaArtilleryRectangular
+    ) {
+        return positionAreaArtilleryLabelPaint(name);
+    }
+    return undefined;
+}
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -223,6 +331,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of DEFAULT_AREA_GRAPHICS) {
         registry[name] = {graphic: areaOutlinePaint(name)};
+    }
+
+    // Labels last, over whatever graphic painter was registered above. Every area
+    // gets one: the bespoke layout if its family has one, the default otherwise.
+    for (const name of [...DEFAULT_AREA_GRAPHICS, ...SPECIAL_AREA_GRAPHICS]) {
+        const entry = registry[name];
+        if (entry) entry.label = areaLabelPainterFor(name) ?? areaDefaultLabelPaint(name);
     }
 
     return registry;

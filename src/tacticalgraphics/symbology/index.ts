@@ -51,4 +51,14 @@ export {
     obstacleAreaPaint,
 } from './areaPaints';
 
+export {
+    areaDateLabel,
+    areaDefaultLabelPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
+} from './areaLabelPaints';
+
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

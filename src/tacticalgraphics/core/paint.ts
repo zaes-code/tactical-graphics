@@ -267,6 +267,36 @@ export interface PaintFeature {
     graphicLabelPoint?: ProjectedPosition;
 
     /**
+     * The graphic's axis-aligned extent, in projected metres.
+     *
+     * Stamped by the holder because a **label** feature is a bare anchor point —
+     * it does not know the shape it labels. Several area layouts hang their
+     * date-time group off a corner of that extent (a rectangle's top-left is a real
+     * vertex; a circle has none, so the square hugging it is the sensible stand-in),
+     * and the position-area-artillery symbol puts a "PAA" at each edge midpoint.
+     */
+    bounds?: {minX: number; minY: number; maxX: number; maxY: number};
+
+    /**
+     * The drawn polygon's outer ring, in projected metres.
+     *
+     * Only the *irregular* zone variants need it, and they need it because the
+     * bounding-box corner is misleading for a shape that is not a rectangle — that
+     * corner can sit a long way outside the polygon. They anchor on the real
+     * upper-left **vertex** instead.
+     */
+    ring?: ProjectedPosition[];
+
+    /**
+     * Two points defining the segment a label lies along, in projected metres.
+     *
+     * Group-or-series-of-targets writes its designation on the polygon's northern
+     * edge, rotated to follow it. Which edge that is was decided when the geometry
+     * was built, so the segment is published rather than re-derived here.
+     */
+    labelSegment?: [ProjectedPosition, ProjectedPosition];
+
+    /**
      * An already-resolved line colour, overriding the affiliation's.
      *
      * A *colour*, not an affiliation — so it is a cache that can go stale, and a
