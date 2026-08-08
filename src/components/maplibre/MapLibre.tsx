@@ -142,6 +142,9 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
         // Test hook for the driving scripts, mirroring the one OpenLayers.tsx
         // installs. Stripped from production builds; nothing in the app may read it.
         if (process.env.NODE_ENV !== 'production') {
+            // The fixture itself, so a probe can tile it up to gallery scale without
+            // re-stating it. @see spikeSamples.ts
+            (window as unknown as Record<string, unknown>).__spikeFixture = SPIKE_SAMPLES;
             (window as unknown as Record<string, unknown>).__tacticalGraphicsMapLibre = {
                 map,
                 resolutionOf: () => resolutionOf(map),
