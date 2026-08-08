@@ -31,6 +31,7 @@ import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {
     arcMissionTaskPaint,
+    areaOutlinePaint,
     defaultLinePaint,
     missionTaskLabelPaint,
     obstacleLinePaint,
@@ -95,6 +96,75 @@ const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RestrictiveFireLine,
 ];
 
+/**
+ * The area graphics with no bespoke style — a plain outline in the affiliation's
+ * colour, dashed when planned.
+ *
+ * Derived from `getStyleFromLabels`: every `polygon` / `polygonRect` entry that
+ * falls past its 15 named special cases. The largest single family in the library.
+ */
+const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
+    TacticalGraphicName.Airfield,
+    TacticalGraphicName.AirheadLine,
+    TacticalGraphicName.AreaOfOperations,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.AssaultPosition,
+    TacticalGraphicName.AssemblyArea,
+    TacticalGraphicName.AttackPosition,
+    TacticalGraphicName.BaseCamp,
+    TacticalGraphicName.BlueKillBoxIrregular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.BrigadeSupportArea,
+    TacticalGraphicName.CallForFireZoneIrregular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.CensorZoneIrregular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CorpsSupportArea,
+    TacticalGraphicName.CriticalFriendlyZoneIrregular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.DeadSpaceAreaIrregular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.DetaineeHoldingArea,
+    TacticalGraphicName.DivisionSupportArea,
+    TacticalGraphicName.DropZone,
+    TacticalGraphicName.EngagementArea,
+    TacticalGraphicName.FireSupportAreaIrregular,
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.ForwardArmingAndRefuelingPoint,
+    TacticalGraphicName.FreeFireAreaIrregular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.GuerrillaBase,
+    TacticalGraphicName.HighAltitudeMissileEngagementZone,
+    TacticalGraphicName.HighDensityAirspaceControlZone,
+    TacticalGraphicName.JointEngagementZone,
+    TacticalGraphicName.KillZone,
+    TacticalGraphicName.LandingZone,
+    TacticalGraphicName.LowAltitudeMissileEngagementZone,
+    TacticalGraphicName.MissileEngagementZone,
+    TacticalGraphicName.NamedAreaOfInterest,
+    TacticalGraphicName.ObjectiveArea,
+    TacticalGraphicName.PickupZone,
+    TacticalGraphicName.PositionAreaArtilleryIrregular,
+    TacticalGraphicName.PositionAreaArtilleryRectangular,
+    TacticalGraphicName.PurpleKillBoxIrregular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.RefugeeHoldingArea,
+    TacticalGraphicName.RestrictedOperationsZone,
+    TacticalGraphicName.RestrictiveFireAreaIrregular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.ShortRangeAirDefenseEngagementZone,
+    TacticalGraphicName.SmokeObscurant,
+    TacticalGraphicName.TargetAreaIrregular,
+    TacticalGraphicName.TargetAreaOfInterest,
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone,
+    TacticalGraphicName.WeaponEngagementZone,
+];
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -122,6 +192,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of DEFAULT_LINE_GRAPHICS) {
         registry[name] = {graphic: defaultLinePaint(name)};
+    }
+
+    for (const name of DEFAULT_AREA_GRAPHICS) {
+        registry[name] = {graphic: areaOutlinePaint(name)};
     }
 
     return registry;

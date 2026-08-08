@@ -456,3 +456,53 @@ export function defaultLinePaint(
         ];
     };
 }
+
+// ── 5. Areas — the plain outline behind 60 of the 75 area graphics ────────────
+
+/**
+ * An area's outline: one stroke in the affiliation's colour, dashed when the
+ * status is `planned`.
+ *
+ * Unremarkable, and the highest-coverage paint function in the library — 60 of
+ * the 75 `polygon` / `polygonRect` registry entries have no bespoke style and
+ * reach this. The other 15 draw something structural (StrongPoint's cross ties,
+ * an obstacle belt's teeth, Encirclement's hostility-dependent form) and are
+ * ported separately.
+ *
+ * **Stroke only, no fill.** There used to be a translucent blue fill here, left
+ * over from a selection highlight that never tracked selection; it painted every
+ * default-styled area all the time, which is neither what FM 1-02.2 draws nor what
+ * any of the bespoke area styles do. @see areaFillPaint for the one that does fill.
+ */
+export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return feature => [{
+        geometry: feature.geometry.type === 'GeometryCollection'
+            ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
+            : feature.geometry,
+        stroke: {
+            color: lineColorOf(feature),
+            widthPx: LINE_WIDTH(),
+            dashPx: feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined,
+        },
+    }];
+}
+
+/**
+ * A filled shape in the affiliation's colour, outlined in the same.
+ *
+ * The fallback for holders that install no dedicated style of their own. Distinct
+ * from {@link areaOutlinePaint} because the fill is deliberate here — this is what
+ * a solid symbol uses, not a control-measure boundary.
+ */
+export function areaFillPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return feature => {
+        const color = lineColorOf(feature);
+        return [{
+            geometry: feature.geometry.type === 'GeometryCollection'
+                ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
+                : feature.geometry,
+            fill: {color},
+            stroke: {color, widthPx: LINE_WIDTH()},
+        }];
+    };
+}
