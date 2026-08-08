@@ -12,14 +12,11 @@ import {
     createInertHandleFeature,
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
-    featureLabelScale,
     fightingPositionStyleFunc,
-    fontStyle,
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
     getMissionTaskStyleFn,
     getRatioLockedMissionTaskStyleFn,
-    getTextWidth,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
@@ -176,8 +173,7 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
  */
 const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import {Stroke, Style} from "ol/style";
-import {LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
+import { movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
 import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
@@ -248,129 +244,15 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
-        // MovementToContact: shift the zigzag "contact" side arrows outward so
-        // they don't touch the big arrow's arrowhead edge. B→A
-        // (upperPath[1]→upperPath[0]) is the upper edge — its CCW perpendicular
-        // points outward; I→A (lowerPath[2]→lowerPath[3]) is the lower edge —
-        // its CW perpendicular points outward.
-        //
-        // The offset is a fraction of the arrow's own half-length, NOT the
-        // `n * resolution` screen-pixel form used elsewhere in this file. Both are
-        // "zoom-invariant", but in different frames, and here the pixel form was
-        // the wrong one: the arrow is baked in metres, so a constant *screen*
-        // offset slid the side arrows toward the arrowhead on zoom-in and away
-        // from it on zoom-out. Deriving it from the geometry locks it to the
-        // graphic under zoom and resize alike.
-        //
-        // `n * resolution` is right for things that must stay a fixed size on
-        // screen — text gaps, label padding. It is wrong for anything that must
-        // hold station against the geometry around it.
-        //   MultiLineString layout (see MovementToContact.generateGraphics):
-        //     [0] upperPath, [1] lowerPath,
-        //     [2] upper zigzag line, [3] upper zigzag arrowhead,
-        //     [4] lower zigzag line, [5] lower zigzag arrowhead.
-        // Pursuit: split the horizontal line around its midpoint so the "P"
-        // label always has breathing room. Gap width is derived from the
-        // actual rendered text width at the current zoom (zoom-invariant on
-        // screen). Other sub-lines (arc, arrowhead, crossbar) render as-is.
-        //   MultiLineString layout (see Pursuit.generateGraphics):
-        //     [0] horizontal line, [1] semicircle arc,
-        //     [2] arrowhead, [3] perpendicular crossbar.
+        // Pursuit splits its horizontal line around the "P" so the letter always has
+        // breathing room; the gap is measured off the rendered glyph.
         if (name === TacticalGraphicName.Pursuit) {
-            this.graphic.setStyle((feature, resolution) => {
-                const geom = feature.getGeometry() as MultiLineString;
-                if (!geom) return [];
-                const lines = geom.getCoordinates();
-                const color = readHostilityColor(feature);
-                const stroke = new Stroke({color, width: LINE_WIDTH()});
-
-                const styles: Style[] = [];
-                const horiz = lines[0];
-                if (horiz && horiz.length === 2) {
-                    const [a, b] = horiz;
-                    const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-                    const dx = b[0] - a[0], dy = b[1] - a[1];
-                    const len = Math.hypot(dx, dy);
-                    const scale = featureLabelScale(feature, resolution);
-                    // Measured width of 'P' (screen px) + 4px padding each side,
-                    // then converted to map units by × resolution so the gap
-                    // matches the rendered glyph at every zoom.
-                    const pWidthPx = getTextWidth(getLabel(name), fontStyle, scale);
-                    const gapHalf = (pWidthPx / 2 + 4) * resolution;
-                    if (len > 2 * gapHalf) {
-                        const ux = dx / len, uy = dy / len;
-                        const gapA: Coordinate = [mid[0] - ux * gapHalf, mid[1] - uy * gapHalf];
-                        const gapB: Coordinate = [mid[0] + ux * gapHalf, mid[1] + uy * gapHalf];
-                        styles.push(new Style({geometry: new LineString([a, gapA]), stroke}));
-                        styles.push(new Style({geometry: new LineString([gapB, b]), stroke}));
-                    } else {
-                        // Line is shorter than the label — don't split; render whole.
-                        styles.push(new Style({geometry: new LineString(horiz), stroke}));
-                    }
-                }
-                // Render the remaining sub-lines (arc, arrowhead, crossbar) as-is.
-                for (let i = 1; i < lines.length; i++) {
-                    styles.push(new Style({geometry: new LineString(lines[i]), stroke}));
-                }
-                return styles;
-            });
+            this.graphic.setStyle(pursuitStyleFunc(name));
         }
+        // MovementToContact nudges its zigzag "contact" arrows off the big arrow's
+        // arrowhead edges — by a fraction of the arrow, not a screen constant.
         if (name === TacticalGraphicName.MovementToContact) {
-            // `_resolution` is deliberately unused: everything this style draws is
-            // proportional to the graphic, so nothing here may depend on the zoom.
-            // Reaching for it again is the bug this function used to have.
-            this.graphic.setStyle((feature, _resolution) => {
-                const geom = feature.getGeometry() as MultiLineString;
-                if (!geom) return [];
-                const rawLines = geom.getCoordinates();
-                const defaultColor = readHostilityColor(feature);
-
-                // Recover the arrow's half-length `r` from the geometry. The tip A
-                // sits at local(+r, 0) and the two tail-fin tips E/F at
-                // local(-r, ±0.5r), so A and the E–F midpoint are exactly 2r apart
-                // — no stamped `graphicSize` needed, and it follows a resize for
-                // free. Plain Euclidean math: these are projected EPSG:3857 metres,
-                // so turf must not be used here.
-                const A = rawLines[0]?.[0];
-                const E = rawLines[0]?.[3];
-                const F = rawLines[1]?.[0];
-                let GAP = 0;
-                if (A && E && F) {
-                    const midEF = [(E[0] + F[0]) / 2, (E[1] + F[1]) / 2];
-                    const r = Math.hypot(A[0] - midEF[0], A[1] - midEF[1]) / 2;
-                    GAP = SIDE_ARROW_GAP_RATIO * r;
-                }
-                const perpShift = (
-                    edgeStart: number[],
-                    edgeEnd: number[],
-                    ccw: boolean,
-                ): [number, number] => {
-                    const dx = edgeEnd[0] - edgeStart[0];
-                    const dy = edgeEnd[1] - edgeStart[1];
-                    const len = Math.hypot(dx, dy);
-                    if (len === 0) return [0, 0];
-                    const sign = ccw ? 1 : -1;
-                    return [sign * -dy / len * GAP, sign * dx / len * GAP];
-                };
-                const [uDx, uDy] = (rawLines[0]?.length >= 2)
-                    ? perpShift(rawLines[0][1], rawLines[0][0], true)
-                    : [0, 0];
-                const [lDx, lDy] = (rawLines[1]?.length >= 4)
-                    ? perpShift(rawLines[1][2], rawLines[1][3], false)
-                    : [0, 0];
-                const shift = (line: number[][], dx: number, dy: number): number[][] =>
-                    line.map(pt => [pt[0] + dx, pt[1] + dy]);
-                const lines = rawLines.map((line, i) => {
-                    if (i === 2 || i === 3) return shift(line, uDx, uDy);
-                    if (i === 4 || i === 5) return shift(line, lDx, lDy);
-                    return line;
-                });
-
-                return lines.map((line) => new Style({
-                    geometry: new LineString(line),
-                    stroke: new Stroke({color: defaultColor, width: LINE_WIDTH()}),
-                }));
-            });
+            this.graphic.setStyle(movementToContactStyleFunc());
         }
         // The arc circles draw their own line work so the gap for the letter can
         // be measured off the glyph instead of being a fixed slice of the circle.

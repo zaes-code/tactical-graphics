@@ -268,7 +268,16 @@ export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmpli
 export {retrogradeTaskPaint} from './symbology/retrogradePaints';
 export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
 export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
-export {CROSSED_HALF_WIDTH_PX, barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskLabelScale, crossedMissionTaskPaint} from './symbology/missionTaskPaints';
+export {
+    CROSSED_HALF_WIDTH_PX,
+    barSymbolPaint,
+    baseDefenseZoneLabelPaint,
+    crossedMissionTaskLabelPaint,
+    crossedMissionTaskLabelScale,
+    crossedMissionTaskPaint,
+    movementToContactPaint,
+    pursuitPaint,
+} from './symbology/missionTaskPaints';
 export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
 export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
