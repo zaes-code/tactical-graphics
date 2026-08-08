@@ -49,6 +49,7 @@
  */
 
 import {TacticalGraphicProperties} from './render';
+import {TacticalGraphicEchelon} from './type';
 
 /** A single `[x, y]` in projected metres (EPSG:3857). */
 export type ProjectedPosition = [number, number];
@@ -310,6 +311,23 @@ export interface PaintFeature {
      * or the host's override of it.
      */
     hostilityColor?: string;
+
+    /**
+     * The echelon glyph a position wears, when the host tracks it outside the
+     * properties bag.
+     *
+     * A separate field rather than a bag entry because that is where it actually
+     * lives: the demo's properties dialog stamps `echelon` straight onto the
+     * OpenLayers feature and does **not** put it in `properties.tacticalGraphic`,
+     * so a paint function that read only the bag would silently render every
+     * position as a squad. Falls back to the bag, then to squad.
+     *
+     * Worth fixing at the source one day — the bag is meant to be the single
+     * description a graphic carries, and an echelon that never gets saved is a
+     * real gap. Until then this is the channel, and it is documented rather than
+     * quietly worked around.
+     */
+    echelon?: TacticalGraphicEchelon;
 }
 
 /**
