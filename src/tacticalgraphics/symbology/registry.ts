@@ -35,6 +35,7 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {blockPaint, breachPaint, clearPaint} from './blockPaints';
 import {
     attackHelicopterAxisLabelPaint,
     aviationAxisLabelPaint,
@@ -485,6 +486,18 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of ROUTE_GRAPHICS) {
         registry[name] = {graphic: routeControlMeasurePaint(name)};
     }
+
+    // 0.75 for the disrupts, not the 0.6 default: it centres the "D" on the middle
+    // prong, which spans 0.5 to 1.0 of the user's drawn base.
+    registry[TacticalGraphicName.TacticalBlock] = {graphic: blockPaint(getLabel(TacticalGraphicName.TacticalBlock))};
+    registry[TacticalGraphicName.Penetration] = {graphic: blockPaint(getLabel(TacticalGraphicName.Penetration))};
+    registry[TacticalGraphicName.Block] = {graphic: blockPaint(getLabel(TacticalGraphicName.Block))};
+    registry[TacticalGraphicName.Bypass] = {graphic: breachPaint(getLabel(TacticalGraphicName.Bypass))};
+    registry[TacticalGraphicName.Canalize] = {graphic: breachPaint(getLabel(TacticalGraphicName.Canalize))};
+    registry[TacticalGraphicName.Breach] = {graphic: breachPaint(getLabel(TacticalGraphicName.Breach))};
+    registry[TacticalGraphicName.Clear] = {graphic: clearPaint(getLabel(TacticalGraphicName.Clear))};
+    registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
+    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
 
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
