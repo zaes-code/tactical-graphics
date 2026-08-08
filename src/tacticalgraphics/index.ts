@@ -234,6 +234,7 @@ export {
     areaFillPaint,
     areaOutlinePaint,
     defaultLinePaint,
+    amplifierDash,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
@@ -257,5 +258,6 @@ export {
     smokeObscurantLabelPaint,
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
+export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

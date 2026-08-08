@@ -394,3 +394,69 @@ export function fortifiedRing(ring: ProjectedPosition[], resolution: number): Pr
         ringIsClockwise(ring) ? 1 : -1,
     );
 }
+
+/** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
+const MAX_MITER = 4;
+
+/**
+ * A true parallel of `path`, `d` metres to its left (negative for its right).
+ *
+ * Offsets each vertex along the **bisector** of its two segments, lengthened by
+ * `1 / cos(half-angle)` — the standard miter. Taking the direction *at* the vertex
+ * instead (which is one of the two adjoining segments) makes the two sides stop
+ * being parallel on a bend: the under-wire and over-wire of a high wire fence
+ * visibly splay apart.
+ *
+ * The miter is capped because at a hairpin `1 / cos(half-angle)` runs away to
+ * infinity, and an uncapped spike looks worse than a slightly pinched corner.
+ */
+export function parallelPath(path: ProjectedPosition[], d: number): ProjectedPosition[] {
+    if (!d || path.length < 2) return path;
+
+    const normals: ProjectedPosition[] = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+        const dx = path[i + 1][0] - path[i][0];
+        const dy = path[i + 1][1] - path[i][1];
+        const len = Math.hypot(dx, dy) || 1;
+        normals.push([-dy / len, dx / len]);
+    }
+
+    return path.map((p, i) => {
+        const a = normals[Math.max(i - 1, 0)];
+        const b = normals[Math.min(i, normals.length - 1)];
+        const mx = a[0] + b[0];
+        const my = a[1] + b[1];
+        const m = Math.hypot(mx, my);
+        // Doubling back on itself: no bisector to speak of, so take the segment normal.
+        if (m < 1e-9) return [p[0] + a[0] * d, p[1] + a[1] * d] as ProjectedPosition;
+        // |a| = |b| = 1, so |a + b| = 2 cos(half-angle) and the miter factor is 2 / |a + b|.
+        const miter = Math.min(2 / m, MAX_MITER);
+        return [p[0] + (mx / m) * d * miter, p[1] + (my / m) * d * miter] as ProjectedPosition;
+    });
+}
+
+/**
+ * The point `dist` metres along `path`, with the unit tangent there.
+ *
+ * `null` past the end, rather than clamping to the last vertex — a caller walking a
+ * repeating pattern uses that to know when to stop, and a clamped point would stack
+ * every remaining mark on the final vertex.
+ */
+export function walkPath(path: ProjectedPosition[], dist: number): {point: ProjectedPosition; tangent: ProjectedPosition} | null {
+    let acc = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        if (acc + seg >= dist) {
+            const t = (dist - acc) / seg;
+            return {
+                point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+                tangent: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg],
+            };
+        }
+        acc += seg;
+    }
+    return null;
+}

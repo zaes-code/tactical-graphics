@@ -29,6 +29,7 @@
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
+import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
@@ -280,6 +281,31 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     return undefined;
 }
 
+
+/**
+ * The countermobility line obstacles: nine wire types and three anti-tank ditches.
+ *
+ * Derived from `LineGraphicBase`'s switch rather than hand-listed, like the other
+ * families here — the routing lives there until the holders consult this registry.
+ */
+const WIRE_OBSTACLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.WireUnspecified,
+    TacticalGraphicName.WireSingleFence,
+    TacticalGraphicName.WireDoubleFence,
+    TacticalGraphicName.WireDoubleApronFence,
+    TacticalGraphicName.WireLowWireFence,
+    TacticalGraphicName.WireHighWireFence,
+    TacticalGraphicName.WireSingleConcertina,
+    TacticalGraphicName.WireDoubleStrandConcertina,
+    TacticalGraphicName.WireTripleStrandConcertina,
+];
+
+const ANTI_TANK_DITCH_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AntiTankDitchUnderConstruction,
+    TacticalGraphicName.AntiTankDitchCompleted,
+    TacticalGraphicName.AntiTankDitchReinforcedWithMines,
+];
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -332,6 +358,16 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of DEFAULT_AREA_GRAPHICS) {
         registry[name] = {graphic: areaOutlinePaint(name)};
     }
+
+    for (const name of WIRE_OBSTACLE_GRAPHICS) {
+        registry[name] = {graphic: wireObstaclePaint(name)};
+    }
+
+    for (const name of ANTI_TANK_DITCH_GRAPHICS) {
+        registry[name] = {graphic: antiTankDitchPaint(name)};
+    }
+
+    registry[TacticalGraphicName.FortifiedLine] = {graphic: fortifiedLinePaint(TacticalGraphicName.FortifiedLine)};
 
     // Labels last, over whatever graphic painter was registered above. Every area
     // gets one: the bespoke layout if its family has one, the default otherwise.

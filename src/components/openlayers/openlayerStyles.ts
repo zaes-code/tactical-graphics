@@ -7,7 +7,9 @@ import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, Multi
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES, ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from '@zaes/tactical-graphics';
+// The wire and anti-tank tables moved with their paint functions — they describe
+// what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
+import {geometryService, BAR_SYMBOL_DASHES} from '@zaes/tactical-graphics';
 import {
     getLabel,
     RouteDirection,
@@ -90,12 +92,15 @@ import {isEmpty} from '../../utils/isEmpty';
  * @see paintToOpenLayers.ts
  */
 import {
+    antiTankDitchPaint,
     arcMissionTaskPaint,
     areaFillPaint,
     areaLabelStackPaint,
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
+    fortifiedLinePaint,
     smokeObscurantLabelPaint,
+    wireObstaclePaint,
     zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
@@ -3113,9 +3118,6 @@ const OBSTACLE_TOOTH_GAP_PX = 10;
  * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
  * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
  */
-const FORTIFIED_MERLON_PX = 15;
-const FORTIFIED_CRENEL_PX = 15;
-const FORTIFIED_HEIGHT_PX = 11;
 const WAVE_WAVELENGTH_PX = 15;
 const WAVE_AMPLITUDE_PX = 8;
 const LINE_OF_CONTACT_OFFSET_PX = 16;
@@ -3258,41 +3260,6 @@ function upSign(dir: Coordinate): number {
     return dir[0] >= 0 ? 1 : -1;
 }
 
-/**
- * Square merlons along a path — the fortified line and area.
- *
- * The tooth is a rectangle standing off the baseline, so the path runs along the
- * baseline for a crenel, up, across a merlon, down, and on. Emitted as one connected
- * path: the generator used to hand back interleaved gap and tooth sub-lines, which drew
- * identically but had to be reassembled by anything that wanted the outline.
- */
-function castellatedPath(path: Coordinate[], merlonMap: number, crenelMap: number, heightMap: number, side: number | 'up'): Coordinate[] {
-    const total = pathLength(path);
-    const pattern = merlonMap + crenelMap;
-    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
-
-    const count = Math.max(1, Math.round(total / pattern));
-    const spacing = total / count;
-    const merlon = spacing * (merlonMap / pattern);
-
-    const out: Coordinate[] = [path[0]];
-    for (let i = 0; i < count; i++) {
-        const startAt = i * spacing + (spacing - merlon) / 2;
-        const left = pathPointAt(path, startAt);
-        const right = pathPointAt(path, startAt + merlon);
-        const sign = side === 'up' ? upSign(left.dir) : side;
-        const ln: Coordinate = [-left.dir[1] * sign, left.dir[0] * sign];
-        const rn: Coordinate = [-right.dir[1] * sign, right.dir[0] * sign];
-        out.push(
-            left.point,
-            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
-            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
-            right.point,
-        );
-    }
-    out.push(path[path.length - 1]);
-    return out;
-}
 
 /** Steps per bump. Enough that a semicircle reads as a curve rather than a tent. */
 const WAVE_STEPS = 12;
@@ -3441,38 +3408,7 @@ function crenellatedPath(path: Coordinate[], heightMap: number, baseMap: number,
     return out;
 }
 
-/**
- * The crenellated ring for an obstacle area.
- *
- * `outward` is a geometric intent, and the side of travel it lands on depends on the
- * ring's winding — which nothing normalises, since the ring comes back in the order the
- * user clicked the corners. Reconciling the two here is what keeps an area drawn
- * anticlockwise from turning its teeth inside out.
- */
-function obstacleRing(ring: Coordinate[], resolution: number, outward: boolean): Coordinate[] {
-    const {heightMap, baseMap, gapMap} = obstacleToothSize(ring, true, resolution);
-    if (heightMap <= 0) return ring;
-    const outwardIsLeft = ringIsClockwise(ring);
-    const sideSign = outward === outwardIsLeft ? 1 : -1;
-    return crenellatedPath(ring, heightMap, baseMap, gapMap, sideSign);
-}
 
-/** Index of the segment containing the halfway point by length — the centre-most one. */
-function centreSegmentIndex(coords: Coordinate[]): number {
-    const lengths: number[] = [];
-    let total = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
-        lengths.push(len);
-        total += len;
-    }
-    let travelled = 0;
-    for (let i = 0; i < lengths.length; i++) {
-        travelled += lengths[i];
-        if (travelled >= total / 2) return i;
-    }
-    return Math.max(0, lengths.length - 1);
-}
 
 /** **Ported.** @see paintFunctions.ts, `obstacleLinePaint`. */
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
@@ -3692,63 +3628,9 @@ export function fightingPositionStyleFunc(): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** **Ported.** @see obstaclePaints.ts, `fortifiedLinePaint`. */
 export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => fortifiedLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const styles: Style[] = [];
-
-        // Merlons in screen pixels, on the upper side of each segment whichever way the
-        // line was drawn. The generator used to hand back interleaved gap and tooth
-        // sub-lines, sized at the drawing resolution; the geometry is the drawn line now.
-        const scale = decorationScale(coords, false, resolution, FORTIFIED_HEIGHT_PX);
-        styles.push(new Style({
-            geometry: new LineString(castellatedPath(
-                coords,
-                FORTIFIED_MERLON_PX * scale * resolution,
-                FORTIFIED_CRENEL_PX * scale * resolution,
-                FORTIFIED_HEIGHT_PX * scale * resolution,
-                'up',
-            )),
-            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
-        }));
-
-        if (!label) return styles;
-
-        // The label goes under the centre-most drawn segment — the merlons take the upper
-        // side, so the two never compete.
-        const segIdx = centreSegmentIndex(coords);
-        const a = coords[segIdx];
-        const b = coords[segIdx + 1];
-        const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        const labelScale = featureLabelScale(f, resolution);
-        const labelAnchor = offsetBelow(mid, a, b, resolution, 8);
-
-        styles.push(new Style({
-            geometry: new Point(labelAnchor),
-            text: new Text({
-                text: label,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: getRotation(a, b),
-                textAlign: 'center',
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        return styles;
-    };
+    return asStyleFunction(fortifiedLinePaint(name), name);
 }
 
 
@@ -3780,7 +3662,6 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  * would fit. Drawn to the limit the disc meets the two teeth bounding it, and with the
  * teeth filled the three merge into one black mass.
  */
-const MINE_CLEARANCE = 0.5;
 
 /**
  * The three anti-tank ditches: triangular teeth along the drawn route, with a mine nested
@@ -3796,90 +3677,9 @@ const MINE_CLEARANCE = 0.5;
  *
  * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
  */
+/** **Ported.** @see obstaclePaints.ts, `antiTankDitchPaint`. */
 export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!geom) return [];
-        const path: Coordinate[] =
-            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
-        if (path.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const {filled, mines} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
-        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [new Style({geometry: new LineString(path), stroke: stroke()})];
-
-        const scale = decorationScale(path, false, resolution, ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO);
-        const width = ANTI_TANK_TOOTH_PX * scale * resolution;
-        if (width <= 0) return styles;
-
-        const depth = width * ANTI_TANK_HEIGHT_RATIO;
-        const total = pathLength(path);
-
-        // Every slot holds a tooth, so consecutive teeth share a base corner and their bases
-        // run edge to edge along the route. Mines go in the notches *between* them, which is
-        // why the run cannot begin or end with one: a notch needs a tooth either side.
-        const teeth = Math.floor(total / width);
-        if (teeth < 1 || (mines && teeth < 2)) return styles;
-
-        // Centre the run, so the pattern sits on the route rather than flush to one end.
-        const lead = (total - teeth * width) / 2;
-
-        /** A point `along` the route, `off` metres to the tooth side of it. */
-        const at = (along: number, off: number): Coordinate | null => {
-            const p = walkPath(path, Math.min(Math.max(along, 0), total));
-            if (!p) return null;
-            const [tx, ty] = p.tangent;
-            return [p.point[0] - ty * off, p.point[1] + tx * off];
-        };
-
-        for (let i = 0; i < teeth; i++) {
-            const a = at(lead + i * width, 0);
-            const b = at(lead + (i + 1) * width, 0);
-            const apex = at(lead + (i + 0.5) * width, -depth);
-            if (!a || !b || !apex) continue;
-            const ring = [a, b, apex, a];
-            styles.push(
-                new Style({
-                    geometry: filled ? new Polygon([ring]) : new LineString(ring),
-                    // A filled tooth is *not* also stroked. A stroke straddles the edge it
-                    // draws, so it inflates the shape by half a line width all round, and
-                    // two teeth sharing a base corner then overlap by a full stroke instead
-                    // of just meeting. The fill already states the shape exactly.
-                    stroke: filled ? undefined : stroke(),
-                    fill: filled ? new Fill({color}) : undefined,
-                }),
-            );
-        }
-
-        if (!mines) return styles;
-
-        // The notch two touching teeth leave is an upward triangle: apex on the route where
-        // their bases meet, widening to a full tooth at the apex depth. So the mine's size
-        // is bounded, not chosen - a disc centred `mineDepth` down touches both edges at
-        // `mineDepth * sin(halfAngle)`. MINE_CLEARANCE holds it well inside that, because a
-        // disc drawn to the limit meets the teeth either side and the three merge into one
-        // black mass with the teeth being filled.
-        const halfAngleSin = width / 2 / Math.hypot(width / 2, depth);
-        const mineDepth = depth * 0.72;
-        const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
-
-        for (let i = 1; i < teeth; i++) {
-            const centre = at(lead + i * width, -mineDepth);
-            if (!centre) continue;
-            const ring: Coordinate[] = [];
-            for (let d = 0; d <= 360; d += 20) {
-                const t = (d * Math.PI) / 180;
-                ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
-            }
-            // Mines are mines, not outlines of one - always solid, whatever the teeth do,
-            // and unstroked for the same reason the filled teeth are: an outline would eat
-            // into the white gap that keeps the disc legible against the teeth beside it.
-            styles.push(new Style({geometry: new Polygon([ring]), fill: new Fill({color})}));
-        }
-
-        return styles;
-    };
+    return asStyleFunction(antiTankDitchPaint(name), name);
 }
 
 export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
@@ -3906,132 +3706,15 @@ export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
     };
 }
 
+/** **Ported.** @see obstaclePaints.ts, `wireObstaclePaint`. */
 export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!geom) return [];
-        const path: Coordinate[] =
-            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
-        if (path.length < 2) return [];
-
-        const style = WIRE_STYLES[name] ?? DEFAULT_WIRE_STYLE;
-        const color = readHostilityColor(f);
-        // No lineDash: none of the nine has a planned form, so there is no status to read.
-        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [];
-
-        const scale = decorationScale(path, false, resolution, WIRE_MARK_PX * style.height);
-        const width = WIRE_MARK_PX * scale * resolution;
-        const height = width * style.height;
-        // Where each wire sits relative to the marks. Low wire fence and single concertina
-        // hang one underneath so the marks sit on it; high wire fence and triple strand add
-        // a second on top; double strand puts its second one straight through the middle,
-        // striking the O through. Everything else runs a single wire through the centre.
-        const railOffset = {under: -height / 2, centre: 0, over: height / 2};
-
-        // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
-        // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
-        // the user cannot find what they drew.
-        if (style.rail || width <= 0) {
-            for (const at of style.railsAt ?? ['centre'])
-                styles.push(new Style({geometry: new LineString(parallelPath(path, railOffset[at])), stroke: stroke()}));
-        }
-        if (width <= 0) return styles;
-
-        const total = pathLength(path);
-        const innerGap = (style.innerGap ?? 0) * width;
-        const step = width + innerGap;
-        const period = style.perGroup * width + (style.perGroup - 1) * innerGap + style.gap * width;
-        const marks: Coordinate[][] = [];
-        for (let start = period / 2; start < total; start += period) {
-            for (let i = 0; i < style.perGroup; i++) {
-                const d = start + i * step;
-                if (d + width / 2 > total) break;
-                const at = walkPath(path, d);
-                if (!at) continue;
-                const [tx, ty] = at.tangent;
-                const [nx, ny] = [-ty, tx];
-                const corner = (u: number, v: number): Coordinate => [
-                    at.point[0] + tx * u + nx * v,
-                    at.point[1] + ty * u + ny * v,
-                ];
-                if (style.mark === 'cross') {
-                    marks.push([corner(-width / 2, height / 2), corner(width / 2, -height / 2)]);
-                    marks.push([corner(-width / 2, -height / 2), corner(width / 2, height / 2)]);
-                } else {
-                    // The concertina O, closed: 360 lands back on 0 so the ring joins up.
-                    const ring: Coordinate[] = [];
-                    for (let a = 0; a <= 360; a += 20) {
-                        const t = (a * Math.PI) / 180;
-                        ring.push(corner((Math.cos(t) * width) / 2, (Math.sin(t) * height) / 2));
-                    }
-                    marks.push(ring);
-                }
-            }
-        }
-        if (marks.length) styles.push(new Style({geometry: new MultiLineString(marks), stroke: stroke()}));
-        return styles;
-    };
+    return asStyleFunction(wireObstaclePaint(name), name);
 }
 
-
-/**
- * A true parallel of `path`, `d` metres to its left (negative for its right).
- *
- * Offsets each vertex along the *bisector* of its two segments, lengthened by
- * `1 / cos(half-angle)` - the standard miter. The shared `offsetPath` takes the direction
- * at the vertex instead, which is one of the two adjoining segments, so on a bend its two
- * sides stop being parallel: the under-wire and over-wire of a high wire fence visibly
- * splayed. That function is left alone because the FLOT and line-of-contact scallops are
- * built on its behaviour.
- *
- * The miter is capped: at a hairpin `1 / cos(half-angle)` runs away to infinity, and an
- * uncapped spike is worse than a slightly pinched corner.
- */
-function parallelPath(path: Coordinate[], d: number): Coordinate[] {
-    if (!d || path.length < 2) return path;
-
-    const normals: Coordinate[] = [];
-    for (let i = 0; i + 1 < path.length; i++) {
-        const [dx, dy] = [path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]];
-        const len = Math.hypot(dx, dy) || 1;
-        normals.push([-dy / len, dx / len]);
-    }
-
-    return path.map((p, i) => {
-        const a = normals[Math.max(i - 1, 0)];
-        const b = normals[Math.min(i, normals.length - 1)];
-        const [mx, my] = [a[0] + b[0], a[1] + b[1]];
-        const m = Math.hypot(mx, my);
-        // Doubling back on itself: no bisector to speak of, so take the segment normal.
-        if (m < 1e-9) return [p[0] + a[0] * d, p[1] + a[1] * d] as Coordinate;
-        // |a| = |b| = 1, so |a + b| = 2 cos(half-angle) and the miter factor is 2 / |a + b|.
-        const miter = Math.min(2 / m, MAX_MITER);
-        return [p[0] + (mx / m) * d * miter, p[1] + (my / m) * d * miter] as Coordinate;
-    });
-}
 
 /** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
 const MAX_MITER = 4;
 
-/** The point `dist` metres along `path`, with the unit tangent there. */
-function walkPath(path: Coordinate[], dist: number): {point: Coordinate; tangent: [number, number]} | null {
-    let acc = 0;
-    for (let i = 0; i + 1 < path.length; i++) {
-        const [a, b] = [path[i], path[i + 1]];
-        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (seg === 0) continue;
-        if (acc + seg >= dist) {
-            const t = (dist - acc) / seg;
-            return {
-                point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
-                tangent: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg],
-            };
-        }
-        acc += seg;
-    }
-    return null;
-}
 
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
     return (f, resolution) => directionArrowStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
