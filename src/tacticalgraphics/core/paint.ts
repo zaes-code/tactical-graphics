@@ -69,6 +69,25 @@ export type ProjectedGeometry =
     | {type: 'Polygon'; coordinates: ProjectedPosition[][]}
     | {type: 'MultiPolygon'; coordinates: ProjectedPosition[][][]};
 
+/**
+ * What a paint function is *given*: any {@link ProjectedGeometry}, or a
+ * collection of them.
+ *
+ * Deliberately wider than {@link ProjectedGeometry}, which is what a paint
+ * function *returns*. Several generators emit a `GeometryCollection` — the arc
+ * mission tasks pack their arcs, arrowheads and (for AreaDefense) solid teeth into
+ * one — but a **mark** is a single stroke, fill, letter or dot, so no mark ever
+ * needs one. A paint function decomposes the collection on the way through, which
+ * is also where it decides that the line work strokes and the rings fill.
+ *
+ * Keeping the two types apart means every renderer's mark converter handles six
+ * cases rather than seven, and none of them has to answer "what does it mean to
+ * stroke a collection?".
+ */
+export type ProjectedInputGeometry =
+    | ProjectedGeometry
+    | {type: 'GeometryCollection'; geometries: ProjectedGeometry[]};
+
 /** Any CSS colour string. Resolved from the config before it reaches a paint list. */
 export type PaintColor = string;
 
@@ -184,8 +203,8 @@ export interface PaintContext {
  * reproduce a size it did not compute.
  */
 export interface PaintFeature {
-    /** The realised geometry, in projected metres. */
-    geometry: ProjectedGeometry;
+    /** The realised geometry, in projected metres. May be a collection. */
+    geometry: ProjectedInputGeometry;
 
     /**
      * The amplifier bag — `properties.tacticalGraphic`. The portable schema, the
@@ -215,6 +234,21 @@ export interface PaintFeature {
 
     /** Where a point-anchored graphic's label sits, in projected metres. */
     graphicLabelPoint?: ProjectedPosition;
+
+    /**
+     * An already-resolved line colour, overriding the affiliation's.
+     *
+     * A *colour*, not an affiliation — so it is a cache that can go stale, and a
+     * host that changes its palette has to re-derive it rather than compare the
+     * string. Present because several host paths (a properties dialog, a bulk
+     * import, a theme switch) resolve a colour once and stamp it, and dropping it
+     * would silently re-colour every such feature.
+     *
+     * Absent is the normal case: the paint function asks
+     * `getColorByHostility(properties.hostility)` and gets the doctrinal answer,
+     * or the host's override of it.
+     */
+    hostilityColor?: string;
 }
 
 /**
@@ -233,6 +267,41 @@ export type PaintFunction = (feature: PaintFeature, context: PaintContext) => Pa
  * Mirrors `HANDLE_Z_INDEX` in the OpenLayers layer, which predates this file.
  */
 export const HANDLE_Z_INDEX = 1000;
+
+/** The member geometries of an input geometry — itself, if it is not a collection. */
+export function paintGeometryMembers(geometry: ProjectedInputGeometry): ProjectedGeometry[] {
+    return geometry.type === 'GeometryCollection' ? geometry.geometries : [geometry];
+}
+
+/**
+ * Every line in an input geometry, flattened, in order.
+ *
+ * The shape almost every ported style function starts from: the generators emit
+ * their line work as a `MultiLineString`, sometimes inside a collection, and a
+ * style function then indexes into the sub-lines (`[0]` and `[1]` are the two arcs
+ * of a mission-task circle, everything after is arrowheads and teeth).
+ *
+ * Returns **copies**, because callers mutate them — cutting an arc back to clear a
+ * label is done in place.
+ */
+export function paintLineWork(geometry: ProjectedInputGeometry): ProjectedPosition[][] {
+    const lines: ProjectedPosition[][] = [];
+    for (const member of paintGeometryMembers(geometry)) {
+        if (member.type === 'LineString') lines.push([...member.coordinates]);
+        else if (member.type === 'MultiLineString') for (const line of member.coordinates) lines.push([...line]);
+    }
+    return lines;
+}
+
+/** Every filled ring in an input geometry — AreaDefense's solid teeth, and nothing else today. */
+export function paintFilledRings(geometry: ProjectedInputGeometry): ProjectedPosition[][][] {
+    const rings: ProjectedPosition[][][] = [];
+    for (const member of paintGeometryMembers(geometry)) {
+        if (member.type === 'Polygon') rings.push(member.coordinates);
+        else if (member.type === 'MultiPolygon') for (const poly of member.coordinates) rings.push(poly);
+    }
+    return rings;
+}
 
 /** Every position in a geometry, in order. Used by bounds and conversion walks. */
 export function paintGeometryPositions(geometry: ProjectedGeometry): ProjectedPosition[] {
