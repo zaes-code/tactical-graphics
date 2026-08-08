@@ -7,6 +7,7 @@ import {
     type PaintContext,
     type PaintFeature,
     type ProjectedGeometry,
+    type ProjectedInputGeometry,
     type ProjectedPosition,
     type TacticalGraphicName,
     type TacticalGraphicProperties,
@@ -42,14 +43,45 @@ import {toMercator} from './projection';
  * first element is a number", which is exactly a `Position`.
  */
 function projectCoordinates(coordinates: unknown): unknown {
-    const array = coordinates as unknown[];
-    if (typeof array[0] === 'number') return toMercator(coordinates as [number, number]);
-    return array.map(projectCoordinates);
+    // Guarded, not assumed: a generator handed a degenerate base (an empty
+    // LineString, most often a draw that was cancelled on its first click) can
+    // return a geometry whose `coordinates` is absent, and indexing that threw a
+    // TypeError straight out of the render loop. Returning an empty list lets the
+    // caller draw nothing, which is what a half-finished graphic should do.
+    if (!Array.isArray(coordinates)) return [];
+    if (typeof coordinates[0] === 'number') return toMercator(coordinates as [number, number]);
+    return coordinates.map(projectCoordinates);
 }
 
-/** A GeoJSON geometry in lon/lat → the same shape in projected metres. */
-export function projectGeometry(geometry: GeoJSONFeature['geometry']): ProjectedGeometry | undefined {
-    if (!geometry || geometry.type === 'GeometryCollection') return undefined;
+/**
+ * A GeoJSON geometry in lon/lat → the same shape in projected metres.
+ *
+ * **`GeometryCollection` has to be handled, not skipped.** Several mission-task
+ * generators pack their arcs, arrowheads and solid teeth into one — `AreaDefense`,
+ * `CordonAndSearch`, `Isolate` and `Retain` all do — and returning `undefined`
+ * meant `buildTacticalGraphic` refused them outright, so they were registered as
+ * paintable and never drew a thing.
+ *
+ * This is the exact mirror of the bug `fromOlGeometry` had on the OpenLayers side.
+ * There, the existing test suite caught it within the hour; here there was no
+ * coverage, and it took the sample sweep listing four graphics it could not build.
+ * Two renderers, one class of bug, found two very different ways — which is the
+ * argument for the sweep existing at all.
+ */
+export function projectGeometry(geometry: GeoJSONFeature['geometry']): ProjectedInputGeometry | undefined {
+    if (!geometry) return undefined;
+
+    if (geometry.type === 'GeometryCollection') {
+        return {
+            type: 'GeometryCollection',
+            geometries: geometry.geometries
+                .map(projectGeometry)
+                // Nested collections are dropped: no generator emits one, and a mark
+                // cannot hold a collection anyway.
+                .filter((g): g is ProjectedGeometry => !!g && g.type !== 'GeometryCollection'),
+        };
+    }
+
     return {
         type: geometry.type,
         coordinates: projectCoordinates(geometry.coordinates),

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import '../styles/map.css';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibreMap from './maplibre/MapLibre';
@@ -6,9 +6,13 @@ import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typog
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
+import MapControls from './MapControls';
+import {InteractionType} from './openlayers/TacticalGraphicsManager';
+import type {MapEngineHandle} from './mapEngine';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
+    TacticalGraphicName,
     TacticalGraphicsConfig,
     TacticalGraphicsConfigOptions,
     setTacticalGraphicsConfig,
@@ -111,6 +115,27 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
+
+    /**
+     * The live map's handle, and its capabilities mirrored into state.
+     *
+     * The handle itself is a ref because the panel's callbacks read it at click
+     * time and nothing should re-render when it changes. The capabilities *are*
+     * state, because the panel's enabled/disabled appearance depends on them and
+     * has to repaint when the engine is swapped.
+     */
+    const engineRef = useRef<MapEngineHandle | null>(null);
+    const [capabilities, setCapabilities] = useState<MapEngineHandle['capabilities'] | null>(null);
+    const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
+    const [selectedShape, setSelectedShape] = useState<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
+
+    const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
+        engineRef.current = handle;
+        setCapabilities(handle?.capabilities ?? null);
+        // A view that cannot edit must not leave the panel showing a stale mode from
+        // the engine that could.
+        if (!handle?.capabilities.edit) setInteractionMode(InteractionType.view);
+    }, []);
     const [settings, setSettings] = useState<TacticalGraphicsConfigOptions>(() => {
         // Applied here as well as in the effect below so the very first render already
         // has the right config — the effect does not run until after it.
@@ -239,8 +264,46 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {engine === 'openlayers'
-                    ? <OpenLayersMap key="openlayers" darkMode={darkMode} graphicsSettings={settings}/>
-                    : <MapLibreMap key="maplibre" darkMode={darkMode} graphicsSettings={settings}/>}
+                    ? <OpenLayersMap
+                        key="openlayers"
+                        darkMode={darkMode}
+                        graphicsSettings={settings}
+                        onReady={handleEngineReady}
+                        onInteractionModeChange={setInteractionMode}
+                    />
+                    : <MapLibreMap
+                        key="maplibre"
+                        darkMode={darkMode}
+                        graphicsSettings={settings}
+                        onReady={handleEngineReady}
+                    />}
+
+                {/*
+                  * One panel, either engine. It used to live inside `OpenLayers.tsx`,
+                  * which is why the MapLibre view had none at all — and why the two
+                  * views could not be compared with the same controls in front of them.
+                  * Everything it calls goes through `MapEngineHandle`; what an engine
+                  * cannot do it declares, and the panel greys rather than hides.
+                  */}
+                {capabilities && (
+                    <MapControls
+                        capabilities={capabilities}
+                        onDrawTacticalGraphics={() => engineRef.current?.startDrawing(selectedShape)}
+                        onToggleInteraction={mode => engineRef.current?.setInteractionMode(mode)}
+                        onShapeChange={setSelectedShape}
+                        onReset={() => engineRef.current?.reset()}
+                        onDrawSamples={hostility => engineRef.current?.drawSamples(hostility)}
+                        onClearAll={() => engineRef.current?.clearAll()}
+                        onExportGeoJson={() => engineRef.current?.exportGeoJson()}
+                        onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
+                        interactionMode={interactionMode}
+                        isRotating={interactionMode === InteractionType.rotate}
+                        isResizing={interactionMode === InteractionType.resize}
+                        isRepositioning={interactionMode === InteractionType.translate}
+                        isModifying={interactionMode === InteractionType.modify}
+                        defaultShape={selectedShape}
+                    />
+                )}
             </Box>
 
             <SettingsModal

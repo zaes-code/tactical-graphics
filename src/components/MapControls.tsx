@@ -38,6 +38,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
+import type {MapEngineCapabilities} from './mapEngine';
 import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 
@@ -59,6 +60,16 @@ interface Props {
     isRepositioning: boolean;
     defaultShape: TacticalGraphicName;
     onToggleInteraction(mode: InteractionType): void;
+    /**
+     * What the live engine can actually do.
+     *
+     * The panel **greys** what an engine does not support and puts the reason on the
+     * tooltip, rather than hiding it. A missing control reads as a different app; a
+     * live control that silently does nothing is worse still. A disabled one with
+     * "MapLibre has no draw interaction yet" is the honest version, and it makes the
+     * state of the port visible from the UI. @see mapEngine.ts
+     */
+    capabilities: MapEngineCapabilities;
 }
 
 interface GraphicOption {
@@ -143,6 +154,7 @@ const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
     });
 
 const MapControls: React.FC<Props> = ({
+    capabilities,
     onDrawTacticalGraphics,
     onShapeChange,
     onReset,
@@ -472,11 +484,19 @@ const MapControls: React.FC<Props> = ({
                     </Typography>
                 )}
 
-                {/* Draw button */}
+                {/* Draw button — disabled outright on an engine with no draw interaction. */}
+                {/*
+                  * The `span` is required, not decorative: MUI's Tooltip listens to its
+                  * child's events, and a disabled button fires none — so without a
+                  * wrapper the tooltip explaining *why* it is disabled never appears,
+                  * which is the one case it exists for.
+                  */}
+                <Tooltip title={capabilities.draw ? '' : capabilities.unsupportedReason ?? ''} placement="top">
+                <Box component="span" sx={{display: 'block', width: '100%'}}>
                 <Box
                     component="button"
                     onClick={onDrawTacticalGraphics}
-                    disabled={!selected}
+                    disabled={!selected || !capabilities.draw}
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -487,7 +507,7 @@ const MapControls: React.FC<Props> = ({
                         px: 1.5,
                         border: 'none',
                         borderRadius: 1,
-                        cursor: selected ? 'pointer' : 'not-allowed',
+                        cursor: selected && capabilities.draw ? 'pointer' : 'not-allowed',
                         backgroundColor: isDrawing ? 'transparent' : 'primary.dark',
                         color: isDrawing ? 'primary.main' : '#ffffff',
                         fontSize: '0.8rem',
@@ -507,6 +527,8 @@ const MapControls: React.FC<Props> = ({
                     <AddCircleOutlineIcon sx={{fontSize: 16}}/>
                     {isDrawing ? 'Drawing… (click to place points)' : 'Add Graphic'}
                 </Box>
+                </Box>
+                </Tooltip>
 
                 <Divider/>
 
@@ -527,24 +549,25 @@ const MapControls: React.FC<Props> = ({
                         value={activeEditMode}
                         onChange={handleEditMode}
                         size="small"
+                        disabled={!capabilities.edit}
                         sx={{width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)'}}
                     >
-                        <Tooltip title="Rotate">
+                        <Tooltip title={capabilities.edit ? 'Rotate' : capabilities.unsupportedReason ?? ''}>
                             <ToggleButton value="rotate" sx={{py: 0.75}}>
                                 <RotateLeftIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
                         </Tooltip>
-                        <Tooltip title="Resize">
+                        <Tooltip title={capabilities.edit ? 'Resize' : capabilities.unsupportedReason ?? ''}>
                             <ToggleButton value="resize" sx={{py: 0.75}}>
                                 <ZoomOutMapIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
                         </Tooltip>
-                        <Tooltip title="Drag / Reposition">
+                        <Tooltip title={capabilities.edit ? 'Drag / Reposition' : capabilities.unsupportedReason ?? ''}>
                             <ToggleButton value="translate" sx={{py: 0.75}}>
                                 <OpenWithIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
                         </Tooltip>
-                        <Tooltip title="Edit">
+                        <Tooltip title={capabilities.edit ? 'Edit' : capabilities.unsupportedReason ?? ''}>
                             <ToggleButton value="modify" sx={{py: 0.75}}>
                                 <EditIcon sx={{fontSize: 16}}/>
                             </ToggleButton>
