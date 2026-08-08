@@ -36,6 +36,19 @@ import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} fro
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {
+    attackHelicopterAxisLabelPaint,
+    aviationAxisLabelPaint,
+    axisOfAdvanceLabelPaint,
+    counterattackLabelPaint,
+    envelopmentLabelPaint,
+    frontalAttackLabelPaint,
+    infiltrationLabelPaint,
+    mobileDefenseLabelPaint,
+    movementGraphicPaint,
+    movementLabelPaint,
+    turningMovementLabelPaint,
+} from './movementPaints';
+import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
     groupOrSeriesOfTargetsLabelPaint,
@@ -352,6 +365,56 @@ const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RearwardPassageOfLines,
 ];
 
+/**
+ * The movement and manoeuvre family. Each draws plain line work and an amplifier
+ * chosen per graphic — the table mirrors what `LineGraphicBase`'s movement switch
+ * used to do inline.
+ */
+const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AttackHelicopterAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.AviationAxisOfAdvance,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.Counterattack,
+    TacticalGraphicName.InfiltrationLane,
+    TacticalGraphicName.Bridge,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.AssaultCrossing,
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+    TacticalGraphicName.FrontalAttack,
+    TacticalGraphicName.TurningMovement,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.MobileDefense,
+    TacticalGraphicName.Infiltration,
+];
+
+/** The four that share the axis-of-advance label layout. */
+const AXIS_OF_ADVANCE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.InfiltrationLane,
+];
+
+/** Members whose amplifier is a fixed letter or a bespoke line. */
+const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => ReturnType<typeof movementLabelPaint>>> = {
+    [TacticalGraphicName.Infiltration]: infiltrationLabelPaint,
+    [TacticalGraphicName.Envelopment]: envelopmentLabelPaint,
+    [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
+    [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
+    [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
+    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+};
+
+function movementLabelFor(name: TacticalGraphicName) {
+    if (AXIS_OF_ADVANCE_GRAPHICS.includes(name)) return axisOfAdvanceLabelPaint(name);
+    return (MOVEMENT_LABEL_PAINTS[name] ?? movementLabelPaint)();
+}
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -421,6 +484,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     for (const name of ROUTE_GRAPHICS) {
         registry[name] = {graphic: routeControlMeasurePaint(name)};
+    }
+
+    for (const name of MOVEMENT_GRAPHICS) {
+        registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
