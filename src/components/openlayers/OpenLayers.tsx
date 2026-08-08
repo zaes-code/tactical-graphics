@@ -2,8 +2,9 @@ import React, {useEffect, useRef, useState} from 'react';
 import 'ol/ol.css';
 import '../../styles/map.css';
 
+// MapControls is no longer rendered here — it moved up to `MapRendering` so one
+// panel can drive either engine. @see components/mapEngine.ts
 import {createMap, getColorByHostility} from './openlayerStyles';
-import MapControls from '../MapControls';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
@@ -19,6 +20,8 @@ import ms from 'milsymbol';
 import {isEmpty} from '../../utils/isEmpty';
 import type {FeatureCollection} from 'geojson';
 import {SPIKE_SAMPLES} from '../spikeSamples';
+import type {MapEngineHandle} from '../mapEngine';
+import {FULL_CAPABILITIES} from '../mapEngine';
 
 // The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
 // Screen the way any consumer would — by handing over the milsymbol it already
@@ -32,9 +35,13 @@ interface Props {
     darkMode: boolean;
     /** The user's config overrides. Used as an invalidation trigger, not read directly. */
     graphicsSettings: TacticalGraphicsConfigOptions;
+    /** Hands the controls panel something to drive. @see mapEngine.ts */
+    onReady(handle: MapEngineHandle | null): void;
+    /** Mirrored up so the shared panel can show the current edit mode. */
+    onInteractionModeChange(mode: InteractionType): void;
 }
 
-const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
+const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
@@ -45,7 +52,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
     useEffect(() => {
         modeRef.current = interactionMode;
         tacticalGraphicManager.current?.setInteractionMode(interactionMode);
-    }, [interactionMode]);
+        onInteractionModeChange(interactionMode);
+    }, [interactionMode, onInteractionModeChange]);
 
     useEffect(() => {
         if (!mapRef.current) return;
@@ -78,7 +86,63 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
             };
         }
 
+        onReady({
+            capabilities: FULL_CAPABILITIES,
+            startDrawing: name => {
+                selectedShape.current = name;
+                setInteractionMode(InteractionType.drawing);
+                tacticalGraphicManager.current?.startDrawing(name);
+            },
+            setInteractionMode,
+            reset: () => {
+                tacticalGraphicManager.current?.renderingVectorSource.clear();
+                setInteractionMode(InteractionType.view);
+            },
+            drawSamples: hostility => {
+                const mgr = tacticalGraphicManager.current;
+                if (!mgr) return;
+                setInteractionMode(InteractionType.view);
+                const {drawn, failed} = drawProvenSamples(mgr, hostility);
+                // eslint-disable-next-line no-console
+                if (failed.length) console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
+            },
+            clearAll: () => {
+                const mgr = tacticalGraphicManager.current;
+                if (!mgr) return;
+                clearAllGraphics(mgr);
+                setInteractionMode(InteractionType.view);
+            },
+            exportGeoJson: () => {
+                const mgr = tacticalGraphicManager.current;
+                if (!mgr) return;
+                const snapshot = serializeTacticalGraphics(mgr);
+                const blob = new Blob([JSON.stringify(snapshot, null, 2)], {type: 'application/geo+json'});
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = 'tactical-graphics.geojson';
+                anchor.click();
+                URL.revokeObjectURL(url);
+            },
+            importGeoJson: async file => {
+                const mgr = tacticalGraphicManager.current;
+                if (!mgr) return;
+                setInteractionMode(InteractionType.view);
+                try {
+                    const snapshot = JSON.parse(await file.text());
+                    clearAllGraphics(mgr);
+                    const {restored, failed} = restoreTacticalGraphics(mgr, snapshot);
+                    // eslint-disable-next-line no-console
+                    if (failed.length) console.warn(`Import: ${restored} restored, ${failed.length} failed.`, failed);
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error('Import failed — not readable as a tactical graphics GeoJSON.', e);
+                }
+            },
+        });
+
         return () => {
+            onReady(null);
             olMap.setTarget(undefined);
             // Delete the hook, don't just drop the map. Until the engine picker existed
             // this component never unmounted, so a stale `__tacticalGraphics` was
@@ -223,23 +287,6 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
             {map && tacticalGraphicManager.current && (
                 <TacticalGraphicsDialog map={map} tacticalGraphicsManager={tacticalGraphicManager.current}/>
             )}
-
-            <MapControls
-                onDrawTacticalGraphics={handleDrawTacticalGraphic}
-                onToggleInteraction={setInteractionMode}
-                onShapeChange={setSelectedShape}
-                onReset={resetMap}
-                onDrawSamples={drawSamples}
-                onClearAll={clearAll}
-                onExportGeoJson={exportGeoJson}
-                onImportGeoJson={importGeoJson}
-                interactionMode={interactionMode}
-                isRotating={modeRef.current === InteractionType.rotate}
-                isResizing={modeRef.current === InteractionType.resize}
-                isRepositioning={modeRef.current === InteractionType.translate}
-                isModifying={modeRef.current === InteractionType.modify}
-                defaultShape={selectedShape.current}
-            />
         </>
     );
 };
