@@ -7,11 +7,15 @@ import '../../styles/maplibre.css';
 // v4/v5 shipped. `import maplibregl from 'maplibre-gl'` typechecks under
 // `allowSyntheticDefaultImports` and then fails at bundle time with
 // "export 'default' was not found" — a mismatch tsc cannot see.
-import {AttributionControl, Map as MapLibreMap, ScaleControl} from 'maplibre-gl';
+import {AttributionControl, Map as MapLibreMap, ScaleControl, setWorkerUrl} from 'maplibre-gl';
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
 import {createBasemapStyle} from './basemapStyle';
 import {resolutionOf} from './projection';
+import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
+import {NativeLayerRenderer} from './native/NativeLayerRenderer';
+import {SPIKE_SAMPLES} from '../spikeSamples';
+import {drawSpikeSamples} from './spikeDriver';
 
 /**
  * The MapLibre half of the demo's engine picker.
@@ -39,6 +43,41 @@ interface Props {
  */
 const START_CENTER: [number, number] = [0, 0];
 const START_ZOOM = 3;
+
+/**
+ * Which of the two spike paths draws the graphics.
+ *
+ * - `canvas` — path A, a 2D overlay synced to the camera. Style functions port
+ *   1:1; MapLibre draws only the basemap.
+ * - `native` — path B, geometry realised into GeoJSON sources and drawn by
+ *   MapLibre's own layers. Real MapLibre rendering, at the cost of re-realising
+ *   geometry on every zoom change.
+ *
+ * A runtime switch rather than a build flag so one capture run can compare the
+ * two against each other and against OpenLayers. `?mlb=native` selects path B.
+ */
+export type SpikeRenderMode = 'canvas' | 'native';
+
+/**
+ * Point MapLibre at the worker bundle the app serves.
+ *
+ * **Required, and its absence is silent.** maplibre-gl v6 finds its own worker by
+ * reading `import.meta.url`, which is not an `http(s):` URL once CRA has bundled
+ * it — so MapLibre falls back to the empty string and `new Worker('')` spawns a
+ * worker pointing at the document. It starts, never errors, and answers nothing.
+ * The map looks fine (raster tiles decode on the main thread) while every GeoJSON
+ * source sits at `isSourceLoaded() === false` forever and every vector layer
+ * renders empty.
+ *
+ * Module scope, not an effect: it is global state, idempotent, and has to be set
+ * before the first `Map` is constructed.
+ *
+ * @see scripts/copy-maplibre-worker.js — which puts the file in `public/`
+ */
+setWorkerUrl(`${process.env.PUBLIC_URL ?? ''}/maplibre-gl-worker.mjs`);
+
+const INITIAL_MODE: SpikeRenderMode =
+    new URLSearchParams(window.location.search).get('mlb') === 'native' ? 'native' : 'canvas';
 
 const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -72,7 +111,33 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
         map.keyboard.disableRotation();
 
         mapRef.current = map;
-        map.on('load', () => setReady(true));
+
+        // Both spike paths are built, and which one draws is a runtime switch, so a
+        // single capture run can compare them against each other and against
+        // OpenLayers without rebuilding. `renderer` is whichever is live.
+        let canvas: CanvasOverlayRenderer | null = null;
+        let native: NativeLayerRenderer | null = null;
+        let mode: SpikeRenderMode = INITIAL_MODE;
+
+        const renderer = () => (mode === 'native' ? native : canvas);
+
+        const load = (snapshot = SPIKE_SAMPLES) => {
+            const target = renderer();
+            if (!target) return {drawn: 0, skipped: ['no renderer']};
+            target.clear();
+            // The spike's three graphics, from the shared fixture. Both engines are
+            // handed the same GeoJSON, so any difference between the two pictures is a
+            // renderer difference and there is no third input to blame.
+            return drawSpikeSamples(snapshot, g => target.add(g), resolutionOf(map));
+        };
+
+        map.on('load', () => {
+            canvas = new CanvasOverlayRenderer(map);
+            native = new NativeLayerRenderer(map);
+            // Only one draws at a time; the idle one simply holds no graphics.
+            load();
+            setReady(true);
+        });
 
         // Test hook for the driving scripts, mirroring the one OpenLayers.tsx
         // installs. Stripped from production builds; nothing in the app may read it.
@@ -80,10 +145,22 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => 
             (window as unknown as Record<string, unknown>).__tacticalGraphicsMapLibre = {
                 map,
                 resolutionOf: () => resolutionOf(map),
+                get overlay() { return canvas; },
+                get native() { return native; },
+                get mode() { return mode; },
+                setMode: (next: SpikeRenderMode) => {
+                    canvas?.clear();
+                    native?.clear();
+                    mode = next;
+                    return load();
+                },
+                drawSpikeSamples: (snapshot = SPIKE_SAMPLES) => load(snapshot),
             };
         }
 
         return () => {
+            canvas?.destroy();
+            native?.destroy();
             map.remove();
             mapRef.current = null;
             if (process.env.NODE_ENV !== 'production') {

@@ -202,3 +202,11 @@ export type {
     StrokeSpec,
     TextSpec,
 } from './core/paint';
+
+/**
+ * ## Symbology — paint functions
+ *
+ * The renderer-agnostic style layer. Three of 69 style functions are ported so far;
+ * `isPaintable` is how a renderer asks whether a graphic has one yet. @see ai/maplibre-renderer.md
+ */
+export * from './symbology';
