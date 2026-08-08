@@ -238,3 +238,41 @@ export function encirclementPaint(): AreaPaint {
         return paints;
     };
 }
+
+/**
+ * The four circular areas that dash and hatch when planned: free fire, restrictive
+ * fire, position area for artillery, and the circular airspace-coordination area.
+ *
+ * The hatch is the *hostility* colour rather than the line colour, so an unknown
+ * or pending area still washes in its own tint — the same choice
+ * {@link limitedAccessAreaPaint} makes, and the reason both take it from
+ * `hostilityOf` rather than reusing the stroke.
+ */
+export function freeFireAreaCircularPaint(): AreaPaint {
+    return feature => {
+        const isPlanned = feature.properties.status === TacticalGraphicStatus.planned;
+        const color = lineColorOf(feature);
+        return [{
+            geometry: strokeableGeometry(feature),
+            fill: isPlanned
+                ? {color: withOpacity(getColorByHostility(hostilityOf(feature)), 0.25), pattern: hatch(getColorByHostility(hostilityOf(feature)), 8, 1)}
+                : undefined,
+            stroke: {color, widthPx: LINE_WIDTH(), dashPx: isPlanned ? PLANNED_DASH_PX : undefined},
+        }];
+    };
+}
+
+/**
+ * A bare outline in the affiliation's colour — **no planned dash**.
+ *
+ * What a holder that installs no style of its own gets, which is most of the
+ * circular areas. Distinct from {@link areaOutlinePaint} precisely in the dash:
+ * these graphics never took one, and adding it here would be a silent change to
+ * thirteen symbols rather than a port.
+ */
+export function plainOutlinePaint(): AreaPaint {
+    return feature => [{
+        geometry: strokeableGeometry(feature),
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+    }];
+}

@@ -245,9 +245,11 @@ export type {DefaultLineOptions} from './symbology/paintFunctions';
 export {
     encirclementPaint,
     fortifiedAreaPaint,
+    freeFireAreaCircularPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
     obstacleAreaPaint,
+    plainOutlinePaint,
 } from './symbology/areaPaints';
 export {
     areaDateLabel,
@@ -267,5 +269,8 @@ export {retrogradeTaskPaint} from './symbology/retrogradePaints';
 export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
 export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
 export {CROSSED_HALF_WIDTH_PX, barSymbolPaint, crossedMissionTaskLabelPaint, crossedMissionTaskLabelScale, crossedMissionTaskPaint} from './symbology/missionTaskPaints';
+export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
+export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
+export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

@@ -460,3 +460,154 @@ export function walkPath(path: ProjectedPosition[], dist: number): {point: Proje
     }
     return null;
 }
+
+/**
+ * The segment of a path that crosses the shape's **projected** midpoint.
+ *
+ * Each vertex is projected onto the straight line from the first to the last, so
+ * "middle" is measured along the graphic's own axis rather than along its drawn
+ * path. A line that doubles back would otherwise put its label at the midpoint of
+ * the *path*, which is not where the eye reads the middle of the symbol.
+ *
+ * Returns the segment's index and the fraction `t` along it — enough to
+ * interpolate the point, cut a gap, or split the path in two.
+ */
+export function projectedMidSegment(coords: ProjectedPosition[]): {index: number; t: number} {
+    const start = coords[0];
+    const end = coords[coords.length - 1];
+    const baseDx = end[0] - start[0];
+    const baseDy = end[1] - start[1];
+    const baseLen = Math.hypot(baseDx, baseDy);
+    if (baseLen === 0) return {index: 0, t: 0.5};
+
+    const projected = coords.map(([x, y]) => ((x - start[0]) * baseDx + (y - start[1]) * baseDy) / baseLen);
+    const min = Math.min(...projected);
+    const max = Math.max(...projected);
+    const span = max - min;
+    const normalised = projected.map(d => (span === 0 ? 0 : (d - min) / span));
+
+    let index = 0;
+    for (let i = 0; i < normalised.length - 1; i++) {
+        if (normalised[i] <= 0.5 && normalised[i + 1] >= 0.5) {
+            index = i;
+            break;
+        }
+    }
+    const denom = normalised[index + 1] - normalised[index];
+    return {index, t: denom === 0 ? 0.5 : (0.5 - normalised[index]) / denom};
+}
+
+/** Scallop dimensions, in screen pixels before {@link decorationScale}. */
+export const WAVE_WAVELENGTH_PX = 15;
+export const WAVE_AMPLITUDE_PX = 8;
+/** How far apart the line of contact's two identities sit, in screen pixels. */
+export const LINE_OF_CONTACT_OFFSET_PX = 16;
+/** Points per half-wave. Enough that a scallop reads as a curve, not a tent. */
+const WAVE_STEPS = 12;
+
+/**
+ * Slides a path sideways by `offsetMap`, on the side `sideSign` selects.
+ *
+ * Per vertex, using the direction at that point along the path, so a bend keeps
+ * both halves of a pair the same distance apart rather than pinching on the inside.
+ */
+export function offsetPath(path: ProjectedPosition[], sideSign: number, offsetMap: number): ProjectedPosition[] {
+    if (!offsetMap || path.length < 2) return path;
+    const total = pathLength(path);
+    if (total === 0) return path;
+
+    let travelled = 0;
+    return path.map((point, i) => {
+        if (i > 0) travelled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(travelled, total));
+        return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as ProjectedPosition;
+    });
+}
+
+/**
+ * A scalloped path — the forward line of own troops, and each half of the line of
+ * contact.
+ *
+ * `offsetMap` shifts the whole wave sideways off the drawn line, which is what
+ * separates the line of contact's two identities. When there is no wave left to
+ * draw the offset still applies: the line of contact is a *pair*, and handing back
+ * the undisplaced path put its two halves on top of each other the moment the
+ * waves were dropped.
+ */
+export function wavePath(
+    path: ProjectedPosition[],
+    wavelengthMap: number,
+    amplitudeMap: number,
+    sideSign: number,
+    offsetMap = 0,
+): ProjectedPosition[] {
+    const total = pathLength(path);
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return offsetPath(path, sideSign, offsetMap);
+
+    const count = Math.max(1, Math.round(total / wavelengthMap));
+    const wavelength = total / count;
+    const out: ProjectedPosition[] = [];
+
+    const shifted = (at: {point: ProjectedPosition; dir: ProjectedPosition}): ProjectedPosition => {
+        const n: ProjectedPosition = [-at.dir[1] * sideSign, at.dir[0] * sideSign];
+        return [at.point[0] + n[0] * offsetMap, at.point[1] + n[1] * offsetMap];
+    };
+
+    for (let i = 0; i < count; i++) {
+        const from = pathPointAt(path, i * wavelength);
+        const to = pathPointAt(path, (i + 1) * wavelength);
+        const a = shifted(from);
+        const b = shifted(to);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const chord = Math.hypot(dx, dy) || 1;
+        const nx = -(dy / chord) * sideSign;
+        const ny = (dx / chord) * sideSign;
+
+        for (let step = 0; step <= WAVE_STEPS; step++) {
+            if (i > 0 && step === 0) continue; // the previous bump ended here
+            const t = step / WAVE_STEPS;
+            const bump = Math.sin(Math.PI * t) * amplitudeMap;
+            out.push([a[0] + dx * t + nx * bump, a[1] + dy * t + ny * bump]);
+        }
+    }
+    return out;
+}
+
+/** Screen size of a generator-emitted solid arrowhead, tip to base. */
+export const SOLID_ARROWHEAD_PX = 15;
+/** Ceiling on that head as a share of the path it terminates. */
+export const ARROWHEAD_MAX_SHARE = 0.25;
+
+/**
+ * Redraws a generator-emitted solid arrowhead at a fixed screen size.
+ *
+ * The generators build their heads in metres — Fix's off the drawn line's length,
+ * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
+ * — so resizing the graphic resized the head, and Turn's swelled on screen as you
+ * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
+ *
+ * Scaled **about the tip**, because the tip is the meaningful point: it is where
+ * the arrow lands, and the generator has already put it in the right place.
+ *
+ * Returns null when the head would fall under `DECORATION_MIN_PX`, letting the
+ * plain geometry stand rather than drawing a smudge.
+ */
+export function screenSizedArrowHead(
+    ring: ProjectedPosition[],
+    path: ProjectedPosition[],
+    resolution: number,
+): ProjectedPosition[] | null {
+    if (!ring || ring.length < 3) return null;
+    const [tip, left, right] = ring;
+    const baseMid: ProjectedPosition = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+    const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
+    if (currentLength === 0) return null;
+
+    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
+    const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
+    if (wantedPx < DECORATION_MIN_PX) return null;
+
+    const factor = (wantedPx * resolution) / currentLength;
+    return ring.map(p => [tip[0] + (p[0] - tip[0]) * factor, tip[1] + (p[1] - tip[1]) * factor] as ProjectedPosition);
+}
