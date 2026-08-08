@@ -259,5 +259,7 @@ export {
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {directionArrowPaint} from './symbology/linePaints';
+export {routeControlMeasurePaint} from './symbology/routePaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

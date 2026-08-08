@@ -63,4 +63,6 @@ export {
 } from './areaLabelPaints';
 
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+export {directionArrowPaint} from './linePaints';
+export {routeControlMeasurePaint} from './routePaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';

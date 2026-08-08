@@ -30,6 +30,8 @@
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+import {directionArrowPaint} from './linePaints';
+import {routeControlMeasurePaint} from './routePaints';
 import {
     areaDefaultLabelPaint,
     areaLabelStackPaint,
@@ -306,6 +308,21 @@ const ANTI_TANK_DITCH_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AntiTankDitchReinforcedWithMines,
 ];
 
+/** The four direction-of-attack arrows. */
+const DIRECTION_ARROW_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.DirectionOfMainAttack,
+    TacticalGraphicName.DirectionOfSupportingAttack,
+    TacticalGraphicName.AviationDirectionOfAttack,
+    TacticalGraphicName.DirectionOfMainAttackFeint,
+];
+
+/** Route, main supply route and alternate supply route: one style, three names. */
+const ROUTE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Route,
+    TacticalGraphicName.MainSupplyRoute,
+    TacticalGraphicName.AlternateSupplyRoute,
+];
+
 function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> {
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
@@ -368,6 +385,14 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     }
 
     registry[TacticalGraphicName.FortifiedLine] = {graphic: fortifiedLinePaint(TacticalGraphicName.FortifiedLine)};
+
+    for (const name of DIRECTION_ARROW_GRAPHICS) {
+        registry[name] = {graphic: directionArrowPaint(name)};
+    }
+
+    for (const name of ROUTE_GRAPHICS) {
+        registry[name] = {graphic: routeControlMeasurePaint(name)};
+    }
 
     // Labels last, over whatever graphic painter was registered above. Every area
     // gets one: the bespoke layout if its family has one, the default otherwise.
