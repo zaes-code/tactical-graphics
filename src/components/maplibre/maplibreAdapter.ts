@@ -12,6 +12,8 @@ import {
     type ProjectedInputGeometry,
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
+    GLYPH_CUT_GAP_GRAPHICS,
+    arrowheadMetres,
     decorationMetres,
     hasBakedDecoration,
     isMovementGraphic,
@@ -203,6 +205,27 @@ function sizeDefaults(
 }
 
 /**
+ * Turn and Envelopment's arrowhead, when the caller did not stamp one.
+ *
+ * Their heads are a **screen** length baked into metres once at draw time — 26 px
+ * and 22 px — not a fraction of the graphic. The OpenLayers holders do this in their
+ * constructors; without the same default here the generator fell back to its
+ * fraction-of-`size` ratio and drew a visibly smaller head.
+ *
+ * A stamped `decorationSize` wins, because that is a restore replaying the head the
+ * graphic was actually drawn with. @see arrowheadMetres
+ */
+function arrowheadDefault(
+    name: TacticalGraphicName,
+    supplied: Omit<TacticalGraphicProperties, 'name'>,
+    drawingResolution?: number,
+): Partial<TacticalGraphicProperties> {
+    if (!drawingResolution || supplied.decorationSize !== undefined) return {};
+    const metres = arrowheadMetres(name, drawingResolution);
+    return metres === undefined ? {} : {decorationSize: metres};
+}
+
+/**
  * The decoration size for a graphic whose `size` option *is* a decoration.
  *
  * For these, `size` means "how big is the chevron" rather than "how far does this
@@ -306,6 +329,10 @@ export function buildTacticalGraphic(
         // rendered glyph needs. A fixed angular gap cannot track a capped label scale.
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
         ...sizeDefaults(name, baseGeometry, properties, drawingResolution),
+        ...arrowheadDefault(name, properties, drawingResolution),
+        // The paint layer measures the letter and cuts its own hole, so the geometry
+        // must arrive unbroken. @see GLYPH_CUT_GAP_GRAPHICS
+        ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) && properties.labelGap === undefined ? {labelGap: 0} : {}),
         ...properties,
         // **After** the caller's properties, unlike every other default here. A
         // security operation's size is not a ground distance a caller may set — it is
