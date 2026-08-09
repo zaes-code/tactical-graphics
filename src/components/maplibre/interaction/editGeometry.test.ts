@@ -14,7 +14,18 @@
 
 import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import type {Geometry, Position} from 'geojson';
-import {centreOf, moveVertex, positionsOf, resize, rotate, translate} from './editGeometry';
+import {
+    centreOf,
+    moveVertex,
+    positionsOf,
+    resize,
+    rotate,
+    setBandRange,
+    setBend,
+    setOffset,
+    setReach,
+    translate,
+} from './editGeometry';
 
 const props = (extra: Partial<TacticalGraphicProperties> = {}): TacticalGraphicProperties => ({
     name: TacticalGraphicName.PhaseLine,
@@ -164,3 +175,142 @@ describe('metric behaviour', () => {
         expect((end[0] - start[0]) * DEGREE_M).toBeCloseTo(2 * DEGREE_M, 0);
     });
 });
+
+describe('setOffset — the width handle', () => {
+    // A degree of longitude at the equator, near enough for a drag distance.
+    const DEGREE = 111_319;
+
+    it('sets a full width from the perpendicular distance, doubled', () => {
+        // The base runs east along the equator; the cursor sits one degree north of
+        // it. At the default sensitivity that is half the drag, doubled to a full
+        // width — so one degree back out again.
+        const widened = setOffset({geometry: LINE, properties: props()}, [1, 1], {resolution: 1});
+        expect(widened.properties.width).toBeCloseTo(DEGREE, -3);
+    });
+
+    it('honours a graphic that draws its handle closer in', () => {
+        // A handle drawn one width out rather than two tracks the cursor 1:1, so the
+        // same drag sets twice the width.
+        const tight = setOffset({geometry: LINE, properties: props()}, [1, 1], {offsetScale: 1, resolution: 1});
+        expect(tight.properties.width).toBeCloseTo(2 * DEGREE, -3);
+    });
+
+    it('measures against the nearest segment of a bent base', () => {
+        // The second leg runs north, so a cursor beside *it* is a small perpendicular
+        // distance — measuring from the first leg would read the whole leg length.
+        const bent: Geometry = {type: 'LineString', coordinates: [[0, 0], [2, 0], [2, 4]]};
+        const widened = setOffset({geometry: bent, properties: props()}, [2.2, 3], {resolution: 1});
+
+        expect(widened.properties.width).toBeLessThan(DEGREE);
+        expect(widened.properties.width).toBeGreaterThan(0);
+    });
+
+    it('flips the graphic only on a decisive drag to the other side', () => {
+        // The sign of the perpendicular sets the side, but a pixel of jitter across
+        // the line must not flip it — otherwise the graphic flickers while the user is
+        // only trying to widen it.
+        const jitter = setOffset({geometry: LINE, properties: props()}, [1, -0.00001], {resolution: DEGREE});
+        expect(jitter.properties.mirrored).toBeUndefined();
+
+        const decisive = setOffset({geometry: LINE, properties: props()}, [1, -1], {resolution: 1});
+        expect(decisive.properties.mirrored).toBe(true);
+    });
+
+    it('leaves a base with one point alone', () => {
+        const same = setOffset({geometry: POINT, properties: props()}, [1, 1], {resolution: 1});
+        expect(same.properties.width).toBeUndefined();
+    });
+});
+
+describe('setBend and setReach — the curve handles', () => {
+    const curve = () => ({
+        geometry: POINT,
+        properties: props({radius: 100_000, rotation: 0, bend: 0.5}),
+    });
+
+    it('bends toward the side the cursor is on, and flips across the chord', () => {
+        // Rotation 0 means the chord runs east, so its clockwise perpendicular points
+        // south — a cursor to the south gives a positive bend.
+        const south = setBend(curve(), [0, -0.5], b => b);
+        const north = setBend(curve(), [0, 0.5], b => b);
+
+        expect(south.properties.bend).toBeGreaterThan(0);
+        expect(north.properties.bend).toBeLessThan(0);
+        expect(south.geometry).toEqual(POINT);
+    });
+
+    it('is scaled by the graphic, so the handle tracks the pointer at any size', () => {
+        const small = setBend({geometry: POINT, properties: props({radius: 50_000, rotation: 0})}, [0, -0.5], b => b);
+        const large = setBend({geometry: POINT, properties: props({radius: 200_000, rotation: 0})}, [0, -0.5], b => b);
+
+        expect(Math.abs(small.properties.bend!)).toBeGreaterThan(Math.abs(large.properties.bend!));
+    });
+
+    it('applies the family clamp', () => {
+        const clamped = setBend(curve(), [0, -20], () => 0.9);
+        expect(clamped.properties.bend).toBe(0.9);
+    });
+
+    it('leaves a graphic with no size alone — the bend would divide by it', () => {
+        const same = setBend({geometry: POINT, properties: props({rotation: 0})}, [0, -1], b => b);
+        expect(same.properties.bend).toBeUndefined();
+    });
+
+    it('takes both size and bearing from the tip, and leaves the bend', () => {
+        const reached = setReach(curve(), [1, 0]);
+
+        expect(reached.properties.radius).toBeGreaterThan(100_000);
+        expect(reached.properties.rotation).toBeCloseTo(0, 4);
+        // Unitless, so the curve keeps its proportion through a resize.
+        expect(reached.properties.bend).toBe(0.5);
+
+        const north = setReach(curve(), [0, 1]);
+        expect(north.properties.rotation).toBeCloseTo(90, 4);
+    });
+});
+
+describe('setBandRange — the range-fan handles', () => {
+    const fan = (ranges: number[]) => ({
+        geometry: POINT,
+        properties: props({
+            name: TacticalGraphicName.WeaponSensorRangeFanCircular,
+            radius: 100_000,
+            rangeFan: {bands: ranges.map(range => ({range}))},
+        }),
+    });
+
+    it('sets the band it was given, in kilometres', () => {
+        // One degree of longitude is about 111 km.
+        const edited = setBandRange(fan([10, 200, 400]), 1, [1, 0]);
+        expect(edited.properties.rangeFan!.bands[1].range).toBeCloseTo(111, 0);
+        // And leaves its neighbours where they were.
+        expect(edited.properties.rangeFan!.bands[0].range).toBe(10);
+        expect(edited.properties.rangeFan!.bands[2].range).toBe(400);
+    });
+
+    it('never lets a band pass the one outside it', () => {
+        // Dragging band 0 far out would otherwise reorder the rings, and the handle the
+        // user is holding would end up attached to a different band.
+        const edited = setBandRange(fan([10, 50, 400]), 0, [4, 0]);
+        expect(edited.properties.rangeFan!.bands[0].range).toBeLessThan(50);
+    });
+
+    it('never lets a band pass the one inside it', () => {
+        const edited = setBandRange(fan([100, 200, 400]), 1, [0.1, 0]);
+        expect(edited.properties.rangeFan!.bands[1].range).toBeGreaterThan(100);
+    });
+
+    it('drives the radius when the user has typed no bands', () => {
+        // The fan is rendering the fallback single band derived from `radius`, so the
+        // drag must not invent a band the user never entered.
+        const edited = setBandRange({geometry: POINT, properties: props({radius: 100_000})}, 0, [1, 0]);
+        expect(edited.properties.rangeFan).toBeUndefined();
+        expect(edited.properties.radius).toBeCloseTo(111_000, -3);
+    });
+
+    it('ignores a band index that is not there', () => {
+        const before = fan([10, 200]);
+        expect(setBandRange(before, 5, [1, 0])).toEqual(before);
+    });
+});
+

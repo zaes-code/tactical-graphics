@@ -29,12 +29,28 @@ import {
     TacticalGraphicName,
     allowedGestures,
     baseGeometryFor,
+    clampEnvelopmentBend,
+    clampTurnBend,
+    RANGE_FAN_BAND_OFFSET,
+    handleContract,
+    handleRole,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {moveVertex, positionsOf, resize, rotate, translate, type GraphicDescription} from './editGeometry';
+import {
+    moveVertex,
+    positionsOf,
+    resize,
+    rotate,
+    setBandRange,
+    setBend,
+    setOffset,
+    setReach,
+    translate,
+    type GraphicDescription,
+} from './editGeometry';
 
 /** What a drag currently means. Mirrors OpenLayers' `InteractionType`. */
 export type EditMode = 'view' | 'translate' | 'rotate' | 'resize' | 'modify';
@@ -77,6 +93,8 @@ export class MapLibreInteractions {
         vertex: number;
         /** Whether the drag began on the inert centre dot. */
         onCentre: boolean;
+        /** Which handle was grabbed, or -1 for a drag that started on the body. */
+        handle: number;
         last: Position;
         /** Whether the pointer has moved far enough to count. @see DRAG_THRESHOLD_PX */
         started: boolean;
@@ -224,16 +242,24 @@ export class MapLibreInteractions {
     // ── dragging ────────────────────────────────────────────────────────────
 
     private readonly onPointerDown = (event: MapMouseEvent): void => {
-        if (this.drawing || this.mode === 'view') return;
+        if (this.drawing) return;
 
         const selectedId = this.renderer.selection;
         const graphic = selectedId ? this.renderer.find(selectedId) : undefined;
         if (!graphic) return;
 
+        // A handle carrying a role of its own works in **view** mode too: its meaning
+        // comes from the handle, not from a mode button, so requiring the user to pick
+        // one first would be asking them to answer a question the handle has already
+        // answered.
+        const grabbed = this.renderer.hitTestHandle(event.point);
+        const roleDrag = grabbed >= 0 && handleRole(graphic.name, grabbed) !== 'shape';
+        if (this.mode === 'view' && !roleDrag) return;
+
         // The drag has to start *on* the graphic, or on one of its handles. Starting
         // it anywhere on the map would mean a user who wanted to pan instead resized
         // whatever happened to be selected.
-        const handle = this.renderer.hitTestHandle(event.point);
+        const handle = grabbed;
         const onHandle = handle >= 0;
         const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
         const vertex = this.mode === 'modify' ? this.grabVertex(graphic, event.point) : -1;
@@ -247,6 +273,7 @@ export class MapLibreInteractions {
             // the centre is the one place a user naturally reaches to drag a symbol
             // bodily. The dot is drawn grey to say so.
             onCentre: onHandle && handle === this.renderer.centreHandleOf(graphic),
+            handle,
             vertex,
             last: [event.lngLat.lng, event.lngLat.lat],
             started: false,
@@ -310,6 +337,13 @@ export class MapLibreInteractions {
     private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
         if (drag.onCentre) return translate(before, drag.last, to);
 
+        // A handle with a *role* means that role, whatever mode is selected — an
+        // offset handle sets a width and nothing else, and a band handle sets its own
+        // band. Reading the mode first would make the same handle do four different
+        // things depending on a button, which is not what the handle is for.
+        const byRole = this.applyHandleRole(before, drag, to);
+        if (byRole) return byRole;
+
         const allowed = allowedGestures(drag.graphic.name);
         if (this.mode === 'rotate' && !allowed.rotate) return before;
         if (this.mode === 'resize' && !allowed.resize) return before;
@@ -330,6 +364,42 @@ export class MapLibreInteractions {
                     : translate(before, drag.last, to);
             default:
                 return before;
+        }
+    }
+
+    /**
+     * The gesture a *specific handle* means, or null when it carries no role of its
+     * own and the mode should decide.
+     *
+     * @see handleContract for why the index alone cannot answer this: the movement
+     * family puts its offset handle last and the block family puts it first.
+     */
+    private applyHandleRole(
+        before: GraphicDescription,
+        drag: NonNullable<typeof this.dragging>,
+        to: Position,
+    ): GraphicDescription | null {
+        if (drag.handle < 0) return null;
+
+        const name = drag.graphic.name;
+        switch (handleRole(name, drag.handle)) {
+            case 'offset':
+                return setOffset(before, to, {
+                    offsetScale: handleContract(name).offsetScale,
+                    resolution: resolutionOf(this.map),
+                });
+            case 'bend':
+                // Each curve family clamps its own bend, and the two ranges differ —
+                // Envelopment's hook bows much harder than a turn.
+                return setBend(before, to, name === TacticalGraphicName.Envelopment ? clampEnvelopmentBend : clampTurnBend);
+            case 'reach':
+                return setReach(before, to);
+            case 'band':
+                // The fans put their centre first, so the handle index is one ahead of
+                // the band it drives. @see RANGE_FAN_BAND_OFFSET
+                return setBandRange(before, drag.handle - RANGE_FAN_BAND_OFFSET, to);
+            default:
+                return null;
         }
     }
 

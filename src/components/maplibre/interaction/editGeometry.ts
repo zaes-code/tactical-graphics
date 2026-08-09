@@ -26,7 +26,7 @@
  */
 
 import type {Geometry, Position} from 'geojson';
-import type {TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import type {ProjectedPosition, TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -222,3 +222,179 @@ export function moveVertex(description: GraphicDescription, index: number, to: P
         }),
     };
 }
+
+// ── the per-handle gestures ─────────────────────────────────────────────────
+
+/**
+ * How far off the base a drag must reach before it counts as a decision to flip
+ * the graphic to the other side, in projected metres per unit of resolution.
+ *
+ * Crossing the line is easy to do by accident; going a long way past it is not. So
+ * the magnitude of the drag sets the width and the *sign* sets the side, read
+ * separately — using the signed number for both would make a flip jump the width
+ * at the same moment.
+ */
+const MIRROR_FLIP_MIN_PX = 12;
+
+/** The squared distance from a point to a segment, all in projected metres. */
+function distanceToSegmentSq(point: ProjectedPosition, a: ProjectedPosition, b: ProjectedPosition): number {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq === 0) return (point[0] - a[0]) ** 2 + (point[1] - a[1]) ** 2;
+
+    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSq));
+    return (point[0] - (a[0] + t * dx)) ** 2 + (point[1] - (a[1] + t * dy)) ** 2;
+}
+
+/**
+ * Sets a graphic's **width** from how far the cursor sits off its base — the
+ * offset handle.
+ *
+ * Measured against the base segment the cursor is *nearest*, not always the first:
+ * a movement graphic drawn with several bends has a width that means the same
+ * thing at every one of them, and measuring from the first segment makes the
+ * handle fight the cursor as soon as the path turns. A two-point base has one
+ * segment, so this picks the same one either way.
+ *
+ * The stored field is a **full width**, edge to edge, while the generator takes a
+ * half-width offset — the factor of two lives in `toGraphicOptions` and must not
+ * be applied twice.
+ *
+ * One handle, two jobs: the magnitude sets the width and the sign sets the side.
+ */
+export function setOffset(
+    description: GraphicDescription,
+    cursor: Position,
+    options: {offsetScale?: number; resolution: number},
+): GraphicDescription {
+    const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
+    if (coords.length < 2) return description;
+
+    const at = toMercator([cursor[0], cursor[1]]);
+    let segment: [ProjectedPosition, ProjectedPosition] = [coords[0], coords[1]];
+    let nearest = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const distance = distanceToSegmentSq(at, coords[i], coords[i + 1]);
+        if (distance < nearest) {
+            nearest = distance;
+            segment = [coords[i], coords[i + 1]];
+        }
+    }
+
+    const angle = Math.atan2(segment[1][1] - segment[0][1], segment[1][0] - segment[0][0]);
+    // The segment's left normal.
+    const axisX = Math.cos(angle + Math.PI / 2);
+    const axisY = Math.sin(angle + Math.PI / 2);
+    const perpendicular = (at[0] - segment[0][0]) * axisX + (at[1] - segment[0][1]) * axisY;
+
+    const width = Math.abs(perpendicular) * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
+    const properties = {...description.properties, width};
+
+    // **Negative, not positive.** The axis above is the left normal and an
+    // unmirrored graphic already hangs on that side, so reading a positive
+    // perpendicular as "mirrored" flips it the moment the user drags along the side
+    // it is already on.
+    if (Math.abs(perpendicular) > MIRROR_FLIP_MIN_PX * options.resolution) {
+        properties.mirrored = perpendicular < 0;
+    }
+
+    return {...description, properties};
+}
+
+/** Default offset sensitivity — a handle drawn two widths out. @see HandleContract */
+const DEFAULT_OFFSET_SCALE = 0.5;
+
+/**
+ * Sets a curve's `bend` from the cursor's signed perpendicular distance to the
+ * chord, over the graphic's own size.
+ *
+ * Over the size, so the handle tracks the pointer exactly at any scale, and
+ * dragging across the chord flips which way the curve bows. The chord's direction
+ * comes from `rotation` — planar degrees, 0 = east — and then its *clockwise*
+ * perpendicular, which is the side the generator bows toward.
+ */
+export function setBend(description: GraphicDescription, cursor: Position, clamp: (bend: number) => number): GraphicDescription {
+    const size = description.properties.radius;
+    if (!size || size <= 0) return description;
+
+    const centre = toMercator(centreOf(description.geometry) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const theta = ((description.properties.rotation ?? 0) * Math.PI) / 180;
+    const bend = clamp(((at[0] - centre[0]) * Math.sin(theta) + (at[1] - centre[1]) * -Math.cos(theta)) / size);
+
+    return {...description, properties: {...description.properties, bend}};
+}
+
+/**
+ * Sets both size and bearing from one cursor position — the tip handle.
+ *
+ * The far end of a chord carries both of its inputs: how long it is and which way
+ * it points. `bend` is unitless and rides along unchanged, so the curve keeps its
+ * proportion through a resize.
+ */
+export function setReach(description: GraphicDescription, cursor: Position): GraphicDescription {
+    const centre = toMercator(centreOf(description.geometry) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const dx = at[0] - centre[0];
+    const dy = at[1] - centre[1];
+    const reach = Math.hypot(dx, dy);
+    if (reach <= 0) return description;
+
+    return {
+        ...description,
+        properties: {
+            ...description.properties,
+            radius: reach,
+            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+        },
+    };
+}
+
+/** Metres in a kilometre — range bands are stored in km. */
+const KM = 1000;
+
+/**
+ * How far apart two range-fan rings are kept, as a share of the outermost.
+ *
+ * Proportional so the gap holds up at any size: a fixed number of kilometres is
+ * invisible on a 500 km fan and larger than the whole of a 2 km one.
+ */
+const BAND_SEPARATION_FRACTION = 0.05;
+
+/**
+ * Sets one range-fan band's range from the cursor's distance to the centre.
+ *
+ * Clamped between its neighbours, so a band can never be dragged through the one
+ * inside or outside it — which would reorder the rings and leave the handle the
+ * user is holding attached to a different band.
+ *
+ * A fan with no user-entered bands is rendering the fallback single band derived
+ * from `radius`, so the drag drives `radius` and leaves the amplifiers alone
+ * rather than inventing a band the user never typed.
+ */
+export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
+    const centre = toMercator(centreOf(description.geometry) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const km = Math.hypot(at[0] - centre[0], at[1] - centre[1]) / KM;
+    if (!isFinite(km) || km <= 0) return description;
+
+    const bands = description.properties.rangeFan?.bands;
+    if (!bands || !bands.length) {
+        return {...description, properties: {...description.properties, radius: km * KM}};
+    }
+
+    const sorted = [...bands].sort((a, b) => a.range - b.range);
+    if (index < 0 || index >= sorted.length) return description;
+
+    const gap = sorted[sorted.length - 1].range * BAND_SEPARATION_FRACTION;
+    const min = index === 0 ? gap : sorted[index - 1].range + gap;
+    const max = index === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[index + 1].range - gap;
+
+    const next = sorted.map((band, i) => (i === index ? {...band, range: Math.min(Math.max(km, min), Math.max(min, max))} : band));
+    return {
+        ...description,
+        properties: {...description.properties, rangeFan: {...description.properties.rangeFan, bands: next}},
+    };
+}
+
