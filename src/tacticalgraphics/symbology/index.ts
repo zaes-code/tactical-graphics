@@ -90,5 +90,5 @@ export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceA
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 export type {ResolvedRangeFanBand} from './boundaryPaints';
 export {securityOperationLabelPaint} from './securityPaints';
-export {envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './movementPaints';
+export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './movementPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
