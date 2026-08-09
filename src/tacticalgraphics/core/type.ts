@@ -60,10 +60,19 @@ export interface RouteOptions extends BaseGraphicOptions {
     direction?: RouteDirection;
 }
 
-/** Options for security-operation fan graphics (Cover/Guard/Screen). */
+/**
+ * Options for security-operation fan graphics (Cover/Guard/Screen).
+ *
+ * **Every dimension is optional**, because they are fixed ratios of one another
+ * and of `size`. These graphics are badges: not resized, describing no ground
+ * extent. A renderer with a map resolution to hand (the OpenLayers holder) passes
+ * them explicitly so the symbol holds a constant on-screen size; one without
+ * passes `size` alone and gets the same proportions.
+ * @see SecurityOperation.dimensions
+ */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
     /** Distance from the centre to where each arm's line begins, in metres. */
-    centerPadding: number;
+    centerPadding?: number;
     /**
      * Distance from the centre to the label anchor, in metres.
      *
@@ -77,10 +86,10 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
      * option set gets the previous geometry.
      */
     labelPadding?: number;
-    arrowLength: number;
-    arrowDepth: number;
-    arrowHeadLength: number;
-    arrowHeadDegree: number;
+    arrowLength?: number;
+    arrowDepth?: number;
+    arrowHeadLength?: number;
+    arrowHeadDegree?: number;
 }
 
 /**
