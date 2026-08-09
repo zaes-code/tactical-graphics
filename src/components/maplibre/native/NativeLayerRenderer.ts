@@ -13,7 +13,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
-import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
@@ -178,6 +178,8 @@ export class NativeLayerRenderer {
     private readonly iconSizes = new globalThis.Map<string, number>();
     /** The provider/size revision those icons were built at. */
     private symbolRevision = -1;
+    /** The resolution the screen-sized graphics were last rebuilt at. */
+    private lastRebuildResolution = Number.NaN;
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
@@ -333,6 +335,7 @@ export class NativeLayerRenderer {
         // Bucketed per graphic rather than in one pass, so each feature can be stamped
         // with the graphic it came from — which is what makes a rendered mark
         // hit-testable back to its symbol. @see GRAPHIC_ID_PROPERTY
+        this.rebuildScreenSized(resolution);
         const visible = this.visibleGraphics();
         const paintedAt = performance.now();
         const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
@@ -394,6 +397,34 @@ export class NativeLayerRenderer {
 
     private setData(kind: string, features: Parameters<typeof featureCollection>[0]): void {
         (this.map.getSource(SOURCE_PREFIX + kind) as GeoJSONSource | undefined)?.setData(featureCollection(features));
+    }
+
+    /**
+     * Rebuilds the graphics whose **geometry** is a screen size, at the new zoom.
+     *
+     * Almost every graphic here is drawn in metres and simply scales with the map, so
+     * a realisation only re-runs the paint functions. The security operations are the
+     * exception: every dimension of one is a pixel constant, so the generator has to
+     * run again with the new resolution or the symbol grows and shrinks with the map
+     * instead of holding its size.
+     *
+     * This is the MapLibre half of `manager.watchResolution(handler)` — the rule that
+     * a graphic sized in screen pixels only holds its size because something
+     * re-derives it. @see ai/conventions.md
+     */
+    private rebuildScreenSized(resolution: number): void {
+        if (resolution === this.lastRebuildResolution) return;
+        this.lastRebuildResolution = resolution;
+
+        for (let i = 0; i < this.graphics.length; i++) {
+            const graphic = this.graphics[i];
+            if (!SCREEN_SIZED_GRAPHICS.has(graphic.name)) continue;
+
+            const rebuilt = buildTacticalGraphic(graphic.name, graphic.base.geometry, graphic.properties, resolution);
+            // A generator that refuses leaves the previous geometry up, which is the
+            // right failure: a symbol at the wrong size beats no symbol.
+            if (rebuilt) this.graphics[i] = {...rebuilt, id: graphic.id};
+        }
     }
 
     /**
@@ -695,3 +726,13 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Guard,
     TacticalGraphicName.Screen,
 ]);
+
+/**
+ * Graphics whose **geometry** is a screen size rather than a ground distance, and
+ * so have to be regenerated when the zoom changes.
+ *
+ * The security operations are the whole set today: they are badges, and every
+ * dimension of one — the arm length, the centre padding, the arrowheads — is a
+ * pixel constant times the resolution. @see rebuildScreenSized
+ */
+const SCREEN_SIZED_GRAPHICS = SECURITY_OPERATIONS;

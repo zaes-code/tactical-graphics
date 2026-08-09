@@ -11,7 +11,8 @@ import {
     type ProjectedGeometry,
     type ProjectedInputGeometry,
     type ProjectedPosition,
-    type TacticalGraphicName,
+    SECURITY_OPERATION_PX,
+    TacticalGraphicName,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {toMercator} from './projection';
@@ -198,6 +199,38 @@ function sizeDefaults(
 }
 
 /**
+ * The size a security operation is drawn at, in metres.
+ *
+ * These are badges: the OpenLayers holder builds every dimension as a pixel
+ * constant times the live map resolution, so the symbol is the same size on screen
+ * at every zoom. Passing a ground distance instead — which is what `radius` is
+ * everywhere else — makes it a different symbol at every zoom, and a tiny one at
+ * the sizes a sweep uses.
+ *
+ * `SECURITY_OPERATION_PX` is the generator's own table, so this reproduces the
+ * OpenLayers rule rather than approximating it. The renderer re-runs this on every
+ * zoom. @see NativeLayerRenderer.rebuildScreenSized
+ */
+function securityOperationSize(
+    name: TacticalGraphicName,
+    drawingResolution?: number,
+): Partial<TacticalGraphicProperties> {
+    if (!drawingResolution || !SECURITY_OPERATIONS.has(name)) return {};
+
+    const halfExtentPx = SECURITY_OPERATION_PX.labelPadding
+        + SECURITY_OPERATION_PX.labelGap
+        + 2 * SECURITY_OPERATION_PX.arrowLength;
+    return {radius: halfExtentPx * drawingResolution};
+}
+
+/** @see securityOperationSize */
+const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
+/**
  * A base's drawn length in metres.
  *
  * A local equirectangular approximation rather than turf: this runs on every build
@@ -239,6 +272,13 @@ export function buildTacticalGraphic(
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
         ...sizeDefaults(baseGeometry, properties, drawingResolution),
         ...properties,
+        // **After** the caller's properties, unlike every other default here. A
+        // security operation's size is not a ground distance a caller may set — it is
+        // a screen constant, and these graphics refuse a resize for exactly that
+        // reason. A `radius` arriving from a saved snapshot or a sweep is a number in
+        // metres from some other zoom, and honouring it draws the symbol at the wrong
+        // size. @see allowedGestures
+        ...securityOperationSize(name, drawingResolution),
     };
 
     const base: GeoJSONFeature = {
