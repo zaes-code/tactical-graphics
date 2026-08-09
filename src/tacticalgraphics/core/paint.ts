@@ -159,6 +159,18 @@ export interface TextSpec {
     /** Screen-space rotation in radians, clockwise positive. */
     rotation?: number;
     align?: 'left' | 'center' | 'right';
+    /**
+     * How the lines of a **multi-line** label line up with each other, when that
+     * differs from where the block sits relative to its anchor.
+     *
+     * Separate from `align` because the two renderers separate them: OpenLayers
+     * derives justification from `textAlign` unless told otherwise, while MapLibre
+     * takes `text-anchor` and `text-justify` independently and centre-justifies by
+     * default. A left-aligned block of `MIN ALT: …` / `MAX ALT: …` lines therefore
+     * came out centre-justified in one engine and left-justified in the other, with
+     * the values in a ragged column. Defaults to `align`.
+     */
+    justify?: 'left' | 'center' | 'right';
     baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic' | 'hanging';
     /** Screen-pixel nudge applied after rotation, as OpenLayers' `offsetX/Y` are. */
     offsetXPx?: number;

@@ -242,6 +242,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     haloColor: text.halo?.color ?? 'transparent',
                     haloWidth: text.halo?.widthPx ?? 0,
                     anchor: textAnchor(text.align, text.baseline),
+                    justify: text.justify ?? text.align ?? 'center',
                     // Pixels → ems, as one array property. Divided by the rendered size,
                     // so this has to be recomputed whenever the label scale moves — see
                     // the header note. It is a single property because `text-offset`
@@ -356,6 +357,8 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             'text-size': ['get', 'size'],
             'text-rotate': ['get', 'rotate'],
             'text-anchor': ['get', 'anchor'],
+            // Independent of the anchor in MapLibre, and centre by default. @see TextSpec.justify
+            'text-justify': ['get', 'justify'],
             // `['array', 'number', 2, …]` asserts the shape: `get` returns untyped
             // JSON, and `text-offset` will not accept it without the assertion.
             'text-offset': ['array', 'number', 2, ['get', 'offset']],

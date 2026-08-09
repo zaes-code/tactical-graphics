@@ -36,6 +36,7 @@ import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
+import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 import {securityOperationLabelPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
@@ -303,10 +304,29 @@ const SPECIAL_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
  * does. Keeping the fallback at the call site rather than in here makes the two
  * structures line up, which matters while the routing lives in two places.
  *
- * Not covered yet, and so still falling through to the default: the eleven
- * air-coordinating zones, the three airspace-coordination areas, and the airfield.
- * Each has its own dedicated function with layout this table cannot express.
+ * Not covered yet, and so still falling through to the default: the airfield, whose
+ * label sits under an inlined SVG symbol.
  */
+const AIR_COORDINATING_ZONES: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.HighDensityAirspaceControlZone,
+    TacticalGraphicName.RestrictedOperationsZone,
+    TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
+    TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone,
+    TacticalGraphicName.WeaponEngagementZone,
+    TacticalGraphicName.JointEngagementZone,
+    TacticalGraphicName.MissileEngagementZone,
+    TacticalGraphicName.LowAltitudeMissileEngagementZone,
+    TacticalGraphicName.HighAltitudeMissileEngagementZone,
+    TacticalGraphicName.ShortRangeAirDefenseEngagementZone,
+    TacticalGraphicName.WeaponsFreeZone,
+];
+
+const AIRSPACE_COORDINATION_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+];
+
 function areaLabelPainterFor(name: TacticalGraphicName) {
     if (ZONE_GRAPHICS_BOXED.includes(name)) return zoneLabelPaint(name, false);
     if (ZONE_GRAPHICS_IRREGULAR.includes(name)) return zoneLabelPaint(name, true);
@@ -314,6 +334,8 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (name === TacticalGraphicName.ObstacleFreeArea) return areaLabelStackPaint(name, {before: ['FREE']});
     if (name === TacticalGraphicName.GroupOrSeriesOfTargets) return groupOrSeriesOfTargetsLabelPaint(name);
     if (name === TacticalGraphicName.SmokeObscurant) return smokeObscurantLabelPaint();
+    if (AIR_COORDINATING_ZONES.includes(name)) return airCoordinatingAreaLabelPaint(name);
+    if (AIRSPACE_COORDINATION_AREAS.includes(name)) return airspaceCoordinationAreaLabelPaint(name);
     if (
         name === TacticalGraphicName.PositionAreaArtilleryCircular ||
         name === TacticalGraphicName.PositionAreaArtilleryIrregular ||
