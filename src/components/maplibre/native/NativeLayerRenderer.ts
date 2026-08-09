@@ -19,6 +19,7 @@ import {
     bucketPaintsInto,
     handleLayer,
     iconLayer,
+    patternFillLayer,
     sketchLayer,
     emptyBuckets,
     circleLayer,
@@ -235,10 +236,11 @@ export class NativeLayerRenderer {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
+        this.map.addLayer(patternFillLayer('tg-fill-pattern', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
         this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
-        this.layerIds.push('tg-fill', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
+        this.layerIds.push('tg-fill', 'tg-fill-pattern', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
 
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a
