@@ -95,6 +95,9 @@ import {
     airCorridorPaint,
     arrowheadedLinePaint,
     attackHelicopterAxisLabelPaint,
+    envelopmentGraphicPaint,
+    infiltrationGraphicPaint,
+    mobileDefenseGraphicPaint,
     coordinatedFireLinePaint,
     engineerWorkLinePaint,
     fieldsOfFirePaint,
@@ -912,45 +915,9 @@ export function passageLaneGraphicStyle(): StyleFunction {
  * NOTE: OL geometry is in EPSG:3857 (projected metres), so gap math must use
  * plain Euclidean vectors — NOT turf/GeometryService geographic helpers.
  */
+/** **Ported.** @see movementPaints.ts, `infiltrationGraphicPaint`. */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
-    return (feature, resolution) => {
-        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
-        const geom = feature.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 2) return [];
-
-        const lineCoords = coords[0];   // base line (EPSG:3857)
-        const arrowCoords = coords[1];  // arrowhead [leftWing, tip, rightWing]
-
-        // Label center is at 25% of the first segment (matches generateLabels logic).
-        const [x0, y0] = lineCoords[0];
-        const [x1, y1] = lineCoords[1];
-        const lcx = x0 + (x1 - x0) * 0.25;
-        const lcy = y0 + (y1 - y0) * 0.25;
-
-        // Unit vector along the segment.
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len === 0) return [];
-        const ux = dx / len;
-        const uy = dy / len;
-
-        // A flat 10 screen pixels a side — the same rule breach and bypass use.
-        // It was `wingWidth * 0.35 + 5px`, off the arrowhead's metric span, so the
-        // hole grew with the graphic while the "IN" stayed capped by
-        // `maxGraphicLabelScale()`. @see envelopmentGraphicStyleFunc
-        const GAP_PX = 10;
-        const gapHalf = GAP_PX * resolution;
-        const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
-        const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
-
-        return [
-            new Style({geometry: new LineString([lineCoords[0], gapStart]), stroke: lineStroke}),
-            new Style({geometry: new LineString([gapEnd, ...lineCoords.slice(1)]), stroke: lineStroke}),
-            new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-        ];
-    };
+    return asStyleFunction(infiltrationGraphicPaint());
 }
 
 /**
@@ -960,76 +927,14 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 // MobileDefense: multi-line-string geometry where triangle rings (closed 4-point
 // sub-arrays) are rendered as filled polygons and every other sub-array is a
 // stroked line (arcs, arrow shaft, arrow head).
+/** **Ported.** @see movementPaints.ts, `mobileDefenseGraphicPaint`. */
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
-    return (feature) => {
-        const color = readHostilityColor(feature);
-        const lineStroke = new Stroke({color, width: LINE_WIDTH()});
-        const fill = new Fill({color});
-        const geom = feature.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        const styles: Style[] = [];
-        for (const ring of coords) {
-            if (ring.length === 4
-                && ring[0][0] === ring[ring.length - 1][0]
-                && ring[0][1] === ring[ring.length - 1][1]) {
-                styles.push(new Style({geometry: new Polygon([ring]), fill, stroke: lineStroke}));
-            } else {
-                styles.push(new Style({geometry: new LineString(ring), stroke: lineStroke}));
-            }
-        }
-        return styles;
-    };
+    return asStyleFunction(mobileDefenseGraphicPaint());
 }
 
+/** **Ported.** @see movementPaints.ts, `envelopmentGraphicPaint`. */
 export function envelopmentGraphicStyleFunc(): StyleFunction {
-    return (feature, resolution) => {
-        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
-        const geom = feature.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 3) return [];
-
-        const lineCoords = coords[0];  // straight part
-        const arcCoords = coords[1];  // semicircular arc
-        const arrowCoords = coords[2]; // open arrowhead
-
-        // Gap around "E" label at 25% of first segment — same logic as Infiltration.
-        const [x0, y0] = lineCoords[0];
-        const [x1, y1] = lineCoords[1];
-        const dx = x1 - x0, dy = y1 - y0;
-        const len = Math.sqrt(dx * dx + dy * dy);
-
-        // Degenerate straight part (during drawing with only 2 base points) — render arc + arrow only.
-        if (len === 0) {
-            return [
-                new Style({geometry: new LineString(arcCoords), stroke: lineStroke}),
-                new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-            ];
-        }
-
-        const lcx = x0 + (x1 - x0) * 0.25;
-        const lcy = y0 + (y1 - y0) * 0.25;
-        const ux = dx / len, uy = dy / len;
-        // A flat 10 screen pixels a side — the same rule breach and bypass use.
-        //
-        // It used to be `wingWidth * 0.35 + 5px`, taken from the arrowhead's
-        // wing-to-wing span. That span is metric, so the hole grew with the
-        // graphic while the "E" is capped by `maxGraphicLabelScale()`: draw a
-        // large envelopment and the gap ran away from the letter it was meant to
-        // clear. A gap belongs to the label, not to the shape around it.
-        const GAP_PX = 10;
-        const gapHalf = GAP_PX * resolution;
-        const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
-        const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
-
-        return [
-            new Style({geometry: new LineString([lineCoords[0], gapStart]), stroke: lineStroke}),
-            new Style({geometry: new LineString([gapEnd, ...lineCoords.slice(1)]), stroke: lineStroke}),
-            new Style({geometry: new LineString(arcCoords), stroke: lineStroke}),
-            new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-        ];
-    };
+    return asStyleFunction(envelopmentGraphicPaint());
 }
 
 /**
