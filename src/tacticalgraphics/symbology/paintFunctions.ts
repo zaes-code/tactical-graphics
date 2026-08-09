@@ -109,21 +109,36 @@ export function halo(): {color: string; widthPx: number} {
 }
 
 /**
- * The screen rotation of a point graphic's own axis, kept upright.
+ * The screen rotation of a point graphic's own axis, kept upright — for a letter
+ * that lies along its graphic rather than standing upright on screen.
  *
- * `properties.rotation` is a **compass bearing in degrees** — that is what the
- * generators hand `translateCoordinates` — and a screen rotation is measured
- * clockwise from east, hence the quarter turn. The flip is the same rule
- * `uprightRotation` applies to a segment: a label is never drawn upside down.
+ * **`properties.rotation` is a maths angle, not a compass bearing.** The point
+ * generators pass `toRadians(rotation)` straight to `translateCoordinates`, which
+ * measures anticlockwise from **east**, so the drawn axis runs along
+ * `(cos θ, sin θ)`. Reading it as a bearing puts the label a quarter turn out — and
+ * a quarter turn on a single capital letter is nearly invisible in a pixel diff,
+ * which is how the first version of this survived a visual comparison.
  *
- * For a letter that lies along its graphic rather than standing upright on screen.
+ * The upright flip is not reimplemented here: the axis is handed to
+ * `uprightRotation`, the same function the segment-based labels use, so the two can
+ * never disagree about which way up a letter goes.
  */
 export function axisRotation(feature: PaintFeature): number {
-    const rotation = toRadians(feature.properties.rotation ?? 0) - Math.PI / 2;
-    return Math.cos(rotation) < 0 ? rotation + Math.PI : rotation;
-}
+    // Preferred: the axis as *drawn*. A point-anchored label sits on the graphic's own
+    // axis, so the anchor and the centre give the direction directly — in projected
+    // metres, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
+    // the same two points for the same reason: EPSG:3857's y is not linear in
+    // latitude, so an axis reconstructed from the angle drifts off the drawn line.
+    const centre = feature.graphicCenter;
+    const anchor = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
+    if (centre && anchor && (centre[0] !== anchor[0] || centre[1] !== anchor[1])) {
+        return uprightRotation(anchor, centre);
+    }
 
-const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+    // Fallback for a feature that carries neither: the angle the generator was given.
+    const theta = ((feature.properties.rotation ?? 0) * Math.PI) / 180;
+    return uprightRotation([0, 0], [Math.cos(theta), Math.sin(theta)]);
+}
 
 /** Zoom-anchored label scale for a paint feature. */
 export function scaleOf(feature: PaintFeature, context: PaintContext): number {
