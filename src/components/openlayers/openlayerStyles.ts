@@ -121,6 +121,7 @@ import {
     pursuitPaint,
     CROSSED_HALF_WIDTH_PX,
     crossedMissionTaskLabelPaint,
+    missionTaskLabelPaint,
     crossedMissionTaskLabelScale,
     crossedMissionTaskPaint,
     blockPaint,
@@ -2231,51 +2232,21 @@ export function airspaceCoordinationAreaStyle(
 }
 
 
-export function getMissionTaskStyleFn(textLabel: string, rotation: number = 0): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry() as Point;
-        let styles = [];
-
-        styles.push(new Style({
-            geometry: geom,
-            text: new Text({
-                rotation: rotation,
-                text: textLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                scale: featureLabelScale(feature, resolution),
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        return styles;
-
-    };
-}
-
 /**
- * Mission-task label rendered with the same 24px base font as the
- * ratio-locked block-family graphics. Scale tracks the circle radius
- * (`graphicSize`) so the label grows with the graphic, tuned so a
- * 50px-radius circle (the 100px-diameter floor) renders the label at
- * ~22.5px tall — matching the block-family label size at their minimum.
+ * The designation a point-anchored mission task carries, at its own anchor.
+ *
+ * **Ported** — one function for the whole family, because the split between the
+ * ratio-locked letters and the ordinary 16px ones is a property of the graphic and
+ * now lives on `RATIO_LOCKED_MISSION_TASKS` in the core library. There used to be a
+ * second style function here for the ratio-locked half and a holder branch choosing
+ * between the two; the second renderer could not see either, so it drew the whole
+ * family ratio-locked.
+ *
+ * `rotation` is for Envelopment's "E", which lies along its approach. @see
+ * paintFunctions.ts, `missionTaskLabelPaint`.
  */
-export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry() as Point;
-        return [new Style({
-            geometry: geom,
-            text: new Text({
-                text: textLabel,
-                font: RATIO_LOCKED_LABEL_FONT,
-                fill: new Fill({color: getLabelFillColor()}),
-                scale: ratioLockedLabelScale(feature, resolution),
-                stroke: getHaloStroke(),
-                textAlign: 'center',
-                textBaseline: 'middle',
-            }),
-        })];
-    };
+export function getMissionTaskStyleFn(name: TacticalGraphicName, rotation: number = 0): StyleFunction {
+    return asStyleFunction(missionTaskLabelPaint(name, rotation), name);
 }
 
 

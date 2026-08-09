@@ -177,6 +177,8 @@ export {
     withOpacity,
     allowedGestures,
     supportsHostility,
+    CROSSED_MISSION_TASKS,
+    RATIO_LOCKED_MISSION_TASKS,
 } from './core/symbology';
 
 /**
