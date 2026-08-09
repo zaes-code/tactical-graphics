@@ -108,6 +108,23 @@ export function halo(): {color: string; widthPx: number} {
     return {color: getLabelHaloColor(), widthPx: HALO_WIDTH};
 }
 
+/**
+ * The screen rotation of a point graphic's own axis, kept upright.
+ *
+ * `properties.rotation` is a **compass bearing in degrees** — that is what the
+ * generators hand `translateCoordinates` — and a screen rotation is measured
+ * clockwise from east, hence the quarter turn. The flip is the same rule
+ * `uprightRotation` applies to a segment: a label is never drawn upside down.
+ *
+ * For a letter that lies along its graphic rather than standing upright on screen.
+ */
+export function axisRotation(feature: PaintFeature): number {
+    const rotation = toRadians(feature.properties.rotation ?? 0) - Math.PI / 2;
+    return Math.cos(rotation) < 0 ? rotation + Math.PI : rotation;
+}
+
+const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+
 /** Zoom-anchored label scale for a paint feature. */
 export function scaleOf(feature: PaintFeature, context: PaintContext): number {
     return labelScale(feature.drawingResolution, context.resolution);
@@ -369,7 +386,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
  */
 export function missionTaskLabelPaint(
     name: TacticalGraphicName,
-    rotation = 0,
+    rotation: number | ((f: PaintFeature) => number) = 0,
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
     const label = getLabel(name);
     const ratioLocked = RATIO_LOCKED_MISSION_TASKS.has(name);
@@ -385,7 +402,7 @@ export function missionTaskLabelPaint(
                 scale: ratioLocked
                     ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
                     : labelScale(feature.drawingResolution, context.resolution),
-                rotation,
+                rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',
                 baseline: 'middle',
             },

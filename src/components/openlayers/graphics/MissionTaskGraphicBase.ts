@@ -32,13 +32,9 @@ import {
     TURN_DEFAULT_BEND,
     CROSSED_MISSION_TASKS,
     RATIO_LOCKED_MISSION_TASKS,
+    arrowheadMetres,
 } from '@zaes/tactical-graphics';
 
-/**
- * Turn's arrowhead length in screen pixels at the drawing zoom. Baked into
- * metres once, so it neither follows a resize nor stays pinned to the screen.
- */
-const TURN_ARROWHEAD_PX = 26;
 /**
  * Turn asks the generator for **no** gap, so its two curve halves meet exactly
  * at the arc-length midpoint, and `turnStyleFunc` cuts the gap itself from the
@@ -58,8 +54,6 @@ const TURN_LABEL_GAP_METRES = 0;
 /** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
 const TURN_TIP_HANDLE = 1;
 
-/** Envelopment's arrowhead length in screen pixels at the drawing zoom. @see TURN_ARROWHEAD_PX */
-const ENVELOPMENT_ARROWHEAD_PX = 22;
 /** Index of the line-end handle in `Envelopment.generateHandles`' output. */
 const ENVELOPMENT_LINE_HANDLE = 1;
 /**
@@ -586,7 +580,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = TURN_ARROWHEAD_PX * (drawingResolution ?? 1);
+        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -662,7 +656,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = ENVELOPMENT_ARROWHEAD_PX * (drawingResolution ?? 1);
+        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and

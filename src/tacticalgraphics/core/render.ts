@@ -132,6 +132,20 @@ export interface TacticalGraphicProperties {
      * as you render it, which is what this library's OpenLayers layer does.
      */
     labelGapDegrees?: number;
+    /**
+     * Half the gap left in a bowed curve for its designation, in **metres**. Turn
+     * and the tactical turn are the only readers.
+     *
+     * The metres twin of `labelGapDegrees`, and it exists for the same reason: pass
+     * 0 when the renderer cuts the gap itself from the rendered glyph, which both of
+     * this library's renderers do. Omitting it leaves the generator's fallback of
+     * `0.16 * size` — right for a consumer taking the raw GeoJSON, wrong on top of a
+     * glyph-measured cut, where the two gaps add up. That is what it did: a
+     * `labelGap` the OpenLayers holder passed as a generator argument had no
+     * portable form, so MapLibre got the fallback and cut a hole three times too
+     * wide around the same "T".
+     */
+    labelGap?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
 }
@@ -220,6 +234,12 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         // Both land on the generators' `size`, which is the one slot they offer; a given
         // graphic reads it as one or the other and never sets both.
         size: props.radius ?? props.decorationSize,
+        // Turn and Envelopment take their arrowhead length as a flat distance rather
+        // than a fraction of `size`, so it survives a resize. It reached the generator
+        // only through an OpenLayers holder override, so every other caller — a second
+        // renderer, a consumer of the public API — silently got the fallback ratio and
+        // a visibly smaller arrowhead. It is the same metres the holder stamps.
+        headSize: props.decorationSize,
         // Public `width` is a full width; the generators' `radius` is the half-width
         // offset from the centreline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
@@ -227,6 +247,7 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         mirrored: props.mirrored,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,
+        labelGap: props.labelGap,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
     };
