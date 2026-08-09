@@ -407,3 +407,24 @@ export function sketchLayer(id: string, source: string, dashPx: number[], widthP
         },
     } as LayerSpecification;
 }
+
+/**
+ * The centre-symbol layer.
+ *
+ * `icon-allow-overlap` is on because this symbol *is* the graphic's centre: MapLibre's
+ * default collision behaviour would drop it whenever a label happened to sit nearby,
+ * which reads as the symbol being missing rather than as decluttering.
+ */
+export function iconLayer(id: string, source: string): LayerSpecification {
+    return {
+        id,
+        type: 'symbol',
+        source,
+        layout: {
+            'icon-image': ['get', 'icon'],
+            'icon-size': ['get', 'scale'],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+        },
+    } as LayerSpecification;
+}

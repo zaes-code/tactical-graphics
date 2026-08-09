@@ -290,6 +290,20 @@ export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {baseGeometryFor} from './core/render';
+export {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    getSecuritySymbolProvider,
+    getSecuritySymbolSize,
+    resolveSecuritySymbol,
+    securitySymbolRevision,
+    securitySymbolSidc,
+    setSecuritySymbolProvider,
+    setSecuritySymbolSize,
+    useMilsymbolSecuritySymbols,
+} from './core/securitySymbol';
+export type {MilsymbolModule, SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from './core/securitySymbol';
 export type {AllowedGestures} from './core/symbology';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

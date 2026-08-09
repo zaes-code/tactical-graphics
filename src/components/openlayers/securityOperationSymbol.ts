@@ -35,7 +35,7 @@
 import {Feature} from 'ol';
 import {Icon, Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -240,6 +240,11 @@ export function useMilsymbolSecurityOperationSymbols(ms: MilsymbolModule, option
         const svg = new ms.Symbol(sidc, {size: sizePx * 2, ...options}).asSVG();
         return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     });
+    // And the renderer-neutral registry, so **one call serves both engines**. A host
+    // that has done this from the OpenLayers entry point should not have to discover
+    // a second function to make the MapLibre view draw the same symbol.
+    // @see core/securitySymbol.ts for why there are two registries at all.
+    useMilsymbolSecuritySymbols(ms as never, options);
 }
 
 /**
