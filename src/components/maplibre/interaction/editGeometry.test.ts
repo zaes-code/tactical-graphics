@@ -133,18 +133,29 @@ describe('moveVertex', () => {
 });
 
 describe('centreOf', () => {
-    it('is the middle of the extent, not the average of the vertices', () => {
-        // Three points bunched at one end and one at the other: an average would sit
-        // in the bunch, and the graphic would pivot around its own corner.
+    it('turns a drawn line about its first vertex, as OpenLayers does', () => {
+        // Not the middle of the extent, which is what this used to be. Every
+        // line-family symbol grows from p0 — an axis of advance stretches along its
+        // bearing from there — and `LineGraphicController.getCenter` returns
+        // `coordinates[0]` for exactly that reason. Pivoting about the middle here
+        // meant one drag turned the graphic two different ways in the two engines.
         const lopsided: Geometry = {type: 'LineString', coordinates: [[0, 0], [0.1, 0], [0.2, 0], [4, 0]]};
-        expect(centreOf(lopsided)[0]).toBeCloseTo(2, 3);
+        expect(centreOf(lopsided)).toEqual([0, 0]);
     });
 
-    it('measures in projected metres, so it is not the mean of the degrees', () => {
-        // Mercator stretches with latitude, so the midpoint of 0° and 60° north sits
-        // well north of 30° — averaging the degrees would put it in the wrong place.
-        const northSouth: Geometry = {type: 'LineString', coordinates: [[0, 0], [0, 60]] as Position[]};
-        expect(centreOf(northSouth)[1]).toBeGreaterThan(33);
+    it('turns a point-anchored graphic about its own point', () => {
+        expect(centreOf({type: 'Point', coordinates: [3, -2]} as Geometry)).toEqual([3, -2]);
+    });
+
+    it('measures a polygon in projected metres, not the mean of the degrees', () => {
+        // Mercator stretches with latitude, so the middle of a ring spanning 0° to 60°
+        // north sits well north of 30° on screen. `Polygon.getInteriorPoint` runs on
+        // projected coordinates, so matching it means projecting here too.
+        const tall: Geometry = {
+            type: 'Polygon',
+            coordinates: [[[-1, 0], [1, 0], [1, 60], [-1, 60], [-1, 0]]],
+        } as Geometry;
+        expect(centreOf(tall)[1]).toBeGreaterThan(33);
     });
 
     it('survives an empty geometry', () => {
