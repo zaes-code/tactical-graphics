@@ -14,6 +14,7 @@ import {
     SECURITY_OPERATION_PX,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMetres,
+    ratioLockOf,
     decorationMetres,
     hasBakedDecoration,
     isMovementGraphic,
@@ -257,6 +258,44 @@ function bakedDecorationSize(
 }
 
 /**
+ * The perpendicular size of a ratio-locked graphic: a fixed fraction of its own
+ * base length, measured end to end.
+ *
+ * **After the caller's properties, like the security operations and for the same
+ * reason.** Being ratio-locked *is* the rule that a caller does not choose the
+ * aspect ratio — the OpenLayers holder recomputes this on every geometry change and
+ * refuses the width drag outright — so a `radius` arriving from a snapshot or a
+ * sweep does not get to override it.
+ *
+ * Measured in projected metres end to end, which is what the OpenLayers holder
+ * measures. Both `radius` and `decorationSize` are set: the first is what
+ * `toGraphicOptions` turns into the generator's `size`, the second is what the
+ * holder stamps, so a graphic handed between the engines carries the same number.
+ */
+function ratioLockedSize(
+    name: TacticalGraphicName,
+    baseGeometry: GeoJSONFeature['geometry'],
+): Partial<TacticalGraphicProperties> {
+    const ratio = ratioLockOf(name);
+    if (ratio === undefined) return {};
+
+    const projected = projectGeometry(baseGeometry);
+    const positions: ProjectedPosition[] = [];
+    if (projected) {
+        for (const member of paintGeometryMembers(projected)) positions.push(...paintGeometryPositions(member));
+    }
+    if (positions.length < 2) return {};
+
+    const first = positions[0];
+    const last = positions[positions.length - 1];
+    const length = Math.hypot(last[0] - first[0], last[1] - first[1]);
+    if (!(length > 0)) return {};
+
+    const size = length * ratio;
+    return {radius: size, decorationSize: size};
+}
+
+/**
  * The size a security operation is drawn at, in metres.
  *
  * These are badges: the OpenLayers holder builds every dimension as a pixel
@@ -342,6 +381,9 @@ export function buildTacticalGraphic(
         // size. @see allowedGestures
         ...securityOperationSize(name, drawingResolution),
         ...bakedDecorationSize(name, properties, drawingResolution),
+        // Also after the caller's properties: a ratio-locked graphic's size is not a
+        // size the caller may set. @see ratioLockedSize
+        ...ratioLockedSize(name, baseGeometry),
     };
 
     const base: GeoJSONFeature = {

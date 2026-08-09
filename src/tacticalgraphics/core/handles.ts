@@ -100,6 +100,38 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * Graphics whose perpendicular size is locked to a fraction of their own base
+ * length, so the user can rotate and resize but never change the aspect ratio.
+ * The value is perpendicular-size / base-length.
+ *
+ * **A proportion, so both renderers have to know it.** It lived in the OpenLayers
+ * holder, which recomputes the size from the base on every geometry change and
+ * refuses the width drag outright. A renderer without the table has to invent a
+ * size instead, and MapLibre's guess — a screen constant times the resolution —
+ * drew the same breach with more than twice the line work at a close zoom.
+ *
+ * A ratio-locked graphic derives its size from its base *always*, in either engine.
+ * That is what makes it ratio-locked: a caller-supplied size is not a size the
+ * symbol may take.
+ */
+export const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.AttackByFire]: 0.4,
+    [TacticalGraphicName.SupportByFire]: 0.4,
+    [TacticalGraphicName.Breach]: 0.3,
+    [TacticalGraphicName.Bypass]: 0.3,
+    [TacticalGraphicName.Canalize]: 0.3,
+    [TacticalGraphicName.Clear]: 0.3,
+    [TacticalGraphicName.TacticalDisrupt]: 0.3,
+    // The table 5-19 twin behaves exactly as the mission task it copies.
+    [TacticalGraphicName.Disrupt]: 0.3,
+};
+
+/** The locked perpendicular-size / base-length ratio, or undefined. @see RATIO_LOCK */
+export function ratioLockOf(name: TacticalGraphicName): number | undefined {
+    return RATIO_LOCK[name];
+}
+
+/**
  * How far out each family draws its offset handle, as a multiple of the width it
  * sets. A handle drawn three widths out needs a third of the drag.
  */
