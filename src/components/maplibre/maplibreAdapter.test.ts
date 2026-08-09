@@ -17,8 +17,11 @@
 
 import {
     PAINTABLE_GRAPHICS,
+    TacticalGraphicHostility,
     TacticalGraphicName,
+    getColorByHostility,
     resetTacticalGraphicsConfig,
+    supportsHostility,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 
@@ -101,6 +104,49 @@ describe('buildTacticalGraphic', () => {
         }
 
         expect(blank).toEqual([]);
+    });
+
+    /**
+     * The whole-catalogue version of the exemption rule.
+     *
+     * `hostilityExemptions.test.ts` pins `lineColorOf`, which is where the rule is
+     * enforced — but a paint function is free to resolve a colour some other way,
+     * and three of them legitimately do. This runs every graphic through the real
+     * generator with a hostile bag and looks at the marks that come out, so a new
+     * paint function that reaches for `getColorByHostility` directly is caught.
+     *
+     * The line of contact is the one graphic excluded, and it is excluded *because*
+     * it draws a red wave: it renders both standard identities at once, by design.
+     */
+    it('never paints an exempt graphic in the hostile colour', () => {
+        const hostileRed = getColorByHostility(TacticalGraphicHostility.hostileFaker);
+        const offenders: string[] = [];
+
+        for (const name of PAINTABLE_GRAPHICS) {
+            if (supportsHostility(name) || name === TacticalGraphicName.LineOfContact) continue;
+
+            const candidates = [
+                {type: 'LineString' as const, coordinates: [[-2, 0], [2, 0]]},
+                {type: 'Polygon' as const, coordinates: [[[-2, -2], [2, -2], [2, 2], [-2, 2], [-2, -2]]]},
+                {type: 'Point' as const, coordinates: [0, 0]},
+            ];
+            const built = candidates
+                .map(geometry => buildTacticalGraphic(name, geometry, {
+                    radius: 180_000,
+                    rotation: 0,
+                    hostility: TacticalGraphicHostility.hostileFaker,
+                }))
+                .find(Boolean);
+            if (!built) continue;
+
+            const red = paintTacticalGraphic(built, context).some(paint =>
+                paint.stroke?.color === hostileRed
+                || paint.fill?.color === hostileRed
+                || paint.circle?.fill?.color === hostileRed);
+            if (red) offenders.push(name);
+        }
+
+        expect(offenders).toEqual([]);
     });
 
     /**

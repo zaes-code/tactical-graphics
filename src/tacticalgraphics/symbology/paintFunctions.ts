@@ -38,6 +38,7 @@ import {
     getLabelHaloColor,
     labelScale,
     ratioLockedLabelScale,
+    supportsHostility,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
@@ -61,17 +62,43 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
     return formatFullLabel(getLabel(graphicName), customName);
 }
 
-/** The affiliation a feature draws in. `unknown` resolves to the default line colour. */
+/**
+ * The affiliation a feature draws in. `unknown` resolves to the default line colour.
+ *
+ * **A graphic whose symbol does not take a standard identity always reads
+ * `unknown`**, whatever its properties say. @see supportsHostility
+ */
 export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
+    if (feature.properties.name && !supportsHostility(feature.properties.name)) {
+        return TacticalGraphicHostility.unknown;
+    }
     return feature.properties.hostility ?? TacticalGraphicHostility.unknown;
 }
 
 /**
- * The colour a graphic's line work draws in: a host's already-resolved override
- * if there is one, otherwise the affiliation's. `getColorByHostility` resolves
+ * The colour a graphic's line work draws in: a host's already-resolved override if
+ * there is one, otherwise the affiliation's. `getColorByHostility` resolves
  * `unknown` to the default line colour, so the unaffiliated case is covered too.
+ *
+ * ## Why the exemption is enforced here and not only in the UI
+ *
+ * FM 1-02.2 gives the Chapter 6 tactical mission tasks no amplifier fields, so a
+ * hostile Seize is drawn exactly like any other Seize. The demo enforced that by
+ * **hiding the input** — which stops a user picking an identity and does nothing
+ * about one that arrives in an imported file, from a host writing the bag
+ * directly, or from a sweep that colours everything. MapLibre's sample sweep did
+ * exactly that last thing and drew every mission task red.
+ *
+ * Hiding a control is a UI convenience; this is the rule. Both halves are kept,
+ * because a field a user can set and the renderer then ignores is its own kind of
+ * wrong.
+ *
+ * `hostilityColor` is skipped for the same reason: it is a *resolved* affiliation
+ * colour, so honouring it would let the same value back in through the other door.
  */
 export function lineColorOf(feature: PaintFeature): string {
+    const name = feature.properties.name;
+    if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
     return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
 }
 
