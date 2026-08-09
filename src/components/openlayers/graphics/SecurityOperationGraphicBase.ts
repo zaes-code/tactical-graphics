@@ -6,34 +6,27 @@ import {_scaleAndRotateCoordinates} from '../../../utils/scaleAndRotateCoordinat
 import {StyleFunction} from 'ol/style/Style';
 import {SecurityOperationGraphic} from "../controllers/SecurityOperationsController";
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {SECURITY_OPERATION_PX, getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 
 /**
- * Screen-pixel sizes at scale 1. Every one is multiplied by the map resolution,
- * which is what keeps the graphic a constant size on screen as you zoom.
- */
-/** Where the label anchor sits, measured from the centre. Unchanged. */
-const LABEL_PADDING_PX = 50;
-/**
- * Clear space between the label and the line that runs away from it.
+ * Screen-pixel sizes at scale 1, **imported from the generator** rather than
+ * declared here. Every one is multiplied by the map resolution, which is what
+ * keeps the graphic a constant size on screen as you zoom.
  *
- * The two used to be locked together: the label was placed at
- * `centerPadding / 1.5`, so the gap was always a third of the padding — 25px,
- * changeable only by moving the arms too. Naming the gap lets the line come in to
- * meet the label without the label or the arrowheads moving at all.
+ * They used to be a second copy of the same numbers. The generator now derives
+ * the whole symbol from `size` when a caller passes no dimensions — which is what
+ * makes these graphics reachable through the public API — so two copies would be
+ * two symbols that silently disagree the first time one is edited.
  */
-const LABEL_GAP_PX = 20;
-/**
- * Where each arm's line begins — just past the label. Was 75px, which left the
- * 25px gap described above.
- */
-const CENTER_PADDING_PX = LABEL_PADDING_PX + LABEL_GAP_PX;
-const ARROW_LENGTH_PX = 75;
-const ARROW_DEPTH_PX = 20;
-const ARROW_HEAD_LENGTH_PX = 10;
-const ARROW_HEAD_DEGREE = 60;
+const LABEL_PADDING_PX = SECURITY_OPERATION_PX.labelPadding;
+/** Where each arm's line begins — just past the label and its clear space. */
+const CENTER_PADDING_PX = LABEL_PADDING_PX + SECURITY_OPERATION_PX.labelGap;
+const ARROW_LENGTH_PX = SECURITY_OPERATION_PX.arrowLength;
+const ARROW_DEPTH_PX = SECURITY_OPERATION_PX.arrowDepth;
+const ARROW_HEAD_LENGTH_PX = SECURITY_OPERATION_PX.arrowHeadLength;
+const ARROW_HEAD_DEGREE = SECURITY_OPERATION_PX.arrowHeadDegree;
 
 /**
  * Smallest scale factor.
