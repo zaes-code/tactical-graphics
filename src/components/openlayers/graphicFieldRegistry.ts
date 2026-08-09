@@ -11,7 +11,7 @@
  * every TacticalGraphicName is covered at compile time.
  */
 
-import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicName} from '@zaes/tactical-graphics';
+import { TacticalGraphicName, supportsHostility} from '@zaes/tactical-graphics';
 
 // ── Public type ───────────────────────────────────────────────────────────────
 
@@ -487,34 +487,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
  * the profile above it.
  */
 /**
- * Graphics that draw both standard identities at once, so selecting one is
- * meaningless. Line of contact is the whole set: FM 1-02.2's line control
- * measure table prints it as two opposed waves — the enemy side red, the
- * friendly side black — and the generator does exactly that, unconditionally.
- * A hostility here has nothing to change.
+ * **Moved to `core/symbology.ts`** and re-exported here so this module's surface is
+ * unchanged. It is a symbology fact — FM 1-02.2 gives the Chapter 6 tactical
+ * mission tasks no amplifier fields — not a property of this dialog, and a second
+ * renderer needs the same answer. The paint layer now enforces it as well as this
+ * registry hiding the input. @see lineColorOf
  */
-const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
-
-/**
- * The four FM 1-02.2 table 5-19 obstacle effects, each an exact copy of the
- * Chapter 6 tactical mission task of the same doctrinal name apart from the
- * letter. They are Chapter 5, so the category derivation would switch hostility
- * on and a hostile one would draw red — but a twin that renders differently
- * from what it twins is not a twin. Kept separate from the set above because
- * the reason is different: line of contact has nothing to change, these have
- * something to change and must not.
- */
-const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Block,
-    TacticalGraphicName.Disrupt,
-    TacticalGraphicName.Fix,
-    TacticalGraphicName.Turn,
-]);
-
-export function supportsHostility(name: TacticalGraphicName): boolean {
-    if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
-    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
-}
+export {supportsHostility};
 
 // ── Public accessor ───────────────────────────────────────────────────────────
 

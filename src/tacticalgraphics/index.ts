@@ -175,6 +175,7 @@ export {
     maxGraphicLabelScale,
     ratioLockedLabelScale,
     withOpacity,
+    supportsHostility,
 } from './core/symbology';
 
 /**

@@ -7,6 +7,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     getDisplayName,
+    supportsHostility,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
 
@@ -79,6 +80,26 @@ export interface MapLibreSampleReport {
 }
 
 /**
+ * The hostility to stamp on a sample, or nothing.
+ *
+ * **A graphic that does not take a standard identity is left untouched**, exactly
+ * as the OpenLayers sweep leaves it: FM 1-02.2 gives no amplifier fields to the
+ * Chapter 6 tactical mission tasks, so a swept mission task has to render as it
+ * does with no hostility selected. Stamping one anyway made every mission task in
+ * this sweep red, which is a picture a user could not produce.
+ *
+ * The paint layer refuses the value too — @see lineColorOf — so this is belt and
+ * braces. It is worth both: this keeps the saved bag honest, so a sweep exported
+ * to GeoJSON does not carry an identity the symbol never had.
+ */
+function hostilityFor(
+    name: TacticalGraphicName,
+    hostility?: TacticalGraphicHostility,
+): {hostility?: TacticalGraphicHostility} {
+    return hostility && supportsHostility(name) ? {hostility} : {};
+}
+
+/**
  * Builds one sample per paintable graphic, laid out on a grid grouped by category.
  *
  * Grouped so the sweep reads the way the OpenLayers gallery does — related symbols
@@ -111,7 +132,7 @@ export function buildSampleGraphics(hostility?: TacticalGraphicHostility): {
                 // which surfaces as the graphic simply not drawing. All nine arc and
                 // circular-area samples were missing until this was passed.
                 rotation: 0,
-                ...(hostility ? {hostility} : {}),
+                ...hostilityFor(name, hostility),
             }))
             .find(Boolean);
 
@@ -152,7 +173,7 @@ export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): F
                     name,
                     radius: SAMPLE_RADIUS_M,
                     rotation: 0,
-                    ...(hostility ? {hostility} : {}),
+                    ...hostilityFor(name, hostility),
                 },
             },
         });
