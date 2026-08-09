@@ -537,15 +537,25 @@ export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature,
  * The fallback for holders that install no dedicated style of their own. Distinct
  * from {@link areaOutlinePaint} because the fill is deliberate here — this is what
  * a solid symbol uses, not a control-measure boundary.
+ *
+ * **The fill is only emitted for a geometry that can hold one.** This is the
+ * fallback for a whole family, and several of its members are paths rather than
+ * areas — exploitation's zigzag among them. OpenLayers drops a fill on a line
+ * silently, so asking for one looked harmless; MapLibre honours it, filling the
+ * zigzag in as a solid blob. A mark that means nothing to one renderer and
+ * something to another is a mark that should not be emitted.
  */
 export function areaFillPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
     return feature => {
         const color = lineColorOf(feature);
+        const geometry: Paint['geometry'] = feature.geometry.type === 'GeometryCollection'
+            ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
+            : feature.geometry;
+        const areal = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
+
         return [{
-            geometry: feature.geometry.type === 'GeometryCollection'
-                ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
-                : feature.geometry,
-            fill: {color},
+            geometry,
+            ...(areal ? {fill: {color}} : {}),
             stroke: {color, widthPx: LINE_WIDTH()},
         }];
     };
