@@ -1,6 +1,16 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
-import {getDrawMarkerColor, getHandleColor, getInertHandleColor} from '@zaes/tactical-graphics';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getDrawMarkerColor,
+    getHandleColor,
+    getInertHandleColor,
+    getSecuritySymbolSize,
+    resolveSecuritySymbol,
+    securitySymbolRevision,
+    securitySymbolSidc,
+} from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
@@ -8,6 +18,7 @@ import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
     handleLayer,
+    iconLayer,
     sketchLayer,
     emptyBuckets,
     circleLayer,
@@ -54,6 +65,8 @@ const SOURCE_PREFIX = 'tg-';
 /** The editor's two layers, named so the interaction layer can query them. */
 export const HANDLE_LAYER_ID = 'tg-handle';
 export const SKETCH_LAYER_ID = 'tg-sketch';
+/** The security operations' host-provided centre symbol. @see core/securitySymbol.ts */
+export const SYMBOL_ICON_LAYER_ID = 'tg-icon';
 
 /**
  * The glyph stack MapLibre renders labels with.
@@ -158,6 +171,12 @@ export class NativeLayerRenderer {
     private selectedId: string | null = null;
     /** The line being drawn, in projected metres, or null when not drawing. */
     private sketch: ProjectedPosition[] | null = null;
+    /** Icon names already handed to `loadImage`, so each is rasterised once. */
+    private readonly registeredIcons = new Set<string>();
+    /** Rasterised width per icon, for turning a wanted size into `icon-size`. */
+    private readonly iconSizes = new globalThis.Map<string, number>();
+    /** The provider/size revision those icons were built at. */
+    private symbolRevision = -1;
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
@@ -212,13 +231,14 @@ export class NativeLayerRenderer {
         if (this.installed) return;
         this.map.setGlyphs(GLYPHS_URL);
 
-        for (const kind of ['fills', 'circles', 'symbols', 'handles', 'sketch']) {
+        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
-        this.layerIds.push('tg-fill', 'tg-circle', 'tg-symbol');
+        this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
+        this.layerIds.push('tg-fill', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
 
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a
@@ -355,6 +375,7 @@ export class NativeLayerRenderer {
             }
         }
 
+        this.realiseCentreSymbols(visible);
         this.realiseEditorMarks();
         this.lastVisibleCount = visible.length;
         this.lastRealiseBreakdown = {
@@ -432,6 +453,84 @@ export class NativeLayerRenderer {
     setSketch(points: ProjectedPosition[] | null): void {
         this.sketch = points && points.length ? points : null;
         this.realiseEditorMarks();
+    }
+
+    /**
+     * Registers and places the security operations' centre symbols.
+     *
+     * The symbol is a single-point icon, which is milsymbol's job rather than this
+     * library's — nothing here names milsymbol, and a host that registers no provider
+     * simply gets an empty centre, which is a supported state.
+     *
+     * MapLibre needs the image **registered by name** before a layer can reference
+     * it, and `loadImage` is asynchronous. So a symbol appears on the realisation
+     * *after* the one that first asked for it. That is invisible in practice — the
+     * load resolves in a frame or two — and the alternative, blocking a rebuild on a
+     * network-shaped call, is not worth it for a decoration.
+     */
+    private realiseCentreSymbols(visible: MapLibreTacticalGraphic[]): void {
+        // A provider or size change invalidates every rasterised icon, and comparing
+        // providers by identity would miss the size half.
+        if (this.symbolRevision !== securitySymbolRevision()) {
+            this.symbolRevision = securitySymbolRevision();
+            this.registeredIcons.clear();
+        }
+
+        const features: Array<{type: 'Feature'; geometry: {type: 'Point'; coordinates: number[]}; properties: Record<string, unknown>}> = [];
+
+        for (const graphic of visible) {
+            if (!SECURITY_OPERATIONS.has(graphic.name)) continue;
+            const centre = graphic.base.geometry;
+            if (centre.type !== 'Point') continue;
+
+            const hostility = graphic.properties.hostility ?? TacticalGraphicHostility.pending;
+            const symbol = resolveSecuritySymbol({
+                name: graphic.name,
+                hostility,
+                sidc: securitySymbolSidc(hostility),
+                sizePx: getSecuritySymbolSize(),
+            });
+            if (!symbol) continue;
+
+            const iconId = `tg-sym-${graphic.name}-${hostility}`;
+            this.registerIcon(iconId, symbol.src);
+            if (!this.map.hasImage(iconId)) continue;
+
+            features.push({
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: centre.coordinates as number[]},
+                // `icon-size` is a *multiplier* on the image's own pixels, so the wanted
+                // size has to be divided by what was actually rasterised.
+                properties: {icon: iconId, scale: (symbol.sizePx ?? getSecuritySymbolSize()) / this.iconPixels(iconId)},
+            });
+        }
+
+        this.setData('icons', features);
+    }
+
+    /** Rasterises an image and registers it under `id`, once. */
+    private registerIcon(id: string, src: string): void {
+        if (this.registeredIcons.has(id)) return;
+        this.registeredIcons.add(id);
+        if (this.map.hasImage(id)) return;
+
+        const image = new Image();
+        image.onload = () => {
+            if (!this.map.hasImage(id)) this.map.addImage(id, image);
+            this.iconSizes.set(id, image.width || getSecuritySymbolSize());
+            // The image arrived after the realisation that asked for it, so the layer
+            // has nothing referencing it yet.
+            this.scheduleRealise();
+        };
+        // A provider that hands back an unloadable src gets an empty centre rather than
+        // a broken-image box, and the failure is not retried on every frame.
+        image.onerror = () => this.iconSizes.set(id, getSecuritySymbolSize());
+        image.src = src;
+    }
+
+    /** The rasterised width of a registered icon, in pixels. */
+    private iconPixels(id: string): number {
+        return this.iconSizes.get(id) || getSecuritySymbolSize();
     }
 
     /**
@@ -587,3 +686,10 @@ function centreHandleIndex(graphic: MapLibreTacticalGraphic): number {
         handle => Math.hypot(handle[0] - centre[0], handle[1] - centre[1]) <= tolerance,
     );
 }
+
+/** The three graphics that carry a host-provided centre symbol. */
+const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
