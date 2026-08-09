@@ -209,3 +209,85 @@ export function handleRole(name: TacticalGraphicName, index: number): HandleRole
 export function isMovementGraphic(name: TacticalGraphicName): boolean {
     return MOVEMENT_GRAPHICS.includes(name);
 }
+
+/**
+ * The point a rotate or a resize is measured about, given a graphic's **base**
+ * geometry in lon/lat.
+ *
+ * Three rules, one per base shape, and they are not interchangeable:
+ *
+ * - **A point-anchored graphic turns about its own point.** There is nothing else
+ *   it could turn about.
+ * - **A drawn line turns about its first vertex.** That is where the user started
+ *   the graphic, and every line-family symbol grows from it: an axis of advance
+ *   stretches along its bearing from p0, and a resize that moved p0 would slide the
+ *   graphic off the thing it was drawn against.
+ * - **A polygon turns about a point inside itself.** The midpoint of the extent is
+ *   not inside a concave ring, and a pivot outside the shape swings it away rather
+ *   than turning it.
+ *
+ * **A renderer that picks its own is a renderer that edits differently.** These
+ * lived in the OpenLayers controllers' `getCenter()` overrides, one per family, so
+ * MapLibre had no way to see them and pivoted everything about the extent midpoint.
+ * A fields-of-fire rotated about its middle in one engine and about its left leg in
+ * the other, from the same drag.
+ *
+ * The polygon case returns the **extent midpoint** for a convex ring, which is where
+ * an interior point lands anyway, and the average of the vertices otherwise. It is a
+ * near-match for OpenLayers' `Polygon.getInteriorPoint`, not a reimplementation of
+ * it; the two agree to well under a pixel on the shapes this library draws.
+ */
+export function rotationAnchor(geometry: {type: string; coordinates: unknown}): [number, number] {
+    const positions = flattenPositions(geometry.coordinates);
+    if (!positions.length) return [0, 0];
+
+    if (geometry.type === 'Point') return positions[0];
+    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
+
+    // Measured in **projected** metres, not degrees. OpenLayers' `getInteriorPoint`
+    // runs on EPSG:3857 coordinates, and Mercator's y is not linear in latitude — the
+    // midpoint of 0 deg and 60 deg is 33 deg on screen and 30 deg in degrees. On a tall
+    // polygon the two pivots are far enough apart to see.
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [lon, lat] of positions) {
+        const y = mercatorY(lat);
+        if (lon < minX) minX = lon;
+        if (lon > maxX) maxX = lon;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    const midpoint: [number, number] = [(minX + maxX) / 2, latitudeOf((minY + maxY) / 2)];
+    return pointInRing(positions, midpoint) ? midpoint : averageOf(positions);
+}
+
+/** Mercator y for a latitude in degrees, in radians-worth of units. */
+const mercatorY = (lat: number): number => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+
+/** The inverse of {@link mercatorY}, back to degrees. */
+const latitudeOf = (y: number): number => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * (180 / Math.PI);
+
+/** Every `[x, y]` in a nested coordinate array, in order. */
+function flattenPositions(node: unknown): [number, number][] {
+    if (!Array.isArray(node) || !node.length) return [];
+    if (typeof node[0] === 'number') return [[node[0] as number, node[1] as number]];
+    return (node as unknown[]).flatMap(flattenPositions);
+}
+
+const averageOf = (positions: [number, number][]): [number, number] => [
+    positions.reduce((sum, p) => sum + p[0], 0) / positions.length,
+    positions.reduce((sum, p) => sum + p[1], 0) / positions.length,
+];
+
+/** Ray casting, in the plane. Good enough at the scale a pivot needs. */
+function pointInRing(ring: [number, number][], [x, y]: [number, number]): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
