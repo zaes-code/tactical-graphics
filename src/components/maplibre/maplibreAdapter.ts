@@ -12,6 +12,8 @@ import {
     type ProjectedInputGeometry,
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
+    decorationMetres,
+    hasBakedDecoration,
     TacticalGraphicName,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
@@ -172,6 +174,7 @@ const DEFAULT_OFFSET_PX = 20;
  * about the shipped renderer rather than a bug fix. @see ai/current-task.md
  */
 function sizeDefaults(
+    name: TacticalGraphicName,
     geometry: GeoJSONFeature['geometry'],
     supplied: Omit<TacticalGraphicProperties, 'name'>,
     drawingResolution?: number,
@@ -192,10 +195,33 @@ function sizeDefaults(
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
         ...(supplied.width === undefined ? {width: metres * 2} : {}),
-        ...(supplied.decorationSize === undefined && supplied.radius === undefined
+        ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: metres}
             : {}),
     };
+}
+
+/**
+ * The decoration size for a graphic whose `size` option *is* a decoration.
+ *
+ * For these, `size` means "how big is the chevron" rather than "how far does this
+ * reach", so it belongs to the renderer, which knows the zoom. The OpenLayers
+ * holder does exactly this — `LineGraphicBase` passes
+ * `decorationMetres(name, resolution)` and lets a stamped value override it.
+ *
+ * Applied **after** the caller's properties, like the security operations and for
+ * the same reason: a `radius` arriving from a sweep or a snapshot is a reach in
+ * metres, and `toGraphicOptions` prefers it over `decorationSize` — so leaving it
+ * in place drew a bridge tick at 200 km. A caller who genuinely means to set the
+ * decoration passes `decorationSize`, which is honoured here.
+ */
+function bakedDecorationSize(
+    name: TacticalGraphicName,
+    supplied: Omit<TacticalGraphicProperties, 'name'>,
+    drawingResolution?: number,
+): Partial<TacticalGraphicProperties> {
+    if (!drawingResolution || !hasBakedDecoration(name)) return {};
+    return {radius: supplied.decorationSize ?? decorationMetres(name, drawingResolution)};
 }
 
 /**
@@ -270,7 +296,7 @@ export function buildTacticalGraphic(
         // to the label axis and `arcMissionTaskPaint` takes back exactly what the
         // rendered glyph needs. A fixed angular gap cannot track a capped label scale.
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
-        ...sizeDefaults(baseGeometry, properties, drawingResolution),
+        ...sizeDefaults(name, baseGeometry, properties, drawingResolution),
         ...properties,
         // **After** the caller's properties, unlike every other default here. A
         // security operation's size is not a ground distance a caller may set — it is
@@ -279,6 +305,7 @@ export function buildTacticalGraphic(
         // metres from some other zoom, and honouring it draws the symbol at the wrong
         // size. @see allowedGestures
         ...securityOperationSize(name, drawingResolution),
+        ...bakedDecorationSize(name, properties, drawingResolution),
     };
 
     const base: GeoJSONFeature = {
