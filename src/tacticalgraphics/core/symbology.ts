@@ -29,7 +29,8 @@ import {
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
 } from './config';
-import {TacticalGraphicHostility} from './type';
+import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -273,3 +274,48 @@ export function ratioLockedLabelScale(graphicSize: number | undefined, drawingRe
  * when the label sits due east.
  */
 export const CAP_HEIGHT_FRACTION = 0.72;
+
+/**
+ * Graphics that draw both standard identities at once, so selecting one is
+ * meaningless. Line of contact is the whole set: FM 1-02.2's line control measure
+ * table prints it as two opposed waves - the enemy side red, the friendly side
+ * black - and the generator does exactly that, unconditionally. A hostility here
+ * has nothing to change.
+ */
+const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
+
+/**
+ * The four FM 1-02.2 table 5-19 obstacle effects, each an exact copy of the
+ * Chapter 6 tactical mission task of the same doctrinal name apart from the
+ * letter. They are Chapter 5, so the category derivation would switch hostility on
+ * and a hostile one would draw red - but a twin that renders differently from what
+ * it twins is not a twin. Kept separate from the set above because the reason is
+ * different: line of contact has nothing to change, these have something to change
+ * and must not.
+ */
+const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Block,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.Fix,
+    TacticalGraphicName.Turn,
+]);
+
+/**
+ * Whether a graphic's line work takes the standard identity colour at all.
+ *
+ * **A symbology fact, not a UI one**, which is why it lives here rather than beside
+ * the dialog's field list. FM 1-02.2 gives no amplifier fields to the Chapter 6
+ * tactical mission tasks: a hostile Seize is drawn exactly like any other Seize.
+ * Deriving that from the category beats repeating a boolean 198 times - a graphic
+ * added later inherits the right answer instead of whatever was copied above it.
+ *
+ * It moved out of `openlayers/graphicFieldRegistry.ts` (which still re-exports it)
+ * once there was a second renderer. Hiding the input is only half the rule: it
+ * stops a *user* choosing an identity, and does nothing about one that arrives in
+ * an imported file or from a host that writes the bag itself. The other half is
+ * {@link getColorByHostility}'s caller refusing it - see `lineColorOf`.
+ */
+export function supportsHostility(name: TacticalGraphicName): boolean {
+    if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
+    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
+}
