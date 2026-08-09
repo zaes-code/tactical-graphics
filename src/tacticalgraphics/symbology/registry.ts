@@ -60,6 +60,7 @@ import {
     frontalAttackLabelPaint,
     infiltrationLabelPaint,
     mobileDefenseLabelPaint,
+    bridgeLabelPaint,
     envelopmentGraphicPaint,
     infiltrationGraphicPaint,
     mobileDefenseGraphicPaint,
@@ -589,6 +590,16 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         graphic: envelopmentGraphicPaint(),
         label: movementLabelFor(TacticalGraphicName.Envelopment),
     };
+    // The crossings label themselves like an amplifier rather than like an arrow —
+    // the OpenLayers holder said so and the registry did not, so MapLibre sized a
+    // bridge's designation by the crossing's span and drew it several times too big.
+    for (const name of [
+        TacticalGraphicName.Bridge,
+        TacticalGraphicName.Gap,
+        TacticalGraphicName.AssaultCrossing,
+    ]) {
+        registry[name] = {graphic: movementGraphicPaint(), label: bridgeLabelPaint()};
+    }
     registry[TacticalGraphicName.MobileDefense] = {
         graphic: mobileDefenseGraphicPaint(),
         label: movementLabelFor(TacticalGraphicName.MobileDefense),

@@ -7,6 +7,7 @@ import {
     getHandleColor,
     getInertHandleColor,
     getSecuritySymbolSize,
+    hasBakedDecoration,
     resolveSecuritySymbol,
     securitySymbolRevision,
     securitySymbolSidc,
@@ -418,7 +419,7 @@ export class NativeLayerRenderer {
 
         for (let i = 0; i < this.graphics.length; i++) {
             const graphic = this.graphics[i];
-            if (!SCREEN_SIZED_GRAPHICS.has(graphic.name)) continue;
+            if (!isScreenSized(graphic.name)) continue;
 
             const rebuilt = buildTacticalGraphic(graphic.name, graphic.base.geometry, graphic.properties, resolution);
             // A generator that refuses leaves the previous geometry up, which is the
@@ -728,11 +729,25 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * Graphics whose **geometry** is a screen size rather than a ground distance, and
- * so have to be regenerated when the zoom changes.
+ * Whether a graphic's **geometry** is a screen size rather than a ground distance,
+ * and so has to be regenerated when the zoom changes.
  *
- * The security operations are the whole set today: they are badges, and every
- * dimension of one — the arm length, the centre padding, the arrowheads — is a
- * pixel constant times the resolution. @see rebuildScreenSized
+ * Two kinds:
+ *
+ * - the **security operations**, badges whose every dimension — arm length, centre
+ *   padding, arrowheads — is a pixel constant times the resolution;
+ * - everything with a **baked decoration**, whose `size` is "how big is the
+ *   chevron" in screen pixels. Bridge, gap, the fords, the wire obstacles, the
+ *   direction arrows.
+ *
+ * OpenLayers re-derives both on every zoom through `watchResolution`, so they hold
+ * their size. Baking them once looks right at the zoom they were built at and
+ * wrong everywhere else — and for the second kind it is not only the decoration:
+ * the label anchors are spaced by the same number, and the movement label's scale
+ * is proportional to that span, so a bridge's designation came out several times
+ * too large. That is invisible to a comparison run at one zoom, which is why this
+ * was missed until the harness grew a zoom axis.
  */
-const SCREEN_SIZED_GRAPHICS = SECURITY_OPERATIONS;
+function isScreenSized(name: TacticalGraphicName): boolean {
+    return SECURITY_OPERATIONS.has(name) || hasBakedDecoration(name);
+}

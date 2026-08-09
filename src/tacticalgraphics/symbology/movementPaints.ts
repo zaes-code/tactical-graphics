@@ -504,3 +504,52 @@ export function mobileDefenseGraphicPaint(): (f: PaintFeature, c: PaintContext) 
     };
 }
 
+/** How far past the pre-placed anchor the date sits, in screen pixels. */
+const BRIDGE_DATE_GAP_PX = 12;
+
+/**
+ * Bridge, gap and assault crossing: the designation across the crossing, and the
+ * date-time group beyond its far end.
+ *
+ * **Zoom-anchored, not span-proportional.** The rest of the movement family sizes
+ * its designation against the arrow's on-screen span, which is right for a graphic
+ * whose whole point is its length. A crossing is a mark on a route: its label is an
+ * amplifier like any other and takes the ordinary capped scale. Sizing it by span
+ * put a bridge's designation several times too large — invisible at the zoom it was
+ * built at and obvious one level in, which is why it survived a single-zoom
+ * comparison.
+ *
+ * The date is drawn **horizontal** whatever the crossing's bearing, and aligned so
+ * it runs *away* from the graphic: `generateLabels` places the anchor beyond the
+ * end, and centring text there would run it back over the crossing. A
+ * more-horizontal crossing therefore aligns left or right by direction; a
+ * more-vertical one centres, because horizontal text at a point above or below the
+ * end does not overlap the axis anyway.
+ */
+export function bridgeLabelPaint(): MovementPaint {
+    return (feature, context) => {
+        const coords = anchors(feature);
+        if (coords.length < 2) return [];
+
+        const [c0, c1] = coords;
+        const dx = c1[0] - c0[0];
+        const dy = c1[1] - c0[1];
+        const scale = scaleOf(feature, context);
+
+        const paints: Paint[] = [
+            text(c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
+        ];
+
+        const date = areaDateLabel(feature);
+        if (date) {
+            const length = Math.hypot(dx, dy) || 1;
+            const gap = BRIDGE_DATE_GAP_PX * context.resolution;
+            const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
+            const align = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'left' : 'right') : 'center';
+            paints.push(text(at, date, scale, {align}));
+        }
+
+        return paints;
+    };
+}
+
