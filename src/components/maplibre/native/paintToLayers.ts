@@ -1,6 +1,6 @@
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry} from '@zaes/tactical-graphics';
+import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -43,6 +43,24 @@ import {toLonLat} from '../projection';
  * changes. That is not a styling difference, it is a different rendering model —
  * and it is the cost `NativeLayerRenderer` exists to measure.
  */
+
+/**
+ * The editor's own marks: drag handles and the vertices of a drawing in progress.
+ *
+ * Deliberately not part of a graphic's paint list. A handle is editor chrome — it
+ * says "you can drag this" — so it is not symbology, it must not take the
+ * affiliation colour, and it has to sit above every graphic rather than in draw
+ * order among them. @see createHandleFeature, which makes the same argument on the
+ * OpenLayers side.
+ */
+export interface EditorMarks {
+    /** Draggable handles, in projected metres. */
+    handles: ProjectedPosition[];
+    /** Handles that show but refuse a drag — the inert centre dot. */
+    inertHandles: ProjectedPosition[];
+    /** The line being drawn, if a draw is in progress. */
+    sketch?: ProjectedPosition[];
+}
 
 /** A paint's marks, split by which MapLibre layer type can draw them. */
 export interface LayerBuckets {
@@ -352,4 +370,40 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
     }
 
     return merged;
+}
+
+/**
+ * The editor's handle layer — always the same colour, never the affiliation's.
+ *
+ * A handle is chrome: it says "you can drag this", and that meaning must not change
+ * with a graphic's standard identity. Tinting them also made a hostile graphic's
+ * handles the same red as its own strokes, so they stopped reading as handles.
+ * @see createHandleFeature, which makes the same argument on the OpenLayers side.
+ */
+export function handleLayer(id: string, source: string): LayerSpecification {
+    return {
+        id,
+        type: 'circle',
+        source,
+        paint: {
+            'circle-radius': ['get', 'radius'],
+            'circle-color': ['get', 'color'],
+            'circle-opacity': 0.8,
+        },
+    } as LayerSpecification;
+}
+
+/** The line being drawn — dashed, because a sketch is not a graphic yet. */
+export function sketchLayer(id: string, source: string, dashPx: number[], widthPx: number): LayerSpecification {
+    return {
+        id,
+        type: 'line',
+        source,
+        layout: {'line-cap': 'round', 'line-join': 'round'},
+        paint: {
+            'line-color': ['get', 'color'],
+            'line-width': widthPx,
+            'line-dasharray': dashPx,
+        },
+    } as LayerSpecification;
 }
