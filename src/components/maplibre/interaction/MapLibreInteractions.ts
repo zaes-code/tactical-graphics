@@ -40,6 +40,7 @@ import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAda
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
 import {
+    centreOf,
     moveVertex,
     positionsOf,
     resize,
@@ -86,6 +87,9 @@ export interface InteractionCallbacks {
  */
 const HANDLE_MODES: readonly EditMode[] = ['translate', 'rotate', 'resize', 'modify'];
 
+/** How near the pivot a grab counts as *on* it, in screen pixels. @see startedOnPivot */
+const PIVOT_GRAB_PX = 6;
+
 export class MapLibreInteractions {
     private mode: EditMode = 'view';
     /** The graphic being drawn, or null when not drawing. */
@@ -100,6 +104,8 @@ export class MapLibreInteractions {
         vertex: number;
         /** Whether the drag began on the inert centre dot. */
         onCentre: boolean;
+        /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
+        onPivot: boolean;
         /** Which handle was grabbed, or -1 for a drag that started on the body. */
         handle: number;
         last: Position;
@@ -298,6 +304,7 @@ export class MapLibreInteractions {
             // the centre is the one place a user naturally reaches to drag a symbol
             // bodily. The dot is drawn grey to say so.
             onCentre: onHandle && handle === this.renderer.centreHandleOf(graphic),
+            onPivot: this.startedOnPivot(graphic, event.point),
             handle,
             vertex,
             last: [event.lngLat.lng, event.lngLat.lat],
@@ -307,6 +314,19 @@ export class MapLibreInteractions {
         // Otherwise the map pans out from under the gesture.
         this.map.dragPan.disable();
     };
+
+    /**
+     * Whether the grab landed on the point a rotate or a resize turns about.
+     *
+     * Measured in **screen pixels**, because "did the user grab the pivot" is a
+     * question about the cursor, not about the ground: the same few metres is a hit at
+     * one zoom and a miss at another.
+     */
+    private startedOnPivot(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): boolean {
+        const pivot = centreOf(graphic.base.geometry as Parameters<typeof centreOf>[0]);
+        const projected = this.map.project([pivot[0], pivot[1]] as [number, number]);
+        return Math.hypot(projected.x - point.x, projected.y - point.y) <= PIVOT_GRAB_PX;
+    }
 
     private readonly onPointerMove = (event: MapMouseEvent): void => {
         if (this.drawing) {
@@ -372,6 +392,13 @@ export class MapLibreInteractions {
         const allowed = allowedGestures(drag.graphic.name);
         if (this.mode === 'rotate' && !allowed.rotate) return before;
         if (this.mode === 'resize' && !allowed.resize) return before;
+        // **Decided once, at pointer-down, and it has to be.** Both gestures measure
+        // from the pivot, and a grab that starts on it carries neither an angle nor a
+        // scale. Testing per step instead let the refusal lapse the moment the cursor
+        // left the pivot, and because each step is relative to the previous one the
+        // whole drag then scaled from the *first step* rather than from the start —
+        // which grew a fields-of-fire sixteenfold from one drag on its own anchor.
+        if (drag.onPivot && (this.mode === 'rotate' || this.mode === 'resize')) return before;
 
         switch (this.mode) {
             case 'translate':

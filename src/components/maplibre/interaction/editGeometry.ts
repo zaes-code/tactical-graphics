@@ -27,6 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import {rotationAnchor} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -70,24 +71,15 @@ export function positionsOf(geometry: Geometry): Position[] {
 }
 
 /**
- * The centre a rotate or a resize is measured about.
+ * The point a rotate or a resize is measured about.
  *
- * The **midpoint of the extent**, not the average of the vertices: a line drawn
- * with ten points clustered at one end would otherwise pivot around the cluster
- * rather than around the middle of the shape the user can see.
+ * **The rule is the library's, not this renderer's.** It differs per base shape —
+ * a point turns about itself, a drawn line about its first vertex, a polygon about
+ * a point inside itself — and choosing here rather than asking is what made the two
+ * engines edit differently from the same drag. @see rotationAnchor
  */
 export function centreOf(geometry: Geometry): Position {
-    const positions = positionsOf(geometry).map(p => toMercator([p[0], p[1]]));
-    if (!positions.length) return [0, 0];
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const [x, y] of positions) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return toLonLat([(minX + maxX) / 2, (minY + maxY) / 2]);
+    return rotationAnchor(geometry as {type: string; coordinates: unknown});
 }
 
 /** Moves a graphic by the metric offset between two lon/lat points. */
@@ -122,6 +114,12 @@ export function translate(description: GraphicDescription, from: Position, to: P
  */
 export function rotate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
     const centre = toMercator(centreOf(description.geometry) as [number, number]);
+    // The same refusal as `resize`, for the same reason: the angle from a point sitting
+    // on the pivot is the direction of a rounding error. @see PIVOT_GRAB_SHARE
+    const [fromX, fromY] = toMercator([from[0], from[1]]);
+    if (Math.hypot(fromX - centre[0], fromY - centre[1]) <= PIVOT_GRAB_SHARE * spanOf(description.geometry)) {
+        return description;
+    }
     const angleTo = (position: Position) => {
         const [x, y] = toMercator([position[0], position[1]]);
         return Math.atan2(y - centre[1], x - centre[0]);
@@ -151,6 +149,27 @@ export function rotate(description: GraphicDescription, from: Position, to: Posi
 
 /** Smallest a graphic may be scaled to in one drag, as a ratio. */
 const MIN_SCALE_STEP = 0.05;
+/**
+ * How close to the pivot a grab has to be before it is treated as *on* it, as a
+ * share of the graphic's own diagonal. Below this a rotate or a resize is refused
+ * rather than amplified. @see resize
+ */
+const PIVOT_GRAB_SHARE = 0.02;
+
+/** The graphic's diagonal in projected metres — its own scale, for relative tests. */
+function spanOf(geometry: Geometry): number {
+    const positions = positionsOf(geometry).map(p => toMercator([p[0], p[1]]));
+    if (positions.length < 2) return 0;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of positions) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    return Math.hypot(maxX - minX, maxY - minY);
+}
+
 /** Smallest radius a point-anchored graphic may be dragged to, in metres. */
 const MIN_RADIUS_METRES = 100;
 
@@ -173,8 +192,14 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
         return Math.hypot(x - centre[0], y - centre[1]);
     };
 
+    // A grab that starts **at the pivot** carries no scale: the ratio is a tiny
+    // number divided by a tiny number. Testing for exactly zero was not enough,
+    // because the grab point is a handle's rounded screen position converted back to
+    // lon/lat and lands a fraction of a metre off — which scaled a fields-of-fire to
+    // 1384 degrees across from one drag. Measured against the graphic's own size, so
+    // it needs no resolution.
     const before = distance(from);
-    if (before === 0) return description;
+    if (before <= PIVOT_GRAB_SHARE * spanOf(description.geometry)) return description;
     const ratio = Math.max(MIN_SCALE_STEP, distance(to) / before);
     if (!isFinite(ratio) || ratio === 1) return description;
 
