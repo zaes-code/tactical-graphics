@@ -19,6 +19,9 @@ import {drawSpikeSamples} from './spikeDriver';
 import {buildSampleGraphics} from './sampleGallery';
 import type {MapEngineHandle} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
+import TacticalGraphicsDialog from '../tactical-graphics-dialog';
+import type {FeaturePropertiesSource} from '../featurePropertiesSource';
+import {createMapLibrePropertiesSource} from './featurePropertiesSource';
 
 /**
  * The MapLibre half of the demo's engine picker.
@@ -134,6 +137,12 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MapLibreMap | null>(null);
     const [, setReady] = useState(false);
+    /**
+     * The properties dialog's map half, once there is a map and a renderer to build
+     * it from. State rather than a ref because the dialog is rendered from it, and a
+     * ref would not re-render when it appears.
+     */
+    const [propertiesSource, setPropertiesSource] = useState<FeaturePropertiesSource | null>(null);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -166,6 +175,9 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         // Both spike paths are built, and which one draws is a runtime switch, so a
         // single capture run can compare them against each other and against
         // OpenLayers without rebuilding. `renderer` is whichever is live.
+        // Set by the cleanup below, and read by anything asynchronous that might
+        // outlive this effect — `map.on('load')` above all.
+        let disposed = false;
         let canvas: CanvasOverlayRenderer | null = null;
         let native: NativeLayerRenderer | null = null;
         let mode: SpikeRenderMode = INITIAL_MODE;
@@ -189,6 +201,16 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             load();
             setReady(true);
             onReady(handle);
+            // The dialog only works against the native path: it hit-tests through
+            // `queryRenderedFeatures`, and the canvas overlay puts nothing in the style
+            // for that to find. The overlay is a comparison tool, not a working view.
+            //
+            // `disposed` guards the case React's StrictMode creates in development: the
+            // effect runs, is torn down, and runs again, so this `load` can fire for a
+            // map that has already been removed. Publishing that map's source left the
+            // dialog subscribed to a dead map while every click went to the live one —
+            // the handler ran on nothing and the dialog simply never opened.
+            if (native && !disposed) setPropertiesSource(createMapLibrePropertiesSource(map, native));
         });
 
         const handle: MapEngineHandle = {
@@ -240,6 +262,8 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         }
 
         return () => {
+            disposed = true;
+            setPropertiesSource(null);
             onReady(null);
             canvas?.destroy();
             native?.destroy();
@@ -269,7 +293,10 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
     }, [graphicsSettings, darkMode]);
 
     return (
-        <div ref={containerRef} className="map-container"/>
+        <>
+            <div ref={containerRef} className="map-container"/>
+            {propertiesSource && <TacticalGraphicsDialog source={propertiesSource}/>}
+        </>
     );
 };
 

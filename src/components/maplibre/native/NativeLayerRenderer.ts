@@ -1,10 +1,12 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
-import type {Paint, PaintContext} from '@zaes/tactical-graphics';
+import type { PaintContext} from '@zaes/tactical-graphics';
 import {resolutionOf} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
+    GRAPHIC_ID_PROPERTY,
     bucketPaints,
+    mergeBuckets,
     circleLayer,
     featureCollection,
     fillLayer,
@@ -83,6 +85,15 @@ const ZOOM_REALISE_THRESHOLD = 0.34;
 
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
+    /**
+     * Every layer this renderer owns, for hit-testing.
+     *
+     * `queryRenderedFeatures` with no layer filter would also return basemap
+     * features, and the basemap has a lot of them — so the query has to name the
+     * layers, and the dash-keyed line layers are created lazily, so the list has to
+     * be kept rather than derived.
+     */
+    private readonly layerIds: string[] = [];
     private readonly lineLayerKeys = new Set<string>();
     private lastRealisedZoom = Number.NaN;
     private installed = false;
@@ -146,6 +157,7 @@ export class NativeLayerRenderer {
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
+        this.layerIds.push('tg-fill', 'tg-circle', 'tg-symbol');
         this.installed = true;
     }
 
@@ -229,10 +241,12 @@ export class NativeLayerRenderer {
         const resolution = resolutionOf(this.map);
         const context: PaintContext = {resolution, measureText: this.measureText};
 
-        const paints: Paint[] = [];
-        for (const graphic of this.graphics) paints.push(...paintTacticalGraphic(graphic, context));
-
-        const buckets = bucketPaints(paints);
+        // Bucketed per graphic rather than in one pass, so each feature can be stamped
+        // with the graphic it came from — which is what makes a rendered mark
+        // hit-testable back to its symbol. @see GRAPHIC_ID_PROPERTY
+        const buckets = mergeBuckets(
+            this.graphics.map(graphic => bucketPaints(paintTacticalGraphic(graphic, context), graphic.id)),
+        );
         let features = buckets.fills.length + buckets.circles.length + buckets.symbols.length;
 
         // Register any hatch this frame needs. MapLibre has no pattern primitive —
@@ -262,6 +276,7 @@ export class NativeLayerRenderer {
                 const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(Number);
                 this.map.addLayer(lineLayer(id, id, dash), 'tg-symbol');
                 this.lineLayerKeys.add(key);
+                this.layerIds.push(id);
             } else {
                 (this.map.getSource(id) as GeoJSONSource | undefined)?.setData(featureCollection(list));
             }
@@ -275,6 +290,52 @@ export class NativeLayerRenderer {
 
     private setData(kind: string, features: Parameters<typeof featureCollection>[0]): void {
         (this.map.getSource(SOURCE_PREFIX + kind) as GeoJSONSource | undefined)?.setData(featureCollection(features));
+    }
+
+    /** The graphic with this id, or undefined. */
+    find(id: string): MapLibreTacticalGraphic | undefined {
+        return this.graphics.find(g => g.id === id);
+    }
+
+    /**
+     * Swaps a graphic for a rebuilt version of itself, keeping its place in the
+     * draw order.
+     *
+     * Order matters because the paint list is emitted in graphic order and MapLibre
+     * draws a source's features in the order they arrive: moving an edited graphic
+     * to the end would lift it above whatever it used to sit under.
+     */
+    replace(id: string, next: MapLibreTacticalGraphic): void {
+        const index = this.graphics.findIndex(g => g.id === id);
+        if (index < 0) return;
+        this.graphics[index] = next;
+        this.scheduleRealise();
+    }
+
+    /**
+     * The graphic under a screen point, or undefined.
+     *
+     * `radiusPx` widens the query into a box, because most of these symbols are line
+     * work: a one-pixel query against a two-pixel line asks the user to be more
+     * accurate than the symbol is wide.
+     */
+    hitTest(point: {x: number; y: number}, radiusPx = 5): MapLibreTacticalGraphic | undefined {
+        const box: [[number, number], [number, number]] = [
+            [point.x - radiusPx, point.y - radiusPx],
+            [point.x + radiusPx, point.y + radiusPx],
+        ];
+        const layers = this.layerIds.filter(id => this.map.getLayer(id));
+        if (!layers.length) return undefined;
+
+        const hits = this.map.queryRenderedFeatures(box, {layers});
+        for (const hit of hits) {
+            const id = hit.properties?.[GRAPHIC_ID_PROPERTY];
+            if (typeof id === 'string') {
+                const graphic = this.find(id);
+                if (graphic) return graphic;
+            }
+        }
+        return undefined;
     }
 
     destroy(): void {
