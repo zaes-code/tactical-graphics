@@ -1,11 +1,14 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
-import type { PaintContext} from '@zaes/tactical-graphics';
-import {MERCATOR_MAX_LATITUDE, resolutionOf, toMercator} from '../projection';
+import {getDrawMarkerColor, getHandleColor} from '@zaes/tactical-graphics';
+import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
+import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
+    handleLayer,
+    sketchLayer,
     emptyBuckets,
     circleLayer,
     featureCollection,
@@ -47,6 +50,10 @@ import {
  */
 
 const SOURCE_PREFIX = 'tg-';
+
+/** The editor's two layers, named so the interaction layer can query them. */
+export const HANDLE_LAYER_ID = 'tg-handle';
+export const SKETCH_LAYER_ID = 'tg-sketch';
 
 /**
  * The glyph stack MapLibre renders labels with.
@@ -97,6 +104,16 @@ const ZOOM_REALISE_THRESHOLD = 0.34;
  */
 const MID_GESTURE_MIN_INTERVAL_MS = 120;
 
+/**
+ * Handle dimensions, matching `createHandleFeature` on the OpenLayers side so the
+ * two editors feel the same under the hand.
+ */
+const HANDLE_RADIUS_PX = 5;
+/** Width of the sketch line while a graphic is being drawn. */
+const SKETCH_WIDTH_PX = 2;
+/** Dash of that sketch line, in pixels — a drawing is not a graphic yet. */
+const SKETCH_DASH = [4, 4];
+
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
     /**
@@ -131,6 +148,16 @@ export class NativeLayerRenderer {
     lastVisibleCount = 0;
     /** Set while a coalesced rebuild is pending. @see scheduleRealise */
     private realisePending = false;
+    /**
+     * The graphic whose handles are showing, or null.
+     *
+     * Only one graphic's handles are drawn at a time, exactly as OpenLayers only
+     * un-hides the selected graphic's. Two hundred graphics' worth of handles is
+     * not an editor, it is a starfield.
+     */
+    private selectedId: string | null = null;
+    /** The line being drawn, in projected metres, or null when not drawing. */
+    private sketch: ProjectedPosition[] | null = null;
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
@@ -185,13 +212,19 @@ export class NativeLayerRenderer {
         if (this.installed) return;
         this.map.setGlyphs(GLYPHS_URL);
 
-        for (const kind of ['fills', 'circles', 'symbols']) {
+        for (const kind of ['fills', 'circles', 'symbols', 'handles', 'sketch']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
         this.layerIds.push('tg-fill', 'tg-circle', 'tg-symbol');
+
+        // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
+        // that list is what a click hit-tests against to find a *graphic*, and a
+        // handle is not one — the interaction layer queries these by name instead.
+        this.map.addLayer(sketchLayer(SKETCH_LAYER_ID, SOURCE_PREFIX + 'sketch', SKETCH_DASH, SKETCH_WIDTH_PX));
+        this.map.addLayer(handleLayer(HANDLE_LAYER_ID, SOURCE_PREFIX + 'handles'));
         this.installed = true;
     }
 
@@ -322,6 +355,7 @@ export class NativeLayerRenderer {
             }
         }
 
+        this.realiseEditorMarks();
         this.lastVisibleCount = visible.length;
         this.lastRealiseBreakdown = {
             paint: bucketedAt - paintedAt,
@@ -376,6 +410,56 @@ export class NativeLayerRenderer {
         });
     }
 
+    /**
+     * Shows the given graphic's handles, or none.
+     *
+     * Separate from `realise` because selection changes far more often than geometry
+     * does — a click that only moves the selection has no reason to repaint 200
+     * graphics.
+     */
+    select(id: string | null): void {
+        if (this.selectedId === id) return;
+        this.selectedId = id;
+        this.realiseEditorMarks();
+    }
+
+    /** The currently selected graphic's id, or null. */
+    get selection(): string | null {
+        return this.selectedId;
+    }
+
+    /** Sets the line being drawn, or clears it. Repaints only the editor chrome. */
+    setSketch(points: ProjectedPosition[] | null): void {
+        this.sketch = points && points.length ? points : null;
+        this.realiseEditorMarks();
+    }
+
+    /**
+     * Uploads the handles and the sketch.
+     *
+     * Deliberately its own pass over its own sources: dragging a handle moves it
+     * every frame, and rebuilding every graphic to reflect that would put the whole
+     * realise cost inside a drag.
+     */
+    private realiseEditorMarks(): void {
+        const selected = this.selectedId ? this.find(this.selectedId) : undefined;
+        const handles = selected?.handles ?? [];
+
+        this.setData('handles', handles.map(position => ({
+            type: 'Feature' as const,
+            geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
+            properties: {radius: HANDLE_RADIUS_PX, color: getHandleColor()},
+        })));
+
+        this.setData('sketch', this.sketch && this.sketch.length >= 2
+            ? [{
+                type: 'Feature' as const,
+                geometry: {type: 'LineString' as const, coordinates: this.sketch.map(toLonLat)},
+                properties: {color: getDrawMarkerColor()},
+            }]
+            : []);
+    }
+
     /** The graphic with this id, or undefined. */
     find(id: string): MapLibreTacticalGraphic | undefined {
         return this.graphics.find(g => g.id === id);
@@ -420,6 +504,32 @@ export class NativeLayerRenderer {
             }
         }
         return undefined;
+    }
+
+    /**
+     * The handle index under a screen point, or -1.
+     *
+     * Queried ahead of the graphic body, because a handle sits *on* the graphic it
+     * belongs to and the body would otherwise always win.
+     */
+    hitTestHandle(point: {x: number; y: number}, radiusPx = 8): number {
+        if (!this.selectedId || !this.map.getLayer(HANDLE_LAYER_ID)) return -1;
+        const selected = this.find(this.selectedId);
+        if (!selected) return -1;
+
+        // Compared in screen space rather than through `queryRenderedFeatures`: the
+        // answer needed is *which* handle, and a rendered feature carries no index.
+        let best = -1;
+        let bestDistance = radiusPx;
+        selected.handles.forEach((position, index) => {
+            const projected = this.map.project(toLonLat(position) as [number, number]);
+            const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
+            if (distance <= bestDistance) {
+                best = index;
+                bestDistance = distance;
+            }
+        });
+        return best;
     }
 
     destroy(): void {

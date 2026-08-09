@@ -22,6 +22,8 @@ import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {createMapLibrePropertiesSource} from './featurePropertiesSource';
+import {MapLibreInteractions, type EditMode} from './interaction/MapLibreInteractions';
+import {InteractionType} from '../openlayers/TacticalGraphicsManager';
 
 /**
  * The MapLibre half of the demo's engine picker.
@@ -46,17 +48,25 @@ interface Props {
 /**
  * What this renderer can do today.
  *
- * Draw and edit are off because MapLibre ships no `Draw` / `Modify` equivalent and
- * the five controllers' translate / rotate / resize / bend semantics have not been
- * re-implemented. The panel greys those controls and shows the reason rather than
- * hiding them — the gap is part of the status, and a button that silently does
- * nothing is worse than one that says why it cannot.
+ * Draw and edit are on: MapLibre ships no `Draw` / `Modify` equivalent, so both
+ * are built here out of pointer events, editing the graphic's *description* rather
+ * than its drawn output. @see interaction/MapLibreInteractions.ts
  */
-const MAPLIBRE_CAPABILITIES = {
-    ...FULL_CAPABILITIES,
-    draw: false,
-    edit: false,
-    unsupportedReason: 'MapLibre has no draw or edit interaction yet — it ships no Draw/Modify equivalent.',
+const MAPLIBRE_CAPABILITIES = {...FULL_CAPABILITIES};
+
+/**
+ * The demo's interaction modes, as this renderer's.
+ *
+ * A translation table rather than a shared enum because `InteractionType` is
+ * OpenLayers' — it carries `drawing`, which is a separate concern here, and its
+ * members are numbers whose order nothing should depend on.
+ */
+const EDIT_MODES: Partial<Record<InteractionType, EditMode>> = {
+    [InteractionType.translate]: 'translate',
+    [InteractionType.rotate]: 'rotate',
+    [InteractionType.resize]: 'resize',
+    [InteractionType.modify]: 'modify',
+    [InteractionType.view]: 'view',
 };
 
 /**
@@ -178,6 +188,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         // Set by the cleanup below, and read by anything asynchronous that might
         // outlive this effect — `map.on('load')` above all.
         let disposed = false;
+        let interactions: MapLibreInteractions | null = null;
         let canvas: CanvasOverlayRenderer | null = null;
         let native: NativeLayerRenderer | null = null;
         let mode: SpikeRenderMode = INITIAL_MODE;
@@ -210,14 +221,16 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             // map that has already been removed. Publishing that map's source left the
             // dialog subscribed to a dead map while every click went to the live one —
             // the handler ran on nothing and the dialog simply never opened.
-            if (native && !disposed) setPropertiesSource(createMapLibrePropertiesSource(map, native));
+            if (native && !disposed) {
+                setPropertiesSource(createMapLibrePropertiesSource(map, native));
+                interactions = new MapLibreInteractions(map, native);
+            }
         });
 
         const handle: MapEngineHandle = {
             capabilities: MAPLIBRE_CAPABILITIES,
-            // Both no-ops, and declared unsupported above so the panel greys them.
-            startDrawing: () => undefined,
-            setInteractionMode: () => undefined,
+            startDrawing: name => interactions?.startDraw(name),
+            setInteractionMode: mode => interactions?.setMode(EDIT_MODES[mode] ?? 'view'),
             reset: () => renderer()?.clear(),
             clearAll: () => renderer()?.clear(),
             drawSamples: hostility => {
@@ -251,6 +264,10 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 get overlay() { return canvas; },
                 get native() { return native; },
                 get mode() { return mode; },
+                // The interaction layer, so a driving script can set an edit mode and
+                // drag without going through the panel — the OpenLayers hook publishes
+                // its manager for the same reason.
+                get interactions() { return interactions; },
                 setMode: (next: SpikeRenderMode) => {
                     canvas?.clear();
                     native?.clear();
@@ -263,6 +280,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
 
         return () => {
             disposed = true;
+            interactions?.destroy();
             setPropertiesSource(null);
             onReady(null);
             canvas?.destroy();
