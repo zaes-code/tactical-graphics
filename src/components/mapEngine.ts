@@ -1,4 +1,5 @@
 import type {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import type {FeatureCollection} from 'geojson';
 import type {InteractionType} from './openlayers/TacticalGraphicsManager';
 
 /**
@@ -52,6 +53,26 @@ export interface MapEngineHandle {
 
     exportGeoJson(): void;
     importGeoJson(file: File): Promise<void>;
+
+    /**
+     * Everything on the map, as the portable GeoJSON both engines already speak —
+     * one base feature per graphic, carrying `properties.tacticalGraphic`.
+     *
+     * The in-memory twin of `exportGeoJson`, which downloads a file. Separate
+     * because the engine picker has to hand the map over *without* a round trip
+     * through the user's downloads folder.
+     */
+    snapshot(): FeatureCollection;
+
+    /**
+     * Replaces everything on the map with `snapshot`.
+     *
+     * The in-memory twin of `importGeoJson`. Both engines rebuild each graphic
+     * through its generator from the saved description rather than restoring drawn
+     * output, which is what lets a graphic drawn in one engine arrive editable in
+     * the other rather than as a picture of itself.
+     */
+    restore(snapshot: FeatureCollection): void;
 }
 
 /**
