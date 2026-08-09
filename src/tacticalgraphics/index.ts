@@ -286,5 +286,6 @@ export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceA
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
+export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
