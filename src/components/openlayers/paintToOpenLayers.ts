@@ -155,6 +155,7 @@ export function paintToOlStyle(paint: Paint): Style {
                 scale: text.scale,
                 rotation: text.rotation,
                 textAlign: text.align,
+                justify: text.justify,
                 textBaseline: text.baseline,
                 // Raw screen pixels, and OpenLayers does not multiply them by `scale` —
                 // measured, not assumed. A paint function whose label scale varies has

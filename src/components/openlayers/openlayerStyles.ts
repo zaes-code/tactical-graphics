@@ -91,7 +91,9 @@ import {OSM} from 'ol/source';
 import {
     antiTankDitchPaint,
     arcMissionTaskPaint,
+    airCoordinatingAreaLabelPaint,
     airCorridorLabelPaint,
+    airspaceCoordinationAreaLabelPaint,
     airCorridorPaint,
     arrowheadedLinePaint,
     attackHelicopterAxisLabelPaint,
@@ -1937,14 +1939,13 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.LowAltitudeMissileEngagementZone:
         case TacticalGraphicName.HighAltitudeMissileEngagementZone:
         case TacticalGraphicName.ShortRangeAirDefenseEngagementZone:
-            return airCoordinatingAreaStyleFunc(getLabel(name), labels, false);
+            return airCoordinatingAreaStyleFunc(name);
         case TacticalGraphicName.WeaponsFreeZone:
-            return airCoordinatingAreaStyleFunc(getLabel(name), labels, true);
+            return airCoordinatingAreaStyleFunc(name);
         case TacticalGraphicName.AirSpaceCoordinationAreaRectangular:
         case TacticalGraphicName.AirSpaceCoordinationAreaIrregular:
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
-            labels.eff = dateLabel;
-            return airspaceCoordinationAreaStyle(fullLabel, labels);
+            return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.Airfield:
             return getAirfieldStyle(fullLabel, dateLabel);
         case TacticalGraphicName.NoFireAreaRectangular:
@@ -2172,63 +2173,9 @@ export function getAreaLabelFn(textLabel: string, dateLabel: string, rotation: n
  * @param {GraphicLabels} labels The parameterized label values (A, T, X, X1, W, W1).
  * @returns {StyleFunction} An array of OpenLayers Style objects for the labels.
  */
-export function airspaceCoordinationAreaStyle(
-    identifier: string,
-    labels: GraphicLabels,
-): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const anchorPoint = feature.getGeometry() as Point;
-
-        // ── Build text block ──────────────────────────────────────────────────
-        const nameLines: string[] = [];
-        if (identifier?.trim())    nameLines.push(identifier.trim());
-        if (labels.secondId?.trim()) nameLines.push(labels.secondId.trim());
-
-        const altLines: string[] = [];
-        if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${labels.minAltitude}`);
-        if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${labels.maxAltitude}`);
-        if (labels.grid)        altLines.push(`${'GRID:'.padEnd(11)}${labels.grid}`);
-        if (labels.eff)         altLines.push(`${'EFF'.padEnd(11)}${labels.eff}`);
-
-        const allLines = (nameLines.length > 0 && altLines.length > 0)
-            ? [...nameLines, '', ...altLines]
-            : [...nameLines, ...altLines];
-
-        if (allLines.length === 0) return [];
-
-        // ── Measure widest line at scale = 1 ─────────────────────────────────
-        const maxLineWidth = Math.max(...allLines.map(l => (l ? getTextWidth(l, fontStyle, 1) : 0)));
-
-        // ── Fit-to-polygon scale cap ──────────────────────────────────────────
-        // Use the shorter bounding-box dimension so the block stays inside the
-        // polygon at every zoom level. Falls back to featureLabelScale alone when
-        // the extent hasn't been stored yet (e.g. first render).
-        const extW = feature.get('polygonExtentWidth')  as number | undefined;
-        const extH = feature.get('polygonExtentHeight') as number | undefined;
-        let fitScale = Infinity;
-        if (extW && extH && maxLineWidth > 0) {
-            const availablePx = Math.min(extW, extH) / resolution * 0.80;
-            fitScale = availablePx / maxLineWidth;
-        }
-        const scale = Math.min(featureLabelScale(feature, resolution), fitScale);
-
-        // ── Center the left-aligned block at the interior point ───────────────
-        const offsetX = -(maxLineWidth * scale) / 2;
-
-        return [new Style({
-            geometry: anchorPoint,
-            text: new Text({
-                text: allLines.join('\n'),
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                textAlign: 'left',
-                textBaseline: 'middle',
-                offsetX,
-                scale,
-            }),
-        })];
-    };
+/** **Ported.** @see airPaints.ts, `airspaceCoordinationAreaLabelPaint`. */
+export function airspaceCoordinationAreaStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airspaceCoordinationAreaLabelPaint(name), name);
 }
 
 
@@ -2995,28 +2942,8 @@ export function createAirCoordinatingAreaLabelStyle(
 }
 
 // Full style function that can be assigned to a layer or feature
-export function airCoordinatingAreaStyleFunc(identifier: string, labels: GraphicLabels, hasHatchPattern: boolean): StyleFunction {
-    return (feature, resolution) => {
-        // Fallback Polygon Style (optional, but good practice)
-        const isPlanned = labels.status === TacticalGraphicStatus.planned;
-        const polygonStyle = new Style({
-            // Fixed literals, and not chrome: this is the graphic's own line work. See
-            // the palette note above `getDefaultLineColor`.
-            fill: new Fill({
-                color: 'rgba(255, 100, 100, 0.4)',
-            }),
-            stroke: new Stroke({
-                color: 'rgb(255, 50, 50)',
-                width: LINE_WIDTH(),
-                lineDash: isPlanned ? [12, 8] : undefined,
-            }),
-        });
-
-        // Generate label styles
-        const labelStyles = createAirCoordinatingAreaLabelStyle(feature, identifier, labels, resolution, hasHatchPattern);
-
-        // Return the base polygon style and all the generated label styles
-        return [polygonStyle, ...labelStyles];
-    };
+/** **Ported.** @see airPaints.ts, `airCoordinatingAreaLabelPaint`. */
+export function airCoordinatingAreaStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airCoordinatingAreaLabelPaint(name), name);
 }
 
