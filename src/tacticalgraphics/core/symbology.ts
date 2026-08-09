@@ -270,6 +270,25 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * Graphics whose designation gap is cut from the **rendered glyph** at paint time,
+ * so the generated geometry must carry none of its own.
+ *
+ * The two bowed turns. Their generator leaves `0.16 * size` for the letter when
+ * nobody says otherwise, which is right for a consumer taking the raw GeoJSON and
+ * wrong for a renderer that measures the letter and cuts its own hole — the two
+ * gaps add, and the curve opens three times wider than the "T" needs.
+ *
+ * A renderer that paints through this library's paint functions passes
+ * `labelGap: 0` for these. It is a list rather than a per-renderer constant because
+ * both renderers need the same answer, and the OpenLayers holder having it alone is
+ * exactly how the two came to disagree.
+ */
+export const GLYPH_CUT_GAP_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.TacticalTurn,
+];
+
+/**
  * The mission tasks whose designation is **ratio-locked**: a 24 px base font scaled
  * from the graphic's own `graphicSize`, so the letter grows and shrinks with the
  * circle it sits in. Every other mission task takes the ordinary zoom-anchored

@@ -76,3 +76,30 @@ export const decorationMetres = (name: TacticalGraphicName, resolution: number):
 export function hasBakedDecoration(name: TacticalGraphicName): boolean {
     return DECORATION_PX[name] !== undefined;
 }
+
+/**
+ * Arrowhead length in screen pixels at the drawing zoom, for the two point-anchored
+ * curves that take it as a **flat distance** rather than a fraction of their size.
+ *
+ * Deliberately not in `DECORATION_PX`: for the graphics in that table `size` *is* the
+ * decoration, so a renderer overrides `radius` with it. These two have a real reach
+ * as well — the run and the circle — so the arrowhead travels as `decorationSize`
+ * instead, and `radius` keeps meaning what it means everywhere else. Feeding them
+ * through the other table would set the arrowhead's length as the graphic's size.
+ *
+ * `headSize` is a flat distance so the arrowhead survives a resize at the size it
+ * was drawn — a fraction of `size` grows with the graphic, which is what the
+ * generators fall back to and what made a second renderer draw a visibly smaller
+ * head than OpenLayers.
+ */
+const ARROWHEAD_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.Turn]: 26,
+    [TacticalGraphicName.TacticalTurn]: 26,
+    [TacticalGraphicName.Envelopment]: 22,
+};
+
+/** The arrowhead length this graphic is drawn with, in metres, or undefined. @see ARROWHEAD_PX */
+export function arrowheadMetres(name: TacticalGraphicName, resolution: number): number | undefined {
+    const px = ARROWHEAD_PX[name];
+    return px === undefined ? undefined : px * resolution;
+}
