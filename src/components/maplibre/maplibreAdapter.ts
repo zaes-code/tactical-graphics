@@ -14,7 +14,10 @@ import {
     SECURITY_OPERATION_PX,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMetres,
+    RANGE_FANS,
     ratioLockOf,
+    resolveRangeFanBands,
+    toGraphicOptions,
     decorationMetres,
     hasBakedDecoration,
     isMovementGraphic,
@@ -257,6 +260,12 @@ function bakedDecorationSize(
     return {radius: supplied.decorationSize ?? stamped ?? decorationMetres(name, drawingResolution)};
 }
 
+/** The band data `rangeFanLabelPaint` walks. @see resolveRangeFanBands */
+function rangeFanFields(name: TacticalGraphicName, props: TacticalGraphicProperties) {
+    const {shape, bands} = resolveRangeFanBands(name, toGraphicOptions(props));
+    return {rangeFanShape: shape, rangeFanBands: bands};
+}
+
 /**
  * The perpendicular size of a ratio-locked graphic: a fixed fraction of its own
  * base length, measured end to end.
@@ -432,6 +441,10 @@ export function buildTacticalGraphic(
         // owns the holder has to supply them. Here that is this adapter.
         bounds: boundsOf(graphicGeometry),
         ring: outerRingOf(projectGeometry(baseGeometry)),
+        // A range fan's bands reach the generator and come back as anonymous points,
+        // so the label paint has to re-resolve them with the generator's own
+        // defaults. `RangeFanGraphicBase` does the same call. @see resolveRangeFanBands
+        ...(RANGE_FANS.includes(name) ? rangeFanFields(name, props) : {}),
     };
 
     return {
