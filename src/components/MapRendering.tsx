@@ -8,6 +8,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import MapControls from './MapControls';
 import {InteractionType} from './openlayers/TacticalGraphicsManager';
+import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
 import {
     DEFAULT_PALETTE,
@@ -129,12 +130,41 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
     const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
     const [selectedShape, setSelectedShape] = useState<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
 
+    /**
+     * What the outgoing engine was holding, waiting for the incoming one.
+     *
+     * A ref rather than state: it is written during a click handler and read in the
+     * next engine's ready callback, and nothing renders from it.
+     */
+    const handoverRef = useRef<FeatureCollection | null>(null);
+
     const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
         engineRef.current = handle;
+        // The live engine, for the driving scripts. Each engine already publishes its
+        // own map; this is the one thing above them — the handle the panel talks to.
+        // Stripped from production builds; nothing in the app may read it.
+        if (process.env.NODE_ENV !== 'production') {
+            (window as unknown as Record<string, unknown>).__tacticalEngine = handle;
+        }
         setCapabilities(handle?.capabilities ?? null);
         // A view that cannot edit must not leave the panel showing a stale mode from
         // the engine that could.
         if (!handle?.capabilities.edit) setInteractionMode(InteractionType.view);
+
+        // Hand the graphics to the engine that just arrived.
+        //
+        // Taken as GeoJSON rather than moved as live objects, because the two engines
+        // share no feature representation — the portable description is the only thing
+        // they both understand, and it is the same one persistence saves. So a graphic
+        // survives the switch *editable*, rebuilt through its generator, rather than as
+        // a picture of itself.
+        // **Not cleared on use.** React's StrictMode mounts a map, tears it down and
+        // mounts it again in development: consuming the snapshot on the first mount
+        // left the second — the one the user actually sees — with nothing to restore,
+        // and the graphics vanished on every switch. `restore` clears before it
+        // rebuilds, so running twice is harmless. The next engine change overwrites it.
+        const pending = handoverRef.current;
+        if (handle && pending) handle.restore(pending);
     }, []);
     const [settings, setSettings] = useState<TacticalGraphicsConfigOptions>(() => {
         // Applied here as well as in the effect below so the very first render already
@@ -167,6 +197,12 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
      */
     const handleEngineChange = (_: React.MouseEvent<HTMLElement>, next: MapEngine | null) => {
         if (!next) return;
+        // Snapshot **before** the state change: switching unmounts the current map, and
+        // by the time the new one reports ready the old engine's handle is gone.
+        const held = engineRef.current?.snapshot();
+        // Always assigned, so a switch away from an empty map clears a stale snapshot
+        // rather than resurrecting it.
+        handoverRef.current = held && held.features.length ? held : null;
         localStorage.setItem(LS_ENGINE, next);
         setEngine(next);
     };
