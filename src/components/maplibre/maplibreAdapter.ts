@@ -14,6 +14,7 @@ import {
     SECURITY_OPERATION_PX,
     decorationMetres,
     hasBakedDecoration,
+    isMovementGraphic,
     TacticalGraphicName,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
@@ -221,7 +222,15 @@ function bakedDecorationSize(
     drawingResolution?: number,
 ): Partial<TacticalGraphicProperties> {
     if (!drawingResolution || !hasBakedDecoration(name)) return {};
-    return {radius: supplied.decorationSize ?? decorationMetres(name, drawingResolution)};
+
+    // A stamped `radius` is the decoration size for the line family — that is what
+    // `LineGraphicBase.setOffset` replays on restore — but means nothing for the
+    // movement family, whose holder stamps `width` for its rails and derives the
+    // decoration from the resolution every time. Honouring it there drew a bridge
+    // tick 200 km tall; ignoring it here shrank a restored fields-of-fire arrowhead
+    // to a quarter of its size. The two families genuinely differ.
+    const stamped = isMovementGraphic(name) ? undefined : supplied.radius;
+    return {radius: supplied.decorationSize ?? stamped ?? decorationMetres(name, drawingResolution)};
 }
 
 /**
