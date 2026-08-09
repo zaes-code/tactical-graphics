@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import 'ol/ol.css';
 import '../../styles/map.css';
 
@@ -7,6 +7,7 @@ import '../../styles/map.css';
 import {createMap, getColorByHostility} from './openlayerStyles';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
+import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
@@ -280,13 +281,25 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         }
     };
 
+    /**
+     * The dialog's map half. Rebuilt only when the map is, since it closes over both
+     * the map and the manager — a new object every render would re-subscribe the
+     * click handler on every state change.
+     */
+    const propertiesSource = useMemo(
+        () => (map && tacticalGraphicManager.current
+            ? createOpenLayersPropertiesSource(map, tacticalGraphicManager.current)
+            : null),
+        // The manager is a ref, so it is not a dependency worth listing — it is
+        // populated in the same effect that sets the map.
+        [map],
+    );
+
     return (
         <>
             <div ref={mapRef} className="map-container"/>
 
-            {map && tacticalGraphicManager.current && (
-                <TacticalGraphicsDialog map={map} tacticalGraphicsManager={tacticalGraphicManager.current}/>
-            )}
+            {propertiesSource && <TacticalGraphicsDialog source={propertiesSource}/>}
         </>
     );
 };
