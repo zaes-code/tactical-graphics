@@ -20,7 +20,7 @@
 
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
+import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {buildTacticalGraphic} from './maplibreAdapter';
 import type {NativeLayerRenderer} from './native/NativeLayerRenderer';
