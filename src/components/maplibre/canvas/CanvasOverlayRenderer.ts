@@ -123,6 +123,16 @@ export class CanvasOverlayRenderer {
         };
     }
 
+    /**
+     * Nothing to do: this renderer repaints from the paint functions on **every**
+     * frame, so a config change is already picked up by the next one. It exists so the
+     * two renderers present the same surface — the native one bakes its paints into
+     * GeoJSON sources and genuinely has to be told. @see MapEngineHandle.refreshStyles
+     */
+    realise(): void {
+        this.map.triggerRepaint();
+    }
+
     clear(): void {
         this.graphics.length = 0;
         this.map.triggerRepaint();

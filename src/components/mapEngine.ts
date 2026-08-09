@@ -73,6 +73,21 @@ export interface MapEngineHandle {
      * the other rather than as a picture of itself.
      */
     restore(snapshot: FeatureCollection): void;
+
+    /**
+     * Redraw everything on screen against the **current** library config.
+     *
+     * `setTacticalGraphicsConfig` changes what the symbology answers; it does not tell
+     * a map that the answer moved. OpenLayers happens to hide this — its style
+     * functions run again on the next frame, so a colour change appears on its own —
+     * while MapLibre bakes each paint result into a GeoJSON source and a layer's paint
+     * properties, and keeps drawing the old colours until something re-runs the paints.
+     *
+     * So the host calls this after configuring. It is the "plus a feature invalidation"
+     * half of the rule in `ai/conventions.md`: a host's whole mode change is
+     * `configureTacticalGraphics(myPalette)` **and** an invalidation.
+     */
+    refreshStyles(): void;
 }
 
 /**

@@ -240,6 +240,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 const {graphics} = buildSampleGraphics(hostility);
                 graphics.forEach(g => target.add(g));
             },
+            refreshStyles: () => renderer()?.realise(),
             snapshot: () => renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []},
             restore: snapshot => {
                 const target = renderer();
