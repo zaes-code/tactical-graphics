@@ -160,3 +160,20 @@ export function handleRole(name: TacticalGraphicName, index: number): HandleRole
     const contract = handleContract(name);
     return contract.roles[index] ?? contract.repeating ?? 'shape';
 }
+
+/**
+ * Whether this graphic belongs to the movement family.
+ *
+ * The distinction matters beyond handles: the two OpenLayers holder families read a
+ * stamped `radius` differently. `LineGraphicBase` replays it as the graphic's
+ * *decoration* size — that is what its `setOffset` does on restore — while
+ * `MovementGraphicBase` stamps `width` for its rails and derives the decoration from
+ * the resolution every time, so a `radius` on one of those means nothing.
+ *
+ * A renderer choosing a decoration size has to know which it is looking at, or it
+ * either ignores a size the user set or honours a number that was never meant as
+ * one. @see maplibreAdapter, `bakedDecorationSize`
+ */
+export function isMovementGraphic(name: TacticalGraphicName): boolean {
+    return MOVEMENT_GRAPHICS.includes(name);
+}

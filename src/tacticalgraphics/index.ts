@@ -291,7 +291,7 @@ export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {baseGeometryFor} from './core/render';
 export {decorationMetres, hasBakedDecoration} from './core/decorationSizes';
-export {RANGE_FAN_BAND_OFFSET, handleContract, handleRole} from './core/handles';
+export {RANGE_FAN_BAND_OFFSET, handleContract, handleRole, isMovementGraphic} from './core/handles';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,
