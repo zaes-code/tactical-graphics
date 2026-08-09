@@ -15,7 +15,7 @@ import type {HatchSpec, Paint, PaintContext, PaintFeature} from '../core/paint';
 import {paintGeometryMembers, paintLineWork} from '../core/paint';
 import {LINE_WIDTH, fontStyle, getColorByHostility, getLabelFillColor, withOpacity} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicStatus} from '../core/type';
-import {fortifiedRing, obstacleRing, textWidth} from './decorations';
+import {crenellatedPath, encirclementToothSize, fortifiedRing, obstacleRing, ringIsClockwise, textWidth} from './decorations';
 import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf} from './paintFunctions';
 
 /** A paint function, in the shape the registry stores. */
@@ -204,19 +204,42 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
 }
 
 /**
- * Encirclement: the drawn outline, plus an "ENY" amplifier at each label anchor —
- * **only when the graphic is hostile**.
+ * Encirclement: the drawn outline worn with outward teeth, plus an "ENY" amplifier
+ * at each label anchor — the amplifiers **only when the graphic is hostile**.
  *
  * The one area graphic whose *form* changes with affiliation rather than only its
  * colour, which is why it cannot fall through to `areaOutlinePaint`.
+ *
+ * **The teeth are drawn here, in screen pixels, not baked by the generator** — the
+ * same split the obstacle belt and the fortified area already use, and for the same
+ * reason. A baked tooth is a ground distance fixed at the resolution the graphic was
+ * drawn at, so it grew and shrank with the map while every other toothed graphic on
+ * the same screen held its size, and it had no floor to fall through: zoomed out far
+ * enough the outline became a band of sub-pixel noise instead of a line.
+ * `encirclementToothSize` caps it against the ring's own on-screen size and drops it
+ * below `DECORATION_MIN_PX`.
+ *
+ * Outward is taken from the ring's winding rather than from drawing order, so a ring
+ * drawn anticlockwise does not come out with its teeth on the inside.
  *
  * The "ENY" stays in the label colour. Hostile line work goes red; hostile text
  * amplifiers do not — see the hostility colour rule in `ai/decisions.md`.
  */
 export function encirclementPaint(): AreaPaint {
     return (feature, context) => {
+        const paths = paintLineWork(feature.geometry);
+        // One ring's worth of points, whether the outline arrived whole or already cut
+        // into segments — both the winding and the tooth size belong to the ring, not
+        // to whichever piece of it is being walked.
+        const ring = paths.flat();
+        const {heightMap, baseMap, gapMap} = encirclementToothSize(ring, context.resolution);
+        const sideSign = ringIsClockwise(ring) ? 1 : -1;
+
         const paints: Paint[] = [{
-            geometry: strokeableGeometry(feature),
+            geometry: {
+                type: 'MultiLineString',
+                coordinates: paths.map(path => crenellatedPath(path, heightMap, baseMap, gapMap, sideSign)),
+            },
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         }];
 

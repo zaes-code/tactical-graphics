@@ -147,6 +147,11 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.AntiTankDitchUnderConstruction,
     TacticalGraphicName.AntiTankDitchCompleted,
     TacticalGraphicName.AntiTankDitchReinforcedWithMines,
+    // Joined the family when its triangles stopped being baked into the GeoJSON at
+    // draw-time resolution and started being drawn in screen space like the rest.
+    // At the sweep's ordinary area size its ring is 17 px across, which is under the
+    // floor, so without this it samples as a bare rectangle.
+    TacticalGraphicName.Encirclement,
 ]);
 
 /**

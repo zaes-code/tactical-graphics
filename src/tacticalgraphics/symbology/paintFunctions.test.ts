@@ -20,6 +20,7 @@ import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
 
 /**
@@ -137,6 +138,82 @@ describe('obstacle teeth are sized against the shape', () => {
         // "down", not from the direction of travel.
         expect(labelY(forward)).toBeLessThan(0);
         expect(labelY(backward)).toBeLessThan(0);
+    });
+});
+
+/**
+ * Encirclement used to bake its triangles into the GeoJSON at the resolution the
+ * graphic was drawn at, so they were a *ground* distance: they grew and shrank with
+ * the map while the obstacle belt beside them held its size, and far enough out they
+ * degenerated into sub-pixel fuzz along the outline instead of dropping out. These
+ * pin the belt's behaviour on them.
+ */
+describe('encirclement teeth are sized against the shape, like the obstacle belt', () => {
+    const paintEncirclement = encirclementPaint();
+
+    /** A square ring, `half` metres from centre to edge, anticlockwise. */
+    const square = (half: number): ProjectedPosition[] => [
+        [-half, -half], [half, -half], [half, half], [-half, half], [-half, -half],
+    ];
+
+    const ringFeature = (ring: ProjectedPosition[], overrides: Partial<PaintFeature['properties']> = {}): PaintFeature => ({
+        geometry: {type: 'MultiLineString', coordinates: [ring]},
+        properties: {name: TacticalGraphicName.Encirclement, ...overrides},
+    });
+
+    /** How far the line work reaches past the ring, in screen pixels. */
+    const toothHeightPx = (half: number, resolution: number, feature = ringFeature(square(half))): number => {
+        const geometry = paintEncirclement(feature, context(resolution))[0].geometry;
+        if (geometry.type !== 'MultiLineString') return NaN;
+        const reach = Math.max(...geometry.coordinates.flat().map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
+        return (reach - half) / resolution;
+    };
+
+    it('holds the same pixel height as the map zooms out', () => {
+        // The same ring on the ground, seen four times as far out. A baked tooth would
+        // report a quarter the pixels here; a screen-sized one reports the same number.
+        expect(toothHeightPx(400_000, 250)).toBeCloseTo(toothHeightPx(400_000, 1000), 6);
+        expect(toothHeightPx(400_000, 1000)).toBeGreaterThan(1);
+    });
+
+    it('shrinks the teeth once they would overwhelm the ring', () => {
+        // A ring 40 px across cannot carry a 10 px tooth, so the cap bites and this
+        // comes out below the uncapped height rather than at it.
+        const capped = toothHeightPx(10_000, 1000);
+        const uncapped = toothHeightPx(400_000, 1000);
+        expect(capped).toBeLessThan(uncapped);
+    });
+
+    it('drops the teeth entirely rather than drawing fuzz', () => {
+        // A ring 8 px across. The plain outline stands: five vertices, no teeth.
+        const geometry = paintEncirclement(ringFeature(square(400_000)), context(100_000))[0].geometry;
+        expect(geometry.type === 'MultiLineString' && geometry.coordinates[0]).toHaveLength(5);
+    });
+
+    it('points the teeth outward whichever way the ring was drawn', () => {
+        const clockwise = [...square(400_000)].reverse() as ProjectedPosition[];
+        expect(toothHeightPx(400_000, 1000)).toBeGreaterThan(1);
+        expect(toothHeightPx(400_000, 1000, ringFeature(clockwise))).toBeGreaterThan(1);
+    });
+
+    it('teeth a hostile outline too, and keeps the ENY amplifiers', () => {
+        // Hostile arrives as a collection: the outline already cut into segments to
+        // clear the amplifiers, plus the anchors they sit on.
+        const ring = square(400_000);
+        const feature: PaintFeature = {
+            geometry: {
+                type: 'GeometryCollection',
+                geometries: [
+                    {type: 'MultiLineString', coordinates: [ring.slice(0, 3), ring.slice(3)]},
+                    {type: 'MultiPoint', coordinates: [[0, 400_000]]},
+                ],
+            },
+            properties: {name: TacticalGraphicName.Encirclement, hostility: TacticalGraphicHostility.hostileFaker},
+        };
+
+        const paints = paintEncirclement(feature, context(1000));
+        expect(toothHeightPx(400_000, 1000, feature)).toBeGreaterThan(1);
+        expect(paints.some(p => p.text?.text === 'ENY')).toBe(true);
     });
 });
 
