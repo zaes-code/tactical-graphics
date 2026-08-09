@@ -16,8 +16,7 @@
  */
 
 import type {TacticalGraphicName} from '@zaes/tactical-graphics';
-import type {GraphicLabels} from '../utils/graphicLinkRegistry';
-import type {GraphicGeometryState} from './openlayers/graphicProperties';
+import type {GraphicGeometryState, GraphicLabels} from './graphicAmplifiers';
 
 /** The graphic a click landed on, as much of it as the dialog cares about. */
 export interface SelectedGraphic {
