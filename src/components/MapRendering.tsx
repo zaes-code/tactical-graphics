@@ -176,6 +176,12 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
     useEffect(() => {
         applyGraphicsConfig(darkMode, settings);
+        // Configuring changes what the symbology answers; it does not tell the map that
+        // the answer moved. OpenLayers hides this — its style functions run again on the
+        // next frame — but MapLibre bakes each paint into a GeoJSON source and keeps
+        // drawing the old colours until the paints re-run. Every host needs both halves.
+        // @see MapEngineHandle.refreshStyles
+        engineRef.current?.refreshStyles();
         localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
     }, [darkMode, settings]);
 

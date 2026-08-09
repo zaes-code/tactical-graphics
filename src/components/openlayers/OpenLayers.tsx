@@ -113,6 +113,12 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 clearAllGraphics(mgr);
                 setInteractionMode(InteractionType.view);
             },
+            refreshStyles: () => {
+                // Explicit rather than relying on the next frame: `ol/Object.set` and a
+                // config write both leave the feature's cached style in place, and only
+                // `changed()` dispatches the event that re-runs the style function.
+                tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => f.changed());
+            },
             snapshot: () => {
                 const mgr = tacticalGraphicManager.current;
                 return mgr ? serializeTacticalGraphics(mgr) : {type: 'FeatureCollection', features: []};
