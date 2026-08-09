@@ -16,7 +16,6 @@ import {
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
     getMissionTaskStyleFn,
-    getRatioLockedMissionTaskStyleFn,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
@@ -29,9 +28,10 @@ import {
     clampEnvelopmentBend,
     clampTurnBend,
     ENVELOPMENT_DEFAULT_BEND,
-    getLabel,
     TacticalGraphicName,
     TURN_DEFAULT_BEND,
+    CROSSED_MISSION_TASKS,
+    RATIO_LOCKED_MISSION_TASKS,
 } from '@zaes/tactical-graphics';
 
 /**
@@ -72,48 +72,6 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  * deliberate move to one side keeps the flip available without that.
  */
 const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
-
-/**
- * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing
- * at a one-letter label. They share one generator (`CrossedMissionTask`) and one
- * style function, which needs the name to know which arm is hashed and which
- * ends carry arrowheads.
- */
-const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Destroy,
-    TacticalGraphicName.Interdict,
-    TacticalGraphicName.Neutralize,
-    TacticalGraphicName.Suppress,
-];
-
-/**
- * Mission-task graphics whose label scales with the graphic rather than with
- * the zoom — the block-family treatment: 24 px base font, scale off
- * `graphicSize`.
- *
- * **Turn is deliberately absent.** Its "T" has to hold its size while the curve
- * is resized and stay capped on zoom, which is exactly what the default
- * `getMissionTaskStyleFn` (`featureLabelScale`, clamped to [0.3, 1.5]) already
- * does. Adding it here would make the letter track the curve instead.
- */
-const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
-    TacticalGraphicName.Contain,
-    TacticalGraphicName.Control,
-    TacticalGraphicName.Isolate,
-    // The other three arc-and-arrowhead circles. Their letters used to render at
-    // the zoom-anchored 16px default while Isolate's "I" tracked its circle, so
-    // four graphics built from the same arcs disagreed about how big a one-letter
-    // label is. Same treatment now: 24px base font, scale from `graphicSize`,
-    // and the 100px-diameter floor.
-    TacticalGraphicName.Occupy,
-    TacticalGraphicName.Retain,
-    TacticalGraphicName.Secure,
-    // The crossed-line tasks, for the 24px font. Their scale does not actually
-    // come from here — `crossedMissionTaskLabelStyleFn` overrides this entry
-    // with a constant, because the whole symbol is pinned to a fixed screen
-    // size — but leaving them in keeps the family's font literal in one place.
-    ...CROSSED_MISSION_TASKS,
-]);
 
 /**
  * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
@@ -259,9 +217,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (ARC_GAP_MISSION_TASKS.includes(name)) {
             this.graphic.setStyle(arcMissionTaskStyleFunc(name, RATIO_LOCKED_MISSION_TASKS.has(name)));
         }
-        this.label.setStyle((feature, resolution) => {
-            return getMissionTaskStyleFn(getLabel(name))(feature, resolution);
-        })
+        // One call for the whole family: `missionTaskLabelPaint` picks the ratio-locked
+        // 24px treatment or the ordinary zoom-anchored one from the name itself, so both
+        // renderers make the same choice. @see RATIO_LOCKED_MISSION_TASKS
+        this.label.setStyle((feature, resolution) => getMissionTaskStyleFn(name)(feature, resolution));
         // BaseDefenseZone uses a hardcoded "BDZ" label whose scale tracks
         // the circle's radius rather than the zoom-anchored
         // featureLabelScale. Override the default mission-task label style
@@ -269,15 +228,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // updateGeometry as `graphicSize`.
         if (name === TacticalGraphicName.BaseDefenseZone) {
             this.label.setStyle(baseDefenseZoneLabelStyleFn());
-        }
-        // Contain and Control share the ratio-locked block-family treatment:
-        // 24px base font, label scales with the circle, and a 100px-diameter
-        // minimum size enforced in updateGeom so the graphic is recognisable
-        // from the first click.
-        if (RATIO_LOCKED_MISSION_TASKS.has(name)) {
-            this.label.setStyle((feature, resolution) =>
-                getRatioLockedMissionTaskStyleFn(getLabel(name))(feature, resolution)
-            );
         }
         // …but the crossed four cap their symbol at 100 px across, and the
         // letter has to stop growing with it. Must come after the block above.
@@ -719,7 +669,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // the closure keeps the style honest because the label feature's geometry
         // is re-set on the same update, which is what triggers the redraw.
         this.label.setStyle((feature, resolution) =>
-            getMissionTaskStyleFn(getLabel(name), this.projectedRotation)(feature, resolution));
+            getMissionTaskStyleFn(name, this.projectedRotation)(feature, resolution));
 
         // `updateGeometry` is an arrow property on the base, not a method, so it
         // cannot be overridden — wrap it instead. Every path that rebuilds the

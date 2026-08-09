@@ -258,6 +258,47 @@ export function graphicLabelScale(graphicSize: number | undefined, drawingResolu
  */
 export const RATIO_LOCKED_LABEL_FRACTION = 0.3;
 
+/**
+ * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing at
+ * a one-letter designation, table 6-1. They share one generator and one style.
+ */
+export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+];
+
+/**
+ * The mission tasks whose designation is **ratio-locked**: a 24 px base font scaled
+ * from the graphic's own `graphicSize`, so the letter grows and shrinks with the
+ * circle it sits in. Every other mission task takes the ordinary zoom-anchored
+ * 16 px label.
+ *
+ * Which list a task is on is a *symbology* fact, not a renderer's opinion — a letter
+ * that tracks its circle in one view and holds a zoom-anchored size in another is
+ * two different symbols. It lived in the OpenLayers holder, and the second renderer
+ * duly disagreed with it: every mission-task letter was drawn ratio-locked there,
+ * which put a 24 px "T" on a turn that OpenLayers drew at 16 px and scaled it by a
+ * different rule as the map moved.
+ *
+ * The crossed four are here for the font only. Their scale is overridden with a
+ * constant, because the whole symbol is pinned to a fixed screen size — but keeping
+ * them on the list keeps the family's font literal in one place.
+ */
+export const RATIO_LOCKED_MISSION_TASKS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.Isolate,
+    // The other three arc-and-arrowhead circles. Their letters used to render at the
+    // zoom-anchored 16 px default while Isolate's "I" tracked its circle, so four
+    // graphics built from the same arcs disagreed about how big a one-letter label is.
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    ...CROSSED_MISSION_TASKS,
+]);
+
 /** Scale of a ratio-locked mission task's label. Anything opening a gap for that label must use this number. */
 export function ratioLockedLabelScale(graphicSize: number | undefined, drawingResolution: number | undefined, resolution: number): number {
     if (graphicSize && graphicSize > 0) {

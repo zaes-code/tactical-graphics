@@ -32,6 +32,7 @@ import {
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_MISSION_TASKS,
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
@@ -355,19 +356,36 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
  * Separate from {@link arcMissionTaskPaint} because the two are separate features
  * in every renderer: the graphic owns the line work, the label feature owns the
  * text, and they are stamped and invalidated independently.
+ *
+ * **Two sizings, and the name picks between them.** A ratio-locked task's letter is
+ * 24 px scaled from the circle it sits in; every other mission task takes the
+ * ordinary 16 px zoom-anchored label. Drawing the whole family ratio-locked — which
+ * is what this did — makes a turn's "T" half again too large and gives it the wrong
+ * response to a resize. @see RATIO_LOCKED_MISSION_TASKS
+ *
+ * `rotation` is for the tasks whose letter lies along the graphic rather than
+ * standing upright on screen: Envelopment's "E" follows its approach. It has to be
+ * passed per render, not baked in, because it changes on every handle drag.
  */
-export function missionTaskLabelPaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+export function missionTaskLabelPaint(
+    name: TacticalGraphicName,
+    rotation = 0,
+): (f: PaintFeature, c: PaintContext) => Paint[] {
     const label = getLabel(name);
+    const ratioLocked = RATIO_LOCKED_MISSION_TASKS.has(name);
     return (feature, context) => {
         if (!label || feature.geometry.type !== 'Point') return [];
         return [{
             geometry: feature.geometry,
             text: {
                 text: label,
-                font: RATIO_LOCKED_LABEL_FONT,
+                font: ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle,
                 fill: getLabelFillColor(),
                 halo: halo(),
-                scale: ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution),
+                scale: ratioLocked
+                    ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
+                    : labelScale(feature.drawingResolution, context.resolution),
+                rotation,
                 align: 'center',
                 baseline: 'middle',
             },
