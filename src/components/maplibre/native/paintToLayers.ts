@@ -286,17 +286,47 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
     } as LayerSpecification;
 }
 
+/**
+ * Plain fills — everything with no hatch.
+ *
+ * **Two layers, not one, and this is not a tidiness choice.** A single layer
+ * carrying both `fill-color` and a data-driven `fill-pattern` looked like it would
+ * serve both cases, on the reasoning that an empty image name would fall back to
+ * the colour. It does not: MapLibre draws **nothing** for a feature whose
+ * `fill-pattern` resolves to an unknown image, and the `fill-color` beside it is
+ * ignored entirely.
+ *
+ * So every solid fill in this renderer was invisible — the ferry crossing's
+ * arrowheads, fix, turn, the aviation direction of attack, area defence's teeth,
+ * exploitation. Each still drew its *outline*, from the stroke on the same mark,
+ * which is what made it look like a thin-line rendering choice rather than a
+ * missing fill.
+ *
+ * Filtering on the property instead gives each case its own layer and neither can
+ * silently swallow the other.
+ */
 export function fillLayer(id: string, source: string): LayerSpecification {
     return {
         id,
         type: 'fill',
         source,
+        filter: ['==', ['get', 'pattern'], ''],
+        paint: {'fill-color': ['get', 'color']},
+    } as LayerSpecification;
+}
+
+/** Hatched fills. @see fillLayer for why these are separate. */
+export function patternFillLayer(id: string, source: string): LayerSpecification {
+    return {
+        id,
+        type: 'fill',
+        source,
+        filter: ['!=', ['get', 'pattern'], ''],
         paint: {
-            'fill-color': ['get', 'color'],
-            // Data-driven, so one layer serves every hatch *and* the unhatched fills.
-            // An unregistered or empty name renders no pattern and the colour shows
-            // through, which is the documented degradation.
             'fill-pattern': ['get', 'pattern'],
+            // Kept as the documented degradation for a pattern that fails to
+            // rasterise — a flat wash is wrong-looking, invisible is worse.
+            'fill-color': ['get', 'color'],
         },
     } as LayerSpecification;
 }
