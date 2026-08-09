@@ -130,6 +130,101 @@ let nextId = 0;
  * — because those two are size-proportional and read `graphicSize` instead. Two
  * of three labels agreeing is exactly how a scale bug hides.
  */
+
+/**
+ * Share of a drawn base's length used for a size the caller did not give.
+ *
+ * Matches what the OpenLayers holders produce: they seed an offset of 20 screen
+ * pixels at the drawing zoom against a base dragged a few hundred pixels long, so
+ * roughly a twentieth either way.
+ */
+const DEFAULT_SIZE_FRACTION = 1 / 20;
+
+/** Screen pixels at the drawing zoom, matching what the OpenLayers holders seed. */
+const DEFAULT_OFFSET_PX = 20;
+
+/**
+ * Sizes for a graphic drawn with none, measured against what was drawn.
+ *
+ * ## Why the renderer, and not the generators
+ *
+ * Every generator falls back to a flat `20` **metres** for a missing `radius` or
+ * `size`. On a 700 km corridor that puts the rails 20 m apart — collapsed onto the
+ * centreline — and it is why a corridor drawn in this renderer looked nothing like
+ * the same corridor in OpenLayers.
+ *
+ * Fixing it in the generators is the tempting move and it is wrong: `LineGraphicBase`
+ * passes **only `size`**, so 41 OpenLayers graphics deliberately rely on that 20 m
+ * `radius`, and changing it reflowed 7% of the sample gallery. The default is load
+ * bearing for the renderer that already ships.
+ *
+ * So the *renderer* supplies them, which is exactly what the OpenLayers holders do —
+ * `MovementGraphicBase` passes `{radius: this.offset, size: decorationMetres(…)}`
+ * derived from the map resolution. This is the same job done from the base's own
+ * length, because that is what a MapLibre view has to hand.
+ *
+ * An explicit value always wins: these are spread *before* the caller's properties.
+ *
+ * **The underlying library gap is real and is not fixed here.** A consumer calling
+ * `renderTacticalGraphic` with only a centre still gets 20 m rails. Closing that
+ * means changing what those 41 graphics draw in OpenLayers, which is a decision
+ * about the shipped renderer rather than a bug fix. @see ai/current-task.md
+ */
+function sizeDefaults(
+    geometry: GeoJSONFeature['geometry'],
+    supplied: Omit<TacticalGraphicProperties, 'name'>,
+    drawingResolution?: number,
+): Partial<TacticalGraphicProperties> {
+    // **The same rule the OpenLayers holders use**, so the two engines draw the same
+    // graphic: 20 screen pixels at the zoom it was drawn at. Matching the rule rather
+    // than approximating it is what makes a corridor drawn here the width of one
+    // drawn there.
+    //
+    // The base's own length is the fallback, for a restore that carries no
+    // resolution — a snapshot deliberately holds no viewport state, so there is
+    // nothing else to measure against. @see ai/context.md, "No viewport state travels"
+    const metres = drawingResolution
+        ? drawingResolution * DEFAULT_OFFSET_PX
+        : baseLengthMetres(geometry) * DEFAULT_SIZE_FRACTION;
+    if (metres <= 0) return {};
+
+    return {
+        // `width` is a full width; the generators halve it. @see toGraphicOptions
+        ...(supplied.width === undefined ? {width: metres * 2} : {}),
+        ...(supplied.decorationSize === undefined && supplied.radius === undefined
+            ? {decorationSize: metres}
+            : {}),
+    };
+}
+
+/**
+ * A base's drawn length in metres.
+ *
+ * A local equirectangular approximation rather than turf: this runs on every build
+ * and the answer only has to be the right order of magnitude. The cosine keeps a
+ * north-south and an east-west drag of the same *distance* measuring the same.
+ */
+function baseLengthMetres(geometry: GeoJSONFeature['geometry']): number {
+    const positions: number[][] = [];
+    const walk = (node: unknown): void => {
+        if (!Array.isArray(node) || !node.length) return;
+        if (typeof node[0] === 'number') positions.push(node as number[]);
+        else node.forEach(walk);
+    };
+    walk((geometry as {coordinates?: unknown}).coordinates);
+    if (positions.length < 2) return 0;
+
+    const METRES_PER_DEGREE = 111_319;
+    let length = 0;
+    for (let i = 0; i < positions.length - 1; i++) {
+        const [x1, y1] = positions[i];
+        const [x2, y2] = positions[i + 1];
+        const dx = (x2 - x1) * Math.cos((((y1 + y2) / 2) * Math.PI) / 180);
+        length += Math.hypot(dx, y2 - y1) * METRES_PER_DEGREE;
+    }
+    return length;
+}
+
 export function buildTacticalGraphic(
     name: TacticalGraphicName,
     baseGeometry: GeoJSONFeature['geometry'],
@@ -142,6 +237,7 @@ export function buildTacticalGraphic(
         // to the label axis and `arcMissionTaskPaint` takes back exactly what the
         // rendered glyph needs. A fixed angular gap cannot track a capped label scale.
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
+        ...sizeDefaults(baseGeometry, properties, drawingResolution),
         ...properties,
     };
 
