@@ -240,6 +240,13 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 const {graphics} = buildSampleGraphics(hostility);
                 graphics.forEach(g => target.add(g));
             },
+            snapshot: () => renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []},
+            restore: snapshot => {
+                const target = renderer();
+                if (!target) return;
+                target.clear();
+                drawSpikeSamples(snapshot, g => target.add(g), resolutionOf(map));
+            },
             exportGeoJson: () => exportGraphics(renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []}),
             importGeoJson: async file => {
                 const target = renderer();

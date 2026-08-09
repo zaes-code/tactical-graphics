@@ -113,6 +113,18 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 clearAllGraphics(mgr);
                 setInteractionMode(InteractionType.view);
             },
+            snapshot: () => {
+                const mgr = tacticalGraphicManager.current;
+                return mgr ? serializeTacticalGraphics(mgr) : {type: 'FeatureCollection', features: []};
+            },
+            restore: snapshot => {
+                const mgr = tacticalGraphicManager.current;
+                if (!mgr) return;
+                clearAllGraphics(mgr);
+                const {restored, failed} = restoreTacticalGraphics(mgr, snapshot);
+                // eslint-disable-next-line no-console
+                if (failed.length) console.warn(`Handover: ${restored} restored, ${failed.length} failed.`, failed);
+            },
             exportGeoJson: () => {
                 const mgr = tacticalGraphicManager.current;
                 if (!mgr) return;
