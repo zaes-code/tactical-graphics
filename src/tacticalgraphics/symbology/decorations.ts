@@ -122,6 +122,31 @@ export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, re
 }
 
 /**
+ * Encirclement's tooth is the obstacle tooth with a narrower base — the 0.75 : 1
+ * base-to-height ratio the generator used to bake, and the proportion the symbol
+ * is read at.
+ */
+export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
+
+/**
+ * An encirclement's tooth size, in projected metres, at the current resolution.
+ *
+ * `ring` is the **whole** outline even when the teeth are then laid along its
+ * pieces: a hostile encirclement's outline is cut into segments to clear the "ENY"
+ * amplifiers, and sizing each segment against its own length would give one ring
+ * several different tooth sizes and make the hostile symbol disagree with the
+ * friendly one drawn over the same area.
+ */
+export function encirclementToothSize(ring: ProjectedPosition[], resolution: number) {
+    const scale = decorationScale(ring, true, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
+    return {
+        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
+        baseMap: OBSTACLE_TOOTH_BASE_PX * ENCIRCLEMENT_TOOTH_BASE_SHARE * scale * resolution,
+        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
+    };
+}
+
+/**
  * Walks a path adding triangular teeth along it, returning one continuous
  * polyline that includes both the baseline and the teeth.
  *
