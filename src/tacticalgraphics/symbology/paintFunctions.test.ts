@@ -18,8 +18,9 @@
 
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
+import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {arcMissionTaskPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
 
@@ -214,6 +215,49 @@ describe('encirclement teeth are sized against the shape, like the obstacle belt
         const paints = paintEncirclement(feature, context(1000));
         expect(toothHeightPx(400_000, 1000, feature)).toBeGreaterThan(1);
         expect(paints.some(p => p.text?.text === 'ENY')).toBe(true);
+    });
+});
+
+/**
+ * The mission-task designation had two sizings in OpenLayers — a named set took the
+ * ratio-locked 24 px treatment, everything else the ordinary zoom-anchored 16 px one
+ * — and the set lived in the OpenLayers holder where no other renderer could see it.
+ * The paint layer therefore drew the whole family ratio-locked. Nothing failed: the
+ * suite went from 1683 tests to 1683 across the fix, which is what these are for.
+ */
+describe('a mission-task letter is sized by which family it is in', () => {
+    const letter = (name: TacticalGraphicName, graphicSize?: number, resolution = 1000) =>
+        missionTaskLabelPaint(name)(
+            {
+                geometry: {type: 'Point', coordinates: [0, 0]},
+                properties: {name},
+                graphicSize,
+                drawingResolution: 1000,
+            },
+            context(resolution),
+        )[0].text!;
+
+    it('gives a ratio-locked task the 24px font and an ordinary one the 16px font', () => {
+        expect(letter(TacticalGraphicName.Isolate, 50_000).font).toBe(RATIO_LOCKED_LABEL_FONT);
+        expect(letter(TacticalGraphicName.TacticalTurn, 50_000).font).toBe(fontStyle);
+    });
+
+    it('tracks the graphic only for the ratio-locked half', () => {
+        // Same graphic, twice the radius. A ratio-locked letter grows with it; a turn's
+        // "T" must not — it has to hold its size while the curve is resized, which is
+        // why the turns were left off the list in the first place.
+        expect(letter(TacticalGraphicName.Isolate, 100_000).scale)
+            .toBeGreaterThan(letter(TacticalGraphicName.Isolate, 50_000).scale!);
+        expect(letter(TacticalGraphicName.TacticalTurn, 100_000).scale)
+            .toBe(letter(TacticalGraphicName.TacticalTurn, 50_000).scale);
+    });
+
+    it('carries the rotation through, for a letter that lies along its graphic', () => {
+        const rotated = missionTaskLabelPaint(TacticalGraphicName.Envelopment, 0.7)(
+            {geometry: {type: 'Point', coordinates: [0, 0]}, properties: {name: TacticalGraphicName.Envelopment}},
+            context(1000),
+        );
+        expect(rotated[0].text?.rotation).toBeCloseTo(0.7, 10);
     });
 });
 

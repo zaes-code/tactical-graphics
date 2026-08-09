@@ -28,6 +28,7 @@
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
+import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {directionArrowPaint} from './linePaints';
@@ -378,17 +379,6 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
  * The retrograde tasks. Each takes its own designation from `getLabel`, and abatis
  * deliberately has none — a graphic with no letter gets no gap cut for one.
  */
-/**
- * The crossed mission tasks — two arms meeting at a one-letter designation,
- * FM 1-02.2 table 6-1. Mirrors `CROSSED_MISSION_TASKS` in `MissionTaskGraphicBase`.
- */
-const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Destroy,
-    TacticalGraphicName.Interdict,
-    TacticalGraphicName.Neutralize,
-    TacticalGraphicName.Suppress,
-];
-
 /**
  * The bar-stack symbols: the three explosives readiness states and the executed
  * roadblock. `BAR_SYMBOL_DASHES` says which bar of each is broken.
