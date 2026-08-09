@@ -126,12 +126,29 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
 }
 
-/** Splits a paint list into per-layer-type GeoJSON features. */
-export function bucketPaints(paints: Paint[]): LayerBuckets {
+/**
+ * The property every emitted feature carries, naming the graphic it belongs to.
+ *
+ * Hit-testing is the reason: `queryRenderedFeatures` hands back the *marks* under
+ * the cursor — a tooth, an arrowhead, a letter — and nothing about a mark says
+ * which graphic drew it. Stamped on every feature of every layer so a click
+ * anywhere on a symbol finds it, rather than only on whichever piece happened to
+ * be the outline.
+ */
+export const GRAPHIC_ID_PROPERTY = 'tgId';
+
+/**
+ * Splits a paint list into per-layer-type GeoJSON features.
+ *
+ * `graphicId`, when given, is stamped on every feature so a rendered mark can be
+ * traced back to its graphic. @see GRAPHIC_ID_PROPERTY
+ */
+export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
     const buckets: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
 
     for (const paint of paints) {
         const {geometry, stroke, fill, text, circle} = paint;
+        const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
             const key = dashKey(stroke.dashPx, stroke.widthPx);
@@ -139,7 +156,7 @@ export function bucketPaints(paints: Paint[]): LayerBuckets {
             list.push({
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
-                properties: {color: stroke.color, width: stroke.widthPx},
+                properties: {...owner, color: stroke.color, width: stroke.widthPx},
             });
             buckets.lines.set(key, list);
         }
@@ -149,6 +166,7 @@ export function bucketPaints(paints: Paint[]): LayerBuckets {
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
                 properties: {
+                    ...owner,
                     color: fill.color,
                     // Empty string, not absent: `fill-pattern` needs a value for every
                     // feature in the layer, and MapLibre treats an unknown image name
@@ -165,6 +183,7 @@ export function bucketPaints(paints: Paint[]): LayerBuckets {
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
                 properties: {
+                    ...owner,
                     radius: circle.radiusPx,
                     color: circle.fill?.color ?? 'transparent',
                     strokeColor: circle.stroke?.color ?? 'transparent',
@@ -179,6 +198,7 @@ export function bucketPaints(paints: Paint[]): LayerBuckets {
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
                 properties: {
+                    ...owner,
                     label: text.text,
                     size,
                     // Radians counter-clockwise → degrees clockwise. MapLibre's
@@ -291,4 +311,30 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             'text-halo-width': ['get', 'haloWidth'],
         },
     } as LayerSpecification;
+}
+
+/**
+ * Folds per-graphic buckets into one set, preserving dash-key grouping.
+ *
+ * Bucketing per graphic is what lets each feature carry its owner's id; merging
+ * afterwards is what keeps the layer count fixed. Doing it the other way round —
+ * one layer per graphic — would put 200-plus layers in the style, and MapLibre
+ * pays per layer on every frame.
+ */
+export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
+    const merged: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+
+    for (const bucket of all) {
+        for (const [key, list] of Array.from(bucket.lines)) {
+            const existing = merged.lines.get(key);
+            if (existing) existing.push(...list);
+            else merged.lines.set(key, list.slice());
+        }
+        merged.fills.push(...bucket.fills);
+        merged.circles.push(...bucket.circles);
+        merged.symbols.push(...bucket.symbols);
+        for (const [id, spec] of Array.from(bucket.hatches)) merged.hatches.set(id, spec);
+    }
+
+    return merged;
 }
