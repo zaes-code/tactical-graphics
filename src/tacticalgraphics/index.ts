@@ -308,6 +308,6 @@ export {
 } from './core/securitySymbol';
 export type {MilsymbolModule, SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from './core/securitySymbol';
 export type {AllowedGestures} from './core/symbology';
-export {envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
+export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';

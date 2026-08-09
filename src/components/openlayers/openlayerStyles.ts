@@ -95,6 +95,7 @@ import {
     airCorridorPaint,
     arrowheadedLinePaint,
     attackHelicopterAxisLabelPaint,
+    bridgeLabelPaint,
     envelopmentGraphicPaint,
     infiltrationGraphicPaint,
     mobileDefenseGraphicPaint,
@@ -811,91 +812,9 @@ export function phaseLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(phaseLinePaint(name), name);
 }
 
+/** **Ported.** @see movementPaints.ts, `bridgeLabelPaint`. */
 export function bridgeGraphicStyleFunc(): StyleFunction {
-    return (f, resolution) => bridgeGraphicStyleFromLabels(readGraphicLabels(f))(f, resolution);
-}
-
-function bridgeGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-        let styles: Style[] = [];
-        const [x1, y1] = coords[0];
-        const [x2, y2] = coords[1];
-
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep main label upright.
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-
-        const labelScale = featureLabelScale(f, resolution);
-
-        // Main label — at bridge midpoint (coords[0]), along the bridge axis.
-        styles.push(new Style({
-            geometry: new Point(coords[0]),
-            text: new Text({
-                text: graphicLabels.label ?? '',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                rotation,
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        // Date label — coords[1] is pre-placed by generateLabels beyond the bridge end
-        // along the bridge axis.  Always render horizontal (rotation: 0).
-        // Use directional textAlign so the text extends AWAY from the bridge rather
-        // than being centered back over it.
-        const dateText = getDateLabel(graphicLabels);
-        if (dateText) {
-            // Bridge is "more horizontal" when |dx| >= |dy|.
-            // For horizontal bridges coords[1] is to the side of the end — align text
-            // so it starts/ends at coords[1] and runs away from the bridge.
-            // For vertical bridges coords[1] is above/below the end — center is fine
-            // because the horizontal text doesn't extend back along the bridge axis.
-            const dateTextAlign: CanvasTextAlign =
-                Math.abs(dx) >= Math.abs(dy)
-                    ? (dx > 0 ? 'left' : 'right')
-                    : 'center';
-
-            // push date label further away from bridge along its axis
-            const len = Math.hypot(dx, dy);
-            const ux = dx / len;
-            const uy = dy / len;
-
-            // distance in pixels → convert to map units
-            const EXTRA_GAP_PX = 12; // 👈 increase this to move further away
-            const extraGapMap = EXTRA_GAP_PX * resolution;
-
-            const dateCoord: Coordinate = [
-                coords[1][0] + ux * extraGapMap,
-                coords[1][1] + uy * extraGapMap,
-            ];
-
-            styles.push(new Style({
-                geometry: new Point(dateCoord),
-                text: new Text({
-                    text: dateText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    textAlign: dateTextAlign,
-                    textBaseline: 'middle',
-                    rotation: 0,
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-
-        return styles;
-    };
+    return asStyleFunction(bridgeLabelPaint());
 }
 
 /** Screen-px clear space between the passage lane's fishtail and its DTG. */
