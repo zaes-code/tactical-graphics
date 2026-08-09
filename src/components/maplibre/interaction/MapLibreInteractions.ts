@@ -75,6 +75,8 @@ export class MapLibreInteractions {
         graphic: MapLibreTacticalGraphic;
         /** Which base vertex is being dragged in `modify`, or -1. */
         vertex: number;
+        /** Whether the drag began on the inert centre dot. */
+        onCentre: boolean;
         last: Position;
         /** Whether the pointer has moved far enough to count. @see DRAG_THRESHOLD_PX */
         started: boolean;
@@ -231,13 +233,20 @@ export class MapLibreInteractions {
         // The drag has to start *on* the graphic, or on one of its handles. Starting
         // it anywhere on the map would mean a user who wanted to pan instead resized
         // whatever happened to be selected.
-        const onHandle = this.renderer.hitTestHandle(event.point) >= 0;
+        const handle = this.renderer.hitTestHandle(event.point);
+        const onHandle = handle >= 0;
         const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
         const vertex = this.mode === 'modify' ? this.grabVertex(graphic, event.point) : -1;
         if (!onHandle && !onGraphic && vertex < 0) return;
 
         this.dragging = {
             graphic,
+            // Grabbing the centre dot always means "move this", whatever mode is
+            // selected. Rotate and resize are both degenerate there — the scale ratio
+            // divides by distance-to-centre and a point on the axis has no angle — and
+            // the centre is the one place a user naturally reaches to drag a symbol
+            // bodily. The dot is drawn grey to say so.
+            onCentre: onHandle && handle === this.renderer.centreHandleOf(graphic),
             vertex,
             last: [event.lngLat.lng, event.lngLat.lat],
             started: false,
@@ -299,6 +308,8 @@ export class MapLibreInteractions {
      * itself off would look like a broken button. @see allowedGestures
      */
     private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        if (drag.onCentre) return translate(before, drag.last, to);
+
         const allowed = allowedGestures(drag.graphic.name);
         if (this.mode === 'rotate' && !allowed.rotate) return before;
         if (this.mode === 'resize' && !allowed.resize) return before;

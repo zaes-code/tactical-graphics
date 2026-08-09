@@ -35,15 +35,27 @@ export interface GraphicDescription {
     properties: TacticalGraphicProperties;
 }
 
-/** Applies `fn` to every position of a geometry, whatever its nesting. */
+/**
+ * Applies `fn` to every position of a geometry, whatever its nesting.
+ *
+ * **An empty array is nothing, not a position.** Recursing on `node[0]` alone reads
+ * `[]` as a coordinate pair, hands it to `fn`, and every downstream number becomes
+ * NaN — which then travels all the way to a rendered geometry that draws nothing,
+ * with no error anywhere. An empty `coordinates` is what a geometry mid-draw or a
+ * malformed import actually looks like, so this is reachable rather than
+ * theoretical.
+ *
+ * The test is on the *first element*: a position is an array of numbers, so a node
+ * whose first element is a number is one, and anything else is a level of nesting.
+ */
 function mapPositions(geometry: Geometry, fn: (position: Position) => Position): Geometry {
     if (geometry.type === 'GeometryCollection') {
         return {type: 'GeometryCollection', geometries: geometry.geometries.map(g => mapPositions(g, fn))};
     }
-    const walk = (node: unknown): unknown =>
-        Array.isArray(node) && Array.isArray(node[0])
-            ? node.map(walk)
-            : fn(node as Position);
+    const walk = (node: unknown): unknown => {
+        if (!Array.isArray(node) || !node.length) return node;
+        return typeof node[0] === 'number' ? fn(node as Position) : node.map(walk);
+    };
     return {...geometry, coordinates: walk((geometry as {coordinates: unknown}).coordinates)} as Geometry;
 }
 
