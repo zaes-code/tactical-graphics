@@ -404,3 +404,103 @@ export function movementGraphicPaint(): MovementPaint {
         stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
     }];
 }
+
+// ── the three that draw their own line work ─────────────────────────────────
+
+/**
+ * Screen-pixel half-gap cut around the letter on infiltration and envelopment.
+ *
+ * A flat count, the same rule breach and bypass use. It was once taken from the
+ * arrowhead's wing-to-wing span, which is metric — so on a large graphic the hole
+ * ran away from the capped letter it was meant to clear. **A gap belongs to the
+ * label, not to the shape around it.**
+ */
+const APPROACH_GAP_PX = 10;
+
+/** Where along the first segment the letter sits, matching `generateLabels`. */
+const APPROACH_LABEL_POSITION = 0.25;
+
+/**
+ * The line work of an approach with a letter set in it — infiltration and
+ * envelopment.
+ *
+ * Sub-line `[0]` is the straight run the gap is cut from; everything after it is
+ * drawn whole. Envelopment adds an arc between the two, which needs no special
+ * handling — `rest` covers it.
+ */
+function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return (feature, context) => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiLineString') return [];
+        const coords = geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH()};
+        const line = coords[0];
+        const rest = coords.slice(1);
+        const asLine = (c: ProjectedPosition[]): Paint => ({geometry: {type: 'LineString', coordinates: c}, stroke});
+
+        const [x0, y0] = line[0];
+        const [x1, y1] = line[1];
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const length = Math.hypot(dx, dy);
+        // Degenerate straight part — mid-draw with only two base points. Everything
+        // else still draws, which is better than the graphic vanishing while it is
+        // being made.
+        if (length === 0) return rest.map(asLine);
+
+        const cx = x0 + dx * APPROACH_LABEL_POSITION;
+        const cy = y0 + dy * APPROACH_LABEL_POSITION;
+        const gap = APPROACH_GAP_PX * context.resolution;
+        const ux = dx / length;
+        const uy = dy / length;
+
+        return [
+            asLine([line[0], [cx - ux * gap, cy - uy * gap]]),
+            asLine([[cx + ux * gap, cy + uy * gap], ...line.slice(1)]),
+            ...rest.map(asLine),
+        ];
+    };
+}
+
+/** Infiltration: base line with a gap for "IN", then the arrowhead. */
+export function infiltrationGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return approachPaint();
+}
+
+/** Envelopment: straight run with a gap for "E", then the arc and the arrowhead. */
+export function envelopmentGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return approachPaint();
+}
+
+/** Points in a closed triangle ring: three corners plus the repeated first. */
+const TRIANGLE_RING_LENGTH = 4;
+
+/**
+ * Mobile defense: the teeth are **filled**, everything else is a line.
+ *
+ * A sub-line is a tooth when it closes on itself in four points — the generator
+ * emits each triangle that way, and the arcs and the arrow never do. Testing the
+ * shape rather than the index is what keeps this working when the generator adds
+ * or drops a tooth, which it does with the size of the ellipse.
+ */
+export function mobileDefenseGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return feature => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiLineString') return [];
+
+        const color = lineColorOf(feature);
+        const stroke = {color, widthPx: LINE_WIDTH()};
+
+        return geometry.coordinates.map(ring => {
+            const closed = ring.length === TRIANGLE_RING_LENGTH
+                && ring[0][0] === ring[ring.length - 1][0]
+                && ring[0][1] === ring[ring.length - 1][1];
+            return closed
+                ? {geometry: {type: 'Polygon' as const, coordinates: [ring]}, fill: {color}, stroke}
+                : {geometry: {type: 'LineString' as const, coordinates: ring}, stroke};
+        });
+    };
+}
+

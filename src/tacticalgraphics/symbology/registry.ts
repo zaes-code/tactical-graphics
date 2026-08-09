@@ -60,6 +60,9 @@ import {
     frontalAttackLabelPaint,
     infiltrationLabelPaint,
     mobileDefenseLabelPaint,
+    envelopmentGraphicPaint,
+    infiltrationGraphicPaint,
+    mobileDefenseGraphicPaint,
     movementGraphicPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
@@ -573,6 +576,23 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
     }
+
+    // Three of the family draw their own line work, and the OpenLayers holder used to
+    // be the only place that said so — it installed these *after* the registry's
+    // painter, so MapLibre kept the generic one and drew mobile defense's teeth
+    // hollow and the two approaches without their letter gap.
+    registry[TacticalGraphicName.Infiltration] = {
+        graphic: infiltrationGraphicPaint(),
+        label: movementLabelFor(TacticalGraphicName.Infiltration),
+    };
+    registry[TacticalGraphicName.Envelopment] = {
+        graphic: envelopmentGraphicPaint(),
+        label: movementLabelFor(TacticalGraphicName.Envelopment),
+    };
+    registry[TacticalGraphicName.MobileDefense] = {
+        graphic: mobileDefenseGraphicPaint(),
+        label: movementLabelFor(TacticalGraphicName.MobileDefense),
+    };
 
     // The four crossed tasks share one shape and differ only in their letter and in
     // which arm is hashed, so both halves are parameterised by name alone.
