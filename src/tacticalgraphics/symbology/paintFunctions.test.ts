@@ -20,7 +20,8 @@ import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {arcMissionTaskPaint, axisRotation, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {renderTacticalGraphic} from '../core/render';
 import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
 
@@ -250,6 +251,43 @@ describe('a mission-task letter is sized by which family it is in', () => {
             .toBeGreaterThan(letter(TacticalGraphicName.Isolate, 50_000).scale!);
         expect(letter(TacticalGraphicName.TacticalTurn, 100_000).scale)
             .toBe(letter(TacticalGraphicName.TacticalTurn, 50_000).scale);
+    });
+
+    /**
+     * The first version of this reconstructed the axis from `properties.rotation`,
+     * read as a compass bearing. It is a maths angle — anticlockwise from east — so
+     * every letter came out a quarter turn off. A quarter turn on a single capital is
+     * nearly invisible in a pixel diff: the graphic measured 1.01 ink and 0.068%
+     * against OpenLayers *with the bug in it*. Only comparing the number against the
+     * drawn axis found it, which is why these compare numbers and not pictures.
+     */
+    it('lays the letter along the axis as drawn, at every bearing', () => {
+        const R = 6378137;
+        const merc = ([x, y]: number[]): ProjectedPosition =>
+            [(x * Math.PI * R) / 180, Math.log(Math.tan(Math.PI / 4 + (y * Math.PI) / 360)) * R];
+
+        for (const rotation of [0, 30, 45, 90, 135, 200, 270, 300, 359]) {
+            const rendered = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [0, 0]},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, radius: 200_000, rotation}},
+            } as never)!;
+
+            // Sub-line 0 is the straight run the "E" lies along.
+            const [start, end] = (rendered.graphic.geometry as {coordinates: number[][][]}).coordinates[0];
+            const drawn = uprightRotation(merc(start), merc(end));
+            const derived = axisRotation({
+                geometry: {type: 'Point', coordinates: merc((rendered.labels.geometry as {coordinates: number[]}).coordinates)},
+                graphicCenter: merc([0, 0]),
+                properties: {name: TacticalGraphicName.Envelopment, rotation},
+            });
+
+            // A tenth of a degree. Not exact, and cannot be: the anchor sits half a
+            // size from the centre while the run spans a whole one, so the two measure
+            // the same axis over different lengths of a Mercator-distorted line and
+            // land ~0.003 deg apart. The error this guards against is a quarter turn.
+            expect(Math.abs(derived - drawn)).toBeLessThan(0.002);
+        }
     });
 
     it('carries the rotation through, for a letter that lies along its graphic', () => {
