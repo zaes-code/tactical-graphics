@@ -221,8 +221,15 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
     Polygon: 'Polygon',
 };
 
-/** Maps the public property bag onto the internal generator option bag. */
-function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
+/**
+ * Maps the public property bag onto the internal generator option bag.
+ *
+ * **Exported** because a renderer sometimes has to see what the generator saw. A
+ * range fan's bands are consumed by the generator and survive only as anonymous
+ * points, so a renderer labelling them must re-resolve them from the same options —
+ * and reconstructing the mapping on its own is how the two ended up disagreeing.
+ */
+export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
     // Public field -> internal generator option. The two disagree on names by design:
     // generators still speak `size` / `radius`, and renaming 200-odd call sites inside
     // them buys nothing a consumer can see. This is the one place the mapping lives.

@@ -162,7 +162,7 @@ const BENT_GRAPHICS: readonly TacticalGraphicName[] = [
  * treats as a move — that agreement is not a coincidence, but the offset still has
  * to be applied or every band drag would set the wrong ring.
  */
-const RANGE_FANS: readonly TacticalGraphicName[] = [
+export const RANGE_FANS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.WeaponSensorRangeFanCircular,
     TacticalGraphicName.WeaponSensorRangeFanSector,
 ];
