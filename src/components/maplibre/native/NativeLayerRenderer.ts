@@ -83,6 +83,20 @@ const FONT_STACK = 'Noto Sans Bold';
 /** How much the zoom must move mid-gesture before the geometry is rebuilt. */
 const ZOOM_REALISE_THRESHOLD = 0.34;
 
+/**
+ * Shortest gap between two mid-gesture rebuilds, in milliseconds.
+ *
+ * The zoom threshold alone does not bound the cost: a fast wheel spin crosses it
+ * on every step, so a twelve-step zoom ran eleven full rebuilds. This puts a
+ * ceiling on that regardless of how fast the input arrives.
+ *
+ * It only ever *delays* a rebuild — `zoomend` and `moveend` are unthrottled, so
+ * the gesture always finishes with the geometry correct for where it landed. What
+ * a user can see is that a decoration keeps the size it had a fraction of a second
+ * ago while the wheel is still spinning.
+ */
+const MID_GESTURE_MIN_INTERVAL_MS = 120;
+
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
     /**
@@ -96,6 +110,8 @@ export class NativeLayerRenderer {
     private readonly layerIds: string[] = [];
     private readonly lineLayerKeys = new Set<string>();
     private lastRealisedZoom = Number.NaN;
+    /** When the last rebuild finished, for the mid-gesture throttle. */
+    private lastRealiseEndedAt = 0;
     private installed = false;
 
     /** Milliseconds the last geometry realisation took. The number the spike is for. */
@@ -119,6 +135,7 @@ export class NativeLayerRenderer {
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
         if (Math.abs(zoom - this.lastRealisedZoom) < ZOOM_REALISE_THRESHOLD) return;
+        if (performance.now() - this.lastRealiseEndedAt < MID_GESTURE_MIN_INTERVAL_MS) return;
         this.realise();
     };
     private readonly onZoomEnd = () => this.realise();
@@ -314,6 +331,7 @@ export class NativeLayerRenderer {
         this.lastRealisedZoom = this.map.getZoom();
         this.lastFeatureCount = features;
         this.lastRealiseMs = performance.now() - started;
+        this.lastRealiseEndedAt = performance.now();
         this.realiseCount++;
     }
 
