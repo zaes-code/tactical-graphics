@@ -1,12 +1,12 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type { PaintContext} from '@zaes/tactical-graphics';
-import {resolutionOf} from '../projection';
+import {MERCATOR_MAX_LATITUDE, resolutionOf, toMercator} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
-    bucketPaints,
-    mergeBuckets,
+    bucketPaintsInto,
+    emptyBuckets,
     circleLayer,
     featureCollection,
     fillLayer,
@@ -104,6 +104,15 @@ export class NativeLayerRenderer {
     lastFeatureCount = 0;
     /** How many times the geometry has been rebuilt since construction. */
     realiseCount = 0;
+    /**
+     * Where the last realisation's time went, in milliseconds.
+     *
+     * Kept because "realise costs 26 ms" is not actionable and "22 of the 26 are in
+     * `setData`" is. Three numbers, taken from a clock that is already running.
+     */
+    lastRealiseBreakdown: {paint: number; bucket: number; upload: number} = {paint: 0, bucket: 0, upload: 0};
+    /** How many graphics survived the cull on the last realisation. */
+    lastVisibleCount = 0;
     /** Set while a coalesced rebuild is pending. @see scheduleRealise */
     private realisePending = false;
 
@@ -113,6 +122,13 @@ export class NativeLayerRenderer {
         this.realise();
     };
     private readonly onZoomEnd = () => this.realise();
+    /**
+     * A pan changes which graphics are on screen, and the cull means the ones that
+     * were off it were never uploaded — so a pan has to rebuild, exactly as a zoom
+     * does. `moveend` rather than `move`: the cull is generous enough that nothing
+     * appears late, and rebuilding every frame of a drag is what this is avoiding.
+     */
+    private readonly onMoveEnd = () => this.scheduleRealise();
 
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
@@ -120,6 +136,7 @@ export class NativeLayerRenderer {
         this.install();
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
+        map.on('moveend', this.onMoveEnd);
     }
 
     /**
@@ -244,9 +261,15 @@ export class NativeLayerRenderer {
         // Bucketed per graphic rather than in one pass, so each feature can be stamped
         // with the graphic it came from — which is what makes a rendered mark
         // hit-testable back to its symbol. @see GRAPHIC_ID_PROPERTY
-        const buckets = mergeBuckets(
-            this.graphics.map(graphic => bucketPaints(paintTacticalGraphic(graphic, context), graphic.id)),
-        );
+        const visible = this.visibleGraphics();
+        const paintedAt = performance.now();
+        const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
+        const bucketedAt = performance.now();
+        const buckets = emptyBuckets();
+        for (let i = 0; i < perGraphic.length; i++) {
+            bucketPaintsInto(buckets, perGraphic[i], visible[i].id);
+        }
+        const uploadAt = performance.now();
         let features = buckets.fills.length + buckets.circles.length + buckets.symbols.length;
 
         // Register any hatch this frame needs. MapLibre has no pattern primitive —
@@ -282,6 +305,12 @@ export class NativeLayerRenderer {
             }
         }
 
+        this.lastVisibleCount = visible.length;
+        this.lastRealiseBreakdown = {
+            paint: bucketedAt - paintedAt,
+            bucket: uploadAt - bucketedAt,
+            upload: performance.now() - uploadAt,
+        };
         this.lastRealisedZoom = this.map.getZoom();
         this.lastFeatureCount = features;
         this.lastRealiseMs = performance.now() - started;
@@ -290,6 +319,43 @@ export class NativeLayerRenderer {
 
     private setData(kind: string, features: Parameters<typeof featureCollection>[0]): void {
         (this.map.getSource(SOURCE_PREFIX + kind) as GeoJSONSource | undefined)?.setData(featureCollection(features));
+    }
+
+    /**
+     * The graphics worth rebuilding: those whose extent meets the padded viewport.
+     *
+     * Rebuilding all of them cost the same whether one was on screen or two hundred,
+     * because every graphic was painted, converted to lon/lat and uploaded on every
+     * zoom step. Zoomed in far enough that only a handful are visible, that is almost
+     * entirely wasted work — and zoomed in is exactly where a user spends their time.
+     *
+     * The padding is a full viewport on each side. It has to cover two things the
+     * bounds do not: a graphic's screen-pixel decorations, which reach beyond the
+     * geometry they hang off, and a label, which can sit well outside the shape it
+     * names. A generous margin costs one comparison per graphic; a tight one shows
+     * as symbols clipping in and out at the edge of the map.
+     *
+     * A graphic with no bounds — an empty geometry — is kept rather than culled: it
+     * draws nothing anyway, and guessing "off screen" for something whose extent is
+     * unknown is the wrong way round.
+     */
+    private visibleGraphics(): MapLibreTacticalGraphic[] {
+        const bounds = this.map.getBounds();
+        const sw = toMercator([bounds.getWest(), Math.max(bounds.getSouth(), -MERCATOR_MAX_LATITUDE)]);
+        const ne = toMercator([bounds.getEast(), Math.min(bounds.getNorth(), MERCATOR_MAX_LATITUDE)]);
+
+        const padX = Math.abs(ne[0] - sw[0]);
+        const padY = Math.abs(ne[1] - sw[1]);
+        const minX = Math.min(sw[0], ne[0]) - padX;
+        const maxX = Math.max(sw[0], ne[0]) + padX;
+        const minY = Math.min(sw[1], ne[1]) - padY;
+        const maxY = Math.max(sw[1], ne[1]) + padY;
+
+        return this.graphics.filter(graphic => {
+            const box = graphic.graphic.bounds;
+            if (!box) return true;
+            return box.maxX >= minX && box.minX <= maxX && box.maxY >= minY && box.minY <= maxY;
+        });
     }
 
     /** The graphic with this id, or undefined. */
@@ -341,5 +407,6 @@ export class NativeLayerRenderer {
     destroy(): void {
         this.map.off('zoom', this.onZoom);
         this.map.off('zoomend', this.onZoomEnd);
+        this.map.off('moveend', this.onMoveEnd);
     }
 }

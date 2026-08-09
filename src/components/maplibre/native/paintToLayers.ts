@@ -143,9 +143,24 @@ export const GRAPHIC_ID_PROPERTY = 'tgId';
  * `graphicId`, when given, is stamped on every feature so a rendered mark can be
  * traced back to its graphic. @see GRAPHIC_ID_PROPERTY
  */
-export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
-    const buckets: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+export function emptyBuckets(): LayerBuckets {
+    return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+}
 
+export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
+    return bucketPaintsInto(emptyBuckets(), paints, graphicId);
+}
+
+/**
+ * Adds a paint list's marks to an existing bucket set.
+ *
+ * The accumulating form exists for the per-graphic pass: every feature has to be
+ * stamped with the id of the graphic that produced it, which means calling this
+ * once per graphic — and a version that allocated its own buckets each time made
+ * 215 Maps and 645 arrays per frame, then merged them. At gallery scale that
+ * *was* the frame: 24.8 ms of a 27.2 ms realisation.
+ */
+export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string): LayerBuckets {
     for (const paint of paints) {
         const {geometry, stroke, fill, text, circle} = paint;
         const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
