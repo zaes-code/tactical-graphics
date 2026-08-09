@@ -181,6 +181,8 @@ export class NativeLayerRenderer {
     private symbolRevision = -1;
     /** The resolution the screen-sized graphics were last rebuilt at. */
     private lastRebuildResolution = Number.NaN;
+    /** Whether a handle-bearing mode is selected. @see setHandleMode */
+    private handleModeActive = false;
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
@@ -575,23 +577,24 @@ export class NativeLayerRenderer {
      * realise cost inside a drag.
      */
     private realiseEditorMarks(): void {
-        const selected = this.selectedId ? this.find(this.selectedId) : undefined;
-        const handles = selected?.handles ?? [];
-
-        const centre = selected ? centreHandleIndex(selected) : -1;
-        this.setData('handles', handles.map((position, index) => ({
-            type: 'Feature' as const,
-            geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
-            properties: {
-                radius: HANDLE_RADIUS_PX,
-                // Grey for the centre dot, and the colour has to stay honest: it says
-                // "this one will not rotate or resize", which is true — the scale ratio
-                // divides by distance-to-centre and a point on the axis carries no
-                // angle. It still moves the graphic, which is what the eye expects of a
-                // centre. @see createInertHandleFeature
-                color: index === centre ? getInertHandleColor() : getHandleColor(),
-            },
-        })));
+        this.setData('handles', this.handleBearers().flatMap(graphic => {
+            const centre = centreHandleIndex(graphic);
+            return graphic.handles.map((position, index) => ({
+                type: 'Feature' as const,
+                geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
+                properties: {
+                    radius: HANDLE_RADIUS_PX,
+                    [GRAPHIC_ID_PROPERTY]: graphic.id,
+                    handleIndex: index,
+                    // Grey for the centre dot, and the colour has to stay honest: it says
+                    // "this one will not rotate or resize", which is true — the scale ratio
+                    // divides by distance-to-centre and a point on the axis carries no
+                    // angle. It still moves the graphic, which is what the eye expects of a
+                    // centre. @see createInertHandleFeature
+                    color: index === centre ? getInertHandleColor() : getHandleColor(),
+                },
+            }));
+        }));
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{
@@ -600,6 +603,32 @@ export class NativeLayerRenderer {
                 properties: {color: getDrawMarkerColor()},
             }]
             : []);
+    }
+
+    /**
+     * The graphics whose handles are on screen.
+     *
+     * **Every graphic while a handle mode is active, and none otherwise** — which is
+     * what OpenLayers does. `TacticalGraphicsManager.toggleHandleFeatures` clears
+     * `hidden` on *all* handle features the moment the user picks rotate, move, resize
+     * or edit, so the whole map becomes editable at once and there is no selection
+     * step. Showing only the selected graphic's handles here meant the two engines
+     * answered the same button differently: OpenLayers lit up four handles across two
+     * graphics, MapLibre lit up none until you clicked one.
+     */
+    private handleBearers(): MapLibreTacticalGraphic[] {
+        if (!this.handleModeActive) return [];
+        return this.visibleGraphics();
+    }
+
+    /**
+     * Whether a handle-bearing mode is selected. Set by the interaction layer, because
+     * the mode is its state; the renderer only needs to know whether to draw chrome.
+     */
+    setHandleMode(active: boolean): void {
+        if (this.handleModeActive === active) return;
+        this.handleModeActive = active;
+        this.realiseEditorMarks();
     }
 
     /** The graphic with this id, or undefined. */
@@ -667,24 +696,37 @@ export class NativeLayerRenderer {
      * Queried ahead of the graphic body, because a handle sits *on* the graphic it
      * belongs to and the body would otherwise always win.
      */
-    hitTestHandle(point: {x: number; y: number}, radiusPx = 8): number {
-        if (!this.selectedId || !this.map.getLayer(HANDLE_LAYER_ID)) return -1;
-        const selected = this.find(this.selectedId);
-        if (!selected) return -1;
+    hitTestHandle(point: {x: number; y: number}, radiusPx = 8): {graphic: MapLibreTacticalGraphic; index: number} | undefined {
+        if (!this.map.getLayer(HANDLE_LAYER_ID)) return undefined;
+
+        // Searched across **every** graphic wearing handles, not just the selected one.
+        // OpenLayers has no selection in these modes — the pointer finds whichever
+        // handle is under it and drags that — so a MapLibre that only answered for the
+        // selected graphic would draw handles the user could not grab.
+        const candidates = this.handleBearers();
+        const searched = candidates.length ? candidates : this.selectedHandleBearer();
 
         // Compared in screen space rather than through `queryRenderedFeatures`: the
         // answer needed is *which* handle, and a rendered feature carries no index.
-        let best = -1;
+        let best: {graphic: MapLibreTacticalGraphic; index: number} | undefined;
         let bestDistance = radiusPx;
-        selected.handles.forEach((position, index) => {
-            const projected = this.map.project(toLonLat(position) as [number, number]);
-            const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
-            if (distance <= bestDistance) {
-                best = index;
-                bestDistance = distance;
-            }
-        });
+        for (const graphic of searched) {
+            graphic.handles.forEach((position, index) => {
+                const projected = this.map.project(toLonLat(position) as [number, number]);
+                const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
+                if (distance <= bestDistance) {
+                    best = {graphic, index};
+                    bestDistance = distance;
+                }
+            });
+        }
         return best;
+    }
+
+    /** The selected graphic as a one-or-zero list, for the no-handle-mode case. */
+    private selectedHandleBearer(): MapLibreTacticalGraphic[] {
+        const selected = this.selectedId ? this.find(this.selectedId) : undefined;
+        return selected ? [selected] : [];
     }
 
     destroy(): void {

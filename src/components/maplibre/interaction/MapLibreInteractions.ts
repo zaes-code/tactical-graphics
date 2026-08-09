@@ -79,6 +79,13 @@ export interface InteractionCallbacks {
     onDrawEnd?(): void;
 }
 
+/**
+ * The modes that put handles on every graphic. Mirrors
+ * `TacticalGraphicsManager.enableHandleModes` — the two must agree, because the same
+ * button in the same panel drives both.
+ */
+const HANDLE_MODES: readonly EditMode[] = ['translate', 'rotate', 'resize', 'modify'];
+
 export class MapLibreInteractions {
     private mode: EditMode = 'view';
     /** The graphic being drawn, or null when not drawing. */
@@ -130,6 +137,10 @@ export class MapLibreInteractions {
     setMode(mode: EditMode): void {
         this.cancelDraw();
         this.mode = mode;
+        // Every graphic wears its handles in a handle-bearing mode and none in view,
+        // which is what the OpenLayers manager does on the same button.
+        // @see NativeLayerRenderer.setHandleMode
+        this.renderer.setHandleMode(HANDLE_MODES.includes(mode));
     }
 
     getMode(): EditMode {
@@ -244,26 +255,40 @@ export class MapLibreInteractions {
     private readonly onPointerDown = (event: MapMouseEvent): void => {
         if (this.drawing) return;
 
+        // **The handle decides which graphic is being edited**, not the selection.
+        // In a handle mode every graphic wears its handles, exactly as OpenLayers does,
+        // so the one under the pointer is the one the user means — requiring them to
+        // select it first would make the same button behave differently in the two
+        // engines. Falls back to the selection when nothing is grabbed, which is what
+        // a body drag needs.
+        const grabbed = this.renderer.hitTestHandle(event.point);
         const selectedId = this.renderer.selection;
-        const graphic = selectedId ? this.renderer.find(selectedId) : undefined;
+        const graphic = grabbed?.graphic ?? (selectedId ? this.renderer.find(selectedId) : undefined);
         if (!graphic) return;
 
         // A handle carrying a role of its own works in **view** mode too: its meaning
         // comes from the handle, not from a mode button, so requiring the user to pick
         // one first would be asking them to answer a question the handle has already
         // answered.
-        const grabbed = this.renderer.hitTestHandle(event.point);
-        const roleDrag = grabbed >= 0 && handleRole(graphic.name, grabbed) !== 'shape';
+        const roleDrag = grabbed !== undefined && handleRole(graphic.name, grabbed.index) !== 'shape';
         if (this.mode === 'view' && !roleDrag) return;
 
         // The drag has to start *on* the graphic, or on one of its handles. Starting
         // it anywhere on the map would mean a user who wanted to pan instead resized
         // whatever happened to be selected.
-        const handle = grabbed;
+        const handle = grabbed?.index ?? -1;
         const onHandle = handle >= 0;
         const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
         const vertex = this.mode === 'modify' ? this.grabVertex(graphic, event.point) : -1;
         if (!onHandle && !onGraphic && vertex < 0) return;
+
+        // Grabbing another graphic's handle makes it the selected one, so everything
+        // downstream — the properties panel, a later body drag — agrees about what the
+        // user is working on.
+        if (graphic.id !== selectedId) {
+            this.renderer.select(graphic.id);
+            this.callbacks.onSelect?.(graphic);
+        }
 
         this.dragging = {
             graphic,
