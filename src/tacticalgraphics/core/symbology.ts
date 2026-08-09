@@ -31,6 +31,7 @@ import {
 } from './config';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
+import {baseGeometryFor} from './render';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -319,3 +320,66 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
+
+/**
+ * The gestures a graphic accepts.
+ *
+ * **A property of the symbol, not of a renderer.** Some of these are badges: they
+ * mark a point and describe no ground extent, so there is no size for a resize to
+ * be right about and no axis for a rotate to turn. Others are pinned to a screen
+ * size outright and would simply ignore the number.
+ *
+ * It reads as doctrine rather than as UI: refusing a gesture is how the symbol
+ * says "this dimension is not yours to set". A renderer that let the user drag it
+ * anyway would store a number the generator throws away, which looks like a
+ * gesture that silently does nothing.
+ *
+ * The OpenLayers side enforces the same thing by choosing a controller —
+ * `PointDropController` no-ops both for the crossed tasks and keeps resize for the
+ * readiness states; `SecurityOperationsController` no-ops resize and keeps rotate.
+ * This is that knowledge as a table any renderer can read.
+ */
+export interface AllowedGestures {
+    translate: boolean;
+    rotate: boolean;
+    resize: boolean;
+    /** Whether the base has vertices a user can drag. A point never does. */
+    modify: boolean;
+}
+
+/**
+ * The four crossed mission tasks. Fixed-size symbols: the style pins them to a
+ * constant 100 px across at every zoom, so a stored size is divided straight back
+ * out and neither gesture can reach the picture.
+ */
+const FIXED_SIZE_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+]);
+
+/**
+ * The security operations. They rotate — the arms point somewhere — but they are
+ * badges and do not resize; every dimension is a screen constant.
+ */
+const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
+export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
+    // A point-anchored graphic has one vertex and dragging it is a move, not a
+    // reshape — so `modify` is off and `translate` covers it.
+    const pointAnchored = baseGeometryFor(name) === 'Point';
+
+    if (FIXED_SIZE_SYMBOLS.has(name)) {
+        return {translate: true, rotate: false, resize: false, modify: false};
+    }
+    if (ROTATE_ONLY_SYMBOLS.has(name)) {
+        return {translate: true, rotate: true, resize: false, modify: false};
+    }
+    return {translate: true, rotate: true, resize: true, modify: !pointAnchored};
+}
+

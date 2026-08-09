@@ -178,6 +178,25 @@ export function isTacticalGraphicFeature(feature: Feature): boolean {
 }
 
 /**
+ * The base geometry a graphic is drawn from — `Point`, `LineString` or `Polygon`.
+ *
+ * What a **draw tool** needs to know before it starts collecting clicks: whether
+ * this graphic wants one point, an open path, or a closed ring. Exported for that
+ * reason; without it a renderer implementing draw has to keep its own table of
+ * 215 names beside this one and watch the two drift.
+ *
+ * `undefined` for an unknown name, and for the handful of generators whose kind is
+ * not in the table below — those accept any base rather than being rejected, so a
+ * caller should treat `undefined` as "no constraint", not as an error.
+ */
+export function baseGeometryFor(name: TacticalGraphicName): 'Point' | 'LineString' | 'Polygon' | undefined {
+    const generator = TacticalGraphicsRegistry.get(name);
+    return generator
+        ? (EXPECTED_BASE_GEOMETRY[generator.type] as 'Point' | 'LineString' | 'Polygon' | undefined)
+        : undefined;
+}
+
+/**
  * The base geometry each generator kind expects. Generators that emit a
  * MultiLineString still take a LineString base (Bridge, Ford).
  */
