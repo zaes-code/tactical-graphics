@@ -1,6 +1,6 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
-import {getDrawMarkerColor, getHandleColor} from '@zaes/tactical-graphics';
+import {getDrawMarkerColor, getHandleColor, getInertHandleColor} from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
@@ -445,10 +445,19 @@ export class NativeLayerRenderer {
         const selected = this.selectedId ? this.find(this.selectedId) : undefined;
         const handles = selected?.handles ?? [];
 
-        this.setData('handles', handles.map(position => ({
+        const centre = selected ? centreHandleIndex(selected) : -1;
+        this.setData('handles', handles.map((position, index) => ({
             type: 'Feature' as const,
             geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
-            properties: {radius: HANDLE_RADIUS_PX, color: getHandleColor()},
+            properties: {
+                radius: HANDLE_RADIUS_PX,
+                // Grey for the centre dot, and the colour has to stay honest: it says
+                // "this one will not rotate or resize", which is true — the scale ratio
+                // divides by distance-to-centre and a point on the axis carries no
+                // angle. It still moves the graphic, which is what the eye expects of a
+                // centre. @see createInertHandleFeature
+                color: index === centre ? getInertHandleColor() : getHandleColor(),
+            },
         })));
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
@@ -507,6 +516,19 @@ export class NativeLayerRenderer {
     }
 
     /**
+     * Which of a graphic's handles is its centre, or -1.
+     *
+     * Found by **position**, not by index: the documented order for the
+     * point-anchored family is `[edge, centre]`, but a range fan emits one handle per
+     * band and the corridors emit one per turning point, so an index would be right
+     * for one family and wrong for the rest. A handle sitting on the base point is
+     * the centre in every family that has one.
+     */
+    centreHandleOf(graphic: MapLibreTacticalGraphic): number {
+        return centreHandleIndex(graphic);
+    }
+
+    /**
      * The handle index under a screen point, or -1.
      *
      * Queried ahead of the graphic body, because a handle sits *on* the graphic it
@@ -537,4 +559,31 @@ export class NativeLayerRenderer {
         this.map.off('zoomend', this.onZoomEnd);
         this.map.off('moveend', this.onMoveEnd);
     }
+}
+
+/**
+ * How close a handle must sit to the base point to count as the centre, in metres
+ * per unit of the graphic's own size.
+ *
+ * Relative rather than absolute: a graphic a kilometre across and one a thousand
+ * kilometres across both have a centre, and a fixed tolerance would either miss
+ * the first or swallow the second's edge handle.
+ */
+const CENTRE_TOLERANCE_FRACTION = 0.01;
+
+/** @see NativeLayerRenderer.centreHandleOf */
+function centreHandleIndex(graphic: MapLibreTacticalGraphic): number {
+    const base = graphic.base.geometry;
+    if (base.type !== 'Point') return -1;
+
+    const centre = toMercator(base.coordinates as [number, number]);
+    // Sized against the graphic's own extent, so the tolerance means the same thing
+    // whatever scale it was drawn at.
+    const bounds = graphic.graphic.bounds;
+    const extent = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) : 0;
+    const tolerance = Math.max(1, extent * CENTRE_TOLERANCE_FRACTION);
+
+    return graphic.handles.findIndex(
+        handle => Math.hypot(handle[0] - centre[0], handle[1] - centre[1]) <= tolerance,
+    );
 }
