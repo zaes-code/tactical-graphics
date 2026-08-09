@@ -199,9 +199,17 @@ function sizeDefaults(
         : baseLengthMetres(geometry) * DEFAULT_SIZE_FRACTION;
     if (metres <= 0) return {};
 
+    // A stamped `radius` on a line graphic **is** its half-width: that is what
+    // `LineGraphicBase.setOffset` replays on restore, and what the OpenLayers holder
+    // did with the same bag. Inventing a width beside it made the two engines draw
+    // different corridors from one saved description — 6.3% of the frame, the largest
+    // single disagreement left in the sweep. A supplied `width` still wins over both.
+    // @see ai/context.md, "A saved graphic carries one object"
+    const halfWidth = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : metres;
+
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined ? {width: metres * 2} : {}),
+        ...(supplied.width === undefined ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: metres}
             : {}),
