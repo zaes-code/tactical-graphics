@@ -563,7 +563,11 @@ export function buildTacticalGraphic(
         base,
         graphic: {geometry: graphicGeometry, ...shared},
         labels: labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
-        handles: handlePositions(rendered.handles.geometry),
+        // **`placed`, not `rendered`.** The security operations are generated centred
+        // on the origin and moved onto their base here; taking the handles from the
+        // raw output left all three graphics' handles at null island, so the symbol
+        // drew in the right place and could not be grabbed at all.
+        handles: handlePositions(placed.handles),
     };
 }
 
