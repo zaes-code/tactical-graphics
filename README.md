@@ -29,8 +29,8 @@ Three entry points ship, and you can use any of them on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
-| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
-| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. **Newer than the OpenLayers one** — see [MapLibre](#maplibre--native-layers) for what it does and does not do yet. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
@@ -85,9 +85,9 @@ You get three pieces back:
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
 
-If you want it drawn, styled and editable on a map instead, that is the
-[OpenLayers entry point](#openlayers--styled-drawable-editable) or the
-[MapLibre one](#maplibre--native-layers) — three lines either way.
+If you want it drawn, styled and editable on a map instead, that is
+[`createTacticalGraphics`](#rendering) — the same three lines whichever
+engine you point it at.
 
 ---
 
@@ -231,79 +231,109 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 ## Rendering
 
-### OpenLayers — styled, drawable, editable
-
-`@zaes/tactical-graphics/openlayers` is the older and more exercised of the two
-renderers. It carries the 4326 → 3857 adapter, the feature holders and controllers,
-and draw and edit interactions.
-
-The doctrinal styling itself — standard identity colors, dashed planned status,
-echelon glyphs, amplifier placement — is **not** in here; it is in the root entry
-point, and this renderer paints through it. That is what lets the
-[MapLibre entry point](#maplibre--native-layers) draw the same symbols rather than
-a second approximation of them.
-
-Three objects appear in every OpenLayers snippet below. This is all they are:
+Both renderers expose the **same function, with the same signature, returning the
+same interface**. The import line is the only difference between the two forms below
+— everything after it is identical, and so is everything you do with the result.
 
 ```ts
+import {createTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+// ...or
+import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
+
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
+
+const graphics = createTacticalGraphics(map);
+
+graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);  // then the user clicks
+graphics.setInteractionMode('modify');                         // rotate | resize | translate | modify | view
+
+const saved = graphics.snapshot();     // portable GeoJSON, one feature per graphic
+graphics.restore(saved);               // rebuilt editable — in either engine
+```
+
+`createTacticalGraphics` attaches to a map you already made, adds its own layer or
+sources, and wires the draw and edit interactions. `destroy()` takes them off again
+and leaves your map alone.
+
+| | |
+|---|---|
+| `capabilities` | what this engine supports, so a host can disable a control **with a reason** rather than offer one that does nothing |
+| `startDrawing(name)` / `cancelDrawing()` | arm the draw tool; the next clicks place the base |
+| `setInteractionMode(mode)` / `getInteractionMode()` | what a drag means: `view`, `translate`, `rotate`, `resize`, `modify` |
+| `clearAll()` | remove every graphic and return to `view` |
+| `snapshot()` / `restore(fc)` | the whole map as GeoJSON, and back — see [Saving and restoring](#saving-and-restoring-a-whole-map) |
+| `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics` |
+| `destroy()` | detach every listener and interaction |
+
+Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,
+`onModeChange` — and they mean the same thing in both engines.
+
+### Setting up the map itself
+
+The map is yours; only its construction differs, and that is an OpenLayers and
+MapLibre difference rather than one of ours.
+
+```ts
+// OpenLayers
 import Map from 'ol/Map';
 import View from 'ol/View';
 import {fromLonLat} from 'ol/proj';
-import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
+import {createTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
 
-// `map` — your own ol/Map. Nothing about it is special; the manager attaches to it.
-const map = new Map({
-    target: 'map',
-    view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 12}),
+const map = new Map({target: 'map', view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 12})});
+const graphics = createTacticalGraphics(map);
+```
+
+```ts
+// MapLibre — wait for `load`, since sources cannot be added before it
+import maplibregl from 'maplibre-gl';
+import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
+
+const map = new maplibregl.Map({container: 'map', style, center: [-77.04, 38.89], zoom: 12});
+map.on('load', () => {
+    const graphics = createTacticalGraphics(map);
 });
-
-// `manager` — takes the map and nothing else. It creates its own vector layer,
-// adds it to the map, and owns every graphic drawn through it.
-const manager = new TacticalGraphicsManager(map);
-
-// `source` — that layer's ol/source/Vector, exposed for the things you do directly
-// to features: add your own, or repaint them all after a config change.
-const source = manager.renderingVectorSource;
 ```
 
-Then drawing a graphic is one call. The user clicks out the base geometry, and the
-manager builds, styles and wires it up:
+### What the two engines share
+
+Nearly everything, and by construction rather than by discipline: **both paint
+through the same map-agnostic code**. Every color and label rule, the screen-sized
+decorations, the radius read-out, which handle sets a width, which vertex is inert
+under a reshape, how many points a base takes, where a rotate pivots, which graphics
+must stay rectangular, and where a drag may add a vertex. Fixing one fixes both,
+because there is only one of each.
+
+Draw, edit, rotate, resize, reshape, add-a-vertex, the hover cursor and the marker
+showing where a new vertex would land are all present in both.
+
+### What still differs
+
+| | |
+|---|---|
+| **Label rasterisation** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
+| **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
+| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realise geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
+
+### Reaching past the façade
+
+Both subpaths still export their own objects, and adopting the façade does not mean
+giving them up — `createTacticalGraphics(map, {manager})` and `{renderer}` adopt one
+you already built. The engine-specific surfaces are `TacticalGraphicsManager`,
+`getController` and the feature holders on the OpenLayers side; `NativeLayerRenderer`
+and `MapLibreInteractions` on the MapLibre one.
+
+These are **not** mirror images of each other, and are not meant to be. OpenLayers
+retains mutable features and edits them in place; MapLibre derives GeoJSON sources
+and discards them on the next rebuild. Those are genuinely different rendering
+models. The façade exists so that you only have to care when you want to.
+
+#### Placing graphics from data, in OpenLayers
+
+Skip the draw interaction when the geometry comes from data rather than a user's
+clicks. You build the base feature; the controller does the rest:
 
 ```ts
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
-
-manager.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
-```
-
-That is the whole managed path — draw, modify, rotate, resize and the properties the
-style functions read all follow from it.
-
-This method was previously called `handleDrawTacticalGraphic`. That name still works
-— it delegates to `startDrawing` — but it is deprecated.
-
-### The radius read-out
-
-While a circular graphic is drawn or resized, the renderer draws a hashed line from its
-center out along the gesture, labeled with the distance — meters below a kilometer,
-kilometers above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
-ends, and it never reaches `serializeTacticalGraphics` or a restored map.
-
-It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
-mission tasks, the range fans. Graphics whose radius is real but not a dimension you could
-measure on the drawn shape are deliberately excluded: Ambush is a hooked arrow, Turn and
-Tactical Turn are bowed arrows.
-
-That same list decides whether the Feature Properties dialog shows a **Radius** read-out,
-so a graphic can never report a radius in one place and not the other. Both are read-outs,
-not inputs — a graphic is sized by dragging it.
-
-### Driving one graphic yourself
-
-Skip the manager's draw interaction when you are placing graphics from data rather
-than from a user's clicks. You build the base feature; the controller does the rest:
-
-```ts
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
 
 const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
@@ -326,13 +356,43 @@ keep drawing the old label.
 security operation — have geometry that is a screen-pixel constant times the map
 resolution, so without a `change:resolution` subscription they are pinned in meters
 and grow and shrink as you zoom. The manager does this for you when the user draws,
-and `restoreTacticalGraphics` does it on load; a graphic you build yourself needs it
-doing. Pair it with `unwatchResolution` when you remove the graphic, or the listener
-outlives its features.
+and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
+with `unwatchResolution` when you remove the graphic, or the listener outlives its
+features.
 
-### OpenLayers — geometry only
+#### Placing graphics from data, in MapLibre
 
-If you would rather keep your own styling, skip the subpath entirely.
+`buildTacticalGraphic` is the same idea, and hands back a ready graphic rather than
+mutating a holder:
+
+```ts
+import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
+
+const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
+    label: 'A', hostility: 'Hostile/Faker',
+}, resolution);
+if (graphic) renderer.add(graphic);
+```
+
+### The radius read-out
+
+While a circular graphic is drawn or resized, both renderers draw a hashed line from
+its center out along the gesture, labeled with the distance — meters below a
+kilometer, kilometers above. It is editor chrome: `role: 'handle'`, cleared the
+moment the gesture ends, and it never reaches a snapshot or a restored map.
+
+It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
+mission tasks, the range fans. Graphics whose radius is real but not a dimension you could
+measure on the drawn shape are deliberately excluded: Ambush is a hooked arrow, Turn and
+Tactical Turn are bowed arrows.
+
+That same list decides whether the Feature Properties dialog shows a **Radius** read-out,
+so a graphic can never report a radius in one place and not the other. Both are read-outs,
+not inputs — a graphic is sized by dragging it.
+
+### Geometry only, no styling
+
+If you would rather keep your own styling, skip the subpaths entirely.
 `renderTacticalGraphic` emits EPSG:4326, so reproject on read:
 
 ```ts
@@ -345,37 +405,6 @@ const features = new GeoJSON().readFeatures(
 );
 source.addFeatures(features);
 ```
-
-### MapLibre — native layers
-
-`@zaes/tactical-graphics/maplibre` draws through MapLibre's own GeoJSON sources and
-layers, so panning and zooming cost nothing beyond what MapLibre already does.
-
-```ts
-import maplibregl from 'maplibre-gl';
-import {NativeLayerRenderer, MapLibreInteractions} from '@zaes/tactical-graphics/maplibre';
-
-const map = new maplibregl.Map({container: 'map', style, center: [-77.04, 38.89], zoom: 8});
-
-map.on('load', () => {
-    const renderer = new NativeLayerRenderer(map);
-    const interactions = new MapLibreInteractions(map, renderer);
-
-    interactions.startDraw(TacticalGraphicName.MainAxisOfAdvance);   // then the user clicks
-    interactions.setMode('modify');                                   // rotate | resize | translate | modify | view
-});
-```
-
-**What it shares with the OpenLayers entry point**, because both read the same
-map-agnostic code rather than each having its own copy: every color and label
-rule, the screen-sized decorations, the radius read-out, which handle sets a
-width, which vertex is inert under a reshape, how many points a graphic's base
-takes, and where a rotate pivots. Fixing one fixes both.
-
-**What differs today.** MapLibre places a label from an SDF glyph set and
-OpenLayers from a browser font, so text lands a pixel or so apart and a label
-anchored off-screen is drawn clipped by one and not placed at all by the other.
-Neither is a difference you can configure away.
 
 ### Any GeoJSON renderer
 
@@ -603,7 +632,7 @@ provider with `handler.setSymbolProvider` — it wins over the global one, and
 ### Worked example: three security operations, three units
 
 Placed programmatically, each with its own unit symbol. Uses the `map`, `source` and
-`manager` from [the setup above](#openlayers--styled-drawable-editable).
+`manager` from [the setup above](#placing-graphics-from-data-in-openlayers).
 
 ```ts
 import ms from 'milsymbol';

@@ -66,10 +66,10 @@ import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
 import {clampTurnBend, TacticalGraphicName} from '@zaes/tactical-graphics';
+import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
-import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController} from './controllers/MissionTaskController';
@@ -462,4 +462,24 @@ export function restoreTacticalGraphics(
     }
 
     return report;
+}
+
+/**
+ * Removes every rendered graphic and its controllers.
+ *
+ * **Not a bare `renderingVectorSource.clear()`.** The source holds the features; the
+ * manager also holds a controller per graphic and a zoom subscription per controller.
+ * Clearing only the source empties the screen and leaves all of that behind — a
+ * snapshot then still reports graphics nobody can see, an export carries them, and
+ * every orphaned listener goes on re-deriving geometry for features that are gone.
+ *
+ * It lived in `sampleGallery.ts`, which is demo-only and stripped from the published
+ * build — so the one correct way to empty a map was the one thing a consumer could not
+ * import. Restoring a snapshot has to clear first, which makes this part of the
+ * save/restore story rather than part of the gallery's.
+ */
+export function clearAllGraphics(manager: TacticalGraphicsManager): void {
+    manager.renderingVectorSource.clear();
+    manager.graphicControllers.length = 0;
+    manager.releaseAllGraphics();
 }
