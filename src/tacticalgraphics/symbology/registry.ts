@@ -736,11 +736,21 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
     // Labels last, over whatever graphic painter was registered above. Every area
     // gets one: the bespoke layout if its family has one, the default otherwise.
+    //
+    // **The three at the end are areas whose *graphic* is bespoke enough to be
+    // registered on their own**, which put them outside the four family lists and so
+    // outside this loop — and an area's labels live on a separate feature, so with no
+    // painter they simply did not draw. Measured, BattlePosition showed 28% of
+    // OpenLayers' ink at a far zoom: the box, and neither its designation nor its
+    // date-time group.
     for (const name of [
         ...DEFAULT_AREA_GRAPHICS,
         ...SPECIAL_AREA_GRAPHICS,
         ...CIRCULAR_AREA_GRAPHICS,
         ...CIRCULAR_HATCHED_WHEN_PLANNED,
+        TacticalGraphicName.BattlePosition,
+        TacticalGraphicName.StrongPoint,
+        TacticalGraphicName.UnexplodedExplosiveOrdnanceArea,
     ]) {
         const entry = registry[name];
         if (entry) entry.label = areaLabelPainterFor(name) ?? areaDefaultLabelPaint(name);
