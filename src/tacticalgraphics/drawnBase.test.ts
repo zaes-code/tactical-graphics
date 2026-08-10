@@ -18,6 +18,7 @@
  */
 
 import {normalizeDrawnBase} from './core/drawnBase';
+import {isRectangular} from './core/handles';
 import {TacticalGraphicName} from './core/type';
 
 const APEX = [10, 0];
@@ -72,5 +73,31 @@ describe('normalizeDrawnBase', () => {
     it('is safe on a base too short to mean anything yet', () => {
         expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP])).toEqual([TIP]);
         expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [])).toEqual([]);
+    });
+});
+
+/**
+ * The rectangles, which are a shape rule rather than a tidy-up, but fail the same way
+ * when only one engine knows about them: OpenLayers withdrew them from its Modify
+ * interaction and MapLibre could not see that, so a corner could be dragged to any
+ * angle and — once a segment drag could add vertices — a rectangle could grow a fifth.
+ */
+describe('isRectangular', () => {
+    const names = Object.values(TacticalGraphicName);
+
+    it('is every rectangular area variant and nothing else', () => {
+        const flagged = names.filter(isRectangular);
+        const named = names.filter(name => String(name).endsWith('Rectangular'));
+        expect([...flagged].sort()).toEqual([...named].sort());
+    });
+
+    it('covers the fourteen the registry draws as boxes', () => {
+        expect(names.filter(isRectangular)).toHaveLength(14);
+    });
+
+    it('does not catch the irregular or circular variants of the same areas', () => {
+        expect(isRectangular(TacticalGraphicName.FreeFireAreaCircular)).toBe(false);
+        expect(isRectangular(TacticalGraphicName.AirSpaceCoordinationAreaIrregular)).toBe(false);
+        expect(isRectangular(TacticalGraphicName.AssemblyArea)).toBe(false);
     });
 });

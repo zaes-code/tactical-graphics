@@ -323,7 +323,13 @@ export function drawProvenSamples(
     const failed: SampleSweepResult['failed'] = [];
     let drawn = 0;
 
-    layout.headings.forEach(({category, x, y}) => source.addFeature(headingFeature([x, y], category)));
+    // **No category banners.** The sweep is a look at the symbols, and MapLibre's has
+    // never drawn them — so this is the engine that changed, to match. The grouping
+    // itself stays: it still orders the grid and reserves the row a heading used to sit
+    // in, which is what keeps each category starting on a fresh line.
+    //
+    // The per-graphic name under each symbol stays too. It is what makes the published
+    // gallery image readable, and it is not what a banner was doing.
 
     layout.placements.forEach(({name, cx, cy, titleY}) => {
         const handler = getController(name, layout.resolution);
