@@ -501,7 +501,6 @@ export class MapLibreInteractions {
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
-        this.showMeasure(graphic);
         // Otherwise the map pans out from under the gesture.
         this.map.dragPan.disable();
     };
@@ -576,9 +575,13 @@ export class MapLibreInteractions {
         const next = {...rebuilt, id: drag.graphic.id};
         this.renderer.replace(drag.graphic.id, next);
         drag.graphic = next;
-        // The read-out follows the drag: it reports the radius the user is dragging
-        // *to*, which is the whole point of showing it.
-        this.showMeasure(next);
+        // **Only once the gesture has actually changed the size**, which is the rule
+        // OpenLayers states in `MissionTaskController.handleResize`: a resize becomes one
+        // when the radius moves, not when a pointer goes down. Arming on pointer-down
+        // instead put the read-out on screen for a plain move, where it measures a radius
+        // nobody is changing. The read-out then follows the drag, reporting the radius
+        // the user is dragging *to*, which is the whole point of showing it.
+        if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
     };
 
     /**
