@@ -382,6 +382,49 @@ export function setOffset(
     return {...description, properties};
 }
 
+/**
+ * Flips the graphic to the other side of its own line, and changes nothing else.
+ *
+ * The retrograde tasks' second handle. Unlike an offset drag it carries no width: in
+ * OpenLayers, dragging a retirement's handle 170 px either way leaves `width` exactly
+ * where it was and moves no vertex — the only thing that changes is which side the cane
+ * hangs on. So this reads the *sign* of the perpendicular and discards the magnitude.
+ *
+ * **Negative is the mirrored side**, matching `setOffset`: the axis is the segment's
+ * left normal and an unmirrored symbol already hangs on that side, so treating a
+ * positive perpendicular as mirrored would flip it the moment the user dragged along
+ * the side it was already on.
+ *
+ * The threshold is the same one, and for the same reason — crossing the line is easy to
+ * do by accident, going a little way past it is not.
+ */
+export function setMirror(description: GraphicDescription, cursor: Position, resolution: number): GraphicDescription {
+    const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
+    if (coords.length < 2) return description;
+
+    const at = toMercator([cursor[0], cursor[1]]);
+    let segment: [ProjectedPosition, ProjectedPosition] = [coords[0], coords[1]];
+    let nearest = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const distance = distanceToSegmentSq(at, coords[i], coords[i + 1]);
+        if (distance < nearest) {
+            nearest = distance;
+            segment = [coords[i], coords[i + 1]];
+        }
+    }
+
+    const angle = Math.atan2(segment[1][1] - segment[0][1], segment[1][0] - segment[0][0]);
+    const axisX = Math.cos(angle + Math.PI / 2);
+    const axisY = Math.sin(angle + Math.PI / 2);
+    const perpendicular = (at[0] - segment[0][0]) * axisX + (at[1] - segment[0][1]) * axisY;
+
+    if (Math.abs(perpendicular) < MIRROR_FLIP_MIN_PX * resolution) return description;
+
+    const mirrored = perpendicular < 0;
+    if (mirrored === !!description.properties.mirrored) return description;
+    return {...description, properties: {...description.properties, mirrored}};
+}
+
 /** Default offset sensitivity — a handle drawn two widths out. @see HandleContract */
 const DEFAULT_OFFSET_SCALE = 0.5;
 
