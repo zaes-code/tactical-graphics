@@ -985,6 +985,14 @@ export class TacticalGraphicsManager {
     handleDrawTacticalGraphic = (name: TacticalGraphicName) => this.startDrawing(name);
 
     addModifyInteraction = () => {
+        // **Idempotent, because it is not always called once.** Each call used to build a
+        // fresh `Modify` and add it while keeping no hold on the previous one, so a
+        // second call left the first on the map — and `removeModifyInteraction` could
+        // only ever take off the newest. Measured through the panel's edit button: two
+        // interactions went on, one came off, and the leftover kept drawing its blue
+        // vertex over every line and polygon in a mode that has no vertices to edit.
+        this.removeModifyInteraction();
+
         // Only allow the base feature (linestring/polygon) for a tactical graphic to be modified
         // once the graphic is modified, the underlying graphic will re-render the tactical graphic from the geometry library.
         let baseFeatures = this.getRenderedFeaturesByProp('base');
@@ -1016,5 +1024,8 @@ export class TacticalGraphicsManager {
         let baseFeatures = this.getRenderedFeaturesByProp('base');
         baseFeatures.forEach(feature => feature.set('hidden', true));
         if (this.modify) this.map.removeInteraction(this.modify);
+        // Dropped, not just detached: a handle kept here is one this class would try to
+        // remove a second time and, worse, one it would not replace.
+        this.modify = undefined;
     };
 }
