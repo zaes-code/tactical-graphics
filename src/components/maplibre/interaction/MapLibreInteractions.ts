@@ -90,6 +90,26 @@ const HANDLE_MODES: readonly EditMode[] = ['translate', 'rotate', 'resize', 'mod
 /** How near the pivot a grab counts as *on* it, in screen pixels. @see startedOnPivot */
 const PIVOT_GRAB_PX = 6;
 
+/**
+ * What a handle of *this* graphic does.
+ *
+ * The vertex count comes from the drawn base, because one contract splits on it: a
+ * corridor's generator emits `[...vertices, ...tangent points]` and the tail sets the
+ * width. Calling `handleRole` without it left every corridor handle a `shape` handle,
+ * so MapLibre drew the width handles and gave them nothing to do — a corridor could
+ * not be widened in that engine at all. @see handleRole
+ */
+function roleOfHandle(graphic: MapLibreTacticalGraphic, index: number) {
+    return handleRole(graphic.name, index, vertexCountOf(graphic));
+}
+
+/** How many points the user drew — the length of the base's own coordinate list. */
+function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
+    const coordinates = (graphic.base.geometry as {coordinates?: unknown}).coordinates;
+    if (!Array.isArray(coordinates)) return 0;
+    return typeof coordinates[0] === 'number' ? 1 : coordinates.length;
+}
+
 export class MapLibreInteractions {
     private mode: EditMode = 'view';
     /** The graphic being drawn, or null when not drawing. */
@@ -276,7 +296,7 @@ export class MapLibreInteractions {
         // comes from the handle, not from a mode button, so requiring the user to pick
         // one first would be asking them to answer a question the handle has already
         // answered.
-        const roleDrag = grabbed !== undefined && handleRole(graphic.name, grabbed.index) !== 'shape';
+        const roleDrag = grabbed !== undefined && roleOfHandle(graphic, grabbed.index) !== 'shape';
         if (this.mode === 'view' && !roleDrag) return;
 
         // The drag has to start *on* the graphic, or on one of its handles. Starting
@@ -434,7 +454,7 @@ export class MapLibreInteractions {
         if (drag.handle < 0) return null;
 
         const name = drag.graphic.name;
-        switch (handleRole(name, drag.handle)) {
+        switch (roleOfHandle(drag.graphic, drag.handle)) {
             case 'offset':
                 return setOffset(before, to, {
                     offsetScale: handleContract(name).offsetScale,
