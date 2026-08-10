@@ -20,10 +20,11 @@ import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {arcMissionTaskPaint, axisRotation, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {renderTacticalGraphic} from '../core/render';
 import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
+import {envelopmentLabelPaint} from './movementPaints';
 
 /**
  * A deterministic stand-in for `ctx.measureText`, at roughly the aspect ratio of
@@ -254,14 +255,23 @@ describe('a mission-task letter is sized by which family it is in', () => {
     });
 
     /**
-     * The first version of this reconstructed the axis from `properties.rotation`,
-     * read as a compass bearing. It is a maths angle — anticlockwise from east — so
-     * every letter came out a quarter turn off. A quarter turn on a single capital is
-     * nearly invisible in a pixel diff: the graphic measured 1.01 ink and 0.068%
-     * against OpenLayers *with the bug in it*. Only comparing the number against the
-     * drawn axis found it, which is why these compare numbers and not pictures.
+     * Two bugs met here, and both were invisible in a picture.
+     *
+     * The first reconstructed the axis from `properties.rotation`, read as a compass
+     * bearing. It is a maths angle — anticlockwise from east — so every letter came out a
+     * quarter turn off, and the graphic still measured 1.01 ink and 0.068% against
+     * OpenLayers *with the bug in it*. A quarter turn on a single capital is nearly
+     * nothing to a pixel diff.
+     *
+     * The second put the letter at a point the generator named in 4326. That is exact on
+     * the geodesic and a little off the straight segment a renderer draws between the
+     * run's reprojected ends — by an error proportional to the run, so the "E" slid out
+     * of its hole as the graphic grew, and only at large sizes.
+     *
+     * So this asserts the letter is **on the drawn segment**, not merely near the right
+     * bearing, and at a size where the old error was metres wide.
      */
-    it('lays the letter along the axis as drawn, at every bearing', () => {
+    it('puts the letter on the run as drawn, at every bearing and at size', () => {
         const R = 6378137;
         const merc = ([x, y]: number[]): ProjectedPosition =>
             [(x * Math.PI * R) / 180, Math.log(Math.tan(Math.PI / 4 + (y * Math.PI) / 360)) * R];
@@ -270,23 +280,37 @@ describe('a mission-task letter is sized by which family it is in', () => {
             const rendered = renderTacticalGraphic({
                 type: 'Feature',
                 geometry: {type: 'Point', coordinates: [0, 0]},
-                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, radius: 200_000, rotation}},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, radius: 900_000, rotation}},
             } as never)!;
 
             // Sub-line 0 is the straight run the "E" lies along.
             const [start, end] = (rendered.graphic.geometry as {coordinates: number[][][]}).coordinates[0];
-            const drawn = uprightRotation(merc(start), merc(end));
-            const derived = axisRotation({
-                geometry: {type: 'Point', coordinates: merc((rendered.labels.geometry as {coordinates: number[]}).coordinates)},
-                graphicCenter: merc([0, 0]),
-                properties: {name: TacticalGraphicName.Envelopment, rotation},
-            });
+            const [a, b] = [merc(start), merc(end)];
 
-            // A tenth of a degree. Not exact, and cannot be: the anchor sits half a
-            // size from the centre while the run spans a whole one, so the two measure
-            // the same axis over different lengths of a Mercator-distorted line and
-            // land ~0.003 deg apart. The error this guards against is a quarter turn.
-            expect(Math.abs(derived - drawn)).toBeLessThan(0.002);
+            const anchors = (rendered.labels.geometry as {coordinates: number[][]}).coordinates.map(merc);
+            const painted = envelopmentLabelPaint()(
+                {geometry: {type: 'MultiPoint', coordinates: anchors}, properties: {name: TacticalGraphicName.Envelopment, rotation}},
+                context(1000),
+            );
+            const at = (painted[0].geometry as {coordinates: ProjectedPosition}).coordinates;
+
+            // Distance from the letter to the segment it is cut into. Planar, because
+            // these are projected metres — which is the whole point.
+            const dx = b[0] - a[0];
+            const dy = b[1] - a[1];
+            const t = ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / (dx * dx + dy * dy);
+            const offBy = Math.hypot(at[0] - (a[0] + t * dx), at[1] - (a[1] + t * dy));
+
+            // A metre, on a run of some 1800 km. The old placement missed by kilometres.
+            expect(offBy).toBeLessThan(1);
+            // And a quarter of the way along it, where the gap is.
+            expect(t).toBeCloseTo(0.25, 3);
+
+            // The letter still lies along the run rather than across it.
+            const drawn = uprightRotation(a, b);
+            const painted0 = painted[0].text!.rotation!;
+            const along = Math.abs(Math.abs(painted0 - drawn) % Math.PI);
+            expect(Math.min(along, Math.PI - along)).toBeLessThan(0.01);
         }
     });
 
