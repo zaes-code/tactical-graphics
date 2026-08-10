@@ -12,25 +12,12 @@ import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManage
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
-import {
-    getSecurityOperationSymbolSize,
-    setSecurityOperationSymbolSize,
-    useMilsymbolSecurityOperationSymbols,
-} from './securityOperationSymbol';
-import ms from 'milsymbol';
+import {getSecurityOperationSymbolSize, setSecurityOperationSymbolSize} from './securityOperationSymbol';
 import {isEmpty} from '../../utils/isEmpty';
 import type {FeatureCollection} from 'geojson';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import type {MapEngineHandle} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
-
-// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
-// Screen the way any consumer would — by handing over the milsymbol it already
-// depends on. The library names milsymbol nowhere, which is what makes the
-// optional peer dependency actually optional; this is the other half of that.
-// Module scope, not an effect: it is global state and idempotent, and a graphic
-// drawn before the first render would otherwise come up with an empty centre.
-useMilsymbolSecurityOperationSymbols(ms);
 
 interface Props {
     darkMode: boolean;
@@ -96,7 +83,16 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             },
             setInteractionMode,
             reset: () => {
-                tacticalGraphicManager.current?.renderingVectorSource.clear();
+                // `clearAllGraphics`, not a bare `renderingVectorSource.clear()`. The
+                // source holds the features; the manager also holds a controller per
+                // graphic and a zoom subscription per controller. Clearing only the
+                // source emptied the screen and left all of it behind — the snapshot
+                // still reported 214 graphics after a reset, so an export would have
+                // carried them, and every one of their resolution listeners went on
+                // re-deriving geometry for features that were no longer on the map.
+                // That is the leak the comment on `clearAllGraphics` warns about.
+                const mgr = tacticalGraphicManager.current;
+                if (mgr) clearAllGraphics(mgr);
                 setInteractionMode(InteractionType.view);
             },
             drawSamples: hostility => {

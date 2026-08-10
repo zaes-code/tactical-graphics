@@ -1,5 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import '../styles/map.css';
+import ms from 'milsymbol';
+import {useMilsymbolSecurityOperationSymbols} from './openlayers/securityOperationSymbol';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibreMap from './maplibre/MapLibre';
 import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typography} from '@mui/material';
@@ -74,6 +76,19 @@ const DARK_PALETTE: TacticalGraphicsConfigOptions = {
     drawMarkerColor: 'rgb(69,106,185)',
     drawMarkerOutlineColor: 'rgb(23,23,23)',
 };
+
+// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
+// Screen the way any consumer would — by handing over the milsymbol it already
+// depends on. The library names milsymbol nowhere, which is what makes the optional
+// peer dependency actually optional; this is the other half of that.
+//
+// **Registered by the host, not by one of the engines.** It used to run at module
+// scope inside `OpenLayers.tsx`, so MapLibre only had a centre symbol because the
+// other engine's module happened to be imported — a MapLibre-only app would have
+// drawn all three with an empty middle. Module scope rather than an effect: it is
+// global, idempotent, and a graphic drawn before the first render would otherwise
+// come up empty.
+useMilsymbolSecurityOperationSymbols(ms);
 
 const paletteFor = (dark: boolean): TacticalGraphicsConfigOptions => dark ? DARK_PALETTE : DEFAULT_PALETTE;
 
