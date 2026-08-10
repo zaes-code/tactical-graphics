@@ -371,6 +371,14 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             'text-allow-overlap': true,
             'text-ignore-placement': true,
             'text-rotation-alignment': 'viewport',
+            // **No automatic wrapping.** MapLibre breaks a label at 10 ems by default;
+            // OpenLayers never breaks one. A designation joined to its date-time group
+            // — "A1     011200ZJUL26 - 012359ZJUL26" — is comfortably past that, so
+            // MapLibre stacked it over three lines while OpenLayers drew one, and the
+            // whole axis-of-advance family measured two to three times the ink at a
+            // close zoom. Labels that *are* multi-line say so with a newline, and an
+            // explicit break is honoured whatever this is set to.
+            'text-max-width': NO_WRAP_EMS,
         },
         paint: {
             'text-color': ['get', 'color'],
@@ -442,6 +450,13 @@ export function measureLabelLayer(id: string, source: string, fontStack: string)
         },
     };
 }
+
+/**
+ * `text-max-width` in ems, set high enough that MapLibre never inserts a break of
+ * its own. Zero would be the obvious way to say "never wrap" and is not: MapLibre
+ * treats it as "break at every opportunity". @see symbolLayer
+ */
+const NO_WRAP_EMS = 1e4;
 
 /** Rendered size of the read-out, matching `fontStyle`'s 16px base. */
 const MEASURE_LABEL_PX = 16;
