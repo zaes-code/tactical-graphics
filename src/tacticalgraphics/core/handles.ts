@@ -405,6 +405,52 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
 };
 
 /**
+ * Graphics whose base is a **rectangle**, and must stay one.
+ *
+ * Fourteen area variants that FM 1-02.2 draws as a box: the rectangular kill boxes,
+ * fire-support areas, zones and target areas. The user draws two opposite corners and
+ * the shape is derived; the four vertices are a *consequence* of that box, not points
+ * with meanings of their own.
+ *
+ * So none of them may be dragged individually and none may be added to. Moving one
+ * corner of a rectangle produces a quadrilateral, which is a different shape and not
+ * one this symbol has — and the rectangular variants exist precisely because a
+ * separate irregular-area variant is already available for when a user wants one.
+ *
+ * **It lived in an OpenLayers holder, invisible to anything else.**
+ * `RectangularAreaGraphicController` draws with `createBox()` and then calls
+ * `base.set('base', false)`, which quietly withdraws the graphic from the Modify
+ * interaction — that single flag is the whole of how OpenLayers keeps these
+ * rectangular. MapLibre had no way to know, so it let a corner be dragged to any
+ * angle, and once a segment drag could add vertices it let a rectangle grow a fifth.
+ */
+const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.PositionAreaArtilleryRectangular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+];
+
+/**
+ * Whether this graphic's base is a rectangle whose corners are not individually
+ * editable. Translate, rotate and resize all still apply — it is the *shape* that is
+ * fixed, not the placement.
+ */
+export function isRectangular(name: TacticalGraphicName): boolean {
+    return RECTANGULAR_GRAPHICS.includes(name);
+}
+
+/**
  * Graphics whose **edit-mode drag resizes them** when it does not land on a vertex.
  *
  * Dragging a fields-of-fire's leg — not its handle, the line between them — opens or
