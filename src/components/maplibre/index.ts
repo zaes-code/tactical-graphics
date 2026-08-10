@@ -41,6 +41,8 @@
  */
 
 // The two renderers.
+export {createTacticalGraphics} from './createTacticalGraphics';
+export type {MapLibreEngineOptions} from './createTacticalGraphics';
 export {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 export {NativeLayerRenderer} from './native/NativeLayerRenderer';
 
