@@ -39,7 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {baseVertexCount} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount} from '@zaes/tactical-graphics';
 import {
     centreOf,
     moveVertex,
@@ -439,13 +439,17 @@ export class MapLibreInteractions {
         const allowed = allowedGestures(drag.graphic.name);
         if (this.mode === 'rotate' && !allowed.rotate) return before;
         if (this.mode === 'resize' && !allowed.resize) return before;
-        // **Decided once, at pointer-down, and it has to be.** Both gestures measure
-        // from the pivot, and a grab that starts on it carries neither an angle nor a
-        // scale. Testing per step instead let the refusal lapse the moment the cursor
-        // left the pivot, and because each step is relative to the previous one the
-        // whole drag then scaled from the *first step* rather than from the start —
-        // which grew a fields-of-fire sixteenfold from one drag on its own anchor.
-        if (drag.onPivot && (this.mode === 'rotate' || this.mode === 'resize')) return before;
+        // **Resize only, and decided once at pointer-down.** A grab on the pivot carries
+        // no scale — the ratio is a tiny number over a tiny number — and testing per
+        // step let the refusal lapse the moment the cursor left, after which every step
+        // scaled from the *first step* rather than from the start: one drag on its own
+        // anchor grew a fields-of-fire sixteenfold.
+        //
+        // Rotate is **not** refused, because OpenLayers does not refuse it: its start
+        // angle at the pivot is `atan2(0, 0)` = 0, so the graphic turns by the direction
+        // of the drag, which is a defined and useful gesture. Measured on a fields of
+        // fire, grabbing handle 0: OpenLayers rotates, MapLibre did nothing.
+        if (drag.onPivot && this.mode === 'resize') return before;
 
         switch (this.mode) {
             case 'translate':
@@ -458,6 +462,10 @@ export class MapLibreInteractions {
                 // A modify drag that did not grab a vertex moves the whole graphic, which
                 // is what the OpenLayers Modify interaction does when you drag a line
                 // rather than one of its points.
+                // The anchor vertex is inert under a reshape — dragging it would bend
+                // the graphic about the point the user thinks of as its origin. Moving
+                // is what translate mode is for. @see anchorVertex
+                if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
                 return drag.vertex >= 0 && allowed.modify
                     ? moveVertex(before, drag.vertex, to)
                     : translate(before, drag.last, to);
