@@ -28,7 +28,7 @@ import {TacticalGraphicName} from './type';
  * - `band` — sets one range-fan band's range, by index.
  * - `centre` — moves the graphic. Found by position, not by index. @see NativeLayerRenderer
  */
-export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band';
+export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band' | 'mirror';
 
 export interface HandleContract {
     /** Role of each handle, by index. */
@@ -55,6 +55,48 @@ export interface HandleContract {
      * vertices there are is however many the user drew. @see handleRole
      */
     offsetAfterVertices?: boolean;
+}
+
+/**
+ * The retrograde tasks, whose second handle **sets which side the symbol hangs on**
+ * and nothing else.
+ *
+ * Delay, the three withdrawals, disengage, retirement and both passages of lines all
+ * draw their cane or arrow to one side of the drawn line, and every one of them can be
+ * flipped to the other. The gesture is a drag of that handle across the line.
+ *
+ * It is a `mirror` rather than an `offset` because it carries no width: measured on a
+ * retirement in OpenLayers, dragging the handle 170 px either way left `width` at
+ * 200000 and moved no vertex — the only thing that changed was `mirrored`. Declaring it
+ * as an offset would have made MapLibre resize the graphic on a gesture that, in the
+ * other engine, only turns it over.
+ *
+ * **It lived in the OpenLayers controllers**, which is why MapLibre could not flip any
+ * of these: `handleRole` called both handles `shape`, so a drag on the second moved a
+ * vertex there while OpenLayers turned the symbol over. Measured across all seven,
+ * OpenLayers flipped via handle 1 and MapLibre flipped via nothing at all.
+ */
+const MIRROR_HANDLE_AT_1: HandleContract = {roles: ['shape', 'mirror'], repeating: 'shape'};
+
+/** The graphics that wear it. @see MIRROR_HANDLE_AT_1 */
+const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.Withdraw,
+    TacticalGraphicName.WithdrawUnderPressure,
+    TacticalGraphicName.Disengage,
+    TacticalGraphicName.Retirement,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+];
+
+/**
+ * Whether this graphic can be flipped to the other side of its own line.
+ *
+ * Exported so a renderer, a properties panel or a test can ask without keeping its own
+ * list — and so the answer is the same wherever it is asked.
+ */
+export function supportsMirror(name: TacticalGraphicName): boolean {
+    return MIRROR_HANDLE_GRAPHICS.includes(name);
 }
 
 /** The default: every handle just reshapes, and the mode decides how. */
@@ -212,6 +254,9 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     }
     if (BLOCK_GRAPHICS.includes(name)) {
         return {roles: ['offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
+    }
+    if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
+        return MIRROR_HANDLE_AT_1;
     }
     if (BENT_GRAPHICS.includes(name)) {
         return {roles: ['bend', 'reach']};
