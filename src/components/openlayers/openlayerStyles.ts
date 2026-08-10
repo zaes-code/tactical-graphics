@@ -94,6 +94,7 @@ import {
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
     airfieldPaint,
+    plainOutlinePaint,
     areaDefaultLabelPaint,
     airCorridorLabelPaint,
     airspaceCoordinationAreaLabelPaint,
@@ -1180,8 +1181,9 @@ function firePositionStyles(f: FeatureLike): Style[] {
  * `getAttackByFireSymbol` as a MultiLineString:
  *   [0] bracket (feather → bar → feather), [1] shaft, [2] arrowhead.
  */
-export function attackByFireStyleFunc(): StyleFunction {
-    return f => firePositionStyles(f);
+/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
+export function attackByFireStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
 }
 
 /**
@@ -1613,13 +1615,9 @@ export function movementToContactStyleFunc(): StyleFunction {
  * LineString of 4 points produced by `FightingPosition.generateGraphics`,
  * so a single Stroke is enough — no fill, no per-point label.
  */
-export function fightingPositionStyleFunc(): StyleFunction {
-    return (f) => {
-        const color = readHostilityColor(f);
-        return new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH()}),
-        });
-    };
+/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
+export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
 }
 
 /**
