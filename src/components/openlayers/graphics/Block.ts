@@ -100,7 +100,7 @@ export class Block implements LineGraphic {
         this.graphic.setStyle((feature, resolution) => {
             switch (name) {
                 case TacticalGraphicName.AttackByFire:
-                    return attackByFireStyleFunc()(feature, resolution);
+                    return attackByFireStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.SupportByFire:
                     return supportByFireStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalBlock:
