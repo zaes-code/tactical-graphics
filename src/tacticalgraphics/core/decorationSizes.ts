@@ -103,3 +103,26 @@ export function arrowheadMetres(name: TacticalGraphicName, resolution: number): 
     const px = ARROWHEAD_PX[name];
     return px === undefined ? undefined : px * resolution;
 }
+
+/**
+ * Half-extent of a crossed mission task, in screen pixels.
+ *
+ * Destroy, Interdict, Neutralize and Suppress are **fixed-size symbols**: they refuse
+ * resize, so their size is never a number the user chose — it is a screen constant
+ * times the resolution they were drawn at, exactly like a security operation's.
+ *
+ * It lived as `res * 50` inside a factory in the OpenLayers controller registry, so
+ * MapLibre had no way to know it and fell back to the generic 40 km default. Measured
+ * side by side, the same Destroy drew at 489,197 m in one engine and 40,000 m in the
+ * other — a symbol an order of magnitude smaller, from a number written in a file the
+ * other renderer cannot see.
+ */
+export const CROSSED_MISSION_TASK_PX = 50;
+
+/**
+ * That half-extent in metres at a given resolution, or `undefined` when there is no
+ * resolution to spend — a caller with no viewport cannot size a screen-constant symbol.
+ */
+export function crossedMissionTaskMetres(drawingResolution?: number): number | undefined {
+    return drawingResolution ? CROSSED_MISSION_TASK_PX * drawingResolution : undefined;
+}

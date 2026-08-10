@@ -12,6 +12,8 @@ import {
     type ProjectedInputGeometry,
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
+    CROSSED_MISSION_TASKS,
+    crossedMissionTaskMetres,
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMetres,
@@ -432,6 +434,23 @@ function securityOperationSize(
     return {radius: halfExtentPx * drawingResolution};
 }
 
+/**
+ * The crossed mission tasks' size, which is a screen constant and not a user's choice.
+ *
+ * After the caller's properties, like `securityOperationSize` and for the same reason:
+ * a radius arriving from a saved snapshot or a sweep is a number in metres from some
+ * other zoom, and honouring it draws the symbol at the wrong size. These graphics refuse
+ * resize, so there is no size of theirs a caller may set. @see CROSSED_MISSION_TASK_PX
+ */
+function crossedMissionTaskSize(
+    name: TacticalGraphicName,
+    drawingResolution?: number,
+): Partial<TacticalGraphicProperties> {
+    if (!CROSSED_MISSION_TASKS.includes(name)) return {};
+    const radius = crossedMissionTaskMetres(drawingResolution);
+    return radius ? {radius} : {};
+}
+
 /** @see securityOperationSize */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Cover,
@@ -520,6 +539,7 @@ export function buildTacticalGraphic(
         // metres from some other zoom, and honouring it draws the symbol at the wrong
         // size. @see allowedGestures
         ...securityOperationSize(name, drawingResolution),
+        ...crossedMissionTaskSize(name, drawingResolution),
         ...bakedDecorationSize(name, properties, drawingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
