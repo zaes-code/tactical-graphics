@@ -588,9 +588,18 @@ export class NativeLayerRenderer {
             features.push({
                 type: 'Feature',
                 geometry: {type: 'Point', coordinates: centre.coordinates as number[]},
-                // `icon-size` is a *multiplier* on the image's own pixels, so the wanted
-                // size has to be divided by what was actually rasterised.
-                properties: {icon: iconId, scale: (symbol.sizePx ?? getSecuritySymbolSize()) / this.iconPixels(iconId)},
+                properties: {
+                    icon: iconId,
+                    // `icon-size` is a *multiplier* on the image's own pixels, so the
+                    // wanted size has to be divided by what was actually rasterised.
+                    scale: (symbol.sizePx ?? getSecuritySymbolSize()) / this.iconPixels(iconId),
+                    // **The symbol has to be hit-testable back to its graphic.** It is
+                    // the biggest thing a security operation draws and the obvious place
+                    // to click, and without this the click found a feature the hit test
+                    // could not attribute — so clicking a Cover selected nothing and its
+                    // properties dialog never opened. @see hitTest
+                    [GRAPHIC_ID_PROPERTY]: graphic.id,
+                },
             });
         }
 
