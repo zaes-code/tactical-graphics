@@ -173,7 +173,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.base.set('drawingResolution', drawingResolution);
         }
         if (name === TacticalGraphicName.FightingPosition) {
-            this.graphic.setStyle(fightingPositionStyleFunc());
+            this.graphic.setStyle(fightingPositionStyleFunc(name));
         }
         // The crossed-line tasks draw their own arms so the gap for the centre
         // label can be measured off the glyph, and so one arm can be hashed.
