@@ -115,6 +115,32 @@ export interface MapLibreTacticalGraphic {
     handles: ProjectedPosition[];
 }
 
+/**
+ * The same graphic with its label scale re-anchored to `resolution`.
+ *
+ * `drawingResolution` is the zoom a graphic was *created* at, and it anchors the
+ * zoom-relative label scale so a designation holds its size at the zoom it was drawn
+ * and grows only within a clamp. Rebuilding a graphic to re-derive a screen-sized
+ * decoration re-stamps it with the *current* resolution, which silently turns that
+ * anchor into "now" — the scale then computes as 1.0 at every zoom and the label
+ * never grows at all.
+ *
+ * Measured on a passage lane: OpenLayers' date-time group reached its 1.5x clamp two
+ * zooms in and MapLibre's stayed at 1.0, which read as ink 0.58 against 1.00.
+ *
+ * @see NativeLayerRenderer.rebuildScreenSized, which is the only caller
+ */
+export function withDrawingResolution(
+    graphic: MapLibreTacticalGraphic,
+    resolution: number | undefined,
+): MapLibreTacticalGraphic {
+    return {
+        ...graphic,
+        graphic: {...graphic.graphic, drawingResolution: resolution},
+        labels: graphic.labels ? {...graphic.labels, drawingResolution: resolution} : undefined,
+    };
+}
+
 let nextId = 0;
 
 /**
