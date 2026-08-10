@@ -22,8 +22,9 @@ import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {createMapLibrePropertiesSource} from './featurePropertiesSource';
-import {MapLibreInteractions, type EditMode} from './interaction/MapLibreInteractions';
-import {InteractionType} from '../openlayers/TacticalGraphicsManager';
+import {MapLibreInteractions} from './interaction/MapLibreInteractions';
+import {createTacticalGraphics} from './createTacticalGraphics';
+import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 
 /**
  * The MapLibre half of the demo's engine picker.
@@ -51,7 +52,7 @@ interface Props {
      * OpenLayers has always had it; MapLibre was never given it, so the panel's state
      * never moved and no edit button ever appeared selected.
      */
-    onInteractionModeChange(mode: InteractionType): void;
+    onInteractionModeChange(mode: EditMode): void;
 }
 
 /**
@@ -63,20 +64,6 @@ interface Props {
  */
 const MAPLIBRE_CAPABILITIES = {...FULL_CAPABILITIES};
 
-/**
- * The demo's interaction modes, as this renderer's.
- *
- * A translation table rather than a shared enum because `InteractionType` is
- * OpenLayers' — it carries `drawing`, which is a separate concern here, and its
- * members are numbers whose order nothing should depend on.
- */
-const EDIT_MODES: Partial<Record<InteractionType, EditMode>> = {
-    [InteractionType.translate]: 'translate',
-    [InteractionType.rotate]: 'rotate',
-    [InteractionType.resize]: 'resize',
-    [InteractionType.modify]: 'modify',
-    [InteractionType.view]: 'view',
-};
 
 /**
  * Where both engines open, so a capture of one lines up with a capture of the
@@ -198,6 +185,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         // outlive this effect — `map.on('load')` above all.
         let disposed = false;
         let interactions: MapLibreInteractions | null = null;
+        let engine: TacticalGraphicsEngine | undefined;
         let canvas: CanvasOverlayRenderer | null = null;
         let native: NativeLayerRenderer | null = null;
         let mode: SpikeRenderMode = INITIAL_MODE;
@@ -232,20 +220,27 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             // the handler ran on nothing and the dialog simply never opened.
             if (native && !disposed) {
                 setPropertiesSource(createMapLibrePropertiesSource(map, native));
-                interactions = new MapLibreInteractions(map, native, {
+                // **Through the library's façade**, adopting the renderer rather than
+                // replacing it: the demo still reaches past it for the sample sweep and
+                // the file IO, which are the app's own concerns.
+                engine = createTacticalGraphics(map, {
+                    renderer: native,
                     // A finished or abandoned draw puts the panel back into view, which
-                    // is what the OpenLayers manager does through the same channel.
-                    onDrawEnd: () => onInteractionModeChange(InteractionType.view),
+                    // is what the OpenLayers engine does through the same channel.
+                    onModeChange: mode => onInteractionModeChange(mode),
                 });
             }
         });
 
         const handle: MapEngineHandle = {
+            // Every tactical-graphics verb comes from the library. Only the demo's own
+            // additions — the gallery and the file IO — are spelled out here.
+            ...(engine as TacticalGraphicsEngine),
             capabilities: MAPLIBRE_CAPABILITIES,
-            startDrawing: name => interactions?.startDraw(name),
-            setInteractionMode: mode => interactions?.setMode(EDIT_MODES[mode] ?? 'view'),
-            reset: () => renderer()?.clear(),
-            clearAll: () => renderer()?.clear(),
+            startDrawing: name => engine?.startDrawing(name),
+            setInteractionMode: mode => engine?.setInteractionMode(mode),
+            reset: () => engine?.clearAll(),
+            clearAll: () => engine?.clearAll(),
             drawSamples: hostility => {
                 const target = renderer();
                 if (!target) return;
@@ -253,21 +248,11 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 const {graphics} = buildSampleGraphics(hostility, resolutionOf(map));
                 graphics.forEach(g => target.add(g));
             },
-            refreshStyles: () => renderer()?.realise(),
-            snapshot: () => renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []},
-            restore: snapshot => {
-                const target = renderer();
-                if (!target) return;
-                target.clear();
-                drawSpikeSamples(snapshot, g => target.add(g), resolutionOf(map));
-            },
+            refreshStyles: () => engine?.refreshStyles(),
+            snapshot: () => engine?.snapshot() ?? {type: 'FeatureCollection', features: []},
+            restore: snapshot => engine?.restore(snapshot),
             exportGeoJson: () => exportGraphics(renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []}),
-            importGeoJson: async file => {
-                const target = renderer();
-                if (!target) return;
-                target.clear();
-                drawSpikeSamples(JSON.parse(await file.text()), g => target.add(g), resolutionOf(map));
-            },
+            importGeoJson: async file => engine?.restore(JSON.parse(await file.text())),
         };
 
         // Test hook for the driving scripts, mirroring the one OpenLayers.tsx

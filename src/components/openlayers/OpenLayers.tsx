@@ -8,7 +8,9 @@ import {createMap, getColorByHostility} from './openlayerStyles';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
-import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
+import {TacticalGraphicsManager} from './TacticalGraphicsManager';
+import {createTacticalGraphics} from './createTacticalGraphics';
+import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
@@ -26,20 +28,22 @@ interface Props {
     /** Hands the controls panel something to drive. @see mapEngine.ts */
     onReady(handle: MapEngineHandle | null): void;
     /** Mirrored up so the shared panel can show the current edit mode. */
-    onInteractionModeChange(mode: InteractionType): void;
+    onInteractionModeChange(mode: EditMode): void;
 }
 
 const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
-    const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
+    const [interactionMode, setInteractionMode] = useState<EditMode>('view');
     const selectedShape = useRef<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
     const modeRef = useRef(interactionMode);
     const tacticalGraphicManager = useRef<TacticalGraphicsManager>(null);
+    /** The library façade, wrapping that manager. @see createTacticalGraphics */
+    const engine = useRef<TacticalGraphicsEngine | null>(null);
 
     useEffect(() => {
         modeRef.current = interactionMode;
-        tacticalGraphicManager.current?.setInteractionMode(interactionMode);
+        engine.current?.setInteractionMode(interactionMode);
         onInteractionModeChange(interactionMode);
     }, [interactionMode, onInteractionModeChange]);
 
@@ -49,10 +53,15 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
 
-        // The manager drops back to `view` by itself when a draw finishes or is
-        // cancelled. Mirror that into React state, or the draw button keeps
-        // reading "Drawing…" long after the draw is over.
-        tacticalGraphicManager.current.onInteractionModeChange = setInteractionMode;
+        // **Through the library's façade**, adopting the manager rather than replacing
+        // it: the demo still reaches past it for the sample sweep and the file IO, which
+        // are the app's own concerns. `onModeChange` is how the engine reports a mode it
+        // chose itself — a draw finishing returns to view — without which the draw button
+        // keeps reading "Drawing…" long after the draw is over.
+        engine.current = createTacticalGraphics(olMap, {
+            manager: tacticalGraphicManager.current,
+            onModeChange: setInteractionMode,
+        });
 
         // Test hook for scripts/drive-app.mjs, which drives the draw/edit flow in a
         // real browser and asserts on feature properties. Stripped from production
@@ -75,62 +84,29 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         }
 
         onReady({
+            // **Every tactical-graphics verb comes from the library**, unchanged. What
+            // is spelled out below is only what the *application* adds: a demo gallery,
+            // and moving GeoJSON through the user's filesystem.
+            ...engine.current,
             capabilities: FULL_CAPABILITIES,
             startDrawing: name => {
                 selectedShape.current = name;
-                setInteractionMode(InteractionType.drawing);
-                tacticalGraphicManager.current?.startDrawing(name);
+                engine.current?.startDrawing(name);
             },
-            setInteractionMode,
             reset: () => {
-                // `clearAllGraphics`, not a bare `renderingVectorSource.clear()`. The
-                // source holds the features; the manager also holds a controller per
-                // graphic and a zoom subscription per controller. Clearing only the
-                // source emptied the screen and left all of it behind — the snapshot
-                // still reported 214 graphics after a reset, so an export would have
-                // carried them, and every one of their resolution listeners went on
-                // re-deriving geometry for features that were no longer on the map.
-                // That is the leak the comment on `clearAllGraphics` warns about.
-                const mgr = tacticalGraphicManager.current;
-                if (mgr) clearAllGraphics(mgr);
-                setInteractionMode(InteractionType.view);
+                engine.current?.clearAll();
             },
             drawSamples: hostility => {
                 const mgr = tacticalGraphicManager.current;
                 if (!mgr) return;
-                setInteractionMode(InteractionType.view);
+                setInteractionMode('view');
                 const {drawn, failed} = drawProvenSamples(mgr, hostility);
                 // eslint-disable-next-line no-console
                 if (failed.length) console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
             },
-            clearAll: () => {
-                const mgr = tacticalGraphicManager.current;
-                if (!mgr) return;
-                clearAllGraphics(mgr);
-                setInteractionMode(InteractionType.view);
-            },
-            refreshStyles: () => {
-                // Explicit rather than relying on the next frame: `ol/Object.set` and a
-                // config write both leave the feature's cached style in place, and only
-                // `changed()` dispatches the event that re-runs the style function.
-                tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => f.changed());
-            },
-            snapshot: () => {
-                const mgr = tacticalGraphicManager.current;
-                return mgr ? serializeTacticalGraphics(mgr) : {type: 'FeatureCollection', features: []};
-            },
-            restore: snapshot => {
-                const mgr = tacticalGraphicManager.current;
-                if (!mgr) return;
-                clearAllGraphics(mgr);
-                const {restored, failed} = restoreTacticalGraphics(mgr, snapshot);
-                // eslint-disable-next-line no-console
-                if (failed.length) console.warn(`Handover: ${restored} restored, ${failed.length} failed.`, failed);
-            },
             exportGeoJson: () => {
-                const mgr = tacticalGraphicManager.current;
-                if (!mgr) return;
-                const snapshot = serializeTacticalGraphics(mgr);
+                const snapshot = engine.current?.snapshot();
+                if (!snapshot) return;
                 const blob = new Blob([JSON.stringify(snapshot, null, 2)], {type: 'application/geo+json'});
                 const url = URL.createObjectURL(blob);
                 const anchor = document.createElement('a');
@@ -140,15 +116,9 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 URL.revokeObjectURL(url);
             },
             importGeoJson: async file => {
-                const mgr = tacticalGraphicManager.current;
-                if (!mgr) return;
-                setInteractionMode(InteractionType.view);
+                setInteractionMode('view');
                 try {
-                    const snapshot = JSON.parse(await file.text());
-                    clearAllGraphics(mgr);
-                    const {restored, failed} = restoreTacticalGraphics(mgr, snapshot);
-                    // eslint-disable-next-line no-console
-                    if (failed.length) console.warn(`Import: ${restored} restored, ${failed.length} failed.`, failed);
+                    engine.current?.restore(JSON.parse(await file.text()));
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.error('Import failed — not readable as a tactical graphics GeoJSON.', e);
@@ -224,7 +194,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     }, [map, graphicsSettings]);
 
     const handleDrawTacticalGraphic = () => {
-        setInteractionMode(InteractionType.drawing);
+        setInteractionMode('drawing');
         tacticalGraphicManager.current?.startDrawing(selectedShape.current);
     };
 
@@ -235,13 +205,13 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     const resetMap = () => {
         if (!map) return;
         tacticalGraphicManager.current?.renderingVectorSource.clear();
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
     };
 
     const drawSamples = (hostility?: TacticalGraphicHostility) => {
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
         const {drawn, failed} = drawProvenSamples(mgr, hostility);
         if (failed.length) {
             // eslint-disable-next-line no-console
@@ -253,7 +223,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
         clearAllGraphics(mgr);
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
     };
 
     /**
@@ -280,7 +250,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     const importGeoJson = async (file: File) => {
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
         try {
             const snapshot = JSON.parse(await file.text());
             clearAllGraphics(mgr);

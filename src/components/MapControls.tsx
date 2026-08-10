@@ -37,7 +37,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 
-import {InteractionType} from './openlayers/TacticalGraphicsManager';
+import type {EditMode} from '@zaes/tactical-graphics';
 import type {MapEngineCapabilities} from './mapEngine';
 import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
@@ -53,13 +53,13 @@ interface Props {
     onExportGeoJson(): void;
     /** Replaces everything on the map with the graphics in `file`. */
     onImportGeoJson(file: File): void;
-    interactionMode: InteractionType;
+    interactionMode: EditMode;
     isRotating: boolean;
     isResizing: boolean;
     isModifying: boolean;
     isRepositioning: boolean;
     defaultShape: TacticalGraphicName;
-    onToggleInteraction(mode: InteractionType): void;
+    onToggleInteraction(mode: EditMode): void;
     /**
      * What the live engine can actually do.
      *
@@ -215,29 +215,18 @@ const MapControls: React.FC<Props> = ({
         onShapeChange(opt.value);
     };
 
-    const isDrawing = interactionMode === InteractionType.drawing;
+    const isDrawing = interactionMode === 'drawing';
 
-    const activeEditMode: string | null = (() => {
-        switch (interactionMode) {
-            case InteractionType.rotate:    return 'rotate';
-            case InteractionType.resize:    return 'resize';
-            case InteractionType.translate: return 'translate';
-            case InteractionType.modify:    return 'modify';
-            default: return null;
-        }
-    })();
+    // **The button values are the modes.** They used to be strings this panel mapped on
+    // and off a numeric enum through two switch blocks; `EditMode` is a string union, so
+    // the toggle group's own value is already the answer.
+    const EDIT_BUTTONS: EditMode[] = ['rotate', 'resize', 'translate', 'modify'];
+    const activeEditMode = EDIT_BUTTONS.includes(interactionMode) ? interactionMode : null;
 
     const handleEditMode = (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
-        if (newMode === null || newMode === activeEditMode) {
-            onToggleInteraction(InteractionType.view);
-        } else {
-            switch (newMode) {
-                case 'rotate':    onToggleInteraction(InteractionType.rotate); break;
-                case 'resize':    onToggleInteraction(InteractionType.resize); break;
-                case 'translate': onToggleInteraction(InteractionType.translate); break;
-                case 'modify':    onToggleInteraction(InteractionType.modify); break;
-            }
-        }
+        // Re-pressing the selected button clears it, which is what a toggle group means
+        // by handing back the mode that is already active.
+        onToggleInteraction(newMode === null || newMode === activeEditMode ? 'view' : (newMode as EditMode));
     };
 
     const pointHint = selected ? getPointHint(selected.value) : null;
