@@ -37,6 +37,7 @@ import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} fro
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
+import {airfieldPaint} from './airfieldPaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 import {securityOperationLabelPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
@@ -304,8 +305,7 @@ const SPECIAL_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
  * does. Keeping the fallback at the call site rather than in here makes the two
  * structures line up, which matters while the routing lives in two places.
  *
- * Not covered yet, and so still falling through to the default: the airfield, whose
- * label sits under an inlined SVG symbol.
+ * Every area family now has one.
  */
 const AIR_COORDINATING_ZONES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.HighDensityAirspaceControlZone,
@@ -336,6 +336,9 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (name === TacticalGraphicName.SmokeObscurant) return smokeObscurantLabelPaint();
     if (AIR_COORDINATING_ZONES.includes(name)) return airCoordinatingAreaLabelPaint(name);
     if (AIRSPACE_COORDINATION_AREAS.includes(name)) return airspaceCoordinationAreaLabelPaint(name);
+    // The airfield's label block is the ordinary one; what is bespoke is the runway
+    // symbol drawn over it, which the paint wraps around the label. @see airfieldPaint
+    if (name === TacticalGraphicName.Airfield) return airfieldPaint(areaDefaultLabelPaint(name));
     if (
         name === TacticalGraphicName.PositionAreaArtilleryCircular ||
         name === TacticalGraphicName.PositionAreaArtilleryIrregular ||

@@ -102,12 +102,14 @@ afterEach(resetTacticalGraphicsConfig);
  * for everybody would still pass.
  */
 /**
- * The airfield's crossed runways are SVG path data in **map units**, so at scale
- * 1 they are a fixed ~400 km across whatever the area's size — which is why a
+ * The airfield's crossed runways are two segments in **map units**, so at scale 1
+ * they are a fixed ~400 km across whatever the area's size — which is why a
  * state-sized airfield used to carry a tiny "x" and a small one was swamped.
  *
- * `AreaGraphicBase` stamps the polygon's extent and its ring onto the label
- * feature, which is the feature these styles run on.
+ * `AreaGraphicBase` stamps the polygon's bounds and its ring onto the label
+ * feature, which is the feature these styles run on. The symbol itself now lives in
+ * `symbology/airfieldPaints.ts` and both renderers draw it; these still run through
+ * the OpenLayers wrapper, which is what a regression would come through.
  */
 describe('the airfield symbol is sized from its polygon', () => {
     const rect = (halfW: number, halfH: number): number[][] => [
@@ -117,11 +119,14 @@ describe('the airfield symbol is sized from its polygon', () => {
     /** Renders the symbol on an area of the given half-extents and reports its size. */
     const crossOn = (halfW: number, halfH: number, ring: number[][] = rect(halfW, halfH), at: number[] = [0, 0]) => {
         const f = new Feature(new Point(at));
-        f.set('polygonExtentWidth', halfW * 2);
-        f.set('polygonExtentHeight', halfH * 2);
+        // The bounds the paint layer reads, which is what `readBounds` builds from.
+        f.set('polygonMinX', -halfW);
+        f.set('polygonMaxX', halfW);
+        f.set('polygonMinY', -halfH);
+        f.set('polygonMaxY', halfH);
         f.set('polygonRing', ring);
 
-        const out = getAirfieldStyle('', '')(f, 1);
+        const out = getAirfieldStyle(TacticalGraphicName.Airfield)(f, 1);
         const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
         const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
         const [minX, minY, maxX, maxY] = geom.getExtent();
@@ -158,11 +163,11 @@ describe('the airfield symbol is sized from its polygon', () => {
         expect(crossOn(1_000_000, 1_000_000, notched).width).toBeLessThan(square.width);
     });
 
-    it('keeps the historical fixed size when the polygon extent has not been stamped', () => {
+    it('keeps the historical fixed size when the polygon bounds have not been stamped', () => {
         // First render, or a holder that never set a base. Falling through to a
         // zero scale would make the symbol vanish rather than merely misfit.
         const bare = new Feature(new Point([0, 0]));
-        const out = getAirfieldStyle('', '')(bare, 1);
+        const out = getAirfieldStyle(TacticalGraphicName.Airfield)(bare, 1);
         const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
         const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
         const [minX, , maxX] = geom.getExtent();
