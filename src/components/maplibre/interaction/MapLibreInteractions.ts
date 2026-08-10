@@ -42,6 +42,7 @@ import {resolutionOf, toMercator} from '../projection';
 import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
     centreOf,
+    insertVertex,
     moveVertex,
     positionsOf,
     resize,
@@ -59,6 +60,27 @@ export type EditMode = 'view' | 'translate' | 'rotate' | 'resize' | 'modify';
 
 /** How close a click must land on a base vertex to grab it, in screen pixels. */
 const VERTEX_GRAB_PX = 10;
+
+/**
+ * How close a drag must start to a segment to add a vertex there, in screen pixels.
+ *
+ * Tighter than `VERTEX_GRAB_PX`, and deliberately so: a grab near a corner is within
+ * reach of both tests, and moving the vertex that is already there is almost always
+ * what was meant. The vertex test runs first for the same reason.
+ */
+const SEGMENT_GRAB_PX = 8;
+
+/** Distance from a point to a line segment, in screen pixels. */
+function distanceToSegment(p: {x: number; y: number}, a: {x: number; y: number}, b: {x: number; y: number}): number {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    // A degenerate segment is a point, and the distance to it is the distance to either end.
+    if (lengthSquared === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
 
 /**
  * How close two consecutive draw clicks have to be to count as one.
@@ -132,6 +154,8 @@ export class MapLibreInteractions {
         graphic: MapLibreTacticalGraphic;
         /** Which base vertex is being dragged in `modify`, or -1. */
         vertex: number;
+        /** Where to add a vertex when this drag starts, or -1. @see grabSegment */
+        insertAt: number;
         /** Whether the drag began on the inert centre dot. */
         onCentre: boolean;
         /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
@@ -374,7 +398,10 @@ export class MapLibreInteractions {
         const onHandle = handle >= 0;
         const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
         const vertex = this.mode === 'modify' ? this.grabVertex(graphic, event.point) : -1;
-        if (!onHandle && !onGraphic && vertex < 0) return;
+        // Noted now, added on the first real move — a click that inserted a vertex would
+        // mean every click on a line reshaped it. @see grabSegment
+        const insertAt = this.mode === 'modify' && vertex < 0 ? this.grabSegment(graphic, event.point) : -1;
+        if (!onHandle && !onGraphic && vertex < 0 && insertAt < 0) return;
 
         // Grabbing another graphic's handle makes it the selected one, so everything
         // downstream — the properties panel, a later body drag — agrees about what the
@@ -395,6 +422,7 @@ export class MapLibreInteractions {
             onPivot: this.startedOnPivot(graphic, event.point),
             handle,
             vertex,
+            insertAt,
             last: [event.lngLat.lng, event.lngLat.lat],
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
@@ -439,7 +467,17 @@ export class MapLibreInteractions {
         }
 
         const to: Position = [event.lngLat.lng, event.lngLat.lat];
-        const before: GraphicDescription = {geometry: drag.graphic.base.geometry, properties: drag.graphic.properties};
+        let before: GraphicDescription = {geometry: drag.graphic.base.geometry, properties: drag.graphic.properties};
+
+        // The drag began on a segment: add the vertex now that it is a drag, then carry
+        // on as though the user had grabbed it. Done once — `insertAt` is cleared — so
+        // the rest of the gesture moves the new vertex instead of sowing a trail of them.
+        if (drag.insertAt >= 0) {
+            before = insertVertex(before, drag.insertAt, drag.last);
+            drag.vertex = drag.insertAt;
+            drag.insertAt = -1;
+        }
+
         const after = this.applyGesture(before, drag, to);
         drag.last = to;
         if (after === before) return;
@@ -600,6 +638,37 @@ export class MapLibreInteractions {
     };
 
     /** The base vertex under a screen point, or -1. */
+    /**
+     * Where a vertex would go if the user dragged the segment under the pointer, or -1.
+     *
+     * **Only for a base the user may add vertices to.** A graphic with a fixed vertex
+     * count is defined by exactly those points — a fields-of-fire is two legs and an
+     * apex, and a fourth vertex makes it a different symbol — and one that stretches on
+     * an edit drag has already given that gesture another meaning. Measured against
+     * OpenLayers, which inserts on a phase line and an assembly area and refuses on a
+     * fields-of-fire; this reproduces that split from the same two library facts rather
+     * than from a list. @see baseVertexCount, editStretches
+     */
+    private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
+        if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
+
+        const positions = positionsOf(graphic.base.geometry);
+        if (positions.length < 2) return -1;
+
+        let best = -1;
+        let bestDistance = SEGMENT_GRAB_PX;
+        for (let i = 1; i < positions.length; i++) {
+            const a = this.map.project([positions[i - 1][0], positions[i - 1][1]]);
+            const b = this.map.project([positions[i][0], positions[i][1]]);
+            const distance = distanceToSegment(point, a, b);
+            if (distance <= bestDistance) {
+                bestDistance = distance;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     private grabVertex(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
         const positions = positionsOf(graphic.base.geometry);
         let best = -1;

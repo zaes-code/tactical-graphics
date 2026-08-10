@@ -18,6 +18,7 @@ import {
     centreOf,
     moveVertex,
     positionsOf,
+    insertVertex,
     resize,
     rotate,
     setBandRange,
@@ -325,3 +326,43 @@ describe('setBandRange — the range-fan handles', () => {
     });
 });
 
+
+describe('insertVertex', () => {
+    const LINE_BASE = {type: 'LineString' as const, coordinates: [[0, 0], [10, 0], [20, 0]]};
+    const RING = {type: 'Polygon' as const, coordinates: [[[0, 0], [10, 0], [10, 10], [0, 0]]]};
+
+    it('adds the vertex inside the segment that ends at the index', () => {
+        const after = insertVertex({geometry: LINE_BASE, properties: props()}, 1, [5, 0]);
+        expect((after.geometry as typeof LINE_BASE).coordinates).toEqual([[0, 0], [5, 0], [10, 0], [20, 0]]);
+    });
+
+    it('leaves every other vertex where it was', () => {
+        const after = insertVertex({geometry: LINE_BASE, properties: props()}, 2, [15, 3]);
+        expect((after.geometry as typeof LINE_BASE).coordinates).toEqual([[0, 0], [10, 0], [15, 3], [20, 0]]);
+    });
+
+    it('keeps a ring closed', () => {
+        const after = insertVertex({geometry: RING, properties: props()}, 2, [10, 5]);
+        const ring = (after.geometry as typeof RING).coordinates[0];
+        expect(ring).toHaveLength(5);
+        expect(ring[0]).toEqual(ring[ring.length - 1]);
+    });
+
+    it('refuses an index that would open a ring', () => {
+        // The closing position is not a segment a user can see, so inserting there is
+        // not an edit they can have meant.
+        expect(insertVertex({geometry: RING, properties: props()}, 3, [1, 1]).geometry).toEqual(RING);
+        expect(insertVertex({geometry: RING, properties: props()}, 0, [1, 1]).geometry).toEqual(RING);
+    });
+
+    it('refuses an index off either end', () => {
+        expect(insertVertex({geometry: LINE_BASE, properties: props()}, 0, [1, 1]).geometry).toEqual(LINE_BASE);
+        expect(insertVertex({geometry: LINE_BASE, properties: props()}, 9, [1, 1]).geometry).toEqual(LINE_BASE);
+    });
+
+    it('produces a vertex the reshape gesture can then move', () => {
+        const inserted = insertVertex({geometry: LINE_BASE, properties: props()}, 1, [5, 0]);
+        const moved = moveVertex(inserted, 1, [5, 8]);
+        expect((moved.geometry as typeof LINE_BASE).coordinates).toEqual([[0, 0], [5, 8], [10, 0], [20, 0]]);
+    });
+});

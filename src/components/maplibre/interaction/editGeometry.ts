@@ -250,6 +250,59 @@ export function moveVertex(description: GraphicDescription, index: number, to: P
     };
 }
 
+/**
+ * Adds a vertex to the base, at `index` — the reshape gesture that OpenLayers gives
+ * you by dragging a segment rather than a corner.
+ *
+ * Indexed like {@link moveVertex}, against `positionsOf`, so the caller's index means
+ * the same thing to both: the new vertex lands *before* the position currently at
+ * `index`, which is what "insert into this segment" means when the segment is the one
+ * ending there.
+ *
+ * **A ring's closing vertex is not an insertion point.** A polygon repeats its first
+ * position last; inserting at 0 or at the end would put a vertex outside the ring's
+ * closure and open the shape. Those two indices are refused, and every segment between
+ * them is available — which is every segment a user can actually see.
+ */
+export function insertVertex(description: GraphicDescription, index: number, at: Position): GraphicDescription {
+    const positions = positionsOf(description.geometry);
+    if (index <= 0 || index > positions.length - 1) return description;
+
+    const isRing = description.geometry.type === 'Polygon' || description.geometry.type === 'MultiPolygon';
+    if (isRing && index === positions.length - 1) return description;
+
+    const inserted = [...positions.slice(0, index), [at[0], at[1]] as Position, ...positions.slice(index)];
+
+    let seen = -1;
+    return {
+        ...description,
+        // Rebuilt by walking the *new* list in the same order `mapPositions` walks the
+        // old one. The geometry has one more position than the walker will visit, so the
+        // tail is appended by the structure rather than by the callback — which is why
+        // this rewrites coordinates directly instead of mapping in place.
+        geometry: rebuildWithPositions(description.geometry, () => inserted[++seen]),
+    };
+}
+
+/**
+ * A geometry of the same type carrying `next()`'s positions, however many there are.
+ *
+ * `mapPositions` cannot grow a geometry — it visits each existing position once — so
+ * an insertion needs a builder that reads its length from the new list.
+ */
+function rebuildWithPositions(geometry: Geometry, next: () => Position): Geometry {
+    const positions: Position[] = [];
+    let candidate = next();
+    while (candidate) {
+        positions.push(candidate);
+        candidate = next();
+    }
+
+    if (geometry.type === 'LineString') return {...geometry, coordinates: positions};
+    if (geometry.type === 'Polygon') return {...geometry, coordinates: [positions]};
+    return geometry;
+}
+
 // ── the per-handle gestures ─────────────────────────────────────────────────
 
 /**

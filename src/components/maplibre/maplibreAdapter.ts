@@ -12,6 +12,7 @@ import {
     type ProjectedInputGeometry,
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
+    normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMetres,
     RANGE_FANS,
@@ -466,12 +467,40 @@ function baseLengthMetres(geometry: GeoJSONFeature['geometry']): number {
     return length;
 }
 
+/**
+ * `normalizeDrawnBase` applied to a geometry, leaving anything that is not a
+ * LineString exactly as it arrived.
+ *
+ * The guard is the point: a polygon's ring closes by repeating its first vertex, and a
+ * Point has a bare coordinate pair rather than a list, so neither is something to tidy.
+ */
+function withNormalizedBase(name: TacticalGraphicName, geometry: GeoJSONFeature['geometry']): GeoJSONFeature['geometry'] {
+    if (geometry.type !== 'LineString') return geometry;
+    const coordinates = normalizeDrawnBase(name, geometry.coordinates);
+    return coordinates === geometry.coordinates ? geometry : {...geometry, coordinates};
+}
+
 export function buildTacticalGraphic(
     name: TacticalGraphicName,
     baseGeometry: GeoJSONFeature['geometry'],
     properties: Omit<TacticalGraphicProperties, 'name'> = {},
     drawingResolution?: number,
 ): MapLibreTacticalGraphic | undefined {
+    // **Every graphic this engine builds comes through here** — drawn, restored,
+    // imported, or built by the sample sweep — so the base is tidied once, at the door,
+    // rather than in each of those paths.
+    //
+    // The sweep is why this is not in the draw handler. A drawn fields-of-fire was
+    // normalised there and came out editable; the sweep builds its base directly from a
+    // candidate geometry, got the two-point version, and produced a graphic whose second
+    // leg was synthesised on every render and whose V therefore could not be opened. Same
+    // symbol, same engine, editable or not depending on which door it came through.
+    //
+    // Restore and import get the repair too, which upgrades a fields-of-fire saved before
+    // this: the shape does not move — `normalizeDrawnBase` calls the very function the
+    // renderer would have called — it just gains the handle it was missing.
+    baseGeometry = withNormalizedBase(name, baseGeometry);
+
     const props: TacticalGraphicProperties = {
         name,
         // The arc mission tasks are asked for **no** gap: their two arcs run right up
