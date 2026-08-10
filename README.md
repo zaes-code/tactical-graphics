@@ -2,7 +2,7 @@
 
 Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
-Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers or anything else that reads GeoJSON.
+Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
 This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in meters.
 
@@ -24,22 +24,30 @@ npm install @zaes/tactical-graphics
 
 The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
 
-Two entry points ship, and you can use either on its own:
+Three entry points ship, and you can use any of them on its own:
 
 | Import | What it gives you | Needs |
 |---|---|---|
-| `@zaes/tactical-graphics` | The geometry. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
-| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. **Newer than the OpenLayers one** — see [MapLibre](#maplibre--native-layers) for what it does and does not do yet. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
-npm install ol             # only if you want the OpenLayers entry point
+npm install ol             # only for the OpenLayers entry point
+npm install maplibre-gl    # only for the MapLibre entry point
 npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
 ```
 
-Both are peer dependencies and both are optional, so installing the package for
-its geometry alone pulls in neither. Nothing in this package imports `milsymbol`
-— you hand it in, once, if you want it. See
+All three are peer dependencies and all are optional, so installing the package
+for its geometry alone pulls in none of them. Nothing in this package imports
+`milsymbol` — you hand it in, once, if you want it. See
 [Security operations: the center symbol](#security-operations-the-center-symbol).
+
+**The two renderers paint through the same code.** Colours, label placement,
+screen-sized decorations, the radius read-out, which handle does what, how a
+rotate picks its pivot — all of it lives in the map-agnostic entry point and both
+renderers read it. That is deliberate: it is what stops the two drifting apart,
+and it means a third renderer inherits the symbology rather than reinventing it.
 
 ---
 
@@ -77,8 +85,9 @@ You get three pieces back:
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
 
-If you want it drawn, styled and editable on an OpenLayers map instead, that is the
-[OpenLayers entry point](#openlayers--styled-drawable-editable) — three lines.
+If you want it drawn, styled and editable on a map instead, that is the
+[OpenLayers entry point](#openlayers--styled-drawable-editable) or the
+[MapLibre one](#maplibre--native-layers) — three lines either way.
 
 ---
 
@@ -331,6 +340,37 @@ const features = new GeoJSON().readFeatures(
 source.addFeatures(features);
 ```
 
+### MapLibre — native layers
+
+`@zaes/tactical-graphics/maplibre` draws through MapLibre's own GeoJSON sources and
+layers, so panning and zooming cost nothing beyond what MapLibre already does.
+
+```ts
+import maplibregl from 'maplibre-gl';
+import {NativeLayerRenderer, MapLibreInteractions} from '@zaes/tactical-graphics/maplibre';
+
+const map = new maplibregl.Map({container: 'map', style, center: [-77.04, 38.89], zoom: 8});
+
+map.on('load', () => {
+    const renderer = new NativeLayerRenderer(map);
+    const interactions = new MapLibreInteractions(map, renderer);
+
+    interactions.startDraw(TacticalGraphicName.MainAxisOfAdvance);   // then the user clicks
+    interactions.setMode('modify');                                   // rotate | resize | translate | modify | view
+});
+```
+
+**What it shares with the OpenLayers entry point**, because both read the same
+map-agnostic code rather than each having its own copy: every colour and label
+rule, the screen-sized decorations, the radius read-out, which handle sets a
+width, which vertex is inert under a reshape, how many points a graphic's base
+takes, and where a rotate pivots. Fixing one fixes both.
+
+**What differs today.** MapLibre places a label from an SDF glyph set and
+OpenLayers from a browser font, so text lands a pixel or so apart and a label
+anchored off-screen is drawn clipped by one and not placed at all by the other.
+Neither is a difference you can configure away.
+
 ### Any GeoJSON renderer
 
 `toFeatureCollection()` flattens a render into a standard `FeatureCollection`, so any
@@ -338,9 +378,13 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 (`graphic` / `label` / `handle`) to style each part. It returns the `graphic` and
 `label` features by default; ask for `handle` too when you are building an editor.
 
-OpenLayers is the reference implementation because that is where the full
-MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry
-but style it themselves.
+**Geometry is not the whole symbol.** Obstacle teeth, the gap cut around a mission
+task's letter, a screen-sized arrowhead and the rest are synthesised at paint time,
+so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
+exported from the root entry point for exactly this — `getPaintFunction(name)`
+returns the marks to draw, in projected metres, with no renderer in them. That is
+how both of the renderers above are built, and it is the supported way to build a
+third.
 
 ### Drawing the label text
 
