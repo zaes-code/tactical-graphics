@@ -268,6 +268,74 @@ function bakedDecorationSize(
     return {radius: supplied.decorationSize ?? stamped ?? decorationMetres(name, drawingResolution)};
 }
 
+/**
+ * Moves an origin-centred graphic onto its base point.
+ *
+ * Three graphics need it — Cover, Guard and Screen. Their generator emits arms and
+ * label anchors as offsets from `[0, 0]` and never looks at the base, so whatever
+ * consumes it has to do the placing. `SecurityOperationGraphicBase.placeCoordinates`
+ * is the OpenLayers half; this is the same arithmetic, kept deliberately identical
+ * rather than re-derived.
+ *
+ * The offsets are added in **lon/lat**, because that is the space the generator
+ * built them in — `getSearchAreaArrow` converts its metre inputs to degrees on the
+ * way out. OpenLayers adds them in projected metres instead, and is self-consistent
+ * because its holder passes the five dimensions already in projected metres; the two
+ * renderers therefore feed the same generator different units. That is the open item
+ * in `ai/decisions.md` about `size` meaning metres-per-pixel, and it is not resolved
+ * here — this only puts the arms where the graphic is.
+ *
+ * A rotation turns the arms about the centre, as the holder's does. Everything else
+ * passes through untouched.
+ */
+function placeOriginCentred(
+    name: TacticalGraphicName,
+    rendered: {graphic: GeoJSONFeature; labels: GeoJSONFeature; handles: GeoJSONFeature},
+    baseGeometry: GeoJSONFeature['geometry'],
+    rotationDegrees?: number,
+): {graphic: GeoJSONFeature['geometry']; labels: GeoJSONFeature['geometry']; handles: GeoJSONFeature['geometry']} {
+    const asIs = {graphic: rendered.graphic.geometry, labels: rendered.labels.geometry, handles: rendered.handles.geometry};
+    if (!ORIGIN_CENTRED.has(name) || baseGeometry.type !== 'Point') return asIs;
+
+    const centre = baseGeometry.coordinates as [number, number];
+    const rotation = ((rotationDegrees ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const place = (offset: Position): Position => {
+        const [x, y] = offset;
+        return [centre[0] + x * cos - y * sin, centre[1] + x * sin + y * cos];
+    };
+
+    return {
+        graphic: mapGeometryPositions(asIs.graphic, place),
+        labels: mapGeometryPositions(asIs.labels, place),
+        handles: mapGeometryPositions(asIs.handles, place),
+    };
+}
+
+/** @see placeOriginCentred */
+const ORIGIN_CENTRED = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
+/** Applies `move` to every position of a GeoJSON geometry, keeping its shape. */
+function mapGeometryPositions(
+    geometry: GeoJSONFeature['geometry'],
+    move: (position: Position) => Position,
+): GeoJSONFeature['geometry'] {
+    const walk = (node: unknown): unknown => {
+        if (!Array.isArray(node) || !node.length) return node;
+        if (typeof node[0] === 'number') return move(node as Position);
+        return node.map(walk);
+    };
+    if (geometry.type === 'GeometryCollection') {
+        return {...geometry, geometries: geometry.geometries.map(g => mapGeometryPositions(g, move))};
+    }
+    return {...geometry, coordinates: walk(geometry.coordinates)} as GeoJSONFeature['geometry'];
+}
+
 /** The band data `rangeFanLabelPaint` walks. @see resolveRangeFanBands */
 function rangeFanFields(name: TacticalGraphicName, props: TacticalGraphicProperties) {
     const {shape, bands} = resolveRangeFanBands(name, toGraphicOptions(props));
@@ -418,10 +486,17 @@ export function buildTacticalGraphic(
         return undefined;
     }
 
-    const graphicGeometry = projectGeometry(rendered.graphic.geometry);
+    // The security operations come back **centred on the origin**: their generator
+    // builds every arm from `[0, 0]` and never reads the base point, so all three
+    // stacked at lon/lat 0 in this renderer while their centre icons sat where the
+    // user clicked. OpenLayers has always placed them itself, in its holder; this is
+    // the same step, and the same arithmetic. @see placeOriginCentred
+    const placed = placeOriginCentred(name, rendered, baseGeometry, props.rotation);
+
+    const graphicGeometry = projectGeometry(placed.graphic);
     if (!graphicGeometry) return undefined;
 
-    const labelGeometry = projectGeometry(rendered.labels.geometry);
+    const labelGeometry = projectGeometry(placed.labels);
     const centre = projectGeometry(baseGeometry);
 
     // The projected centre cannot be recovered from the drawn geometry: the
