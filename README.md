@@ -233,9 +233,15 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 ### OpenLayers — styled, drawable, editable
 
-`@zaes/tactical-graphics/openlayers` is the renderer the demo uses. It carries the
-doctrinal styling — standard identity colors, dashed planned status, echelon glyphs,
-amplifier placement — plus draw and edit interactions.
+`@zaes/tactical-graphics/openlayers` is the older and more exercised of the two
+renderers. It carries the 4326 → 3857 adapter, the feature holders and controllers,
+and draw and edit interactions.
+
+The doctrinal styling itself — standard identity colors, dashed planned status,
+echelon glyphs, amplifier placement — is **not** in here; it is in the root entry
+point, and this renderer paints through it. That is what lets the
+[MapLibre entry point](#maplibre--native-layers) draw the same symbols rather than
+a second approximation of them.
 
 Three objects appear in every OpenLayers snippet below. This is all they are:
 
@@ -944,18 +950,30 @@ src/tacticalgraphics/          # The library. Pure GeoJSON, map-agnostic.
   core/render.ts               #   renderTacticalGraphic()
   core/type.ts                 #   TacticalGraphicName + the properties schema
   core/GeometryService.ts      #   all geographic math (turf + custom)
-  core/TacticalGraphicsRegistry.ts
+  core/handles.ts              #   the editing rules both renderers obey
+  core/symbology.ts            #   colors, label scales, per-graphic symbol rules
+  symbology/                   #   paint functions — the marks, with no renderer
   graphics/                    #   one generator class per graphic family
 
 src/components/
-  openlayers/                  # Published as @zaes/tactical-graphics/openlayers:
-                               #   styling, the 4326→3857 adapter, draw/edit
+  openlayers/                  # Published as @zaes/tactical-graphics/openlayers
+  maplibre/                    # Published as @zaes/tactical-graphics/maplibre
   MapControls.tsx, …           # The React demo — not published.
 ```
 
-The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
+The demo runs on **either renderer** — there is a picker in the app bar, and a
+graphic drawn in one survives the switch to the other. It shows drawing, editing,
+rotating, resizing, modifying and a Feature Properties dialog, on a keyless
+OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-The geometry layer is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)) — and it never imports `ol`, which the build asserts. The OpenLayers styling ships beside it as an optional entry point; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
+**Where the shared code lives, and why it matters.** The geometry layer never
+imports `ol` or `maplibre-gl` — the build asserts it — but it carries more than
+geometry: `symbology/` holds the paint functions that say what marks to draw, and
+`core/symbology.ts` and `core/handles.ts` hold the per-graphic rules that decide a
+label's font, a decoration's size, which handle sets a width and where a rotate
+pivots. Both renderers read all of it. A rule that lives in one renderer instead
+is how the two silently drift apart, which is a mistake this repo has made and
+written up: `ai/conventions.md`, "A symbology fact never lives in a holder".
 
 ---
 
