@@ -43,6 +43,15 @@ interface Props {
     graphicsSettings: TacticalGraphicsConfigOptions;
     /** Hands the controls panel something to drive. @see mapEngine.ts */
     onReady(handle: MapEngineHandle | null): void;
+    /**
+     * Reports a mode the *engine* chose, so the panel's buttons stay honest.
+     *
+     * The panel sets the mode on the way down and holds it as state; this is the way
+     * back, for the changes the user did not ask for — a draw ending returns to view.
+     * OpenLayers has always had it; MapLibre was never given it, so the panel's state
+     * never moved and no edit button ever appeared selected.
+     */
+    onInteractionModeChange(mode: InteractionType): void;
 }
 
 /**
@@ -143,7 +152,7 @@ function exportGraphics(snapshot: {type: string; features: unknown[]}): void {
     URL.revokeObjectURL(url);
 }
 
-const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady}) => {
+const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MapLibreMap | null>(null);
     const [, setReady] = useState(false);
@@ -223,7 +232,11 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             // the handler ran on nothing and the dialog simply never opened.
             if (native && !disposed) {
                 setPropertiesSource(createMapLibrePropertiesSource(map, native));
-                interactions = new MapLibreInteractions(map, native);
+                interactions = new MapLibreInteractions(map, native, {
+                    // A finished or abandoned draw puts the panel back into view, which
+                    // is what the OpenLayers manager does through the same channel.
+                    onDrawEnd: () => onInteractionModeChange(InteractionType.view),
+                });
             }
         });
 

@@ -333,6 +333,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         darkMode={darkMode}
                         graphicsSettings={settings}
                         onReady={handleEngineReady}
+                        onInteractionModeChange={setInteractionMode}
                     />}
 
                 {/*
@@ -346,7 +347,14 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                     <MapControls
                         capabilities={capabilities}
                         onDrawTacticalGraphics={() => engineRef.current?.startDrawing(selectedShape)}
-                        onToggleInteraction={mode => engineRef.current?.setInteractionMode(mode)}
+                        onToggleInteraction={mode => {
+                            // Held here, not inside an engine. The panel's buttons read this
+                            // state, and only OpenLayers ever reported a mode back — so on
+                            // MapLibre the mode reached the map and never reached the panel,
+                            // and no edit button appeared selected.
+                            setInteractionMode(mode);
+                            engineRef.current?.setInteractionMode(mode);
+                        }}
                         onShapeChange={setSelectedShape}
                         onReset={() => engineRef.current?.reset()}
                         onDrawSamples={hostility => engineRef.current?.drawSamples(hostility)}
