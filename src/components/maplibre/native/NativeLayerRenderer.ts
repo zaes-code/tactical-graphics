@@ -18,7 +18,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
-import {buildTacticalGraphic, paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, paintTacticalGraphic, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
@@ -454,7 +454,15 @@ export class NativeLayerRenderer {
             const rebuilt = buildTacticalGraphic(graphic.name, graphic.base.geometry, graphic.properties, resolution);
             // A generator that refuses leaves the previous geometry up, which is the
             // right failure: a symbol at the wrong size beats no symbol.
-            if (rebuilt) this.graphics[i] = {...rebuilt, id: graphic.id};
+            //
+            // **The label scale keeps its original anchor.** The rebuild needs the
+            // *current* resolution to re-derive the decoration, and stamping that as
+            // `drawingResolution` would move the zoom the label is measured against to
+            // "now" — so the scale computes as 1.0 forever and the label never grows.
+            // @see withDrawingResolution
+            if (rebuilt) {
+                this.graphics[i] = withDrawingResolution({...rebuilt, id: graphic.id}, graphic.graphic.drawingResolution);
+            }
         }
     }
 
