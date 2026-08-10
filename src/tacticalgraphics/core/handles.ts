@@ -76,9 +76,9 @@ export interface HandleContract {
  * vertex there while OpenLayers turned the symbol over. Measured across all seven,
  * OpenLayers flipped via handle 1 and MapLibre flipped via nothing at all.
  */
-const MIRROR_HANDLE_AT_1: HandleContract = {roles: ['shape', 'mirror'], repeating: 'shape'};
+const MIRROR_HANDLE_AT_0: HandleContract = {roles: ['mirror', 'shape'], repeating: 'shape'};
 
-/** The graphics that wear it. @see MIRROR_HANDLE_AT_1 */
+/** The graphics that wear it. @see MIRROR_HANDLE_AT_0 */
 const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
@@ -87,6 +87,11 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Retirement,
     TacticalGraphicName.ForwardPassageOfLines,
     TacticalGraphicName.RearwardPassageOfLines,
+    // These three carry the handle elsewhere in their own contracts below, but they
+    // mirror just the same, and `supportsMirror` is the question a panel or a test asks.
+    TacticalGraphicName.Abatis,
+    TacticalGraphicName.Pursuit,
+    TacticalGraphicName.MobileDefense,
 ];
 
 /**
@@ -255,8 +260,26 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (BLOCK_GRAPHICS.includes(name)) {
         return {roles: ['offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
     }
+    // **These three first.** They mirror, so they are in `MIRROR_HANDLE_GRAPHICS` — but
+    // each puts the handle at its own index, and the generic branch below would
+    // otherwise claim them and put it at 0.
+    //
+    // The chevron's apex, which the generator emits third precisely so the flip has
+    // something to grab. @see Abatis.generateHandles
+    if (name === TacticalGraphicName.Abatis) {
+        return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
+    }
+    // `[edge, lineStart]` — the start of the hook's cross stroke, which is the part
+    // that swaps sides. @see Pursuit.generateHandles
+    if (name === TacticalGraphicName.Pursuit) {
+        return {roles: ['shape', 'mirror'], repeating: 'shape'};
+    }
+    // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
+    if (name === TacticalGraphicName.MobileDefense) {
+        return {roles: ['shape', 'mirror'], repeating: 'shape'};
+    }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
-        return MIRROR_HANDLE_AT_1;
+        return MIRROR_HANDLE_AT_0;
     }
     if (BENT_GRAPHICS.includes(name)) {
         return {roles: ['bend', 'reach']};
