@@ -274,6 +274,27 @@ export function featureCollection(features: Feature[]): FeatureCollection {
  * pre-generated SDF glyph PBFs, so a deployment either self-hosts them or points
  * at someone else's server. There is no "just use the system font" option.
  */
+/**
+ * A dash pattern in **screen pixels** → the units MapLibre's `line-dasharray` wants.
+ *
+ * MapLibre scales a dash array by the line width; OpenLayers' `lineDash` is in raw
+ * canvas pixels. So the same `[8, 6]` that draws an 8px dash on one engine draws a
+ * 16px dash on the other at the default 2px stroke — the whole pattern comes out a
+ * factor of `LINE_WIDTH()` too long, everywhere a dash appears.
+ *
+ * A graphic's dashes were already converted — `dashKey` divides on the way in and the
+ * renderer parses the divided array back out of the layer key. **The editor's own
+ * dashes were not**: `sketchLayer` takes a pixel array and a width and passed both
+ * straight through, so the circle's radius read-out drew a 16px dash against
+ * OpenLayers' 8px. Hence a named helper rather than a division at one call site — the
+ * two paths reached the same property by different routes and only one had done the
+ * arithmetic.
+ */
+export function dashInWidths(dashPx: readonly number[], widthPx: number): number[] {
+    if (!(widthPx > 0)) return [...dashPx];
+    return dashPx.map(segment => segment / widthPx);
+}
+
 export function lineLayer(id: string, source: string, dashPx: number[] | undefined): LayerSpecification {
     return {
         id,
@@ -283,6 +304,8 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
         paint: {
             'line-color': ['get', 'color'],
             'line-width': ['get', 'width'],
+            // Already in line-widths: the layer key carries the divided array and the
+            // renderer parses it back out of that key. @see dashKey, dashInWidths
             ...(dashPx && dashPx.length ? {'line-dasharray': dashPx} : {}),
         },
     } as LayerSpecification;
@@ -503,7 +526,7 @@ export function sketchLayer(id: string, source: string, dashPx: number[], widthP
         paint: {
             'line-color': ['get', 'color'],
             'line-width': widthPx,
-            'line-dasharray': dashPx,
+            'line-dasharray': dashInWidths(dashPx, widthPx),
         },
     } as LayerSpecification;
 }

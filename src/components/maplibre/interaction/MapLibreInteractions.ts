@@ -39,7 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
     centreOf,
     insertVertex,
@@ -275,6 +275,13 @@ export class MapLibreInteractions {
 
         this.sketch.push(position);
 
+        // A rectangle is two opposite corners and nothing else — the other two follow.
+        // @see buildBox, isRectangular
+        if (isRectangular(name) && this.sketch.length >= 2) {
+            this.finishDraw(this.sketch.slice(0, 2));
+            return;
+        }
+
         // A graphic with a fixed base finishes on its own last click. It never sends
         // the double-click a free-form line ends on, so waiting for one meant a
         // fields-of-fire could not be drawn here at all: five clicks, no graphic.
@@ -318,6 +325,8 @@ export class MapLibreInteractions {
     private sketchIsComplete(): boolean {
         const name = this.drawing;
         if (!name) return false;
+        // Two corners is a whole rectangle. @see buildBox
+        if (isRectangular(name)) return this.sketch.length >= 2;
         const wanted = baseVertexCount(name);
         // Asked of the **normalised** sketch, not the raw one, so a graphic that defines
         // part of its own base counts as finished once the rest is implied: two points
@@ -346,7 +355,10 @@ export class MapLibreInteractions {
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        const geometry = buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
+        const geometry =
+            isRectangular(name) && vertices.length >= 2
+                ? buildBox(vertices)
+                : buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
         if (!geometry) return;
 
         const properties: TacticalGraphicProperties = {
@@ -554,6 +566,11 @@ export class MapLibreInteractions {
                 // instead slid the whole graphic, so the angle could not be changed that
                 // way at all. @see editStretches
                 if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.last, to);
+                // **A rectangle's corners are a consequence of its box, not points with
+                // meanings of their own**, so a reshape drag is refused outright and the
+                // shape can only be moved, turned or scaled. OpenLayers withdraws these
+                // from its Modify interaction to the same end. @see isRectangular
+                if (isRectangular(drag.graphic.name)) return before;
                 // A graphic that does not reshape and does not stretch is left alone.
                 // Falling through to the move below would make "edit" a second "move" for
                 // the point-anchored symbols, where OpenLayers does nothing at all.
@@ -651,6 +668,8 @@ export class MapLibreInteractions {
      */
     private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
         if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
+        // A rectangle with a fifth vertex is not a rectangle. @see isRectangular
+        if (isRectangular(graphic.name)) return -1;
 
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return -1;
@@ -689,6 +708,22 @@ export class MapLibreInteractions {
  * The base geometry a set of drawn vertices makes, for the shape this graphic
  * wants — or null when there are not enough of them yet.
  */
+/**
+ * The ring of an axis-aligned box through two opposite corners.
+ *
+ * What OpenLayers gets from `createBox()`, which is why its rectangles are rectangles:
+ * the user gives two corners and the other two are derived, so there is never a moment
+ * at which the shape could be anything else. MapLibre was collecting these as ordinary
+ * polygons — click a ring out by hand — so a "rectangular" kill box was whatever
+ * quadrilateral the user happened to click, and every later complaint about corners
+ * moving and vertices appearing followed from that.
+ */
+function buildBox([a, b]: Position[]): Geometry {
+    const [x0, x1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
+    const [y0, y1] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
+    return {type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]};
+}
+
 function buildBase(wants: 'Point' | 'LineString' | 'Polygon' | undefined, vertices: Position[]): Geometry | null {
     if (!vertices.length) return null;
 
