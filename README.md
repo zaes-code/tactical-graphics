@@ -43,7 +43,7 @@ for its geometry alone pulls in none of them. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
 [Security operations: the center symbol](#security-operations-the-center-symbol).
 
-**The two renderers paint through the same code.** Colours, label placement,
+**The two renderers paint through the same code.** Colors, label placement,
 screen-sized decorations, the radius read-out, which handle does what, how a
 rotate picks its pivot — all of it lives in the map-agnostic entry point and both
 renderers read it. That is deliberate: it is what stops the two drifting apart,
@@ -361,7 +361,7 @@ map.on('load', () => {
 ```
 
 **What it shares with the OpenLayers entry point**, because both read the same
-map-agnostic code rather than each having its own copy: every colour and label
+map-agnostic code rather than each having its own copy: every color and label
 rule, the screen-sized decorations, the radius read-out, which handle sets a
 width, which vertex is inert under a reshape, how many points a graphic's base
 takes, and where a rotate pivots. Fixing one fixes both.
@@ -382,7 +382,7 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 task's letter, a screen-sized arrowhead and the rest are synthesised at paint time,
 so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
 exported from the root entry point for exactly this — `getPaintFunction(name)`
-returns the marks to draw, in projected metres, with no renderer in them. That is
+returns the marks to draw, in projected meters, with no renderer in them. That is
 how both of the renderers above are built, and it is the supported way to build a
 third.
 
