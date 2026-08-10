@@ -7,7 +7,9 @@ Thanks for helping build out MIL-STD-2525E / FM 1-02.2 coverage.
 Understanding this split is the single most important thing before you write code.
 
 - **`src/tacticalgraphics/`** is the library — the thing published to npm. Pure GeoJSON geometry, no map library. It depends only on `@turf/turf` and the `geojson` types, and it must **never** import from `src/components/`.
-- **`src/components/`** is a *sample implementation* showing how to consume the library. The OpenLayers renderer is the reference; MapLibre and Cesium are secondary. None of it is published.
+- **`src/components/`** is a *sample implementation* showing how to consume the library. Two renderers live there — OpenLayers and MapLibre — and both are published as subpath entry points; the React demo around them is not. A Cesium view is a planned addition.
+
+  Anything that decides **what a symbol looks like or how it edits** belongs in `src/tacticalgraphics/`, not in a renderer: both read it from there, and that is what keeps them identical. A rule written into one renderer is invisible to the other and to every test.
 
 Styling is sample-app code. Geometry, the `TacticalGraphicName` enum, and the `properties.tacticalGraphic` schema are library code.
 
