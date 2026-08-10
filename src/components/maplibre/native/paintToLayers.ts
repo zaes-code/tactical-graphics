@@ -516,6 +516,30 @@ export function handleLayer(id: string, source: string): LayerSpecification {
     } as LayerSpecification;
 }
 
+/**
+ * The marker for a vertex a drag would create — OpenLayers' Modify draws one by
+ * default and it is the only thing that announces the gesture exists.
+ *
+ * Styled to `createEditingStyle()` exactly, because the two engines should hint the
+ * same edit the same way: a radius-6 dot in OpenLayers' editing blue with a 1.5px
+ * white ring. Deliberately **not** the configured handle colour — this is not a handle
+ * that exists, it is an offer to make one, and OpenLayers distinguishes them the same
+ * way.
+ */
+export function vertexHintLayer(id: string, source: string): LayerSpecification {
+    return {
+        id,
+        type: 'circle',
+        source,
+        paint: {
+            'circle-radius': 6,
+            'circle-color': 'rgba(0, 153, 255, 1)',
+            'circle-stroke-color': 'rgba(255, 255, 255, 1)',
+            'circle-stroke-width': 1.5,
+        },
+    } as LayerSpecification;
+}
+
 /** The line being drawn — dashed, because a sketch is not a graphic yet. */
 export function sketchLayer(id: string, source: string, dashPx: number[], widthPx: number): LayerSpecification {
     return {
