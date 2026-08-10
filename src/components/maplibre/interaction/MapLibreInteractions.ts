@@ -39,7 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, hasRadiusReadout} from '@zaes/tactical-graphics';
 import {
     centreOf,
     moveVertex,
@@ -358,6 +358,7 @@ export class MapLibreInteractions {
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
+        this.showMeasure(graphic);
         // Otherwise the map pans out from under the gesture.
         this.map.dragPan.disable();
     };
@@ -416,6 +417,9 @@ export class MapLibreInteractions {
         const next = {...rebuilt, id: drag.graphic.id};
         this.renderer.replace(drag.graphic.id, next);
         drag.graphic = next;
+        // The read-out follows the drag: it reports the radius the user is dragging
+        // *to*, which is the whole point of showing it.
+        this.showMeasure(next);
     };
 
     /**
@@ -510,7 +514,28 @@ export class MapLibreInteractions {
         }
     }
 
+    /**
+     * The radius read-out, for a graphic that reports one.
+     *
+     * Shown for the whole gesture, as OpenLayers' `showMeasure` is: from the pivot to
+     * the rim, so the user can read the number they are dragging to.
+     * `hasRadiusReadout` is the same list the properties dialog uses, so a graphic
+     * cannot report a radius in one place and not the other.
+     */
+    private showMeasure(graphic: MapLibreTacticalGraphic): void {
+        if (!hasRadiusReadout(graphic.name)) return;
+        const radius = graphic.properties.radius;
+        if (!radius || radius <= 0) return;
+
+        const centre = toMercator(centreOf(graphic.base.geometry as Parameters<typeof centreOf>[0]) as [number, number]);
+        // Due east: the direction does not carry meaning, and a line drawn to the rim
+        // handle would swing to wherever `rotation` put it — which for the arc tasks is
+        // roughly opposite the cursor. @see MissionTaskGraphicBase.measureEdge
+        this.renderer.setMeasure([centre, [centre[0] + radius, centre[1]]]);
+    }
+
     private readonly onPointerUp = (): void => {
+        this.renderer.setMeasure(null);
         if (!this.dragging) return;
         const changed = this.dragging.started;
         this.dragging = null;

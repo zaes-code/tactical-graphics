@@ -270,6 +270,69 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * A distance for a user to read, from metres.
+ *
+ * Metres below a kilometre — a 400 m radius shown as "0.4 km" is both harder to read
+ * and less precise than the number it came from. Above that, kilometres: one decimal
+ * while the figure is small enough for it to mean something, whole numbers beyond
+ * 10 km where it is noise.
+ *
+ * **In the core, because every renderer's measure read-out has to agree with every
+ * other and with the properties dialog** — they report the same quantity and a user
+ * compares them. It was in `openlayerStyles.ts`, which is why MapLibre had no
+ * read-out to be consistent with.
+ */
+export const formatDistance = (metres: number): string => {
+    if (metres < 1000) return `${Math.round(metres)} m`;
+    const km = metres / 1000;
+    return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
+};
+
+/**
+ * Graphics that carry a radius a user can read: the circular areas, the arc mission
+ * tasks, the range fans.
+ *
+ * Drives both the properties dialog's read-out and the measure line drawn while the
+ * graphic is sized. The coupling is deliberate — a graphic showing a radius in one
+ * place and not the other reads as a bug — and it belongs here for the same reason
+ * the formatter does: a second renderer draws the same read-out.
+ */
+export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.BaseDefenseZone,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.FightingPosition,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.MovementToContact,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.PositionAreaArtilleryCircular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.TargetAreaCircular,
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+]);
+
+/** Whether this graphic reports a radius. @see RADIUS_GRAPHICS */
+export function hasRadiusReadout(name: TacticalGraphicName): boolean {
+    return RADIUS_GRAPHICS.has(name);
+}
+
+/**
  * Graphics whose designation gap is cut from the **rendered glyph** at paint time,
  * so the generated geometry must carry none of its own.
  *
