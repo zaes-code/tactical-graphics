@@ -404,6 +404,63 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 1,
 };
 
+/**
+ * Graphics whose **edit-mode drag resizes them** when it does not land on a vertex.
+ *
+ * Dragging a fields-of-fire's leg — not its handle, the line between them — opens or
+ * closes the V in OpenLayers, because its controller borrows the resize path for an
+ * edit drag. That is what makes the two arms feel like an editable line rather than
+ * a fixed shape you may only move. MapLibre translated instead, so the same drag slid
+ * the whole graphic and the V angle could not be changed that way at all.
+ *
+ * It was `controller.editStretches = true`, set by six factories in the OpenLayers
+ * registry, so no other renderer could see it. The circles are here for the same
+ * reason: an edit drag on one resizes it, identically to resize mode.
+ */
+const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
+    // FireSupportStation, PointTarget and TargetReferencePoint belong here too and
+    // are commented out of the enum. @see ai/excluded-graphics.md
+TacticalGraphicName.Abatis,
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.Ambush,
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.BaseDefenseZone,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.FightingPosition,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.MovementToContact,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.PositionAreaArtilleryCircular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+    TacticalGraphicName.Pursuit,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.TargetAreaCircular,
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+];
+
+/** Whether an edit drag that grabs no vertex resizes rather than moves. @see EDIT_STRETCHES */
+export function editStretches(name: TacticalGraphicName): boolean {
+    return EDIT_STRETCHES.includes(name);
+}
+
 /** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
 export function anchorVertex(name: TacticalGraphicName): number | undefined {
     return ANCHOR_VERTEX[name];
