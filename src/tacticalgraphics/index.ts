@@ -292,6 +292,7 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
+export {airfieldPaint} from './symbology/airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';

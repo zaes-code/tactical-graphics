@@ -20,7 +20,6 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
-import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The colour table, the line weight and the three label-scale formulas now live in the
@@ -94,6 +93,8 @@ import {
     antiTankDitchPaint,
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
+    airfieldPaint,
+    areaDefaultLabelPaint,
     airCorridorLabelPaint,
     airspaceCoordinationAreaLabelPaint,
     airCorridorPaint,
@@ -1945,7 +1946,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
             return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.Airfield:
-            return getAirfieldStyle(fullLabel, dateLabel);
+            return getAirfieldStyle(name);
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
         case TacticalGraphicName.NoFireAreaIrregular:
@@ -2013,20 +2014,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
     }
 }
 
-/**
- * The crossed runways, written as SVG path data in **map units** — so at scale 1
- * the symbol is a fixed ~400 km across, on every polygon and at every zoom.
- */
-const AIRFIELD_SVG = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
-/** Half-extents of the path above, in its own unscaled units. */
-const AIRFIELD_HALF_W = 200000;
-const AIRFIELD_HALF_H = 120000;
-/**
- * Share of the area's shorter side the symbol spans. Matches the fit-to-polygon
- * cap the area's own text block uses, so symbol and text agree about how much
- * room a polygon offers.
- */
-const AIRFIELD_FIT_SHARE = 0.8;
 
 /**
  * Points along the two runway strokes, in unscaled path units, used to test the
@@ -2034,21 +2021,6 @@ const AIRFIELD_FIT_SHARE = 0.8;
  * pass through the centre, so a notch can cut a stroke without containing either
  * of its ends.
  */
-const AIRFIELD_SAMPLES: Coordinate[] = (() => {
-    const segments: [Coordinate, Coordinate][] = [
-        [[-AIRFIELD_HALF_W, 0], [AIRFIELD_HALF_W, 0]],
-        [[-AIRFIELD_HALF_W, -AIRFIELD_HALF_H], [AIRFIELD_HALF_W, AIRFIELD_HALF_H]],
-    ];
-    const STEPS = 8;
-    const pts: Coordinate[] = [];
-    for (const [a, b] of segments) {
-        for (let i = 0; i <= STEPS; i++) {
-            const t = i / STEPS;
-            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-        }
-    }
-    return pts;
-})();
 
 /**
  * Ray-cast point-in-polygon.
@@ -2081,45 +2053,10 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
  *     a bounding-box fit will happily push an arm out through the notch of an
  *     L-shape. `AreaGraphicBase` stamps `polygonRing`, so the real edges are here.
  */
-function airfieldSymbolScale(f: FeatureLike, center: Coordinate): number {
-    const extW = f.get('polygonExtentWidth') as number | undefined;
-    const extH = f.get('polygonExtentHeight') as number | undefined;
-    // Not stamped yet (first render, or a holder that never set a base) — keep
-    // the historical fixed size rather than collapsing the symbol to nothing.
-    if (!extW || !extH) return 1;
 
-    let scale = AIRFIELD_FIT_SHARE * Math.min(extW / (AIRFIELD_HALF_W * 2), extH / (AIRFIELD_HALF_H * 2));
-
-    const ring = f.get('polygonRing') as Coordinate[] | undefined;
-    if (!ring || ring.length < 3) return scale;
-
-    const fits = (s: number) =>
-        AIRFIELD_SAMPLES.every(p => pointInRing([center[0] + p[0] * s, center[1] + p[1] * s], ring));
-
-    // Bounded so it can never run away: 0.9^30 ≈ 0.04 of the bbox fit. Anything
-    // still outside at that point is a degenerate polygon, not a sizing problem.
-    for (let i = 0; i < 30 && !fits(scale); i++) scale *= 0.9;
-    return scale;
-}
-
-export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFunction {
-    return (f, res) => {
-        let styles = getAreaLabelStyles(f, res, fullLabel, dateLabel, 0, 36);
-        const center = (f.getGeometry() as Point).getCoordinates();
-        let {geometry} = svgToOpenLayersGeometry(AIRFIELD_SVG, center, airfieldSymbolScale(f, center));
-        styles.push(new Style({
-            geometry: geometry,
-            // The crossed runways are the symbol's own line work, not an
-            // amplifier, so they take the standard identity colour with the
-            // area outline — FM 1-02.2 para 5-3.
-            stroke: new Stroke({
-                color: readHostilityColor(f),
-                width: LINE_WIDTH(),
-            }),
-        }));
-
-        return styles;
-    };
+/** **Ported.** @see airfieldPaints.ts, `airfieldPaint`. */
+export function getAirfieldStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airfieldPaint(areaDefaultLabelPaint(name)), name);
 }
 
 export function getAreaLabelStyles(feature: FeatureLike, resolution: number, textLabel: string, dateLabel: string, rotation: number, offsetY: number = 0) {
