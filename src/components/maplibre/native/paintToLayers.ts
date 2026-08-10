@@ -1,3 +1,4 @@
+import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
 import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
@@ -240,7 +241,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     rotate: ((text.rotation ?? 0) * 180) / Math.PI,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
-                    haloWidth: text.halo?.widthPx ?? 0,
+                    haloWidth: outwardHalo(text.halo?.widthPx),
                     anchor: textAnchor(text.align, text.baseline),
                     justify: text.justify ?? text.align ?? 'center',
                     // Pixels → ems, as one array property. Divided by the rendered size,
@@ -444,7 +445,25 @@ export function measureLabelLayer(id: string, source: string, fontStack: string)
 
 /** Rendered size of the read-out, matching `fontStyle`'s 16px base. */
 const MEASURE_LABEL_PX = 16;
-const MEASURE_HALO_PX = 3;
+const MEASURE_HALO_PX = outwardHalo(HALO_WIDTH);
+
+/**
+ * A halo width in **MapLibre's** units, from the shared one.
+ *
+ * The two renderers measure it differently and the shared number is written in
+ * OpenLayers' terms. OpenLayers draws a halo with `strokeText`, and a canvas stroke
+ * straddles the path it follows — half inside the glyph, half outside — so a width of
+ * 4 shows as 2px of halo. MapLibre's `text-halo-width` is the distance the halo
+ * extends *outward*, all of it.
+ *
+ * Passing the number through unchanged therefore drew every label with twice the
+ * halo, which is a lot of ink: eight of the air zones measured 14-16% more ink than
+ * OpenLayers at close zoom on text alone, and the labels read visibly heavier
+ * side by side.
+ */
+function outwardHalo(sharedWidth: number | undefined): number {
+    return (sharedWidth ?? 0) / 2;
+}
 
 export function handleLayer(id: string, source: string): LayerSpecification {
     return {
