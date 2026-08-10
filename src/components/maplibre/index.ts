@@ -45,6 +45,24 @@ export {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 export {NativeLayerRenderer} from './native/NativeLayerRenderer';
 
 // Generator output → paint-ready graphics, including the 4326 → 3857 projection.
+/**
+ * Draw, modify and the four handle gestures.
+ *
+ * Exported because a renderer without them is a picture, not an editor — and this
+ * was reachable only from inside the demo, so nobody installing the package could
+ * build one. `NativeLayerRenderer` draws; this turns pointer events into edits.
+ */
+export {MapLibreInteractions} from './interaction/MapLibreInteractions';
+export type {EditMode, InteractionCallbacks} from './interaction/MapLibreInteractions';
+
+/**
+ * The geometry edits themselves, for a host driving them from its own UI rather
+ * than from the pointer — a slider that sets a width, a form that sets a bearing.
+ * Each takes a description and returns a new one; none of them touch a map.
+ */
+export {centreOf, moveVertex, positionsOf, resize, rotate, setBandRange, setBend, setOffset, setReach, translate} from './interaction/editGeometry';
+export type {GraphicDescription} from './interaction/editGeometry';
+
 export {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 export type {MapLibreTacticalGraphic} from './maplibreAdapter';
 
