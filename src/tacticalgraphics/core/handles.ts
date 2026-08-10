@@ -334,3 +334,61 @@ function pointInRing(ring: [number, number][], [x, y]: [number, number]): boolea
     }
     return inside;
 }
+
+/**
+ * How many points a graphic's base takes, when the answer is fixed.
+ *
+ * A drawing rule, and a portable one: it says what the *symbol* is, not how one
+ * renderer collects clicks. A fields-of-fire is two segments meeting at an apex —
+ * one segment is a line with an arrowhead at each end, three is a shape FM 1-02.2
+ * does not draw — so the draw has to end on the third click whichever engine is
+ * collecting them.
+ *
+ * It lived in `openlayers/controllerRegistry.ts` as an argument to a factory, which
+ * is why MapLibre had no limit at all: its draw waited for a double-click that a
+ * fixed-vertex graphic never sends, so **a fields-of-fire could not be drawn there**
+ * — five clicks and no graphic.
+ *
+ * `undefined` means "as many as the user wants", which is most line graphics.
+ */
+const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
+    // Two segments, three points. The only graphic here that is not two points.
+    [TacticalGraphicName.FieldsOfFire]: 3,
+
+    // Two points: a start and an end, and the symbol is built between them.
+    [TacticalGraphicName.FerryCrossing]: 2,
+    [TacticalGraphicName.PassageLane]: 2,
+    [TacticalGraphicName.TacticalFix]: 2,
+    [TacticalGraphicName.Fix]: 2,
+    [TacticalGraphicName.LinearTarget]: 2,
+    [TacticalGraphicName.FinalProtectiveFire]: 2,
+    [TacticalGraphicName.LinearSmokeTarget]: 2,
+
+    // The block family: the bar is drawn across the line the user gives it.
+    [TacticalGraphicName.TacticalBlock]: 2,
+    [TacticalGraphicName.Breach]: 2,
+    [TacticalGraphicName.Bypass]: 2,
+    [TacticalGraphicName.Canalize]: 2,
+    [TacticalGraphicName.Clear]: 2,
+    [TacticalGraphicName.TacticalDisrupt]: 2,
+    [TacticalGraphicName.Penetration]: 2,
+    [TacticalGraphicName.Exploitation]: 2,
+    [TacticalGraphicName.Block]: 2,
+    [TacticalGraphicName.Disrupt]: 2,
+    [TacticalGraphicName.AttackByFire]: 2,
+    [TacticalGraphicName.SupportByFire]: 2,
+
+    // The retrograde tasks: an axis from where the force is to where it goes.
+    [TacticalGraphicName.Delay]: 2,
+    [TacticalGraphicName.Withdraw]: 2,
+    [TacticalGraphicName.WithdrawUnderPressure]: 2,
+    [TacticalGraphicName.Disengage]: 2,
+    [TacticalGraphicName.Retirement]: 2,
+    [TacticalGraphicName.ForwardPassageOfLines]: 2,
+    [TacticalGraphicName.RearwardPassageOfLines]: 2,
+};
+
+/** How many points this graphic's base takes, or `undefined` for no limit. */
+export function baseVertexCount(name: TacticalGraphicName): number | undefined {
+    return BASE_VERTEX_COUNT[name];
+}
