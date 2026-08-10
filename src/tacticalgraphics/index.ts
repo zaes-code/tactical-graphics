@@ -181,6 +181,7 @@ export {
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
     formatDistance,
+    formatAmplifierDistance,
     hasRadiusReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
