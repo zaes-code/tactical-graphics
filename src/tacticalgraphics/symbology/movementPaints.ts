@@ -131,7 +131,14 @@ function nameAndDate(feature: PaintFeature): string {
  */
 function fixedLetterPaint(
     letter: string,
-    options: {atMidpoint?: boolean; align?: 'left' | 'center'; upright?: boolean; keepFlip?: boolean} = {},
+    options: {
+        atMidpoint?: boolean;
+        align?: 'left' | 'center';
+        upright?: boolean;
+        keepFlip?: boolean;
+        /** Where between the two anchors the letter sits. Defaults to the midpoint. */
+        atFraction?: number;
+    } = {},
 ): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
@@ -157,15 +164,25 @@ function fixedLetterPaint(
         const rotation = options.keepFlip
             ? -Math.atan2(y1 - y0, x1 - x0)
             : uprightRotation(coords[0], coords[1]);
-        return [text([(x0 + x1) / 2, (y0 + y1) / 2], letter, scale, {rotation, align: options.align ?? 'center'})];
+        // Interpolated **in projected metres**, on the segment the renderer draws, so a
+        // letter placed a quarter along lands in the hole cut a quarter along.
+        const t = options.atFraction ?? 0.5;
+        return [text([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
     };
 }
 
 /** Infiltration: "IN" between the first two anchors, upright-flipped. */
 export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN', {atMidpoint: true});
 
-/** Envelopment: "E" between the first two anchors, following the raw angle. */
-export const envelopmentLabelPaint = (): MovementPaint => fixedLetterPaint('E', {atMidpoint: true, keepFlip: true});
+/**
+ * Envelopment: "E" a quarter of the way along the approach, following the raw angle.
+ *
+ * The anchors are the run's two ends, so the quarter point is computed on the projected
+ * segment — the same one `approachPaint` cuts its gap in, at the same fraction.
+ * @see APPROACH_LABEL_POSITION, Envelopment.generateLabels
+ */
+export const envelopmentLabelPaint = (): MovementPaint =>
+    fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION});
 
 /**
  * Mobile defence: "MD" at the tail of the ellipse, horizontal whatever the

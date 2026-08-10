@@ -93,7 +93,6 @@ import {
     areaFillPaint,
     areaOutlinePaint,
     defaultLinePaint,
-    axisRotation,
     missionTaskLabelPaint,
     obstacleLinePaint,
     phaseLinePaint,
@@ -602,13 +601,18 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         graphic: infiltrationGraphicPaint(),
         label: movementLabelFor(TacticalGraphicName.Infiltration),
     };
-    // Envelopment's line work is the movement family's, but it is a *mission task* in
-    // every other respect — one label anchor, not the two the movement letter reads
-    // from. Routing it to `movementLabelFor` meant the paint returned nothing at all,
-    // so the gap for the "E" was cut in the line and no "E" was drawn in it.
+    // Envelopment's line work is the movement family's, and so is its letter — now that
+    // its generator hands over the run's two ends rather than one pre-placed point.
+    //
+    // It was routed to `missionTaskLabelPaint`, which draws the letter at whatever point
+    // the generator named. That point is exact in 4326 and a little off the *straight
+    // segment* a renderer draws between the run's reprojected ends, by an error that
+    // grows with the run — so the "E" slid out of its hole as the graphic got bigger,
+    // which is the one thing the hole exists to prevent. `envelopmentLabelPaint` finds
+    // the quarter point on the projected segment instead, where the gap is cut.
     registry[TacticalGraphicName.Envelopment] = {
         graphic: envelopmentGraphicPaint(),
-        label: missionTaskLabelPaint(TacticalGraphicName.Envelopment, axisRotation),
+        label: envelopmentLabelPaint(),
     };
     // The crossings label themselves like an amplifier rather than like an arrow —
     // the OpenLayers holder said so and the registry did not, so MapLibre sized a
