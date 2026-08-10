@@ -265,20 +265,26 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // Horizontal line: from (−2.4r, +r) to (0, +r) — ends at the top of
         // the semicircle.
         const lineLen = 2.4 * r;
-        // Mirroring flips **the hook only** — the P-line, its label and the arrowhead's
-        // anchor all stay put, exactly as the cane graphics keep their route and move just
-        // the cane. Reflecting the whole construction moved the line too, which read as
-        // the graphic jumping rather than the hook changing hands.
-        const line: Position[] = [local(-lineLen, r), local(0, r)];
+        // **The whole construction reflects about the graphic's own axis.** Everything
+        // below carries `m`, so a mirrored pursuit is the same symbol seen the other way
+        // up: the P-line at the bottom, the hook curling over it, the arrowhead at the
+        // top pointing back.
+        //
+        // It used to reverse the *sweep* instead — keeping the line and the arrowhead
+        // where they were and sending the arc the long way round, west through 180°. That
+        // is not a mirrored pursuit; it is a backwards C whose ends no longer sit at the
+        // line and the arrow. The reasoning recorded here was that reflecting the whole
+        // thing "read as the graphic jumping rather than the hook changing hands", and a
+        // graphic that jumps is a smaller price than one that stops being its own symbol.
+        const m = opts.mirrored ? -1 : 1;
+        const line: Position[] = [local(-lineLen, m * r), local(0, m * r)];
 
-        // Semicircle: bulges east, from top (+r) clockwise through east (+r, 0)
-        // to bottom (−r). Center is the graphic's center; planar angles go
-        // 90° → −90° (decreasing = clockwise).
-        // Both sweeps start at the line's end (+r) and finish at the arrowhead (-r); the
-        // mirror is which way round they get there — east through 0, or west through 180.
-        const arc: Position[] = opts.mirrored
-            ? geometryService.createCircularArc(center, rotation, r, 90, 270, 48)
-            : geometryService.createCircularArc(center, rotation, r, 90, -90, 48);
+        // Semicircle bulging **east in both states** — that is what makes this a
+        // reflection rather than a rotation. Unmirrored it runs from the line's end at
+        // the top (+90°) clockwise through east (0°) to the arrowhead at the bottom
+        // (−90°); mirrored it runs the same way round the same bulge, from the line's end
+        // now at the bottom to the arrowhead now at the top.
+        const arc: Position[] = geometryService.createCircularArc(center, rotation, r, m * 90, -m * 90, 48);
 
         // Arrowhead at the end of the arc (bottom), pointing in the tangent
         // direction at that point (≈ −x at rotation 0 — i.e., back toward
@@ -296,7 +302,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // graphic through `local()`.
         const wingHalf = arrowLen * Math.sin((ARROW_LEN_DEG * Math.PI) / 180);
         const crossHalf = wingHalf * 1.3;   // 30% wider than the arrowhead
-        const crossBar: Position[] = [local(0, -r + crossHalf), local(0, -r - crossHalf)];
+        const crossBar: Position[] = [local(0, -m * r + crossHalf), local(0, -m * r - crossHalf)];
 
         return this.asMultiLineStringFeature([line, arc, arrowHead, crossBar]);
     }
@@ -330,15 +336,15 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
             return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
         };
 
-        const arrowTip = at(0, -r);
-        // **On the bulge, and it moves with the flip.** The mirror swaps which way the
-        // semicircle sweeps — east for an unmirrored graphic, west for a mirrored one —
-        // so the handle sits at the middle of the current arc. The P-line's free end,
-        // which this used to be, does not move when the graphic flips, so a handle there
-        // could neither show the state nor be dragged across anything.
-        const bulge = at(opts.mirrored ? -r : r, 0);
+        const m = opts.mirrored ? -1 : 1;
+        const arrowTip = at(0, -m * r);
+        // The P-line's free end. It sits a long way off the axis and crosses to the other
+        // side when the graphic reflects, which is what a mirror handle has to do: a
+        // handle that stays put can neither show the state nor be dragged across
+        // anything. The arc's midpoint cannot serve — the bulge stays east either way.
+        const lineStart = at(-2.4 * r, m * r);
 
-        return this.asMultiPointFeature([arrowTip, bulge]);
+        return this.asMultiPointFeature([arrowTip, lineStart]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
@@ -352,7 +358,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
-        const x = -1.2 * r, y = r;
+        const x = -1.2 * r, y = (opts.mirrored ? -1 : 1) * r;
         const dist = Math.hypot(x, y);
         const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
         let bearing = 90 - (planarDeg + rotation);
