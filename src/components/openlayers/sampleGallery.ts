@@ -53,6 +53,7 @@ import {PROVEN_GRAPHICS} from './provenGraphics';
 import {supportsHostility} from './graphicFieldRegistry';
 import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
+import {clearAllGraphics} from './persistence';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import ms from 'milsymbol';
 import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
@@ -281,15 +282,12 @@ export function applyHostility(
     });
 }
 
-/** Removes every rendered graphic and its controllers. */
-export function clearAllGraphics(manager: TacticalGraphicsManager): void {
-    manager.renderingVectorSource.clear();
-    manager.graphicControllers.length = 0;
-    // The controllers are gone, so their zoom subscriptions have to go too. Without
-    // this every sweep left its predecessor's listeners re-deriving graphics that
-    // were no longer on the map.
-    manager.releaseAllGraphics();
-}
+/**
+ * @see clearAllGraphics in `persistence.ts`, which is where this lives now — it is part
+ * of the save/restore story rather than the gallery's, and this file is stripped from
+ * the published build. Re-exported so existing callers keep working.
+ */
+export {clearAllGraphics};
 
 /**
  * Clears the map, draws a sample of every proven graphic grouped by category,

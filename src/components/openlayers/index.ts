@@ -26,6 +26,8 @@
  */
 
 // The entry point: wires draw / modify / pointer interactions onto a map.
+export {createTacticalGraphics} from './createTacticalGraphics';
+export type {OpenLayersEngineOptions} from './createTacticalGraphics';
 export {TacticalGraphicsManager} from './TacticalGraphicsManager';
 
 // Generator → OpenLayers features, including the 4326 → 3857 reprojection.

@@ -214,6 +214,9 @@ export class MapLibreInteractions {
     setMode(mode: EditMode): void {
         this.cancelDraw();
         this.mode = mode;
+        // The old mode's answer does not survive the change: a pointer left over a handle
+        // that view mode does not drag would promise a gesture that no longer exists.
+        this.setCursor('default');
         // The hint belongs to modify alone, and a stale one left behind would offer an
         // edit the new mode does not perform. @see updateVertexHint
         this.renderer.setVertexHint(null);
@@ -317,7 +320,42 @@ export class MapLibreInteractions {
 
     private readonly onMouseOut = (): void => {
         this.renderer.setVertexHint(null);
+        this.setCursor('');
     };
+
+    /**
+     * A pointer over something a click or drag would act on, and an ordinary arrow
+     * everywhere else — the same rule and the same hit-testing as
+     * `TacticalGraphicsManager.updateHoverCursor`.
+     *
+     * **MapLibre's default is an open hand**, set by its own CSS on the interactive
+     * canvas, and it says "you can pan" over every pixel of the map — including over a
+     * graphic, where it is wrong, and over the vertex hint, where it hides the dot it
+     * sits on. So the arrow here is not a preference: it is the absence of a claim,
+     * which is what lets the pointer mean something when it appears.
+     */
+    private updateHoverCursor(point: {x: number; y: number}): void {
+        if (this.drawing) return;
+
+        let interactive: boolean;
+        if (HANDLE_MODES.includes(this.mode)) {
+            // Only a handle that would move. The centre dot is inert except in translate,
+            // where it is the one place a user naturally reaches to drag a symbol bodily.
+            const grabbed = this.renderer.hitTestHandle(point);
+            interactive = !!grabbed
+                && (grabbed.index !== this.renderer.centreHandleOf(grabbed.graphic) || this.mode === 'translate');
+        } else {
+            interactive = !!this.renderer.hitTest(point);
+        }
+
+        this.setCursor(interactive ? 'pointer' : 'default');
+    }
+
+    /** The canvas cursor. Inline, because it has to beat MapLibre's own class. */
+    private setCursor(cursor: string): void {
+        const canvas = this.map.getCanvas();
+        if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
+    }
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
         if (!this.drawing) return;
@@ -495,8 +533,10 @@ export class MapLibreInteractions {
 
         const drag = this.dragging;
         if (!drag) {
-            // Nothing held: the pointer is only shopping, so show where a vertex would go.
+            // Nothing held: the pointer is only shopping, so show where a vertex would go
+            // and say whether there is anything here to act on.
             this.updateVertexHint(event.point);
+            this.updateHoverCursor(event.point);
             return;
         }
 
