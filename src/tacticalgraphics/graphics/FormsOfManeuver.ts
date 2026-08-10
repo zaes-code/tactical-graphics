@@ -618,9 +618,28 @@ export class MobileDefense extends MovementGraphicBase {
      * so emitting fewer than three points tells the OpenLayers holder there is
      * no offset handle to show.
      */
-    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+    /**
+     * `[end, mirror]`.
+     *
+     * The second is new, and it is what makes the flip reachable. This graphic's only
+     * asymmetry is which half of the ellipse the arrow leaves from, so a user had no way
+     * to swap it: the single end handle rotates and resizes, and there was no dot on the
+     * side that moves. It sits at the top of the current arc — perpendicular from the
+     * midpoint by the ellipse's own minor radius — so dragging it across the major axis
+     * is the gesture, and it moves with the graphic when the flip lands.
+     */
+    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature([baseCoords[baseCoords.length - 1]]);
+        const p0 = baseCoords[0];
+        const p1 = baseCoords[baseCoords.length - 1];
+
+        const center = geometryService.getMidpoint(p0, p1);
+        const minorR = (turf.distance(p0, p1, {units: 'meters'}) / 2) * 0.4;
+        // `perp+` is left of p0→p1, which is the arc an unmirrored graphic uses.
+        const bearing = turf.bearing(p0, p1) - (opts?.mirrored ? -90 : 90);
+        const mirror = turf.destination(center, minorR, bearing, {units: 'meters'}).geometry.coordinates as Position;
+
+        return this.asMultiPointFeature([p1, mirror]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {

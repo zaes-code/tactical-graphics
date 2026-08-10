@@ -1,19 +1,30 @@
 /**
  * # Which graphics flip, and which handle flips them
  *
- * The retrograde tasks hang their cane or arrow to one side of the drawn line, and a
- * drag of their second handle across that line turns them over. That fact lived in the
- * OpenLayers controllers, so `handleRole` called both handles `shape` and MapLibre
- * moved a vertex where OpenLayers flipped the symbol — measured across all seven, one
- * engine flipped via handle 1 and the other flipped via nothing at all.
+ * Ten graphics hang part of themselves to one side of their own axis and can be turned
+ * over: the seven retrograde tasks, plus abatis, pursuit and mobile defense.
  *
- * These pin the two halves that were out of step: which graphics own a mirror handle,
- * and which side of the line means mirrored.
+ * That fact lived in the OpenLayers controllers, so `handleRole` called every handle
+ * `shape` and MapLibre moved a vertex where OpenLayers flipped the symbol — measured
+ * across all seven of the retrograde tasks, one engine flipped via a handle and the
+ * other flipped via nothing at all.
+ *
+ * **The index is per graphic and cannot be guessed**, which is why it is declared. The
+ * retrograde tasks put it first, on the cane; abatis puts it third, on the chevron's
+ * apex; pursuit and mobile defense put it second. Getting it wrong is silent and looks
+ * plausible — it was on the arrowhead of the retrograde tasks for a while, which flips
+ * the graphic from the one part of it that does not move.
  */
 
-import {handleRole, supportsMirror} from './core/handles';
-import {listTacticalGraphicNames, renderTacticalGraphic, toFeatureCollection} from './index';
+import {handleContract, handleRole, supportsMirror} from './core/handles';
+import {baseGeometryFor, listTacticalGraphicNames, renderTacticalGraphic, toFeatureCollection} from './index';
 import {TacticalGraphicName} from './core/type';
+
+const BASES: Record<string, {type: string; coordinates: unknown}> = {
+    Point: {type: 'Point', coordinates: [2, 1]},
+    LineString: {type: 'LineString', coordinates: [[2, 1], [3, 1.6]]},
+    Polygon: {type: 'Polygon', coordinates: [[[2, 1], [3, 1], [3, 2], [2, 2], [2, 1]]]},
+};
 
 /** The drawn geometry only — the flag itself is stamped onto every output feature. */
 const geometryOf = (name: TacticalGraphicName, mirrored: boolean) =>
@@ -21,29 +32,23 @@ const geometryOf = (name: TacticalGraphicName, mirrored: boolean) =>
         toFeatureCollection(
             renderTacticalGraphic({
                 type: 'Feature',
-                geometry: {type: 'LineString', coordinates: [[2, 1], [3, 1.6]]},
+                geometry: BASES[baseGeometryFor(name) ?? 'LineString'] as never,
                 properties: {tacticalGraphic: {name, rotation: 0, radius: 60000, width: 30000, mirrored}},
             }),
         ).features.map(f => f.geometry),
     );
 
-describe('mirroring', () => {
-    it('gives every mirrorable graphic its mirror handle at index 1', () => {
-        for (const name of listTacticalGraphicNames()) {
-            if (!supportsMirror(name as TacticalGraphicName)) continue;
-            expect(handleRole(name as TacticalGraphicName, 1)).toBe('mirror');
-            // Handle 0 stays a shape handle: it moves the line's far end, and making it
-            // a mirror too would leave the graphic no way to be reshaped.
-            expect(handleRole(name as TacticalGraphicName, 0)).toBe('shape');
-        }
-    });
+const mirrorable = () => listTacticalGraphicNames().filter(n => supportsMirror(n as TacticalGraphicName));
 
-    it('names the seven retrograde tasks and nothing else', () => {
-        const flagged = listTacticalGraphicNames().filter(n => supportsMirror(n as TacticalGraphicName));
-        expect(flagged.sort()).toEqual([
+describe('mirroring', () => {
+    it('names the ten graphics that flip', () => {
+        expect(mirrorable().sort()).toEqual([
+            'Abatis',
             'Delay',
             'Disengage',
             'ForwardPassageOfLines',
+            'MobileDefense',
+            'Pursuit',
             'RearwardPassageOfLines',
             'Retirement',
             'Withdraw',
@@ -51,17 +56,53 @@ describe('mirroring', () => {
         ]);
     });
 
-    it('actually changes the drawn geometry for each of them', () => {
+    it('gives each of them exactly one mirror handle', () => {
+        for (const name of mirrorable()) {
+            const {roles} = handleContract(name as TacticalGraphicName);
+            expect(roles.filter(role => role === 'mirror')).toHaveLength(1);
+        }
+    });
+
+    it('puts the retrograde tasks on the cane, not the arrowhead', () => {
+        // Handle 0 is the cane hanging off the start; handle 1 is the far end the arrow
+        // points from. Flipping from the arrowhead is the wrong end of the symbol.
+        for (const name of ['Delay', 'Withdraw', 'WithdrawUnderPressure', 'Disengage', 'Retirement', 'ForwardPassageOfLines', 'RearwardPassageOfLines'] as TacticalGraphicName[]) {
+            expect(handleRole(name, 0)).toBe('mirror');
+            expect(handleRole(name, 1)).toBe('shape');
+        }
+    });
+
+    it('puts the other three where their own generators emit one', () => {
+        expect(handleRole(TacticalGraphicName.Abatis, 2)).toBe('mirror');
+        expect(handleRole(TacticalGraphicName.Pursuit, 1)).toBe('mirror');
+        expect(handleRole(TacticalGraphicName.MobileDefense, 1)).toBe('mirror');
+    });
+
+    it('actually changes the drawn geometry for every one of them', () => {
         // A mirror handle on a graphic whose generator ignores `mirrored` would be a
         // gesture that visibly does nothing.
-        for (const name of listTacticalGraphicNames()) {
-            if (!supportsMirror(name as TacticalGraphicName)) continue;
+        for (const name of mirrorable()) {
             expect(geometryOf(name as TacticalGraphicName, true)).not.toEqual(geometryOf(name as TacticalGraphicName, false));
+        }
+    });
+
+    it('emits a handle at every index it declares a role for', () => {
+        // A declared mirror handle the generator never emits is a rule with nothing to
+        // apply it to — which is what mobile defense was before it grew a second handle.
+        for (const name of mirrorable()) {
+            const {roles} = handleContract(name as TacticalGraphicName);
+            const rendered = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: BASES[baseGeometryFor(name as TacticalGraphicName) ?? 'LineString'] as never,
+                properties: {tacticalGraphic: {name, rotation: 0, radius: 60000, width: 30000}},
+            });
+            const handles = (rendered.handles?.geometry as {coordinates?: unknown[]})?.coordinates ?? [];
+            expect(handles.length).toBeGreaterThanOrEqual(roles.length);
         }
     });
 
     it('leaves a graphic without the handle alone', () => {
         expect(supportsMirror(TacticalGraphicName.PhaseLine)).toBe(false);
-        expect(handleRole(TacticalGraphicName.PhaseLine, 1)).toBe('shape');
+        expect(handleRole(TacticalGraphicName.PhaseLine, 0)).toBe('shape');
     });
 });

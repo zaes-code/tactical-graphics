@@ -400,9 +400,28 @@ export function setOffset(
  */
 export function setMirror(description: GraphicDescription, cursor: Position, resolution: number): GraphicDescription {
     const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
-    if (coords.length < 2) return description;
-
     const at = toMercator([cursor[0], cursor[1]]);
+
+    // **A point-anchored graphic has no drawn axis to measure against.** Its orientation
+    // lives in `properties.rotation`, so the axis comes from there and the origin is the
+    // point itself — which is what OpenLayers' `mirrorIfDraggedPastAxis` does for the
+    // same family. Without this branch abatis and pursuit could not be flipped at all:
+    // one position is not a line, and the segment loop below had nothing to run on.
+    if (coords.length < 2) {
+        if (!coords.length) return description;
+        const axis = ((description.properties.rotation ?? 0) * Math.PI) / 180;
+        const dx = at[0] - coords[0][0];
+        const dy = at[1] - coords[0][1];
+        const across = -dx * Math.sin(axis) + dy * Math.cos(axis);
+        // A far more generous threshold than the line families': on these graphics a
+        // handle drag normally means rotate, so the flip has to be a deliberate
+        // excursion rather than anything a rotation could brush past.
+        if (Math.abs(across) < MIRROR_PAST_AXIS_MIN_PX * resolution) return description;
+        const flipped = across < 0;
+        if (flipped === !!description.properties.mirrored) return description;
+        return {...description, properties: {...description.properties, mirrored: flipped}};
+    }
+
     let segment: [ProjectedPosition, ProjectedPosition] = [coords[0], coords[1]];
     let nearest = Infinity;
     for (let i = 0; i < coords.length - 1; i++) {
@@ -424,6 +443,13 @@ export function setMirror(description: GraphicDescription, cursor: Position, res
     if (mirrored === !!description.properties.mirrored) return description;
     return {...description, properties: {...description.properties, mirrored}};
 }
+
+/**
+ * How far past its own axis, in screen pixels, a handle has to be dragged before a
+ * point-anchored graphic flips. Much larger than `MIRROR_FLIP_MIN_PX`, and matching
+ * OpenLayers' constant of the same name. @see setMirror
+ */
+const MIRROR_PAST_AXIS_MIN_PX = 40;
 
 /** Default offset sensitivity — a handle drawn two widths out. @see HandleContract */
 const DEFAULT_OFFSET_SCALE = 0.5;
