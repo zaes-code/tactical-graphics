@@ -47,6 +47,14 @@ export interface HandleContract {
      * on the rail itself tracks the cursor 1:1.
      */
     offsetScale?: number;
+    /**
+     * Every handle past the base's own vertex count is an `offset`.
+     *
+     * For the contracts whose split is not a fixed prefix but a variable one: a
+     * corridor's generator emits `[...vertices, ...tangent points]`, and how many
+     * vertices there are is however many the user drew. @see handleRole
+     */
+    offsetAfterVertices?: boolean;
 }
 
 /** The default: every handle just reshapes, and the mode decides how. */
@@ -170,8 +178,35 @@ export const RANGE_FANS: readonly TacticalGraphicName[] = [
 /** How many leading handles come before the first band's. @see RANGE_FANS */
 export const RANGE_FAN_BAND_OFFSET = 1;
 
+/**
+ * The corridors. Their generator emits `[...base vertices, ...tangent points]`, and
+ * the tail is the **width**: a tangent point sits one radius off the centre line, so
+ * dragging one sets how wide the corridor is.
+ *
+ * The split cannot be written as a fixed prefix, which is what every other contract
+ * here uses — the vertex count is however many points the user drew. So the contract
+ * says "offset after the vertices" and the caller supplies the count.
+ *
+ * `offsetScale` is 1 rather than the shared half: the perpendicular distance from the
+ * centre line to the handle *is* the radius, so it has to track the cursor 1:1 or the
+ * handle runs away from it.
+ */
+const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AirCorridor,
+    TacticalGraphicName.LowLevelTransitRoute,
+    TacticalGraphicName.MinimumRiskRoute,
+    TacticalGraphicName.SafeLane,
+    TacticalGraphicName.SpecialCorridor,
+    TacticalGraphicName.StandardUseArmyAircraftFlightRoute,
+    TacticalGraphicName.TransitCorridor,
+    TacticalGraphicName.UnmannedAircraftCorridor,
+];
+
 /** What each handle of `name` does. */
 export function handleContract(name: TacticalGraphicName): HandleContract {
+    if (CORRIDOR_GRAPHICS.includes(name)) {
+        return {roles: [], repeating: 'shape', offsetAfterVertices: true, offsetScale: 1};
+    }
     if (MOVEMENT_GRAPHICS.includes(name)) {
         return {roles: ['shape', 'shape', 'offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
     }
@@ -187,9 +222,17 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     return SHAPE_ONLY;
 }
 
-/** The role of one handle, or `shape` when the index is past the contract. */
-export function handleRole(name: TacticalGraphicName, index: number): HandleRole {
+/**
+ * The role of one handle, or `shape` when the index is past the contract.
+ *
+ * `vertexCount` — how many points the user drew — is only consulted by the contracts
+ * that split on it, the corridors. Omitting it there leaves every handle `shape`,
+ * which is what MapLibre did: it drew the corridor's width handles and gave them
+ * nothing to do, so a corridor could not be widened in that engine at all.
+ */
+export function handleRole(name: TacticalGraphicName, index: number, vertexCount?: number): HandleRole {
     const contract = handleContract(name);
+    if (contract.offsetAfterVertices && vertexCount !== undefined && index >= vertexCount) return 'offset';
     return contract.roles[index] ?? contract.repeating ?? 'shape';
 }
 
