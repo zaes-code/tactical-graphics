@@ -108,34 +108,52 @@ describe('mirroring', () => {
 });
 
 /**
- * The flip axis, which is per graphic and was got wrong once.
+ * How a pursuit mirrors, which took two wrong turns worth recording.
  *
- * Most of these reflect **across** their own axis — a chevron swaps sides of its route.
- * Pursuit does not: its semicircle bulges east or west of the same axis, so the flip is
- * decided by the along-axis component. Measuring its perpendicular instead meant
- * dragging *north* flipped a graphic that visibly moves *east and west*, which reads as
- * a gesture that does nothing.
+ * It reflects the **whole construction** about its own axis: the P-line moves to the
+ * other side, the hook curls the other way, the arrowhead and its crossbar follow.
+ *
+ * It used to reverse the arc's *sweep* instead, keeping the line and arrowhead put and
+ * sending the arc the long way round through 180°. That produced a backwards C whose
+ * ends no longer met the line and the arrow — a shape that is not a pursuit at all —
+ * and, because the bulge then moved east-to-west rather than across the axis, it also
+ * needed a special along-axis rule to decide the flip. Reflecting properly removed both:
+ * the bulge stays east, and the perpendicular decides it like every other graphic here.
  */
-describe('the mirror axis', () => {
-    it('is along the axis for pursuit and across it for everyone else', () => {
-        expect(handleContract(TacticalGraphicName.Pursuit).mirrorAxis).toBe('along');
+describe('a pursuit reflects about its own axis', () => {
+    const rendered = (mirrored: boolean) =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            geometry: BASES.Point as never,
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit, rotation: 0, radius: 60000, mirrored}},
+        });
+
+    it('needs no special axis — the perpendicular decides it', () => {
         for (const name of mirrorable()) {
-            if (name === TacticalGraphicName.Pursuit) continue;
             expect(handleContract(name as TacticalGraphicName).mirrorAxis).toBeUndefined();
         }
     });
 
-    it('moves pursuit\'s handle with the flip, so it stays on the bulge', () => {
-        const at = (mirrored: boolean) => {
-            const rendered = renderTacticalGraphic({
-                type: 'Feature',
-                geometry: BASES.Point as never,
-                properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit, rotation: 0, radius: 60000, mirrored}},
-            });
-            return (rendered.handles?.geometry as {coordinates: number[][]}).coordinates[1];
+    /** Latitude relative to the anchor — absolute latitude is positive on both sides of it. */
+    const ANCHOR_LAT = (BASES.Point.coordinates as number[])[1];
+
+    it('moves the P-line to the other side of the anchor', () => {
+        // The line is what a reader sees move. At rotation 0 it sits one radius north of
+        // the anchor when unmirrored and one radius south when mirrored.
+        const lineY = (mirrored: boolean) => {
+            const members = (rendered(mirrored).graphic.geometry as {coordinates: number[][][]}).coordinates;
+            return members[0][0][1] - ANCHOR_LAT;
         };
+        expect(Math.sign(lineY(false))).toBe(-Math.sign(lineY(true)));
+    });
+
+    it('carries its label and its mirror handle across with it', () => {
+        const labelY = (mirrored: boolean) => (rendered(mirrored).labels?.geometry as {coordinates: number[]}).coordinates[1] - ANCHOR_LAT;
+        expect(Math.sign(labelY(false))).toBe(-Math.sign(labelY(true)));
+
         // A handle that stays put through a flip can neither show the state nor be
-        // dragged across anything — which is what the P-line's free end used to do.
-        expect(at(true)).not.toEqual(at(false));
+        // dragged across anything.
+        const handleY = (mirrored: boolean) => (rendered(mirrored).handles?.geometry as {coordinates: number[][]}).coordinates[1][1] - ANCHOR_LAT;
+        expect(Math.sign(handleY(false))).toBe(-Math.sign(handleY(true)));
     });
 });

@@ -287,7 +287,7 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     // `[edge, lineStart]` — the start of the hook's cross stroke, which is the part
     // that swaps sides. @see Pursuit.generateHandles
     if (name === TacticalGraphicName.Pursuit) {
-        return {roles: ['shape', 'mirror'], repeating: 'shape', mirrorAxis: 'along'};
+        return {roles: ['shape', 'mirror'], repeating: 'shape'};
     }
     // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
     if (name === TacticalGraphicName.MobileDefense) {
