@@ -509,9 +509,23 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * exact: the run spans `2 * size`, so a quarter along is `0.5 * size` back
      * from the middle.
      */
-    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<Point> {
-        const {center, angle, size} = this.frame(base, opts);
-        return this.asPointFeature(this.at(center, angle, -size * 0.5, 0));
+    /**
+     * **The run's two ends, not the letter's own point.**
+     *
+     * The "E" belongs a quarter of the way along the approach, in the hole the paint
+     * cuts for it. Naming that spot here — geodesically, in 4326 — puts it a little off
+     * the *straight segment* a renderer then draws between the run's reprojected ends,
+     * because 3857's y is not linear in latitude. Measured at 3.5 km off a 4739 km run:
+     * a fraction of a pixel on a small graphic, and growing with every metre you add, so
+     * the letter drifts out of its hole exactly when the graphic gets big.
+     *
+     * Handing over the ends instead lets the paint find the quarter point on the segment
+     * it is actually drawing, in projected metres, which is where the gap is cut too.
+     * Letter and hole then agree by construction at any size and any zoom.
+     * @see envelopmentLabelPaint
+     */
+    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(this.axis(base, opts));
     }
 }
 
