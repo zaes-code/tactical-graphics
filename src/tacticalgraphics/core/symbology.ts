@@ -28,6 +28,8 @@ import {
     getInertHandleColorOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
+    HEIGHT_UNIT_SUFFIX,
+    getHeightUnit,
 } from './config';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
@@ -289,25 +291,27 @@ export const formatDistance = (metres: number): string => {
 };
 
 /**
- * A distance for the **distance amplifier (field AM)**, from metres.
+ * An altitude or height for a label, from whatever the user typed.
  *
- * **Not `formatDistance`, and the difference is doctrinal rather than cosmetic.**
- * FM 1-02.2 defines field AM as "a numeric amplifier that displays a minimum,
- * maximum, or specific distance (range, radius, width, or length) in meters or
- * feet", capped at 7 characters. Kilometres are not one of the two units the field
- * admits — the manual reaches for "km" only once, in the *speed* amplifier's "kph".
- * Table 5-23's air corridor plates render the field as `1200FT`, `300FT`, `1500FT`:
- * an integer, the unit appended, no separators and no decimals.
+ * The number is written in the configured {@link HeightUnit} and the unit is appended,
+ * which is what FM 1-02.2 asks for — fields X and X1 say "measurement units shall be
+ * displayed in the string" — while keeping the input a plain number a host can store,
+ * compare and sort. The plates append it tight: `1500FT`, not `1500 ft`.
  *
- * So a corridor width belongs here and the radius read-out that appears while you
- * drag a circle does not — that one is an editor measurement rather than a symbol's
- * amplifier, and kilometres read better in it.
+ * **Anything non-numeric is shown verbatim**, and that is what keeps the doctrine
+ * whole. A flight level is not a count of feet and a datum is not a unit, so `FL150`,
+ * `1500MSL` and `1500FT AGL` all pass through untouched — restored from a save,
+ * imported from another system, or typed where a host allows it. Formatting them would
+ * destroy the very thing they carry.
  *
- * The 7-character cap governs what a user may type, so it is not enforced on a
- * measured value: truncating a real width would misstate the corridor. Only a
- * corridor past 999,999 m can exceed it.
+ * @see getHeightUnit for why the unit is a host-level setting rather than per symbol.
  */
-export const formatAmplifierDistance = (metres: number): string => `${Math.round(metres)}M`;
+export const formatAltitude = (value: string | number | undefined): string => {
+    if (value === undefined) return '';
+    const text = String(value).trim();
+    const height = Number(text);
+    return text !== '' && Number.isFinite(height) ? `${Math.round(height)}${HEIGHT_UNIT_SUFFIX[getHeightUnit()]}` : text;
+};
 
 /**
  * Graphics that carry a radius a user can read: the circular areas, the arc mission

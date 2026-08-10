@@ -104,6 +104,9 @@ export {default as geometryService} from './core/GeometryService';
 export {
     BASE_FONT_SIZE_PX,
     DEFAULT_LINE_WIDTH,
+    HeightUnit,
+    HEIGHT_UNIT_SUFFIX,
+    getHeightUnit,
     DEFAULT_PALETTE,
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
@@ -181,7 +184,7 @@ export {
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
     formatDistance,
-    formatAmplifierDistance,
+    formatAltitude,
     hasRadiusReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
@@ -302,6 +305,7 @@ export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {baseGeometryFor} from './core/render';
 export {arrowheadMetres, decorationMetres, hasBakedDecoration} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, ratioLockOf, rotationAnchor} from './core/handles';
+export {normalizeDrawnBase} from './core/drawnBase';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,

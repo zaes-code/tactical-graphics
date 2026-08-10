@@ -35,7 +35,7 @@ const DEFAULT_VEE_DEGREES = 90;
  * space comes out the wrong length and the wrong bearing away from the equator, and
  * the V would open by a different angle at every latitude.
  */
-function asVee(coords: Position[]): Position[] {
+export function asVee(coords: Position[]): Position[] {
     if (coords.length >= 3) return coords;
     if (coords.length < 2) return coords;
 
