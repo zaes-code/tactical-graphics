@@ -114,17 +114,19 @@ export function translate(description: GraphicDescription, from: Position, to: P
  */
 export function rotate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
     const centre = toMercator(centreOf(description.geometry) as [number, number]);
-    // The same refusal as `resize`, for the same reason: the angle from a point sitting
-    // on the pivot is the direction of a rounding error. @see PIVOT_GRAB_SHARE
+    // **A grab on the pivot rotates by the direction of the drag**, which is what
+    // OpenLayers does: its start angle there is `atan2(0, 0)` = 0, so the graphic turns
+    // to face wherever the cursor went. Reproduced explicitly rather than left to
+    // `atan2` of a sub-metre vector, which is the direction of a rounding error.
+    // @see PIVOT_GRAB_SHARE
     const [fromX, fromY] = toMercator([from[0], from[1]]);
-    if (Math.hypot(fromX - centre[0], fromY - centre[1]) <= PIVOT_GRAB_SHARE * spanOf(description.geometry)) {
-        return description;
-    }
+    const onPivot = Math.hypot(fromX - centre[0], fromY - centre[1]) <= PIVOT_GRAB_SHARE * spanOf(description.geometry);
     const angleTo = (position: Position) => {
         const [x, y] = toMercator([position[0], position[1]]);
         return Math.atan2(y - centre[1], x - centre[0]);
     };
-    const delta = angleTo(to) - angleTo(from);
+    // Zero when the grab was on the pivot, matching OpenLayers' `atan2(0, 0)`.
+    const delta = angleTo(to) - (onPivot ? 0 : angleTo(from));
     if (!isFinite(delta) || delta === 0) return description;
 
     if (description.geometry.type === 'Point') {

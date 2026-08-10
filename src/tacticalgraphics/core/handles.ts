@@ -388,6 +388,27 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.RearwardPassageOfLines]: 2,
 };
 
+/**
+ * The base vertex that **moves the graphic instead of reshaping it**.
+ *
+ * Fields of fire is the only one today: its apex. Dragging the apex under a reshape
+ * would bend the V about a point the user thinks of as its origin, so OpenLayers
+ * makes that vertex inert in modify mode and leaves moving to translate — the same
+ * contract the inert centre dot has on a point-anchored graphic.
+ *
+ * It was the third argument to `vertexLine` in the OpenLayers registry, so MapLibre
+ * did not know: measured on a fields of fire in modify mode, dragging the apex was
+ * inert in OpenLayers and reshaped the graphic in MapLibre.
+ */
+const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.FieldsOfFire]: 1,
+};
+
+/** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
+export function anchorVertex(name: TacticalGraphicName): number | undefined {
+    return ANCHOR_VERTEX[name];
+}
+
 /** How many points this graphic's base takes, or `undefined` for no limit. */
 export function baseVertexCount(name: TacticalGraphicName): number | undefined {
     return BASE_VERTEX_COUNT[name];
