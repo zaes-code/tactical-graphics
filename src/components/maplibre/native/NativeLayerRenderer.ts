@@ -23,6 +23,7 @@ import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
     handleLayer,
+    vertexHintLayer,
     iconLayer,
     patternFillLayer,
     measureLabelLayer,
@@ -133,6 +134,8 @@ const HANDLE_RADIUS_PX = 5;
 const SKETCH_WIDTH_PX = 2;
 /** The radius read-out's layers and its dash, in screen pixels. @see setMeasure */
 export const MEASURE_LAYER_ID = 'tg-measure';
+/** The "a drag here adds a vertex" marker. @see setVertexHint */
+export const VERTEX_HINT_LAYER_ID = 'tg-vertex-hint';
 export const MEASURE_LABEL_LAYER_ID = 'tg-measure-label';
 const MEASURE_DASH = [8, 6];
 
@@ -185,6 +188,8 @@ export class NativeLayerRenderer {
     private sketch: ProjectedPosition[] | null = null;
     /** The radius read-out line, centre to rim, while a graphic is sized. @see setMeasure */
     private measure: [ProjectedPosition, ProjectedPosition] | null = null;
+    /** Where a drag would add a vertex, while the cursor hovers a segment. @see setVertexHint */
+    private vertexHint: ProjectedPosition | null = null;
     /** Icon names already handed to `loadImage`, so each is rasterised once. */
     private readonly registeredIcons = new Set<string>();
     /** Rasterised width per icon, for turning a wanted size into `icon-size`. */
@@ -249,7 +254,7 @@ export class NativeLayerRenderer {
         if (this.installed) return;
         this.map.setGlyphs(GLYPHS_URL);
 
-        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure']) {
+        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
@@ -269,6 +274,9 @@ export class NativeLayerRenderer {
         this.map.addLayer(sketchLayer(MEASURE_LAYER_ID, SOURCE_PREFIX + 'measure', MEASURE_DASH, LINE_WIDTH()));
         this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', FONT_STACK));
         this.map.addLayer(handleLayer(HANDLE_LAYER_ID, SOURCE_PREFIX + 'handles'));
+        // Above the handles: it marks the vertex a drag would create, and a real handle
+        // sitting on top of that offer would hide it. @see setVertexHint
+        this.map.addLayer(vertexHintLayer(VERTEX_HINT_LAYER_ID, SOURCE_PREFIX + 'vertexHint'));
         this.installed = true;
     }
 
@@ -538,6 +546,21 @@ export class NativeLayerRenderer {
         this.realiseEditorMarks();
     }
 
+    /**
+     * Marks where a drag would add a vertex, or clears the mark.
+     *
+     * Called on every pointer move in modify mode, so it returns early when nothing
+     * changed: repainting the editor marks on each mousemove would rebuild the handle
+     * source hundreds of times a second for a dot that has not moved.
+     */
+    setVertexHint(position: ProjectedPosition | null): void {
+        const same = this.vertexHint === position
+            || (!!this.vertexHint && !!position && this.vertexHint[0] === position[0] && this.vertexHint[1] === position[1]);
+        if (same) return;
+        this.vertexHint = position;
+        this.realiseEditorMarks();
+    }
+
     /** Sets the line being drawn, or clears it. Repaints only the editor chrome. */
     setSketch(points: ProjectedPosition[] | null): void {
         this.sketch = points && points.length ? points : null;
@@ -657,6 +680,14 @@ export class NativeLayerRenderer {
                 },
             }));
         }));
+
+        this.setData('vertexHint', this.vertexHint
+            ? [{
+                type: 'Feature' as const,
+                geometry: {type: 'Point' as const, coordinates: toLonLat(this.vertexHint)},
+                properties: {},
+            }]
+            : []);
 
         this.setData('measure', this.measure
             ? [{

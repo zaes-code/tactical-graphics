@@ -70,16 +70,29 @@ const VERTEX_GRAB_PX = 10;
  */
 const SEGMENT_GRAB_PX = 8;
 
-/** Distance from a point to a line segment, in screen pixels. */
-function distanceToSegment(p: {x: number; y: number}, a: {x: number; y: number}, b: {x: number; y: number}): number {
+/**
+ * The nearest point on a line segment to `p`, and how far away it is — all in screen
+ * pixels.
+ *
+ * The point is what the hover hint is drawn at: OpenLayers shows the vertex you would
+ * create sliding along the geometry under the cursor, so it has to be the projection
+ * onto the segment rather than the cursor itself.
+ */
+function closestPointOnSegment(
+    p: {x: number; y: number},
+    a: {x: number; y: number},
+    b: {x: number; y: number},
+): {distance: number; x: number; y: number} {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const lengthSquared = dx * dx + dy * dy;
-    // A degenerate segment is a point, and the distance to it is the distance to either end.
-    if (lengthSquared === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    // A degenerate segment is a point, and the nearest point on it is that point.
+    if (lengthSquared === 0) return {distance: Math.hypot(p.x - a.x, p.y - a.y), x: a.x, y: a.y};
 
     const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared));
-    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    const x = a.x + t * dx;
+    const y = a.y + t * dy;
+    return {distance: Math.hypot(p.x - x, p.y - y), x, y};
 }
 
 /**
@@ -178,6 +191,9 @@ export class MapLibreInteractions {
         map.on('mouseup', this.onPointerUp);
         map.on('click', this.onClick);
         map.on('dblclick', this.onDoubleClick);
+        // A hint left behind when the cursor leaves the map offers an edit at a place
+        // the pointer is no longer near. @see updateVertexHint
+        map.on('mouseout', this.onMouseOut);
         // `keydown` is not a map event — the canvas has to be focusable for it, and
         // it is simpler to listen on the document than to manage focus.
         document.addEventListener('keydown', this.onKeyDown);
@@ -189,6 +205,7 @@ export class MapLibreInteractions {
         this.map.off('mouseup', this.onPointerUp);
         this.map.off('click', this.onClick);
         this.map.off('dblclick', this.onDoubleClick);
+        this.map.off('mouseout', this.onMouseOut);
         document.removeEventListener('keydown', this.onKeyDown);
     }
 
@@ -197,6 +214,9 @@ export class MapLibreInteractions {
     setMode(mode: EditMode): void {
         this.cancelDraw();
         this.mode = mode;
+        // The hint belongs to modify alone, and a stale one left behind would offer an
+        // edit the new mode does not perform. @see updateVertexHint
+        this.renderer.setVertexHint(null);
         // Every graphic wears its handles in a handle-bearing mode and none in view,
         // which is what the OpenLayers manager does on the same button.
         // @see NativeLayerRenderer.setHandleMode
@@ -294,6 +314,10 @@ export class MapLibreInteractions {
 
         this.renderer.setSketch(this.sketch.map(p => toMercator([p[0], p[1]])));
     }
+
+    private readonly onMouseOut = (): void => {
+        this.renderer.setVertexHint(null);
+    };
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
         if (!this.drawing) return;
@@ -470,7 +494,11 @@ export class MapLibreInteractions {
         }
 
         const drag = this.dragging;
-        if (!drag) return;
+        if (!drag) {
+            // Nothing held: the pointer is only shopping, so show where a vertex would go.
+            this.updateVertexHint(event.point);
+            return;
+        }
 
         if (!drag.started) {
             const moved = Math.hypot(event.point.x - drag.startPixel.x, event.point.y - drag.startPixel.y);
@@ -674,18 +702,67 @@ export class MapLibreInteractions {
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return -1;
 
-        let best = -1;
+        return this.nearestSegment(graphic, point)?.index ?? -1;
+    }
+
+    /**
+     * The insertable segment nearest the cursor, with the point a new vertex would
+     * land on — or undefined when there is none within reach.
+     *
+     * Shared by the grab and the hover hint on purpose: the marker has to appear at
+     * exactly the place the drag would act, or it promises something the gesture does
+     * not deliver.
+     */
+    private nearestSegment(
+        graphic: MapLibreTacticalGraphic,
+        point: {x: number; y: number},
+    ): {index: number; position: Position} | undefined {
+        const positions = positionsOf(graphic.base.geometry);
+        if (positions.length < 2) return undefined;
+
+        let best: {index: number; position: Position} | undefined;
         let bestDistance = SEGMENT_GRAB_PX;
         for (let i = 1; i < positions.length; i++) {
             const a = this.map.project([positions[i - 1][0], positions[i - 1][1]]);
             const b = this.map.project([positions[i][0], positions[i][1]]);
-            const distance = distanceToSegment(point, a, b);
-            if (distance <= bestDistance) {
-                bestDistance = distance;
-                best = i;
+            const near = closestPointOnSegment(point, a, b);
+            if (near.distance <= bestDistance) {
+                bestDistance = near.distance;
+                const lngLat = this.map.unproject([near.x, near.y]);
+                best = {index: i, position: [lngLat.lng, lngLat.lat]};
             }
         }
         return best;
+    }
+
+    /**
+     * Shows or hides the marker for the vertex a drag here would create.
+     *
+     * OpenLayers' Modify draws one by default — a blue dot that slides along the
+     * geometry under the cursor — and it is the only thing that says the gesture is
+     * available at all. Without it a user has to discover that dragging a line adds a
+     * point by trying it, which is how MapLibre felt: the capability existed and
+     * nothing announced it.
+     *
+     * Only in `modify`, only when not already dragging, and only over a graphic that
+     * accepts a new vertex — so it never promises an edit that would be refused.
+     * @see grabSegment for which graphics those are
+     */
+    private updateVertexHint(point: {x: number; y: number}): void {
+        if (this.mode !== 'modify' || this.dragging || this.drawing) {
+            this.renderer.setVertexHint(null);
+            return;
+        }
+
+        const graphic = this.renderer.hitTest(point) ?? (this.renderer.selection ? this.renderer.find(this.renderer.selection) : undefined);
+        // A cursor already on a vertex means moving that one, not making another —
+        // the same order of precedence the grab uses.
+        if (!graphic || this.grabSegment(graphic, point) < 0 || this.grabVertex(graphic, point) >= 0) {
+            this.renderer.setVertexHint(null);
+            return;
+        }
+
+        this.renderer.setVertexHint(toMercator(this.nearestSegment(graphic, point)!.position as [number, number]));
     }
 
     private grabVertex(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
