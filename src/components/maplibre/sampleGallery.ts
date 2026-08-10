@@ -105,8 +105,18 @@ function hostilityFor(
  * Grouped so the sweep reads the way the OpenLayers gallery does — related symbols
  * adjacent — but without that gallery's measured packing, which is tied to
  * OpenLayers extents. A plain grid is enough for "what can this renderer draw".
+ *
+ * **`drawingResolution` is not optional in practice**, for the same reason it is not
+ * on the draw path: a graphic whose every dimension is a screen constant has no size
+ * without it. Omitting it built Cover, Guard and Screen from `SAMPLE_RADIUS_M` — a
+ * ground distance — so each came out 34px across instead of 410, and then snapped to
+ * the right size on the first zoom, when `rebuildScreenSized` re-derived it from the
+ * live map. @see securityOperationSize
  */
-export function buildSampleGraphics(hostility?: TacticalGraphicHostility): {
+export function buildSampleGraphics(
+    hostility?: TacticalGraphicHostility,
+    drawingResolution?: number,
+): {
     graphics: MapLibreTacticalGraphic[];
     report: MapLibreSampleReport;
 } {
@@ -133,7 +143,7 @@ export function buildSampleGraphics(hostility?: TacticalGraphicHostility): {
                 // circular-area samples were missing until this was passed.
                 rotation: 0,
                 ...hostilityFor(name, hostility),
-            }))
+            }, drawingResolution))
             .find(Boolean);
 
         if (built) graphics.push(built);

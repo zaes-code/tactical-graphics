@@ -250,7 +250,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 const target = renderer();
                 if (!target) return;
                 target.clear();
-                const {graphics} = buildSampleGraphics(hostility);
+                const {graphics} = buildSampleGraphics(hostility, resolutionOf(map));
                 graphics.forEach(g => target.add(g));
             },
             refreshStyles: () => renderer()?.realise(),
