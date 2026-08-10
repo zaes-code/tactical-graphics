@@ -461,7 +461,14 @@ export function measureLabelLayer(id: string, source: string, fontStack: string)
             'text-field': ['get', 'label'],
             'text-font': [fontStack],
             'text-size': MEASURE_LABEL_PX,
-            'symbol-placement': 'line',
+            // **Point placement on a midpoint feature, not a line placement.** Both of
+            // MapLibre's line placements refuse a label that does not fit inside the
+            // geometry's length, which silently dropped the read-out on every small
+            // radius; and plain `line` spaced labels 250 px apart from a half-spacing
+            // offset, which put the single label near the rim. A point always draws and
+            // is exactly halfway. @see measureFeatures
+            'text-rotate': ['get', 'rotation'],
+            'text-rotation-alignment': 'map',
             'text-offset': [0, -0.6],
             'text-allow-overlap': true,
             'text-ignore-placement': true,

@@ -1,4 +1,4 @@
-import type {FeatureCollection} from 'geojson';
+import type {Feature, FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import {
     TacticalGraphicHostility,
@@ -689,21 +689,7 @@ export class NativeLayerRenderer {
             }]
             : []);
 
-        this.setData('measure', this.measure
-            ? [{
-                type: 'Feature' as const,
-                geometry: {type: 'LineString' as const, coordinates: this.measure.map(toLonLat)},
-                properties: {
-                    color: getInertHandleColor(),
-                    label: formatDistance(Math.hypot(
-                        this.measure[1][0] - this.measure[0][0],
-                        this.measure[1][1] - this.measure[0][1],
-                    )),
-                    labelColor: getLabelFillColor(),
-                    haloColor: getLabelHaloColor(),
-                },
-            }]
-            : []);
+        this.setData('measure', this.measure ? measureFeatures(this.measure) : []);
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{
@@ -904,4 +890,54 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
  */
 function isScreenSized(name: TacticalGraphicName): boolean {
     return SECURITY_OPERATIONS.has(name) || hasBakedDecoration(name);
+}
+
+/**
+ * The radius read-out, as the dashed line and **a separate point for its label**.
+ *
+ * The label is not laid along the line, and that is the whole point of this function.
+ * MapLibre's line placements — `line` and `line-center` alike — refuse a label that
+ * does not fit within the geometry's own length, so the read-out silently vanished on
+ * exactly the radii a user most wants it for: measured on a fresh map, "30 km",
+ * "120 km" and "400 km" all failed to render and only a 1200 km radius appeared. Plain
+ * `line` was worse still, spacing labels every 250 px from a half-spacing offset, which
+ * put the one label near the rim instead of the middle.
+ *
+ * A point at the midpoint has neither problem. It always draws, it is exactly halfway,
+ * and `text-rotate` lays it along the line — which is what OpenLayers' `placement:
+ * 'line'` produces and what the read-out has always looked like there.
+ */
+function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition]): Feature[] {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+
+    // **The angle from horizontal, not a compass bearing.** `text-rotate` turns the
+    // glyphs clockwise from ordinary left-to-right, so an east-west line wants 0 — a
+    // bearing would call that 90 and stand the read-out on end. Negated because these
+    // are projected metres, where y runs north, while a clockwise screen rotation runs
+    // the other way.
+    let rotation = -(Math.atan2(dy, dx) * 180) / Math.PI;
+    // Kept upright: past a quarter turn either way the text would read upside down, and
+    // a half turn puts it the right way up along the very same line.
+    if (rotation > 90) rotation -= 180;
+    if (rotation < -90) rotation += 180;
+
+    const shared = {
+        color: getInertHandleColor(),
+        labelColor: getLabelFillColor(),
+        haloColor: getLabelHaloColor(),
+    };
+
+    return [
+        {
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [from, to].map(toLonLat)},
+            properties: shared,
+        },
+        {
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: toLonLat([from[0] + dx / 2, from[1] + dy / 2])},
+            properties: {...shared, label: formatDistance(Math.hypot(dx, dy)), rotation},
+        },
+    ];
 }
