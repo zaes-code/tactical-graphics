@@ -45,6 +45,7 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
     fontStyle,
+    formatDistance,
     getColorByHostility,
     getDefaultLineColor,
     getDoctrinalHostilityColor,
@@ -60,6 +61,7 @@ import {
 } from '@zaes/tactical-graphics';
 
 export {
+    formatDistance,
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
     LINE_WIDTH,
@@ -464,11 +466,7 @@ export const HANDLE_Z_INDEX = 1000;
  * Exported so the measure line and the properties dialog cannot drift apart; they are
  * reporting the same quantity and a user will compare them.
  */
-export const formatDistance = (metres: number): string => {
-    if (metres < 1000) return `${Math.round(metres)} m`;
-    const km = metres / 1000;
-    return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
-};
+
 
 /**
  * The radius read-out shown while a circular graphic is drawn or resized: a hashed line

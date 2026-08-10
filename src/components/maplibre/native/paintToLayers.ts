@@ -413,6 +413,39 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
  * handles the same red as its own strokes, so they stopped reading as handles.
  * @see createHandleFeature, which makes the same argument on the OpenLayers side.
  */
+/**
+ * The radius read-out's text, laid **along** the measure line.
+ *
+ * `symbol-placement: 'line'` is what OpenLayers' `placement: 'line'` does: the text
+ * takes the line's own angle and stays upright relative to it as the user swings the
+ * handle round, with no rotation to compute and none to keep in step.
+ */
+export function measureLabelLayer(id: string, source: string, fontStack: string): LayerSpecification {
+    return {
+        id,
+        type: 'symbol',
+        source,
+        layout: {
+            'text-field': ['get', 'label'],
+            'text-font': [fontStack],
+            'text-size': MEASURE_LABEL_PX,
+            'symbol-placement': 'line',
+            'text-offset': [0, -0.6],
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
+        },
+        paint: {
+            'text-color': ['get', 'labelColor'],
+            'text-halo-color': ['get', 'haloColor'],
+            'text-halo-width': MEASURE_HALO_PX,
+        },
+    };
+}
+
+/** Rendered size of the read-out, matching `fontStyle`'s 16px base. */
+const MEASURE_LABEL_PX = 16;
+const MEASURE_HALO_PX = 3;
+
 export function handleLayer(id: string, source: string): LayerSpecification {
     return {
         id,
