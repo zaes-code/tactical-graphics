@@ -106,3 +106,36 @@ describe('mirroring', () => {
         expect(handleRole(TacticalGraphicName.PhaseLine, 0)).toBe('shape');
     });
 });
+
+/**
+ * The flip axis, which is per graphic and was got wrong once.
+ *
+ * Most of these reflect **across** their own axis — a chevron swaps sides of its route.
+ * Pursuit does not: its semicircle bulges east or west of the same axis, so the flip is
+ * decided by the along-axis component. Measuring its perpendicular instead meant
+ * dragging *north* flipped a graphic that visibly moves *east and west*, which reads as
+ * a gesture that does nothing.
+ */
+describe('the mirror axis', () => {
+    it('is along the axis for pursuit and across it for everyone else', () => {
+        expect(handleContract(TacticalGraphicName.Pursuit).mirrorAxis).toBe('along');
+        for (const name of mirrorable()) {
+            if (name === TacticalGraphicName.Pursuit) continue;
+            expect(handleContract(name as TacticalGraphicName).mirrorAxis).toBeUndefined();
+        }
+    });
+
+    it('moves pursuit\'s handle with the flip, so it stays on the bulge', () => {
+        const at = (mirrored: boolean) => {
+            const rendered = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: BASES.Point as never,
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit, rotation: 0, radius: 60000, mirrored}},
+            });
+            return (rendered.handles?.geometry as {coordinates: number[][]}).coordinates[1];
+        };
+        // A handle that stays put through a flip can neither show the state nor be
+        // dragged across anything — which is what the P-line's free end used to do.
+        expect(at(true)).not.toEqual(at(false));
+    });
+});

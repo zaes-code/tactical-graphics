@@ -331,9 +331,14 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         };
 
         const arrowTip = at(0, -r);
-        const lineStart = at(-2.4 * r, r);
+        // **On the bulge, and it moves with the flip.** The mirror swaps which way the
+        // semicircle sweeps — east for an unmirrored graphic, west for a mirrored one —
+        // so the handle sits at the middle of the current arc. The P-line's free end,
+        // which this used to be, does not move when the graphic flips, so a handle there
+        // could neither show the state nor be dragged across anything.
+        const bulge = at(opts.mirrored ? -r : r, 0);
 
-        return this.asMultiPointFeature([arrowTip, lineStart]);
+        return this.asMultiPointFeature([arrowTip, bulge]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
