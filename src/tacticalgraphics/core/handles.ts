@@ -284,10 +284,13 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (name === TacticalGraphicName.Abatis) {
         return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
     }
-    // `[edge, lineStart]` — the start of the hook's cross stroke, which is the part
-    // that swaps sides. @see Pursuit.generateHandles
+    // **First, like the retrograde tasks.** A pursuit's hook is its cane: the part that
+    // hangs off the line and swaps sides when the graphic reflects. Its generator emits
+    // that end first, so the mirror handle is index 0 here for the same reason it is
+    // there, and a user reaches for the same place on every graphic that flips.
+    // @see Pursuit.generateHandles
     if (name === TacticalGraphicName.Pursuit) {
-        return {roles: ['shape', 'mirror'], repeating: 'shape'};
+        return {roles: ['mirror', 'shape'], repeating: 'shape'};
     }
     // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
     if (name === TacticalGraphicName.MobileDefense) {

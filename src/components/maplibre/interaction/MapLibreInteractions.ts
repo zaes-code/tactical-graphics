@@ -117,6 +117,9 @@ const DRAG_THRESHOLD_PX = 3;
 /** Default size for a point-anchored graphic, in metres, when one is drawn fresh. */
 const DEFAULT_RADIUS_METRES = 40_000;
 
+/** Below this the second draw click landed on the anchor and carries no size. */
+const MIN_DRAWN_RADIUS_M = 1;
+
 export interface InteractionCallbacks {
     /** A graphic was added, edited or removed — the host may want to save. */
     onChange?(): void;
@@ -250,6 +253,8 @@ export class MapLibreInteractions {
         this.drawing = null;
         this.sketch = [];
         this.renderer.setSketch(null);
+        // An abandoned sizing click would otherwise leave its read-out on the map.
+        this.renderer.setMeasure(null);
         this.map.doubleClickZoom.enable();
         this.callbacks.onDrawEnd?.();
     }
@@ -280,7 +285,25 @@ export class MapLibreInteractions {
 
         const wants = baseGeometryFor(name);
         if (wants === 'Point') {
-            this.finishDraw([position]);
+            // **A graphic that can be resized is sized by the draw**, in two clicks: the
+            // first plants the anchor, the second sets how far out it reaches and which
+            // way it faces. That is what OpenLayers does — its point-anchored graphics
+            // draw through a Circle interaction whose radius the gesture supplies — and
+            // finishing on the first click instead dropped every one of them at a fixed
+            // default. At a typical zoom that is a symbol a few pixels across, with its
+            // handles piled on top of each other and nothing grabbable.
+            //
+            // A fixed-size symbol takes the first click and is done: there is no size for
+            // a second click to give it. @see allowedGestures
+            if (!allowedGestures(name).resize) {
+                this.finishDraw([position]);
+                return;
+            }
+            if (!this.sketch.length) {
+                this.sketch.push(position);
+                return;
+            }
+            this.finishDraw([this.sketch[0], position]);
             return;
         }
 
@@ -358,6 +381,33 @@ export class MapLibreInteractions {
         if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
     }
 
+    /**
+     * The size and bearing a point-anchored draw supplies, from its two clicks.
+     *
+     * The second click is a point on the rim: how far it is from the anchor is the
+     * radius, and the direction it lies in is the graphic's bearing — both read exactly
+     * as OpenLayers reads them off a Circle sketch. Planar, in projected metres, which is
+     * also the frame `rotation` is expressed in: degrees counter-clockwise from east, not
+     * a compass bearing.
+     *
+     * Falls back to the default for a one-click draw, so a fixed-size symbol is
+     * unaffected and a cancelled sizing click cannot leave a graphic with no size at all.
+     */
+    private sizeFromDraw(wants: string | undefined, vertices: Position[]): {radius: number; rotation: number} {
+        if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METRES, rotation: 0};
+
+        const centre = toMercator([vertices[0][0], vertices[0][1]]);
+        const rim = toMercator([vertices[1][0], vertices[1][1]]);
+        const dx = rim[0] - centre[0];
+        const dy = rim[1] - centre[1];
+        const radius = Math.hypot(dx, dy);
+
+        // A click on the anchor carries no size and no direction; the default is better
+        // than a graphic with a radius of nothing.
+        if (radius < MIN_DRAWN_RADIUS_M) return {radius: DEFAULT_RADIUS_METRES, rotation: 0};
+        return {radius, rotation: (Math.atan2(dy, dx) * 180) / Math.PI};
+    }
+
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
         if (!this.drawing) return;
         event.preventDefault();
@@ -414,6 +464,7 @@ export class MapLibreInteractions {
     private finishDraw(vertices: Position[]): void {
         const name = this.drawing;
         if (!name) return;
+        this.renderer.setMeasure(null);
 
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
@@ -429,8 +480,7 @@ export class MapLibreInteractions {
             // The generators need both, and neither has a safe absent value: `rotation`
             // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
             // no radius has no size at all. @see maplibreAdapter
-            radius: DEFAULT_RADIUS_METRES,
-            rotation: 0,
+            ...this.sizeFromDraw(wants, vertices),
         };
 
         const graphic = buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
@@ -524,9 +574,17 @@ export class MapLibreInteractions {
             // A rubber band to the cursor, so the user can see the segment they are
             // about to commit rather than only the ones they already have.
             if (this.sketch.length) {
+                const centre = toMercator([this.sketch[0][0], this.sketch[0][1]]);
+                const cursor = toMercator([event.lngLat.lng, event.lngLat.lat]);
                 this.renderer.setSketch(
                     [...this.sketch, [event.lngLat.lng, event.lngLat.lat]].map(p => toMercator([p[0], p[1]])),
                 );
+                // Sizing a point-anchored graphic reads out the radius as it goes, the
+                // way a resize does — the second click is otherwise blind, and the number
+                // it is about to commit is the whole point of the gesture.
+                if (baseGeometryFor(this.drawing) === 'Point' && hasRadiusReadout(this.drawing)) {
+                    this.renderer.setMeasure([centre, cursor]);
+                }
             }
             return;
         }

@@ -72,9 +72,16 @@ describe('mirroring', () => {
         }
     });
 
-    it('puts the other three where their own generators emit one', () => {
+    it('puts pursuit on its hook, first, like the retrograde tasks', () => {
+        // The hook is a pursuit's cane — the part that hangs off the line and swaps
+        // sides — and its generator emits that end first. A user reaching to flip a
+        // graphic should find the handle in the same place on all of them.
+        expect(handleRole(TacticalGraphicName.Pursuit, 0)).toBe('mirror');
+        expect(handleRole(TacticalGraphicName.Pursuit, 1)).toBe('shape');
+    });
+
+    it('puts the other two where their own generators emit one', () => {
         expect(handleRole(TacticalGraphicName.Abatis, 2)).toBe('mirror');
-        expect(handleRole(TacticalGraphicName.Pursuit, 1)).toBe('mirror');
         expect(handleRole(TacticalGraphicName.MobileDefense, 1)).toBe('mirror');
     });
 
@@ -153,7 +160,7 @@ describe('a pursuit reflects about its own axis', () => {
 
         // A handle that stays put through a flip can neither show the state nor be
         // dragged across anything.
-        const handleY = (mirrored: boolean) => (rendered(mirrored).handles?.geometry as {coordinates: number[][]}).coordinates[1][1] - ANCHOR_LAT;
+        const handleY = (mirrored: boolean) => (rendered(mirrored).handles?.geometry as {coordinates: number[][]}).coordinates[0][1] - ANCHOR_LAT;
         expect(Math.sign(handleY(false))).toBe(-Math.sign(handleY(true)));
     });
 });
