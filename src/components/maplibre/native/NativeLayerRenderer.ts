@@ -5,7 +5,11 @@ import {
     TacticalGraphicName,
     getDrawMarkerColor,
     getHandleColor,
+    LINE_WIDTH,
+    formatDistance,
     getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
     getSecuritySymbolSize,
     hasBakedDecoration,
     resolveSecuritySymbol,
@@ -21,6 +25,7 @@ import {
     handleLayer,
     iconLayer,
     patternFillLayer,
+    measureLabelLayer,
     sketchLayer,
     emptyBuckets,
     circleLayer,
@@ -126,6 +131,11 @@ const MID_GESTURE_MIN_INTERVAL_MS = 120;
 const HANDLE_RADIUS_PX = 5;
 /** Width of the sketch line while a graphic is being drawn. */
 const SKETCH_WIDTH_PX = 2;
+/** The radius read-out's layers and its dash, in screen pixels. @see setMeasure */
+export const MEASURE_LAYER_ID = 'tg-measure';
+export const MEASURE_LABEL_LAYER_ID = 'tg-measure-label';
+const MEASURE_DASH = [8, 6];
+
 /** Dash of that sketch line, in pixels — a drawing is not a graphic yet. */
 const SKETCH_DASH = [4, 4];
 
@@ -173,6 +183,8 @@ export class NativeLayerRenderer {
     private selectedId: string | null = null;
     /** The line being drawn, in projected metres, or null when not drawing. */
     private sketch: ProjectedPosition[] | null = null;
+    /** The radius read-out line, centre to rim, while a graphic is sized. @see setMeasure */
+    private measure: [ProjectedPosition, ProjectedPosition] | null = null;
     /** Icon names already handed to `loadImage`, so each is rasterised once. */
     private readonly registeredIcons = new Set<string>();
     /** Rasterised width per icon, for turning a wanted size into `icon-size`. */
@@ -237,7 +249,7 @@ export class NativeLayerRenderer {
         if (this.installed) return;
         this.map.setGlyphs(GLYPHS_URL);
 
-        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch']) {
+        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
@@ -251,6 +263,11 @@ export class NativeLayerRenderer {
         // that list is what a click hit-tests against to find a *graphic*, and a
         // handle is not one — the interaction layer queries these by name instead.
         this.map.addLayer(sketchLayer(SKETCH_LAYER_ID, SOURCE_PREFIX + 'sketch', SKETCH_DASH, SKETCH_WIDTH_PX));
+        // The radius read-out: a hashed line in the inert-handle colour, with the
+        // distance laid **along** it so it picks up the line's own angle. Same shape as
+        // OpenLayers' `createMeasureFeature`. @see setMeasure
+        this.map.addLayer(sketchLayer(MEASURE_LAYER_ID, SOURCE_PREFIX + 'measure', MEASURE_DASH, LINE_WIDTH()));
+        this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', FONT_STACK));
         this.map.addLayer(handleLayer(HANDLE_LAYER_ID, SOURCE_PREFIX + 'handles'));
         this.installed = true;
     }
@@ -496,6 +513,23 @@ export class NativeLayerRenderer {
         return this.selectedId;
     }
 
+    /**
+     * Shows the radius read-out, or clears it.
+     *
+     * A hashed line from the centre to the rim with the distance on it, drawn while a
+     * circular graphic is sized — the same chrome as OpenLayers' measure feature, and
+     * deliberately the same words: both call `formatDistance`, so the read-out, the
+     * other renderer's read-out and the properties dialog cannot disagree about a
+     * number the user is comparing.
+     *
+     * Editor chrome, so it lives in its own source rather than in the paint buckets:
+     * it must never reach `snapshot`, a sample sweep or a restored map.
+     */
+    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null): void {
+        this.measure = line;
+        this.realiseEditorMarks();
+    }
+
     /** Sets the line being drawn, or clears it. Repaints only the editor chrome. */
     setSketch(points: ProjectedPosition[] | null): void {
         this.sketch = points && points.length ? points : null;
@@ -606,6 +640,22 @@ export class NativeLayerRenderer {
                 },
             }));
         }));
+
+        this.setData('measure', this.measure
+            ? [{
+                type: 'Feature' as const,
+                geometry: {type: 'LineString' as const, coordinates: this.measure.map(toLonLat)},
+                properties: {
+                    color: getInertHandleColor(),
+                    label: formatDistance(Math.hypot(
+                        this.measure[1][0] - this.measure[0][0],
+                        this.measure[1][1] - this.measure[0][1],
+                    )),
+                    labelColor: getLabelFillColor(),
+                    haloColor: getLabelHaloColor(),
+                },
+            }]
+            : []);
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{

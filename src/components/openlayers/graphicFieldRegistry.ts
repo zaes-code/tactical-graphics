@@ -11,7 +11,7 @@
  * every TacticalGraphicName is covered at compile time.
  */
 
-import { TacticalGraphicName, supportsHostility} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, hasRadiusReadout, supportsHostility} from '@zaes/tactical-graphics';
 
 // ── Public type ───────────────────────────────────────────────────────────────
 
@@ -519,38 +519,9 @@ export {supportsHostility};
  * report the same quantity, and a graphic showing a radius in one place but not the other
  * would read as a bug.
  */
-const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
-    TacticalGraphicName.AreaDefense,
-    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
-    TacticalGraphicName.BaseDefenseZone,
-    TacticalGraphicName.BlueKillBoxCircular,
-    TacticalGraphicName.CallForFireZoneCircular,
-    TacticalGraphicName.CensorZoneCircular,
-    TacticalGraphicName.Contain,
-    TacticalGraphicName.Control,
-    TacticalGraphicName.CordonAndSearch,
-    TacticalGraphicName.CriticalFriendlyZoneCircular,
-    TacticalGraphicName.DeadSpaceAreaCircular,
-    TacticalGraphicName.FightingPosition,
-    TacticalGraphicName.FireSupportAreaCircular,
-    TacticalGraphicName.FreeFireAreaCircular,
-    TacticalGraphicName.Isolate,
-    TacticalGraphicName.MovementToContact,
-    TacticalGraphicName.NoFireAreaCircular,
-    TacticalGraphicName.Occupy,
-    TacticalGraphicName.PositionAreaArtilleryCircular,
-    TacticalGraphicName.PurpleKillBoxCircular,
-    TacticalGraphicName.RestrictiveFireAreaCircular,
-    TacticalGraphicName.Retain,
-    TacticalGraphicName.Secure,
-    TacticalGraphicName.TargetAreaCircular,
-    TacticalGraphicName.WeaponSensorRangeFanCircular,
-    TacticalGraphicName.WeaponSensorRangeFanSector,
-]);
 
 export function getGraphicFields(name: TacticalGraphicName): GraphicFieldSet {
     const base = GRAPHIC_FIELDS[name] ?? f(true, false, false, false, false);
     // Both are decided centrally rather than per entry — same reasoning as `hostility`.
-    return {...base, hostility: supportsHostility(name), radius: RADIUS_GRAPHICS.has(name)};
+    return {...base, hostility: supportsHostility(name), radius: hasRadiusReadout(name)};
 }

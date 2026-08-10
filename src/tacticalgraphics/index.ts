@@ -179,6 +179,9 @@ export {
     allowedGestures,
     supportsHostility,
     CROSSED_MISSION_TASKS,
+    RADIUS_GRAPHICS,
+    formatDistance,
+    hasRadiusReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
 } from './core/symbology';
