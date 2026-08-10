@@ -398,7 +398,12 @@ export function setOffset(
  * The threshold is the same one, and for the same reason — crossing the line is easy to
  * do by accident, going a little way past it is not.
  */
-export function setMirror(description: GraphicDescription, cursor: Position, resolution: number): GraphicDescription {
+export function setMirror(
+    description: GraphicDescription,
+    cursor: Position,
+    resolution: number,
+    mirrorAxis: 'across' | 'along' = 'across',
+): GraphicDescription {
     const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
     const at = toMercator([cursor[0], cursor[1]]);
 
@@ -412,7 +417,12 @@ export function setMirror(description: GraphicDescription, cursor: Position, res
         const axis = ((description.properties.rotation ?? 0) * Math.PI) / 180;
         const dx = at[0] - coords[0][0];
         const dy = at[1] - coords[0][1];
-        const across = -dx * Math.sin(axis) + dy * Math.cos(axis);
+        // Which component decides the flip is the graphic's own business: a chevron
+        // swaps sides *across* its route, a pursuit's semicircle bulges east or west
+        // *along* the same axis. @see HandleContract.mirrorAxis
+        const across = mirrorAxis === 'along'
+            ? dx * Math.cos(axis) + dy * Math.sin(axis)
+            : -dx * Math.sin(axis) + dy * Math.cos(axis);
         // A far more generous threshold than the line families': on these graphics a
         // handle drag normally means rotate, so the flip has to be a deliberate
         // excursion rather than anything a rotation could brush past.

@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, handleRole, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -557,6 +557,17 @@ export class TacticalGraphicsManager {
                     break;
                 }
 
+                // A mirror handle flips the graphic and does nothing else, which is the
+                // contract MapLibre already reads from the library. Without it the drag
+                // fell through to `handleResize`, so mobile defense's mirror handle
+                // stretched the ellipse instead of turning it over — measured, a 200px
+                // drag either way moved the far vertex from x=4 to x=15 and never
+                // flipped. @see handleRole
+                if (this.mirrorIfMirrorHandle(evt)) {
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
+
                 if (this.activeFeature.get('offsetHandler')) {
                     this.handleOffset(evt);
                 } else {
@@ -566,6 +577,46 @@ export class TacticalGraphicsManager {
                 break;
         }
     };
+
+    /**
+     * Flips a graphic whose grabbed handle is declared a `mirror`, and reports whether
+     * it took the drag.
+     *
+     * The rule and the handle index both come from the library, so the two renderers
+     * cannot disagree about which dot turns a symbol over. Measured against the drawn
+     * line rather than `rotation`: a graphic whose orientation *is* its vertices reports
+     * a rotation of 0 whatever direction it runs, so the perpendicular would be taken
+     * about due east regardless.
+     */
+    private mirrorIfMirrorHandle(evt: MapBrowserEvent): boolean {
+        const controller = this.activeController;
+        const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
+        if (!controller?.setMirrored || !name || this.activeHandleIndex < 0) return false;
+
+        const drawn = controller.getBaseGeometry() as unknown;
+        const line = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]) : undefined;
+        if (!line || line.length < 2) return false;
+        if (handleRole(name, this.activeHandleIndex, line.length) !== 'mirror') return false;
+
+        const from = line[0];
+        const to = line[line.length - 1];
+        const axis = Math.atan2(to[1] - from[1], to[0] - from[0]);
+        // Projected metres, so the midpoint is the plain average — no turf in here.
+        const originX = (from[0] + to[0]) / 2;
+        const originY = (from[1] + to[1]) / 2;
+        const dx = evt.coordinate[0] - originX;
+        const dy = evt.coordinate[1] - originY;
+        const perpendicular = -dx * Math.sin(axis) + dy * Math.cos(axis);
+
+        const resolution = this.map.getView().getResolution() ?? 1;
+        if (Math.abs(perpendicular) >= MIRROR_FLIP_MIN_PX * resolution) {
+            // Negative is the mirrored side, matching every other flip in the library.
+            controller.setMirrored(perpendicular < 0);
+        }
+        // Claimed either way: the handle means "flip", so a drag too small to decide
+        // must not fall through and resize the graphic instead.
+        return true;
+    }
 
     // update the length of a graphic
     handleResize(evt: MapBrowserEvent) {
