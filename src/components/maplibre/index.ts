@@ -62,7 +62,7 @@ export type {EditMode, InteractionCallbacks} from './interaction/MapLibreInterac
  * than from the pointer — a slider that sets a width, a form that sets a bearing.
  * Each takes a description and returns a new one; none of them touch a map.
  */
-export {centreOf, moveVertex, positionsOf, resize, rotate, setBandRange, setBend, setOffset, setReach, translate} from './interaction/editGeometry';
+export {centreOf, insertVertex, moveVertex, positionsOf, resize, rotate, setBandRange, setBend, setMirror, setOffset, setReach, translate} from './interaction/editGeometry';
 export type {GraphicDescription} from './interaction/editGeometry';
 
 export {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';

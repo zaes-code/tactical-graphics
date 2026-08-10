@@ -49,6 +49,7 @@ import {
     rotate,
     setBandRange,
     setBend,
+    setMirror,
     setOffset,
     setReach,
     translate,
@@ -685,6 +686,9 @@ export class MapLibreInteractions {
                 // Each curve family clamps its own bend, and the two ranges differ —
                 // Envelopment's hook bows much harder than a turn.
                 return setBend(before, to, name === TacticalGraphicName.Envelopment ? clampEnvelopmentBend : clampTurnBend);
+            case 'mirror':
+                // Side only — no width, no vertex. @see setMirror
+                return setMirror(before, to, resolutionOf(this.map));
             case 'reach':
                 return setReach(before, to);
             case 'band':
