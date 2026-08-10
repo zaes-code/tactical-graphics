@@ -39,7 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, hasRadiusReadout} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout} from '@zaes/tactical-graphics';
 import {
     centreOf,
     moveVertex,
@@ -469,9 +469,15 @@ export class MapLibreInteractions {
             case 'resize':
                 return resize(before, drag.last, to);
             case 'modify':
-                // A graphic that does not reshape is left alone entirely. Falling through
-                // to the move below would make "edit" a second "move" for the
-                // point-anchored symbols, where OpenLayers does nothing at all.
+                // **A graphic that stretches on an edit drag resizes**, whether or not it
+                // reshapes — that is what makes a fields-of-fire's two arms feel like an
+                // editable line: dragging a leg opens or closes the V. Translating
+                // instead slid the whole graphic, so the angle could not be changed that
+                // way at all. @see editStretches
+                if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.last, to);
+                // A graphic that does not reshape and does not stretch is left alone.
+                // Falling through to the move below would make "edit" a second "move" for
+                // the point-anchored symbols, where OpenLayers does nothing at all.
                 if (!allowed.modify) return before;
                 // The anchor vertex is inert under a reshape — dragging it would bend the
                 // graphic about the point the user thinks of as its origin. Moving is
