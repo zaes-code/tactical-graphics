@@ -18,6 +18,7 @@ import {paintGeometryMembers} from '../core/paint';
 import {
     HALO_WIDTH,
     LINE_WIDTH,
+    formatDistance,
     fontStyle,
     getLabelFillColor,
     getLabelHaloColor,
@@ -69,13 +70,18 @@ export function acpLabelScale(
  * Renders the AM (width) amplifier.
  *
  * Stored as bare metres because the properties dialog's Width input accepts digits
- * only, so the unit and the thousands separators are presentation and are added
- * here. Anything non-numeric — feet, free text, an imported value — is shown
- * verbatim rather than mangled.
+ * only, so the unit is presentation and is added here. Anything non-numeric — feet,
+ * free text, an imported value — is shown verbatim rather than mangled.
+ *
+ * **The same words as every other distance in this library.** It used to print raw
+ * metres with thousands separators, so a corridor read `391,357.585 M` — a number
+ * nobody measures a corridor in, carrying three decimal places of a metre. It now
+ * goes through `formatDistance`, which is what the radius read-out on a circle and
+ * the properties dialog already use: metres below a kilometre, kilometres above.
  */
 export function formatWidthAmplifier(value: string): string {
     const metres = Number(value);
-    return value.trim() !== '' && Number.isFinite(metres) ? `${metres.toLocaleString('en-US')} M` : value;
+    return value.trim() !== '' && Number.isFinite(metres) ? formatDistance(metres) : value;
 }
 
 /** A text amplifier with the usual halo. */
