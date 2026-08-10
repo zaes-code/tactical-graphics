@@ -11,7 +11,9 @@ import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {createTacticalGraphics} from './createTacticalGraphics';
 import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
-import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
+import {clearAllGraphics} from './sampleGallery';
+// The sweep's grid, shared with the MapLibre view so both engines draw the same one.
+import {sampleFeatureCollection} from '../maplibre/sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {getSecurityOperationSymbolSize, setSecurityOperationSymbolSize} from './securityOperationSymbol';
@@ -97,12 +99,14 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 engine.current?.clearAll();
             },
             drawSamples: hostility => {
-                const mgr = tacticalGraphicManager.current;
-                if (!mgr) return;
+                // **The same grid MapLibre draws, restored through the ordinary path.**
+                // The two sweeps used to be different programs — this one packed measured
+                // cells under category banners, that one tiled a plain grid — so the
+                // engines could not be compared by looking at them, which is most of what
+                // the sweep is for. Handing both the identical GeoJSON makes them
+                // identical by construction rather than by imitation.
                 setInteractionMode('view');
-                const {drawn, failed} = drawProvenSamples(mgr, hostility);
-                // eslint-disable-next-line no-console
-                if (failed.length) console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
+                engine.current?.restore(sampleFeatureCollection(hostility));
             },
             exportGeoJson: () => {
                 const snapshot = engine.current?.snapshot();
@@ -209,14 +213,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     };
 
     const drawSamples = (hostility?: TacticalGraphicHostility) => {
-        const mgr = tacticalGraphicManager.current;
-        if (!mgr) return;
         setInteractionMode('view');
-        const {drawn, failed} = drawProvenSamples(mgr, hostility);
-        if (failed.length) {
-            // eslint-disable-next-line no-console
-            console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
-        }
+        engine.current?.restore(sampleFeatureCollection(hostility));
     };
 
     const clearAll = () => {
