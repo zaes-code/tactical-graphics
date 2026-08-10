@@ -9,7 +9,7 @@ import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import MapControls from './MapControls';
-import {InteractionType} from './openlayers/TacticalGraphicsManager';
+import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
 import {
@@ -142,7 +142,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
      */
     const engineRef = useRef<MapEngineHandle | null>(null);
     const [capabilities, setCapabilities] = useState<MapEngineHandle['capabilities'] | null>(null);
-    const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
+    const [interactionMode, setInteractionMode] = useState<EditMode>('view');
     const [selectedShape, setSelectedShape] = useState<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
 
     /**
@@ -164,7 +164,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         setCapabilities(handle?.capabilities ?? null);
         // A view that cannot edit must not leave the panel showing a stale mode from
         // the engine that could.
-        if (!handle?.capabilities.edit) setInteractionMode(InteractionType.view);
+        if (!handle?.capabilities.edit) setInteractionMode('view');
 
         // Hand the graphics to the engine that just arrived.
         //
@@ -362,10 +362,10 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         onExportGeoJson={() => engineRef.current?.exportGeoJson()}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
                         interactionMode={interactionMode}
-                        isRotating={interactionMode === InteractionType.rotate}
-                        isResizing={interactionMode === InteractionType.resize}
-                        isRepositioning={interactionMode === InteractionType.translate}
-                        isModifying={interactionMode === InteractionType.modify}
+                        isRotating={interactionMode === 'rotate'}
+                        isResizing={interactionMode === 'resize'}
+                        isRepositioning={interactionMode === 'translate'}
+                        isModifying={interactionMode === 'modify'}
                         defaultShape={selectedShape}
                     />
                 )}
