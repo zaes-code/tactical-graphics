@@ -688,7 +688,7 @@ export class MapLibreInteractions {
                 return setBend(before, to, name === TacticalGraphicName.Envelopment ? clampEnvelopmentBend : clampTurnBend);
             case 'mirror':
                 // Side only — no width, no vertex. @see setMirror
-                return setMirror(before, to, resolutionOf(this.map));
+                return setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis);
             case 'reach':
                 return setReach(before, to);
             case 'band':

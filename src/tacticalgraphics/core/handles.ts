@@ -55,6 +55,21 @@ export interface HandleContract {
      * vertices there are is however many the user drew. @see handleRole
      */
     offsetAfterVertices?: boolean;
+    /**
+     * Which way a mirror drag is measured, for a point-anchored graphic.
+     *
+     * - `across` (the default) — the flip reflects the symbol **across** its own axis,
+     *   so the perpendicular component decides it. An abatis's chevron swaps sides of
+     *   its route this way.
+     * - `along` — the flip reflects the symbol **about the perpendicular**, so the
+     *   along-axis component decides it. A pursuit's semicircle bulges east or west of
+     *   the same axis, and measuring its perpendicular meant dragging *north* flipped
+     *   a graphic that visibly moves *east and west*.
+     *
+     * Getting it wrong is not a refusal, it is a gesture whose direction has nothing to
+     * do with what it changes.
+     */
+    mirrorAxis?: 'across' | 'along';
 }
 
 /**
@@ -272,7 +287,7 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     // `[edge, lineStart]` — the start of the hook's cross stroke, which is the part
     // that swaps sides. @see Pursuit.generateHandles
     if (name === TacticalGraphicName.Pursuit) {
-        return {roles: ['shape', 'mirror'], repeating: 'shape'};
+        return {roles: ['shape', 'mirror'], repeating: 'shape', mirrorAxis: 'along'};
     }
     // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
     if (name === TacticalGraphicName.MobileDefense) {
