@@ -39,6 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
+import {baseVertexCount} from '@zaes/tactical-graphics';
 import {
     centreOf,
     moveVertex,
@@ -227,6 +228,17 @@ export class MapLibreInteractions {
         }
 
         this.sketch.push(position);
+
+        // A graphic with a fixed base finishes on its own last click. It never sends
+        // the double-click a free-form line ends on, so waiting for one meant a
+        // fields-of-fire could not be drawn here at all: five clicks, no graphic.
+        // @see baseVertexCount
+        const wanted = baseVertexCount(name);
+        if (wanted !== undefined && this.sketch.length >= wanted) {
+            this.finishDraw(this.sketch.slice(0, wanted));
+            return;
+        }
+
         this.renderer.setSketch(this.sketch.map(p => toMercator([p[0], p[1]])));
     }
 
@@ -237,9 +249,24 @@ export class MapLibreInteractions {
         this.finishDraw(this.sketch);
     };
 
+    /**
+     * Whether the sketch has enough points to become a graphic.
+     *
+     * A fixed-vertex graphic needs **exactly** its count, so an Enter or a
+     * double-click part-way through is refused rather than producing a half symbol —
+     * a one-segment fields-of-fire is a line with an arrowhead at each end, which is
+     * a different graphic. @see baseVertexCount
+     */
+    private sketchIsComplete(): boolean {
+        const name = this.drawing;
+        if (!name) return false;
+        const wanted = baseVertexCount(name);
+        return wanted === undefined ? this.sketch.length >= 2 : this.sketch.length === wanted;
+    }
+
     private readonly onKeyDown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') this.cancelDraw();
-        else if (event.key === 'Enter' && this.drawing) this.finishDraw(this.sketch);
+        else if (event.key === 'Enter' && this.sketchIsComplete()) this.finishDraw(this.sketch);
     };
 
     /**
