@@ -12,7 +12,8 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
@@ -882,11 +883,40 @@ export class TacticalGraphicsManager {
 
         this.draw.on('drawend', (e: DrawEvent) => {
             this.lastDrawEndedAt = Date.now() + 1000;
+            this.normalizeDrawnGeometry(name, e);
             tacticalGraphicHandler.onDrawEndFunc(e);
             drawingVectorSource.clear();
             this.graphicControllers.push(tacticalGraphicHandler);
             this.stopDrawing(tacticalGraphicHandler, false);
         });
+    };
+
+    /**
+     * Applies the library's tidy-up to the geometry the user just drew.
+     *
+     * Runs **before** `onDrawEndFunc`, so the holder builds from the base that will be
+     * stored rather than from the raw clicks — otherwise the graphic and its handles
+     * disagree about how many vertices there are.
+     *
+     * The reason it is needed here at all is a double-click: OpenLayers ends a
+     * fields-of-fire at two points, the generator synthesises the second leg on every
+     * render, and the V is frozen because the synthesised leg has no vertex to drag.
+     * Materialising it is invisible — `normalizeDrawnBase` calls the very function the
+     * renderer would have called — but it turns a fixed angle into an editable one.
+     *
+     * Coordinates are projected, so they travel to 4326 and back: the library speaks
+     * geographic degrees and the swing that opens the V is a geodesic one.
+     * @see normalizeDrawnBase
+     */
+    private normalizeDrawnGeometry = (name: TacticalGraphicName, e: DrawEvent) => {
+        const geometry = e.feature?.getGeometry();
+        if (!(geometry instanceof LineString)) return;
+
+        const drawn = geometry.getCoordinates().map(c => toLonLat(c));
+        const normalized = normalizeDrawnBase(name, drawn);
+        if (normalized.length === drawn.length) return;
+
+        geometry.setCoordinates(normalized.map(c => fromLonLat(c as Coordinate)));
     };
 
     /**

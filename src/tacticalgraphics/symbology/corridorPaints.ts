@@ -18,7 +18,8 @@ import {paintGeometryMembers} from '../core/paint';
 import {
     HALO_WIDTH,
     LINE_WIDTH,
-    formatAmplifierDistance,
+    formatAltitude,
+    formatDistance,
     fontStyle,
     getLabelFillColor,
     getLabelHaloColor,
@@ -73,16 +74,23 @@ export function acpLabelScale(
  * only, so the unit is presentation and is added here. Anything non-numeric — feet,
  * free text, an imported value — is shown verbatim rather than mangled.
  *
- * **The units FM 1-02.2 allows this field, which are not the ones a read-out uses.**
- * It used to print raw metres with thousands separators, so a corridor read
- * `391,357.585 M` — three decimal places of a metre, in a number nobody measures a
- * corridor in. The first fix sent it through `formatDistance` and it read `391 km`,
- * which is wrong in a quieter way: field AM admits metres or feet only, and table
- * 5-23's plates render it `1200FT`. `formatAmplifierDistance` is that format.
+ * **The same words as every other distance in this library**, which is a deliberate
+ * departure from doctrine rather than an oversight. It used to print raw metres with
+ * thousands separators, so a corridor read `391,357.585 M` — three decimal places of a
+ * metre, in a number nobody measures a corridor in. It now goes through
+ * `formatDistance`: metres below a kilometre, kilometres above.
+ *
+ * FM 1-02.2 defines field AM as "a numeric amplifier that displays a minimum, maximum,
+ * or specific distance (range, radius, width, or length) **in meters or feet**", capped
+ * at 7 characters, and table 5-23's plates render it `1200FT` / `300FT`. Kilometres are
+ * not one of the two units it admits — the manual reaches for "km" once in the whole
+ * document, in the *speed* amplifier's "kph". Readability won that trade on the user's
+ * call: a 391 km corridor written as `391358M` is a number nobody can take in at a
+ * glance, and the quantity is unambiguous either way.
  */
 export function formatWidthAmplifier(value: string): string {
     const metres = Number(value);
-    return value.trim() !== '' && Number.isFinite(metres) ? formatAmplifierDistance(metres) : value;
+    return value.trim() !== '' && Number.isFinite(metres) ? formatDistance(metres) : value;
 }
 
 /** A text amplifier with the usual halo. */
@@ -146,8 +154,8 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const corridorName = props.label?.trim();
         if (corridorName) infoLines.push(`NAME:       ${corridorName}`);
         if (props.width) infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(props.width))}`);
-        if (props.minAltitude) infoLines.push(`MIN ALT:    ${props.minAltitude}`);
-        if (props.maxAltitude) infoLines.push(`MAX ALT:    ${props.maxAltitude}`);
+        if (props.minAltitude) infoLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude)}`);
+        if (props.maxAltitude) infoLines.push(`MAX ALT:    ${formatAltitude(props.maxAltitude)}`);
         if (props.startDate) infoLines.push(`DTG START:  ${props.startDate}`);
         if (props.endDate) infoLines.push(`DTG END:    ${props.endDate}`);
 

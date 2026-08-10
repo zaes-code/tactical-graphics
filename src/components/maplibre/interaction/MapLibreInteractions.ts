@@ -39,7 +39,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
     centreOf,
     moveVertex,
@@ -59,6 +59,15 @@ export type EditMode = 'view' | 'translate' | 'rotate' | 'resize' | 'modify';
 
 /** How close a click must land on a base vertex to grab it, in screen pixels. */
 const VERTEX_GRAB_PX = 10;
+
+/**
+ * How close two consecutive draw clicks have to be to count as one.
+ *
+ * Small, because it only has to catch a double-click — which lands on the same pixel
+ * or within a hand-tremor of it — without refusing two deliberate vertices a user
+ * placed close together. @see addSketchVertex
+ */
+const DUPLICATE_CLICK_PX = 4;
 
 /**
  * How far the pointer must move before a press counts as a drag.
@@ -227,6 +236,19 @@ export class MapLibreInteractions {
             return;
         }
 
+        // **The second click of a double-click is not a new vertex.** MapLibre delivers
+        // both of them as ordinary `click`s before it delivers the `dblclick`, and they
+        // land on the same pixel — so double-clicking the apex of a fields-of-fire
+        // pushed that apex twice, hit the three-vertex count, and finished the draw with
+        // a leg of zero length. The V had nothing to open, and the tip handle sat
+        // exactly on the apex handle, so the user grabbed the apex whichever they aimed
+        // for. That is the "V angle cannot be modified" this fixes.
+        //
+        // Measured in screen pixels rather than degrees: whether two clicks are the same
+        // click is a question about the cursor, not about the ground.
+        const previous = this.sketch[this.sketch.length - 1];
+        if (previous && this.pixelsApart(previous, position) < DUPLICATE_CLICK_PX) return;
+
         this.sketch.push(position);
 
         // A graphic with a fixed base finishes on its own last click. It never sends
@@ -246,8 +268,20 @@ export class MapLibreInteractions {
         if (!this.drawing) return;
         event.preventDefault();
         // The double-click also fired two `click`s, so the last vertex is already in.
+        //
+        // **And it only ends a draw that has enough points**, which is what
+        // `sketchIsComplete` has always documented and never got asked. Ending early
+        // built a half symbol: a two-point ferry crossing is not a ferry crossing.
+        if (!this.sketchIsComplete()) return;
         this.finishDraw(this.sketch);
     };
+
+    /** Screen distance between two lon/lat positions, for the questions that are about the cursor. */
+    private pixelsApart(a: Position, b: Position): number {
+        const p = this.map.project([a[0], a[1]]);
+        const q = this.map.project([b[0], b[1]]);
+        return Math.hypot(p.x - q.x, p.y - q.y);
+    }
 
     /**
      * Whether the sketch has enough points to become a graphic.
@@ -261,7 +295,12 @@ export class MapLibreInteractions {
         const name = this.drawing;
         if (!name) return false;
         const wanted = baseVertexCount(name);
-        return wanted === undefined ? this.sketch.length >= 2 : this.sketch.length === wanted;
+        // Asked of the **normalised** sketch, not the raw one, so a graphic that defines
+        // part of its own base counts as finished once the rest is implied: two points
+        // of a fields-of-fire are a whole V, because the second leg follows from them.
+        // Deriving it here rather than listing the exceptions keeps one source for what
+        // a complete base is. @see normalizeDrawnBase
+        return wanted === undefined ? this.sketch.length >= 2 : normalizeDrawnBase(name, this.sketch).length === wanted;
     }
 
     private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -281,7 +320,9 @@ export class MapLibreInteractions {
         if (!name) return;
 
         const wants = baseGeometryFor(name);
-        const geometry = buildBase(wants, vertices);
+        // What the user clicked becomes what is stored — repeated clicks dropped, and an
+        // implied vertex made real so it gets a handle. @see normalizeDrawnBase
+        const geometry = buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
         if (!geometry) return;
 
         const properties: TacticalGraphicProperties = {

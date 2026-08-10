@@ -9,7 +9,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getColorByHostility, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {projectedMidSegment} from './decorations';
 import {echelonMarks} from './echelonPaints';
@@ -229,7 +229,7 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             if (feature.rangeFanShape === 'circular') lines.push(`MIN RG ${formatKm(band.range)}`);
             else if (isSector) lines.push(`RG ${formatKm(band.range)}`);
             const altitude = band.altitude?.trim();
-            if (altitude) lines.push(`ALT ${altitude}`);
+            if (altitude) lines.push(`ALT ${formatAltitude(altitude)}`);
             if (lines.length) paints.push(text(coords[midIndex], lines.join('\n')));
 
             if (!isSector) continue;

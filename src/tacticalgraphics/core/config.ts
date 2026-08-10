@@ -58,6 +58,30 @@ export const MIN_LABEL_SIZE = 8;
 export const MAX_LABEL_SIZE = 26;
 
 /**
+ * The unit an altitude or height is entered and displayed in.
+ *
+ * **A host-level choice, not a per-symbol one.** FM 1-02.2 allows either — fields X
+ * and X1 are free text and its examples run `1500MSL`, `FL150`, `1500FT AGL` — but a
+ * picture where one zone is in feet and the next in metres is a picture nobody can
+ * read across. One setting for the map means every altitude on it compares.
+ *
+ * The value is **interpreted in this unit, never converted into it**: 1500 entered
+ * under `Feet` is 1500 feet, and the same 1500 under `Metres` is 1500 metres. So this
+ * is a decision to make once, at start-up, beside the palette — changing it later
+ * reinterprets every altitude already entered rather than restating it.
+ */
+export enum HeightUnit {
+    Metres = 'metres',
+    Feet = 'feet',
+}
+
+/** What each unit is written as on a label. Matches the plates: `1500FT`, not `1500 ft`. */
+export const HEIGHT_UNIT_SUFFIX: Readonly<Record<HeightUnit, string>> = Object.freeze({
+    [HeightUnit.Metres]: 'M',
+    [HeightUnit.Feet]: 'FT',
+});
+
+/**
  * Every knob the library exposes. All optional — an omitted field keeps the default.
  *
  * `hostilityColors` is a partial map, so overriding one affiliation leaves the others
@@ -78,6 +102,8 @@ export interface TacticalGraphicsConfigOptions {
     labelFillColor?: string;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
+    /** Unit for every altitude and height amplifier. Default {@link HeightUnit.Feet}. @see HeightUnit */
+    heightUnit?: HeightUnit;
 
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these colour the affordances a renderer draws so a user
@@ -113,6 +139,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly defaultLineColor?: string;
     readonly labelFillColor?: string;
     readonly labelHaloColor?: string;
+    readonly heightUnit?: HeightUnit;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -127,6 +154,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
+        if (options.heightUnit !== undefined) this.heightUnit = options.heightUnit;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -151,6 +179,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             defaultLineColor: overrides.defaultLineColor ?? this.defaultLineColor,
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
+            heightUnit: overrides.heightUnit ?? this.heightUnit,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -262,6 +291,17 @@ export function getLabelHaloColorOverride(): string | undefined {
 
 export function getHandleColorOverride(): string | undefined {
     return _config.handleColor;
+}
+
+/**
+ * The unit every altitude and height amplifier is written in.
+ *
+ * Defaults to feet: every altitude FM 1-02.2 prints is in feet or a flight level —
+ * `1500FT AGL`, `20000FT AGL`, `FL150` — and aviation, which is what these particular
+ * amplifiers annotate, is flown in feet almost everywhere.
+ */
+export function getHeightUnit(): HeightUnit {
+    return _config.heightUnit ?? HeightUnit.Feet;
 }
 
 export function getInertHandleColorOverride(): string | undefined {
