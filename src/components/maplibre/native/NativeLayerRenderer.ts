@@ -371,7 +371,7 @@ export class NativeLayerRenderer {
         // iterating a Map needs --downlevelIteration.
         for (const [key, list] of Array.from(buckets.lines)) {
             features += list.length;
-            const id = `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
+            const id = lineSourceId(key);
             if (!this.lineLayerKeys.has(key)) {
                 this.map.addSource(id, {type: 'geojson', data: featureCollection(list)});
                 const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(Number);
@@ -381,6 +381,17 @@ export class NativeLayerRenderer {
             } else {
                 (this.map.getSource(id) as GeoJSONSource | undefined)?.setData(featureCollection(list));
             }
+        }
+
+        // **Every dash layer this frame did not fill has to be emptied.** The loop above
+        // only visits the patterns present *now*, and the layers outlive the data that
+        // created them — so a pattern that stopped appearing kept drawing whatever it
+        // held last. Clearing the map left 87% of the ink on screen with no graphics
+        // behind it, and the same stale draw happened whenever the last graphic using a
+        // pattern was deleted or panned out of view.
+        for (const key of Array.from(this.lineLayerKeys)) {
+            if (buckets.lines.has(key)) continue;
+            (this.map.getSource(lineSourceId(key)) as GeoJSONSource | undefined)?.setData(featureCollection([]));
         }
 
         this.realiseCentreSymbols(visible);
@@ -762,6 +773,9 @@ function centreHandleIndex(graphic: MapLibreTacticalGraphic): number {
         handle => Math.hypot(handle[0] - centre[0], handle[1] - centre[1]) <= tolerance,
     );
 }
+
+/** The source and layer id for a dash pattern. One derivation, used by both passes. */
+const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
 
 /** The three graphics that carry a host-provided centre symbol. */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
