@@ -431,7 +431,13 @@ export class MapLibreInteractions {
      * itself off would look like a broken button. @see allowedGestures
      */
     private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
-        if (drag.onCentre) return translate(before, drag.last, to);
+        // The centre dot is a **shortcut to move**, and only in translate mode. Under
+        // any other mode the drag falls through to what that mode means, which is what
+        // OpenLayers does: grabbing a security operation's centre rotates it, and a
+        // gesture the graphic refuses is refused below rather than quietly becoming a
+        // move. Treating the centre as "move" in every mode made a security operation —
+        // which refuses resize — move when the user asked it to resize.
+        if (drag.onCentre && this.mode === 'translate') return translate(before, drag.last, to);
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
@@ -463,16 +469,19 @@ export class MapLibreInteractions {
             case 'resize':
                 return resize(before, drag.last, to);
             case 'modify':
+                // A graphic that does not reshape is left alone entirely. Falling through
+                // to the move below would make "edit" a second "move" for the
+                // point-anchored symbols, where OpenLayers does nothing at all.
+                if (!allowed.modify) return before;
+                // The anchor vertex is inert under a reshape — dragging it would bend the
+                // graphic about the point the user thinks of as its origin. Moving is
+                // what translate mode is for. @see anchorVertex
+                if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
                 // A modify drag that did not grab a vertex moves the whole graphic, which
                 // is what the OpenLayers Modify interaction does when you drag a line
                 // rather than one of its points.
-                // The anchor vertex is inert under a reshape — dragging it would bend
-                // the graphic about the point the user thinks of as its origin. Moving
-                // is what translate mode is for. @see anchorVertex
-                if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
-                return drag.vertex >= 0 && allowed.modify
-                    ? moveVertex(before, drag.vertex, to)
-                    : translate(before, drag.last, to);
+                return drag.vertex >= 0 ? moveVertex(before, drag.vertex, to) : translate(before, drag.last, to);
+
             default:
                 return before;
         }
