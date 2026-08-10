@@ -289,6 +289,27 @@ export const formatDistance = (metres: number): string => {
 };
 
 /**
+ * A distance for the **distance amplifier (field AM)**, from metres.
+ *
+ * **Not `formatDistance`, and the difference is doctrinal rather than cosmetic.**
+ * FM 1-02.2 defines field AM as "a numeric amplifier that displays a minimum,
+ * maximum, or specific distance (range, radius, width, or length) in meters or
+ * feet", capped at 7 characters. Kilometres are not one of the two units the field
+ * admits — the manual reaches for "km" only once, in the *speed* amplifier's "kph".
+ * Table 5-23's air corridor plates render the field as `1200FT`, `300FT`, `1500FT`:
+ * an integer, the unit appended, no separators and no decimals.
+ *
+ * So a corridor width belongs here and the radius read-out that appears while you
+ * drag a circle does not — that one is an editor measurement rather than a symbol's
+ * amplifier, and kilometres read better in it.
+ *
+ * The 7-character cap governs what a user may type, so it is not enforced on a
+ * measured value: truncating a real width would misstate the corridor. Only a
+ * corridor past 999,999 m can exceed it.
+ */
+export const formatAmplifierDistance = (metres: number): string => `${Math.round(metres)}M`;
+
+/**
  * Graphics that carry a radius a user can read: the circular areas, the arc mission
  * tasks, the range fans.
  *
