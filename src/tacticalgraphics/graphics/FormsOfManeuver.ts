@@ -629,11 +629,20 @@ export class MobileDefense extends MovementGraphicBase {
         const arrowPrev = arrowArc[arrowArc.length - 2];
         const arrowHead: Position[] = geometryService.computeArrowheadPoints(arrowPrev, arrowTip, radius, 45);
 
-        // Outward-facing triangles with both base vertices lying on the arc, and
-        // apex perpendicular to the base (not radial). Placed at 33%/67% along
-        // each arc.
-        const triSize = Math.min(radius * 0.9, minorR * 1.1);
+        // Outward-facing triangles with both base vertices lying on the arc, and apex
+        // perpendicular to the base (not radial). Placed at 33%/67% along each arc.
+        //
+        // **The height follows the base, so the triangle stays equilateral.** It used to
+        // be `min(radius * 0.9, minorR * 1.1)` — a height that stops growing once the
+        // arrowhead size caps it, while the base is a chord of the arc and keeps widening
+        // with the ellipse. The triangles therefore flattened as the graphic was resized,
+        // which is the one thing a symbol built from equilateral teeth must not do.
+        //
+        // Geodesic, like every other length in this generator: the base is measured on
+        // the same sphere the apex is projected from, so the three sides agree.
         const triangleFractions = [0.33, 0.67];
+        /** Height of an equilateral triangle, as a share of its base. */
+        const EQUILATERAL_HEIGHT = Math.sqrt(3) / 2;
         const triBaseHalfSpan = 0.05; // fraction of arc length between base vertices (×2)
         const triangles: Position[][] = [];
         const addTriangles = (arc: Position[], perpSign: 1 | -1) => {
@@ -648,7 +657,8 @@ export class MobileDefense extends MovementGraphicBase {
                 // Top arc walks p0→p1 with outward on the left (base − 90);
                 // bottom arc has outward on the right (base + 90).
                 const outBearing = perpSign === 1 ? baseBearing - 90 : baseBearing + 90;
-                const apex = turf.destination(mid, triSize, outBearing, {units: 'meters'}).geometry.coordinates as Position;
+                const base = turf.distance(b1, b2, {units: 'meters'});
+                const apex = turf.destination(mid, base * EQUILATERAL_HEIGHT, outBearing, {units: 'meters'}).geometry.coordinates as Position;
                 triangles.push([b1, apex, b2, b1]);
             }
         };
