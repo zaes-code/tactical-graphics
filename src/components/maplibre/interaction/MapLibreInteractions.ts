@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, editStretches, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
     centreOf,
     insertVertex,
@@ -394,7 +394,19 @@ export class MapLibreInteractions {
      * Falls back to the default for a one-click draw, so a fixed-size symbol is
      * unaffected and a cancelled sizing click cannot leave a graphic with no size at all.
      */
-    private sizeFromDraw(wants: string | undefined, vertices: Position[]): {radius: number; rotation: number} {
+    private sizeFromDraw(
+        name: TacticalGraphicName,
+        wants: string | undefined,
+        vertices: Position[],
+    ): {radius?: number; rotation: number} {
+        // **A graphic whose size *is* its decoration gets no radius at all.** For the
+        // direction-of-attack family and the crossings, `size` means "how big is the
+        // chevron", which the renderer derives from the zoom — so a placeholder radius
+        // here is not a default, it is a wrong answer that outranks the right one:
+        // `bakedDecorationSize` cannot tell a placeholder from a genuinely saved size, so
+        // it honoured 40 km where OpenLayers derived 196 km, and the handles that hang off
+        // the arrow landed nowhere near it. @see hasBakedDecoration
+        if (hasBakedDecoration(name)) return {rotation: 0};
         if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METRES, rotation: 0};
 
         const centre = toMercator([vertices[0][0], vertices[0][1]]);
@@ -481,7 +493,7 @@ export class MapLibreInteractions {
             // The generators need both, and neither has a safe absent value: `rotation`
             // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
             // no radius has no size at all. @see maplibreAdapter
-            ...this.sizeFromDraw(wants, vertices),
+            ...this.sizeFromDraw(name, wants, vertices),
         };
 
         const graphic = buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
