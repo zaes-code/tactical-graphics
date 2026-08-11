@@ -6,7 +6,7 @@ import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import openlayersAdapter from "../openlayersAdapter";
 import {getRangeFanLabelStyleFn, LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
-import {resolveBandAzimuths, resolveBands} from '@zaes/tactical-graphics';
+import {resolveBands, resolveRangeFanBands} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
 /**
@@ -102,23 +102,9 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // that keeps the defaults consistent (single band at the drawn
         // radius; sector per-band azimuths fall back through band → config
         // → ±45° around the drawn rotation).
-        const isSector = this.name === TacticalGraphicName.WeaponSensorRangeFanSector;
-        const resolvedBands = resolveBands(opts);
-        const bandsForStyle = isSector
-            ? resolvedBands.map(band => {
-                const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
-                return {
-                    ...band,
-                    // Resolved absolute azimuths (CW from N) for the style
-                    // fn to print as compass bearings; the raw user-facing
-                    // fields on the band are deflections from center.
-                    resolvedLeftAz: leftAz,
-                    resolvedRightAz: rightAz,
-                };
-            })
-            : resolvedBands;
-        this.label.set('rangeFanShape', isSector ? 'sector' : 'circular');
-        this.label.set('rangeFanBands', bandsForStyle);
+        const {shape, bands} = resolveRangeFanBands(this.name, opts);
+        this.label.set('rangeFanShape', shape);
+        this.label.set('rangeFanBands', bands);
 
         // Bands ride in the amplifiers already; `size` and `rotation` do not, and a
         // fan restored without them loses its drawn radius and bearing.

@@ -30,6 +30,7 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    AltitudeDatum,
     TacticalGraphicStatus,
 } from './type';
 
@@ -55,8 +56,31 @@ export interface TacticalGraphicProperties {
     /** Date-time group, formatted by the caller. */
     startDate?: string;
     endDate?: string;
-    minAltitude?: string;
-    maxAltitude?: string;
+    /**
+     * Altitude or depth, as a **number** in the host's configured {@link AltitudeUnit}.
+     *
+     * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
+     * in the string", and feet, metres, a flight level and a submerged depth are all
+     * legal — so this was a string. In practice the properties dialog has only ever
+     * accepted digits, which made the freedom theoretical while costing every consumer a
+     * value it could not sort, compare or arithmetic on. The unit comes from the config
+     * instead and the renderer appends it, which is the same information in a shape a
+     * program can use.
+     *
+     * **A string still renders, and deliberately so.** `formatAltitude` passes anything
+     * non-numeric through untouched, so a `"FL150"` or a `"1500MSL"` restored from an
+     * older snapshot — or imported from a system that speaks doctrine's own notation —
+     * draws exactly as written rather than being mangled or dropped. It simply is not
+     * what the type invites you to send.
+     */
+    minAltitude?: number;
+    maxAltitude?: number;
+    /**
+     * What those altitudes are measured from. Applies to both, because a graphic quoting
+     * a floor and a ceiling against two different datums would be describing two
+     * different volumes. @see AltitudeDatum
+     */
+    altitudeDatum?: AltitudeDatum;
 
     eff?: string;
     grid?: string;
@@ -132,9 +156,72 @@ export interface TacticalGraphicProperties {
      * as you render it, which is what this library's OpenLayers layer does.
      */
     labelGapDegrees?: number;
+    /**
+     * Half the gap left in a bowed curve for its designation, in **metres**. Turn
+     * and the tactical turn are the only readers.
+     *
+     * The metres twin of `labelGapDegrees`, and it exists for the same reason: pass
+     * 0 when the renderer cuts the gap itself from the rendered glyph, which both of
+     * this library's renderers do. Omitting it leaves the generator's fallback of
+     * `0.16 * size` — right for a consumer taking the raw GeoJSON, wrong on top of a
+     * glyph-measured cut, where the two gaps add up. That is what it did: a
+     * `labelGap` the OpenLayers holder passed as a generator argument had no
+     * portable form, so MapLibre got the fallback and cut a hole three times too
+     * wide around the same "T".
+     */
+    labelGap?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
 }
+
+/**
+ * The amplifiers a user can put on a graphic — what a properties dialog edits, and
+ * what the style and paint functions read back.
+ *
+ * Kept separate from {@link TacticalGraphicProperties} rather than aliased to it:
+ * that is the *saved* bag, which also carries the graphic's name and its geometry
+ * inputs, and a dialog that edited those by accident would resize the shape.
+ *
+ * **It lives here, beside the saved bag, because it is symbology.** It was declared
+ * in `utils/graphicLinkRegistry.ts` (which imports `ol`), then moved to
+ * `components/graphicAmplifiers.ts` when the MapLibre entry point started compiling
+ * the whole OpenLayers tree through it. That second move stopped short: a type
+ * describing what amplifiers a graphic carries is exactly the kind of fact this half
+ * of the library owns, and leaving it under `src/components/` meant the map-agnostic
+ * registries could not name it. `securitySymbolRequest.labels` is where that bit —
+ * a provider on one renderer was handed the graphic's amplifiers and on the other
+ * was not. `components/graphicAmplifiers.ts` re-exports this, so nothing that
+ * already imports it had to change.
+ */
+export interface GraphicLabels {
+    label: string;
+    countryCode?: string;
+    secondId?: string;
+    secondCountryCode?: string;
+    startDate?: string;
+    endDate?: string;
+    /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
+    minAltitude?: number;
+    maxAltitude?: number;
+    /** What both are measured from. @see AltitudeDatum */
+    altitudeDatum?: AltitudeDatum;
+    /**
+     * Full width in metres, edge to edge. The same field the geometry schema uses —
+     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
+     * width rather than a string mirror of it that has to be kept in step.
+     */
+    width?: number;
+    eff?: string;
+    grid?: string;
+    weapon?: string;
+    hostility?: TacticalGraphicHostility;
+    echelon?: TacticalGraphicEchelon;
+    direction?: RouteDirection;
+    status?: TacticalGraphicStatus;
+    confidence?: TacticalGraphicConfidence;
+    rangeFan?: RangeFanConfig;
+}
+
 
 /** Which part of a rendered graphic a feature represents. */
 export type TacticalGraphicRole = 'graphic' | 'label' | 'handle' | 'base';
@@ -178,6 +265,25 @@ export function isTacticalGraphicFeature(feature: Feature): boolean {
 }
 
 /**
+ * The base geometry a graphic is drawn from — `Point`, `LineString` or `Polygon`.
+ *
+ * What a **draw tool** needs to know before it starts collecting clicks: whether
+ * this graphic wants one point, an open path, or a closed ring. Exported for that
+ * reason; without it a renderer implementing draw has to keep its own table of
+ * 215 names beside this one and watch the two drift.
+ *
+ * `undefined` for an unknown name, and for the handful of generators whose kind is
+ * not in the table below — those accept any base rather than being rejected, so a
+ * caller should treat `undefined` as "no constraint", not as an error.
+ */
+export function baseGeometryFor(name: TacticalGraphicName): 'Point' | 'LineString' | 'Polygon' | undefined {
+    const generator = TacticalGraphicsRegistry.get(name);
+    return generator
+        ? (EXPECTED_BASE_GEOMETRY[generator.type] as 'Point' | 'LineString' | 'Polygon' | undefined)
+        : undefined;
+}
+
+/**
  * The base geometry each generator kind expects. Generators that emit a
  * MultiLineString still take a LineString base (Bridge, Ford).
  */
@@ -188,8 +294,15 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
     Polygon: 'Polygon',
 };
 
-/** Maps the public property bag onto the internal generator option bag. */
-function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
+/**
+ * Maps the public property bag onto the internal generator option bag.
+ *
+ * **Exported** because a renderer sometimes has to see what the generator saw. A
+ * range fan's bands are consumed by the generator and survive only as anonymous
+ * points, so a renderer labelling them must re-resolve them from the same options —
+ * and reconstructing the mapping on its own is how the two ended up disagreeing.
+ */
+export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
     // Public field -> internal generator option. The two disagree on names by design:
     // generators still speak `size` / `radius`, and renaming 200-odd call sites inside
     // them buys nothing a consumer can see. This is the one place the mapping lives.
@@ -201,6 +314,12 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         // Both land on the generators' `size`, which is the one slot they offer; a given
         // graphic reads it as one or the other and never sets both.
         size: props.radius ?? props.decorationSize,
+        // Turn and Envelopment take their arrowhead length as a flat distance rather
+        // than a fraction of `size`, so it survives a resize. It reached the generator
+        // only through an OpenLayers holder override, so every other caller — a second
+        // renderer, a consumer of the public API — silently got the fallback ratio and
+        // a visibly smaller arrowhead. It is the same metres the holder stamps.
+        headSize: props.decorationSize,
         // Public `width` is a full width; the generators' `radius` is the half-width
         // offset from the centreline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
@@ -208,6 +327,7 @@ function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<
         mirrored: props.mirrored,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,
+        labelGap: props.labelGap,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
     };

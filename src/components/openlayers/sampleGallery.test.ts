@@ -15,6 +15,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
 } from '@zaes/tactical-graphics';
+import type {TacticalGraphicProperties} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
@@ -23,6 +24,8 @@ import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {supportsHostility} from './graphicFieldRegistry';
 import {readGraphicLabels, writeGraphicProperties} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
+import {buildSampleGraphics, sampleFeatureCollection} from '../maplibre/sampleGallery';
+import {isRectangular} from '@zaes/tactical-graphics';
 
 /**
  * The doctrinal colours below are the light-mode ones, and the palette has had a
@@ -255,5 +258,98 @@ describe('hostility survives a bag-only stamp, as restore and consumers produce'
         const colours = strokeColours(bagOnly(name));
         expect(colours.length).toBeGreaterThan(0);
         expect(colours).toContain(normalise(HOSTILE_RED));
+    });
+});
+
+/**
+ * The sweep's own shapes, which are a documentation decision rather than a rendering
+ * one: a catalogue whose job is showing what a symbol looks like must not draw the
+ * fourteen rectangular variants identically to the irregular areas they exist to be an
+ * alternative to. Four corners means a rectangle, five means an area.
+ *
+ * Asserted on `sampleFeatureCollection`, which is what **both** engines draw — the
+ * OpenLayers sweep restores the very same collection — so one assertion covers them.
+ */
+describe('the sample sweep tells rectangles from areas', () => {
+    const rings = () =>
+        sampleFeatureCollection()
+            .features.filter(f => f.geometry.type === 'Polygon')
+            .map(f => ({
+                name: (f.properties as {tacticalGraphic: {name: TacticalGraphicName}}).tacticalGraphic.name,
+                // Corners, not coordinates: a ring repeats its first point.
+                corners: (f.geometry as {coordinates: number[][][]}).coordinates[0].length - 1,
+            }));
+
+    it('draws every rectangular variant with four corners', () => {
+        const boxes = rings().filter(r => isRectangular(r.name));
+        expect(boxes.length).toBeGreaterThan(0);
+        expect(boxes.every(r => r.corners === 4)).toBe(true);
+    });
+
+    it('draws every other area with five, so the two cannot be confused', () => {
+        const areas = rings().filter(r => !isRectangular(r.name));
+        expect(areas.length).toBeGreaterThan(0);
+        expect(areas.every(r => r.corners === 5)).toBe(true);
+    });
+});
+
+/**
+ * # The two engines draw the same catalogue
+ *
+ * `buildSampleGraphics` (MapLibre realises these directly) and `sampleFeatureCollection`
+ * (the OpenLayers sweep restores this) are two exits from one list. They were not always:
+ * one sorted by category and the other took registry order, so the circular range fan sat
+ * in a different cell in each engine and every side-by-side comparison was comparing two
+ * different pictures. A pixel diff cannot report that — it sees two full, plausible
+ * catalogues — so the ordering is asserted here instead.
+ */
+describe('both engines lay the sweep out identically', () => {
+    it('emits the same graphics in the same order', () => {
+        const built = buildSampleGraphics().graphics.map(g => g.name);
+        const collected = sampleFeatureCollection().features.map(
+            f => (f.properties as {tacticalGraphic: {name: TacticalGraphicName}}).tacticalGraphic.name,
+        );
+        expect(collected).toEqual(built);
+    });
+
+    it('gives each cell its own identity, so a graphic may appear twice', () => {
+        const ids = sampleFeatureCollection().features.map(f => (f.properties as {symbolId: string}).symbolId);
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+});
+
+/**
+ * The range fans are the one family whose interesting variation is in the properties
+ * rather than the geometry: a lone band draws a ring, three draw nested rings with the
+ * labels sharing the gaps between them. A catalogue with only the first shows the shape
+ * and hides the graphic, so each fan appears twice.
+ */
+describe('the range fans appear once with one band and once with several', () => {
+    const bandCounts = (name: TacticalGraphicName): number[] =>
+        sampleFeatureCollection()
+            .features.map(f => (f.properties as {tacticalGraphic: TacticalGraphicProperties}).tacticalGraphic)
+            .filter(g => g.name === name)
+            .map(g => g.rangeFan?.bands?.length ?? 0);
+
+    it.each([TacticalGraphicName.WeaponSensorRangeFanCircular, TacticalGraphicName.WeaponSensorRangeFanSector])(
+        '%s',
+        name => {
+            const counts = bandCounts(name);
+            expect(counts.length).toBe(2);
+            expect(counts).toContain(1);
+            expect(counts.some(n => n > 1)).toBe(true);
+        },
+    );
+
+    it('gives the multi-band sector its own bearings per band, which the circle cannot do', () => {
+        // Only the multi-band one. The single-band sample omits them on purpose, so the
+        // catalogue also shows a sector falling back to its own span.
+        const bands = sampleFeatureCollection()
+            .features.map(f => (f.properties as {tacticalGraphic: TacticalGraphicProperties}).tacticalGraphic)
+            .filter(g => g.name === TacticalGraphicName.WeaponSensorRangeFanSector)
+            .map(g => g.rangeFan?.bands ?? [])
+            .find(b => b.length > 1);
+        expect(bands?.length).toBeGreaterThan(1);
+        expect(bands?.every(b => b.leftAzimuthDeg !== undefined && b.rightAzimuthDeg !== undefined)).toBe(true);
     });
 });

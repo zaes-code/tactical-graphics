@@ -18,9 +18,10 @@
 import type {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
 import {TACTICAL_GRAPHIC_KEY} from '@zaes/tactical-graphics';
-import type {TacticalGraphicProperties, TacticalGraphicRole} from '@zaes/tactical-graphics';
+import type { TacticalGraphicRole} from '@zaes/tactical-graphics';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
+import type {GraphicGeometryState} from '../graphicAmplifiers';
 
 export {TACTICAL_GRAPHIC_KEY};
 
@@ -40,8 +41,12 @@ const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
  * only mean something to *this* renderer — the drawing resolution, and the
  * security-operation `scale` that is only interpretable when multiplied by it — are not
  * here. They live under the snapshot's `renderer` object; see `persistence.ts`.
+ *
+ * **Moved to `components/graphicAmplifiers.ts`** and re-exported here. It is a
+ * description of a graphic's shape inputs, which both renderers need, and this
+ * module imports `ol`. @see graphicAmplifiers.ts
  */
-export type GraphicGeometryState = Pick<TacticalGraphicProperties, 'radius' | 'decorationSize' | 'width' | 'rotation' | 'bend' | 'mirrored'>;
+export type {GraphicGeometryState};
 
 /** Feature property naming which part of a graphic a feature is. */
 export const ROLE_KEY = 'role' as const;

@@ -14,8 +14,13 @@
  *
  *   dist/ol/cjs/    dist/ol/esm/    dist/ol/types/
  *
- * Order matters: the OpenLayers half imports the root by package name, and
- * tsconfig.ol.json points that at `dist/types`, so the root must be built first.
+ * `@zaes/tactical-graphics/maplibre` — the MapLibre renderer, from
+ * `src/components/maplibre`:
+ *
+ *   dist/mlb/cjs/   dist/mlb/esm/   dist/mlb/types/
+ *
+ * Order matters: both renderer halves import the root by package name, and their
+ * tsconfigs point that at `dist/types`, so the root must be built first.
  *
  * The React demo (`src/components/MapControls.tsx`, `OpenLayers.tsx`, the sample
  * gallery) is not built or published.
@@ -69,6 +74,25 @@ addEsmExtensions(path.join(ol, 'esm'));
 
 console.log('Resolving bare deep imports for Node ESM');
 addBareEsmExtensions(path.join(ol, 'esm'));
+
+// ── The MapLibre entry point ──────────────────────────────────────────────────
+
+const mlb = path.join(dist, 'mlb');
+
+console.log('\nBuilding the MapLibre renderer (CommonJS + declarations)');
+run('-p', 'tsconfig.mlb.json', '--module', 'commonjs', '--outDir', 'dist/mlb/cjs', '--declarationDir', 'dist/mlb/types');
+
+console.log('Building the MapLibre renderer (ES modules)');
+run('-p', 'tsconfig.mlb.json', '--module', 'esnext', '--outDir', 'dist/mlb/esm', '--declaration', 'false', '--declarationMap', 'false');
+
+console.log('Marking dist/mlb/esm as ESM');
+fs.writeFileSync(path.join(mlb, 'esm', 'package.json'), JSON.stringify({type: 'module'}, null, 2) + '\n');
+
+console.log('Adding .js extensions to ESM relative imports');
+addEsmExtensions(path.join(mlb, 'esm'));
+
+console.log('Resolving bare deep imports for Node ESM');
+addBareEsmExtensions(path.join(mlb, 'esm'));
 
 /**
  * The same problem as addEsmExtensions, one step out: `import ... from
@@ -253,16 +277,41 @@ for (const dir of ['cjs', 'esm', 'types']) {
     const entry = path.join(ol, dir, 'components', 'openlayers', dir === 'types' ? 'index.d.ts' : 'index.js');
     console.log(`  ${fs.existsSync(entry) ? 'OK  ' : 'MISS'} dist/ol/${dir}/components/openlayers/${path.basename(entry)}`);
 }
-
-// The published root must never import `ol` — that is the whole point of the
-// split. Assert it rather than trusting tsconfig.lib.json's include list.
-const leaked = [...walk(path.join(dist, 'cjs')), ...walk(path.join(dist, 'esm'))].filter(
-    f => f.endsWith('.js') && /(?:from|require\()\s*['"]ol[/'"]/.test(fs.readFileSync(f, 'utf8')),
-);
-if (leaked.length) {
-    throw new Error(`OpenLayers leaked into the map-agnostic entry point:\n  ${leaked.map(f => path.relative(dist, f)).join('\n  ')}`);
+for (const dir of ['cjs', 'esm', 'types']) {
+    const entry = path.join(mlb, dir, 'components', 'maplibre', dir === 'types' ? 'index.d.ts' : 'index.js');
+    console.log(`  ${fs.existsSync(entry) ? 'OK  ' : 'MISS'} dist/mlb/${dir}/components/maplibre/${path.basename(entry)}`);
 }
-console.log('  verified: the root entry point imports no OpenLayers');
+
+/**
+ * Each entry point may import exactly one map library, and the root may import
+ * none. That separation is the whole point of the split — it is what keeps the
+ * geometry portable and what lets both renderers be optional peers — so it is
+ * asserted rather than trusted to the tsconfig include lists.
+ *
+ * Four checks, not one. The two renderers now share a paint layer, so an
+ * accidental import across them would make each drag in the other's peer
+ * dependency — a consumer who installed `maplibre-gl` alone would get a module
+ * that cannot resolve `ol`. Checking only the root would not catch that.
+ */
+const assertNoImport = (dirs, pkg, what) => {
+    const pattern = new RegExp(`(?:from|require\\()\\s*['"]${pkg}[/'"]`);
+    const leaked = dirs
+        .flatMap(dir => (fs.existsSync(dir) ? [...walk(dir)] : []))
+        .filter(f => f.endsWith('.js') && pattern.test(fs.readFileSync(f, 'utf8')));
+    if (leaked.length) {
+        throw new Error(`${pkg} leaked into ${what}:\n  ${leaked.map(f => path.relative(dist, f)).join('\n  ')}`);
+    }
+    console.log(`  verified: ${what} imports no ${pkg}`);
+};
+
+const rootDirs = [path.join(dist, 'cjs'), path.join(dist, 'esm')];
+const olDirs = [path.join(ol, 'cjs'), path.join(ol, 'esm')];
+const mlbDirs = [path.join(mlb, 'cjs'), path.join(mlb, 'esm')];
+
+assertNoImport(rootDirs, 'ol', 'the root entry point');
+assertNoImport(rootDirs, 'maplibre-gl', 'the root entry point');
+assertNoImport(mlbDirs, 'ol', 'the MapLibre entry point');
+assertNoImport(olDirs, 'maplibre-gl', 'the OpenLayers entry point');
 
 // Load every emitted entry the way a consumer would. Static checks missed a
 // whole broken build once: 1.3.0's ESM output imported `ol/source/Vector`
@@ -282,6 +331,8 @@ for (const [label, spec, esm] of [
     ['root  esm', './dist/esm/index.js', true],
     ['ol    cjs', './dist/ol/cjs/components/openlayers/index.js', false],
     ['ol    esm', './dist/ol/esm/components/openlayers/index.js', true],
+    ['mlb   cjs', './dist/mlb/cjs/components/maplibre/index.js', false],
+    ['mlb   esm', './dist/mlb/esm/components/maplibre/index.js', true],
 ]) {
     const code = esm
         ? `import(${JSON.stringify(spec)}).then(m => { if (!Object.keys(m).length) throw new Error('no exports'); })`

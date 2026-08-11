@@ -5,7 +5,14 @@ import geometryService from "../core/GeometryService";
 
 export class Breach extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Breach;
-    type: string = 'Point';
+    /**
+     * **LineString, not Point.** This generator is driven by a drawn line — its
+     * `generateGraphics` takes `Feature<LineString>` — and declaring `Point` made
+     * `renderTacticalGraphic` reject every base a consumer could give it. The
+     * OpenLayers holders never noticed because they call the registry directly and
+     * bypass that guard; the public entry point is the only reader of this field.
+     */
+    type: string = 'LineString';
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         let topArrow = geometryService.getBreachArrow(base.geometry.coordinates, -opts.size, 45, -135);

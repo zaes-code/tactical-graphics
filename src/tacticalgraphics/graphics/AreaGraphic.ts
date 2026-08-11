@@ -37,33 +37,30 @@ export class EncirclementArea extends TacticalGraphicsBase<EncirclementAreaOptio
     name: string = TacticalGraphicName.Encirclement;
     type: string = "Polygon";
 
+    /**
+     * The drawn outline, undecorated — the teeth are drawn in screen space.
+     * @see FortifiedArea, and `encirclementPaint` for why.
+     *
+     * A hostile encirclement's outline arrives cut into segments, with the gaps and
+     * the anchors the "ENY" amplifiers sit in. That stays here: the gap is a geodesic
+     * cut through the drawn ring, not a screen-space decoration.
+     */
     generateGraphics(base: Feature<Polygon>, opts?: EncirclementAreaOptions): Feature<MultiLineString | GeometryCollection> {
-        let size = opts?.size ?? 1;
-        let rotation = opts?.rotation ?? 0;
+        const size = opts?.size ?? 1;
+        const rotation = opts?.rotation ?? 0;
 
-        // create label spacing
         if (opts?.hostility === TacticalGraphicHostility.hostileFaker) {
-            let {outlineSegments, labelPoints} = geometryService.generateLabelGaps(base.geometry, {
+            const {outlineSegments, labelPoints} = geometryService.generateLabelGaps(base.geometry, {
                 rotationRad: rotation,
                 gapSize: (2 * size) / 111320
             });
-            let triangles = geometryService.generateMultiLineStringTriangles(outlineSegments, size * 0.75, size, size);
-            return this.asGeometryCollectionFeature(
-                [
-                    this.asMultiLineStringFeature([
-                        ...triangles,
-                        ...outlineSegments
-                    ]).geometry,
-                    this.asMultiPointFeature(labelPoints).geometry
-                ]
-            );
+            return this.asGeometryCollectionFeature([
+                this.asMultiLineStringFeature(outlineSegments).geometry,
+                this.asMultiPointFeature(labelPoints).geometry
+            ]);
         }
 
-        let triangles = geometryService.generatePolygonTriangles(base.geometry.coordinates, size * 0.75, size, size);
-        return this.asMultiLineStringFeature([
-            ...triangles,
-            ...base.geometry.coordinates
-        ]);
+        return this.asMultiLineStringFeature(base.geometry.coordinates);
     }
 
     generateHandles(base: Feature<Polygon>, opts: EncirclementAreaOptions | undefined): Feature<MultiPoint> {

@@ -53,6 +53,7 @@ import {PROVEN_GRAPHICS} from './provenGraphics';
 import {supportsHostility} from './graphicFieldRegistry';
 import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
+import {clearAllGraphics} from './persistence';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import ms from 'milsymbol';
 import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
@@ -147,6 +148,11 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.AntiTankDitchUnderConstruction,
     TacticalGraphicName.AntiTankDitchCompleted,
     TacticalGraphicName.AntiTankDitchReinforcedWithMines,
+    // Joined the family when its triangles stopped being baked into the GeoJSON at
+    // draw-time resolution and started being drawn in screen space like the rest.
+    // At the sweep's ordinary area size its ring is 17 px across, which is under the
+    // floor, so without this it samples as a bare rectangle.
+    TacticalGraphicName.Encirclement,
 ]);
 
 /**
@@ -276,15 +282,12 @@ export function applyHostility(
     });
 }
 
-/** Removes every rendered graphic and its controllers. */
-export function clearAllGraphics(manager: TacticalGraphicsManager): void {
-    manager.renderingVectorSource.clear();
-    manager.graphicControllers.length = 0;
-    // The controllers are gone, so their zoom subscriptions have to go too. Without
-    // this every sweep left its predecessor's listeners re-deriving graphics that
-    // were no longer on the map.
-    manager.releaseAllGraphics();
-}
+/**
+ * @see clearAllGraphics in `persistence.ts`, which is where this lives now — it is part
+ * of the save/restore story rather than the gallery's, and this file is stripped from
+ * the published build. Re-exported so existing callers keep working.
+ */
+export {clearAllGraphics};
 
 /**
  * Clears the map, draws a sample of every proven graphic grouped by category,
@@ -318,7 +321,13 @@ export function drawProvenSamples(
     const failed: SampleSweepResult['failed'] = [];
     let drawn = 0;
 
-    layout.headings.forEach(({category, x, y}) => source.addFeature(headingFeature([x, y], category)));
+    // **No category banners.** The sweep is a look at the symbols, and MapLibre's has
+    // never drawn them — so this is the engine that changed, to match. The grouping
+    // itself stays: it still orders the grid and reserves the row a heading used to sit
+    // in, which is what keeps each category starting on a fresh line.
+    //
+    // The per-graphic name under each symbol stays too. It is what makes the published
+    // gallery image readable, and it is not what a banner was doing.
 
     layout.placements.forEach(({name, cx, cy, titleY}) => {
         const handler = getController(name, layout.resolution);

@@ -60,10 +60,19 @@ export interface RouteOptions extends BaseGraphicOptions {
     direction?: RouteDirection;
 }
 
-/** Options for security-operation fan graphics (Cover/Guard/Screen). */
+/**
+ * Options for security-operation fan graphics (Cover/Guard/Screen).
+ *
+ * **Every dimension is optional**, because they are fixed ratios of one another
+ * and of `size`. These graphics are badges: not resized, describing no ground
+ * extent. A renderer with a map resolution to hand (the OpenLayers holder) passes
+ * them explicitly so the symbol holds a constant on-screen size; one without
+ * passes `size` alone and gets the same proportions.
+ * @see SecurityOperation.dimensions
+ */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
     /** Distance from the centre to where each arm's line begins, in metres. */
-    centerPadding: number;
+    centerPadding?: number;
     /**
      * Distance from the centre to the label anchor, in metres.
      *
@@ -77,10 +86,10 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
      * option set gets the previous geometry.
      */
     labelPadding?: number;
-    arrowLength: number;
-    arrowDepth: number;
-    arrowHeadLength: number;
-    arrowHeadDegree: number;
+    arrowLength?: number;
+    arrowDepth?: number;
+    arrowHeadLength?: number;
+    arrowHeadDegree?: number;
 }
 
 /**
@@ -98,11 +107,27 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  * drawn bearing. The circular variant ignores azimuth fields entirely.
  */
 export interface RangeFanBand {
+    /**
+     * How far the band reaches, in **kilometres**.
+     *
+     * The one distance in this schema that is not metres — `radius`, `width` and
+     * `decorationSize` all are. It is kilometres because a weapon or sensor envelope is
+     * quoted that way and the label prints the number bare, so metres here would put
+     * three zeroes on every ring. Kept rather than corrected: changing it would silently
+     * rescale every range fan already saved by a factor of a thousand.
+     */
     range: number;
     /** Optional user-entered name shown above the auto-generated range line. */
     label?: string;
-    /** Optional altitude string rendered as "ALT <altitude>" below the range label. */
-    altitude?: string;
+    /**
+     * Optional altitude for this band, rendered as `ALT <altitude>` beneath the range.
+     *
+     * A number in the configured {@link AltitudeUnit}, like the graphic's own altitudes,
+     * and measured from the graphic's `altitudeDatum` — every band of one fan shares it,
+     * because a fan quoting each ring against a different datum would not be one picture.
+     * A string still renders untouched. @see formatAltitude
+     */
+    altitude?: number;
     /** Sector only — absolute bearing of the band's left edge, degrees CW from north. */
     leftAzimuthDeg?: number;
     /** Sector only — absolute bearing of the band's right edge, degrees CW from north. */
@@ -915,6 +940,31 @@ export enum TacticalGraphicHostility {
 export enum TacticalGraphicStatus {
     present = 'present',
     planned = 'planned',
+}
+
+/**
+ * What an altitude is measured **from**.
+ *
+ * FM 1-02.2's field X carries a number plus the thing it is relative to — the plates
+ * print `1500FT AGL` and `20000FT AGL`, and the field description's own examples are
+ * `1500MSL` and `FL150`. The datum belongs to the *value*, not to the host: two zones on
+ * one map can honestly be one AGL and one MSL, so a global setting could never say so.
+ * That is why this is a graphic property while {@link AltitudeUnit} is configuration.
+ *
+ * - `MSL` — above **mean sea level**. A true height from a real datum.
+ * - `AGL` — above **ground level**. Also a true height, and a different one: 1500 AGL
+ *   over a 3000 ft ridge is 4500 MSL, which is why the two cannot be folded together.
+ * - `FL` — a **flight level**: hundreds of feet of *pressure* altitude against the
+ *   standard 1013.25 hPa setting. Deliberately not a height above anything — above the
+ *   transition altitude every aircraft uses the same reference, so flight levels
+ *   separate aircraft from each other rather than placing them. It renders as `FL150`,
+ *   with no unit and the number meaning 15,000 ft, which is why it takes its own branch
+ *   in `formatAltitude` rather than a suffix.
+ */
+export enum AltitudeDatum {
+    meanSeaLevel = 'MSL',
+    aboveGroundLevel = 'AGL',
+    flightLevel = 'FL',
 }
 
 export enum TacticalGraphicConfidence {
