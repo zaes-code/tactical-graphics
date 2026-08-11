@@ -26,6 +26,7 @@
  */
 
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import type {GraphicLabels} from './render';
 
 /** What the provider is told about the symbol it is being asked for. */
 export interface SecuritySymbolRequest {
@@ -37,6 +38,22 @@ export interface SecuritySymbolRequest {
     sidc: string;
     /** Intended on-screen size in CSS pixels. */
     sizePx: number;
+    /**
+     * This graphic's amplifiers.
+     *
+     * Do not reach for this to tell two graphics of the same kind apart: Cover,
+     * Guard and Screen are `SHAPE_ONLY` in the field registry and carry
+     * **hostility and nothing else** — the letter between the arms is
+     * `getLabel(name)`, fixed by doctrine, so two Screens are indistinguishable
+     * here. It is passed because a provider is a host's code and may key on
+     * whatever it likes, and because which amplifiers a graphic carries is the
+     * registry's business rather than this module's.
+     *
+     * Present on the OpenLayers provider from the start and absent here, which
+     * made a provider that read it work on one renderer and quietly not on the
+     * other.
+     */
+    labels: GraphicLabels;
 }
 
 /** An image to draw at the centre, and optionally the size to draw it at. */

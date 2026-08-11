@@ -142,6 +142,26 @@ const MEASURE_DASH = [8, 6];
 /** Dash of that sketch line, in pixels — a drawing is not a graphic yet. */
 const SKETCH_DASH = [4, 4];
 
+
+/**
+ * A short, stable key for an image source.
+ *
+ * FNV-1a over the `src`. It only has to tell one provider's answers apart from
+ * another's within a session, and a `data:` URI is far too long to use as a MapLibre
+ * image id directly — the id is written into every symbol feature's properties too,
+ * so it travels with the source data on each rebuild.
+ *
+ * Exported for its test only; it is not on the `/maplibre` barrel.
+ */
+export function imageKey(src: string): string {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < src.length; i++) {
+        hash ^= src.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(36);
+}
+
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
     /**
@@ -601,10 +621,23 @@ export class NativeLayerRenderer {
                 hostility,
                 sidc: securitySymbolSidc(hostility),
                 sizePx: getSecuritySymbolSize(),
+                // The graphic's own amplifiers, which the OpenLayers provider has
+                // always been handed. A provider is a host's code and may key on
+                // anything in here.
+                labels: {...graphic.properties, label: graphic.properties.label ?? ''},
             });
             if (!symbol) continue;
 
-            const iconId = `tg-sym-${graphic.name}-${hostility}`;
+            // **Keyed on the image, not on the graphic.** The id used to be
+            // `name`-`hostility`, which assumes those two decide the picture. They do
+            // for the default provider and not for a host's: one that varies the
+            // symbol by `labels`, or returns a per-graphic `sizePx` — milsymbol bakes
+            // the requested size into the SVG, so a different size is a different
+            // image — had every such graphic collapse onto the first raster
+            // registered. Hashing the `src` makes two graphics share a raster exactly
+            // when they asked for the same one, which is also the dedupe the old key
+            // was trying to be.
+            const iconId = `tg-sym-${imageKey(symbol.src)}`;
             this.registerIcon(iconId, symbol.src);
             if (!this.map.hasImage(iconId)) continue;
 
