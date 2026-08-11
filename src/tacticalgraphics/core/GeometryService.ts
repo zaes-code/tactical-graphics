@@ -2,6 +2,15 @@ import {Feature, LineString, MultiLineString, Point, Polygon, Position} from 'ge
 import {Coordinate} from './type';
 import * as turf from '@turf/turf';
 
+/**
+ * Most dashes any one line may be broken into.
+ *
+ * A ceiling, not a target: 250 dashes across a line is already finer than a screen
+ * can show, so anything past it is invisible detail that still costs a coordinate
+ * pair each. @see lineStringToDashes
+ */
+const MAX_DASHES_PER_LINE = 250;
+
 const EARTH_RADIUS_METERS = 6378137;
 
 /**
@@ -1314,13 +1323,34 @@ class GeometryService {
         return [lon, lat];
     }
 
+    /**
+     * Breaks a line into dashes of the given metre lengths.
+     *
+     * **The pattern is clamped against the line's own length**, because it arrives
+     * as a fraction of a caller-supplied `radius` and a caller that supplies none
+     * gets a default measured in tens of metres. On a line hundreds of kilometres
+     * long that produced 66,600 dashes — 133,000 coordinates for one graphic, where
+     * the next heaviest in the whole catalogue has 237. It is invisible on screen
+     * (the dashes are far below a pixel) and it is most of a frame's work.
+     *
+     * The floor is a share of the total length, so the clamp only ever engages when
+     * the pattern was already too fine to see. A caller passing a sensible period is
+     * unaffected.
+     */
     lineStringToDashes(coords: Position[], dashPattern = [10, 10]) {
-        const [dashLength, gapLength] = dashPattern;
         if (coords.length < 2) {
             throw new Error('LineString must have at least 2 points');
         }
 
         const projected = coords.map(this.project);
+
+        let totalLength = 0;
+        for (let i = 0; i < projected.length - 1; i++) {
+            totalLength += Math.hypot(projected[i + 1][0] - projected[i][0], projected[i + 1][1] - projected[i][1]);
+        }
+        const minPeriod = totalLength / MAX_DASHES_PER_LINE;
+        const dashLength = Math.max(dashPattern[0], minPeriod / 2);
+        const gapLength = Math.max(dashPattern[1], minPeriod / 2);
 
         let carry = 0;
         let isDash = true;

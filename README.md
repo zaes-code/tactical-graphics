@@ -2,7 +2,7 @@
 
 Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
-Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers or anything else that reads GeoJSON.
+Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
 This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in meters.
 
@@ -12,7 +12,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*Every verified graphic, drawn in one sweep by the demo's **Draw all samples** button and grouped by category. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would.*
+*Every paintable graphic, drawn in one sweep by the demo's **Draw all samples** button. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
 
 ---
 
@@ -24,22 +24,35 @@ npm install @zaes/tactical-graphics
 
 The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
 
-Two entry points ship, and you can use either on its own:
+Three entry points ship, and you can use any of them on its own:
 
 | Import | What it gives you | Needs |
 |---|---|---|
-| `@zaes/tactical-graphics` | The geometry. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
-| `@zaes/tactical-graphics/openlayers` | The renderer: every style function, the 4326 → 3857 adapter, the feature holders and controllers, and a manager that wires draw/modify onto a map. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
-npm install ol             # only if you want the OpenLayers entry point
+npm install ol             # only for the OpenLayers entry point
+npm install maplibre-gl    # only for the MapLibre entry point
 npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
 ```
 
-Both are peer dependencies and both are optional, so installing the package for
-its geometry alone pulls in neither. Nothing in this package imports `milsymbol`
-— you hand it in, once, if you want it. See
+All three are peer dependencies and all are optional, so installing the package
+for its geometry alone pulls in none of them. Nothing in this package imports
+`milsymbol` — you hand it in, once, if you want it. See
 [Security operations: the center symbol](#security-operations-the-center-symbol).
+
+**The same names, from either subpath.** `createTacticalGraphics` and the library's own
+exports — configuration, the palette, the property key, the center-symbol controls — are
+offered by both entry points, so moving a program from one engine to the other changes
+the import path and nothing else. A test asserts the two keep matching.
+
+**The two renderers paint through the same code.** Colors, label placement,
+screen-sized decorations, the radius read-out, which handle does what, how a
+rotate picks its pivot — all of it lives in the map-agnostic entry point and both
+renderers read it. That is deliberate: it is what stops the two drifting apart,
+and it means a third renderer inherits the symbology rather than reinventing it.
 
 ---
 
@@ -77,8 +90,9 @@ You get three pieces back:
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
 
-If you want it drawn, styled and editable on an OpenLayers map instead, that is the
-[OpenLayers entry point](#openlayers--styled-drawable-editable) — three lines.
+If you want it drawn, styled and editable on a map instead, that is
+[`createTacticalGraphics`](#rendering) — the same three lines whichever
+engine you point it at.
 
 ---
 
@@ -106,34 +120,103 @@ tacticalGraphic: {
 
     // Amplifiers — text rendered on the graphic.
     label: '1-508 IN',        // primary designation
-    secondId: 'TF RAIDER',    // secondary designation
+    secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    countryCode: 'USA',       // country beside the primary designation
+    secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
     endDate: '021800ZJUN26',
-    minAltitude: '500',
-    maxAltitude: '2000',
+    eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
+    minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
+    maxAltitude: 2000,
+    altitudeDatum: 'AGL',     // MSL | AGL | FL — what those numbers are measured from
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
     // Symbology — affects color and dash pattern.
     hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
     status: 'present',        // present | planned  (planned ⇒ dashed)
+    confidence: 'confirmed',  // rendered where doctrine shows a reliability rating
     echelon: 'battalion',
     direction: 'ONE_WAY',     // route graphics
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
-                              // Only for graphics that HAVE a center.
+                              // Only for graphics that HAVE a center. METERS — note that
+                              // a range fan's bands are kilometers, see below.
     decorationSize: 300,      // how big to draw a line graphic's decorations — an
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
     width: 600,               // FULL width across a drawn line — rail to rail on an axis
                               // of advance, edge to edge on a corridor
-    rotation: 45,             // degrees (point graphics)
-    bend: 0.8,                // Turn only — how sharply it turns, × radius
-    labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
+    rotation: 45,             // degrees, counter-clockwise from east (point graphics)
+    mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
+                              // withdrawal, the chevron on an abatis
+    bend: 0.8,                // Turn and Envelopment — how sharply the curve bows
+    labelGapDegrees: 15,      // arc mission tasks — angular hole left for the letter
+    labelGap: 0,              // the same hole in meters, for the graphics that cut it
+                              // from the rendered glyph instead
+    rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 }
 ```
+
+**Altitudes are numbers**, in whichever unit the host configured — feet by default. The
+renderer appends it, so `500` draws as `500FT`, or `500M` under
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`.
+
+`altitudeDatum` says what they are measured **from**, and it is a property rather than a
+setting because two zones on one map can honestly differ: 1500 AGL over a 3000 ft ridge
+is 4500 MSL. It renders after the unit, as the plates print it — `1500FT AGL`.
+
+**`FL` is the exception, and deliberately so.** A flight level is hundreds of feet of
+*pressure* altitude against the standard 1013.25 hPa setting, so it is not a height above
+anything and the configured unit does not apply. Under `FL` the number **is** the level:
+`150` draws as `FL150`, not `FL15000`.
+
+FM 1-02.2 makes these fields free text, so a string still renders untouched — a
+`'FL150'` or a `'1500MSL'` from another system draws exactly as written, datum and all.
+A number plus a datum is what the types invite, because that is what a program can sort
+and compare. See [Configuring colors and sizes](#configuring-colors-and-sizes).
+
+### Range fans
+
+The two weapon/sensor range fans read one extra object. Every other graphic ignores it:
+
+```ts
+rangeFan: {
+    // One entry per ring, innermost first — they are sorted, so the order you write
+    // them in does not matter.
+    bands: [
+        {range: 5,  label: 'MG',   altitude: 300},
+        {range: 12, label: 'ATGM', altitude: 1500, leftAzimuthDeg: 340, rightAzimuthDeg: 40},
+    ],
+    // Sector fan only: where the sector points, degrees clockwise from north.
+    // Omit it and the fan uses the bearing the graphic was drawn at.
+    centerAzimuthDeg: 15,
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `range` | how far the ring reaches, **in kilometers** — see the warning below |
+| `label` | optional name, drawn above the range line (`MG`, `ATGM`) |
+| `altitude` | optional, a number in the configured unit — drawn as `ALT 300FT AGL`, measured from the graphic's own `altitudeDatum` |
+| `leftAzimuthDeg` / `rightAzimuthDeg` | sector fan only: this band's own edges, degrees clockwise from north. Omit them and the band spans the sector |
+
+**`range` is in kilometers, and it is the only distance here that is not meters.**
+`radius`, `width` and `decorationSize` are all meters. A range fan is quoted in
+kilometers because that is how an envelope is written and the label prints the number
+bare — meters would put three zeroes on every ring. It is a wart, and it stays one: the
+alternative silently rescales every range fan already saved by a factor of a thousand.
+
+Bands render as `MIN RG 5` on a circular fan and `RG 5` on a sector, matching FM 1-02.2
+table 5-276.
+
+**A fan with no `bands` still draws.** It falls back to a single ring taken from the
+graphic's own `radius` — so a `radius` of 180000 meters draws one ring labeled
+`MIN RG 180`. That is the shape you get from the draw tool before any band is entered,
+and it is why the two units sit next to each other on one graphic: `radius` is the
+meters a user dragged, `range` is the kilometers they typed.
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
@@ -172,7 +255,7 @@ renderTacticalGraphic({
     type: 'Feature',
     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
     properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
-});                                             // rails 300 m either side of the centreline
+});                                             // rails 300 m either side of the centerline
 ```
 
 **`decorationSize` — the ornament on a line, not a reach.** A direction of attack is its
@@ -222,56 +305,170 @@ getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
 
 ## Rendering
 
-### OpenLayers — styled, drawable, editable
-
-`@zaes/tactical-graphics/openlayers` is the renderer the demo uses. It carries the
-doctrinal styling — standard identity colors, dashed planned status, echelon glyphs,
-amplifier placement — plus draw and edit interactions.
-
-Three objects appear in every OpenLayers snippet below. This is all they are:
+Both renderers expose the **same function, with the same signature, returning the
+same interface**. The import line is the only difference between the two forms below
+— everything after it is identical, and so is everything you do with the result.
 
 ```ts
-import Map from 'ol/Map';
-import View from 'ol/View';
-import {fromLonLat} from 'ol/proj';
-import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
+import {createTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+// ...or
+import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
 
-// `map` — your own ol/Map. Nothing about it is special; the manager attaches to it.
-const map = new Map({
-    target: 'map',
-    view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 12}),
-});
-
-// `manager` — takes the map and nothing else. It creates its own vector layer,
-// adds it to the map, and owns every graphic drawn through it.
-const manager = new TacticalGraphicsManager(map);
-
-// `source` — that layer's ol/source/Vector, exposed for the things you do directly
-// to features: add your own, or repaint them all after a config change.
-const source = manager.renderingVectorSource;
-```
-
-Then drawing a graphic is one call. The user clicks out the base geometry, and the
-manager builds, styles and wires it up:
-
-```ts
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 
-manager.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+const graphics = createTacticalGraphics(map);
+
+graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);  // then the user clicks
+graphics.setInteractionMode('modify');                         // rotate | resize | translate | modify | view
+
+const saved = graphics.snapshot();     // portable GeoJSON, one feature per graphic
+graphics.restore(saved);               // rebuilt editable — in either engine
 ```
 
-That is the whole managed path — draw, modify, rotate, resize and the properties the
-style functions read all follow from it.
+`createTacticalGraphics` attaches to a map you already made, adds its own layer or
+sources, and wires the draw and edit interactions. `destroy()` takes them off again
+and leaves your map alone.
 
-This method was previously called `handleDrawTacticalGraphic`. That name still works
-— it delegates to `startDrawing` — but it is deprecated.
+| | |
+|---|---|
+| `capabilities` | what this engine supports, so a host can disable a control **with a reason** rather than offer one that does nothing |
+| `startDrawing(name)` / `cancelDrawing()` | arm the draw tool; the next clicks place the base |
+| `setInteractionMode(mode)` / `getInteractionMode()` | what a drag means: `view`, `translate`, `rotate`, `resize`, `modify` |
+| `clearAll()` | remove every graphic and return to `view` |
+| `snapshot()` / `restore(fc)` | the whole map as GeoJSON, and back — see [Saving and restoring](#saving-and-restoring-a-whole-map) |
+| `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics` |
+| `destroy()` | detach every listener and interaction |
+
+Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,
+`onModeChange` — and they mean the same thing in both engines.
+
+### A complete example, per engine
+
+The same program twice. Read either one on its own — that is the point of printing both
+in full rather than a shared snippet with the import elided.
+
+#### OpenLayers
+
+```ts
+import 'ol/ol.css';
+import Map from 'ol/Map';
+import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile';
+import OSM from 'ol/source/OSM';
+import {fromLonLat} from 'ol/proj';
+
+import {TacticalGraphicName, configureTacticalGraphics} from '@zaes/tactical-graphics';
+import {createTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+
+const map = new Map({
+    target: 'map',
+    layers: [new TileLayer({source: new OSM()})],
+    view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 10}),
+});
+
+const graphics = createTacticalGraphics(map, {
+    onChange: () => localStorage.setItem('map', JSON.stringify(graphics.snapshot())),
+    onSelect: g => console.log(g ? `selected ${g.name}` : 'nothing selected'),
+    onModeChange: mode => toolbar.setActive(mode),
+});
+
+// Draw one: the user clicks out the base geometry from here.
+graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+
+// Then let them edit it.
+graphics.setInteractionMode('modify');
+
+// Re-theme at any time. The config lives in the root package, so this call is
+// identical on both engines — but a repaint has to be asked for.
+configureTacticalGraphics({lineWidth: 3, defaultLineColor: '#e0e0e0'});
+graphics.refreshStyles();
+
+// Save and reload.
+const saved = graphics.snapshot();
+graphics.clearAll();
+graphics.restore(saved);
+
+// On teardown.
+graphics.destroy();
+```
+
+#### MapLibre
+
+```ts
+import 'maplibre-gl/dist/maplibre-gl.css';
+import maplibregl from 'maplibre-gl';
+
+import {TacticalGraphicName, configureTacticalGraphics} from '@zaes/tactical-graphics';
+import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://your-style-server/style.json',   // must serve glyphs — see below
+    center: [-77.04, 38.89],
+    zoom: 10,
+});
+
+// Sources and layers cannot be added before the style is ready.
+map.on('load', () => {
+    const graphics = createTacticalGraphics(map, {
+        onChange: () => localStorage.setItem('map', JSON.stringify(graphics.snapshot())),
+        onSelect: g => console.log(g ? `selected ${g.name}` : 'nothing selected'),
+        onModeChange: mode => toolbar.setActive(mode),
+    });
+
+    // Draw one: the user clicks out the base geometry from here.
+    graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+
+    // Then let them edit it.
+    graphics.setInteractionMode('modify');
+
+    // Re-theme at any time. The config lives in the root package, so this call is
+    // identical on both engines — but a repaint has to be asked for.
+    configureTacticalGraphics({lineWidth: 3, defaultLineColor: '#e0e0e0'});
+    graphics.refreshStyles();
+
+    // Save and reload.
+    const saved = graphics.snapshot();
+    graphics.clearAll();
+    graphics.restore(saved);
+
+    // On teardown.
+    graphics.destroy();
+});
+```
+
+**Three lines differ**, and each for a reason that is MapLibre's rather than this
+library's: the map is constructed differently, the work waits for `load`, and the style
+must serve glyphs because MapLibre draws text from SDF glyph PBFs rather than a system
+font. Everything from `createTacticalGraphics` onward is character-for-character the
+same.
+
+### What the two engines share
+
+Nearly everything, and by construction rather than by discipline: **both paint
+through the same map-agnostic code**. Every color and label rule, the screen-sized
+decorations, the radius read-out, which handle sets a width, which vertex is inert
+under a reshape, how many points a base takes, where a rotate pivots, which graphics
+must stay rectangular, and where a drag may add a vertex. Fixing one fixes both,
+because there is only one of each.
+
+Draw, edit, rotate, resize, reshape, add-a-vertex, the hover cursor and the marker
+showing where a new vertex would land are all present in both.
+
+### What still differs
+
+| | |
+|---|---|
+| **Label rasterisation** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
+| **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
+| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realise geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
 
 ### The radius read-out
 
-While a circular graphic is drawn or resized, the renderer draws a hashed line from its
-center out along the gesture, labeled with the distance — meters below a kilometer,
-kilometers above. It is editor chrome: `role: 'handle'`, cleared the moment the gesture
-ends, and it never reaches `serializeTacticalGraphics` or a restored map.
+While a circular graphic is drawn or resized, both renderers draw a hashed line from
+its center out along the gesture, labeled with the distance — meters below a
+kilometer, kilometers above. It is editor chrome: `role: 'handle'`, cleared the
+moment the gesture ends, and it never reaches a snapshot or a restored map.
 
 It applies to the graphics a user sizes by dragging a radius — the circular areas, the arc
 mission tasks, the range fans. Graphics whose radius is real but not a dimension you could
@@ -282,42 +479,14 @@ That same list decides whether the Feature Properties dialog shows a **Radius** 
 so a graphic can never report a radius in one place and not the other. Both are read-outs,
 not inputs — a graphic is sized by dragging it.
 
-### Driving one graphic yourself
+The read-out is a *measurement*, so it reads in whichever unit suits the number — `400 m`,
+`78 km`. That is deliberately not how the `WIDTH` amplifier or a range band is written:
+those are part of the symbol and follow doctrine's own conventions. A read-out that
+changes units is easier to read; an amplifier that does is a symbol that changes meaning.
 
-Skip the manager's draw interaction when you are placing graphics from data rather
-than from a user's clicks. You build the base feature; the controller does the rest:
+### Geometry only, no styling
 
-```ts
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
-
-const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
-handler.setBaseFeature(drawnFeature);          // your own LineString / Point / Polygon feature
-source.addFeatures(handler.getFeatures());     // graphic + labels + handles
-manager.watchResolution(handler);              // see below — not optional
-
-writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
-    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
-});
-```
-
-Two rules apply to anything built this way:
-
-**Set amplifiers through `writeGraphicProperties`, never `feature.set`.**
-`ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
-keep drawing the old label.
-
-**`manager.watchResolution(handler)` is not optional.** Some graphics — every
-security operation — have geometry that is a screen-pixel constant times the map
-resolution, so without a `change:resolution` subscription they are pinned in meters
-and grow and shrink as you zoom. The manager does this for you when the user draws,
-and `restoreTacticalGraphics` does it on load; a graphic you build yourself needs it
-doing. Pair it with `unwatchResolution` when you remove the graphic, or the listener
-outlives its features.
-
-### OpenLayers — geometry only
-
-If you would rather keep your own styling, skip the subpath entirely.
+If you would rather keep your own styling, skip the subpaths entirely.
 `renderTacticalGraphic` emits EPSG:4326, so reproject on read:
 
 ```ts
@@ -338,9 +507,13 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 (`graphic` / `label` / `handle`) to style each part. It returns the `graphic` and
 `label` features by default; ask for `handle` too when you are building an editor.
 
-OpenLayers is the reference implementation because that is where the full
-MIL-STD-2525E / FM 1-02.2 styling lives; other renderers show the correct geometry
-but style it themselves.
+**Geometry is not the whole symbol.** Obstacle teeth, the gap cut around a mission
+task's letter, a screen-sized arrowhead and the rest are synthesised at paint time,
+so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
+exported from the root entry point for exactly this — `getPaintFunction(name)`
+returns the marks to draw, in projected meters, with no renderer in them. That is
+how both of the renderers above are built, and it is the supported way to build a
+third.
 
 ### Drawing the label text
 
@@ -444,19 +617,22 @@ you just cleared. The former is a pure function of the enum.
 
 ## Saving and restoring a whole map
 
-`serializeTacticalGraphics` writes every graphic the manager holds to GeoJSON, and
-`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols,
-the same objects, ready to rotate, resize and modify:
+`snapshot()` writes every graphic to GeoJSON and `restore()` rebuilds them **editable**
+— not a picture of the symbols, the same objects, ready to rotate, resize and modify.
+Both come from [`createTacticalGraphics`](#rendering), so this is the same code whichever
+engine drew the map:
 
 ```ts
-import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
-
-const snapshot = serializeTacticalGraphics(manager);   // one feature per graphic
+const snapshot = graphics.snapshot();          // one feature per graphic
 await db.save(JSON.stringify(snapshot));
 
-// later, in a fresh session
-const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+// later, in a fresh session — or in the other engine
+graphics.restore(await db.load());
 ```
+
+**A snapshot taken in one engine restores in the other.** Nothing renderer-specific
+travels with it, which is what makes that true rather than merely likely; the demo's
+engine picker hands the map across on every switch.
 
 A snapshot holds **one feature per graphic** — the base geometry the user drew.
 Everything else is derived and regenerates on load. A record is the same
@@ -478,8 +654,8 @@ else:
 as long as `tacticalGraphic` survives, the graphic rebuilds exactly. There is no
 companion object to keep, and no viewport state to lose.
 
-A graphic that fails to restore is reported in `failed` and rolled back on its own,
-so one bad record cannot cost you the rest of the map.
+A base short of what its graphic needs is completed on the way in, so a record written
+by hand — or by an older version — arrives fully editable rather than half-drawn.
 
 ---
 
@@ -492,10 +668,13 @@ register one:
 
 ```ts
 import ms from 'milsymbol';
-import {useMilsymbolSecurityOperationSymbols} from '@zaes/tactical-graphics/openlayers';
+import {useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
 
-useMilsymbolSecurityOperationSymbols(ms);   // once, at startup
+useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
+
+From the **root** entry point, because a center symbol is symbology rather than
+rendering: one registration serves whichever engine is drawing, and both read it.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
@@ -503,69 +682,84 @@ dependency: a consumer who wants the geometry, or the other 200-odd graphics, ne
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
-hostile Screen gets a hostile-framed symbol. `securityOperationSidc(hostility)`
-exposes the same doctrinal code if you want to build on it.
+hostile Screen gets a hostile-framed symbol. `securitySymbolSidc(hostility)` exposes the
+same doctrinal code if you want to build on it.
 
 ### Sizing the symbol
 
 ```ts
-import {setSecurityOperationSymbolSize} from '@zaes/tactical-graphics/openlayers';
+import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
 
-setSecurityOperationSymbolSize(40);        // CSS px, default 25, clamped to [8, 96]
-source.forEachFeature(f => f.changed());   // takes effect on the next render
+setSecuritySymbolSize(40);   // CSS px, default 25, clamped to [8, 96]
+graphics.refreshStyles();    // takes effect on the next render
 ```
 
 **Not** milsymbol's own `size` option. That sets the SVG's internal resolution; the
-`Icon` built around it still draws at the library's size, so
-`useMilsymbolSecurityOperationSymbols(ms, {size: 40})` changes the sharpness and
-nothing you can see. The size belongs to the library because the library is what
-builds the `Icon` around a provider that returns a `src` string — a provider
-returning a whole `Style` bypasses this and owns its own sizing.
+image built around it still draws at the library's size, so passing `{size: 40}` to
+`useMilsymbolSecuritySymbols` changes the sharpness and nothing you can see. The size
+belongs to the library because the library is what places the image around a provider
+that returns a `src` string.
 
 To size **one** symbol rather than all of them, return `{src, sizePx}` from its
 provider. That wins over the global size and leaves it untouched.
 
 ### Choosing the symbol
 
-Register a provider of your own instead of `useMilsymbolSecurityOperationSymbols`.
-It can return four things, in ascending order of control:
+Register a provider of your own instead of `useMilsymbolSecuritySymbols`. It can return
+three things, in ascending order of control:
 
 | Return | You get |
 |---|---|
 | a **string** | used as an image `src`, drawn at the library's size |
 | **`{src, sizePx}`** | a `src` plus its own on-screen size, for this symbol only |
-| an **`ol` `Style`** | used verbatim — no `Icon` is built, so sizing and anchoring are yours |
 | **`undefined`** | no center symbol |
 
 ```ts
-setSecurityOperationSymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
+import {setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setSecuritySymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
 ```
 
 It is global — one call configures the whole application — and it is handed the
 graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
 
-That is as far as the global provider goes. It also receives `labels`, but these three
-graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing else), so
-two Screens look identical to it. To vary those, give the individual graphic its own
-provider with `handler.setSymbolProvider` — it wins over the global one, and
-`undefined` puts the graphic back on it.
+It also receives `labels`, the graphic's amplifiers, and may return a per-graphic
+`sizePx`. In practice these three graphics carry only `hostility`
+(`getGraphicFields('Screen')` offers nothing else), so two Screens look identical to a
+provider keyed on the bag alone.
 
-### Worked example: three security operations, three units
+**To tell two of a kind apart, bind a provider to one graphic by id:**
 
-Placed programmatically, each with its own unit symbol. Uses the `map`, `source` and
-`manager` from [the setup above](#openlayers--styled-drawable-editable).
+```ts
+import {setGraphicSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setGraphicSecuritySymbolProvider(graphicId, ({sidc, sizePx}) => cavalryTroop(sidc, sizePx));
+setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global provider
+```
+
+It wins over the global provider for that graphic and returns `undefined` to draw no
+center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayers holder,
+`id` on a `MapLibreTacticalGraphic`. Both engines honour it, and both repaint straight
+away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
+the registry is keyed by id and the library is never told when an id stops existing.
+
+#### Worked example: three security operations, three units
+
+Each with its own unit symbol, on **either engine** — every call below is from the façade
+or the root package, so the only thing that differs between OpenLayers and MapLibre is
+the import path in the setup above.
+
+The provider is the global one, keyed on `request.name`. That is enough here because the
+three graphics are three *kinds*; reach for `setGraphicSecuritySymbolProvider` only when
+two graphics of the **same** kind need different symbols.
 
 ```ts
 import ms from 'milsymbol';
-import Feature from 'ol/Feature';
-import Point from 'ol/geom/Point';
-import {fromLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+import {TacticalGraphicHostility, TacticalGraphicName, setSecuritySymbolProvider} from '@zaes/tactical-graphics';
 
-// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard
-// identity the library derived from `hostility` survives the swap, and a hostile
-// graphic stays hostile-framed whichever unit goes in.
+// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard identity
+// the library derived from `hostility` survives the swap, and a hostile graphic stays
+// hostile-framed whichever unit goes in.
 const UNIT = {
     [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
     [TacticalGraphicName.Guard]: '121000',    // oval + diagonal  — armored cavalry
@@ -573,39 +767,143 @@ const UNIT = {
 };
 const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
 
-function placeSecurityOperation(name, lonLat, hostility = TacticalGraphicHostility.friend) {
-    const handler = getController(name, map.getView().getResolution()!);
-    handler.setSymbolId(crypto.randomUUID());
+setSecuritySymbolProvider(({name, sidc}) => {
+    const entity = UNIT[name];
+    if (!entity) return undefined;                    // no symbol for anything else
+    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI render.
+    // `sizePx` is what it actually draws at; return a bare string to take the library's.
+    const svg = new ms.Symbol(sidc.slice(0, 10) + entity + sidc.slice(16), {size: UNIT_SIZE_PX * 2}).asSVG();
+    return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
+});
 
-    // This graphic's own provider, overriding whatever is registered globally.
-    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI
-    // render. `sizePx` is what it actually draws at. Return a bare string instead
-    // to take the library's size.
-    handler.setSymbolProvider(({sidc}) => {
-        const unit = sidc.slice(0, 10) + UNIT[name] + sidc.slice(16);
-        const svg = new ms.Symbol(unit, {size: UNIT_SIZE_PX * 2}).asSVG();
-        return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
-    });
+// Placed from data rather than drawn. `hostility` is the only amplifier these three
+// take: the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S,
+// so there is no user label to set.
+const at = (name, coordinates, hostility = TacticalGraphicHostility.friend) => ({
+    type: 'Feature',
+    geometry: {type: 'Point', coordinates},
+    properties: {tacticalGraphic: {name, hostility}},
+});
 
-    handler.setBaseFeature(new Feature(new Point(fromLonLat(lonLat))));
-
-    // `hostility` is the only amplifier these three take. There is no user label:
-    // the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S.
-    // `label: ''` is here only because the type requires the field.
-    writeGraphicProperties(handler.getFeatures(), name, {label: '', hostility});
-
-    source.addFeatures(handler.getFeatures());
-    manager.watchResolution(handler);   // required — the geometry is screen-pixel sized
-}
-
-placeSecurityOperation(TacticalGraphicName.Screen, [-77.10, 38.89]);
-placeSecurityOperation(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker);
-placeSecurityOperation(TacticalGraphicName.Cover, [-76.98, 38.89]);
+// `restore` replaces the map's contents, so this is a load rather than an append —
+// snapshot first if you are adding to something already drawn.
+graphics.restore({
+    type: 'FeatureCollection',
+    features: [
+        at(TacticalGraphicName.Screen, [-77.10, 38.89]),
+        at(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker),
+        at(TacticalGraphicName.Cover, [-76.98, 38.89]),
+    ],
+});
 ```
 
-The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
-performs which security task, so substitute your own. The demo's **Draw all samples**
-button uses exactly this mechanism.
+The entity codes are illustrative — FM 1-02.2 does not prescribe which unit performs
+which security task, so substitute your own.
+
+Note what you do **not** do here. These three are sized in screen pixels rather than
+meters, so their geometry has to be re-derived whenever the map zooms; the façade
+subscribes for you. Reaching past it to place graphics yourself is where that becomes
+your job — see [Placing graphics from data](#placing-graphics-from-data).
+
+---
+
+## Advanced: reaching past the façade
+
+Everything above works the same on both engines. Everything below does not, and is
+grouped here so that the difference is a place you go rather than a surprise you meet.
+
+The two renderers are not mirror images and are not meant to be: OpenLayers retains
+mutable features and edits them in place, MapLibre derives GeoJSON sources and discards
+them on the next rebuild. Those are different rendering models, and the façade exists so
+you only have to care when you want to. `createTacticalGraphics(map, {manager})` and
+`{renderer}` adopt an object you already built, so reaching past it costs nothing.
+
+### Advanced: OpenLayers
+
+`TacticalGraphicsManager`, `getController`, the feature holders and the controllers. One
+thing here has no MapLibre counterpart:
+
+**A provider for one graphic, handed straight to the holder.** `handler.setSymbolProvider`
+is the same idea as `setGraphicSecuritySymbolProvider` above without needing an id, and it
+accepts this subpath's wider return — an `ol` `Style` included. It takes precedence over
+the shared per-graphic registry, which works on both engines and is what to reach for
+first.
+
+**A provider that returns an `ol` `Style`.** Used verbatim — no image is built, so sizing
+and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
+accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
+
+Everything *else* about the provider is shared, and a provider is resolved most-specific
+first: `handler.setSymbolProvider`, then `setGraphicSecuritySymbolProvider(id, …)`, then
+the OpenLayers global, then the shared global. `labels`, a per-graphic `sizePx` and a
+per-graphic provider all reach both engines. What stays OpenLayers-only is the `ol`
+`Style` return, which cannot cross engines at all.
+
+#### Placing graphics from data
+
+Skip the draw interaction when the geometry comes from data rather than a user's clicks.
+You build the base feature; the controller does the rest:
+
+```ts
+import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+
+const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
+handler.setBaseFeature(drawnFeature);          // your own LineString / Point / Polygon feature
+source.addFeatures(handler.getFeatures());     // graphic + labels + handles
+manager.watchResolution(handler);              // see below — not optional
+
+writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
+    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
+});
+```
+
+Two rules apply to anything built this way:
+
+**Set amplifiers through `writeGraphicProperties`, never `feature.set`.**
+`ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
+keep drawing the old label.
+
+**`manager.watchResolution(handler)` is not optional.** Some graphics — every
+security operation — have geometry that is a screen-pixel constant times the map
+resolution, so without a `change:resolution` subscription they are pinned in meters
+and grow and shrink as you zoom. The manager does this for you when the user draws,
+and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
+with `unwatchResolution` when you remove the graphic, or the listener outlives its
+features.
+
+#### When you need the restore report
+
+`restore()` returns nothing, because the common case is "put the map back". This subpath
+exposes the underlying pair when you need to know what failed:
+
+```ts
+import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+
+const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+```
+
+A graphic that fails to restore is reported in `failed` and rolled back on its own, so
+one bad record cannot cost you the rest of the map.
+
+### Advanced: MapLibre
+
+`NativeLayerRenderer` and `MapLibreInteractions`. `buildTacticalGraphic` is the
+counterpart to `getController` for placing graphics from data, and hands back a ready
+graphic rather than mutating a holder:
+
+```ts
+import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
+
+const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
+    label: 'A', hostility: 'Hostile/Faker',
+}, resolution);
+if (graphic) renderer.add(graphic);
+```
+
+**Text needs a glyph server.** MapLibre draws labels from pre-generated SDF glyphs served
+over HTTP; there is no path to a system font. A deployment either self-hosts a glyph set
+or points at someone else's. OpenLayers has no equivalent requirement — it is the
+sharpest practical difference between the two.
 
 ---
 
@@ -900,18 +1198,30 @@ src/tacticalgraphics/          # The library. Pure GeoJSON, map-agnostic.
   core/render.ts               #   renderTacticalGraphic()
   core/type.ts                 #   TacticalGraphicName + the properties schema
   core/GeometryService.ts      #   all geographic math (turf + custom)
-  core/TacticalGraphicsRegistry.ts
+  core/handles.ts              #   the editing rules both renderers obey
+  core/symbology.ts            #   colors, label scales, per-graphic symbol rules
+  symbology/                   #   paint functions — the marks, with no renderer
   graphics/                    #   one generator class per graphic family
 
 src/components/
-  openlayers/                  # Published as @zaes/tactical-graphics/openlayers:
-                               #   styling, the 4326→3857 adapter, draw/edit
+  openlayers/                  # Published as @zaes/tactical-graphics/openlayers
+  maplibre/                    # Published as @zaes/tactical-graphics/maplibre
   MapControls.tsx, …           # The React demo — not published.
 ```
 
-The demo application is built on **OpenLayers** — it shows drawing, editing, rotating, resizing, modifying, and a Feature Properties dialog, on a keyless OpenStreetMap basemap (no API key needed). Start it with `npm start`.
+The demo runs on **either renderer** — there is a picker in the app bar, and a
+graphic drawn in one survives the switch to the other. It shows drawing, editing,
+rotating, resizing, modifying and a Feature Properties dialog, on a keyless
+OpenStreetMap basemap (no API key needed). Start it with `npm start`.
 
-The geometry layer is renderer-agnostic — it emits GeoJSON, so any renderer that reads GeoJSON can draw it (see [Rendering](#rendering)) — and it never imports `ol`, which the build asserts. The OpenLayers styling ships beside it as an optional entry point; matching that styling pixel-for-pixel on another renderer is a per-renderer effort left to consumers.
+**Where the shared code lives, and why it matters.** The geometry layer never
+imports `ol` or `maplibre-gl` — the build asserts it — but it carries more than
+geometry: `symbology/` holds the paint functions that say what marks to draw, and
+`core/symbology.ts` and `core/handles.ts` hold the per-graphic rules that decide a
+label's font, a decoration's size, which handle sets a width and where a rotate
+pivots. Both renderers read all of it. A rule that lives in one renderer instead
+is how the two silently drift apart, which is a mistake this repo has made and
+written up: `ai/conventions.md`, "A symbology fact never lives in a holder".
 
 ---
 
@@ -951,7 +1261,14 @@ a fixed-size badge like Destroy has no resize to offer.
 ## Roadmap
 
 - Complete the remaining graphics from FM 1-02.2.
-- A Cesium 2D/3D view is planned once the OpenLayers graphics are complete. The OpenLayers style functions already read their amplifiers (label, hostility, status, DTGs) from `properties.tacticalGraphic`, but the styling *logic* is still OpenLayers-specific code — a second renderer would first need that logic expressed as portable, renderer-agnostic data.
+- **Leaflet is scoped as a third rendering engine.** The groundwork is done: symbology
+  now lives in the map-agnostic half as paint functions — geometry, colors, and text
+  described in projected meters — and both shipping engines are consumers of it rather
+  than owners. A third engine implements one bridge from those paint descriptions to
+  its own primitives, and inherits every graphic. Leaflet's canvas renderer is the
+  natural fit; the open questions are its lack of a built-in editing interaction and
+  how far its layer model stretches to the screen-space decorations, and both are being
+  assessed before any commitment to a date.
 
 ---
 
@@ -960,6 +1277,23 @@ a fixed-size badge like Destroy has no resize to offer.
 - [FM 1-02.2, Military Symbols](https://www.battleorder.org/post/symbolsfm) — US Army
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [TurfJS](https://turfjs.org/) — the geospatial math underneath
+
+## About Zaes
+
+[Zaes](https://zaes.com) is a software engineering and consulting firm working with the
+U.S. Department of Defense and enterprise clients, founded in 2017 and operating
+remote-first from Chantilly, VA and Charleston, SC.
+
+The work spans full-stack engineering, enterprise and application architecture,
+geospatial engineering and GIS development, systems integration, UI/UX design, DevOps and
+CI/CD automation, and program management — with domain consulting in DoD and C2 systems,
+and cleared personnel where a program requires it.
+
+This library comes out of that geospatial and C2 work. It is open-sourced because an
+accurate MIL-STD-2525E symbol set is infrastructure rather than an advantage worth
+keeping: every team building a common operational picture rebuilds the same arrows and
+the same amplifier rules, and doing it once, in the open, against the plates is better
+for everyone drawing them.
 
 ## Contributors
 

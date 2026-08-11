@@ -58,6 +58,55 @@ export const MIN_LABEL_SIZE = 8;
 export const MAX_LABEL_SIZE = 26;
 
 /**
+ * The unit an altitude is entered and displayed in.
+ *
+ * **A host-level choice, not a per-symbol one.** A picture where one zone is in feet and
+ * the next in metres is a picture nobody can read across, so one setting covers the map
+ * and every altitude on it compares.
+ *
+ * The value is **interpreted in this unit, never converted into it**: 1500 entered
+ * under `Feet` is 1500 feet, and the same 1500 under `Metres` is 1500 metres. So this
+ * is a decision to make once, at start-up, beside the palette — changing it later
+ * reinterprets every altitude already entered rather than restating it.
+ *
+ * ## Why this is only two members
+ *
+ * FM 1-02.2 gives field X four kinds of value, and they are **not four units**:
+ *
+ * 1. an altitude "in feet or meters **in relation to a reference datum**" — `1500MSL`,
+ *    `1500FT AGL`
+ * 2. a **flight level** — `FL150`
+ * 3. a **depth** for a submerged object, in feet below sea level
+ * 4. a **height** of equipment or structures on the ground
+ *
+ * Only the first half of (1) is a unit. `MSL` and `AGL` are a *reference datum* — what
+ * the number is measured from — which is an independent axis: any datum can be quoted in
+ * either unit, so folding them in here would produce an enum whose members cannot be
+ * combined and a value that cannot say "metres above ground".
+ *
+ * A **flight level** is neither. `FL150` is 15,000 ft of *pressure* altitude against the
+ * standard 1013.25 hPa datum, so it is deliberately not a true height above anything —
+ * two aircraft at FL150 are separated from each other, not placed. The number is
+ * different too: 150, not 15000. It is its own encoding, not this quantity in another
+ * unit.
+ *
+ * So the datum belongs on the **graphic**, not here: two zones on one map can honestly
+ * be one AGL and one MSL, which a host-level setting could never express. Until such a
+ * field exists, `formatAltitude` passes a non-numeric string through untouched, so
+ * `'FL150'` and `'1500MSL'` still render exactly as doctrine writes them.
+ */
+export enum AltitudeUnit {
+    Metres = 'metres',
+    Feet = 'feet',
+}
+
+/** What each unit is written as on a label. Matches the plates: `1500FT`, not `1500 ft`. */
+export const ALTITUDE_UNIT_SUFFIX: Readonly<Record<AltitudeUnit, string>> = Object.freeze({
+    [AltitudeUnit.Metres]: 'M',
+    [AltitudeUnit.Feet]: 'FT',
+});
+
+/**
  * Every knob the library exposes. All optional — an omitted field keeps the default.
  *
  * `hostilityColors` is a partial map, so overriding one affiliation leaves the others
@@ -78,6 +127,8 @@ export interface TacticalGraphicsConfigOptions {
     labelFillColor?: string;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
+    /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.Feet}. @see AltitudeUnit */
+    altitudeUnit?: AltitudeUnit;
 
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these colour the affordances a renderer draws so a user
@@ -113,6 +164,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly defaultLineColor?: string;
     readonly labelFillColor?: string;
     readonly labelHaloColor?: string;
+    readonly altitudeUnit?: AltitudeUnit;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -127,6 +179,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
+        if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -151,6 +204,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             defaultLineColor: overrides.defaultLineColor ?? this.defaultLineColor,
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
+            altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -262,6 +316,17 @@ export function getLabelHaloColorOverride(): string | undefined {
 
 export function getHandleColorOverride(): string | undefined {
     return _config.handleColor;
+}
+
+/**
+ * The unit every altitude and height amplifier is written in.
+ *
+ * Defaults to feet: every altitude FM 1-02.2 prints is in feet or a flight level —
+ * `1500FT AGL`, `20000FT AGL`, `FL150` — and aviation, which is what these particular
+ * amplifiers annotate, is flown in feet almost everywhere.
+ */
+export function getAltitudeUnit(): AltitudeUnit {
+    return _config.altitudeUnit ?? AltitudeUnit.Feet;
 }
 
 export function getInertHandleColorOverride(): string | undefined {

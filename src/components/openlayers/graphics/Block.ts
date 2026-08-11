@@ -1,5 +1,5 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,
@@ -16,21 +16,6 @@ import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
-
-// Graphics that lock the perpendicular size to a fixed fraction of the base length
-// so the user can only rotate and resize, not change the aspect ratio. The value
-// is the perpendicular-size / base-length ratio.
-const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.AttackByFire]: 0.4,
-    [TacticalGraphicName.SupportByFire]: 0.4,
-    [TacticalGraphicName.Breach]: 0.3,
-    [TacticalGraphicName.Bypass]: 0.3,
-    [TacticalGraphicName.Canalize]: 0.3,
-    [TacticalGraphicName.Clear]: 0.3,
-    [TacticalGraphicName.TacticalDisrupt]: 0.3,
-    // The table 5-19 twin behaves exactly as the mission task it copies.
-    [TacticalGraphicName.Disrupt]: 0.3,
-};
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -106,7 +91,7 @@ export class Block implements LineGraphic {
         // same screen pixels, so rescale rather than replace.
         const sizePx = DEFAULT_SIZE_PX[name];
         this.size = sizePx !== undefined && drawingResolution ? sizePx * drawingResolution : size;
-        this.ratioLock = RATIO_LOCK[name];
+        this.ratioLock = ratioLockOf(name);
         this.offsetScale = OFFSET_SCALE[name];
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
@@ -115,7 +100,7 @@ export class Block implements LineGraphic {
         this.graphic.setStyle((feature, resolution) => {
             switch (name) {
                 case TacticalGraphicName.AttackByFire:
-                    return attackByFireStyleFunc()(feature, resolution);
+                    return attackByFireStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.SupportByFire:
                     return supportByFireStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalBlock:
