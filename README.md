@@ -722,10 +722,13 @@ setSecuritySymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx
 It is global — one call configures the whole application — and it is handed the
 graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
 
-That is as far as the global provider goes. It also receives `labels`, but these three
-graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing else), so
-two Screens look identical to it. Varying *those* is engine-specific, and is covered
-under [advanced usage](#advanced-openlayers) — the OpenLayers subpath lets a single
+It also receives `labels`, the graphic's amplifiers, on **both** engines — and may return
+a per-graphic `sizePx` on both, which each renderer rasterises separately. In practice
+these three graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing
+else), so two Screens still look identical to a provider keyed on amplifiers alone.
+
+Telling two graphics of the same kind apart is where the engines part company, and it is
+covered under [advanced usage](#advanced-openlayers): the OpenLayers subpath lets a single
 graphic carry its own provider, and lets a provider return an `ol` `Style` outright.
 
 ---
@@ -753,6 +756,11 @@ gives a single graphic its own; `undefined` puts it back on the global one.
 **A provider that returns an `ol` `Style`.** Used verbatim — no image is built, so sizing
 and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
 accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
+
+Everything *else* about the provider is shared. `labels` and a per-graphic `sizePx` reach
+both engines; only the two above are OpenLayers-only, and both are so because they are
+tied to something OpenLayers has and MapLibre does not — a long-lived holder object per
+graphic, and an `ol` style type.
 
 #### Placing graphics from data
 
