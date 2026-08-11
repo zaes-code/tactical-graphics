@@ -28,8 +28,8 @@ import {
     getInertHandleColorOverride,
     getLabelFillColorOverride,
     getLabelHaloColorOverride,
-    HEIGHT_UNIT_SUFFIX,
-    getHeightUnit,
+    ALTITUDE_UNIT_SUFFIX,
+    getAltitudeUnit,
 } from './config';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
@@ -293,7 +293,7 @@ export const formatDistance = (metres: number): string => {
 /**
  * An altitude or height for a label, from whatever the user typed.
  *
- * The number is written in the configured {@link HeightUnit} and the unit is appended,
+ * The number is written in the configured {@link AltitudeUnit} and the unit is appended,
  * which is what FM 1-02.2 asks for — fields X and X1 say "measurement units shall be
  * displayed in the string" — while keeping the input a plain number a host can store,
  * compare and sort. The plates append it tight: `1500FT`, not `1500 ft`.
@@ -304,13 +304,13 @@ export const formatDistance = (metres: number): string => {
  * imported from another system, or typed where a host allows it. Formatting them would
  * destroy the very thing they carry.
  *
- * @see getHeightUnit for why the unit is a host-level setting rather than per symbol.
+ * @see getAltitudeUnit for why the unit is a host-level setting rather than per symbol.
  */
 export const formatAltitude = (value: string | number | undefined): string => {
     if (value === undefined) return '';
     const text = String(value).trim();
     const height = Number(text);
-    return text !== '' && Number.isFinite(height) ? `${Math.round(height)}${HEIGHT_UNIT_SUFFIX[getHeightUnit()]}` : text;
+    return text !== '' && Number.isFinite(height) ? `${Math.round(height)}${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]}` : text;
 };
 
 /**
