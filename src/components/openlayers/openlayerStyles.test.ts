@@ -36,6 +36,7 @@ import {
     getDefaultLabelSize,
     getDefaultLineWidth,
     resetTacticalGraphicsConfig,
+    securitySymbolSidc,
 } from '@zaes/tactical-graphics';
 
 import {
@@ -988,6 +989,33 @@ describe('security operation centre symbol', () => {
     // hostility must not have moved the symbol a Friend graphic renders.
     it('reproduces the historical SIDC for a friendly graphic', () => {
         expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001413010000000000000000');
+    });
+
+    /**
+     * # Both renderers ask milsymbol for the same symbol
+     *
+     * They did not. This subpath built the code from its own template and its own
+     * identity table, beside an identical-looking pair in `core/securitySymbol.ts`
+     * that MapLibre reads — and that one left the echelon and entity digits zero.
+     * Rendered, the difference is 6 drawn elements against 2: OpenLayers drew a
+     * platoon symbol, MapLibre a bare frame. It was reported as MapLibre "clipping
+     * the top", which is what a missing echelon looks like.
+     *
+     * Neither engine's own tests could see it. This one compares them.
+     */
+    it('resolves the identical SIDC in both renderers, for every affiliation', () => {
+        for (const hostility of Object.values(TacticalGraphicHostility)) {
+            expect(securityOperationSidc(hostility)).toBe(securitySymbolSidc(hostility));
+        }
+    });
+
+    it('keeps the echelon and entity digits, which are what milsymbol draws detail from', () => {
+        // Positions 9-10 are the echelon — 14, platoon, the three dots above the
+        // frame — and 11-16 the entity. All zeros is not a neutral default; it is an
+        // empty outline, and it renders without complaint.
+        const sidc = securitySymbolSidc(TacticalGraphicHostility.friend);
+        expect(sidc.slice(8, 10)).toBe('14');
+        expect(sidc.slice(10, 16)).not.toBe('000000');
     });
 
     it('varies only the standard-identity digit, position 4', () => {
