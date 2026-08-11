@@ -16,7 +16,7 @@ import {
     SelectChangeEvent,
     Typography,} from '@mui/material';
 import {formatDistance} from './openlayers/openlayerStyles';
-import {HEIGHT_UNIT_SUFFIX, getHeightUnit} from '@zaes/tactical-graphics';
+import {ALTITUDE_UNIT_SUFFIX, getAltitudeUnit} from '@zaes/tactical-graphics';
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
@@ -582,10 +582,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.altitude1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="min-altitude-input">{`Minimum Altitude (${HEIGHT_UNIT_SUFFIX[getHeightUnit()]})`}</InputLabel>
+                                            <InputLabel htmlFor="min-altitude-input">{`Minimum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}</InputLabel>
                                             <OutlinedInput
                                                 id="min-altitude-input"
-                                                label={`Minimum Altitude (${HEIGHT_UNIT_SUFFIX[getHeightUnit()]})`}
+                                                label={`Minimum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.minAltitude ?? ''}
                                                 onChange={e => {
@@ -608,10 +608,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.altitude2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="max-altitude-input">{`Maximum Altitude (${HEIGHT_UNIT_SUFFIX[getHeightUnit()]})`}</InputLabel>
+                                            <InputLabel htmlFor="max-altitude-input">{`Maximum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}</InputLabel>
                                             <OutlinedInput
                                                 id="max-altitude-input"
-                                                label={`Maximum Altitude (${HEIGHT_UNIT_SUFFIX[getHeightUnit()]})`}
+                                                label={`Maximum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.maxAltitude ?? ''}
                                                 onChange={e => {

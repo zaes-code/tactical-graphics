@@ -20,7 +20,7 @@
  * engines render the same wrong string identically.
  */
 
-import {HeightUnit, TacticalGraphicsConfig, configureTacticalGraphics, resetTacticalGraphicsConfig} from './core/config';
+import {AltitudeUnit, TacticalGraphicsConfig, configureTacticalGraphics, resetTacticalGraphicsConfig} from './core/config';
 import type {PaintContext, PaintFeature} from './core/paint';
 import {formatAltitude, formatDistance} from './core/symbology';
 import {TacticalGraphicName} from './core/type';
@@ -71,23 +71,23 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
     });
 
     it('writes the number in whichever unit the host configured', () => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
         expect(formatAltitude('1500')).toBe('1500M');
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Feet}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Feet}));
         expect(formatAltitude('1500')).toBe('1500FT');
     });
 
     it('interprets the value in that unit rather than converting it', () => {
         // 1500 under Metres is 1500 metres, not 457 — the setting says what the number
         // already meant. Converting would silently restate every altitude on the map.
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
         expect(formatAltitude('1500')).toBe('1500M');
     });
 
     it('takes a number, which is what the property now is', () => {
         expect(formatAltitude(1500)).toBe('1500FT');
         expect(formatAltitude(0)).toBe('0FT');
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
         expect(formatAltitude(1500)).toBe('1500M');
     });
 
@@ -141,7 +141,7 @@ describe('every graphic that renders an altitude', () => {
     });
 
     it('includes the corridors, which label a MultiPoint', () => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
         const painters = getPaintFunction(TacticalGraphicName.AirCorridor);
         const paints = painters!.label!(
             {
@@ -156,7 +156,7 @@ describe('every graphic that renders an altitude', () => {
     });
 
     it.each(withAltitude)('%s writes its altitudes in the configured unit', name => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
         const text = labelText(name, {minAltitude: '1500', maxAltitude: '20000'});
         expect(text).toContain('1500M');
         expect(text).toContain('20000M');
