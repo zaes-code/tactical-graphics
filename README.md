@@ -141,7 +141,8 @@ tacticalGraphic: {
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
-                              // Only for graphics that HAVE a center.
+                              // Only for graphics that HAVE a center. METERS — note that
+                              // a range fan's bands are kilometers, see below.
     decorationSize: 300,      // how big to draw a line graphic's decorations — an
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
@@ -209,6 +210,12 @@ alternative silently rescales every range fan already saved by a factor of a tho
 
 Bands render as `MIN RG 5` on a circular fan and `RG 5` on a sector, matching FM 1-02.2
 table 5-276.
+
+**A fan with no `bands` still draws.** It falls back to a single ring taken from the
+graphic's own `radius` — so a `radius` of 180000 meters draws one ring labeled
+`MIN RG 180`. That is the shape you get from the draw tool before any band is entered,
+and it is why the two units sit next to each other on one graphic: `radius` is the
+meters a user dragged, `range` is the kilometers they typed.
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
@@ -470,6 +477,11 @@ Tactical Turn are bowed arrows.
 That same list decides whether the Feature Properties dialog shows a **Radius** read-out,
 so a graphic can never report a radius in one place and not the other. Both are read-outs,
 not inputs — a graphic is sized by dragging it.
+
+The read-out is a *measurement*, so it reads in whichever unit suits the number — `400 m`,
+`78 km`. That is deliberately not how the `WIDTH` amplifier or a range band is written:
+those are part of the symbol and follow doctrine's own conventions. A read-out that
+changes units is easier to read; an amplifier that does is a symbol that changes meaning.
 
 ### Geometry only, no styling
 
