@@ -35,7 +35,14 @@
 import {Feature} from 'ol';
 import {Icon, Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicHostility, TacticalGraphicName, securitySymbolSidc, useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getGraphicSecuritySymbolProvider,
+    getSecuritySymbolProvider,
+    securitySymbolSidc,
+    useMilsymbolSecuritySymbols,
+} from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -43,6 +50,8 @@ import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 export interface SecurityOperationSymbolRequest {
     /** Cover, Guard or Screen. */
     name: TacticalGraphicName;
+    /** This graphic's `symbolId`, when it has one. @see setGraphicSecuritySymbolProvider */
+    graphicId?: string;
     /** The graphic's current affiliation, defaulted to `pending` when it carries none. */
     hostility: TacticalGraphicHostility;
     /** The 30-character MIL-STD-2525E SIDC this library would use. @see securityOperationSidc */
@@ -320,13 +329,26 @@ export function securityOperationSymbolStyle(
     name: TacticalGraphicName,
     source: () => Feature | undefined,
     override: () => SecurityOperationSymbolProvider | undefined = () => undefined,
+    graphicId: () => string = () => '',
 ): StyleFunction {
     return () => {
         const labels = readGraphicLabels(source() ?? new Feature());
         const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+        const id = graphicId();
+        // **Four places a provider can come from, most specific first.** The two
+        // OpenLayers ones are supersets — they may return an `ol` `Style` — and the
+        // two shared ones reach both engines from a single call. The shared pair
+        // used to be missed entirely on this side: a host that registered only
+        // `setSecuritySymbolProvider` got symbols in MapLibre and an empty centre
+        // here, while the README called that call application-wide.
+        const active =
+            override() ??
+            (id ? getGraphicSecuritySymbolProvider(id) : undefined) ??
+            provider ??
+            getSecuritySymbolProvider();
         return resolve(
-            {name, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
-            override() ?? provider,
+            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
+            active,
         );
     };
 }
