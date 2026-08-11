@@ -32,6 +32,15 @@ import type {GraphicLabels} from './render';
 export interface SecuritySymbolRequest {
     /** Cover, Guard or Screen. */
     name: TacticalGraphicName;
+    /**
+     * This graphic's own id, when the renderer knows one.
+     *
+     * Only used to find a provider registered for this graphic alone — @see
+     * setGraphicSecuritySymbolProvider. A provider may read it, but two graphics of
+     * the same kind are otherwise indistinguishable here, which is the whole reason
+     * the per-graphic registry exists.
+     */
+    graphicId?: string;
     /** The graphic's affiliation, defaulted to `pending` when it carries none. */
     hostility: TacticalGraphicHostility;
     /** The 30-character MIL-STD-2525E SIDC this library would use. */
@@ -89,13 +98,38 @@ let symbolSizePx = DEFAULT_SYMBOL_SIZE_PX;
 let provider: SecuritySymbolProvider | undefined;
 /** Bumped on every change, so a renderer can tell its cache is stale. */
 let revision = 0;
+const listeners = new Set<() => void>();
+
+/**
+ * Records a change and tells every renderer about it.
+ *
+ * The revision alone is a *pull*: a renderer notices it is stale the next time it
+ * happens to look. That is enough for OpenLayers, whose style functions re-run on
+ * the next draw, and not for MapLibre, which realises its sources on zoom and would
+ * otherwise show the old symbol until something unrelated moved the map. A provider
+ * set and nothing visibly happening is not an API worth shipping.
+ */
+function bump(): void {
+    revision++;
+    listeners.forEach(listener => listener());
+}
+
+/**
+ * Subscribes to provider and size changes. Returns the unsubscribe.
+ *
+ * For a renderer that has to be *told*. @see bump
+ */
+export function subscribeSecuritySymbolChange(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+}
 
 /** Sets how big the centre symbol draws, in CSS pixels, clamped to the readable range. */
 export function setSecuritySymbolSize(px: number): void {
     const next = Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, px));
     if (next === symbolSizePx) return;
     symbolSizePx = next;
-    revision++;
+    bump();
 }
 
 /** The current centre-symbol size in CSS pixels. */
@@ -112,12 +146,62 @@ export function getSecuritySymbolSize(): number {
  */
 export function setSecuritySymbolProvider(next: SecuritySymbolProvider | undefined): void {
     provider = next;
-    revision++;
+    bump();
 }
 
 /** The registered provider, or `undefined` if a host has registered none. */
 export function getSecuritySymbolProvider(): SecuritySymbolProvider | undefined {
     return provider;
+}
+
+/**
+ * Providers bound to one graphic, by id.
+ *
+ * The global provider is chosen once for the whole application and is told the
+ * graphic's `name` and its amplifiers — enough to give Cover, Guard and Screen
+ * three different symbols, and not enough to give *this* Screen a different one
+ * from that Screen. These three graphics are `SHAPE_ONLY` in the field registry
+ * and carry only `hostility`, so no amount of reading the bag separates two of
+ * them. A map routinely wants exactly that: one Screen is a cavalry troop and the
+ * next is something else.
+ *
+ * Held here rather than on a renderer's object so that **one call covers both
+ * engines**. OpenLayers can hang a provider on its holder because it keeps one per
+ * graphic; MapLibre derives its features from GeoJSON on every realise and has no
+ * such object to hang anything on. Keying by id is the mechanism that works for
+ * both, and it is the only one that could be shared.
+ */
+const graphicProviders = new Map<string, SecuritySymbolProvider>();
+
+/**
+ * Gives one graphic its own centre-symbol provider, on every renderer.
+ *
+ * `undefined` removes it, putting that graphic back on the global provider. The id
+ * is the graphic's own — `symbolId` on an OpenLayers holder, `id` on a
+ * `MapLibreTacticalGraphic`.
+ */
+export function setGraphicSecuritySymbolProvider(graphicId: string, next: SecuritySymbolProvider | undefined): void {
+    if (next) graphicProviders.set(graphicId, next);
+    else graphicProviders.delete(graphicId);
+    bump();
+}
+
+/** The provider bound to one graphic, or `undefined` if it uses the global one. */
+export function getGraphicSecuritySymbolProvider(graphicId: string): SecuritySymbolProvider | undefined {
+    return graphicProviders.get(graphicId);
+}
+
+/**
+ * Forgets every per-graphic provider.
+ *
+ * For a host tearing down a map: the registry is keyed by id and nothing in the
+ * library knows when an id stops existing, so without this a long-lived page that
+ * draws and clears repeatedly accumulates providers for graphics that are gone.
+ */
+export function clearGraphicSecuritySymbolProviders(): void {
+    if (!graphicProviders.size) return;
+    graphicProviders.clear();
+    bump();
 }
 
 /**
@@ -216,9 +300,25 @@ export function useMilsymbolSecuritySymbols(ms: MilsymbolModule, options: Record
     });
 }
 
-/** The provider's answer as an image, whichever shape it returned. */
+/**
+ * The provider's answer as an image, whichever shape it returned.
+ *
+ * A provider bound to this graphic wins over the global one; a provider that throws
+ * costs the centre symbol and nothing else. The arms, the letter and every
+ * interaction are already in place, and losing a whole graphic over its decoration
+ * is not a trade worth making — a host's provider is a host's code, and a bad SIDC
+ * or a missing DOM is the ordinary way it fails.
+ */
 export function resolveSecuritySymbol(request: SecuritySymbolRequest): SecuritySymbolImage | undefined {
-    const answer = provider?.(request);
+    const active = (request.graphicId ? graphicProviders.get(request.graphicId) : undefined) ?? provider;
+    if (!active) return undefined;
+
+    let answer: ReturnType<SecuritySymbolProvider>;
+    try {
+        answer = active(request);
+    } catch {
+        return undefined;
+    }
     if (!answer) return undefined;
     return typeof answer === 'string' ? {src: answer, sizePx: request.sizePx} : {sizePx: request.sizePx, ...answer};
 }

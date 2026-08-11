@@ -15,6 +15,10 @@ import {TacticalGraphicHostility, TacticalGraphicName} from './core/type';
 import type {GraphicLabels} from './core/render';
 import {
     DEFAULT_SYMBOL_SIZE_PX,
+    clearGraphicSecuritySymbolProviders,
+    getGraphicSecuritySymbolProvider,
+    setGraphicSecuritySymbolProvider,
+    subscribeSecuritySymbolChange,
     MAX_SYMBOL_SIZE_PX,
     MIN_SYMBOL_SIZE_PX,
     getSecuritySymbolProvider,
@@ -40,6 +44,7 @@ const request = (over: Partial<SecuritySymbolRequest> = {}): SecuritySymbolReque
 
 afterEach(() => {
     setSecuritySymbolProvider(undefined);
+    clearGraphicSecuritySymbolProviders();
     setSecuritySymbolSize(DEFAULT_SYMBOL_SIZE_PX);
 });
 
@@ -151,5 +156,104 @@ describe('the size', () => {
         expect(getSecuritySymbolSize()).toBe(MIN_SYMBOL_SIZE_PX);
         setSecuritySymbolSize(500);
         expect(getSecuritySymbolSize()).toBe(MAX_SYMBOL_SIZE_PX);
+    });
+});
+
+
+/**
+ * # A provider bound to one graphic
+ *
+ * The global provider is told the graphic's name and its amplifiers, which separates
+ * Cover from Guard and cannot separate one Screen from another — those three carry
+ * only `hostility`. Telling two of a kind apart needs the graphic's own id.
+ *
+ * Keyed by id rather than hung on a renderer's object, because that is the only shape
+ * both engines can implement: OpenLayers keeps a holder per graphic and MapLibre
+ * rebuilds its features from GeoJSON on every realise, with nothing to hang on to.
+ */
+describe('a provider bound to one graphic', () => {
+    it('wins over the global one, for that graphic only', () => {
+        setSecuritySymbolProvider(() => 'data:image/svg+xml,global');
+        setGraphicSecuritySymbolProvider('screen-2', () => 'data:image/svg+xml,mine');
+
+        expect(resolveSecuritySymbol(request({graphicId: 'screen-2'}))?.src).toBe('data:image/svg+xml,mine');
+        expect(resolveSecuritySymbol(request({graphicId: 'screen-1'}))?.src).toBe('data:image/svg+xml,global');
+        expect(resolveSecuritySymbol(request())?.src).toBe('data:image/svg+xml,global');
+    });
+
+    it('separates two graphics the global provider cannot tell apart', () => {
+        // Same name, same affiliation, same (empty) amplifiers — indistinguishable to
+        // anything but the id.
+        setGraphicSecuritySymbolProvider('a', () => 'data:image/svg+xml,cav');
+        setGraphicSecuritySymbolProvider('b', () => 'data:image/svg+xml,armor');
+        const one = request({name: TacticalGraphicName.Screen, graphicId: 'a'});
+        const two = request({name: TacticalGraphicName.Screen, graphicId: 'b'});
+
+        expect(resolveSecuritySymbol(one)?.src).not.toBe(resolveSecuritySymbol(two)?.src);
+    });
+
+    it('is removed by passing undefined, falling back to the global one', () => {
+        setSecuritySymbolProvider(() => 'data:image/svg+xml,global');
+        setGraphicSecuritySymbolProvider('x', () => 'data:image/svg+xml,mine');
+        setGraphicSecuritySymbolProvider('x', undefined);
+
+        expect(getGraphicSecuritySymbolProvider('x')).toBeUndefined();
+        expect(resolveSecuritySymbol(request({graphicId: 'x'}))?.src).toBe('data:image/svg+xml,global');
+    });
+
+    it('draws nothing when it returns undefined, rather than falling through', () => {
+        // Otherwise "this graphic has no symbol" would be unsayable: the global
+        // provider would answer for it.
+        setSecuritySymbolProvider(() => 'data:image/svg+xml,global');
+        setGraphicSecuritySymbolProvider('hidden', () => undefined);
+        expect(resolveSecuritySymbol(request({graphicId: 'hidden'}))).toBeUndefined();
+    });
+
+    it('is forgotten wholesale, for a host tearing a map down', () => {
+        setGraphicSecuritySymbolProvider('x', () => 'data:image/svg+xml,mine');
+        clearGraphicSecuritySymbolProviders();
+        expect(getGraphicSecuritySymbolProvider('x')).toBeUndefined();
+    });
+});
+
+describe('a provider that throws', () => {
+    it('costs the centre symbol and nothing else', () => {
+        setSecuritySymbolProvider(() => {
+            throw new Error('milsymbol rejected the SIDC');
+        });
+        expect(() => resolveSecuritySymbol(request())).not.toThrow();
+        expect(resolveSecuritySymbol(request())).toBeUndefined();
+    });
+});
+
+/**
+ * The revision is a *pull* — a renderer notices it is stale next time it looks. That
+ * suits OpenLayers, whose style functions re-run on the next draw, and not MapLibre,
+ * which realises its sources on zoom and would otherwise show the old symbol until
+ * something unrelated moved the map.
+ */
+describe('the change notification', () => {
+    it('fires for a global provider, a per-graphic one and a size', () => {
+        const seen: string[] = [];
+        const stop = subscribeSecuritySymbolChange(() => seen.push('x'));
+
+        setSecuritySymbolProvider(() => 'data:image/svg+xml,a');
+        setGraphicSecuritySymbolProvider('g', () => 'data:image/svg+xml,b');
+        setSecuritySymbolSize(40);
+        setGraphicSecuritySymbolProvider('g', undefined);
+        expect(seen).toHaveLength(4);
+
+        stop();
+        setSecuritySymbolProvider(undefined);
+        expect(seen).toHaveLength(4);
+    });
+
+    it('does not fire when a setter changes nothing', () => {
+        let fired = 0;
+        const stop = subscribeSecuritySymbolChange(() => fired++);
+        setSecuritySymbolSize(getSecuritySymbolSize());
+        clearGraphicSecuritySymbolProviders();
+        stop();
+        expect(fired).toBe(0);
     });
 });

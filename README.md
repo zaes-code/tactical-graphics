@@ -254,7 +254,7 @@ renderTacticalGraphic({
     type: 'Feature',
     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
     properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
-});                                             // rails 300 m either side of the centreline
+});                                             // rails 300 m either side of the centerline
 ```
 
 **`decorationSize` — the ornament on a line, not a reach.** A direction of attack is its
@@ -722,14 +722,25 @@ setSecuritySymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx
 It is global — one call configures the whole application — and it is handed the
 graphic's `name`, so it can give Cover, Guard and Screen three different symbols.
 
-It also receives `labels`, the graphic's amplifiers, on **both** engines — and may return
-a per-graphic `sizePx` on both, which each renderer rasterises separately. In practice
-these three graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing
-else), so two Screens still look identical to a provider keyed on amplifiers alone.
+It also receives `labels`, the graphic's amplifiers, and may return a per-graphic
+`sizePx`. In practice these three graphics carry only `hostility`
+(`getGraphicFields('Screen')` offers nothing else), so two Screens look identical to a
+provider keyed on the bag alone.
 
-Telling two graphics of the same kind apart is where the engines part company, and it is
-covered under [advanced usage](#advanced-openlayers): the OpenLayers subpath lets a single
-graphic carry its own provider, and lets a provider return an `ol` `Style` outright.
+**To tell two of a kind apart, bind a provider to one graphic by id:**
+
+```ts
+import {setGraphicSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setGraphicSecuritySymbolProvider(graphicId, ({sidc, sizePx}) => cavalryTroop(sidc, sizePx));
+setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global provider
+```
+
+It wins over the global provider for that graphic and returns `undefined` to draw no
+center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayers holder,
+`id` on a `MapLibreTacticalGraphic`. Both engines honour it, and both repaint straight
+away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
+the registry is keyed by id and the library is never told when an id stops existing.
 
 ---
 
@@ -746,21 +757,24 @@ you only have to care when you want to. `createTacticalGraphics(map, {manager})`
 
 ### Advanced: OpenLayers
 
-`TacticalGraphicsManager`, `getController`, the feature holders and the controllers. Two
-things here have no MapLibre counterpart:
+`TacticalGraphicsManager`, `getController`, the feature holders and the controllers. One
+thing here has no MapLibre counterpart:
 
-**A provider for one graphic.** The global provider is handed the graphic's `name`, so it
-can distinguish Cover from Guard, but not one Screen from another. `handler.setSymbolProvider`
-gives a single graphic its own; `undefined` puts it back on the global one.
+**A provider for one graphic, handed straight to the holder.** `handler.setSymbolProvider`
+is the same idea as `setGraphicSecuritySymbolProvider` above without needing an id, and it
+accepts this subpath's wider return — an `ol` `Style` included. It takes precedence over
+the shared per-graphic registry, which works on both engines and is what to reach for
+first.
 
 **A provider that returns an `ol` `Style`.** Used verbatim — no image is built, so sizing
 and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
 accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
 
-Everything *else* about the provider is shared. `labels` and a per-graphic `sizePx` reach
-both engines; only the two above are OpenLayers-only, and both are so because they are
-tied to something OpenLayers has and MapLibre does not — a long-lived holder object per
-graphic, and an `ol` style type.
+Everything *else* about the provider is shared, and a provider is resolved most-specific
+first: `handler.setSymbolProvider`, then `setGraphicSecuritySymbolProvider(id, …)`, then
+the OpenLayers global, then the shared global. `labels`, a per-graphic `sizePx` and a
+per-graphic provider all reach both engines. What stays OpenLayers-only is the `ol`
+`Style` return, which cannot cross engines at all.
 
 #### Placing graphics from data
 

@@ -15,6 +15,7 @@ import {
     resolveSecuritySymbol,
     securitySymbolRevision,
     securitySymbolSidc,
+    subscribeSecuritySymbolChange,
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
@@ -162,6 +163,54 @@ export function imageKey(src: string): string {
     return (hash >>> 0).toString(36);
 }
 
+/**
+ * The map's own backing-store ratio. Matches the clamp `MapLibre.tsx` passes as
+ * `pixelRatio`, so a raster drawn here lands on whole device pixels.
+ */
+function canvasPixelRatio(): number {
+    return Math.max(1, window.devicePixelRatio || 1);
+}
+
+/**
+ * Redraws a symbol at the resolution it will actually be shown at.
+ *
+ * **Why not hand MapLibre the `Image`.** `addImage(id, image)` takes it at its own
+ * intrinsic size and calls those CSS pixels, so the sprite is whatever milsymbol
+ * happened to emit — 73 px for a 25 px symbol — and the GPU then rescales it to the
+ * wanted size and again by the device ratio, with linear filtering both times. Beside
+ * OpenLayers, which hands the browser an `Icon` with an explicit `width` and lets it
+ * scale the *vector* into a HiDPI canvas, the difference reads as a softer symbol.
+ *
+ * An SVG scales losslessly, so drawing it once at `wantedPx * ratio` device pixels and
+ * declaring that ratio leaves the GPU nothing to interpolate.
+ *
+ * Returns `undefined` when there is no 2D context to draw into — a headless or
+ * hostile environment — and the caller falls back to the intrinsic-size path rather
+ * than losing the symbol.
+ */
+function rasterise(image: HTMLImageElement, wantedPx: number, ratio: number): ImageData | undefined {
+    const naturalW = image.naturalWidth || image.width;
+    const naturalH = image.naturalHeight || image.height;
+    if (!naturalW || !naturalH) return undefined;
+
+    // Height follows the symbol's own aspect: milsymbol's SVG is not square — the
+    // echelon marks sit above the frame — and forcing a square would squash it.
+    const width = Math.max(1, Math.round(wantedPx * ratio));
+    const height = Math.max(1, Math.round((naturalH / naturalW) * wantedPx * ratio));
+
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return undefined;
+        ctx.drawImage(image, 0, 0, width, height);
+        return ctx.getImageData(0, 0, width, height);
+    } catch {
+        return undefined;
+    }
+}
+
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
     /**
@@ -243,7 +292,14 @@ export class NativeLayerRenderer {
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
         map.on('moveend', this.onMoveEnd);
+        // Sources are realised on zoom, so without this a provider registered after
+        // the map settled would not appear until something unrelated moved it. The
+        // revision check inside `realiseCentreSymbols` then throws the stale rasters
+        // away; this is only what makes it look.
+        this.unsubscribeSymbols = subscribeSecuritySymbolChange(() => this.scheduleRealise());
     }
+
+    private readonly unsubscribeSymbols: () => void;
 
     /**
      * Text measurement, still done on a canvas.
@@ -618,6 +674,9 @@ export class NativeLayerRenderer {
             const hostility = graphic.properties.hostility ?? TacticalGraphicHostility.pending;
             const symbol = resolveSecuritySymbol({
                 name: graphic.name,
+                // Lets a provider registered for this graphic alone win over the
+                // global one. @see setGraphicSecuritySymbolProvider
+                graphicId: graphic.id,
                 hostility,
                 sidc: securitySymbolSidc(hostility),
                 sizePx: getSecuritySymbolSize(),
@@ -637,8 +696,9 @@ export class NativeLayerRenderer {
             // registered. Hashing the `src` makes two graphics share a raster exactly
             // when they asked for the same one, which is also the dedupe the old key
             // was trying to be.
-            const iconId = `tg-sym-${imageKey(symbol.src)}`;
-            this.registerIcon(iconId, symbol.src);
+            const wantedPx = symbol.sizePx ?? getSecuritySymbolSize();
+            const iconId = `tg-sym-${imageKey(symbol.src)}-${Math.round(wantedPx)}@${canvasPixelRatio()}`;
+            this.registerIcon(iconId, symbol.src, wantedPx);
             if (!this.map.hasImage(iconId)) continue;
 
             features.push({
@@ -648,7 +708,11 @@ export class NativeLayerRenderer {
                     icon: iconId,
                     // `icon-size` is a *multiplier* on the image's own pixels, so the
                     // wanted size has to be divided by what was actually rasterised.
-                    scale: (symbol.sizePx ?? getSecuritySymbolSize()) / this.iconPixels(iconId),
+                    // 1 in the ordinary case: the raster was drawn at exactly this
+                    // size, so there is nothing left for the GPU to rescale. It only
+                    // leaves 1 on the fallback path, where the SVG went in at its own
+                    // intrinsic size. @see registerIcon
+                    scale: wantedPx / this.iconPixels(iconId),
                     // **The symbol has to be hit-testable back to its graphic.** It is
                     // the biggest thing a security operation draws and the obvious place
                     // to click, and without this the click found a feature the hit test
@@ -663,15 +727,23 @@ export class NativeLayerRenderer {
     }
 
     /** Rasterises an image and registers it under `id`, once. */
-    private registerIcon(id: string, src: string): void {
+    private registerIcon(id: string, src: string, wantedPx: number): void {
         if (this.registeredIcons.has(id)) return;
         this.registeredIcons.add(id);
         if (this.map.hasImage(id)) return;
 
+        const ratio = canvasPixelRatio();
         const image = new Image();
         image.onload = () => {
-            if (!this.map.hasImage(id)) this.map.addImage(id, image);
-            this.iconSizes.set(id, image.width || getSecuritySymbolSize());
+            if (!this.map.hasImage(id)) {
+                const raster = rasterise(image, wantedPx, ratio);
+                // `pixelRatio` is what tells MapLibre these are *device* pixels, so it
+                // displays the image at `width / ratio` CSS px — exactly `wantedPx` —
+                // with `icon-size` left at 1.
+                if (raster) this.map.addImage(id, raster, {pixelRatio: ratio});
+                else this.map.addImage(id, image);
+                this.iconSizes.set(id, raster ? wantedPx : image.width || getSecuritySymbolSize());
+            }
             // The image arrived after the realisation that asked for it, so the layer
             // has nothing referencing it yet.
             this.scheduleRealise();
@@ -861,6 +933,7 @@ export class NativeLayerRenderer {
         this.map.off('zoom', this.onZoom);
         this.map.off('zoomend', this.onZoomEnd);
         this.map.off('moveend', this.onMoveEnd);
+        this.unsubscribeSymbols();
     }
 }
 
