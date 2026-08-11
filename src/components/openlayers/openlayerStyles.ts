@@ -44,6 +44,7 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
     fontStyle,
+    formatAltitude,
     formatDistance,
     getColorByHostility,
     getDefaultLineColor,
@@ -60,6 +61,7 @@ import {
 } from '@zaes/tactical-graphics';
 
 export {
+    formatAltitude,
     formatDistance,
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
@@ -2840,8 +2842,8 @@ export function createAirCoordinatingAreaLabelStyle(
 
     // ── Alt / time block — pad label to 11 chars for rough column alignment ───
     const altLines: string[] = [];
-    if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${labels.minAltitude}`);
-    if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${labels.maxAltitude}`);
+    if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${formatAltitude(labels.minAltitude, labels.altitudeDatum)}`);
+    if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${formatAltitude(labels.maxAltitude, labels.altitudeDatum)}`);
     if (labels.startDate)   altLines.push(`${'TIME FROM:'.padEnd(11)}${labels.startDate}`);
     if (labels.endDate)     altLines.push(`${'TIME TO:'.padEnd(11)}${labels.endDate}`);
 

@@ -154,8 +154,8 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const corridorName = props.label?.trim();
         if (corridorName) infoLines.push(`NAME:       ${corridorName}`);
         if (props.width) infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(props.width))}`);
-        if (props.minAltitude) infoLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude)}`);
-        if (props.maxAltitude) infoLines.push(`MAX ALT:    ${formatAltitude(props.maxAltitude)}`);
+        if (props.minAltitude) infoLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude, props.altitudeDatum)}`);
+        if (props.maxAltitude) infoLines.push(`MAX ALT:    ${formatAltitude(props.maxAltitude, props.altitudeDatum)}`);
         if (props.startDate) infoLines.push(`DTG START:  ${props.startDate}`);
         if (props.endDate) infoLines.push(`DTG END:    ${props.endDate}`);
 

@@ -36,6 +36,7 @@ export type {TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRo
 export {
     TacticalGraphicName,
     TacticalGraphicHostility,
+    AltitudeDatum,
     TacticalGraphicStatus,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
