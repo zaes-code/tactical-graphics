@@ -55,8 +55,25 @@ export interface TacticalGraphicProperties {
     /** Date-time group, formatted by the caller. */
     startDate?: string;
     endDate?: string;
-    minAltitude?: string;
-    maxAltitude?: string;
+    /**
+     * Altitude or depth, as a **number** in the host's configured {@link HeightUnit}.
+     *
+     * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
+     * in the string", and feet, metres, a flight level and a submerged depth are all
+     * legal — so this was a string. In practice the properties dialog has only ever
+     * accepted digits, which made the freedom theoretical while costing every consumer a
+     * value it could not sort, compare or arithmetic on. The unit comes from the config
+     * instead and the renderer appends it, which is the same information in a shape a
+     * program can use.
+     *
+     * **A string still renders, and deliberately so.** `formatAltitude` passes anything
+     * non-numeric through untouched, so a `"FL150"` or a `"1500MSL"` restored from an
+     * older snapshot — or imported from a system that speaks doctrine's own notation —
+     * draws exactly as written rather than being mangled or dropped. It simply is not
+     * what the type invites you to send.
+     */
+    minAltitude?: number;
+    maxAltitude?: number;
 
     eff?: string;
     grid?: string;
