@@ -42,8 +42,9 @@ export interface GraphicLabels {
     secondCountryCode?: string;
     startDate?: string;
     endDate?: string;
-    minAltitude?: string;
-    maxAltitude?: string;
+    /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
+    minAltitude?: number;
+    maxAltitude?: number;
     /**
      * Full width in metres, edge to edge. The same field the geometry schema uses —
      * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual

@@ -589,10 +589,15 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.minAltitude ?? ''}
                                                 onChange={e => {
-                                                    const v = e.target.value.replace(/[^0-9]/g, '');
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, minAltitude: v},
+                                                        labels: {...prev.labels, minAltitude: digits === '' ? undefined : Number(digits)},
                                                     }));
                                                 }}
                                             />
@@ -610,10 +615,15 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.maxAltitude ?? ''}
                                                 onChange={e => {
-                                                    const v = e.target.value.replace(/[^0-9]/g, '');
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, maxAltitude: v},
+                                                        labels: {...prev.labels, maxAltitude: digits === '' ? undefined : Number(digits)},
                                                     }));
                                                 }}
                                             />

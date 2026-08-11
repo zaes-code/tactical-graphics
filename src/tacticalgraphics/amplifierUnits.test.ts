@@ -20,7 +20,7 @@
  * engines render the same wrong string identically.
  */
 
-import {HeightUnit, TacticalGraphicsConfig, configureTacticalGraphics} from './core/config';
+import {HeightUnit, TacticalGraphicsConfig, configureTacticalGraphics, resetTacticalGraphicsConfig} from './core/config';
 import type {PaintContext, PaintFeature} from './core/paint';
 import {formatAltitude, formatDistance} from './core/symbology';
 import {TacticalGraphicName} from './core/type';
@@ -42,7 +42,11 @@ const labelText = (name: TacticalGraphicName, properties: Record<string, unknown
         .join('\n');
 };
 
-afterEach(() => configureTacticalGraphics(new TacticalGraphicsConfig()));
+// **Reset, not reconfigure.** `configureTacticalGraphics` merges over what is already
+// in force, so handing it an empty config clears nothing and a unit set by one test
+// leaked into the next — which showed up as an assertion expecting feet and getting
+// metres, in a test that had not mentioned either.
+afterEach(() => resetTacticalGraphicsConfig());
 
 describe('field AM — corridor width, in metres and kilometres', () => {
     it('reads in kilometres above a kilometre and metres below', () => {
@@ -80,10 +84,25 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
         expect(formatAltitude('1500')).toBe('1500M');
     });
 
+    it('takes a number, which is what the property now is', () => {
+        expect(formatAltitude(1500)).toBe('1500FT');
+        expect(formatAltitude(0)).toBe('0FT');
+        configureTacticalGraphics(new TacticalGraphicsConfig({heightUnit: HeightUnit.Metres}));
+        expect(formatAltitude(1500)).toBe('1500M');
+    });
+
     it('leaves a flight level, a datum or a depth exactly as it found it', () => {
         for (const value of ['FL150', '1500MSL', '1500FT AGL', 'GL', '20000FT AGL']) {
             expect(formatAltitude(value)).toBe(value);
         }
+    });
+
+    it('still renders a string, so an older snapshot is not mangled', () => {
+        // The type says number now; the runtime stays tolerant, because a value written
+        // before that — or imported from a system speaking doctrine's own notation —
+        // should draw as written rather than be dropped.
+        expect(formatAltitude('1500MSL' as unknown as number)).toBe('1500MSL');
+        expect(formatAltitude('1500' as unknown as number)).toBe('1500FT');
     });
 
     it('never turns an altitude into a distance', () => {
