@@ -11,7 +11,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {projectedMidSegment} from './decorations';
+import {projectedMidSegment, textWidth} from './decorations';
 import {echelonMarks} from './echelonPaints';
 import {amplifierDash, formatFullLabel, lineColorOf, scaleOf} from './paintFunctions';
 
@@ -177,6 +177,14 @@ function formatKm(km: number): string {
  */
 const AZIMUTH_LABEL_GAP_PX = 16;
 
+/**
+ * Share of the gap between two bands their labels may fill.
+ *
+ * Short of the whole gap, so consecutive blocks have air between them rather than
+ * meeting exactly.
+ */
+const BAND_LABEL_FIT_SHARE = 0.85;
+
 /** Rendered height of one label row at scale 1 — the base font with normal leading. */
 const LABEL_LINE_PX = BASE_FONT_SIZE_PX * 1.2;
 
@@ -232,7 +240,12 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
         const scale = scaleOf(feature, context);
         const paints: Paint[] = [];
 
-        const text = (at: ProjectedPosition, value: string, offsets: {offsetXPx?: number; offsetYPx?: number} = {}): Paint => ({
+        const text = (
+            at: ProjectedPosition,
+            value: string,
+            offsets: {offsetXPx?: number; offsetYPx?: number} = {},
+            textScale: number = scale,
+        ): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 ...offsets,
@@ -242,9 +255,30 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
-                scale,
+                scale: textScale,
             },
         });
+
+        /**
+         * The largest scale a band's block may take before it runs into its neighbours'.
+         *
+         * Each band anchors its block at its own mid-radius, so consecutive blocks sit one
+         * band's width apart — a fixed distance on the ground, and so a fixed number of
+         * pixels at any zoom. The block's *scale*, though, grows with the graphic. On a fan
+         * of any real size the text therefore outgrew the gap it sits in, and three bands
+         * rendered as `MGATGMARTY` over `MINRINRINZOG 300` — at every zoom, which is what
+         * marks this as a cap rather than a spacing tweak.
+         *
+         * The same reasoning as `acpLabelScale`: a label that has to fit inside something
+         * is measured against that thing.
+         */
+        const bandScale = (block: string, from: ProjectedPosition, to: ProjectedPosition | undefined): number => {
+            if (!to) return scale;
+            const spacingPx = Math.hypot(to[0] - from[0], to[1] - from[1]) / context.resolution;
+            const widest = Math.max(...block.split('\n').map(row => textWidth(context, row, fontStyle, 1)));
+            if (!(widest > 0)) return scale;
+            return Math.min(scale, (spacingPx * BAND_LABEL_FIT_SHARE) / widest);
+        };
 
         for (let i = 0; i < bands.length; i++) {
             const midIndex = 1 + i * stride;
@@ -272,7 +306,17 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             // It also puts the block above the arc, which is where table 5-276 prints it.
             // Scaled with the text, so the clearance holds as the label grows.
             if (lines.length) {
-                paints.push(text(coords[midIndex], lines.join('\n'), isSector ? {offsetYPx: -rangeBlockLiftPx(lines.length) * scale} : {}));
+                const block = lines.join('\n');
+                // Measured against the next band's anchor, or the previous one for the
+                // outermost. **A lone band has no neighbour and takes no cap** — its
+                // fallback would be the fan's own centre, which is not something the
+                // label can collide with, and capping against it shrank the one-band
+                // sample to an unreadable speck. @see bandScale
+                const neighbour = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
+                const fitted = bandScale(block, coords[midIndex], neighbour);
+                paints.push(
+                    text(coords[midIndex], block, isSector ? {offsetYPx: -rangeBlockLiftPx(lines.length) * fitted} : {}, fitted),
+                );
             }
 
             if (!isSector) continue;
