@@ -1,7 +1,4 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Feature, Map} from 'ol';
-import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
-import {Draw} from 'ol/interaction';
 import Draggable from 'react-draggable';
 import {
     Box,
@@ -18,14 +15,11 @@ import {
     Select,
     SelectChangeEvent,
     Typography,} from '@mui/material';
-import {Coordinate} from 'ol/coordinate';
-import VectorSource from 'ol/source/Vector';
-import VectorLayer from 'ol/layer/Vector';
-import Style from 'ol/style/Style';
-import {formatDistance, getColorByHostility} from './openlayers/openlayerStyles';
-import {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
-import {GraphicLabels, GraphicLinkRegistry, RangeFanConfig} from '../utils/graphicLinkRegistry';
-import {GraphicGeometryState, readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './openlayers/graphicProperties';
+import {formatDistance} from './openlayers/openlayerStyles';
+import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactical-graphics';
+import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
+import type {GraphicGeometryState} from './openlayers/graphicProperties';
+import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
@@ -57,9 +51,76 @@ function defaultRangeFanConfig(): RangeFanConfig {
     };
 }
 
+/**
+ * The amplifiers a graphic actually shows, seeded where the stored value is blank.
+ *
+ * Narrowing to the graphic's own field set is what stops a disabled input
+ * accumulating a stale value that then renders — a country code typed on one
+ * graphic and inherited by the next of a type that has no such field.
+ *
+ * Two of the defaults are load-bearing rather than cosmetic:
+ *
+ * - **`hostility` is always kept**, even when hidden, because it drives the stroke
+ *   colour. Defaulting to `unknown` means editing some other property on a graphic
+ *   that never had an affiliation does not silently turn it friendly blue — and it
+ *   keeps the MUI `Select` controlled from the first render rather than flipping
+ *   uncontrolled to controlled.
+ * - **`status` defaults to `present`**, which is what `amplifierDash` already
+ *   assumed for an unset status.
+ */
+function shownLabels(selection: SelectedGraphic): GraphicLabels {
+    const stored = selection.labels;
+    const fields = getGraphicFields(selection.graphicName);
+
+    const labels: GraphicLabels = {
+        label: fields.identifier1 ? (stored.label ?? '') : '',
+        hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
+    };
+
+    if (fields.identifier2) {
+        labels.countryCode = stored.countryCode ?? '';
+        labels.secondId = stored.secondId ?? '';
+        labels.secondCountryCode = stored.secondCountryCode ?? '';
+    }
+    if (fields.hostility) labels.confidence = stored.confidence;
+    if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
+    if (fields.direction) labels.direction = stored.direction;
+    if (fields.dtg1) labels.startDate = stored.startDate ?? nowDtg();
+    if (fields.dtg2) labels.endDate = stored.endDate ?? nowDtg();
+    if (fields.altitude1) labels.minAltitude = stored.minAltitude;
+    if (fields.altitude2) labels.maxAltitude = stored.maxAltitude;
+    // One datum for both, since a floor and a ceiling measured from different things
+    // would describe two different volumes. Shown whenever either altitude is.
+    if (fields.altitude1 || fields.altitude2) labels.altitudeDatum = stored.altitudeDatum;
+    if (fields.weapon) labels.weapon = stored.weapon ?? '';
+    if (fields.grids) {
+        labels.secondId = stored.secondId ?? '';
+        labels.grid = stored.grid;
+    }
+    if (fields.rangeFan) {
+        // First time opening the editor on this fan: seed a single band at the drawn
+        // radius so pressing OK does not snap the geometry to the 1 km fallback.
+        // `graphicSize` is projected metres; the editor works in kilometres.
+        labels.rangeFan = stored.rangeFan ?? {
+            bands: [{range: selection.graphicSize && selection.graphicSize > 0
+                ? Math.max(0.1, Math.round((selection.graphicSize / 1000) * 10) / 10)
+                : 1}],
+        };
+    }
+
+    return labels;
+}
+
 interface TacticalGraphicsDialogProps {
-    map: Map;
-    tacticalGraphicsManager: TacticalGraphicsManager;
+    /**
+     * The map half of the dialog — selection, anchoring and applying.
+     *
+     * The dialog used to take an OpenLayers `Map` and its manager directly, which
+     * made ~580 lines of doctrinal form unreachable from any other renderer. Only
+     * three things here are actually renderer knowledge, and they are that interface.
+     * @see FeaturePropertiesSource
+     */
+    source: FeaturePropertiesSource;
 }
 
 const hostilityOptions = Object.values(TacticalGraphicHostility);
@@ -67,15 +128,28 @@ const echelonOptions = Object.values(TacticalGraphicEchelon);
 const statusOptions = Object.values(TacticalGraphicStatus);
 const confidenceOptions = Object.values(TacticalGraphicConfidence);
 
+/** What the dialog is editing: the amplifier bag plus the echelon beside it. */
 interface TacticalGraphicProperties {
-    echelon: TacticalGraphicEchelon;
-    labels: GraphicLabels
+    echelon: TacticalGraphicEchelon | string;
+    labels: GraphicLabels;
 }
 
-const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tacticalGraphicsManager}) => {
+/**
+ * What to call the altitude input, given the datum it is measured from.
+ *
+ * **A flight level is not an altitude in the configured unit**, so offering "(FT)" beside
+ * it would invite the wrong number: a user thinking in feet types 1500, and `FL1500`
+ * means 150,000 ft. Under `FL` the field *is* the level — 150 — and the label says so.
+ */
+function altitudeFieldLabel(which: 'Minimum' | 'Maximum', datum: AltitudeDatum | undefined): string {
+    if (datum === AltitudeDatum.flightLevel) return `${which} Flight Level`;
+    return `${which} Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`;
+}
+
+const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source}) => {
     /** Geometry read-outs (metres) for the selected graphic. @see readGraphicGeometryState */
     const [measured, setMeasured] = useState<GraphicGeometryState>({});
-    const [selectedFeature, setSelectedFeature] = useState<Feature | any | null>(null);
+    const [selection, setSelection] = useState<SelectedGraphic | null>(null);
     const [dialogPosition, setDialogPosition] = useState({x: 0, y: 0});
     const [isDragging, setIsDragging] = useState(false);
     const defaultProperties = {
@@ -90,132 +164,47 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
 
     // Open dialog on feature click
     useEffect(() => {
-        if (!map) return;
-
-        const handleClick = (evt: any) => {
-            if (tacticalGraphicsManager.isDrawing()) {
-                console.debug('Skipping modal — drawing still active');
+        return source.onSelect(next => {
+            if (!next) {
+                setSelection(null);
                 return;
             }
+            if (source.suppressed?.()) return;
 
-            const activeInteractions = map.getInteractions().getArray();
-            const hasActiveDraw = activeInteractions.some(i => i instanceof Draw);
-            if (hasActiveDraw) return;
+            setSelection(next);
+            // Read-only: the geometry inputs the user set by dragging. Kept out of
+            // `pendingChanges` because nothing in this dialog can change them.
+            setMeasured(next.measured);
 
-            if (Date.now() < tacticalGraphicsManager.lastDrawEndedAt) {
-                console.debug('Skipping modal — click suppressed right after draw');
-                return;
-            }
-            // short delay to let drawend finish
-            setTimeout(() => {
-                const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
-                if (feature) {
-                    setSelectedFeature(feature);
+            const curr = {
+                echelon: next.echelon,
+                labels: shownLabels(next),
+            };
+            setCurrentProperties(curr);
+            setPendingChanges(curr);
+            setDialogPosition({x: 0, y: 0});
+        });
+    }, [source]);
 
-                    const graphicLabels = readGraphicLabels(feature);
-                    const fields = getGraphicFields(feature.get('graphicName') as TacticalGraphicName);
-                    // Read-only: the geometry inputs the user set by dragging. Read off
-                    // the feature rather than carried in `pendingChanges`, since nothing
-                    // in this dialog can change them.
-                    setMeasured(readGraphicGeometryState(feature));
-
-                    // Build labels containing only fields enabled for this graphic type.
-                    // This prevents disabled fields from accumulating stale values.
-                    const filteredLabels: GraphicLabels = {
-                        // label is required on the type; default to '' so it never renders as "undefined"
-                        label: fields.identifier1 ? (graphicLabels.label ?? '') : '',
-                        // hostility is always kept — it drives stroke/fill color even when not shown.
-                        // Default to `unknown` (renders as the neutral default line color, i.e. black)
-                        // so editing any other property on a graphic that never specified a hostility
-                        // doesn't silently turn it Friendly blue. `unknown` also keeps the MUI Select
-                        // controlled from first render instead of flipping uncontrolled→controlled.
-                        hostility: graphicLabels.hostility ?? TacticalGraphicHostility.unknown,
-                    };
-                    if (fields.identifier2) {
-                        filteredLabels.countryCode = graphicLabels.countryCode ?? '';
-                        filteredLabels.secondId = graphicLabels.secondId ?? '';
-                        filteredLabels.secondCountryCode = graphicLabels.secondCountryCode ?? '';
-                    }
-                    if (fields.hostility) filteredLabels.confidence = graphicLabels.confidence;
-                    // Defaulted for the same uncontrolled->controlled reason as hostility above.
-                    // `present` is what dashStyle() already assumed for an unset status.
-                    if (fields.status) filteredLabels.status = graphicLabels.status ?? TacticalGraphicStatus.present;
-                    if (fields.direction) filteredLabels.direction = graphicLabels.direction;
-                    if (fields.dtg1) filteredLabels.startDate = graphicLabels.startDate ?? nowDtg();
-                    if (fields.dtg2) filteredLabels.endDate = graphicLabels.endDate ?? nowDtg();
-                    
-                    if (fields.altitude1) filteredLabels.minAltitude = graphicLabels.minAltitude;
-                    if (fields.altitude2) filteredLabels.maxAltitude = graphicLabels.maxAltitude;
-                    if (fields.weapon) filteredLabels.weapon = graphicLabels.weapon ?? '';
-                    if (fields.grids) {
-                        filteredLabels.secondId = graphicLabels.secondId ?? '';
-                        filteredLabels.grid = graphicLabels.grid;
-                    }
-                    if (fields.rangeFan) {
-                        if (graphicLabels.rangeFan) {
-                            filteredLabels.rangeFan = graphicLabels.rangeFan;
-                        } else {
-                            // First time opening the editor on this fan —
-                            // seed a single band at the drawn radius so
-                            // hitting OK doesn't snap the geometry to the
-                            // 1km fallback. graphicSize is stamped in
-                            // projected meters by the controller; convert
-                            // to km (one decimal) for the editor.
-                            const drawnSize = feature.get('graphicSize') as number | undefined;
-                            const initialKm =
-                                typeof drawnSize === 'number' && drawnSize > 0
-                                    ? Math.max(0.1, Math.round((drawnSize / 1000) * 10) / 10)
-                                    : 1;
-                            filteredLabels.rangeFan = {bands: [{range: initialKm}]};
-                        }
-                    }
-
-                    let curr = {
-                        identifier: feature.get('customName') || '',
-                        echelon: feature.get('echelon') || '',
-                        countryCode: feature.get('countryCode') || '',
-                        secondIdentifier: feature.get('secondIdentifier') || '',
-                        secondCountryCode: feature.get('secondCountryCode') || '',
-                        labels: filteredLabels,
-                    }
-                    setCurrentProperties(curr);
-                    setPendingChanges(curr);
-
-                    setDialogPosition({x: 0, y: 0});
-                } else {
-                    setSelectedFeature(null);
-                }
-            }, 50); // 50ms is enough to wait for drawend
-        };
-
-        map.on('singleclick', handleClick);
-        return () => {
-            map.un('singleclick', handleClick);
-        };
-    }, [map]);
-
-    // ---- Update line between dialog and feature ----
+    /**
+     * Redraws the cone joining the dialog to the graphic it is editing.
+     *
+     * Page coordinates throughout: the cone is a viewport-level SVG, not a map
+     * overlay, so it has to work in the space `getBoundingClientRect` reports in.
+     * The source supplies the map end; everything after that is geometry.
+     */
     const updateLine = () => {
-        if (!selectedFeature || !map || !lineRef.current || !paperRef.current) return;
+        if (!selection || !lineRef.current || !paperRef.current) return;
 
-        const geometry = selectedFeature.getGeometry();
-        if (!(geometry instanceof Geometry)) return;
+        const anchor = source.anchorPixel(selection);
+        if (!anchor) return;
 
-        const anchorCoord = getAnchorCoordinate(geometry);
-        if (!anchorCoord) return;
-
-        const pixel = map.getPixelFromCoordinate(anchorCoord);
-        if (!pixel) return;
-
-        const mapRect = map.getTargetElement().getBoundingClientRect();
         const dialogRect = paperRef.current.getBoundingClientRect();
-
-        const x1 = mapRect.left + pixel[0];
-        const y1 = mapRect.top + pixel[1];
+        const [x1, y1] = anchor;
         const x2 = dialogRect.left + dialogRect.width / 2;
         const y2 = dialogRect.top + dialogRect.height / 2;
 
-        // cone width control (in pixels)
+        // The cone's mouth, spread either side of the line at the dialog end.
         const spread = 30;
         const angle = Math.atan2(y2 - y1, x2 - x1);
         const leftX = x2 + Math.cos(angle + Math.PI / 2) * spread;
@@ -223,124 +212,52 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
         const rightX = x2 + Math.cos(angle - Math.PI / 2) * spread;
         const rightY = y2 + Math.sin(angle - Math.PI / 2) * spread;
 
-        const polygon = `${x1},${y1} ${leftX},${leftY} ${rightX},${rightY}`;
-        lineRef.current.setAttribute('points', polygon);
+        lineRef.current.setAttribute('points', `${x1},${y1} ${leftX},${leftY} ${rightX},${rightY}`);
     };
 
-    const getAnchorCoordinate = (geometry: Geometry): Coordinate | undefined => {
-        if (!geometry) return;
-
-        switch (geometry.getType()) {
-            case 'Point':
-                return (geometry as Point).getCoordinates();
-            case 'LineString':
-                return (geometry as LineString).getCoordinates().at(-1);
-            case 'Polygon':
-                return (geometry as Polygon).getCoordinates()[0]?.at(-1);
-            case 'MultiPoint':
-                return (geometry as MultiPoint).getCoordinates().at(-1);
-            case 'MultiLineString': {
-                const lines = (geometry as MultiLineString).getCoordinates();
-                return lines.at(-1)?.at(-1);
-            }
-            case 'GeometryCollection': {
-                const geoms = (geometry as GeometryCollection).getGeometries();
-                for (const g of geoms) {
-                    if (g instanceof Circle) return g.getCenter();
-                    const coord = getAnchorCoordinate(g);
-                    if (coord) return coord;
-                }
-                break;
-            }
-            case 'Circle':
-                return (geometry as Circle).getCenter();
-        }
-        return undefined;
-    };
-
+    /**
+     * Draws the cone when a graphic is selected, and keeps it attached while the
+     * window is resized.
+     *
+     * A frame is skipped first: the dialog has to be laid out before its centre can
+     * be measured, and on the first render `getBoundingClientRect` reports zeroes.
+     */
     useEffect(() => {
-        if (!selectedFeature) return;
+        if (!selection) return;
         requestAnimationFrame(updateLine);
         window.addEventListener('resize', updateLine);
         return () => window.removeEventListener('resize', updateLine);
-    }, [selectedFeature]);
+        // eslint-disable-next-line
+    }, [selection]);
 
+    /**
+     * While the dialog is being dragged, redraw every frame.
+     *
+     * `Draggable` reports its position only on drag *stop*, so nothing else would
+     * move the cone until the user let go — and the line would visibly detach from
+     * the dialog for the whole gesture.
+     */
     useEffect(() => {
         if (!isDragging) return;
         const id = setInterval(() => requestAnimationFrame(updateLine), 16);
         return () => clearInterval(id);
+        // eslint-disable-next-line
     }, [isDragging]);
 
     const applyChanges = () => {
-        if (!selectedFeature || !map) return;
-
-        const symbolId = selectedFeature.get('symbolId');
-        if (!symbolId) return;
-
-        const color = getColorByHostility(pendingChanges.labels.hostility ?? TacticalGraphicHostility.unknown);
-
-        const vectorLayers = map
-            .getLayers()
-            .getArray()
-            .filter((l): l is VectorLayer<VectorSource> => l instanceof VectorLayer && !!l.getSource());
-
-        for (const layer of vectorLayers) {
-            const source = layer.getSource();
-            if (!source) continue;
-
-            let findFeatures = source.getFeatures().filter(feat => feat.get('symbolId') === symbolId);
-            if (findFeatures.length < 1) continue;
-
-            findFeatures.forEach(findFeature => {
-                findFeature.set('hostility', pendingChanges.labels.hostility);
-                findFeature.set('echelon', pendingChanges.echelon);
-                findFeature.set('hostilityColor', color);
-                // Persist the amplifiers on the feature itself, under the same key
-                // the style functions read. Graphics whose holder has no setLabel
-                // (Block, Retrograde, …) depend on this write alone.
-                writeGraphicProperties(
-                    [findFeature],
-                    findFeature.get('graphicName') as TacticalGraphicName,
-                    pendingChanges.labels,
-                );
-                const styleLike = findFeature.getStyle?.();
-                let resolvedStyle: Style | undefined;
-
-                if (!styleLike) {
-                    resolvedStyle = undefined;
-                } else if (Array.isArray(styleLike)) {
-                    resolvedStyle = styleLike[0];
-                } else if (typeof styleLike === 'function') {
-                    resolvedStyle = undefined;
-                } else {
-                    resolvedStyle = styleLike;
-                }
-
-                if (resolvedStyle instanceof Style) {
-                    resolvedStyle.getStroke?.()?.setColor(color);
-                    resolvedStyle.getFill?.()?.setColor(`${color}44`);
-                }
-
-                const graphicObj = GraphicLinkRegistry.getFromFeature(findFeature);
-                graphicObj?.setLabel?.(pendingChanges.labels);
-
-                setCurrentProperties((prev: TacticalGraphicProperties) => ({
-                    ...prev,
-                    labels: pendingChanges.labels,
-                    echelon: pendingChanges.echelon,
-                }));
-
-                findFeature.changed();
-            });
-        }
-
-        setSelectedFeature(null);
+        if (!selection) return;
+        source.apply(selection, pendingChanges.labels, pendingChanges.echelon);
+        setCurrentProperties(prev => ({
+            ...prev,
+            labels: pendingChanges.labels,
+            echelon: pendingChanges.echelon,
+        }));
+        setSelection(null);
     };
 
     const cancelChanges = () => {
         setPendingChanges({...currentProperties});
-
-        setSelectedFeature(null);
+        setSelection(null);
     };
 
     const DraggablePaper = useMemo(
@@ -363,7 +280,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
         [dialogPosition],
     );
 
-    if (!selectedFeature) return null;
+    if (!selection) return null;
 
     const hasChanges = JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties);
 
@@ -395,7 +312,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                     onClose={cancelChanges}>
                 <DialogTitle id="draggable-dialog-title" sx={{cursor: 'move'}}>
                     Feature Properties
-                    {selectedFeature.get('graphicName') && (
+                    {selection.graphicName && (
                         <Box component="span" sx={{
                             display: 'block',
                             fontSize: '0.75rem',
@@ -404,14 +321,14 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                             mt: 0.25,
                             textTransform: 'capitalize',
                         }}>
-                            {getDisplayName(selectedFeature.get('graphicName') as TacticalGraphicName)}
+                            {getDisplayName(selection.graphicName)}
                         </Box>
                     )}
                 </DialogTitle>
 
                 <DialogContent>
                     {(() => {
-                        const fields = getGraphicFields(selectedFeature.get('graphicName') as TacticalGraphicName);
+                        const fields = getGraphicFields(selection.graphicName);
                         return (
                             <>
                                 {/* Every flag, or the message contradicts a control rendered right below it.
@@ -576,7 +493,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                             <Select
                                                 value={pendingChanges.echelon}
                                                 label="Echelon"
-                                                onChange={(e: SelectChangeEvent<TacticalGraphicEchelon>) =>
+                                                onChange={(e: SelectChangeEvent<string>) =>
                                                     setPendingChanges(prev => ({...prev, echelon: e.target.value}))
                                                 }
                                             >
@@ -680,17 +597,22 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                 {fields.altitude1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="min-altitude-input">Minimum Altitude</InputLabel>
+                                            <InputLabel htmlFor="min-altitude-input">{altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}</InputLabel>
                                             <OutlinedInput
                                                 id="min-altitude-input"
-                                                label="Minimum Altitude"
+                                                label={altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.minAltitude ?? ''}
                                                 onChange={e => {
-                                                    const v = e.target.value.replace(/[^0-9]/g, '');
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, minAltitude: v},
+                                                        labels: {...prev.labels, minAltitude: digits === '' ? undefined : Number(digits)},
                                                     }));
                                                 }}
                                             />
@@ -701,20 +623,52 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                 {fields.altitude2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="max-altitude-input">Maximum Altitude</InputLabel>
+                                            <InputLabel htmlFor="max-altitude-input">{altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}</InputLabel>
                                             <OutlinedInput
                                                 id="max-altitude-input"
-                                                label="Maximum Altitude"
+                                                label={altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.maxAltitude ?? ''}
                                                 onChange={e => {
-                                                    const v = e.target.value.replace(/[^0-9]/g, '');
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, maxAltitude: v},
+                                                        labels: {...prev.labels, maxAltitude: digits === '' ? undefined : Number(digits)},
                                                     }));
                                                 }}
                                             />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {(fields.altitude1 || fields.altitude2) && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel id="altitude-datum-label">Measured from</InputLabel>
+                                            <Select
+                                                labelId="altitude-datum-label"
+                                                label="Measured from"
+                                                value={pendingChanges.labels.altitudeDatum ?? ''}
+                                                onChange={e => {
+                                                    const v = e.target.value as AltitudeDatum | '';
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, altitudeDatum: v === '' ? undefined : v},
+                                                    }));
+                                                }}
+                                            >
+                                                {/* Unset renders the bare number and its unit, which is what a
+                                                    graphic that does not care about a datum should show. */}
+                                                <MenuItem value="">(none)</MenuItem>
+                                                <MenuItem value={AltitudeDatum.meanSeaLevel}>MSL — above mean sea level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.aboveGroundLevel}>AGL — above ground level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.flightLevel}>FL — flight level</MenuItem>
+                                            </Select>
                                         </FormControl>
                                     </Box>
                                 )}
@@ -778,7 +732,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                 {fields.rangeFan && (() => {
                                     const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
                                     const bands = config.bands ?? [];
-                                    const isSector = selectedFeature.get('graphicName') === TacticalGraphicName.WeaponSensorRangeFanSector;
+                                    const isSector = selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector;
 
                                     const updateConfig = (next: RangeFanConfig) => {
                                         setPendingChanges(prev => ({
@@ -857,7 +811,12 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({map, tac
                                                                 id={`band-alt-${i}`}
                                                                 label="Altitude"
                                                                 value={band.altitude ?? ''}
-                                                                onChange={e => updateBand(i, {altitude: e.target.value})}
+                                                                onChange={e => {
+                                                                    // Digits in, a number out — the same edge
+                                                                    // conversion the graphic's own altitudes get.
+                                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                                    updateBand(i, {altitude: digits === '' ? undefined : Number(digits)});
+                                                                }}
                                                             />
                                                         </FormControl>
                                                         <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>

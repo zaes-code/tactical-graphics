@@ -1,13 +1,21 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import '../styles/map.css';
+import ms from 'milsymbol';
+import {useMilsymbolSecurityOperationSymbols} from './openlayers/securityOperationSymbol';
 import OpenLayersMap from './openlayers/OpenLayers';
-import {AppBar, Box, IconButton, Toolbar, Typography} from '@mui/material';
+import MapLibreMap from './maplibre/MapLibre';
+import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
+import MapControls from './MapControls';
+import type {EditMode} from '@zaes/tactical-graphics';
+import type {FeatureCollection} from 'geojson';
+import type {MapEngineHandle} from './mapEngine';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
+    TacticalGraphicName,
     TacticalGraphicsConfig,
     TacticalGraphicsConfigOptions,
     setTacticalGraphicsConfig,
@@ -22,6 +30,27 @@ const LS_SETTINGS = 'tg_graphicsSettings';
 /** Superseded by the single JSON blob above; read once so an existing user keeps their values. */
 const LS_LEGACY_LABELSIZE = 'tg_defaultLabelSize';
 const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
+const LS_ENGINE = 'tg_mapEngine';
+
+/**
+ * Which renderer draws the map.
+ *
+ * The library's whole Layer 1 / Layer 2 split exists so this can be a choice: the
+ * geometry and the config are map-agnostic, and only the painting is not. This
+ * picker is what makes that claim checkable rather than aspirational — the two
+ * views take the same props and read the same config singleton, so anything that
+ * differs between them is a renderer bug.
+ */
+export type MapEngine = 'openlayers' | 'maplibre';
+
+const ENGINE_LABELS: Record<MapEngine, string> = {
+    openlayers: 'OpenLayers',
+    maplibre: 'MapLibre',
+};
+
+function loadEngine(): MapEngine {
+    return localStorage.getItem(LS_ENGINE) === 'maplibre' ? 'maplibre' : 'openlayers';
+}
 
 /**
  * The demo's colours for a dark basemap — **the app's, not the library's.**
@@ -47,6 +76,19 @@ const DARK_PALETTE: TacticalGraphicsConfigOptions = {
     drawMarkerColor: 'rgb(69,106,185)',
     drawMarkerOutlineColor: 'rgb(23,23,23)',
 };
+
+// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
+// Screen the way any consumer would — by handing over the milsymbol it already
+// depends on. The library names milsymbol nowhere, which is what makes the optional
+// peer dependency actually optional; this is the other half of that.
+//
+// **Registered by the host, not by one of the engines.** It used to run at module
+// scope inside `OpenLayers.tsx`, so MapLibre only had a centre symbol because the
+// other engine's module happened to be imported — a MapLibre-only app would have
+// drawn all three with an empty middle. Module scope rather than an effect: it is
+// global, idempotent, and a graphic drawn before the first render would otherwise
+// come up empty.
+useMilsymbolSecurityOperationSymbols(ms);
 
 const paletteFor = (dark: boolean): TacticalGraphicsConfigOptions => dark ? DARK_PALETTE : DEFAULT_PALETTE;
 
@@ -88,6 +130,57 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [engine, setEngine] = useState<MapEngine>(loadEngine);
+
+    /**
+     * The live map's handle, and its capabilities mirrored into state.
+     *
+     * The handle itself is a ref because the panel's callbacks read it at click
+     * time and nothing should re-render when it changes. The capabilities *are*
+     * state, because the panel's enabled/disabled appearance depends on them and
+     * has to repaint when the engine is swapped.
+     */
+    const engineRef = useRef<MapEngineHandle | null>(null);
+    const [capabilities, setCapabilities] = useState<MapEngineHandle['capabilities'] | null>(null);
+    const [interactionMode, setInteractionMode] = useState<EditMode>('view');
+    const [selectedShape, setSelectedShape] = useState<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
+
+    /**
+     * What the outgoing engine was holding, waiting for the incoming one.
+     *
+     * A ref rather than state: it is written during a click handler and read in the
+     * next engine's ready callback, and nothing renders from it.
+     */
+    const handoverRef = useRef<FeatureCollection | null>(null);
+
+    const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
+        engineRef.current = handle;
+        // The live engine, for the driving scripts. Each engine already publishes its
+        // own map; this is the one thing above them — the handle the panel talks to.
+        // Stripped from production builds; nothing in the app may read it.
+        if (process.env.NODE_ENV !== 'production') {
+            (window as unknown as Record<string, unknown>).__tacticalEngine = handle;
+        }
+        setCapabilities(handle?.capabilities ?? null);
+        // A view that cannot edit must not leave the panel showing a stale mode from
+        // the engine that could.
+        if (!handle?.capabilities.edit) setInteractionMode('view');
+
+        // Hand the graphics to the engine that just arrived.
+        //
+        // Taken as GeoJSON rather than moved as live objects, because the two engines
+        // share no feature representation — the portable description is the only thing
+        // they both understand, and it is the same one persistence saves. So a graphic
+        // survives the switch *editable*, rebuilt through its generator, rather than as
+        // a picture of itself.
+        // **Not cleared on use.** React's StrictMode mounts a map, tears it down and
+        // mounts it again in development: consuming the snapshot on the first mount
+        // left the second — the one the user actually sees — with nothing to restore,
+        // and the graphics vanished on every switch. `restore` clears before it
+        // rebuilds, so running twice is harmless. The next engine change overwrites it.
+        const pending = handoverRef.current;
+        if (handle && pending) handle.restore(pending);
+    }, []);
     const [settings, setSettings] = useState<TacticalGraphicsConfigOptions>(() => {
         // Applied here as well as in the effect below so the very first render already
         // has the right config — the effect does not run until after it.
@@ -98,6 +191,12 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
     useEffect(() => {
         applyGraphicsConfig(darkMode, settings);
+        // Configuring changes what the symbology answers; it does not tell the map that
+        // the answer moved. OpenLayers hides this — its style functions run again on the
+        // next frame — but MapLibre bakes each paint into a GeoJSON source and keeps
+        // drawing the old colours until the paints re-run. Every host needs both halves.
+        // @see MapEngineHandle.refreshStyles
+        engineRef.current?.refreshStyles();
         localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
     }, [darkMode, settings]);
 
@@ -111,6 +210,22 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             });
             return next as TacticalGraphicsConfigOptions;
         });
+    };
+
+    /**
+     * `null` when the user clicks the already-selected button — `ToggleButtonGroup`
+     * reports a deselect, and honouring it would leave the app with no map at all.
+     */
+    const handleEngineChange = (_: React.MouseEvent<HTMLElement>, next: MapEngine | null) => {
+        if (!next) return;
+        // Snapshot **before** the state change: switching unmounts the current map, and
+        // by the time the new one reports ready the old engine's handle is gone.
+        const held = engineRef.current?.snapshot();
+        // Always assigned, so a switch away from an empty map clears a stale snapshot
+        // rather than resurrecting it.
+        handoverRef.current = held && held.features.length ? held : null;
+        localStorage.setItem(LS_ENGINE, next);
+        setEngine(next);
     };
 
     const handleHostilityColorChange = (hostility: TacticalGraphicHostility, color: string | undefined) => {
@@ -167,6 +282,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         </Typography>
                     </Typography>
 
+                    <ToggleButtonGroup
+                        value={engine}
+                        exclusive
+                        onChange={handleEngineChange}
+                        size="small"
+                        aria-label="map engine"
+                    >
+                        {(Object.keys(ENGINE_LABELS) as MapEngine[]).map(value => (
+                            <ToggleButton key={value} value={value} aria-label={ENGINE_LABELS[value]} sx={{px: 1.5, py: 0.25, fontSize: '0.75rem'}}>
+                                {ENGINE_LABELS[value]}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+
                     <IconButton
                         onClick={() => setSettingsOpen(true)}
                         size="small"
@@ -180,8 +309,66 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 </Toolbar>
             </AppBar>
 
+            {/*
+              * `key` on each view, and only one mounted at a time.
+              *
+              * Both engines attach to a container div and own it for their lifetime. Without
+              * a distinct key React reuses the same DOM node across the swap, and the
+              * incoming map initialises against a container the outgoing one has not
+              * finished tearing down — MapLibre in particular leaves its canvas behind.
+              * Remounting is also what makes the comparison honest: each engine starts from
+              * a clean map at the same centre and zoom.
+              */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
-                <OpenLayersMap darkMode={darkMode} graphicsSettings={settings}/>
+                {engine === 'openlayers'
+                    ? <OpenLayersMap
+                        key="openlayers"
+                        darkMode={darkMode}
+                        graphicsSettings={settings}
+                        onReady={handleEngineReady}
+                        onInteractionModeChange={setInteractionMode}
+                    />
+                    : <MapLibreMap
+                        key="maplibre"
+                        darkMode={darkMode}
+                        graphicsSettings={settings}
+                        onReady={handleEngineReady}
+                        onInteractionModeChange={setInteractionMode}
+                    />}
+
+                {/*
+                  * One panel, either engine. It used to live inside `OpenLayers.tsx`,
+                  * which is why the MapLibre view had none at all — and why the two
+                  * views could not be compared with the same controls in front of them.
+                  * Everything it calls goes through `MapEngineHandle`; what an engine
+                  * cannot do it declares, and the panel greys rather than hides.
+                  */}
+                {capabilities && (
+                    <MapControls
+                        capabilities={capabilities}
+                        onDrawTacticalGraphics={() => engineRef.current?.startDrawing(selectedShape)}
+                        onToggleInteraction={mode => {
+                            // Held here, not inside an engine. The panel's buttons read this
+                            // state, and only OpenLayers ever reported a mode back — so on
+                            // MapLibre the mode reached the map and never reached the panel,
+                            // and no edit button appeared selected.
+                            setInteractionMode(mode);
+                            engineRef.current?.setInteractionMode(mode);
+                        }}
+                        onShapeChange={setSelectedShape}
+                        onReset={() => engineRef.current?.reset()}
+                        onDrawSamples={hostility => engineRef.current?.drawSamples(hostility)}
+                        onClearAll={() => engineRef.current?.clearAll()}
+                        onExportGeoJson={() => engineRef.current?.exportGeoJson()}
+                        onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
+                        interactionMode={interactionMode}
+                        isRotating={interactionMode === 'rotate'}
+                        isResizing={interactionMode === 'resize'}
+                        isRepositioning={interactionMode === 'translate'}
+                        isModifying={interactionMode === 'modify'}
+                        defaultShape={selectedShape}
+                    />
+                )}
             </Box>
 
             <SettingsModal
