@@ -65,7 +65,8 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {clampTurnBend, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {clampTurnBend, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
@@ -406,6 +407,20 @@ export function restoreTacticalGraphics(
             }) as Feature;
             const geometry = incoming.getGeometry();
             if (!geometry) throw new Error('base feature has no geometry');
+            // **Tidied on the way in, exactly as a drawn base is.** A saved base can be
+            // short of what its graphic needs — the sample sweep hands a fields-of-fire
+            // two points, and every snapshot written before the draw path started
+            // normalising has the same shape. Left alone, the generator synthesises the
+            // missing leg on every render and the V cannot be reshaped, because there is
+            // no vertex there to drag. MapLibre normalises inside `buildTacticalGraphic`,
+            // which every one of its paths goes through; this is the same door on this
+            // side. @see normalizeDrawnBase
+            if (geometry instanceof LineString) {
+                const tidied = normalizeDrawnBase(name, geometry.getCoordinates().map(c => toLonLat(c)));
+                if (tidied.length !== geometry.getCoordinates().length) {
+                    geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
+                }
+            }
             handler.graphic.base.setGeometry(geometry);
 
             const labels = toLabels(bag);
