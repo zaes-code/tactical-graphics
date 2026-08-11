@@ -15,19 +15,21 @@ export class DirectionOfSupportingAttack extends TacticalGraphicsBase<MovementGr
         return this.asMultiLineStringFeature([baseCoords, arrowCoords]);
     }
 
-    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-
-        return this.asMultiPointFeature([baseCoords[0], arrowTipCoord, leftArrowHeadBase]);
-
+    /**
+     * **The drawn vertices, and nothing else.**
+     *
+     * These used to be `[start, arrowTip, arrowHeadBase]` — two of them placed off the
+     * line by `radius`, on the arrow. OpenLayers never passed a radius into this call, so
+     * its fallback of 20 m collapsed both onto the line's end and it drew what looked
+     * like two handles at one vertex; MapLibre passed the real one and drew them out on
+     * the arrowhead, where they read as dots floating beside the graphic.
+     *
+     * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
+     * dragging them cannot mean anything the line's own ends do not already say — so the
+     * handles are the vertices the user drew, in both engines and for any consumer.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(base.geometry.coordinates);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -48,19 +50,21 @@ export class DirectionOfMainAttack extends TacticalGraphicsBase<MovementGraphicO
         return this.asMultiLineStringFeature([baseCoords, arrowCoords]);
     }
 
-    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-
-        return this.asMultiPointFeature([baseCoords[0], arrowTipCoord, leftArrowHeadBase]);
-
+    /**
+     * **The drawn vertices, and nothing else.**
+     *
+     * These used to be `[start, arrowTip, arrowHeadBase]` — two of them placed off the
+     * line by `radius`, on the arrow. OpenLayers never passed a radius into this call, so
+     * its fallback of 20 m collapsed both onto the line's end and it drew what looked
+     * like two handles at one vertex; MapLibre passed the real one and drew them out on
+     * the arrowhead, where they read as dots floating beside the graphic.
+     *
+     * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
+     * dragging them cannot mean anything the line's own ends do not already say — so the
+     * handles are the vertices the user drew, in both engines and for any consumer.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(base.geometry.coordinates);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -81,19 +85,21 @@ export class DirectionOfMainAttackFeint extends TacticalGraphicsBase<MovementGra
         return this.asMultiLineStringFeature([baseCoords, ...arrowCoords]);
     }
 
-    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-
-        return this.asMultiPointFeature([baseCoords[0], arrowTipCoord, leftArrowHeadBase]);
-
+    /**
+     * **The drawn vertices, and nothing else.**
+     *
+     * These used to be `[start, arrowTip, arrowHeadBase]` — two of them placed off the
+     * line by `radius`, on the arrow. OpenLayers never passed a radius into this call, so
+     * its fallback of 20 m collapsed both onto the line's end and it drew what looked
+     * like two handles at one vertex; MapLibre passed the real one and drew them out on
+     * the arrowhead, where they read as dots floating beside the graphic.
+     *
+     * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
+     * dragging them cannot mean anything the line's own ends do not already say — so the
+     * handles are the vertices the user drew, in both engines and for any consumer.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(base.geometry.coordinates);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -157,19 +163,21 @@ export class AviationDirectionOfAttack extends TacticalGraphicsBase<MovementGrap
         ];
     }
 
-    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-
-        return this.asMultiPointFeature([baseCoords[0], arrowTipCoord, leftArrowHeadBase]);
-
+    /**
+     * **The drawn vertices, and nothing else.**
+     *
+     * These used to be `[start, arrowTip, arrowHeadBase]` — two of them placed off the
+     * line by `radius`, on the arrow. OpenLayers never passed a radius into this call, so
+     * its fallback of 20 m collapsed both onto the line's end and it drew what looked
+     * like two handles at one vertex; MapLibre passed the real one and drew them out on
+     * the arrowhead, where they read as dots floating beside the graphic.
+     *
+     * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
+     * dragging them cannot mean anything the line's own ends do not already say — so the
+     * handles are the vertices the user drew, in both engines and for any consumer.
+     */
+    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(base.geometry.coordinates);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
