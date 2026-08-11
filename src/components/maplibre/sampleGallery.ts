@@ -10,6 +10,7 @@ import {
     supportsHostility,
     AltitudeDatum,
     isRectangular,
+    type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
 
@@ -116,11 +117,11 @@ const SAMPLE_AMPLIFIERS = {
     maxAltitude: 20000,
     altitudeDatum: AltitudeDatum.aboveGroundLevel,
     rangeFan: {
-        // **One band, not three.** Each band draws a three-line stack — its name, its
-        // range, its altitude — anchored on its own ring, and in a cell this size three
-        // rings put those stacks within a few pixels of each other: rendered with
-        // 60/120/180 km the two fan samples were an unreadable pile. One ring shows the
-        // same three lines and stays legible, which is what a catalogue owes a reader.
+        // **One band**, and no bearings on it — the sector fan then falls back to its
+        // own span, which is the plain case worth showing first. The multi-band variants
+        // are separate samples rather than a replacement for this one, so the catalogue
+        // shows both what a fan looks like with a single ring and what stacking does to
+        // it. @see EXTRA_SAMPLES
         //
         // Kilometres, unlike every other distance here. @see RangeFanBand.range
         bands: [{range: 180, label: 'ARTY', altitude: 1500}],
@@ -175,6 +176,114 @@ function hostilityFor(
  * the right size on the first zoom, when `rebuildScreenSized` re-derived it from the
  * live map. @see securityOperationSize
  */
+/**
+ * One sample: which graphic, where in the grid, and the properties it is drawn with.
+ *
+ * **Both sweeps walk this same list**, which they did not used to. `buildSampleGraphics`
+ * sorted by category while `sampleFeatureCollection` took the registry's own order, so
+ * the engine that builds its own graphics and the engine that restores the collection
+ * laid the catalogue out differently — the same fan sat at [26, -47] in one and
+ * [-10, -54] in the other. Comparing the two by looking at them was comparing two
+ * different pictures.
+ */
+interface SampleSpec {
+    name: TacticalGraphicName;
+    index: number;
+    properties: Omit<TacticalGraphicProperties, 'name'>;
+}
+
+/**
+ * A second sample for the graphics whose interesting variation is in their *properties*
+ * rather than their shape.
+ *
+ * The range fans carry a list of bands, and one band draws nothing like four — the rings
+ * nest, the labels stack, and the sector's bearings spread across the arc. A catalogue
+ * showing only the single-band case shows the shape and hides the graphic.
+ */
+const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphicProperties, 'name'>}[] = [
+    {
+        name: TacticalGraphicName.WeaponSensorRangeFanCircular,
+        properties: {
+            rangeFan: {
+                bands: [
+                    {range: 60, label: 'MG'},
+                    {range: 120, label: 'ATGM'},
+                    {range: 180, label: 'ARTY'},
+                ],
+            },
+        },
+    },
+    {
+        name: TacticalGraphicName.WeaponSensorRangeFanSector,
+        properties: {
+            // Three, for the same reason — and each with its own pair of bearings, which
+            // is the thing a sector fan can do that a circular one cannot.
+            rangeFan: {
+                bands: [
+                    {range: 60, label: 'MG', leftAzimuthDeg: 20, rightAzimuthDeg: 70},
+                    {range: 120, label: 'ATGM', leftAzimuthDeg: 35, rightAzimuthDeg: 85},
+                    {range: 180, label: 'ARTY', leftAzimuthDeg: 45, rightAzimuthDeg: 100},
+                ],
+            },
+        },
+    },
+];
+
+/**
+ * Every sample, in one order, ready for either engine to realise.
+ *
+ * Sorted by category so related symbols sit together, which is what makes the sweep
+ * readable as a catalogue rather than a heap.
+ */
+function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
+    const byCategory = [...PAINTABLE_GRAPHICS].sort((a, b) => {
+        const ca = GRAPHIC_CATEGORIES[a] ?? TacticalGraphicCategory.Areas;
+        const cb = GRAPHIC_CATEGORIES[b] ?? TacticalGraphicCategory.Areas;
+        return ca === cb ? getDisplayName(a).localeCompare(getDisplayName(b)) : String(ca).localeCompare(String(cb));
+    });
+
+    const specs: SampleSpec[] = byCategory.map((name, index) => ({
+        name,
+        index,
+        properties: {
+            ...SAMPLE_AMPLIFIERS,
+            radius: SAMPLE_RADIUS_M,
+            // **`rotation` is not optional in practice.** The point-anchored generators
+            // feed it straight into `Math.cos`/`Math.sin`, so leaving it undefined
+            // produces NaN coordinates and turf then refuses the feature — which surfaces
+            // as the graphic simply not drawing. All nine arc and circular-area samples
+            // were missing until this was passed.
+            rotation: 0,
+            ...hostilityFor(name, hostility),
+        },
+    }));
+
+    // Appended, so they take the cells after the catalogue proper and nothing shifts.
+    EXTRA_SAMPLES.forEach((extra, offset) => {
+        specs.push({
+            name: extra.name,
+            index: byCategory.length + offset,
+            properties: {
+                ...SAMPLE_AMPLIFIERS,
+                radius: SAMPLE_RADIUS_M,
+                rotation: 0,
+                ...hostilityFor(extra.name, hostility),
+                ...extra.properties,
+            },
+        });
+    });
+
+    return specs;
+}
+
+/** Where a sample's cell sits, from its place in the list. */
+function cellOrigin(index: number): {lon: number; lat: number} {
+    return {
+        lon: ORIGIN[0] + (index % COLUMNS) * COLUMN_STEP,
+        lat: ORIGIN[1] - Math.floor(index / COLUMNS) * ROW_STEP,
+    };
+}
+
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
@@ -182,31 +291,13 @@ export function buildSampleGraphics(
     graphics: MapLibreTacticalGraphic[];
     report: MapLibreSampleReport;
 } {
-    const byCategory = [...PAINTABLE_GRAPHICS].sort((a, b) => {
-        const ca = GRAPHIC_CATEGORIES[a] ?? TacticalGraphicCategory.Areas;
-        const cb = GRAPHIC_CATEGORIES[b] ?? TacticalGraphicCategory.Areas;
-        return ca === cb ? getDisplayName(a).localeCompare(getDisplayName(b)) : String(ca).localeCompare(String(cb));
-    });
-
     const graphics: MapLibreTacticalGraphic[] = [];
     const failed: string[] = [];
 
-    byCategory.forEach((name, i) => {
-        const lon = ORIGIN[0] + (i % COLUMNS) * COLUMN_STEP;
-        const lat = ORIGIN[1] - Math.floor(i / COLUMNS) * ROW_STEP;
-
+    sampleSpecs(hostility).forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index);
         const built = candidateGeometries(name, lon, lat)
-            .map(geometry => buildTacticalGraphic(name, geometry, {
-                ...SAMPLE_AMPLIFIERS,
-                radius: SAMPLE_RADIUS_M,
-                // **`rotation` is not optional in practice.** The point-anchored
-                // generators feed it straight into `Math.cos`/`Math.sin`, so leaving it
-                // undefined produces NaN coordinates and turf then refuses the feature —
-                // which surfaces as the graphic simply not drawing. All nine arc and
-                // circular-area samples were missing until this was passed.
-                rotation: 0,
-                ...hostilityFor(name, hostility),
-            }, drawingResolution))
+            .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
             .find(Boolean);
 
         if (built) graphics.push(built);
@@ -226,10 +317,8 @@ export function buildSampleGraphics(
 export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): FeatureCollection {
     const features: Feature[] = [];
 
-    [...PAINTABLE_GRAPHICS].forEach((name, i) => {
-        const lon = ORIGIN[0] + (i % COLUMNS) * COLUMN_STEP;
-        const lat = ORIGIN[1] - Math.floor(i / COLUMNS) * ROW_STEP;
-
+    sampleSpecs(hostility).forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index);
         const geometry = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );
@@ -240,21 +329,17 @@ export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): F
             geometry,
             properties: {
                 role: 'base',
-                symbolId: `sample-${name}`,
+                // Unique per cell, not per graphic: the fans appear twice.
+                symbolId: `sample-${name}-${index}`,
                 graphicName: name,
-                [TACTICAL_GRAPHIC_KEY]: {
-                    name,
-                    radius: SAMPLE_RADIUS_M,
-                    rotation: 0,
-                    ...SAMPLE_AMPLIFIERS,
-                    ...hostilityFor(name, hostility),
-                },
+                [TACTICAL_GRAPHIC_KEY]: {name, ...properties},
             },
         });
     });
 
     return {type: 'FeatureCollection', features};
 }
+
 
 /** Every graphic the registry cannot paint yet — the remaining port, as a list. */
 export function unpaintableGraphics(): TacticalGraphicName[] {
