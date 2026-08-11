@@ -121,16 +121,19 @@ tacticalGraphic: {
     // Amplifiers — text rendered on the graphic.
     label: '1-508 IN',        // primary designation
     secondId: 'TF RAIDER',    // secondary designation
+    countryCode: 'USA',       // and secondCountryCode, beside each designation
     startDate: '021200ZJUN26',
     endDate: '021800ZJUN26',
-    minAltitude: '500',
-    maxAltitude: '2000',
+    eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
+    minAltitude: 500,         // a NUMBER, in the configured height unit — see below
+    maxAltitude: 2000,
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
     // Symbology — affects color and dash pattern.
     hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
     status: 'present',        // present | planned  (planned ⇒ dashed)
+    confidence: 'confirmed',  // rendered where doctrine shows a reliability rating
     echelon: 'battalion',
     direction: 'ONE_WAY',     // route graphics
 
@@ -143,11 +146,24 @@ tacticalGraphic: {
                               // reach from anywhere, which is why it isn't `radius`.
     width: 600,               // FULL width across a drawn line — rail to rail on an axis
                               // of advance, edge to edge on a corridor
-    rotation: 45,             // degrees (point graphics)
-    bend: 0.8,                // Turn only — how sharply it turns, × radius
-    labelGapDegrees: 15,      // arc mission tasks — hole left for the letter
+    rotation: 45,             // degrees, counter-clockwise from east (point graphics)
+    mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
+                              // withdrawal, the chevron on an abatis
+    bend: 0.8,                // Turn and Envelopment — how sharply the curve bows
+    labelGapDegrees: 15,      // arc mission tasks — angular hole left for the letter
+    labelGap: 0,              // the same hole in meters, for the graphics that cut it
+                              // from the rendered glyph instead
+    rangeFan: {bands: [...]}, // weapon/sensor range fans — one entry per band
 }
 ```
+
+**Altitudes are numbers**, in whichever unit the host configured — feet by default. The
+renderer appends it, so `500` draws as `500FT`, or `500M` under
+`configureTacticalGraphics({heightUnit: HeightUnit.Metres})`. FM 1-02.2 makes these
+fields free text, and a string still renders untouched, so a `'FL150'` or a `'1500MSL'`
+from another system draws as written — but a number is what the type invites, because it
+is what a program can sort and compare. See
+[Configuring colors and sizes](#configuring-colors-and-sizes).
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
@@ -273,32 +289,106 @@ and leaves your map alone.
 Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,
 `onModeChange` — and they mean the same thing in both engines.
 
-### Setting up the map itself
+### A complete example, per engine
 
-The map is yours; only its construction differs, and that is an OpenLayers and
-MapLibre difference rather than one of ours.
+The same program twice. Read either one on its own — that is the point of printing both
+in full rather than a shared snippet with the import elided.
+
+#### OpenLayers
 
 ```ts
-// OpenLayers
+import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile';
+import OSM from 'ol/source/OSM';
 import {fromLonLat} from 'ol/proj';
+
+import {TacticalGraphicName, configureTacticalGraphics} from '@zaes/tactical-graphics';
 import {createTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
 
-const map = new Map({target: 'map', view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 12})});
-const graphics = createTacticalGraphics(map);
+const map = new Map({
+    target: 'map',
+    layers: [new TileLayer({source: new OSM()})],
+    view: new View({center: fromLonLat([-77.04, 38.89]), zoom: 10}),
+});
+
+const graphics = createTacticalGraphics(map, {
+    onChange: () => localStorage.setItem('map', JSON.stringify(graphics.snapshot())),
+    onSelect: g => console.log(g ? `selected ${g.name}` : 'nothing selected'),
+    onModeChange: mode => toolbar.setActive(mode),
+});
+
+// Draw one: the user clicks out the base geometry from here.
+graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+
+// Then let them edit it.
+graphics.setInteractionMode('modify');
+
+// Re-theme at any time. The config lives in the root package, so this call is
+// identical on both engines — but a repaint has to be asked for.
+configureTacticalGraphics({lineWidth: 3, defaultLineColor: '#e0e0e0'});
+graphics.refreshStyles();
+
+// Save and reload.
+const saved = graphics.snapshot();
+graphics.clearAll();
+graphics.restore(saved);
+
+// On teardown.
+graphics.destroy();
 ```
+
+#### MapLibre
 
 ```ts
-// MapLibre — wait for `load`, since sources cannot be added before it
+import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
+
+import {TacticalGraphicName, configureTacticalGraphics} from '@zaes/tactical-graphics';
 import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
 
-const map = new maplibregl.Map({container: 'map', style, center: [-77.04, 38.89], zoom: 12});
+const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://your-style-server/style.json',   // must serve glyphs — see below
+    center: [-77.04, 38.89],
+    zoom: 10,
+});
+
+// Sources and layers cannot be added before the style is ready.
 map.on('load', () => {
-    const graphics = createTacticalGraphics(map);
+    const graphics = createTacticalGraphics(map, {
+        onChange: () => localStorage.setItem('map', JSON.stringify(graphics.snapshot())),
+        onSelect: g => console.log(g ? `selected ${g.name}` : 'nothing selected'),
+        onModeChange: mode => toolbar.setActive(mode),
+    });
+
+    // Draw one: the user clicks out the base geometry from here.
+    graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);
+
+    // Then let them edit it.
+    graphics.setInteractionMode('modify');
+
+    // Re-theme at any time. The config lives in the root package, so this call is
+    // identical on both engines — but a repaint has to be asked for.
+    configureTacticalGraphics({lineWidth: 3, defaultLineColor: '#e0e0e0'});
+    graphics.refreshStyles();
+
+    // Save and reload.
+    const saved = graphics.snapshot();
+    graphics.clearAll();
+    graphics.restore(saved);
+
+    // On teardown.
+    graphics.destroy();
 });
 ```
+
+**Three lines differ**, and each for a reason that is MapLibre's rather than this
+library's: the map is constructed differently, the work waits for `load`, and the style
+must serve glyphs because MapLibre draws text from SDF glyph PBFs rather than a system
+font. Everything from `createTacticalGraphics` onward is character-for-character the
+same.
 
 ### What the two engines share
 
