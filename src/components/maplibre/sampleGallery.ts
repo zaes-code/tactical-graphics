@@ -8,6 +8,7 @@ import {
     TacticalGraphicName,
     getDisplayName,
     supportsHostility,
+    AltitudeDatum,
     isRectangular,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
@@ -93,6 +94,40 @@ function pentagon(lon: number, lat: number): Geometry {
 }
 
 /**
+ * Amplifiers handed to **every** sample, so the ones that render them show what they
+ * actually look like in use.
+ *
+ * Set unconditionally rather than per graphic, because that is how the schema already
+ * works: a graphic ignores the fields that do not apply to it. Only the twenty-odd that
+ * draw an altitude block react, and picking them by name here would be a second list to
+ * keep in step with the generators.
+ *
+ * They exist because the sweep is the engine-comparison tool and the published gallery,
+ * and without them the whole multi-line `MIN ALT: / MAX ALT:` layout — eleven air zones,
+ * three coordination areas, eight corridors — was invisible in both. A regression there
+ * could not have shown up in either.
+ *
+ * Values are representative rather than doctrinal: a floor and a ceiling far enough apart
+ * to read, against a datum, and three range bands sized to sit inside the cell a sample
+ * is allotted.
+ */
+const SAMPLE_AMPLIFIERS = {
+    minAltitude: 1500,
+    maxAltitude: 20000,
+    altitudeDatum: AltitudeDatum.aboveGroundLevel,
+    rangeFan: {
+        // **One band, not three.** Each band draws a three-line stack — its name, its
+        // range, its altitude — anchored on its own ring, and in a cell this size three
+        // rings put those stacks within a few pixels of each other: rendered with
+        // 60/120/180 km the two fan samples were an unreadable pile. One ring shows the
+        // same three lines and stays legible, which is what a catalogue owes a reader.
+        //
+        // Kilometres, unlike every other distance here. @see RangeFanBand.range
+        bands: [{range: 180, label: 'ARTY', altitude: 1500}],
+    },
+};
+
+/**
  * A radius for the point-anchored graphics, in metres.
  *
  * Only read by graphics that take one; the rest ignore it. Sized so a circle lands
@@ -162,6 +197,7 @@ export function buildSampleGraphics(
 
         const built = candidateGeometries(name, lon, lat)
             .map(geometry => buildTacticalGraphic(name, geometry, {
+                ...SAMPLE_AMPLIFIERS,
                 radius: SAMPLE_RADIUS_M,
                 // **`rotation` is not optional in practice.** The point-anchored
                 // generators feed it straight into `Math.cos`/`Math.sin`, so leaving it
@@ -210,6 +246,7 @@ export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): F
                     name,
                     radius: SAMPLE_RADIUS_M,
                     rotation: 0,
+                    ...SAMPLE_AMPLIFIERS,
                     ...hostilityFor(name, hostility),
                 },
             },
