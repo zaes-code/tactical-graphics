@@ -30,6 +30,7 @@ import {
     allowedGestures,
     baseGeometryFor,
     clampEnvelopmentBend,
+    envelopmentBendFrom,
     clampTurnBend,
     RANGE_FAN_BAND_OFFSET,
     handleContract,
@@ -742,8 +743,12 @@ export class MapLibreInteractions {
                 });
             case 'bend':
                 // Each curve family clamps its own bend, and the two ranges differ —
-                // Envelopment's hook bows much harder than a turn.
-                return setBend(before, to, name === TacticalGraphicName.Envelopment ? clampEnvelopmentBend : clampTurnBend);
+                // Envelopment's hook bows much harder than a turn. It also *reads* the
+                // bend differently: its tip lies along the axis rather than off it, so it
+                // brings its own rule. @see envelopmentBendFrom
+                return name === TacticalGraphicName.Envelopment
+                    ? setBend(before, to, clampEnvelopmentBend, envelopmentBendFrom)
+                    : setBend(before, to, clampTurnBend);
             case 'mirror':
                 // Side only — no width, no vertex. @see setMirror
                 return setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis);

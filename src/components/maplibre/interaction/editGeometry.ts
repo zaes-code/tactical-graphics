@@ -473,14 +473,34 @@ const DEFAULT_OFFSET_SCALE = 0.5;
  * comes from `rotation` — planar degrees, 0 = east — and then its *clockwise*
  * perpendicular, which is the side the generator bows toward.
  */
-export function setBend(description: GraphicDescription, cursor: Position, clamp: (bend: number) => number): GraphicDescription {
+export function setBend(
+    description: GraphicDescription,
+    cursor: Position,
+    clamp: (bend: number) => number,
+    /**
+     * Reads the bend from the cursor's own frame instead of the perpendicular offset.
+     * Envelopment needs it: its tip sits **along** the axis, so the perpendicular
+     * carries no radius and the default rule collapses the hook. @see envelopmentBendFrom
+     */
+    fromFrame?: (along: number, perpendicular: number, size: number, currentBend: number) => number,
+): GraphicDescription {
     const size = description.properties.radius;
     if (!size || size <= 0) return description;
 
     const centre = toMercator(centreOf(description.geometry) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     const theta = ((description.properties.rotation ?? 0) * Math.PI) / 180;
-    const bend = clamp(((at[0] - centre[0]) * Math.sin(theta) + (at[1] - centre[1]) * -Math.cos(theta)) / size);
+    const dx = at[0] - centre[0];
+    const dy = at[1] - centre[1];
+
+    const bend = fromFrame
+        ? fromFrame(
+            dx * Math.cos(theta) + dy * Math.sin(theta),
+            -dx * Math.sin(theta) + dy * Math.cos(theta),
+            size,
+            description.properties.bend ?? 0,
+        )
+        : clamp((dx * Math.sin(theta) + dy * -Math.cos(theta)) / size);
 
     return {...description, properties: {...description.properties, bend}};
 }

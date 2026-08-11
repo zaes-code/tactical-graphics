@@ -79,6 +79,8 @@ export {
     ENVELOPMENT_MIN_BEND,
     ENVELOPMENT_MAX_BEND,
     clampEnvelopmentBend,
+    ENVELOPMENT_FLIP_THRESHOLD,
+    envelopmentBendFrom,
 } from './graphics/FormsOfManeuver';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
