@@ -169,6 +169,33 @@ function formatKm(km: number): string {
     return Number.isInteger(km) ? String(km) : km.toFixed(1);
 }
 
+/**
+ * How far outward a sector band's bearing sits from the arc it labels, in screen pixels.
+ *
+ * Enough to clear a three-line range block and no more: these mark the sector's edges, so
+ * a bearing that drifts far from its own edge stops pointing at anything.
+ */
+const AZIMUTH_LABEL_GAP_PX = 16;
+
+/** Rendered height of one label row at scale 1 — the base font with normal leading. */
+const LABEL_LINE_PX = BASE_FONT_SIZE_PX * 1.2;
+
+/** Clearance between the bottom of a lifted block and the line it was sitting on. */
+const RANGE_BLOCK_CLEARANCE_PX = 8;
+
+/**
+ * How far a sector band's range block sits above its own centre line, at scale 1.
+ *
+ * **Measured from the block, not fixed.** The block is centred on its anchor and carries
+ * one to three rows depending on which fields are set, so a constant lift either fails to
+ * clear a three-row block or throws a one-row block into the arc above it. Half the
+ * block's own height puts its bottom edge on the axis; the clearance takes it off.
+ *
+ * A first attempt used a flat 22 px and simply moved the collision down a row — `RG 180`
+ * came clear and `ALT 1500FT AGL` took its place on the line.
+ */
+const rangeBlockLiftPx = (rows: number): number => (rows * LABEL_LINE_PX) / 2 + RANGE_BLOCK_CLEARANCE_PX;
+
 /** An azimuth as FM 1-02.2 prints it — three digits, zero-padded. */
 function formatAzimuth(deg: number): string {
     let n = Math.round(deg) % 360;
@@ -205,9 +232,10 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
         const scale = scaleOf(feature, context);
         const paints: Paint[] = [];
 
-        const text = (at: ProjectedPosition, value: string): Paint => ({
+        const text = (at: ProjectedPosition, value: string, offsets: {offsetXPx?: number; offsetYPx?: number} = {}): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
+                ...offsets,
                 text: value,
                 font: fontStyle,
                 fill: getLabelFillColor(),
@@ -235,14 +263,46 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             // fan is measured from the same thing.
             const written = formatAltitude(altitude, feature.properties.altitudeDatum);
             if (written) lines.push(`ALT ${written}`);
-            if (lines.length) paints.push(text(coords[midIndex], lines.join('\n')));
+            // **Lifted clear of the centre axis, on a sector.** That fan draws an arrow
+            // from the apex along its centre line, and the range block is anchored on the
+            // same line — so the axis ran straight through the middle row and filled the
+            // space between the words: `RG 180` read as `RG-180`, which is exactly how it
+            // was reported. A circular fan has no such line and needs no lift.
+            //
+            // It also puts the block above the arc, which is where table 5-276 prints it.
+            // Scaled with the text, so the clearance holds as the label grows.
+            if (lines.length) {
+                paints.push(text(coords[midIndex], lines.join('\n'), isSector ? {offsetYPx: -rangeBlockLiftPx(lines.length) * scale} : {}));
+            }
 
             if (!isSector) continue;
+            // **Nudged outward, clear of the range stack.** The bearings are anchored on
+            // the band's own edges and the range block sits at its midpoint, so on a fan
+            // whose arc is short next to a three-line label the two overlap — rendered at
+            // 180 km with one band, "045" landed across "RG 180" and read as "RG-180",
+            // which is a bug report someone did file. Pushed along the centre-to-edge
+            // ray, so each moves away from the block rather than in some fixed direction
+            // that would be wrong at half the bearings.
+            const centre = coords[0];
+            const outward = (at: ProjectedPosition): {offsetXPx: number; offsetYPx: number} => {
+                const dx = at[0] - centre[0];
+                const dy = at[1] - centre[1];
+                const length = Math.hypot(dx, dy);
+                if (length === 0) return {offsetXPx: 0, offsetYPx: 0};
+                // Screen y grows downward while projected y grows north, hence the flip.
+                return {
+                    offsetXPx: (dx / length) * AZIMUTH_LABEL_GAP_PX,
+                    offsetYPx: (-dy / length) * AZIMUTH_LABEL_GAP_PX,
+                };
+            };
+
             if (midIndex + 1 < coords.length && band.resolvedLeftAz !== undefined) {
-                paints.push(text(coords[midIndex + 1], formatAzimuth(band.resolvedLeftAz)));
+                const at = coords[midIndex + 1];
+                paints.push(text(at, formatAzimuth(band.resolvedLeftAz), outward(at)));
             }
             if (midIndex + 2 < coords.length && band.resolvedRightAz !== undefined) {
-                paints.push(text(coords[midIndex + 2], formatAzimuth(band.resolvedRightAz)));
+                const at = coords[midIndex + 2];
+                paints.push(text(at, formatAzimuth(band.resolvedRightAz), outward(at)));
             }
         }
 
