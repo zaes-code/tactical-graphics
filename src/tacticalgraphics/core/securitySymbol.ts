@@ -119,9 +119,30 @@ export function securitySymbolRevision(): number {
  * Version 13, reality context (digit 3), symbol set 10 (land unit). Digit **4** is
  * standard identity; digit 3 is context, and putting the placeholder there instead
  * produces a valid-looking code for the wrong thing.
+ *
+ * Positions 9-10 are the echelon — `14`, platoon — and 11-16 the entity. They are
+ * what milsymbol draws the three dots above the frame from, and the detail inside
+ * it. **A template of all zeros is not a neutral default; it is a bare frame.**
+ * This module carried exactly that while the OpenLayers half carried the code with
+ * the digits filled in, so the same graphic drew a full symbol in one renderer and
+ * an empty outline in the other — reported as MapLibre "clipping the top", which is
+ * what a missing echelon looks like. Rendered through milsymbol the two differ by
+ * 6 drawn elements against 2.
+ *
+ * The entity is illustrative rather than prescribed — FM 1-02.2 does not say which
+ * unit performs a security task — so a host that cares substitutes its own through
+ * a provider. What matters here is that both renderers start from **one** code.
  */
-const SIDC_TEMPLATE = '130#10000000000000000000000000000';
+const SIDC_TEMPLATE = '130#10001413010000000000000000';
 
+/**
+ * Standard-identity digit per MIL-STD-2525E, position 4 of the SIDC.
+ *
+ * `assumedFriend` and `suspectJoker` are distinct identities in the standard and
+ * get their own digits here, even though the *colour* accessors alias them onto
+ * friend and pending — colour is a rendering choice, identity is what the symbol
+ * asserts.
+ */
 const IDENTITY_DIGIT: Partial<Record<TacticalGraphicHostility, string>> = {
     [TacticalGraphicHostility.pending]: '0',
     [TacticalGraphicHostility.unknown]: '1',
