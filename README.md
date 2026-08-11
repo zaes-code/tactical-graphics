@@ -320,65 +320,6 @@ showing where a new vertex would land are all present in both.
 | **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
 | **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realise geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
 
-### Reaching past the façade
-
-Both subpaths still export their own objects, and adopting the façade does not mean
-giving them up — `createTacticalGraphics(map, {manager})` and `{renderer}` adopt one
-you already built. The engine-specific surfaces are `TacticalGraphicsManager`,
-`getController` and the feature holders on the OpenLayers side; `NativeLayerRenderer`
-and `MapLibreInteractions` on the MapLibre one.
-
-These are **not** mirror images of each other, and are not meant to be. OpenLayers
-retains mutable features and edits them in place; MapLibre derives GeoJSON sources
-and discards them on the next rebuild. Those are genuinely different rendering
-models. The façade exists so that you only have to care when you want to.
-
-#### Placing graphics from data, in OpenLayers
-
-Skip the draw interaction when the geometry comes from data rather than a user's
-clicks. You build the base feature; the controller does the rest:
-
-```ts
-import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
-
-const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
-handler.setBaseFeature(drawnFeature);          // your own LineString / Point / Polygon feature
-source.addFeatures(handler.getFeatures());     // graphic + labels + handles
-manager.watchResolution(handler);              // see below — not optional
-
-writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
-    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
-});
-```
-
-Two rules apply to anything built this way:
-
-**Set amplifiers through `writeGraphicProperties`, never `feature.set`.**
-`ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
-keep drawing the old label.
-
-**`manager.watchResolution(handler)` is not optional.** Some graphics — every
-security operation — have geometry that is a screen-pixel constant times the map
-resolution, so without a `change:resolution` subscription they are pinned in meters
-and grow and shrink as you zoom. The manager does this for you when the user draws,
-and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
-with `unwatchResolution` when you remove the graphic, or the listener outlives its
-features.
-
-#### Placing graphics from data, in MapLibre
-
-`buildTacticalGraphic` is the same idea, and hands back a ready graphic rather than
-mutating a holder:
-
-```ts
-import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
-
-const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
-    label: 'A', hostility: 'Hostile/Faker',
-}, resolution);
-if (graphic) renderer.add(graphic);
-```
-
 ### The radius read-out
 
 While a circular graphic is drawn or resized, both renderers draw a hashed line from
@@ -568,20 +509,6 @@ companion object to keep, and no viewport state to lose.
 A base short of what its graphic needs is completed on the way in, so a record written
 by hand — or by an older version — arrives fully editable rather than half-drawn.
 
-### When you need the report
-
-`restore()` returns nothing, because the common case is "put the map back". The
-OpenLayers subpath exposes the underlying pair when you need to know what failed:
-
-```ts
-import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
-
-const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
-```
-
-A graphic that fails to restore is reported in `failed` and rolled back on its own, so
-one bad record cannot cost you the rest of the map.
-
 ---
 
 ## Security operations: the center symbol
@@ -593,10 +520,13 @@ register one:
 
 ```ts
 import ms from 'milsymbol';
-import {useMilsymbolSecurityOperationSymbols} from '@zaes/tactical-graphics/openlayers';
+import {useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
 
-useMilsymbolSecurityOperationSymbols(ms);   // once, at startup
+useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
+
+From the **root** entry point, because a center symbol is symbology rather than
+rendering: one registration serves whichever engine is drawing, and both read it.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
@@ -604,42 +534,42 @@ dependency: a consumer who wants the geometry, or the other 200-odd graphics, ne
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
-hostile Screen gets a hostile-framed symbol. `securityOperationSidc(hostility)`
-exposes the same doctrinal code if you want to build on it.
+hostile Screen gets a hostile-framed symbol. `securitySymbolSidc(hostility)` exposes the
+same doctrinal code if you want to build on it.
 
 ### Sizing the symbol
 
 ```ts
-import {setSecurityOperationSymbolSize} from '@zaes/tactical-graphics/openlayers';
+import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
 
-setSecurityOperationSymbolSize(40);        // CSS px, default 25, clamped to [8, 96]
-source.forEachFeature(f => f.changed());   // takes effect on the next render
+setSecuritySymbolSize(40);   // CSS px, default 25, clamped to [8, 96]
+graphics.refreshStyles();    // takes effect on the next render
 ```
 
 **Not** milsymbol's own `size` option. That sets the SVG's internal resolution; the
-`Icon` built around it still draws at the library's size, so
-`useMilsymbolSecurityOperationSymbols(ms, {size: 40})` changes the sharpness and
-nothing you can see. The size belongs to the library because the library is what
-builds the `Icon` around a provider that returns a `src` string — a provider
-returning a whole `Style` bypasses this and owns its own sizing.
+image built around it still draws at the library's size, so passing `{size: 40}` to
+`useMilsymbolSecuritySymbols` changes the sharpness and nothing you can see. The size
+belongs to the library because the library is what places the image around a provider
+that returns a `src` string.
 
 To size **one** symbol rather than all of them, return `{src, sizePx}` from its
 provider. That wins over the global size and leaves it untouched.
 
 ### Choosing the symbol
 
-Register a provider of your own instead of `useMilsymbolSecurityOperationSymbols`.
-It can return four things, in ascending order of control:
+Register a provider of your own instead of `useMilsymbolSecuritySymbols`. It can return
+three things, in ascending order of control:
 
 | Return | You get |
 |---|---|
 | a **string** | used as an image `src`, drawn at the library's size |
 | **`{src, sizePx}`** | a `src` plus its own on-screen size, for this symbol only |
-| an **`ol` `Style`** | used verbatim — no `Icon` is built, so sizing and anchoring are yours |
 | **`undefined`** | no center symbol |
 
 ```ts
-setSecurityOperationSymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
+import {setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setSecuritySymbolProvider(({name, sidc, sizePx}) => symbolFor(name, sidc, sizePx));
 ```
 
 It is global — one call configures the whole application — and it is handed the
@@ -647,14 +577,72 @@ graphic's `name`, so it can give Cover, Guard and Screen three different symbols
 
 That is as far as the global provider goes. It also receives `labels`, but these three
 graphics carry only `hostility` (`getGraphicFields('Screen')` offers nothing else), so
-two Screens look identical to it. To vary those, give the individual graphic its own
-provider with `handler.setSymbolProvider` — it wins over the global one, and
-`undefined` puts the graphic back on it.
+two Screens look identical to it. Varying *those* is engine-specific, and is covered
+under [advanced usage](#advanced-openlayers) — the OpenLayers subpath lets a single
+graphic carry its own provider, and lets a provider return an `ol` `Style` outright.
 
-### Worked example: three security operations, three units
+---
 
-Placed programmatically, each with its own unit symbol. Uses the `map`, `source` and
-`manager` from [the setup above](#placing-graphics-from-data-in-openlayers).
+## Advanced: reaching past the façade
+
+Everything above works the same on both engines. Everything below does not, and is
+grouped here so that the difference is a place you go rather than a surprise you meet.
+
+The two renderers are not mirror images and are not meant to be: OpenLayers retains
+mutable features and edits them in place, MapLibre derives GeoJSON sources and discards
+them on the next rebuild. Those are different rendering models, and the façade exists so
+you only have to care when you want to. `createTacticalGraphics(map, {manager})` and
+`{renderer}` adopt an object you already built, so reaching past it costs nothing.
+
+### Advanced: OpenLayers
+
+`TacticalGraphicsManager`, `getController`, the feature holders and the controllers. Two
+things here have no MapLibre counterpart:
+
+**A provider for one graphic.** The global provider is handed the graphic's `name`, so it
+can distinguish Cover from Guard, but not one Screen from another. `handler.setSymbolProvider`
+gives a single graphic its own; `undefined` puts it back on the global one.
+
+**A provider that returns an `ol` `Style`.** Used verbatim — no image is built, so sizing
+and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
+accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
+
+#### Placing graphics from data
+
+Skip the draw interaction when the geometry comes from data rather than a user's clicks.
+You build the base feature; the controller does the rest:
+
+```ts
+import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
+
+const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
+handler.setBaseFeature(drawnFeature);          // your own LineString / Point / Polygon feature
+source.addFeatures(handler.getFeatures());     // graphic + labels + handles
+manager.watchResolution(handler);              // see below — not optional
+
+writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
+    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
+});
+```
+
+Two rules apply to anything built this way:
+
+**Set amplifiers through `writeGraphicProperties`, never `feature.set`.**
+`ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
+keep drawing the old label.
+
+**`manager.watchResolution(handler)` is not optional.** Some graphics — every
+security operation — have geometry that is a screen-pixel constant times the map
+resolution, so without a `change:resolution` subscription they are pinned in meters
+and grow and shrink as you zoom. The manager does this for you when the user draws,
+and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
+with `unwatchResolution` when you remove the graphic, or the listener outlives its
+features.
+
+#### Worked example: three security operations, three units
+
+Placed programmatically, each with its own unit symbol — the per-graphic provider that
+only this subpath offers. Uses the `map`, `source` and `manager` from above.
 
 ```ts
 import ms from 'milsymbol';
@@ -707,6 +695,40 @@ placeSecurityOperation(TacticalGraphicName.Cover, [-76.98, 38.89]);
 The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
 performs which security task, so substitute your own. The demo's **Draw all samples**
 button uses exactly this mechanism.
+
+#### When you need the restore report
+
+`restore()` returns nothing, because the common case is "put the map back". This subpath
+exposes the underlying pair when you need to know what failed:
+
+```ts
+import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+
+const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+```
+
+A graphic that fails to restore is reported in `failed` and rolled back on its own, so
+one bad record cannot cost you the rest of the map.
+
+### Advanced: MapLibre
+
+`NativeLayerRenderer` and `MapLibreInteractions`. `buildTacticalGraphic` is the
+counterpart to `getController` for placing graphics from data, and hands back a ready
+graphic rather than mutating a holder:
+
+```ts
+import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
+
+const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
+    label: 'A', hostility: 'Hostile/Faker',
+}, resolution);
+if (graphic) renderer.add(graphic);
+```
+
+**Text needs a glyph server.** MapLibre draws labels from pre-generated SDF glyphs served
+over HTTP; there is no path to a system font. A deployment either self-hosts a glyph set
+or points at someone else's. OpenLayers has no equivalent requirement — it is the
+sharpest practical difference between the two.
 
 ---
 
