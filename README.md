@@ -154,7 +154,7 @@ tacticalGraphic: {
     labelGapDegrees: 15,      // arc mission tasks — angular hole left for the letter
     labelGap: 0,              // the same hole in meters, for the graphics that cut it
                               // from the rendered glyph instead
-    rangeFan: {bands: [...]}, // weapon/sensor range fans — one entry per band
+    rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 }
 ```
 
@@ -175,6 +175,40 @@ FM 1-02.2 makes these fields free text, so a string still renders untouched — 
 `'FL150'` or a `'1500MSL'` from another system draws exactly as written, datum and all.
 A number plus a datum is what the types invite, because that is what a program can sort
 and compare. See [Configuring colors and sizes](#configuring-colors-and-sizes).
+
+### Range fans
+
+The two weapon/sensor range fans read one extra object. Every other graphic ignores it:
+
+```ts
+rangeFan: {
+    // One entry per ring, innermost first — they are sorted, so the order you write
+    // them in does not matter.
+    bands: [
+        {range: 5,  label: 'MG',   altitude: 300},
+        {range: 12, label: 'ATGM', altitude: 1500, leftAzimuthDeg: 340, rightAzimuthDeg: 40},
+    ],
+    // Sector fan only: where the sector points, degrees clockwise from north.
+    // Omit it and the fan uses the bearing the graphic was drawn at.
+    centerAzimuthDeg: 15,
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `range` | how far the ring reaches, **in kilometers** — see the warning below |
+| `label` | optional name, drawn above the range line (`MG`, `ATGM`) |
+| `altitude` | optional, a number in the configured unit — drawn as `ALT 300FT AGL`, measured from the graphic's own `altitudeDatum` |
+| `leftAzimuthDeg` / `rightAzimuthDeg` | sector fan only: this band's own edges, degrees clockwise from north. Omit them and the band spans the sector |
+
+**`range` is in kilometers, and it is the only distance here that is not meters.**
+`radius`, `width` and `decorationSize` are all meters. A range fan is quoted in
+kilometers because that is how an envelope is written and the label prints the number
+bare — meters would put three zeroes on every ring. It is a wart, and it stays one: the
+alternative silently rescales every range fan already saved by a factor of a thousand.
+
+Bands render as `MIN RG 5` on a circular fan and `RG 5` on a sector, matching FM 1-02.2
+table 5-276.
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
