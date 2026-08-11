@@ -55,6 +55,30 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
 
+        // **Force a frame once the page is on screen and its container measured.**
+        //
+        // OpenLayers renders on demand: a frame is scheduled by an interaction, a
+        // resize, or a source loading. Nothing schedules one for "the browser finally
+        // laid this out" or "the tab you booted in is visible again", and a map that
+        // drew its one frame into a container it had not measured — or while
+        // `requestAnimationFrame` was suspended because the document was hidden —
+        // stays blank until something else asks for a frame. The reported symptom is
+        // exactly that: panel present, map area empty, and the tiles appearing the
+        // moment the zoom changes. `updateSize` re-reads the container and `render`
+        // asks for the frame; both are no-ops when the map is already correct, which
+        // is why this can be unconditional.
+        const revive = () => {
+            if (document.visibilityState !== 'visible') return;
+            olMap.updateSize();
+            olMap.render();
+        };
+        // After layout rather than during this effect: the container's height comes
+        // from a flex chain that is not resolved while React is still committing.
+        const firstFrame = requestAnimationFrame(revive);
+        document.addEventListener('visibilitychange', revive);
+        // A back/forward restore re-shows a page without a visibility change.
+        window.addEventListener('pageshow', revive);
+
         // **Through the library's façade**, adopting the manager rather than replacing
         // it: the demo still reaches past it for the sample sweep and the file IO, which
         // are the app's own concerns. `onModeChange` is how the engine reports a mode it
@@ -132,6 +156,9 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
 
         return () => {
             onReady(null);
+            cancelAnimationFrame(firstFrame);
+            document.removeEventListener('visibilitychange', revive);
+            window.removeEventListener('pageshow', revive);
             olMap.setTarget(undefined);
             // Delete the hook, don't just drop the map. Until the engine picker existed
             // this component never unmounted, so a stale `__tacticalGraphics` was
