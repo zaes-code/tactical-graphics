@@ -23,6 +23,8 @@ import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {supportsHostility} from './graphicFieldRegistry';
 import {readGraphicLabels, writeGraphicProperties} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
+import {sampleFeatureCollection} from '../maplibre/sampleGallery';
+import {isRectangular} from '@zaes/tactical-graphics';
 
 /**
  * The doctrinal colours below are the light-mode ones, and the palette has had a
@@ -255,5 +257,37 @@ describe('hostility survives a bag-only stamp, as restore and consumers produce'
         const colours = strokeColours(bagOnly(name));
         expect(colours.length).toBeGreaterThan(0);
         expect(colours).toContain(normalise(HOSTILE_RED));
+    });
+});
+
+/**
+ * The sweep's own shapes, which are a documentation decision rather than a rendering
+ * one: a catalogue whose job is showing what a symbol looks like must not draw the
+ * fourteen rectangular variants identically to the irregular areas they exist to be an
+ * alternative to. Four corners means a rectangle, five means an area.
+ *
+ * Asserted on `sampleFeatureCollection`, which is what **both** engines draw — the
+ * OpenLayers sweep restores the very same collection — so one assertion covers them.
+ */
+describe('the sample sweep tells rectangles from areas', () => {
+    const rings = () =>
+        sampleFeatureCollection()
+            .features.filter(f => f.geometry.type === 'Polygon')
+            .map(f => ({
+                name: (f.properties as {tacticalGraphic: {name: TacticalGraphicName}}).tacticalGraphic.name,
+                // Corners, not coordinates: a ring repeats its first point.
+                corners: (f.geometry as {coordinates: number[][][]}).coordinates[0].length - 1,
+            }));
+
+    it('draws every rectangular variant with four corners', () => {
+        const boxes = rings().filter(r => isRectangular(r.name));
+        expect(boxes.length).toBeGreaterThan(0);
+        expect(boxes.every(r => r.corners === 4)).toBe(true);
+    });
+
+    it('draws every other area with five, so the two cannot be confused', () => {
+        const areas = rings().filter(r => !isRectangular(r.name));
+        expect(areas.length).toBeGreaterThan(0);
+        expect(areas.every(r => r.corners === 5)).toBe(true);
     });
 });
