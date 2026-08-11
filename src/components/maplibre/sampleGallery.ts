@@ -1,4 +1,4 @@
-import type {Feature, FeatureCollection, Geometry} from 'geojson';
+import type {Feature, FeatureCollection, Geometry, Position} from 'geojson';
 import {
     GRAPHIC_CATEGORIES,
     PAINTABLE_GRAPHICS,
@@ -8,6 +8,7 @@ import {
     TacticalGraphicName,
     getDisplayName,
     supportsHostility,
+    isRectangular,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
 
@@ -49,9 +50,21 @@ const ORIGIN: [number, number] = [-64, 44];
  * That is not a guess: it is the same question the generator itself answers, asked
  * directly. It also means a newly-ported graphic joins the sweep with no edit here.
  */
-function candidateGeometries(lon: number, lat: number): Geometry[] {
+function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number): Geometry[] {
     const line: Geometry = {type: 'LineString', coordinates: [[lon - HALF, lat], [lon + HALF, lat]]};
-    const ring: Geometry = {
+    const point: Geometry = {type: 'Point', coordinates: [lon, lat]};
+    // **A rectangle gets four corners and an irregular area gets five**, so the sweep
+    // tells them apart on sight. Every polygon-based graphic used to get the same square,
+    // which made the fourteen rectangular variants indistinguishable from the areas they
+    // exist to be an alternative to — and a catalogue whose whole job is showing what a
+    // symbol looks like should not hide the one difference between two of them.
+    const ring: Geometry = isRectangular(name) ? box(lon, lat) : pentagon(lon, lat);
+    return [line, ring, point];
+}
+
+/** Four corners, axis-aligned — what `createBox` and MapLibre's `buildBox` produce. */
+function box(lon: number, lat: number): Geometry {
+    return {
         type: 'Polygon',
         coordinates: [[
             [lon - HALF, lat - HALF],
@@ -61,8 +74,22 @@ function candidateGeometries(lon: number, lat: number): Geometry[] {
             [lon - HALF, lat - HALF],
         ]],
     };
-    const point: Geometry = {type: 'Point', coordinates: [lon, lat]};
-    return [line, ring, point];
+}
+
+/**
+ * Five corners, regular, point-up and inscribed in the same cell a box would fill.
+ *
+ * Regular rather than scribbled: a sample is a reference drawing, and an irregular area
+ * drawn irregularly reads as a mistake rather than as the shape's own freedom.
+ */
+function pentagon(lon: number, lat: number): Geometry {
+    const corners: Position[] = [];
+    for (let i = 0; i < 5; i++) {
+        const angle = Math.PI / 2 + (i * 2 * Math.PI) / 5;
+        corners.push([lon + HALF * Math.cos(angle), lat + HALF * Math.sin(angle)]);
+    }
+    corners.push(corners[0]);
+    return {type: 'Polygon', coordinates: [corners]};
 }
 
 /**
@@ -133,7 +160,7 @@ export function buildSampleGraphics(
         const lon = ORIGIN[0] + (i % COLUMNS) * COLUMN_STEP;
         const lat = ORIGIN[1] - Math.floor(i / COLUMNS) * ROW_STEP;
 
-        const built = candidateGeometries(lon, lat)
+        const built = candidateGeometries(name, lon, lat)
             .map(geometry => buildTacticalGraphic(name, geometry, {
                 radius: SAMPLE_RADIUS_M,
                 // **`rotation` is not optional in practice.** The point-anchored
@@ -167,7 +194,7 @@ export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): F
         const lon = ORIGIN[0] + (i % COLUMNS) * COLUMN_STEP;
         const lat = ORIGIN[1] - Math.floor(i / COLUMNS) * ROW_STEP;
 
-        const geometry = candidateGeometries(lon, lat).find(g =>
+        const geometry = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );
         if (!geometry) return;
