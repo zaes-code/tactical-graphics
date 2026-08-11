@@ -17,16 +17,7 @@
  * Both original modules re-export these, so nothing else had to change.
  */
 
-import type {
-    AltitudeDatum,
-    RangeFanConfig,
-    RouteDirection,
-    TacticalGraphicConfidence,
-    TacticalGraphicEchelon,
-    TacticalGraphicHostility,
-    TacticalGraphicProperties,
-    TacticalGraphicStatus,
-} from '@zaes/tactical-graphics';
+import type {GraphicLabels, TacticalGraphicProperties} from '@zaes/tactical-graphics';
 
 /**
  * The amplifiers a user can put on a graphic — what the Feature Properties dialog
@@ -36,34 +27,10 @@ import type {
  * is the *saved* bag, which also carries the graphic's name and its geometry
  * inputs, and a dialog that edited those by accident would resize the shape.
  */
-export interface GraphicLabels {
-    label: string;
-    countryCode?: string;
-    secondId?: string;
-    secondCountryCode?: string;
-    startDate?: string;
-    endDate?: string;
-    /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
-    minAltitude?: number;
-    maxAltitude?: number;
-    /** What both are measured from. @see AltitudeDatum */
-    altitudeDatum?: AltitudeDatum;
-    /**
-     * Full width in metres, edge to edge. The same field the geometry schema uses —
-     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
-     * width rather than a string mirror of it that has to be kept in step.
-     */
-    width?: number;
-    eff?: string;
-    grid?: string;
-    weapon?: string;
-    hostility?: TacticalGraphicHostility;
-    echelon?: TacticalGraphicEchelon;
-    direction?: RouteDirection;
-    status?: TacticalGraphicStatus;
-    confidence?: TacticalGraphicConfidence;
-    rangeFan?: RangeFanConfig;
-}
+// Re-exported from the map-agnostic half, where it now lives — a type describing a
+// graphic's amplifiers is symbology, and the renderer-neutral symbol registry needs to
+// name it. Every existing import of `GraphicLabels` from here still resolves.
+export type {GraphicLabels};
 
 /**
  * The geometry inputs a graphic carries — metres and degrees, the portable

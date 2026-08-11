@@ -174,6 +174,55 @@ export interface TacticalGraphicProperties {
     rangeFan?: RangeFanConfig;
 }
 
+/**
+ * The amplifiers a user can put on a graphic — what a properties dialog edits, and
+ * what the style and paint functions read back.
+ *
+ * Kept separate from {@link TacticalGraphicProperties} rather than aliased to it:
+ * that is the *saved* bag, which also carries the graphic's name and its geometry
+ * inputs, and a dialog that edited those by accident would resize the shape.
+ *
+ * **It lives here, beside the saved bag, because it is symbology.** It was declared
+ * in `utils/graphicLinkRegistry.ts` (which imports `ol`), then moved to
+ * `components/graphicAmplifiers.ts` when the MapLibre entry point started compiling
+ * the whole OpenLayers tree through it. That second move stopped short: a type
+ * describing what amplifiers a graphic carries is exactly the kind of fact this half
+ * of the library owns, and leaving it under `src/components/` meant the map-agnostic
+ * registries could not name it. `securitySymbolRequest.labels` is where that bit —
+ * a provider on one renderer was handed the graphic's amplifiers and on the other
+ * was not. `components/graphicAmplifiers.ts` re-exports this, so nothing that
+ * already imports it had to change.
+ */
+export interface GraphicLabels {
+    label: string;
+    countryCode?: string;
+    secondId?: string;
+    secondCountryCode?: string;
+    startDate?: string;
+    endDate?: string;
+    /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
+    minAltitude?: number;
+    maxAltitude?: number;
+    /** What both are measured from. @see AltitudeDatum */
+    altitudeDatum?: AltitudeDatum;
+    /**
+     * Full width in metres, edge to edge. The same field the geometry schema uses —
+     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
+     * width rather than a string mirror of it that has to be kept in step.
+     */
+    width?: number;
+    eff?: string;
+    grid?: string;
+    weapon?: string;
+    hostility?: TacticalGraphicHostility;
+    echelon?: TacticalGraphicEchelon;
+    direction?: RouteDirection;
+    status?: TacticalGraphicStatus;
+    confidence?: TacticalGraphicConfidence;
+    rangeFan?: RangeFanConfig;
+}
+
+
 /** Which part of a rendered graphic a feature represents. */
 export type TacticalGraphicRole = 'graphic' | 'label' | 'handle' | 'base';
 

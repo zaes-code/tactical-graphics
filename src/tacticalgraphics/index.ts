@@ -30,7 +30,7 @@ export {
     toGraphicOptions,
 } from './core/render';
 
-export type {TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
+export type {GraphicLabels, TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
 
 // ── Names, categories, symbology ────────────────────────────────────────────
 export {
