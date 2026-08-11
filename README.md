@@ -43,6 +43,11 @@ for its geometry alone pulls in none of them. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
 [Security operations: the center symbol](#security-operations-the-center-symbol).
 
+**The same names, from either subpath.** `createTacticalGraphics` and the library's own
+exports — configuration, the palette, the property key, the center-symbol controls — are
+offered by both entry points, so moving a program from one engine to the other changes
+the import path and nothing else. A test asserts the two keep matching.
+
 **The two renderers paint through the same code.** Colors, label placement,
 screen-sized decorations, the radius read-out, which handle does what, how a
 rotate picks its pivot — all of it lives in the map-agnostic entry point and both
@@ -523,19 +528,22 @@ you just cleared. The former is a pure function of the enum.
 
 ## Saving and restoring a whole map
 
-`serializeTacticalGraphics` writes every graphic the manager holds to GeoJSON, and
-`restoreTacticalGraphics` rebuilds them **editable** — not a picture of the symbols,
-the same objects, ready to rotate, resize and modify:
+`snapshot()` writes every graphic to GeoJSON and `restore()` rebuilds them **editable**
+— not a picture of the symbols, the same objects, ready to rotate, resize and modify.
+Both come from [`createTacticalGraphics`](#rendering), so this is the same code whichever
+engine drew the map:
 
 ```ts
-import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
-
-const snapshot = serializeTacticalGraphics(manager);   // one feature per graphic
+const snapshot = graphics.snapshot();          // one feature per graphic
 await db.save(JSON.stringify(snapshot));
 
-// later, in a fresh session
-const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+// later, in a fresh session — or in the other engine
+graphics.restore(await db.load());
 ```
+
+**A snapshot taken in one engine restores in the other.** Nothing renderer-specific
+travels with it, which is what makes that true rather than merely likely; the demo's
+engine picker hands the map across on every switch.
 
 A snapshot holds **one feature per graphic** — the base geometry the user drew.
 Everything else is derived and regenerates on load. A record is the same
@@ -557,8 +565,22 @@ else:
 as long as `tacticalGraphic` survives, the graphic rebuilds exactly. There is no
 companion object to keep, and no viewport state to lose.
 
-A graphic that fails to restore is reported in `failed` and rolled back on its own,
-so one bad record cannot cost you the rest of the map.
+A base short of what its graphic needs is completed on the way in, so a record written
+by hand — or by an older version — arrives fully editable rather than half-drawn.
+
+### When you need the report
+
+`restore()` returns nothing, because the common case is "put the map back". The
+OpenLayers subpath exposes the underlying pair when you need to know what failed:
+
+```ts
+import {serializeTacticalGraphics, restoreTacticalGraphics} from '@zaes/tactical-graphics/openlayers';
+
+const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
+```
+
+A graphic that fails to restore is reported in `failed` and rolled back on its own, so
+one bad record cannot cost you the rest of the map.
 
 ---
 
