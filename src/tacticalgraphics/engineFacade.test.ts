@@ -75,6 +75,21 @@ describe('the shared façade', () => {
         }
     });
 
+    it('offers the library own names from both subpaths, or from neither', () => {
+        // Configuration, the palette, the property key and the centre-symbol controls
+        // describe the symbology rather than a renderer, so which engine you picked must
+        // not change how you import them. OpenLayers re-exported 27 of these and MapLibre
+        // none, so the same program needed different import lines for things that have
+        // nothing to do with either engine.
+        const fromRoot = (barrel: Set<string>) => new Set(Array.from(barrel).filter(name => root.has(name)));
+        const olRoot = fromRoot(openlayers);
+        const mlbRoot = fromRoot(maplibre);
+
+        const onlyOpenLayers = Array.from(olRoot).filter(name => !mlbRoot.has(name)).sort();
+        const onlyMapLibre = Array.from(mlbRoot).filter(name => !olRoot.has(name)).sort();
+        expect({onlyOpenLayers, onlyMapLibre}).toEqual({onlyOpenLayers: [], onlyMapLibre: []});
+    });
+
     it('keeps the root free of both map libraries, which is what makes it shared', () => {
         const engine = read('core/engine.ts');
         expect(engine).not.toMatch(/from ['"](ol|maplibre-gl)/);

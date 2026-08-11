@@ -55,7 +55,11 @@ export {NativeLayerRenderer} from './native/NativeLayerRenderer';
  * build one. `NativeLayerRenderer` draws; this turns pointer events into edits.
  */
 export {MapLibreInteractions} from './interaction/MapLibreInteractions';
-export type {EditMode, InteractionCallbacks} from './interaction/MapLibreInteractions';
+// `EditMode` is deliberately **not** re-exported here. This layer has an internal one
+// that predates the façade and lacks `drawing`, and exporting it put two different types
+// under one name depending on which subpath you imported from. The portable `EditMode`
+// — the one `TacticalGraphicsEngine` speaks — comes from the root entry point.
+export type {InteractionCallbacks} from './interaction/MapLibreInteractions';
 
 /**
  * The geometry edits themselves, for a host driving them from its own UI rather
@@ -89,3 +93,44 @@ export type {LayerBuckets} from './native/paintToLayers';
 
 // A keyless OSM raster basemap, the same tiles the OpenLayers demo uses.
 export {createBasemapStyle} from './basemapStyle';
+
+/**
+ * ## The library's own names, re-exported
+ *
+ * Configuration, the palette, the property key and the centre-symbol controls belong to
+ * the root entry point — they describe the *symbology*, not a renderer. The OpenLayers
+ * subpath has always re-exported them as a convenience, and this one did not, so the
+ * same program written for the two engines needed different import lines for things
+ * that have nothing to do with either.
+ *
+ * They are re-exported rather than redefined: one implementation, two doors.
+ * `engineFacade.test.ts` asserts the two subpaths keep offering the same set.
+ */
+export {
+    BASE_FONT_SIZE_PX,
+    DEFAULT_LINE_WIDTH,
+    DEFAULT_PALETTE,
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    MIN_SYMBOL_SIZE_PX,
+    TACTICAL_GRAPHIC_KEY,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getTacticalGraphicsConfig,
+    resetTacticalGraphicsConfig,
+    setDefaultLabelSize,
+    setDefaultLineWidth,
+    setTacticalGraphicsConfig,
+    supportsHostility,
+} from '@zaes/tactical-graphics';
+export type {MilsymbolModule, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
