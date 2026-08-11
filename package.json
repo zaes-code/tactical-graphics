@@ -1,6 +1,6 @@
 {
   "name": "@zaes/tactical-graphics",
-  "version": "1.13.0",
+  "version": "2.0.0",
   "description": "MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJSON. Renders axis-of-advance arrows, phase lines, mission tasks, and range fans for OpenLayers or any GeoJSON consumer.",
   "keywords": [
     "mil-std-2525",
@@ -59,6 +59,11 @@
       "import": "./dist/ol/esm/components/openlayers/index.js",
       "require": "./dist/ol/cjs/components/openlayers/index.js"
     },
+    "./maplibre": {
+      "types": "./dist/mlb/types/components/maplibre/index.d.ts",
+      "import": "./dist/mlb/esm/components/maplibre/index.js",
+      "require": "./dist/mlb/cjs/components/maplibre/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -73,8 +78,10 @@
     "node": ">=18"
   },
   "scripts": {
+    "prestart": "node scripts/copy-maplibre-worker.js",
     "start": "craco start",
     "build": "node scripts/build-lib.js",
+    "prebuild:demo": "node scripts/copy-maplibre-worker.js",
     "build:demo": "craco build",
     "test": "craco test",
     "drive": "node scripts/drive-app.mjs",
@@ -88,10 +95,14 @@
     "@types/geojson": "^7946.0.16"
   },
   "peerDependencies": {
+    "maplibre-gl": ">=4",
     "milsymbol": ">=3",
     "ol": ">=9"
   },
   "peerDependenciesMeta": {
+    "maplibre-gl": {
+      "optional": true
+    },
     "milsymbol": {
       "optional": true
     },
@@ -116,6 +127,7 @@
     "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.57.1",
     "eslint-plugin-unused-imports": "^4.2.0",
+    "maplibre-gl": "^6.2.0",
     "milsymbol": "^3.0.2",
     "ol": "^10.5.0",
     "ol-ext": "^4.0.27",

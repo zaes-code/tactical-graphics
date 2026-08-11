@@ -310,8 +310,27 @@ const main = async () => {
             const result = feature.getStyle()(feature, resolution);
             const styles = Array.isArray(result) ? result : result ? [result] : [];
 
+            // **Matched by coordinates, not by object identity.**
+            //
+            // `s.getGeometry() === feature.getGeometry()` held while the style function
+            // reused the feature's own geometry object. It stopped holding when the
+            // route moved onto the shared paint layer, which describes each mark as
+            // plain coordinates and lets the OpenLayers bridge build a fresh geometry
+            // per paint. Nothing about the rendering changed — but the probe then
+            // counted the route line as a third arrow shaft, reported its stroke among
+            // the traffic figure's colours (so a hostile route "proved" the arrows had
+            // gone red), and found no route line at all to read `lineColor` from. Three
+            // failures, one bad assumption, and none of them in the code under test.
             const own = feature.getGeometry();
-            const isRouteLine = s => !!own && s.getGeometry?.() === own;
+            const ownCoords = own?.getCoordinates?.() ?? [];
+            const sameLine = coords =>
+                Array.isArray(coords) &&
+                coords.length === ownCoords.length &&
+                coords.every((p, i) => Math.abs(p[0] - ownCoords[i][0]) < 1e-6 && Math.abs(p[1] - ownCoords[i][1]) < 1e-6);
+            const isRouteLine = s => {
+                const g = s.getGeometry?.();
+                return !!g && g.getType?.() === 'LineString' && sameLine(g.getCoordinates?.());
+            };
             const shaftStyles = styles.filter(
                 s => !isRouteLine(s) && s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.(),
             );
@@ -442,8 +461,92 @@ const main = async () => {
     }
     await page.screenshot({path: join(SHOTS, '05-passage-lane-bearing.png')});
 
-    // ── 6. No console errors ────────────────────────────────────────────────
-    console.log('\n6. Console is clean');
+    // ── 6. Graphics survive an engine switch ────────────────────────────────
+    //
+    // The only place this can be checked. Both engines need a real map — MapLibre a
+    // GL context — so jsdom cannot host either, and the handover is demo wiring rather
+    // than library code, so no unit suite covers it.
+    //
+    // It was broken and silent: `MapLibre.tsx` announced `onReady` *before* it built
+    // its engine, and every verb on the handle delegates through `engine?.…`, so the
+    // restore that `MapRendering` fires on hearing `onReady` went nowhere. Switching
+    // to MapLibre dropped every graphic and left the seven the mount used to draw, so
+    // the map looked populated and the count was wrong. Assert the number.
+    console.log('\n6. Graphics survive an engine switch');
+    const engineCount = () => page.evaluate(() => window.__tacticalEngine?.snapshot()?.features.length ?? -1);
+    const switchTo = async name => {
+        await page.getByRole('button', {name, exact: true}).click();
+        await page.waitForFunction(() => !!window.__tacticalEngine, {timeout: 30000});
+        await page.waitForTimeout(7000);
+    };
+
+    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.waitForTimeout(5000);
+    const drawnOnOl = await engineCount();
+    check('the sweep draws on OpenLayers', drawnOnOl > 100, `${drawnOnOl} graphics`);
+
+    await switchTo('MapLibre');
+    const carried = await engineCount();
+    check('every graphic crosses to MapLibre', carried === drawnOnOl, `${carried} of ${drawnOnOl}`);
+
+    await page.getByRole('button', {name: /clear all/i}).click();
+    await page.waitForTimeout(2000);
+    await switchTo('OpenLayers');
+    const afterClear = await engineCount();
+    // A removal has to cross too, or switching back would resurrect the map.
+    check('a removal crosses back', afterClear === 0, `${afterClear} left`);
+
+    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.waitForTimeout(5000);
+    const redrawn = await engineCount();
+    await switchTo('MapLibre');
+    await switchTo('OpenLayers');
+    check('a round trip loses nothing', (await engineCount()) === redrawn, `${redrawn} graphics`);
+
+    // ── 6b. The view onto them crosses too ──────────────────────────────────
+    //
+    // Centre and metres-per-pixel, not a zoom number: MapLibre's tiles are 512 px and
+    // OpenLayers' are 256, so the same view is `z` in one and `z - 1` in the other and
+    // storing the raw number would halve or double the scale on every switch. Assert
+    // the resolution rather than the zoom for exactly that reason.
+    const viewOf = () => page.evaluate(() => JSON.parse(localStorage.getItem('tg_viewport') ?? 'null'));
+    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.waitForTimeout(4000);
+    await page.evaluate(() => {
+        const view = window.__tacticalGraphics.map.getView();
+        view.setCenter([1500000, 4000000]);
+        view.setZoom(6);
+    });
+    await page.waitForTimeout(2500);
+    const olView = await viewOf();
+    check('OpenLayers records where it is looking', !!olView && olView.resolution > 0, JSON.stringify(olView));
+
+    await switchTo('MapLibre');
+    const mlbView = await viewOf();
+    const sameScale = olView && mlbView && Math.abs(mlbView.resolution / olView.resolution - 1) < 0.02;
+    const sameSpot =
+        olView && mlbView && Math.abs(mlbView.lon - olView.lon) < 0.5 && Math.abs(mlbView.lat - olView.lat) < 0.5;
+    check('MapLibre opens at the same scale', !!sameScale, `${olView?.resolution} -> ${mlbView?.resolution}`);
+    check('MapLibre opens at the same place', !!sameSpot, `${mlbView?.lon?.toFixed(3)}, ${mlbView?.lat?.toFixed(3)}`);
+    await switchTo('OpenLayers');
+    const backView = await viewOf();
+    check(
+        'and back again, without drifting',
+        !!backView && Math.abs(backView.resolution / olView.resolution - 1) < 0.02,
+        `${backView?.resolution}`,
+    );
+
+    // Nothing is persisted, by design: the handover is an in-memory ref, so a reload
+    // is the way back to an empty map. The *viewport* is deliberately the exception —
+    // three numbers in localStorage, so a refresh comes back to the same view of an
+    // empty map. @see mapViewport.ts
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await page.waitForFunction(() => !!window.__tacticalEngine, {timeout: 30000});
+    await page.waitForTimeout(3000);
+    check('a refresh starts empty — the handover is not persisted', (await engineCount()) === 0);
+
+    // ── 7. No console errors ────────────────────────────────────────────────
+    console.log('\n7. Console is clean');
     const realErrors = consoleErrors.filter(e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e));
     check('no console/page errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 

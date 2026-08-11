@@ -1,0 +1,45 @@
+{
+  // Builds the MapLibre renderer published as `@zaes/tactical-graphics/maplibre`.
+  // A third tsconfig rather than a shared one because each renderer half is
+  // allowed to import exactly one map library and no other: this one may see
+  // `maplibre-gl` and must never see `ol`, the OpenLayers half is the mirror
+  // image, and the root entry point may see neither. `scripts/build-lib.js`
+  // asserts all three rather than trusting these include lists.
+  //
+  // rootDir is `src`, matching tsconfig.ol.json, so the emitted layout is the
+  // same shape for both renderers.
+  "compilerOptions": {
+    "target": "es2019",
+    // `dom` on top of the library config: the canvas renderer paints to a 2D
+    // context and both renderers measure text on one.
+    "lib": ["es2019", "dom"],
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false,
+    // The layer imports the root entry point by package name. Point that at the
+    // built types so the emitted .d.ts references `@zaes/tactical-graphics`
+    // rather than a relative path out of the package.
+    "baseUrl": ".",
+    "paths": {
+      "@zaes/tactical-graphics": ["dist/types/index.d.ts"]
+    }
+  },
+  "include": [
+    "src/components/maplibre/**/*.ts"
+  ],
+  "exclude": [
+    "src/components/maplibre/**/*.test.ts",
+    // Demo-only: the React view and the spike's fixture loader. `MapLibre.tsx`
+    // is excluded by the .ts-only include above; `spikeDriver.ts` is not, so it
+    // is named here. It reads a FeatureCollection the demo happens to define.
+    "src/components/maplibre/spikeDriver.ts"
+  ]
+}

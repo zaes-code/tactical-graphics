@@ -1,49 +1,55 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import 'ol/ol.css';
 import '../../styles/map.css';
 
+// MapControls is no longer rendered here — it moved up to `MapRendering` so one
+// panel can drive either engine. @see components/mapEngine.ts
 import {createMap, getColorByHostility} from './openlayerStyles';
-import MapControls from '../MapControls';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
-import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
-import {clearAllGraphics, drawProvenSamples} from './sampleGallery';
+import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
+import {TacticalGraphicsManager} from './TacticalGraphicsManager';
+import {createTacticalGraphics} from './createTacticalGraphics';
+import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
+import {clearAllGraphics} from './sampleGallery';
+// The sweep's grid, shared with the MapLibre view so both engines draw the same one.
+import {sampleFeatureCollection} from '../maplibre/sampleGallery';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
-import {
-    getSecurityOperationSymbolSize,
-    setSecurityOperationSymbolSize,
-    useMilsymbolSecurityOperationSymbols,
-} from './securityOperationSymbol';
-import ms from 'milsymbol';
+import {getSecurityOperationSymbolSize, setSecurityOperationSymbolSize} from './securityOperationSymbol';
 import {isEmpty} from '../../utils/isEmpty';
-
-// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
-// Screen the way any consumer would — by handing over the milsymbol it already
-// depends on. The library names milsymbol nowhere, which is what makes the
-// optional peer dependency actually optional; this is the other half of that.
-// Module scope, not an effect: it is global state and idempotent, and a graphic
-// drawn before the first render would otherwise come up with an empty centre.
-useMilsymbolSecurityOperationSymbols(ms);
+import {readViewport, writeViewport} from '../mapViewport';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {FeatureCollection} from 'geojson';
+import {SPIKE_SAMPLES} from '../spikeSamples';
+import type {MapEngineHandle} from '../mapEngine';
+import {FULL_CAPABILITIES} from '../mapEngine';
 
 interface Props {
     darkMode: boolean;
     /** The user's config overrides. Used as an invalidation trigger, not read directly. */
     graphicsSettings: TacticalGraphicsConfigOptions;
+    /** Hands the controls panel something to drive. @see mapEngine.ts */
+    onReady(handle: MapEngineHandle | null): void;
+    /** Mirrored up so the shared panel can show the current edit mode. */
+    onInteractionModeChange(mode: EditMode): void;
 }
 
-const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) => {
+const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
-    const [interactionMode, setInteractionMode] = useState<InteractionType>(InteractionType.view);
+    const [interactionMode, setInteractionMode] = useState<EditMode>('view');
     const selectedShape = useRef<TacticalGraphicName>(TacticalGraphicName.AirCorridor);
     const modeRef = useRef(interactionMode);
     const tacticalGraphicManager = useRef<TacticalGraphicsManager>(null);
+    /** The library façade, wrapping that manager. @see createTacticalGraphics */
+    const engine = useRef<TacticalGraphicsEngine | null>(null);
 
     useEffect(() => {
         modeRef.current = interactionMode;
-        tacticalGraphicManager.current?.setInteractionMode(interactionMode);
-    }, [interactionMode]);
+        engine.current?.setInteractionMode(interactionMode);
+        onInteractionModeChange(interactionMode);
+    }, [interactionMode, onInteractionModeChange]);
 
     useEffect(() => {
         if (!mapRef.current) return;
@@ -51,10 +57,57 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
 
-        // The manager drops back to `view` by itself when a draw finishes or is
-        // cancelled. Mirror that into React state, or the draw button keeps
-        // reading "Drawing…" long after the draw is over.
-        tacticalGraphicManager.current.onInteractionModeChange = setInteractionMode;
+        // Open where the other engine — or the last visit — left off. Applied before
+        // the first frame, so there is no visible jump from the default view.
+        const storedView = readViewport();
+        if (storedView) {
+            const view = olMap.getView();
+            view.setCenter(fromLonLat([storedView.lon, storedView.lat]));
+            view.setResolution(storedView.resolution);
+        }
+        const rememberView = () => {
+            const view = olMap.getView();
+            const centre = view.getCenter();
+            const resolution = view.getResolution();
+            if (!centre || !resolution) return;
+            const [lon, lat] = toLonLat(centre);
+            writeViewport({lon, lat, resolution});
+        };
+        olMap.on('moveend', rememberView);
+
+        // **Force a frame once the page is on screen and its container measured.**
+        //
+        // OpenLayers renders on demand: a frame is scheduled by an interaction, a
+        // resize, or a source loading. Nothing schedules one for "the browser finally
+        // laid this out" or "the tab you booted in is visible again", and a map that
+        // drew its one frame into a container it had not measured — or while
+        // `requestAnimationFrame` was suspended because the document was hidden —
+        // stays blank until something else asks for a frame. The reported symptom is
+        // exactly that: panel present, map area empty, and the tiles appearing the
+        // moment the zoom changes. `updateSize` re-reads the container and `render`
+        // asks for the frame; both are no-ops when the map is already correct, which
+        // is why this can be unconditional.
+        const revive = () => {
+            if (document.visibilityState !== 'visible') return;
+            olMap.updateSize();
+            olMap.render();
+        };
+        // After layout rather than during this effect: the container's height comes
+        // from a flex chain that is not resolved while React is still committing.
+        const firstFrame = requestAnimationFrame(revive);
+        document.addEventListener('visibilitychange', revive);
+        // A back/forward restore re-shows a page without a visibility change.
+        window.addEventListener('pageshow', revive);
+
+        // **Through the library's façade**, adopting the manager rather than replacing
+        // it: the demo still reaches past it for the sample sweep and the file IO, which
+        // are the app's own concerns. `onModeChange` is how the engine reports a mode it
+        // chose itself — a draw finishing returns to view — without which the draw button
+        // keeps reading "Drawing…" long after the draw is over.
+        engine.current = createTacticalGraphics(olMap, {
+            manager: tacticalGraphicManager.current,
+            onModeChange: setInteractionMode,
+        });
 
         // Test hook for scripts/drive-app.mjs, which drives the draw/edit flow in a
         // real browser and asserts on feature properties. Stripped from production
@@ -68,10 +121,75 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
                 // so this is a handle on it rather than a copy.
                 setSecurityOperationSymbolSize,
                 getSecurityOperationSymbolSize,
+                // The MapLibre spike's fixture, restored through the ordinary
+                // persistence path. Both engines are handed the same GeoJSON, so a
+                // side-by-side capture compares renderers rather than test rigs.
+                drawSpikeSamples: (snapshot: FeatureCollection = SPIKE_SAMPLES) =>
+                    restoreTacticalGraphics(tacticalGraphicManager.current!, snapshot),
             };
         }
 
-        return () => olMap.setTarget(undefined);
+        onReady({
+            // **Every tactical-graphics verb comes from the library**, unchanged. What
+            // is spelled out below is only what the *application* adds: a demo gallery,
+            // and moving GeoJSON through the user's filesystem.
+            ...engine.current,
+            capabilities: FULL_CAPABILITIES,
+            startDrawing: name => {
+                selectedShape.current = name;
+                engine.current?.startDrawing(name);
+            },
+            reset: () => {
+                engine.current?.clearAll();
+            },
+            drawSamples: hostility => {
+                // **The same grid MapLibre draws, restored through the ordinary path.**
+                // The two sweeps used to be different programs — this one packed measured
+                // cells under category banners, that one tiled a plain grid — so the
+                // engines could not be compared by looking at them, which is most of what
+                // the sweep is for. Handing both the identical GeoJSON makes them
+                // identical by construction rather than by imitation.
+                setInteractionMode('view');
+                engine.current?.restore(sampleFeatureCollection(hostility));
+            },
+            exportGeoJson: () => {
+                const snapshot = engine.current?.snapshot();
+                if (!snapshot) return;
+                const blob = new Blob([JSON.stringify(snapshot, null, 2)], {type: 'application/geo+json'});
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = 'tactical-graphics.geojson';
+                anchor.click();
+                URL.revokeObjectURL(url);
+            },
+            importGeoJson: async file => {
+                setInteractionMode('view');
+                try {
+                    engine.current?.restore(JSON.parse(await file.text()));
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error('Import failed — not readable as a tactical graphics GeoJSON.', e);
+                }
+            },
+        });
+
+        return () => {
+            onReady(null);
+            cancelAnimationFrame(firstFrame);
+            olMap.un('moveend', rememberView);
+            document.removeEventListener('visibilitychange', revive);
+            window.removeEventListener('pageshow', revive);
+            olMap.setTarget(undefined);
+            // Delete the hook, don't just drop the map. Until the engine picker existed
+            // this component never unmounted, so a stale `__tacticalGraphics` was
+            // unreachable — now it outlives its map and *shadows* the MapLibre hook,
+            // and a driving script that probes for it silently steers a dead map while
+            // screenshotting a live one. Cost an hour of reading correct code as broken.
+            if (process.env.NODE_ENV !== 'production') {
+                delete (window as unknown as Record<string, unknown>).__tacticalGraphics;
+            }
+        };
     }, []);
 
     // Swap tile source when dark mode changes
@@ -128,7 +246,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
     }, [map, graphicsSettings]);
 
     const handleDrawTacticalGraphic = () => {
-        setInteractionMode(InteractionType.drawing);
+        setInteractionMode('drawing');
         tacticalGraphicManager.current?.startDrawing(selectedShape.current);
     };
 
@@ -139,25 +257,19 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
     const resetMap = () => {
         if (!map) return;
         tacticalGraphicManager.current?.renderingVectorSource.clear();
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
     };
 
     const drawSamples = (hostility?: TacticalGraphicHostility) => {
-        const mgr = tacticalGraphicManager.current;
-        if (!mgr) return;
-        setInteractionMode(InteractionType.view);
-        const {drawn, failed} = drawProvenSamples(mgr, hostility);
-        if (failed.length) {
-            // eslint-disable-next-line no-console
-            console.warn(`Sample sweep: ${drawn} drawn, ${failed.length} failed.`);
-        }
+        setInteractionMode('view');
+        engine.current?.restore(sampleFeatureCollection(hostility));
     };
 
     const clearAll = () => {
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
         clearAllGraphics(mgr);
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
     };
 
     /**
@@ -184,7 +296,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
     const importGeoJson = async (file: File) => {
         const mgr = tacticalGraphicManager.current;
         if (!mgr) return;
-        setInteractionMode(InteractionType.view);
+        setInteractionMode('view');
         try {
             const snapshot = JSON.parse(await file.text());
             clearAllGraphics(mgr);
@@ -199,30 +311,25 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings}) =
         }
     };
 
+    /**
+     * The dialog's map half. Rebuilt only when the map is, since it closes over both
+     * the map and the manager — a new object every render would re-subscribe the
+     * click handler on every state change.
+     */
+    const propertiesSource = useMemo(
+        () => (map && tacticalGraphicManager.current
+            ? createOpenLayersPropertiesSource(map, tacticalGraphicManager.current)
+            : null),
+        // The manager is a ref, so it is not a dependency worth listing — it is
+        // populated in the same effect that sets the map.
+        [map],
+    );
+
     return (
         <>
             <div ref={mapRef} className="map-container"/>
 
-            {map && tacticalGraphicManager.current && (
-                <TacticalGraphicsDialog map={map} tacticalGraphicsManager={tacticalGraphicManager.current}/>
-            )}
-
-            <MapControls
-                onDrawTacticalGraphics={handleDrawTacticalGraphic}
-                onToggleInteraction={setInteractionMode}
-                onShapeChange={setSelectedShape}
-                onReset={resetMap}
-                onDrawSamples={drawSamples}
-                onClearAll={clearAll}
-                onExportGeoJson={exportGeoJson}
-                onImportGeoJson={importGeoJson}
-                interactionMode={interactionMode}
-                isRotating={modeRef.current === InteractionType.rotate}
-                isResizing={modeRef.current === InteractionType.resize}
-                isRepositioning={modeRef.current === InteractionType.translate}
-                isModifying={modeRef.current === InteractionType.modify}
-                defaultShape={selectedShape.current}
-            />
+            {propertiesSource && <TacticalGraphicsDialog source={propertiesSource}/>}
         </>
     );
 };

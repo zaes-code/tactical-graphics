@@ -11,7 +11,7 @@
  * every TacticalGraphicName is covered at compile time.
  */
 
-import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, hasRadiusReadout, supportsHostility} from '@zaes/tactical-graphics';
 
 // ── Public type ───────────────────────────────────────────────────────────────
 
@@ -487,34 +487,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
  * the profile above it.
  */
 /**
- * Graphics that draw both standard identities at once, so selecting one is
- * meaningless. Line of contact is the whole set: FM 1-02.2's line control
- * measure table prints it as two opposed waves — the enemy side red, the
- * friendly side black — and the generator does exactly that, unconditionally.
- * A hostility here has nothing to change.
+ * **Moved to `core/symbology.ts`** and re-exported here so this module's surface is
+ * unchanged. It is a symbology fact — FM 1-02.2 gives the Chapter 6 tactical
+ * mission tasks no amplifier fields — not a property of this dialog, and a second
+ * renderer needs the same answer. The paint layer now enforces it as well as this
+ * registry hiding the input. @see lineColorOf
  */
-const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
-
-/**
- * The four FM 1-02.2 table 5-19 obstacle effects, each an exact copy of the
- * Chapter 6 tactical mission task of the same doctrinal name apart from the
- * letter. They are Chapter 5, so the category derivation would switch hostility
- * on and a hostile one would draw red — but a twin that renders differently
- * from what it twins is not a twin. Kept separate from the set above because
- * the reason is different: line of contact has nothing to change, these have
- * something to change and must not.
- */
-const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Block,
-    TacticalGraphicName.Disrupt,
-    TacticalGraphicName.Fix,
-    TacticalGraphicName.Turn,
-]);
-
-export function supportsHostility(name: TacticalGraphicName): boolean {
-    if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
-    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
-}
+export {supportsHostility};
 
 // ── Public accessor ───────────────────────────────────────────────────────────
 
@@ -540,38 +519,9 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * report the same quantity, and a graphic showing a radius in one place but not the other
  * would read as a bug.
  */
-const RADIUS_GRAPHICS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
-    TacticalGraphicName.AreaDefense,
-    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
-    TacticalGraphicName.BaseDefenseZone,
-    TacticalGraphicName.BlueKillBoxCircular,
-    TacticalGraphicName.CallForFireZoneCircular,
-    TacticalGraphicName.CensorZoneCircular,
-    TacticalGraphicName.Contain,
-    TacticalGraphicName.Control,
-    TacticalGraphicName.CordonAndSearch,
-    TacticalGraphicName.CriticalFriendlyZoneCircular,
-    TacticalGraphicName.DeadSpaceAreaCircular,
-    TacticalGraphicName.FightingPosition,
-    TacticalGraphicName.FireSupportAreaCircular,
-    TacticalGraphicName.FreeFireAreaCircular,
-    TacticalGraphicName.Isolate,
-    TacticalGraphicName.MovementToContact,
-    TacticalGraphicName.NoFireAreaCircular,
-    TacticalGraphicName.Occupy,
-    TacticalGraphicName.PositionAreaArtilleryCircular,
-    TacticalGraphicName.PurpleKillBoxCircular,
-    TacticalGraphicName.RestrictiveFireAreaCircular,
-    TacticalGraphicName.Retain,
-    TacticalGraphicName.Secure,
-    TacticalGraphicName.TargetAreaCircular,
-    TacticalGraphicName.WeaponSensorRangeFanCircular,
-    TacticalGraphicName.WeaponSensorRangeFanSector,
-]);
 
 export function getGraphicFields(name: TacticalGraphicName): GraphicFieldSet {
     const base = GRAPHIC_FIELDS[name] ?? f(true, false, false, false, false);
     // Both are decided centrally rather than per entry — same reasoning as `hostility`.
-    return {...base, hostility: supportsHostility(name), radius: RADIUS_GRAPHICS.has(name)};
+    return {...base, hostility: supportsHostility(name), radius: hasRadiusReadout(name)};
 }

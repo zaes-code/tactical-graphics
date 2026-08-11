@@ -42,7 +42,7 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
         // time the feature is drawn — which is what makes changing the hostility
         // update the centre glyph instead of leaving the one built at draw time.
         this.milSymbolFeature.setStyle(
-            securityOperationSymbolStyle(graphic.name, this.sourceFeature, () => this.symbolProvider),
+            securityOperationSymbolStyle(graphic.name, this.sourceFeature, () => this.symbolProvider, () => this.symbolId),
         );
     }
 

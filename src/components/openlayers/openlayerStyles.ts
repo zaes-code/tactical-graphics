@@ -3,15 +3,15 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
-import RenderFeature from 'ol/render/Feature';
+import { Geometry, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
-import {geometryService, WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX, BAR_SYMBOL_DASHES, ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from '@zaes/tactical-graphics';
+// The wire and anti-tank tables moved with their paint functions — they describe
+// what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
+import {geometryService} from '@zaes/tactical-graphics';
 import {
     getLabel,
-    RouteDirection,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
@@ -20,61 +20,163 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
-import {svgToOpenLayersGeometry} from '../../utils/svgToGeoJson';
-import {Position} from 'geojson';
-import {
-    BASE_FONT_SIZE_PX,
-    DEFAULT_PALETTE,
-    getDefaultLabelSize,
-    getDefaultLineColorOverride,
-    getDefaultLineWidth,
-    getDrawMarkerColorOverride,
-    getDrawMarkerOutlineColorOverride,
-    getHandleColorOverride,
-    getHostilityColorOverride,
-    getInertHandleColorOverride,
-    getLabelFillColorOverride,
-    getLabelHaloColorOverride,
-} from '@zaes/tactical-graphics';
-import {OSM} from 'ol/source';
-import {isEmpty} from '../../utils/isEmpty';
-
+import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
- * Scratch canvas for measuring text, created on first use rather than at module
- * load. This module is published as `@zaes/tactical-graphics/openlayers`, and a
- * top-level `document.createElement` makes it unimportable anywhere without a
- * DOM — a Next.js server render, a Node script, a jest suite in the `node`
- * environment. Every caller runs inside a StyleFunction, which by then has a
- * document; the fallback only matters if one is ever called without one, and
- * returning 0 widths beats throwing during import.
+ * The colour table, the line weight and the three label-scale formulas now live in the
+ * map-agnostic half (`core/symbology.ts`) — none of them mentions OpenLayers, and a
+ * second renderer that cannot reach them has to reinvent the palette and then drift from
+ * it. Imported here and re-exported below, so this module's public surface is unchanged
+ * and there is exactly one implementation of each.
+ *
+ * The three scale functions are aliased on import because this module exports
+ * feature-reading wrappers of the same names.
  */
-let textMeasureCtx: CanvasRenderingContext2D | null = null;
-const NO_MEASURE: Pick<CanvasRenderingContext2D, 'font' | 'measureText'> = {
-    font: '',
-    measureText: () => ({width: 0}) as TextMetrics,
-};
+import {
+    graphicLabelScale as graphicLabelScaleOf,
+    labelScale as labelScaleOf,
+    ratioLockedLabelScale as ratioLockedLabelScaleOf,
+} from '@zaes/tactical-graphics';
+import {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    formatAltitude,
+    formatDistance,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+    withOpacity,
+} from '@zaes/tactical-graphics';
 
-function measureCtx(): Pick<CanvasRenderingContext2D, 'font' | 'measureText'> {
-    if (textMeasureCtx) return textMeasureCtx;
-    if (typeof document === 'undefined') return NO_MEASURE;
-    textMeasureCtx = document.createElement('canvas').getContext('2d');
-    return textMeasureCtx ?? NO_MEASURE;
-}
+export {
+    formatAltitude,
+    formatDistance,
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+};
+import {OSM} from 'ol/source';
+/**
+ * The ported style functions, and the adapter that renders their output here.
+ *
+ * A ported function is deleted from this file and replaced by a one-line
+ * `asStyleFunction(...)` wrapper, so there is exactly one implementation and the
+ * ~1,600 tests that assert on this module's output become parity tests for it.
+ * @see paintToOpenLayers.ts
+ */
+import {
+    antiTankDitchPaint,
+    arcMissionTaskPaint,
+    airCoordinatingAreaLabelPaint,
+    airfieldPaint,
+    plainOutlinePaint,
+    areaDefaultLabelPaint,
+    airCorridorLabelPaint,
+    airspaceCoordinationAreaLabelPaint,
+    airCorridorPaint,
+    arrowheadedLinePaint,
+    attackHelicopterAxisLabelPaint,
+    bridgeLabelPaint,
+    envelopmentGraphicPaint,
+    infiltrationGraphicPaint,
+    mobileDefenseGraphicPaint,
+    coordinatedFireLinePaint,
+    engineerWorkLinePaint,
+    fieldsOfFirePaint,
+    forwardLineOfOwnTroopsPaint,
+    lineOfContactPaint,
+    munitionFlightPathPaint,
+    passageLanePaint,
+    barSymbolPaint,
+    securityOperationLabelPaint,
+    boundaryPaint,
+    rangeFanLabelPaint,
+    battlePositionPaint,
+    strongPointPaint,
+    unexplodedOrdnanceAreaPaint,
+    exfiltratePaint,
+    reliefInPlacePaint,
+    turnPaint,
+    baseDefenseZoneLabelPaint,
+    movementToContactPaint,
+    pursuitPaint,
+    CROSSED_HALF_WIDTH_PX,
+    crossedMissionTaskLabelPaint,
+    missionTaskLabelPaint,
+    crossedMissionTaskLabelScale,
+    crossedMissionTaskPaint,
+    blockPaint,
+    breachPaint,
+    clearPaint,
+    aviationAxisLabelPaint,
+    axisOfAdvanceLabelPaint,
+    counterattackLabelPaint,
+    directionArrowPaint,
+    envelopmentLabelPaint,
+    frontalAttackLabelPaint,
+    infiltrationLabelPaint,
+    mobileDefenseLabelPaint,
+    movementLabelPaint,
+    turningMovementLabelPaint,
+    retrogradeTaskPaint,
+    finalProtectiveFirePaint,
+    linearSmokeTargetPaint,
+    linearTargetPaint,
+    areaFillPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    fortifiedLinePaint,
+    smokeObscurantLabelPaint,
+    wireObstaclePaint,
+    zoneLabelPaint,
+    areaOutlinePaint,
+    defaultLinePaint,
+    encirclementPaint,
+    fortifiedAreaPaint,
+    freeFireAreaCircularPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+    obstacleLinePaint,
+    phaseLinePaint,
+    routeControlMeasurePaint,
+} from '@zaes/tactical-graphics';
+import {asStyleFunction} from './paintToOpenLayers';
+import type {Paint, PaintContext, PaintFeature} from '@zaes/tactical-graphics';
+// Moved to its own leaf module so `paintToOpenLayers` can share it without an
+// import cycle back through this file. Re-exported: it is public API.
+import {getTextWidth} from './textMeasure';
+export {getTextWidth};
 
 const centerCoordinates = [0, 0];
-const TEXT_RESOLUTION_FALLBACK = 3000; // used as fallback when drawingResolution is not stored
-export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
-
-/**
- * Stroke width (in screen pixels) for every graphic's lines: phase-lines,
- * area outlines, arrows, and custom-rendered graphics all use this width.
- * Backed by the live config — call it fresh from inside a style function
- * rather than caching the result, the same rule as `getDefaultLabelSize()`.
- */
-export const LINE_WIDTH = (): number => getDefaultLineWidth();
-
-/** Text-halo stroke width — independent of LINE_WIDTH by design. */
-const HALO_WIDTH = 4;
 
 /** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
 const OBSTACLE_LABEL_GAP_PX = 8;
@@ -132,51 +234,6 @@ export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
  */
 export function readHostilityColor(feature: FeatureLike): string {
     return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
-}
-
-/** Default stroke/fill colour for graphics with no specific hostility colour. */
-export function getDefaultLineColor(): string {
-    return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
-}
-
-/** Text label fill colour. Follows the default line colour unless overridden on its own. */
-export function getLabelFillColor(): string {
-    return getLabelFillColorOverride() ?? getDefaultLineColor();
-}
-
-/** Text label halo (outline) colour — contrast against the map background. */
-export function getLabelHaloColor(): string {
-    return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
-}
-
-/**
- * ## Editor chrome
- *
- * The affordances a user edits a graphic with — handle dots, the inert centre, the draw
- * marker. Not part of any symbol: they say "you can drag this", and that meaning must
- * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
- * graphic's handles the same red as its own strokes, so they stopped reading as handles
- * at all.
- */
-
-/** Draggable handle dots. Renderers apply their own opacity on top. */
-export function getHandleColor(): string {
-    return getHandleColorOverride() ?? DEFAULT_PALETTE.handleColor;
-}
-
-/** Handle dots that exist but cannot be dragged in the current mode. */
-export function getInertHandleColor(): string {
-    return getInertHandleColorOverride() ?? DEFAULT_PALETTE.inertHandleColor;
-}
-
-/** The marker and sketch line shown while a graphic is being drawn. */
-export function getDrawMarkerColor(): string {
-    return getDrawMarkerColorOverride() ?? DEFAULT_PALETTE.drawMarkerColor;
-}
-
-/** That marker's outline. */
-export function getDrawMarkerOutlineColor(): string {
-    return getDrawMarkerOutlineColorOverride() ?? DEFAULT_PALETTE.drawMarkerOutlineColor;
 }
 
 /** Radius in px of the dot under the cursor while drawing. */
@@ -257,77 +314,24 @@ export function getHaloStroke(): Stroke {
 }
 
 /**
- * Readability clamp on the zoom multiplier of `featureLabelScale`. Same range as
- * `getLineLabelScale`: without the cap a graphic drawn from high altitude grows its
- * label without bound as the user zooms in past the drawing zoom; without the floor
- * the label shrinks to nothing zoomed out.
- */
-const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
-const MAX_LABEL_ZOOM_MULTIPLIER = 1.5;
-
-function labelZoomMultiplier(drawRes: number | undefined, resolution: number): number {
-    const zoom = drawRes && drawRes > 0 ? drawRes / resolution : Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution);
-    return Math.min(MAX_LABEL_ZOOM_MULTIPLIER, Math.max(MIN_LABEL_ZOOM_MULTIPLIER, zoom));
-}
-
-/**
- * Ceiling shared by every *size-proportional* label scale — the block family's
- * `featureGraphicLabelScale` and the ratio-locked mission tasks'
- * `ratioLockedLabelScale`.
- *
- * Both formulas track the graphic's rendered size with nothing stopping them, so
- * a large or zoomed-in graphic grew a letter of unbounded height: a Breach drawn
- * 400 px wide rendered its "B" at ~90 px. The zoom-anchored scales never did
- * that — `featureLabelScale` and `getLineLabelScale` both stop at 1.5× the
- * configured label size, which is why "EX", "DIS" and the Lines labels stay
- * readable-but-sane at every altitude.
- *
- * This is that same ceiling, so a size-proportional label tops out exactly where
- * a zoom-anchored one does. It is a multiple of the *configured* label size, not
- * an absolute pixel count, so raising `labelSize` in the config raises the cap
- * with it. Note the families that share it also share the 24 px font literal, so
- * "1.5" means 36 px of glyph for them and 24 px for anything on `fontStyle`.
- */
-export function maxGraphicLabelScale(): number {
-    return (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * MAX_LABEL_ZOOM_MULTIPLIER;
-}
-
-/**
- * Unified label scale for all graphics.
- * - Uses drawingResolution stored on the feature (set at creation time) to anchor the
- *   label size: at drawing zoom the text is exactly defaultLabelSize px; when zoomed
- *   out (higher resolution) the label shrinks proportionally.
- * - Falls back to a sqrt curve when drawingResolution is not available.
- * - Either way the zoom multiplier is clamped to [0.3, 1.5] of defaultLabelSize so the
- *   label stays readable at every altitude instead of tracking the world scale forever.
+ * Zoom-anchored label scale — the default, and the one that does **not** react to a
+ * resize. Reads `drawingResolution` off the feature and hands the formula to the
+ * map-agnostic `labelScale`.
  */
 export function featureLabelScale(feature: FeatureLike, resolution: number): number {
-    const drawRes = feature.get('drawingResolution') as number | undefined;
-    const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    return sizeFactor * labelZoomMultiplier(drawRes, resolution);
+    return labelScaleOf(feature.get('drawingResolution') as number | undefined, resolution);
 }
 
 /**
- * Label scale proportional to the graphic's perpendicular size on screen.
- * Falls back to `featureLabelScale` for features that do not stamp `graphicSize`.
- *
- * Formula: `scale = sizeFactor × K × (graphicSizePx / BASE_FONT_SIZE_PX)`.
- * - `graphicSizePx = graphicSize / resolution`, so the label grows with both
- *   user resize (graphicSize map units) and zoom-in (resolution shrinks).
- * - `K` keeps the rendered label well under the graphic's perpendicular extent.
- * - The result is capped at `maxGraphicLabelScale()` so the growth stops where a
- *   zoom-anchored label's does; past that the letter only gets smaller relative
- *   to the graphic, never larger on screen.
+ * Size-proportional label scale: grows with both user resize and zoom-in. Requires
+ * the feature to stamp `graphicSize`; falls back to `featureLabelScale` otherwise.
  */
-const GRAPHIC_LABEL_FRACTION = 0.5;
 export function featureGraphicLabelScale(feature: FeatureLike, resolution: number): number {
-    const graphicSize = feature.get('graphicSize') as number | undefined;
-    if (graphicSize && graphicSize > 0) {
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        const graphicSizePx = graphicSize / resolution;
-        return Math.min(maxGraphicLabelScale(), sizeFactor * GRAPHIC_LABEL_FRACTION * graphicSizePx / BASE_FONT_SIZE_PX);
-    }
-    return featureLabelScale(feature, resolution);
+    return graphicLabelScaleOf(
+        feature.get('graphicSize') as number | undefined,
+        feature.get('drawingResolution') as number | undefined,
+        resolution,
+    );
 }
 
 /**
@@ -360,6 +364,29 @@ const createBasemapLayers = () => BASEMAP_ENABLED ? [
     }),
 ] : [];
 
+/**
+ * The backing store never gets *smaller* than the element it fills.
+ *
+ * OpenLayers sizes its canvas at `devicePixelRatio` and scales it to the container
+ * with a CSS transform. Above 1 that transform shrinks — the ordinary HiDPI path,
+ * and fine. Below 1 it **enlarges**, and a browser zoomed to 90% (`devicePixelRatio`
+ * 0.9) gets a 1920x866 canvas stretched over a 2133x962 box by
+ * `transform: matrix(1.11111, …)`. Chrome's compositor can drop that layer
+ * entirely: the canvas paints correctly — its pixels read back as the basemap, every
+ * tile loaded, no error anywhere — and simply never reaches the screen, until any
+ * interaction invalidates the layer and it appears. Diagnosed from a boot recording
+ * of a live blank map; `Ctrl+0` cured it, and a clamp here prevents it.
+ *
+ * Clamping only ever affects a zoomed-*out* page. A real HiDPI display (2), or
+ * Windows at 125% or 150% (1.25, 1.5), passes through untouched and keeps its
+ * sharpness — those downscale, which is the path every retina browser exercises
+ * constantly. This costs a zoomed-out viewer about 20% more pixels per frame.
+ *
+ * Read once at construction, because OL fixes `pixelRatio` there; changing the
+ * browser zoom afterwards has always needed a reload to re-derive it.
+ */
+const canvasPixelRatio = () => Math.max(1, window.devicePixelRatio || 1);
+
 export const createMap = (target: HTMLElement) => {
     let controls = defaults({zoom: false}).extend([
         new ScaleLine({
@@ -369,6 +396,7 @@ export const createMap = (target: HTMLElement) => {
     return new Map({
         controls: controls,
         target: target,
+        pixelRatio: canvasPixelRatio(),
         layers: [
             ...createBasemapLayers(),
         ],
@@ -466,11 +494,7 @@ export const HANDLE_Z_INDEX = 1000;
  * Exported so the measure line and the properties dialog cannot drift apart; they are
  * reporting the same quantity and a user will compare them.
  */
-export const formatDistance = (metres: number): string => {
-    if (metres < 1000) return `${Math.round(metres)} m`;
-    const km = metres / 1000;
-    return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
-};
+
 
 /**
  * The radius read-out shown while a circular graphic is drawn or resized: a hashed line
@@ -643,211 +667,28 @@ export const createFeature = () => {
 };
 
 /**
- * Renders the AM (width) amplifier. The value is stored as bare metres — the
- * dialog's Width input accepts digits only — so the unit and the thousands
- * separators are presentation, added here. Anything non-numeric (free text
- * typed before this was a number, or an imported value) is shown verbatim.
+ * ## The air-coordinating corridors — ported
+ *
+ * `formatWidthAmplifier`, the ACP label-fitting scale and both style functions
+ * moved to `symbology/corridorPaints.ts`. Nothing about a corridor's layout is an
+ * OpenLayers fact; these are the adapters over the shared implementation.
  */
-function formatWidthAmplifier(value: string): string {
-    const metres = Number(value);
-    return value.trim() !== '' && Number.isFinite(metres) ? `${metres.toLocaleString('en-US')} M` : value;
-}
 
-/** Assumed circle radius when the real one is unknown. */
-const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
-/** Share of the circle's diameter the label may span. */
-const ACP_TEXT_FRACTION = 0.8;
-const PADDING = 4;
+/** **Ported.** @see corridorPaints.ts, `airCorridorLabelPaint`. */
+export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airCorridorLabelPaint(name), name);
+}
 
 /**
- * Scale for an "ACP n" label.
+ * **Ported.** @see corridorPaints.ts, `airCorridorPaint`.
  *
- * Two competing sizes, and the larger wins:
- *
- * - the **floor** — fitted to a fixed assumed circle and capped at the
- *   zoom-anchored scale. This is what the label used to do unconditionally, and
- *   it keeps a narrow corridor labelled instead of letting the text collapse to
- *   nothing when its circle is only a few pixels across.
- * - the **grown** size — fitted to the circle's real rendered radius and capped
- *   at the size-proportional scale, so a wide corridor gets a big label.
- *
- * Pass `circleRadiusPx` / `proportionalScale` only when the feature stamps
- * `graphicSize`; without them the floor applies alone, i.e. the old behaviour.
+ * Takes a resolution it does not use, because the holder calls it with the feature
+ * alone. The paint function needs a context, so one is built from a nominal value;
+ * nothing in the corridor's line work is resolution-dependent.
  */
-function getAcpLabelScale(
-    text: string,
-    font: string,
-    zoomScale: number,
-    circleRadiusPx?: number,
-    proportionalScale?: number,
-): number {
-    const textWidthAt1 = getTextWidth(text, font, 1);
-    const floor = Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - PADDING) / textWidthAt1);
+export const airCorridorCircleStyleFunc = (feature: FeatureLike, resolution = 1) =>
+    asStyleFunction(airCorridorPaint())(feature, resolution);
 
-    if (circleRadiusPx === undefined || proportionalScale === undefined) return floor;
-
-    const circleMaxWidth = Math.max(0, circleRadiusPx * 2 * ACP_TEXT_FRACTION - PADDING);
-    return Math.max(floor, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
-}
-
-export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => airCoordinatingCorridorStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function airCoordinatingCorridorStyleFromLabels(name: TacticalGraphicName, graphicLabel: GraphicLabels): StyleFunction {
-    return (feature, resolution) => {
-        const geometry = feature.getGeometry() as MultiPoint;
-        const styles: Style[] = [];
-        const coords = geometry.getCoordinates();
-        const label = getFullLabel(name, graphicLabel.label ?? '');
-        const baseScale = featureLabelScale(feature, resolution);
-
-        // The ACP labels track the circle rather than the zoom. `graphicSize` is
-        // the corridor radius in map units, so dividing by the resolution gives
-        // the circle's rendered pixel radius; `featureGraphicLabelScale` grows
-        // the text from the same number, and the fit below keeps it inside.
-        const graphicSize = feature.get('graphicSize') as number | undefined;
-        const circleRadiusPx = graphicSize && graphicSize > 0 ? graphicSize / resolution : undefined;
-        const acpScale = featureGraphicLabelScale(feature, resolution);
-
-        // 🟡 Pull hostility color dynamically
-        const color = readHostilityColor(feature);
-
-        // ── Properties info block (above the graphic, upper-left) ──────────────
-        const infoLines: string[] = [];
-        const corridorName = graphicLabel.label?.trim();
-        if (corridorName)               infoLines.push(`NAME:       ${corridorName}`);
-        if (graphicLabel.width)         infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(graphicLabel.width))}`);
-        if (graphicLabel.minAltitude)   infoLines.push(`MIN ALT:    ${graphicLabel.minAltitude}`);
-        if (graphicLabel.maxAltitude)   infoLines.push(`MAX ALT:    ${graphicLabel.maxAltitude}`);
-        if (graphicLabel.startDate)     infoLines.push(`DTG START:  ${graphicLabel.startDate}`);
-        if (graphicLabel.endDate)       infoLines.push(`DTG END:    ${graphicLabel.endDate}`);
-
-        if (infoLines.length > 0) {
-            // Anchor at the NW corner of the ACP bounding box (minX, maxY)
-            let minX = Infinity, maxY = -Infinity;
-            for (const [x, y] of coords) {
-                if (x < minX) minX = x;
-                if (y > maxY) maxY = y;
-            }
-            // Scale the pixel gap with baseScale so clearance stays proportional
-            // to both the text size and the corridor circles at every zoom level.
-            styles.push(new Style({
-                geometry: new Point([minX, maxY]),
-                text: new Text({
-                    text: infoLines.join('\n'),
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    textAlign: 'left',
-                    textBaseline: 'bottom',
-                    offsetY: -60 * baseScale,
-                    scale: baseScale,
-                }),
-            }));
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-
-            const labelText = `ACP ${i + 1}`;
-            const fittedScale = getAcpLabelScale(labelText, fontStyle, baseScale, circleRadiusPx, acpScale);
-
-            const [x0, y0] = coords[i];
-            const [x1, y1] = coords[i + 1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            styles.push(new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: label,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(feature, resolution),
-                }),
-            }));
-            styles.push(
-                new Style({
-                    geometry: new Point(coords[i]),
-                    stroke: new Stroke({
-                        color,
-                        width: LINE_WIDTH(),
-                    }),
-                    text: new Text({
-                        text: labelText,
-                        font: fontStyle,
-                        // Black, not `color`. FM 1-02.2 colours the *lines* of a
-                        // control measure by standard identity — the circle
-                        // stroke above — while text amplifiers stay black. See
-                        // table 5-3's enemy boundary in colour: red line, black
-                        // T/AS and B labels.
-                        fill: new Fill({color: getLabelFillColor()}),
-                        scale: fittedScale,
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                    }),
-                }),
-            );
-        }
-        // add the last node in the corridor
-        const fittedScale = getAcpLabelScale(`ACP ${coords.length}`, fontStyle, baseScale, circleRadiusPx, acpScale);
-        styles.push(
-            new Style({
-                geometry: new Point(coords[coords.length - 1]),
-                stroke: new Stroke({
-                    color,
-                    width: LINE_WIDTH(),
-                }),
-                text: new Text({
-                    text: `ACP ${coords.length}`,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    scale: fittedScale,
-                    stroke: getHaloStroke(),
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                }),
-            }),
-        );
-        return styles;
-    };
-}
-
-export const airCorridorCircleStyleFunc = (feature: FeatureLike) => {
-    const geometry = feature.getGeometry();
-    const color = readHostilityColor(feature);
-    const styles: Style[] = [];
-
-    if (geometry instanceof GeometryCollection) {
-        geometry.getGeometries().forEach(geom => {
-            if (geom instanceof Circle || geom instanceof Polygon) {
-                styles.push(
-                    new Style({
-                        geometry: geom,
-                        stroke: new Stroke({color, width: LINE_WIDTH()}),
-                        fill: undefined,
-                    }),
-                );
-            } else if (geom instanceof MultiLineString) {
-                styles.push(
-                    new Style({
-                        geometry: geom,
-                        stroke: new Stroke({
-                            color: color,
-                            width: LINE_WIDTH(),
-                        }),
-                        fill: undefined,
-                    }),
-                );
-            }
-        });
-    }
-    return styles;
-};
 
 function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coordinate, resolution: number, label: string, scaleMultiplier = 1, feature?: FeatureLike): Style {
     const [x1, y1] = start;
@@ -988,194 +829,31 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
  * already-formatted label string. Every graphic routed through
  * `phaseLineStyle` shares this entry point.
  */
+/**
+ * **Ported.** The body lives in `tacticalgraphics/symbology/paintFunctions.ts` and
+ * this is the OpenLayers adapter over it, so the same implementation draws in both
+ * renderers. @see paintToOpenLayers.ts for why the port works this way round.
+ *
+ * `phaseLineStyle` above is kept: it takes an already-formatted label string and
+ * several other style functions call it directly.
+ */
 export function phaseLineStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (feature, resolution) =>
-        phaseLineStyle(feature, resolution, getFullLabel(name, readGraphicLabels(feature).label ?? ''));
+    return asStyleFunction(phaseLinePaint(name), name);
 }
 
+/** **Ported.** @see movementPaints.ts, `bridgeLabelPaint`. */
 export function bridgeGraphicStyleFunc(): StyleFunction {
-    return (f, resolution) => bridgeGraphicStyleFromLabels(readGraphicLabels(f))(f, resolution);
-}
-
-function bridgeGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-        let styles: Style[] = [];
-        const [x1, y1] = coords[0];
-        const [x2, y2] = coords[1];
-
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep main label upright.
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-
-        const labelScale = featureLabelScale(f, resolution);
-
-        // Main label — at bridge midpoint (coords[0]), along the bridge axis.
-        styles.push(new Style({
-            geometry: new Point(coords[0]),
-            text: new Text({
-                text: graphicLabels.label ?? '',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                rotation,
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        // Date label — coords[1] is pre-placed by generateLabels beyond the bridge end
-        // along the bridge axis.  Always render horizontal (rotation: 0).
-        // Use directional textAlign so the text extends AWAY from the bridge rather
-        // than being centered back over it.
-        const dateText = getDateLabel(graphicLabels);
-        if (dateText) {
-            // Bridge is "more horizontal" when |dx| >= |dy|.
-            // For horizontal bridges coords[1] is to the side of the end — align text
-            // so it starts/ends at coords[1] and runs away from the bridge.
-            // For vertical bridges coords[1] is above/below the end — center is fine
-            // because the horizontal text doesn't extend back along the bridge axis.
-            const dateTextAlign: CanvasTextAlign =
-                Math.abs(dx) >= Math.abs(dy)
-                    ? (dx > 0 ? 'left' : 'right')
-                    : 'center';
-
-            // push date label further away from bridge along its axis
-            const len = Math.hypot(dx, dy);
-            const ux = dx / len;
-            const uy = dy / len;
-
-            // distance in pixels → convert to map units
-            const EXTRA_GAP_PX = 12; // 👈 increase this to move further away
-            const extraGapMap = EXTRA_GAP_PX * resolution;
-
-            const dateCoord: Coordinate = [
-                coords[1][0] + ux * extraGapMap,
-                coords[1][1] + uy * extraGapMap,
-            ];
-
-            styles.push(new Style({
-                geometry: new Point(dateCoord),
-                text: new Text({
-                    text: dateText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    textAlign: dateTextAlign,
-                    textBaseline: 'middle',
-                    rotation: 0,
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-
-        return styles;
-    };
+    return asStyleFunction(bridgeLabelPaint());
 }
 
 /** Screen-px clear space between the passage lane's fishtail and its DTG. */
 const PASSAGE_LANE_LABEL_GAP_PX = 8;
 
+/** **Ported.** @see mobilityPaints.ts, `passageLanePaint`. */
 export function passageLaneGraphicStyle(): StyleFunction {
-    return (f, resolution) => passageLaneGraphicStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(passageLanePaint());
 }
 
-function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates()[1];
-        let styles: Style[] = [];
-        const [x1, y1] = coords[0];
-        const [x2, y2] = coords[1];
-
-        // Segment angle
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-
-        // Zoom-anchored and clamped, exactly as Bridge sizes its DTG. The span-
-        // proportional formula this replaced tied the glyph to the width of the
-        // lane, so a lane drawn a few hundred metres wider rendered text several
-        // times the height of every other mobility label.
-        const scale = featureLabelScale(f, resolution);
-
-        // The DTG sits clear of the whole symbol, so it has to start behind the
-        // fishtail — not behind the centre line, which is where a flat offset off
-        // `coords[0]` put it. Sub-line [2] is the tail: `[hook, start, hook]`,
-        // both hooks swept back from the start point, so measuring how far they
-        // reach along the line is the only way to know what to clear. A constant
-        // cannot: the hooks are `size * 20` metres, so their screen reach changes
-        // with zoom while a pixel offset does not.
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len;
-        const uy = dy / len;
-        const tail = geom.getCoordinates()[2] ?? [];
-        let tailReachPx = 0;
-        for (const p of [tail[0], tail[2]]) {
-            if (!p) continue;
-            const alongPx = ((p[0] - x1) * ux + (p[1] - y1) * uy) / resolution;
-            tailReachPx = Math.max(tailReachPx, -alongPx);   // negative = behind the start
-        }
-        // Text is rendered turned 90°, so half its *height* is what overhangs
-        // toward the symbol; `BASE_FONT_SIZE_PX` is the height `fontStyle` declares.
-        const clearancePx = tailReachPx + PASSAGE_LANE_LABEL_GAP_PX + (BASE_FONT_SIZE_PX / 2) * scale;
-        const labelCoord: Coordinate = [x1 - ux * clearancePx * resolution, y1 - uy * clearancePx * resolution];
-
-        // The DTG reads across the lane, so it needs its *own* upright pass: the
-        // one above keeps `rotation` upright, and adding a quarter turn to an
-        // already-normalised angle pushes it straight back out of range. Drawn
-        // north-to-south the lane landed the label on π — upside down.
-        //
-        // **Wrap before comparing.** The pass above corrects by *adding* π, so a
-        // south-west lane leaves `rotation` at 7π/4 — the same direction as −π/4
-        // and drawn identically, but numerically far outside any range test. A
-        // bare `if (θ > π/2)` on that reads it as needing a flip and turns an
-        // upright label over, which is exactly the fault being fixed here.
-        // `atan2(sin, cos)` folds any angle back into (−π, π] first.
-        //
-        // Correcting by ±π keeps the label perpendicular to the lane, so it only
-        // ever flips end-for-end about its own centre. That matters twice over:
-        // the anchor does not move, and the clearance above stays valid, because
-        // it is still the glyph's *height* that overhangs toward the symbol.
-        const acrossLane = rotation + Math.PI / 2;
-        let labelRotation = Math.atan2(Math.sin(acrossLane), Math.cos(acrossLane));
-        if (labelRotation > Math.PI / 2) labelRotation -= Math.PI;
-        else if (labelRotation <= -Math.PI / 2) labelRotation += Math.PI;
-
-        styles.push(new Style({
-            geometry: new Point(labelCoord),
-            text: new Text({
-                text: getDateLabel(graphicLabels),
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                rotation: labelRotation,
-                scale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-        const hostility = readHostility(f);
-        const outlineStyle = new Style({
-            geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        styles.push(outlineStyle);
-        return styles;
-    };
-}
 
 /**
  * Graphic StyleFunction for the Infiltration line feature.
@@ -1185,45 +863,9 @@ function passageLaneGraphicStyleFromLabels(graphicLabels: GraphicLabels): StyleF
  * NOTE: OL geometry is in EPSG:3857 (projected metres), so gap math must use
  * plain Euclidean vectors — NOT turf/GeometryService geographic helpers.
  */
+/** **Ported.** @see movementPaints.ts, `infiltrationGraphicPaint`. */
 export function infiltrationGraphicStyleFunc(): StyleFunction {
-    return (feature, resolution) => {
-        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
-        const geom = feature.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 2) return [];
-
-        const lineCoords = coords[0];   // base line (EPSG:3857)
-        const arrowCoords = coords[1];  // arrowhead [leftWing, tip, rightWing]
-
-        // Label center is at 25% of the first segment (matches generateLabels logic).
-        const [x0, y0] = lineCoords[0];
-        const [x1, y1] = lineCoords[1];
-        const lcx = x0 + (x1 - x0) * 0.25;
-        const lcy = y0 + (y1 - y0) * 0.25;
-
-        // Unit vector along the segment.
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len === 0) return [];
-        const ux = dx / len;
-        const uy = dy / len;
-
-        // A flat 10 screen pixels a side — the same rule breach and bypass use.
-        // It was `wingWidth * 0.35 + 5px`, off the arrowhead's metric span, so the
-        // hole grew with the graphic while the "IN" stayed capped by
-        // `maxGraphicLabelScale()`. @see envelopmentGraphicStyleFunc
-        const GAP_PX = 10;
-        const gapHalf = GAP_PX * resolution;
-        const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
-        const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
-
-        return [
-            new Style({geometry: new LineString([lineCoords[0], gapStart]), stroke: lineStroke}),
-            new Style({geometry: new LineString([gapEnd, ...lineCoords.slice(1)]), stroke: lineStroke}),
-            new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-        ];
-    };
+    return asStyleFunction(infiltrationGraphicPaint());
 }
 
 /**
@@ -1233,76 +875,14 @@ export function infiltrationGraphicStyleFunc(): StyleFunction {
 // MobileDefense: multi-line-string geometry where triangle rings (closed 4-point
 // sub-arrays) are rendered as filled polygons and every other sub-array is a
 // stroked line (arcs, arrow shaft, arrow head).
+/** **Ported.** @see movementPaints.ts, `mobileDefenseGraphicPaint`. */
 export function mobileDefenseGraphicStyleFunc(): StyleFunction {
-    return (feature) => {
-        const color = readHostilityColor(feature);
-        const lineStroke = new Stroke({color, width: LINE_WIDTH()});
-        const fill = new Fill({color});
-        const geom = feature.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        const styles: Style[] = [];
-        for (const ring of coords) {
-            if (ring.length === 4
-                && ring[0][0] === ring[ring.length - 1][0]
-                && ring[0][1] === ring[ring.length - 1][1]) {
-                styles.push(new Style({geometry: new Polygon([ring]), fill, stroke: lineStroke}));
-            } else {
-                styles.push(new Style({geometry: new LineString(ring), stroke: lineStroke}));
-            }
-        }
-        return styles;
-    };
+    return asStyleFunction(mobileDefenseGraphicPaint());
 }
 
+/** **Ported.** @see movementPaints.ts, `envelopmentGraphicPaint`. */
 export function envelopmentGraphicStyleFunc(): StyleFunction {
-    return (feature, resolution) => {
-        const lineStroke = new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()});
-        const geom = feature.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 3) return [];
-
-        const lineCoords = coords[0];  // straight part
-        const arcCoords = coords[1];  // semicircular arc
-        const arrowCoords = coords[2]; // open arrowhead
-
-        // Gap around "E" label at 25% of first segment — same logic as Infiltration.
-        const [x0, y0] = lineCoords[0];
-        const [x1, y1] = lineCoords[1];
-        const dx = x1 - x0, dy = y1 - y0;
-        const len = Math.sqrt(dx * dx + dy * dy);
-
-        // Degenerate straight part (during drawing with only 2 base points) — render arc + arrow only.
-        if (len === 0) {
-            return [
-                new Style({geometry: new LineString(arcCoords), stroke: lineStroke}),
-                new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-            ];
-        }
-
-        const lcx = x0 + (x1 - x0) * 0.25;
-        const lcy = y0 + (y1 - y0) * 0.25;
-        const ux = dx / len, uy = dy / len;
-        // A flat 10 screen pixels a side — the same rule breach and bypass use.
-        //
-        // It used to be `wingWidth * 0.35 + 5px`, taken from the arrowhead's
-        // wing-to-wing span. That span is metric, so the hole grew with the
-        // graphic while the "E" is capped by `maxGraphicLabelScale()`: draw a
-        // large envelopment and the gap ran away from the letter it was meant to
-        // clear. A gap belongs to the label, not to the shape around it.
-        const GAP_PX = 10;
-        const gapHalf = GAP_PX * resolution;
-        const gapStart: Coordinate = [lcx - ux * gapHalf, lcy - uy * gapHalf];
-        const gapEnd: Coordinate = [lcx + ux * gapHalf, lcy + uy * gapHalf];
-
-        return [
-            new Style({geometry: new LineString([lineCoords[0], gapStart]), stroke: lineStroke}),
-            new Style({geometry: new LineString([gapEnd, ...lineCoords.slice(1)]), stroke: lineStroke}),
-            new Style({geometry: new LineString(arcCoords), stroke: lineStroke}),
-            new Style({geometry: new LineString(arrowCoords), stroke: lineStroke}),
-        ];
-    };
+    return asStyleFunction(envelopmentGraphicPaint());
 }
 
 /**
@@ -1348,352 +928,37 @@ function segmentProportionalScale(dx: number, dy: number, resolution: number): n
  * that draws labels at each segment midpoint with rotation.
  */
 export function movementGraphicPathStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => movementGraphicPathStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(movementLabelPaintFor(name), name);
 }
 
-function movementGraphicPathStyleFromLabels(name: TacticalGraphicName, label: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        // Infiltration always shows "IN" near the tail — user label is ignored.
-        if (name === TacticalGraphicName.Infiltration) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: 'IN',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // Envelopment always shows "E" near the tail — user label is ignored.
-        if (name === TacticalGraphicName.Envelopment) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            return [new Style({
-                geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-                text: new Text({
-                    text: 'E',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // MobileDefense always shows "MD" at the p0 vertex — the tail of the
-        // ellipse, in the gap the two arcs leave open on that side — horizontal
-        // regardless of the graphic's rotation. Doctrinally the amplifier sits at
-        // the start of the graphic, not in its middle. User label is ignored.
-        if (name === TacticalGraphicName.MobileDefense) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 1) return [];
-            const [x0, y0] = coords[0];
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'MD',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation: 0,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // TurningMovement always shows "T" starting at the arrowhead base — user label is ignored.
-        if (name === TacticalGraphicName.TurningMovement) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            //const spanPx = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2) / resolution;
-            //const scale = featureLabelScale(f, resolution);//(spanPx * 0.7) / 24;
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'T',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // FrontalAttack always shows "A" starting at the arrowhead base — user label is ignored.
-        if (name === TacticalGraphicName.FrontalAttack) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            // const spanPx = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2) / resolution;
-            // const scale = (spanPx * 0.7) / 24;
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: 'A',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        // AviationAxisOfAdvance: name + DTG on one line at the start of the arrow.
-        if (name === TacticalGraphicName.AviationAxisOfAdvance) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            const dx = x1 - x0, dy = y1 - y0;
-            let rotation = -Math.atan2(dy, dx);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ') || '';
-            if (!text) return [];
-            const spanPx = Math.sqrt(dx * dx + dy * dy) / resolution;
-            const scale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale,
-                }),
-            })];
-        }
-        if (name === TacticalGraphicName.AttackHelicopterAxisOfAdvance) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 4) return [];
-            const styles: Style[] = [];
+/**
+ * **Ported.** @see movementPaints.ts.
+ *
+ * The dispatch that used to be a 340-line switch in here is now a table: each
+ * member of the family names the paint function that draws its amplifier.
+ */
+const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: PaintFeature, c: PaintContext) => Paint[]>> = {
+    [TacticalGraphicName.Infiltration]: infiltrationLabelPaint,
+    [TacticalGraphicName.Envelopment]: envelopmentLabelPaint,
+    [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
+    [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
+    [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
+    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+};
 
-            // coords[0..1]: text label span; coords[2]: twist center; coords[3]: direction point
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            const [cx, cy] = coords[2];
-            const [dx3, dy3] = coords[3];
+/** The four that share the axis-of-advance layout, which needs its own name. */
+const AXIS_OF_ADVANCE_LABELS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.InfiltrationLane,
+];
 
-            // ── Text label (same as AviationAxisOfAdvance) ─────────────
-            const tdx = x1 - x0, tdy = y1 - y0;
-            let textRotation = -Math.atan2(tdy, tdx);
-            if (textRotation > Math.PI / 2 || textRotation < -Math.PI / 2) textRotation += Math.PI;
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ') || '';
-            if (text) {
-                const spanPx = Math.sqrt(tdx * tdx + tdy * tdy) / resolution;
-                const textScale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-                styles.push(new Style({
-                    geometry: new Point([x0, y0]),
-                    text: new Text({
-                        text,
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        rotation: textRotation,
-                        textAlign: 'left',
-                        textBaseline: 'middle',
-                        scale: textScale,
-                    }),
-                }));
-            }
-
-            // ── Attack helicopter symbol at twist point ────────────────
-            // Arrow direction: from direction point (coords[3]) toward twist center (coords[2])
-            const heading = Math.atan2(cy - dy3, cx - dx3);
-            // Symbol half-size: use the text label span as reference (= arrow radius in map units)
-            const s = Math.sqrt(tdx * tdx + tdy * tdy) * 0.5;
-
-            const color = (f as Feature).get?.('hostilityColor') || getDefaultLineColor();
-            const symbolStroke = new Stroke({ color, width: LINE_WIDTH() });
-            const symbolFill = new Fill({ color });
-
-            // Helper: offset from center by angle and distance
-            const off = (angle: number, dist: number): Coordinate =>
-                [cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist];
-
-            // Line parallel to arrowhead base (perpendicular to arrow heading),
-            // with arrowhead pointing in whichever perpendicular direction is "up" on screen.
-            // Pick the perpendicular that has a positive Y component (north = up in EPSG:3857).
-            let perpAngle = heading + Math.PI / 2;
-            if (Math.sin(perpAngle) < 0) perpAngle += Math.PI;
-
-            const stalkHalf = s * 1.0;
-            const lineTop = off(perpAngle, stalkHalf);
-            const lineBottom = off(perpAngle + Math.PI, stalkHalf);
-            const stalkLine = new LineString([lineBottom, lineTop]);
-            styles.push(new Style({ geometry: stalkLine, stroke: symbolStroke }));
-
-            // Small horizontal base at the bottom of the stalk (perpendicular to stalk = along heading)
-            const baseHalfWidth = s * 0.3;
-            const baseLeft: Coordinate = [
-                lineBottom[0] + Math.cos(heading) * baseHalfWidth,
-                lineBottom[1] + Math.sin(heading) * baseHalfWidth,
-            ];
-            const baseRight: Coordinate = [
-                lineBottom[0] - Math.cos(heading) * baseHalfWidth,
-                lineBottom[1] - Math.sin(heading) * baseHalfWidth,
-            ];
-            const baseLine = new LineString([baseLeft, baseRight]);
-            styles.push(new Style({ geometry: baseLine, stroke: symbolStroke }));
-
-            // Arrowhead (filled triangle) at top of the stalk
-            const arrowLen = s * 0.4;
-            const arrowHalfWidth = s * 0.2;
-            const arrowTip = off(perpAngle, stalkHalf + arrowLen);
-            // Arrowhead base wings are perpendicular to perpAngle (i.e. along the heading)
-            const arrowLeft: Coordinate = [
-                lineTop[0] + Math.cos(heading) * arrowHalfWidth,
-                lineTop[1] + Math.sin(heading) * arrowHalfWidth,
-            ];
-            const arrowRight: Coordinate = [
-                lineTop[0] - Math.cos(heading) * arrowHalfWidth,
-                lineTop[1] - Math.sin(heading) * arrowHalfWidth,
-            ];
-            const arrowHead = new Polygon([[arrowTip, arrowLeft, arrowRight, arrowTip]]);
-            styles.push(new Style({ geometry: arrowHead, fill: symbolFill, stroke: symbolStroke }));
-
-            return styles;
-        }
-        // Main/Supporting axis of advance: single "name DTG" label on the
-        // centerline, right-aligned just behind the arrowhead. Span (coords[0],
-        // coords[1]) runs along the last base segment with coords[1] sitting at
-        // the arrow tip anchor; we draw text anchored at coords[1] minus a
-        // small clearance, extending backward, rotated with the line. Scale
-        // tracks the arrow's radius span so text stays inside the channel.
-        if (name === TacticalGraphicName.MainAxisOfAdvance ||
-            name === TacticalGraphicName.MainAxisOfAdvanceFeint ||
-            name === TacticalGraphicName.SupportingAxisOfAdvance ||
-            name === TacticalGraphicName.InfiltrationLane) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [c0, c1] = coords;
-            const dx = c1[0] - c0[0], dy = c1[1] - c0[1];
-            const segLenMap = Math.hypot(dx, dy);
-            if (segLenMap === 0) return [];
-            const ux = dx / segLenMap, uy = dy / segLenMap;
-
-            const dateLabel = getDateLabel(label);
-            const parts: string[] = [];
-            if (label.label) parts.push(label.label);
-            if (dateLabel) parts.push(dateLabel);
-            const text = parts.join('     ');
-            if (!text) return [];
-
-            const rotation = getRotation(c0, c1);
-            const arrowGoesRight = c1[0] >= c0[0];
-            // InfiltrationLane label sits centered on the middle of the
-            // center-most segment; axis-of-advance labels sit right-aligned
-            // just behind the arrowhead.
-            const centerLabel = name === TacticalGraphicName.InfiltrationLane;
-            const textAlign: CanvasTextAlign = centerLabel
-                ? 'center'
-                : (arrowGoesRight ? 'right' : 'left');
-
-            const CLEARANCE_PX = 10;
-            const clearanceMap = CLEARANCE_PX * resolution;
-            const anchor: Coordinate = centerLabel
-                ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
-                : [c1[0] - ux * clearanceMap, c1[1] - uy * clearanceMap];
-
-            const spanPx = segLenMap / resolution;
-            const scale = (spanPx * 0.7) / BASE_FONT_SIZE_PX;
-
-            return [new Style({
-                geometry: new Point(anchor),
-                text: new Text({
-                    text,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign,
-                    textBaseline: 'middle',
-                    scale,
-                }),
-            })];
-        }
-        // Counterattack: "CATK" left of segment midpoint, user name right — both on the
-        // last body segment (before the arrowhead). Bypasses movementGraphicStyles.
-        if (name === TacticalGraphicName.Counterattack) {
-            const geom = f.getGeometry() as MultiPoint;
-            if (!geom) return [];
-            const coords = geom.getCoordinates();
-            if (!coords || coords.length < 2) return [];
-            const [x0, y0] = coords[0];
-            const [x1, y1] = coords[1];
-            let rotation = -Math.atan2(y1 - y0, x1 - x0);
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-            const catkText = label.label ? `CATK ${label.label}` : 'CATK';
-            return [new Style({
-                geometry: new Point([x0, y0]),
-                text: new Text({
-                    text: catkText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation,
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: featureLabelScale(f, resolution),
-                }),
-            })];
-        }
-        return movementGraphicStyles(label, f, resolution);
-    };
+function movementLabelPaintFor(name: TacticalGraphicName) {
+    if (AXIS_OF_ADVANCE_LABELS.includes(name)) return axisOfAdvanceLabelPaint(name);
+    return (MOVEMENT_LABEL_PAINTS[name] ?? movementLabelPaint)();
 }
 
 function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution: number) {
@@ -1726,98 +991,9 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
  */
 const OPTICAL_CENTRE_PX_PER_SCALE = 2.2;
 
+/** **Ported.** @see blockPaints.ts, `clearPaint`. */
 export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let midLine = coords[4];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = 4;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // t1 is the fractional position along the mid line where the label
-        // sits (0 = start, 1 = end). Defaults to 0.6 for Clear; Disrupt passes
-        // 0.5 so the D label centers on the middle line.
-        const p1 = midLine[0];
-        const p2 = midLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (!textLabel) {
-            // The table 5-19 obstacle effect carries no letter. GAP_PX below is
-            // a flat constant rather than a measured label width, so an empty
-            // label still cuts a 20px hole in the prong. Push the segment whole.
-            outlineSegments.push([p1, p2]);
-        } else {
-            // 4) carve a central gap in that opening side
-            const GAP_PX = 10; // px gap on each side of the dot
-            const gapMap = GAP_PX * resolution; // map-unit gap
-            const gapRatio = gapMap / segLen;
-
-            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-            // keep the two side pieces of that segment
-            outlineSegments.push([p1, gapA], [gapB, p2]);
-
-            // 5) compute the center of the gap for the dot
-            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-            let rotation = -Math.atan2(dy, dx);
-
-            // Keep text upright
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-                rotation += Math.PI;
-            }
-            // Normalize to [-π, π)
-            if (rotation > Math.PI) rotation -= 2 * Math.PI;
-            // 6) build styles for the echelon in the middle
-            const labelScale = featureGraphicLabelScale(f, resolution);
-            const textStyle = new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: textLabel,
-                    font: 'bold 24px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    // `textBaseline: 'middle'` centres the font's *em box* on the
-                    // anchor, not the capital's ink, so the letter renders high and
-                    // the line looks as if it passes below centre. Measured on the
-                    // rendered glyph, the error is 2.2 px per unit of label scale
-                    // (2.5 px at scale 1.03, 5.5 px at 2.44) — a font-metric
-                    // artefact, hence proportional. OL applies `offsetY` in raw
-                    // screen pixels and does **not** multiply it by `scale`, so the
-                    // scale has to be applied here.
-                    offsetY: OPTICAL_CENTRE_PX_PER_SCALE * labelScale,
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            });
-            styles.push(textStyle);
-        }
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-        return styles;
-    };
+    return asStyleFunction(clearPaint(textLabel, t1));
 }
 
 function getRotation(start: Coordinate, end: Coordinate) {
@@ -1914,690 +1090,63 @@ function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: nu
  * 4 — at `lineWidth: 1` the "thinner" decoration came out *thicker* than the line it
  * decorates. Floors at 1 so it never vanishes, which also stops it from crossing over.
  */
-const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
 /** Centreline of the arrow row nearest the route. */
-const ROUTE_ARROW_BASE_PX = 14;
 /** Row-to-row pitch for the two-way pair. */
-const ROUTE_ARROW_ROW_PITCH_PX = 12;
-const ROUTE_ARROW_HEAD_LEN_PX = 10;
-const ROUTE_ARROW_HEAD_HALF_PX = 5;
 /** Clear space either side of the ALT word before its arrows start. */
-const ROUTE_ALT_GAP_PX = 5;
 /**
  * Shortest an alternating arm may be, head included. The plate draws each arm at
  * roughly two-thirds the width of the word between them, so a bare `ROUTE` — the
  * narrowest identifier there is — still gets an arm that reads as an arrow
  * rather than a head with a stub behind it.
  */
-const ROUTE_ALT_ARM_PX = 26;
 /** Shortest a traffic arrow may get when the identifier is short or empty. */
-const ROUTE_ARROW_MIN_SPAN_PX = 56;
 
-/**
- * One end of the route: the identifier, plus the traffic-direction figure for
- * everything except {@link RouteDirection.GENERAL}.
- *
- * `anchor` is the line endpoint; `a`→`b` is the segment whose bearing orients
- * the block. Offsets go through `offsetAbove` / `offsetBelow` so the block lands
- * on the same side of the line whichever way the user drew it.
- *
- * The whole block renders in the label colour — see the note on `color` below.
- */
-function routeEndStyles(
-    resolution: number,
-    label: string,
-    direction: RouteDirection,
-    atStart: boolean,
-    anchor: Coordinate,
-    a: Coordinate,
-    b: Coordinate,
-    labelScale: number,
-): Style[] {
-    const styles: Style[] = [];
-    // The traffic arrows are part of the amplifier block, not the control
-    // measure's line work, so they take the label colour and stay black on a
-    // hostile route — the same call `ALT` and the identifier make. Only the
-    // route line itself answers to `getColorByHostility`.
-    const color = getLabelFillColor();
-    const rotation = getRotation(a, b);
-    // getRotation returns -atan2(dy, dx) flipped to keep text upright, so
-    // negating it recovers the along-line unit vector in the same, upright
-    // direction the text reads.
-    const ux = Math.cos(-rotation);
-    const uy = Math.sin(-rotation);
 
-    /**
-     * How far along the line the whole block is pushed off `anchor`, in screen px.
-     * Set once the block's width is known; the figure is built symmetrically about
-     * zero and then slid inward by half its width so it sits **over** the route
-     * instead of straddling its end. Zero for GENERAL, which has no figure and
-     * keeps the endpoint-anchored identifier every other line graphic uses.
-     */
-    let shiftPx = 0;
-    /** Point `alongPx` screen px along the line from the row centred `upPx` above it. */
-    const at = (upPx: number, alongPx: number): Coordinate => {
-        const [cx, cy] = offsetAbove(anchor, a, b, resolution, upPx);
-        const d = (alongPx + shiftPx) * resolution;
-        return [cx + ux * d, cy + uy * d];
-    };
-
-    const s = labelScale;
-    const headLenPx = ROUTE_ARROW_HEAD_LEN_PX * s;
-    const headHalfPx = ROUTE_ARROW_HEAD_HALF_PX * s;
-
-    /** Shaft `fromPx`→`toPx` on row `rowPx`, with the solid head always at `toPx`. */
-    const arrow = (rowPx: number, fromPx: number, toPx: number) => {
-        const base = at(rowPx, toPx + (fromPx > toPx ? headLenPx : -headLenPx));
-        styles.push(new Style({
-            geometry: new LineString([at(rowPx, fromPx), at(rowPx, toPx)]),
-            stroke: new Stroke({color, width: routeArrowWidth()}),
-        }));
-        const tip = at(rowPx, toPx);
-        const left = offsetAbove(base, a, b, resolution, headHalfPx);
-        const right = offsetBelow(base, a, b, resolution, headHalfPx);
-        styles.push(new Style({
-            // Ring closed explicitly — an open ring renders inconsistently.
-            geometry: new Polygon([[tip, left, right, tip]]),
-            fill: new Fill({color}),
-        }));
-    };
-
-    const rows = direction === RouteDirection.TWO_WAY ? 2 : direction === RouteDirection.GENERAL ? 0 : 1;
-    const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * s;
-
-    if (rows > 0) {
-        const labelWidthPx = getTextWidth(label, fontStyle, s);
-        const altWidthPx = direction === RouteDirection.ALTERNATING ? getTextWidth('ALT', fontStyle, s) : 0;
-        // An alternating row has to hold ALT plus a full arrow on each side, so
-        // its floor is that content — never the label, which may be shorter.
-        const minSpanPx = altWidthPx > 0
-            ? altWidthPx + 2 * (ROUTE_ALT_GAP_PX + ROUTE_ALT_ARM_PX) * s
-            : ROUTE_ARROW_MIN_SPAN_PX * s;
-        const halfPx = Math.max(labelWidthPx, minSpanPx) / 2;
-
-        // Slide the block off the endpoint and onto the route. `ux`/`uy` point
-        // the way the text reads, which is inward at one end of the line and
-        // outward at the other, so the direction has to be taken from the
-        // segment rather than assumed.
-        const inward: Coordinate = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
-        shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
-
-        if (direction === RouteDirection.ONE_WAY) {
-            arrow(row(0), -halfPx, halfPx);
-        } else if (direction === RouteDirection.TWO_WAY) {
-            arrow(row(0), halfPx, -halfPx);   // lower row points back
-            arrow(row(1), -halfPx, halfPx);   // upper row points forward
-        } else {
-            // Both arms point away from the word, so each shaft runs outward.
-            const innerPx = altWidthPx / 2 + ROUTE_ALT_GAP_PX * s;
-            arrow(row(0), innerPx, halfPx);
-            arrow(row(0), -innerPx, -halfPx);
-            styles.push(new Style({
-                geometry: new Point(at(row(0), 0)),
-                text: new Text({
-                    text: 'ALT',
-                    font: fontStyle,
-                    // A text amplifier, so it stays in the label colour even when
-                    // the route's line work has gone red for a hostile identity.
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: s,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-    }
-
-    // Identifier clears the top arrow row; with no arrows it falls back to the
-    // plain 8 px every other line graphic uses.
-    const labelOffsetPx = rows > 0
-        ? row(rows - 1) + headHalfPx + 11 * s
-        : 8;
-    // Each endpoint is judged on its own segment — a route can start left-to-right
-    // and have its last leg turn back, so one shared flag would flip the wrong one.
-    const goesRight = b[0] >= a[0];
-    const endAlign: CanvasTextAlign = atStart
-        ? (goesRight ? 'left' : 'right')
-        : (goesRight ? 'right' : 'left');
-    styles.push(new Style({
-        // Through `at`, so the identifier rides the same inward shift as the
-        // figure it caps and the two stay registered with each other.
-        geometry: new Point(at(labelOffsetPx, 0)),
-        text: new Text({
-            text: label,
-            font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
-            rotation,
-            // Centre the identifier over the arrow figure it caps; with no arrows
-            // there is nothing to centre on, so run it inward off the endpoint.
-            textAlign: rows > 0 ? 'center' : endAlign,
-            textBaseline: 'bottom',
-            scale: labelScale,
-            stroke: getHaloStroke(),
-        }),
-    }));
-
-    return styles;
-}
-
+/** **Ported.** @see routePaints.ts, `routeControlMeasurePaint`. */
 export function routeControlMeasureStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => routeControlMeasureStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(routeControlMeasurePaint(name), name);
 }
 
-function routeControlMeasureStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    const direction = labels.direction ?? RouteDirection.GENERAL;
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-        if (!coords || coords.length < 2) return [];
-
-        const hostility = readHostility(f);
-        const color = getColorByHostility(hostility);
-        const labelScale = featureLabelScale(f, resolution);
-
-        const start = coords[0];
-        const afterStart = coords[1];
-        const end = coords[coords.length - 1];
-        const beforeEnd = coords[coords.length - 2];
-
-        const styles: Style[] = [
-            ...routeEndStyles(resolution, label, direction, true, start, start, afterStart, labelScale),
-            ...routeEndStyles(resolution, label, direction, false, end, beforeEnd, end, labelScale),
-        ];
-
-        // The route line is the only line work here, so it is the only thing that
-        // carries the hostility colour and the only thing that goes dashed when
-        // planned or suspected. The amplifier block above it stays black.
-        styles.push(new Style({
-            geometry: geom,
-            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
-        }));
-
-        return styles;
-    };
-}
-
-function getDefaultLineStyles(f: FeatureLike, resolution: number, identifierLabel: string, startDateLabel: string, endDateLabel: string) {
-    const geom = f.getGeometry() as MultiPoint;
-    const coords = geom.getCoordinates();
-
-    const hostility = readHostility(f);
-    const styles: Style[] = [];
-
-    const start = coords[0];
-    const afterStart = coords[1];
-
-    const end = coords[coords.length - 1];
-    const beforeEnd = coords[coords.length - 2];
-
-    let startLabelCoordinate = offsetAbove(start, start, afterStart, resolution, 8);
-    let startDateLabelCoordinate = offsetBelow(start, start, afterStart, resolution, 8);
-    let endLabelCoordinate = offsetAbove(end, beforeEnd, end, resolution, 8);
-    let endDateLabelCoordinate = offsetBelow(end, beforeEnd, end, resolution, 8);
-
-    let startRotation = getRotation(start, afterStart);
-    let endRotation = getRotation(end, beforeEnd);
-
-    // After "keep upright" normalization, rotation is always ~0 for horizontal lines,
-    // so textAlign refers to screen-left/right regardless of drawing direction.
-    // Each endpoint is evaluated independently — the first and last segments can go
-    // different directions (e.g. L-to-R overall but last segment turns back R-to-L).
-    const startGoesRight = afterStart[0] >= start[0];
-    const endGoesRight   = end[0] >= beforeEnd[0];
-    const startAlign: CanvasTextAlign = startGoesRight ? 'left' : 'right';
-    const endAlign: CanvasTextAlign   = endGoesRight   ? 'right' : 'left';
-    const startScale = featureLabelScale(f, resolution);
-    const endScale = featureLabelScale(f, resolution);
-
-    styles.push(new Style(
-        {
-            geometry: new Point(startLabelCoordinate), // dummy point
-            text: new Text({
-                text: identifierLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: startAlign,
-                textBaseline: 'bottom',
-                scale: startScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endLabelCoordinate),
-            text: new Text({
-                text: identifierLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: endAlign,
-                textBaseline: 'bottom',
-                scale: endScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-
-    let dateLabel = (!isEmpty(startDateLabel) && !isEmpty(endDateLabel) ? `${startDateLabel} - ${endDateLabel}` : '');
-    styles.push(new Style(
-        {
-            geometry: new Point(startDateLabelCoordinate), // dummy point
-            text: new Text({
-                text: dateLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: startRotation,
-                textAlign: startAlign,
-                textBaseline: 'top',
-                scale: startScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    styles.push(new Style(
-        {
-            geometry: new Point(endDateLabelCoordinate),
-            text: new Text({
-                text: dateLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: endRotation,
-                textAlign: endAlign,
-                textBaseline: 'top',
-                scale: endScale,
-                stroke: getHaloStroke(),
-            }),
-        },
-    ));
-    const outlineStyle = new Style({
-        geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-    });
-    styles.push(outlineStyle);
-
-    return styles;
-}
-
+/** **Ported.** @see paintFunctions.ts, `defaultLinePaint`. */
 export function defaultLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => defaultLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(defaultLinePaint(name), name);
 }
 
-function defaultLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    let identifierLabel = getFullLabel(name, labels.label);
-    let startDate = labels.startDate || '';
-    let endDate = labels.endDate || '';
 
-    return (f, resolution) => {
-        const styles = getDefaultLineStyles(f, resolution, identifierLabel, startDate, endDate);
-        if (labels.status && labels.status === TacticalGraphicStatus.planned) {
-            // Override the line stroke to always be dashed
-            styles.forEach(s => {
-                const stroke = s.getStroke?.();
-                if (stroke) stroke.setLineDash([12, 8]);
-            });
-        }
-        return styles;
-    };
+/** **Ported.** @see linearTargetPaints.ts. */
+export function linearTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(linearTargetPaint(name), name);
+}
+
+/** **Ported.** @see linearTargetPaints.ts. */
+export function linearSmokeTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(linearSmokeTargetPaint(name), name);
+}
+
+/** **Ported.** @see linearTargetPaints.ts. */
+export function finalProtectiveFireStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(finalProtectiveFirePaint(), name);
 }
 
 /**
- * Linear target shape used by LinearTarget, LinearSmokeTarget, and
- * FinalProtectiveFire: a stretchable horizontal line with two perpendicular
- * end-caps (an "H" lying on its side). The name label sits above the center;
- * `belowLines` are stacked vertically below the center with single-line
- * spacing (LinearSmokeTarget passes ['SMOKE']; FPF passes ['FPF', secondId,
- * weapon]).
- *
- * Drawn from a 2-point base line; the two ends carry the perpendicular caps
- * and the user stretches the middle by dragging an endpoint.
+ * ProbableLineOfDeployment is always dashed (present and anticipated), and carries
+ * no date-time group. **Ported.** @see paintFunctions.ts, `defaultLinePaint`.
  */
-function buildLinearTargetStyles(
-    f: FeatureLike,
-    resolution: number,
-    nameLabel: string,
-    belowLines: string[],
-    labels: GraphicLabels,
-): Style[] {
-    const geom = f.getGeometry() as LineString;
-    if (!geom) return [];
-    const coords = geom.getCoordinates();
-    if (!coords || coords.length < 2) return [];
-
-    const start = coords[0];
-    const end = coords[coords.length - 1];
-    const dx = end[0] - start[0];
-    const dy = end[1] - start[1];
-    const len = Math.hypot(dx, dy);
-    if (len === 0) return [];
-
-    const ux = dx / len;
-    const uy = dy / len;
-    // CCW perpendicular unit vector
-    const px = -uy;
-    const py = ux;
-
-    const drawRes = (f.get('drawingResolution') as number | undefined) ?? resolution;
-    const BAR_HALF_PX = 14;
-    const barHalfMap = BAR_HALF_PX * drawRes;
-
-    const startTop:    Coordinate = [start[0] + px * barHalfMap, start[1] + py * barHalfMap];
-    const startBottom: Coordinate = [start[0] - px * barHalfMap, start[1] - py * barHalfMap];
-    const endTop:      Coordinate = [end[0]   + px * barHalfMap, end[1]   + py * barHalfMap];
-    const endBottom:   Coordinate = [end[0]   - px * barHalfMap, end[1]   - py * barHalfMap];
-
-    const center: Coordinate = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
-
-    const hostility = readHostility(f);
-    const color = getColorByHostility(hostility);
-
-    const styles: Style[] = [];
-
-    styles.push(new Style({
-        geometry: new MultiLineString([
-            [start, end],
-            [startTop, startBottom],
-            [endTop, endBottom],
-        ]),
-        stroke: new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: dashStyle(labels),
-        }),
-    }));
-
-    const rotation = getRotation(start, end);
-    const labelScale = featureLabelScale(f, resolution);
-    const LABEL_GAP_PX = 8;
-    // textBaseline:'bottom' (used by the name label above) reserves descender
-    // space below the baseline, so a name with no descenders floats farther
-    // from the line than the anchor would suggest. The labels below use
-    // textBaseline:'top' which sits right at the anchor with no equivalent
-    // reserved space, so push the first below-line down by the same amount
-    // to match the visual gap above the line. Scales with text scale.
-    const DESCENDER_COMPENSATE_PX = 4;
-    // Vertical spacing between stacked below-line labels (FPF / secondId /
-    // weapon for FinalProtectiveFire). Drop this for tighter stacking, raise
-    // it for more breathing room. Scales with text scale at render time.
-    const LINE_HEIGHT_PX = 20;
-
-    if (nameLabel) {
-        const labelAnchor = offsetAbove(center, start, end, resolution, LABEL_GAP_PX);
-        styles.push(new Style({
-            geometry: new Point(labelAnchor),
-            text: new Text({
-                text: nameLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign: 'center',
-                textBaseline: 'bottom',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    for (let i = 0; i < belowLines.length; i++) {
-        const text = belowLines[i];
-        if (!text) continue;
-        const offsetPx =
-            LABEL_GAP_PX +
-            DESCENDER_COMPENSATE_PX * labelScale +
-            i * LINE_HEIGHT_PX * labelScale;
-        const anchor = offsetBelow(center, start, end, resolution, offsetPx);
-        styles.push(new Style({
-            geometry: new Point(anchor),
-            text: new Text({
-                text,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign: 'center',
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    return styles;
-}
-
-export function linearTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => linearTargetStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function linearTargetStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = getFullLabel(name, labels.label ?? '');
-        return buildLinearTargetStyles(f, resolution, nameLabel, [], labels);
-    };
-}
-
-export function linearSmokeTargetStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => linearSmokeTargetStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function linearSmokeTargetStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = getFullLabel(name, labels.label ?? '');
-        return buildLinearTargetStyles(f, resolution, nameLabel, ['SMOKE'], labels);
-    };
-}
-
-export function finalProtectiveFireStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => finalProtectiveFireStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function finalProtectiveFireStyleFromLabels(_name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const nameLabel = labels.label ?? '';
-        const secondId = labels.secondId ?? '';
-        const weapon = labels.weapon ?? '';
-        const belowLines = ['FPF', secondId, weapon].filter(s => s.length > 0);
-        return buildLinearTargetStyles(f, resolution, nameLabel, belowLines, labels);
-    };
-}
-
-/** ProbableLineOfDeployment is always dashed (present and anticipated). */
 export function probableLineOfDeploymentStyleFunc(): StyleFunction {
-    return (f, resolution) => probableLineOfDeploymentStyleFromLabels(readGraphicLabels(f))(f, resolution);
-}
-
-function probableLineOfDeploymentStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    const identifierLabel = getFullLabel(TacticalGraphicName.ProbableLineOfDeployment, labels.label);
-    return (f, resolution) => {
-        const styles = getDefaultLineStyles(f, resolution, identifierLabel, '', '');
-        // Override the line stroke to always be dashed
-        styles.forEach(s => {
-            const stroke = s.getStroke?.();
-            if (stroke) stroke.setLineDash([12, 8]);
-        });
-        return styles;
-    };
+    const name = TacticalGraphicName.ProbableLineOfDeployment;
+    return asStyleFunction(defaultLinePaint(name, {alwaysDashed: true, showDates: false}), name);
 }
 
 /** Line of Contact: two mirrored half-circle waves — red on top, black on bottom. */
+/** **Ported.** @see scallopPaints.ts, `lineOfContactPaint`. */
 export function lineOfContactStyleFunc(): StyleFunction {
-    return (f, resolution) => lineOfContactStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(lineOfContactPaint());
 }
 
-function lineOfContactStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        const coords = geom?.getCoordinates() ?? [];
-        if (coords.length < 2) return [];
 
-        // Both waves and — the point of this symbol — the gap between them are screen
-        // sized. Baked into the geometry the offset was fixed in metres, so the distance
-        // between the enemy-side and friendly-side lines grew as the map zoomed in and
-        // closed up as it zoomed out.
-        //
-        // One scale drives all three, so the symbol keeps its proportions and simply
-        // gets smaller. This was exempt from `decorationScale` until 2026-08-04, on the
-        // grounds that the separation is what the graphic says and so must hold at every
-        // zoom. What that produced was a 117 px line still wearing 8 px waves 16 px
-        // apart — two separate squiggles rather than one symbol. The separation is not
-        // lost by scaling: held in ratio to the waves it stays legible, which is what
-        // makes the pair read as a line of contact. The failure the exemption was
-        // guarding against — an offset fixed in *metres*, growing as you zoom in — is a
-        // different one, and is not what a shared cap does.
-        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
-        const wavelengthMap = WAVE_WAVELENGTH_PX * scale * resolution;
-        const amplitudeMap = WAVE_AMPLITUDE_PX * scale * resolution;
-
-        // The separation alone does not scale to nothing. Below `DECORATION_MIN_PX` the
-        // waves are dropped, and a shared scale of 0 would put the enemy-side and
-        // friendly-side lines on top of each other — one red line, and no symbol left.
-        // Held at the scale the waves were dropped at, the pair still stands apart:
-        // two plain lines in contact, which is the graphic with its detail removed
-        // rather than the graphic gone. This is the one place the old exemption's
-        // reasoning still holds.
-        const offsetScale = Math.max(scale, DECORATION_MIN_PX / WAVE_AMPLITUDE_PX);
-        const offsetMap = LINE_OF_CONTACT_OFFSET_PX * offsetScale * resolution;
-
-        // Which side is which is a property of the map, not of the drawing gesture: the
-        // enemy-side wave takes the upper side of the line however it was drawn.
-        const {dir} = pathPointAt(coords, pathLength(coords) / 2);
-        const enemySign = upSign(dir);
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-        const labelScale = featureLabelScale(f, resolution);
-        const startRotation = getRotation(start, end);
-        const endRotation = getRotation(end, start);
-        // getRotation flips rotation 180° to keep text upright, so a line drawn right→left
-        // needs its anchors swapped to keep the labels outside the graphic.
-        const reversed = end[0] < start[0];
-        const labelPadPx = 10;
-
-        return [
-            // Enemy-side wave. Routed through the palette rather than a literal 'red' so
-            // it tracks its friendly-side partner; the graphic draws both identities at
-            // once, so the pair has to stay balanced.
-            new Style({
-                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, enemySign, offsetMap)),
-                stroke: new Stroke({color: getColorByHostility(TacticalGraphicHostility.hostileFaker), width: LINE_WIDTH()}),
-            }),
-            // Friendly-side wave
-            new Style({
-                geometry: new LineString(wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)),
-                stroke: new Stroke({color: getDefaultLineColor(), width: LINE_WIDTH()}),
-            }),
-            new Style({
-                geometry: new Point(start),
-                text: new Text({
-                    text: 'LC',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: startRotation,
-                    textAlign: reversed ? 'left' : 'right',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    offsetX: (reversed ? 1 : -1) * labelPadPx,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-            new Style({
-                geometry: new Point(end),
-                text: new Text({
-                    text: 'LC',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: endRotation,
-                    textAlign: reversed ? 'right' : 'left',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    offsetX: (reversed ? -1 : 1) * labelPadPx,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-        ];
-    };
-}
-
+/** **Ported.** @see retrogradePaints.ts, `retrogradeTaskPaint`. */
 export function retroGradeTaskStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let baseLine = coords[0];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = 0;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 = .5;
-        const p1 = baseLine[0];
-        const p2 = baseLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a central gap sized to fit the label at current scale
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const labelWidthPx = getTextWidth(label, labelFont, labelScale);
-        const GAP_PADDING_PX = 4;
-        // A graphic in this family with no doctrinal letter — abatis — has nothing to
-        // carve space for, and the bare padding left a visible nick in an otherwise
-        // continuous route.
-        const halfGapPx = label ? labelWidthPx / 2 + GAP_PADDING_PX : 0;
-        const gapMap = halfGapPx * resolution;
-        const gapRatio = gapMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the echelon in the middle. The label lies along the
-        // segment whose gap holds it — `getRotation` flips it through 180° when
-        // that segment points left, so it never renders upside down.
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: labelFont,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: getRotation(p1, p2),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(retrogradeTaskPaint(label));
 }
 
 /**
@@ -2613,330 +1162,26 @@ export function retroGradeTaskStyleFunc(label: string): StyleFunction {
  * a multi-vertex route would lose every segment after the first — fine for the
  * cane arrows, which are fixed at two points, wrong here.
  */
+/** **Ported.** @see routedTaskPaints.ts, `exfiltratePaint`. */
 export function exfiltrateStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const lines = geom.getCoordinates();
-        const route = lines[0];
-        if (!route || route.length < 2) return [];
-
-        const hostility = readHostility(f);
-        // Everything after the route renders untouched — that is the arrowhead.
-        const outlineSegments: Coordinate[][] = lines.slice(1);
-
-        const p1 = route[0];
-        const p2 = route[1];
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // Gap sized to the rendered glyph plus 4px padding a side. getTextWidth
-        // returns screen pixels, so × resolution once to reach map units.
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const halfGapPx = getTextWidth(label, labelFont, labelScale) / 2 + 4;
-        const gapRatio = segLen > 0 ? (halfGapPx * resolution) / segLen : 0;
-
-        const midGap: Coordinate = [p1[0] + dx * 0.5, p1[1] + dy * 0.5];
-        if (gapRatio > 0 && gapRatio < 0.5) {
-            const at = (t: number): Coordinate => [p1[0] + dx * t, p1[1] + dy * t];
-            outlineSegments.push([p1, at(0.5 - gapRatio)]);
-            // The far side of the gap runs on through every remaining vertex, so a
-            // bent route stays connected.
-            outlineSegments.push([at(0.5 + gapRatio), ...route.slice(1)]);
-        } else {
-            // Label is wider than the segment holding it — render the route
-            // unbroken rather than opening a gap that swallows the segment.
-            outlineSegments.push(route);
-        }
-
-        return [
-            new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    // Lies along the first segment, the one the gap is cut from.
-                    // `getRotation` adds 180° for a right-to-left segment, so the
-                    // "EX" reads the right way up whichever way the route was drawn.
-                    text: label,
-                    font: labelFont,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: getRotation(p1, p2),
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-            new Style({
-                geometry: new MultiLineString(outlineSegments),
-                stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-            }),
-        ];
-    };
+    return asStyleFunction(exfiltratePaint(label));
 }
 
 // ReliefInPlace: top line + curve + bottom line + arrowhead, with the "RIP"
 // label carved into a gap on the top line near the non-arrow end.
+/** **Ported.** @see routedTaskPaints.ts, `reliefInPlacePaint`. */
 export function reliefInPlaceStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 4) return [];
-
-        const topLine = coords[0];
-        const curve = coords[1];
-        const bottomLine = coords[2];
-        const bottomArrow = coords[3];
-        const topArrow = coords[4];
-
-        const hostility = readHostility(f);
-        const stroke = new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()});
-
-        const p1 = topLine[0];
-        const p2 = topLine[1];
-        const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-        if (segLen === 0) return [];
-
-        const labelFont = 'bold 24px sans-serif';
-        const labelScale = featureLabelScale(f, resolution);
-        const textWidthPx = getTextWidth(label, labelFont, labelScale);
-        const halfGapPx = textWidthPx / 2 + 4;
-        const gapRatio = (halfGapPx * resolution) / segLen;
-        const t = 0.2; // gap center at 20% along the top line (near p0)
-
-        const gapA: Coordinate = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t + gapRatio), p1[1] + dy * (t + gapRatio)];
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        let rotation = -Math.atan2(dy, dx);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-
-        return [
-            new Style({geometry: new LineString([p1, gapA]), stroke}),
-            new Style({geometry: new LineString([gapB, p2]), stroke}),
-            new Style({geometry: new LineString(curve as Coordinate[]), stroke}),
-            new Style({geometry: new LineString(bottomLine as Coordinate[]), stroke}),
-            new Style({geometry: new LineString(bottomArrow as Coordinate[]), stroke}),
-            ...(topArrow ? [new Style({geometry: new LineString(topArrow as Coordinate[]), stroke})] : []),
-            new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: label,
-                    font: labelFont,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            }),
-        ];
-    };
+    return asStyleFunction(reliefInPlacePaint(label));
 }
 
+/** **Ported.** @see blockPaints.ts, `breachPaint`. */
 export function breachStyleFunc(label: string): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiLineString;
-        const coords = geom.getCoordinates();
-
-        let verticalLine = coords[coords.length - 1];
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        let midSegmentIndex = coords.length - 1;
-
-        for (let i = 0; i < coords.length; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push(coords[i]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 = .5;
-        const p1 = verticalLine[0];
-        const p2 = verticalLine[1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a central gap in that opening side
-        const GAP_PX = 10; // px gap on each side of the dot
-        const gapMap = GAP_PX * resolution; // map-unit gap
-        const gapRatio = gapMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 6) build styles for the echelon in the middle
-        const textStyle = new Style({
-            geometry: new Point(midGap),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: 0,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale: featureGraphicLabelScale(f, resolution),
-                stroke: getHaloStroke(),
-            }),
-        });
-        styles.push(textStyle);
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(breachPaint(label));
 }
 
+/** **Ported.** @see blockPaints.ts, `blockPaint`. */
 export function blockStyleFunc(label: string): StyleFunction {
-    return (f: FeatureLike, resolution: number) => {
-        const geom = f.getGeometry();
-        let coords;
-        if (!geom) return;
-
-        if (geom instanceof LineString) coords = geom.getCoordinates();
-        else if (geom instanceof MultiLineString) coords = geom.getCoordinates()[0];
-        else return;
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-        if (geom instanceof MultiLineString) {
-            outlineSegments.push(...geom.getCoordinates().slice(1, geom.getCoordinates().length));
-        }
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-
-        // Compute the total baseline vector (start → end)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        // Project each vertex onto that baseline to get cumulative "linear" distance
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen; // scalar projection
-        });
-
-        // 4️⃣ Normalize to 0 → baseLen range
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const normalizedProjections = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        // Find segment that crosses the projected midpoint (0.5)
-        const half = 0.5;
-        let midSegmentIndex = 0;
-        for (let i = 0; i < normalizedProjections.length - 1; i++) {
-            if (normalizedProjections[i] <= half && normalizedProjections[i + 1] >= half) {
-                midSegmentIndex = i;
-                break;
-            }
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push([coords[i], coords[i + 1]]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 =
-            (half - normalizedProjections[midSegmentIndex]) /
-            (normalizedProjections[midSegmentIndex + 1] - normalizedProjections[midSegmentIndex]);
-
-        const p1 = coords[midSegmentIndex];
-        const p2 = coords[midSegmentIndex + 1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (!label) {
-            // The table 5-19 obstacle effect carries no letter, so there is no
-            // hole to leave for one. The gap below is not label-width alone —
-            // it adds 4px of padding a side — so an empty label would still
-            // break the shaft around nothing. Push the segment unbroken.
-            outlineSegments.push([p1, p2]);
-        } else {
-            // Gap: sized to fit the actually rendered label glyph plus 4px
-            // padding per side. getTextWidth returns screen pixels at the
-            // current OL text scale, so we convert to map units with
-            // `* resolution` — this keeps the gap tight around the label
-            // regardless of zoom or of how wide the graphic's front line is.
-            // Measure with the same 24px font that the text style renders.
-            const labelScale = featureGraphicLabelScale(f, resolution);
-            const labelWidthPx = getTextWidth(label, 'bold 24px sans-serif', labelScale);
-            const gapMap = (labelWidthPx / 2 + 4) * resolution;
-            const gapRatio = gapMap / segLen;
-
-            const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-            const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-            let rotation = -Math.atan2(dy, dx);
-
-            // Keep text upright
-            if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-                rotation += Math.PI;
-            }
-            // Normalize to [-π, π)
-            if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-            // keep the two side pieces of that segment
-            outlineSegments.push([p1, gapA], [gapB, p2]);
-
-            // 5) compute the center of the gap for the dot
-            const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-            // 6) build styles for the label in the middle.
-            // Use the same 24px base font as breachStyleFunc/clearStyleFunc so the
-            // ratio-locked block-family graphics render with matching label sizes.
-            const textStyle = new Style({
-                geometry: new Point(midGap),
-                text: new Text({
-                    text: label,
-                    font: 'bold 24px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                }),
-            });
-            styles.push(textStyle);
-        }
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
+    return asStyleFunction(blockPaint(label));
 }
 
 /**
@@ -2962,8 +1207,9 @@ function firePositionStyles(f: FeatureLike): Style[] {
  * `getAttackByFireSymbol` as a MultiLineString:
  *   [0] bracket (feather → bar → feather), [1] shaft, [2] arrowhead.
  */
-export function attackByFireStyleFunc(): StyleFunction {
-    return f => firePositionStyles(f);
+/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
+export function attackByFireStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
 }
 
 /**
@@ -2980,288 +1226,17 @@ export function supportByFireStyleFunc(): StyleFunction {
     return f => firePositionStyles(f);
 }
 
+/** **Ported.** @see midLabelLinePaints.ts, `coordinatedFireLinePaint`. */
 export function coordinatedFireLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => coordinatedFireLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(coordinatedFireLinePaint(name), name);
 }
 
-function coordinatedFireLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const topLabel = getFullLabel(name, labels.label ?? '');
-    const bottomLabel = getDateLabel(labels);
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
 
-        const styles: Style[] = [];
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-
-        // Compute the total baseline vector (start → end)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        // Project each vertex onto that baseline to get cumulative "linear" distance
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen; // scalar projection
-        });
-
-        // 4️⃣ Normalize to 0 → baseLen range
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const normalizedProjections = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        // Find segment that crosses the projected midpoint (0.5)
-        const half = 0.5;
-        let midSegmentIndex = 0;
-        for (let i = 0; i < normalizedProjections.length - 1; i++) {
-            if (normalizedProjections[i] <= half && normalizedProjections[i + 1] >= half) {
-                midSegmentIndex = i;
-                break;
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 =
-            (half - normalizedProjections[midSegmentIndex]) /
-            (normalizedProjections[midSegmentIndex + 1] - normalizedProjections[midSegmentIndex]);
-
-        const p1 = coords[midSegmentIndex];
-        const p2 = coords[midSegmentIndex + 1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a gap: infiltration formula — half label width + 8px padding
-        const cflScale = featureLabelScale(f, resolution);
-        const cflGapMap = segLen * 0.35 + 8 * resolution;
-        const gapRatio = cflGapMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // 8px perpendicular offset from line to nearest text edge
-        const offsetMap = 8 * resolution;
-        // Perpendicular unit vector — normalized to always point "above" (north),
-        // so labels are correct regardless of drawing direction.
-        const len = Math.hypot(dx, dy);
-        let nx = -dy / len;
-        let ny = dx / len;
-        if (ny < 0 || (ny === 0 && nx < 0)) { nx = -nx; ny = -ny; }
-        let topLabelCoordinate = [midGap[0] + nx * offsetMap, midGap[1] + ny * offsetMap];
-        let bottomLabelCoordinate = [midGap[0] - nx * offsetMap, midGap[1] - ny * offsetMap];
-
-        styles.push(new Style(
-            {
-                geometry: new Point(topLabelCoordinate), // dummy point
-                text: new Text({
-                    text: topLabel,
-                    font: fontStyle,
-                    //font: 'bold 20px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'bottom',
-                    scale: cflScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-        styles.push(new Style(
-            {
-                geometry: new Point(bottomLabelCoordinate), // dummy point
-                text: new Text({
-                    text: bottomLabel,
-                    font: fontStyle,
-                    //font: 'bold 20px sans-serif',
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'top',
-                    scale: cflScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-
-        const hostility = readHostility(f);
-        const outlineStyle = new Style({
-            geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        });
-        styles.push(outlineStyle);
-        if (labels.status && labels.status === TacticalGraphicStatus.planned) {
-            // Override the line stroke to always be dashed
-            styles.forEach(s => {
-                const stroke = s.getStroke?.();
-                if (stroke) stroke.setLineDash([12, 8]);
-            });
-        }
-
-        return styles;
-    };
-}
-
+/** **Ported.** @see midLabelLinePaints.ts, `engineerWorkLinePaint`. */
 export function engineerWorkLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => engineerWorkLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(engineerWorkLinePaint(name), name);
 }
 
-function engineerWorkLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const mainLabelText = getLabel(name);          // "EWL"
-    const midTopText   = (!isEmpty(labels.label) ? labels.label : '') + (!isEmpty(labels.countryCode) ? ' ' + labels.countryCode : '');       // name / field T (optional)
-    const midBotText   = (!isEmpty(labels.secondId) ? labels.secondId : '') + (!isEmpty(labels.secondCountryCode) ? ' ' + labels.secondCountryCode : ''); // country code / field AS (optional)
-
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-        if (coords.length < 2) return [];
-
-        const styles: Style[] = [];
-        const scale = featureLabelScale(f, resolution);
-
-        // ── End labels ("EWL" on the line above each endpoint) ────────────
-        const start     = coords[0];
-        const startNext = coords[1];
-        const end       = coords[coords.length - 1];
-        const endPrev   = coords[coords.length - 2];
-
-        const rotStart = getRotation(start, startNext);
-        const rotEnd   = getRotation(endPrev, end);
-
-        const startGoesRight = startNext[0] >= start[0];
-        const endGoesRight   = end[0]       >= endPrev[0];
-
-        styles.push(new Style({
-            geometry: new Point(offsetAbove(start, start, startNext, resolution, 8)),
-            text: new Text({
-                text: mainLabelText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: rotStart,
-                textAlign: startGoesRight ? 'left' : 'right',
-                textBaseline: 'bottom',
-                scale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        styles.push(new Style({
-            geometry: new Point(offsetAbove(end, endPrev, end, resolution, 8)),
-            text: new Text({
-                text: mainLabelText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: rotEnd,
-                textAlign: endGoesRight ? 'right' : 'left',
-                textBaseline: 'bottom',
-                scale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        // ── Midpoint: find the projected centre of the line ────────────────
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen;
-        });
-
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const norm = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        let midIdx = 0;
-        for (let i = 0; i < norm.length - 1; i++) {
-            if (norm[i] <= 0.5 && norm[i + 1] >= 0.5) { midIdx = i; break; }
-        }
-
-        const p1 = coords[midIdx];
-        const p2 = coords[midIdx + 1];
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-        const t1 = (0.5 - norm[midIdx]) / (norm[midIdx + 1] - norm[midIdx]);
-        const midPt: Coordinate = [p1[0] + dx * t1, p1[1] + dy * t1];
-
-        let rotation = -Math.atan2(dy, dx);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // Perpendicular unit vector always pointing "above" (north-ward)
-        let nx = -dy / segLen;
-        let ny =  dx / segLen;
-        if (ny < 0 || (ny === 0 && nx < 0)) { nx = -nx; ny = -ny; }
-
-        const offsetMap = 8 * resolution;
-
-        // ── Middle-top: name (field T) ─────────────────────────────────────
-        if (midTopText) {
-            styles.push(new Style({
-                geometry: new Point([midPt[0] + nx * offsetMap, midPt[1] + ny * offsetMap]),
-                text: new Text({
-                    text: midTopText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'bottom',
-                    scale,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-
-        // ── Middle-bottom: country code / identifier2 (field AS) ──────────
-        if (midBotText) {
-            styles.push(new Style({
-                geometry: new Point([midPt[0] - nx * offsetMap, midPt[1] - ny * offsetMap]),
-                text: new Text({
-                    text: midBotText,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation,
-                    textAlign: 'center',
-                    textBaseline: 'top',
-                    scale,
-                    stroke: getHaloStroke(),
-                }),
-            }));
-        }
-
-        // ── Line ──────────────────────────────────────────────────────────
-        const hostility = readHostility(f);
-        styles.push(new Style({
-            geometry: geom,
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        }));
-        if (labels.status && labels.status === TacticalGraphicStatus.planned) {
-            // Override the line stroke to always be dashed
-            styles.forEach(s => {
-                const stroke = s.getStroke?.();
-                if (stroke) stroke.setLineDash([12, 8]);
-            });
-        }
-        return styles;
-    };
-}
 
 /**
  * ## Obstacle crenellation
@@ -3293,9 +1268,6 @@ const OBSTACLE_TOOTH_GAP_PX = 10;
  * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
  * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
  */
-const FORTIFIED_MERLON_PX = 15;
-const FORTIFIED_CRENEL_PX = 15;
-const FORTIFIED_HEIGHT_PX = 11;
 const WAVE_WAVELENGTH_PX = 15;
 const WAVE_AMPLITUDE_PX = 8;
 const LINE_OF_CONTACT_OFFSET_PX = 16;
@@ -3438,41 +1410,6 @@ function upSign(dir: Coordinate): number {
     return dir[0] >= 0 ? 1 : -1;
 }
 
-/**
- * Square merlons along a path — the fortified line and area.
- *
- * The tooth is a rectangle standing off the baseline, so the path runs along the
- * baseline for a crenel, up, across a merlon, down, and on. Emitted as one connected
- * path: the generator used to hand back interleaved gap and tooth sub-lines, which drew
- * identically but had to be reassembled by anything that wanted the outline.
- */
-function castellatedPath(path: Coordinate[], merlonMap: number, crenelMap: number, heightMap: number, side: number | 'up'): Coordinate[] {
-    const total = pathLength(path);
-    const pattern = merlonMap + crenelMap;
-    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
-
-    const count = Math.max(1, Math.round(total / pattern));
-    const spacing = total / count;
-    const merlon = spacing * (merlonMap / pattern);
-
-    const out: Coordinate[] = [path[0]];
-    for (let i = 0; i < count; i++) {
-        const startAt = i * spacing + (spacing - merlon) / 2;
-        const left = pathPointAt(path, startAt);
-        const right = pathPointAt(path, startAt + merlon);
-        const sign = side === 'up' ? upSign(left.dir) : side;
-        const ln: Coordinate = [-left.dir[1] * sign, left.dir[0] * sign];
-        const rn: Coordinate = [-right.dir[1] * sign, right.dir[0] * sign];
-        out.push(
-            left.point,
-            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
-            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
-            right.point,
-        );
-    }
-    out.push(path[path.length - 1]);
-    return out;
-}
 
 /** Steps per bump. Enough that a semicircle reads as a curve rather than a tent. */
 const WAVE_STEPS = 12;
@@ -3621,131 +1558,13 @@ function crenellatedPath(path: Coordinate[], heightMap: number, baseMap: number,
     return out;
 }
 
-/**
- * The crenellated ring for an obstacle area.
- *
- * `outward` is a geometric intent, and the side of travel it lands on depends on the
- * ring's winding — which nothing normalises, since the ring comes back in the order the
- * user clicked the corners. Reconciling the two here is what keeps an area drawn
- * anticlockwise from turning its teeth inside out.
- */
-function obstacleRing(ring: Coordinate[], resolution: number, outward: boolean): Coordinate[] {
-    const {heightMap, baseMap, gapMap} = obstacleToothSize(ring, true, resolution);
-    if (heightMap <= 0) return ring;
-    const outwardIsLeft = ringIsClockwise(ring);
-    const sideSign = outward === outwardIsLeft ? 1 : -1;
-    return crenellatedPath(ring, heightMap, baseMap, gapMap, sideSign);
-}
 
-/** Index of the segment containing the halfway point by length — the centre-most one. */
-function centreSegmentIndex(coords: Coordinate[]): number {
-    const lengths: number[] = [];
-    let total = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
-        lengths.push(len);
-        total += len;
-    }
-    let travelled = 0;
-    for (let i = 0; i < lengths.length; i++) {
-        travelled += lengths[i];
-        if (travelled >= total / 2) return i;
-    }
-    return Math.max(0, lengths.length - 1);
-}
 
+/** **Ported.** @see paintFunctions.ts, `obstacleLinePaint`. */
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => obstacleLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(obstacleLinePaint(name), name);
 }
 
-function obstacleLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        const coords = geom.getCoordinates();
-        const styles: Style[] = [];
-
-        if (coords.length < 2) return styles;
-
-        // ── 1. The centre-most drawn segment ──────────────────────────────
-        // The geometry *is* the drawn line now — the teeth are added below, in screen
-        // space — so its own segments are the drawn ones. While the teeth were baked in,
-        // every third vertex here was a tooth apex, and finding the middle of the drawn
-        // line meant carrying a copy of it on the feature.
-        const segIdx = centreSegmentIndex(coords);
-        const p1 = coords[segIdx];
-        const p2 = coords[segIdx + 1];
-
-        const segDx = p2[0] - p1[0];
-        const segDy = p2[1] - p1[1];
-        const segLength = Math.hypot(segDx, segDy);
-        if (segLength === 0) return styles;
-
-        const dir: Coordinate = [segDx / segLength, segDy / segLength];
-        const mid: Coordinate = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-
-        // ── 2. The side that is down ──────────────────────────────────────
-        // Both perpendiculars are equally "beside the line"; the one with a negative
-        // northing is the one below it on screen. Picking by the segment's own direction
-        // is what made the label change sides when the same line was drawn right-to-left
-        // — the direction of travel reverses, and every perpendicular derived from it
-        // with it. A vertical line has no lower side, so the tie breaks to the east.
-        let normal: Coordinate = [-dir[1], dir[0]];
-        if (normal[1] > 0 || (normal[1] === 0 && normal[0] < 0)) {
-            normal = [-normal[0], -normal[1]];
-        }
-
-        // ── 3. Stand off the line — a constant, in pixels ─────────────────
-        // The teeth take the upper side and the label the lower, so it has only the line
-        // itself to clear, and both terms are screen-sized: text does not scale with the
-        // map. This used to be a scan of the rendered geometry to discover how far
-        // map-unit teeth happened to reach, which is what sent the label a screen away on
-        // a line that doubled back over itself.
-        const obsScale = featureLabelScale(f, resolution);
-        const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * obsScale;
-        const offsetMap = (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * resolution;
-
-        const labelPoint: Coordinate = [
-            mid[0] + normal[0] * offsetMap,
-            mid[1] + normal[1] * offsetMap,
-        ];
-
-        // ── 4. Read along the segment, always upright ─────────────────────
-        let rotation = -Math.atan2(dir[1], dir[0]);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-
-        styles.push(new Style(
-            {
-                geometry: new Point(labelPoint), // dummy point
-                text: new Text({
-                    text: label,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: obsScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-
-        // The line, crenellated in screen space. The teeth take the upper side whichever
-        // way the line was drawn, and the label sits below, so the two never compete.
-        const {heightMap, baseMap, gapMap} = obstacleToothSize(coords, false, resolution);
-        const hostility = readHostility(f);
-        styles.push(new Style({
-            geometry: new LineString(crenellatedPath(coords, heightMap, baseMap, gapMap, 'up')),
-            stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-        }));
-
-        return styles;
-    };
-}
 
 function getPointAlongSegment(coord1: number[], coord2: number[], ratio: number) {
     return [
@@ -3754,43 +1573,11 @@ function getPointAlongSegment(coord1: number[], coord2: number[], ratio: number)
     ];
 }
 
+/** **Ported.** @see scallopPaints.ts, `arrowheadedLinePaint` — the no-letter case. */
 export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => ferryCrossingStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(arrowheadedLinePaint(), name);
 }
 
-function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
-        const geom = f.getGeometry();
-        // One geometry-less style used to cover the whole collection. The two
-        // arrowheads have to be drawn separately now so they can be re-sized to
-        // screen pixels rather than following the dragged `size`.
-        if (!(geom instanceof GeometryCollection)) {
-            return new Style({fill: new Fill({color}), stroke: lineStroke});
-        }
-        const subs = geom.getGeometries();
-        const line = subs.find(g => g instanceof LineString) as LineString | undefined;
-        const path = line?.getCoordinates() ?? [];
-
-        const styles: Style[] = [];
-        for (const sub of subs) {
-            if (sub instanceof Polygon) {
-                const head = screenSizedArrowHead(sub, path, resolution);
-                if (head) {
-                    styles.push(new Style({
-                        geometry: head,
-                        fill: new Fill({color}),
-                        stroke: new Stroke({color, width: LINE_WIDTH()}),
-                    }));
-                }
-            } else {
-                styles.push(new Style({geometry: sub, stroke: lineStroke}));
-            }
-        }
-        return styles;
-    };
-}
 
 /**
  * TacticalFix — same fill/stroke treatment as `ferryCrossingStyleFunc`, plus
@@ -3804,110 +1591,21 @@ function ferryCrossingStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  *   stays source-compatible; the table 5-19 obstacle effect passes '' and gets
  *   the same zigzag with no glyph.
  */
+/**
+ * **Ported.** @see scallopPaints.ts, `arrowheadedLinePaint`.
+ *
+ * @param label the doctrinal letter. Defaults to "F" so the published signature
+ *   stays source-compatible; the table 5-19 obstacle effect passes '' and gets
+ *   the same zigzag with no glyph.
+ */
 export function tacticalFixStyleFunc(label: string = 'F'): StyleFunction {
-    return (f, resolution) => tacticalFixStyleFromLabels(label, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(arrowheadedLinePaint(label));
 }
 
-function tacticalFixStyleFromLabels(label: string, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const styles: Style[] = [];
-        const color = readHostilityColor(f);
-        const lineStroke = new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)});
 
-        const geom = f.getGeometry();
-        let lineCoords: Coordinate[] | undefined;
-        if (geom instanceof GeometryCollection) {
-            const subs = geom.getGeometries();
-            const line = subs.find(g => g instanceof LineString) as LineString | undefined;
-            lineCoords = line?.getCoordinates();
-            // The arrowhead is drawn separately from the zigzag so it can hold a
-            // screen size instead of following the drawn line's length.
-            for (const sub of subs) {
-                if (sub instanceof Polygon) {
-                    const head = screenSizedArrowHead(sub, lineCoords ?? [], resolution);
-                    if (head) {
-                        styles.push(new Style({
-                            geometry: head,
-                            fill: new Fill({color}),
-                            stroke: new Stroke({color, width: LINE_WIDTH()}),
-                        }));
-                    }
-                } else {
-                    styles.push(new Style({geometry: sub, stroke: lineStroke}));
-                }
-            }
-        } else {
-            styles.push(new Style({fill: new Fill({color}), stroke: lineStroke}));
-            if (geom instanceof LineString) lineCoords = geom.getCoordinates();
-        }
-        if (!lineCoords || lineCoords.length < 2) return styles;
-
-        // Derive the F position straight from the geometry: the first segment
-        // runs from the line start (lineCoords[0]) to the first triangle's
-        // first vertex (lineCoords[1]). Anchoring at that segment's midpoint
-        // keeps the label glued in place across zooms — it's no longer offset
-        // by `25 × resolution`, which used to drift as zoom changed.
-        const segStart = lineCoords[0];
-        const segEnd = lineCoords[1];
-        const labelAnchor: Coordinate = [
-            (segStart[0] + segEnd[0]) / 2,
-            (segStart[1] + segEnd[1]) / 2,
-        ];
-
-        // Rotation/scale come from the full line so the F is upright with the
-        // graphic and its size tracks the user-drawn length.
-        const start = lineCoords[0];
-        const end = lineCoords[lineCoords.length - 1];
-        const dx = end[0] - start[0];
-        const dy = end[1] - start[1];
-        const len = Math.hypot(dx, dy);
-        if (len === 0) return styles;
-
-        // Everything past here builds the letter. Unlike the block family this
-        // one cuts no gap for it, so the twin just stops.
-        if (!label) return styles;
-
-        let rotation = -Math.atan2(dy, dx);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // Sized to render ~22.5px tall at the 145px min line length, matching
-        // the block-family label size at minimum — and capped at the same
-        // ceiling they are, so a long Fix does not grow an outsized "F".
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        const lenPx = len / resolution;
-        const K = 0.10;
-        const scale = Math.min(maxGraphicLabelScale(), sizeFactor * K * lenPx / BASE_FONT_SIZE_PX);
-
-        styles.push(new Style({
-            geometry: new Point(labelAnchor),
-            text: new Text({
-                text: label,
-                font: 'bold 24px sans-serif',
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                rotation,
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale,
-            }),
-        }));
-
-        return styles;
-    };
-}
-
+/** **Ported.** @see paintFunctions.ts, `areaFillPaint`. */
 export function defaultStyleFunc(): StyleFunction {
-    return (f, resolution) => {
-        let color = readHostilityColor(f);
-        return new Style({
-            fill: new Fill({color: color}),
-            stroke: new Stroke({
-                color: color,
-                width: LINE_WIDTH(),
-            }),
-        });
-    };
+    return asStyleFunction(areaFillPaint());
 }
 
 /**
@@ -3922,26 +1620,19 @@ export function defaultStyleFunc(): StyleFunction {
  * smaller one; past a ~68 px radius the cap is what decides, so the divisor
  * only shapes how the label grows on the way there.
  */
+/** **Ported.** @see missionTaskPaints.ts, `baseDefenseZoneLabelPaint`. */
 export function baseDefenseZoneLabelStyleFn(): StyleFunction {
-    return (feature, resolution) => {
-        const geom = feature.getGeometry() as Point;
-        const size = feature.get('graphicSize') as number | undefined;
-        const radiusPx = size && size > 0 ? size / resolution : 0;
-        const SCALE_DIVISOR = 45;
-        const scale = Math.min(maxGraphicLabelScale(), Math.max(0.1, radiusPx / SCALE_DIVISOR));
-        return [new Style({
-            geometry: geom,
-            text: new Text({
-                text: 'BDZ',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textAlign: 'center',
-                textBaseline: 'middle',
-                scale,
-                stroke: getHaloStroke(),
-            }),
-        })];
-    };
+    return asStyleFunction(baseDefenseZoneLabelPaint());
+}
+
+/** **Ported.** @see missionTaskPaints.ts, `pursuitPaint`. */
+export function pursuitStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(pursuitPaint(name), name);
+}
+
+/** **Ported.** @see missionTaskPaints.ts, `movementToContactPaint`. */
+export function movementToContactStyleFunc(): StyleFunction {
+    return asStyleFunction(movementToContactPaint());
 }
 
 /**
@@ -3950,13 +1641,9 @@ export function baseDefenseZoneLabelStyleFn(): StyleFunction {
  * LineString of 4 points produced by `FightingPosition.generateGraphics`,
  * so a single Stroke is enough — no fill, no per-point label.
  */
-export function fightingPositionStyleFunc(): StyleFunction {
-    return (f) => {
-        const color = readHostilityColor(f);
-        return new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH()}),
-        });
-    };
+/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
+export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
 }
 
 /**
@@ -3967,63 +1654,9 @@ export function fightingPositionStyleFunc(): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** **Ported.** @see obstaclePaints.ts, `fortifiedLinePaint`. */
 export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => fortifiedLineStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
-}
-
-function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const label = getFullLabel(name, labels.label ?? '');
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        if (!geom) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const styles: Style[] = [];
-
-        // Merlons in screen pixels, on the upper side of each segment whichever way the
-        // line was drawn. The generator used to hand back interleaved gap and tooth
-        // sub-lines, sized at the drawing resolution; the geometry is the drawn line now.
-        const scale = decorationScale(coords, false, resolution, FORTIFIED_HEIGHT_PX);
-        styles.push(new Style({
-            geometry: new LineString(castellatedPath(
-                coords,
-                FORTIFIED_MERLON_PX * scale * resolution,
-                FORTIFIED_CRENEL_PX * scale * resolution,
-                FORTIFIED_HEIGHT_PX * scale * resolution,
-                'up',
-            )),
-            stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashStyle(labels)}),
-        }));
-
-        if (!label) return styles;
-
-        // The label goes under the centre-most drawn segment — the merlons take the upper
-        // side, so the two never compete.
-        const segIdx = centreSegmentIndex(coords);
-        const a = coords[segIdx];
-        const b = coords[segIdx + 1];
-        const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        const labelScale = featureLabelScale(f, resolution);
-        const labelAnchor = offsetBelow(mid, a, b, resolution, 8);
-
-        styles.push(new Style({
-            geometry: new Point(labelAnchor),
-            text: new Text({
-                text: label,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation: getRotation(a, b),
-                textAlign: 'center',
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        return styles;
-    };
+    return asStyleFunction(fortifiedLinePaint(name), name);
 }
 
 
@@ -4055,7 +1688,6 @@ function fortifiedLineStyleFromLabels(name: TacticalGraphicName, labels: Graphic
  * would fit. Drawn to the limit the disc meets the two teeth bounding it, and with the
  * teeth filled the three merge into one black mass.
  */
-const MINE_CLEARANCE = 0.5;
 
 /**
  * The three anti-tank ditches: triangular teeth along the drawn route, with a mine nested
@@ -4071,630 +1703,48 @@ const MINE_CLEARANCE = 0.5;
  *
  * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
  */
+/** **Ported.** @see obstaclePaints.ts, `antiTankDitchPaint`. */
 export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!geom) return [];
-        const path: Coordinate[] =
-            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
-        if (path.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const {filled, mines} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
-        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [new Style({geometry: new LineString(path), stroke: stroke()})];
-
-        const scale = decorationScale(path, false, resolution, ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO);
-        const width = ANTI_TANK_TOOTH_PX * scale * resolution;
-        if (width <= 0) return styles;
-
-        const depth = width * ANTI_TANK_HEIGHT_RATIO;
-        const total = pathLength(path);
-
-        // Every slot holds a tooth, so consecutive teeth share a base corner and their bases
-        // run edge to edge along the route. Mines go in the notches *between* them, which is
-        // why the run cannot begin or end with one: a notch needs a tooth either side.
-        const teeth = Math.floor(total / width);
-        if (teeth < 1 || (mines && teeth < 2)) return styles;
-
-        // Centre the run, so the pattern sits on the route rather than flush to one end.
-        const lead = (total - teeth * width) / 2;
-
-        /** A point `along` the route, `off` metres to the tooth side of it. */
-        const at = (along: number, off: number): Coordinate | null => {
-            const p = walkPath(path, Math.min(Math.max(along, 0), total));
-            if (!p) return null;
-            const [tx, ty] = p.tangent;
-            return [p.point[0] - ty * off, p.point[1] + tx * off];
-        };
-
-        for (let i = 0; i < teeth; i++) {
-            const a = at(lead + i * width, 0);
-            const b = at(lead + (i + 1) * width, 0);
-            const apex = at(lead + (i + 0.5) * width, -depth);
-            if (!a || !b || !apex) continue;
-            const ring = [a, b, apex, a];
-            styles.push(
-                new Style({
-                    geometry: filled ? new Polygon([ring]) : new LineString(ring),
-                    // A filled tooth is *not* also stroked. A stroke straddles the edge it
-                    // draws, so it inflates the shape by half a line width all round, and
-                    // two teeth sharing a base corner then overlap by a full stroke instead
-                    // of just meeting. The fill already states the shape exactly.
-                    stroke: filled ? undefined : stroke(),
-                    fill: filled ? new Fill({color}) : undefined,
-                }),
-            );
-        }
-
-        if (!mines) return styles;
-
-        // The notch two touching teeth leave is an upward triangle: apex on the route where
-        // their bases meet, widening to a full tooth at the apex depth. So the mine's size
-        // is bounded, not chosen - a disc centred `mineDepth` down touches both edges at
-        // `mineDepth * sin(halfAngle)`. MINE_CLEARANCE holds it well inside that, because a
-        // disc drawn to the limit meets the teeth either side and the three merge into one
-        // black mass with the teeth being filled.
-        const halfAngleSin = width / 2 / Math.hypot(width / 2, depth);
-        const mineDepth = depth * 0.72;
-        const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
-
-        for (let i = 1; i < teeth; i++) {
-            const centre = at(lead + i * width, -mineDepth);
-            if (!centre) continue;
-            const ring: Coordinate[] = [];
-            for (let d = 0; d <= 360; d += 20) {
-                const t = (d * Math.PI) / 180;
-                ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
-            }
-            // Mines are mines, not outlines of one - always solid, whatever the teeth do,
-            // and unstroked for the same reason the filled teeth are: an outline would eat
-            // into the white gap that keeps the disc legible against the teeth beside it.
-            styles.push(new Style({geometry: new Polygon([ring]), fill: new Fill({color})}));
-        }
-
-        return styles;
-    };
+    return asStyleFunction(antiTankDitchPaint(name), name);
 }
 
+/** **Ported.** @see missionTaskPaints.ts, `barSymbolPaint`. */
 export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const bars = geom.getCoordinates();
-        if (bars.length < 2) return [];
-
-        const color = readHostilityColor(f);
-        const dashed = BAR_SYMBOL_DASHES[name] ?? [];
-        // Pixels, not map units. OL's lineDash is canvas pixels, so multiplying by
-        // resolution made the dash [200, 140] px on a bar ~50 px long - the whole bar fell
-        // inside one "on" segment and every state rendered solid. Matches dashStyle().
-        const dash = [12, 8];
-
-        return bars.map(
-            (bar, i) =>
-                new Style({
-                    geometry: new LineString(bar),
-                    stroke: new Stroke({color, width: LINE_WIDTH(), lineDash: dashed[i] ? dash : undefined}),
-                }),
-        );
-    };
+    return asStyleFunction(barSymbolPaint(name), name);
 }
 
+/** **Ported.** @see obstaclePaints.ts, `wireObstaclePaint`. */
 export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry();
-        if (!geom) return [];
-        const path: Coordinate[] =
-            geom instanceof MultiLineString ? geom.getCoordinates()[0] ?? [] : ((geom as LineString).getCoordinates?.() ?? []);
-        if (path.length < 2) return [];
-
-        const style = WIRE_STYLES[name] ?? DEFAULT_WIRE_STYLE;
-        const color = readHostilityColor(f);
-        // No lineDash: none of the nine has a planned form, so there is no status to read.
-        const stroke = () => new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [];
-
-        const scale = decorationScale(path, false, resolution, WIRE_MARK_PX * style.height);
-        const width = WIRE_MARK_PX * scale * resolution;
-        const height = width * style.height;
-        // Where each wire sits relative to the marks. Low wire fence and single concertina
-        // hang one underneath so the marks sit on it; high wire fence and triple strand add
-        // a second on top; double strand puts its second one straight through the middle,
-        // striking the O through. Everything else runs a single wire through the centre.
-        const railOffset = {under: -height / 2, centre: 0, over: height / 2};
-
-        // Wire Unspecified has no rail: there the marks *are* the symbol. If the marks have
-        // scaled away, though, draw the route anyway — otherwise the graphic vanishes and
-        // the user cannot find what they drew.
-        if (style.rail || width <= 0) {
-            for (const at of style.railsAt ?? ['centre'])
-                styles.push(new Style({geometry: new LineString(parallelPath(path, railOffset[at])), stroke: stroke()}));
-        }
-        if (width <= 0) return styles;
-
-        const total = pathLength(path);
-        const innerGap = (style.innerGap ?? 0) * width;
-        const step = width + innerGap;
-        const period = style.perGroup * width + (style.perGroup - 1) * innerGap + style.gap * width;
-        const marks: Coordinate[][] = [];
-        for (let start = period / 2; start < total; start += period) {
-            for (let i = 0; i < style.perGroup; i++) {
-                const d = start + i * step;
-                if (d + width / 2 > total) break;
-                const at = walkPath(path, d);
-                if (!at) continue;
-                const [tx, ty] = at.tangent;
-                const [nx, ny] = [-ty, tx];
-                const corner = (u: number, v: number): Coordinate => [
-                    at.point[0] + tx * u + nx * v,
-                    at.point[1] + ty * u + ny * v,
-                ];
-                if (style.mark === 'cross') {
-                    marks.push([corner(-width / 2, height / 2), corner(width / 2, -height / 2)]);
-                    marks.push([corner(-width / 2, -height / 2), corner(width / 2, height / 2)]);
-                } else {
-                    // The concertina O, closed: 360 lands back on 0 so the ring joins up.
-                    const ring: Coordinate[] = [];
-                    for (let a = 0; a <= 360; a += 20) {
-                        const t = (a * Math.PI) / 180;
-                        ring.push(corner((Math.cos(t) * width) / 2, (Math.sin(t) * height) / 2));
-                    }
-                    marks.push(ring);
-                }
-            }
-        }
-        if (marks.length) styles.push(new Style({geometry: new MultiLineString(marks), stroke: stroke()}));
-        return styles;
-    };
+    return asStyleFunction(wireObstaclePaint(name), name);
 }
 
-
-/**
- * A true parallel of `path`, `d` metres to its left (negative for its right).
- *
- * Offsets each vertex along the *bisector* of its two segments, lengthened by
- * `1 / cos(half-angle)` - the standard miter. The shared `offsetPath` takes the direction
- * at the vertex instead, which is one of the two adjoining segments, so on a bend its two
- * sides stop being parallel: the under-wire and over-wire of a high wire fence visibly
- * splayed. That function is left alone because the FLOT and line-of-contact scallops are
- * built on its behaviour.
- *
- * The miter is capped: at a hairpin `1 / cos(half-angle)` runs away to infinity, and an
- * uncapped spike is worse than a slightly pinched corner.
- */
-function parallelPath(path: Coordinate[], d: number): Coordinate[] {
-    if (!d || path.length < 2) return path;
-
-    const normals: Coordinate[] = [];
-    for (let i = 0; i + 1 < path.length; i++) {
-        const [dx, dy] = [path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]];
-        const len = Math.hypot(dx, dy) || 1;
-        normals.push([-dy / len, dx / len]);
-    }
-
-    return path.map((p, i) => {
-        const a = normals[Math.max(i - 1, 0)];
-        const b = normals[Math.min(i, normals.length - 1)];
-        const [mx, my] = [a[0] + b[0], a[1] + b[1]];
-        const m = Math.hypot(mx, my);
-        // Doubling back on itself: no bisector to speak of, so take the segment normal.
-        if (m < 1e-9) return [p[0] + a[0] * d, p[1] + a[1] * d] as Coordinate;
-        // |a| = |b| = 1, so |a + b| = 2 cos(half-angle) and the miter factor is 2 / |a + b|.
-        const miter = Math.min(2 / m, MAX_MITER);
-        return [p[0] + (mx / m) * d * miter, p[1] + (my / m) * d * miter] as Coordinate;
-    });
-}
 
 /** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
 const MAX_MITER = 4;
 
-/** The point `dist` metres along `path`, with the unit tangent there. */
-function walkPath(path: Coordinate[], dist: number): {point: Coordinate; tangent: [number, number]} | null {
-    let acc = 0;
-    for (let i = 0; i + 1 < path.length; i++) {
-        const [a, b] = [path[i], path[i + 1]];
-        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (seg === 0) continue;
-        if (acc + seg >= dist) {
-            const t = (dist - acc) / seg;
-            return {
-                point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
-                tangent: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg],
-            };
-        }
-        acc += seg;
-    }
-    return null;
-}
 
+/** **Ported.** @see linePaints.ts, `directionArrowPaint`. */
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => directionArrowStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(directionArrowPaint(name), name);
 }
 
-function directionArrowStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const geom = f.getGeometry() as MultiLineString;
-        const allCoords = geom.getCoordinates();
-        const baseCoords = allCoords[0];
-        const arrowCoords = allCoords[1];
-        const styles: Style[] = [];
-
-        // Base line (dashes when planned).
-        styles.push(new Style({
-            geometry: new LineString(baseCoords),
-            stroke: new Stroke({
-                color,
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        }));
-
-        // Arrowhead + any extra shapes (feint dashes, main-attack polygon, etc.), solid.
-        if (allCoords.length > 1) {
-            styles.push(new Style({
-                geometry: new MultiLineString(allCoords.slice(1)),
-                stroke: new Stroke({color, width: LINE_WIDTH()}),
-            }));
-        }
-
-        // Fill the Aviation-direction-of-attack bow-tie triangles (closed rings
-        // appended at indices 2 and 3 by AviationDirectionOfAttack.generateGraphics).
-        if (name === TacticalGraphicName.AviationDirectionOfAttack && allCoords.length >= 4) {
-            styles.push(new Style({
-                geometry: new Polygon([allCoords[2]]),
-                fill: new Fill({color}),
-            }));
-            styles.push(new Style({
-                geometry: new Polygon([allCoords[3]]),
-                fill: new Fill({color}),
-            }));
-        }
-
-        if (baseCoords.length >= 2 && arrowCoords && arrowCoords.length >= 3) {
-            addDirectionArrowLabels(name, labels, baseCoords, arrowCoords, styles, resolution, f);
-        }
-
-        return styles;
-    };
-}
-
-/**
- * Draws the name / optional ENY prefix / DTG labels for a direction arrow.
- * Anchor is set just behind the arrowhead wing base so text never invades the
- * arrowhead. Text extends backward along the line via `textAlign` chosen per
- * local screen direction, keeping the labels away from the tip for both
- * left-to-right and right-to-left draws.
- */
-function addDirectionArrowLabels(
-    name: TacticalGraphicName,
-    labels: GraphicLabels,
-    baseCoords: Position[],
-    arrowCoords: Position[],
-    styles: Style[],
-    resolution: number,
-    feature: FeatureLike,
-): void {
-    const p1 = baseCoords[baseCoords.length - 2];
-    const p2 = baseCoords[baseCoords.length - 1];
-    const dx = p2[0] - p1[0];
-    const dy = p2[1] - p1[1];
-    const lineLen = Math.hypot(dx, dy);
-    if (lineLen === 0) return;
-    const ux = dx / lineLen;
-    const uy = dy / lineLen;
-
-    // Midpoint of the arrowhead's wing base (computeArrowheadPoints → [lw, tip, rw]).
-    const leftWing = arrowCoords[0];
-    const rightWing = arrowCoords[2];
-    const midWingBase: Coordinate = [
-        (leftWing[0] + rightWing[0]) / 2,
-        (leftWing[1] + rightWing[1]) / 2,
-    ];
-
-    // Anchor = short fixed clearance behind the wing base along the line.
-    const CLEARANCE_PX = 10;
-    const clearanceMap = CLEARANCE_PX * resolution;
-    const anchor: Coordinate = [
-        midWingBase[0] - ux * clearanceMap,
-        midWingBase[1] - uy * clearanceMap,
-    ];
-
-    const rotation = getRotation(p1, p2);
-    const labelScale = featureLabelScale(feature, resolution);
-    // The arrowhead is at p2; text must extend away from it in screen space.
-    const arrowGoesRight = p2[0] >= p1[0];
-    const textAlign: CanvasTextAlign = arrowGoesRight ? 'right' : 'left';
-
-    const nameText = getFullLabel(name, labels.label ?? '');
-    const dateText = getDateLabel(labels);
-    const isHostile = labels.hostility === TacticalGraphicHostility.hostileFaker;
-    const showEny = name === TacticalGraphicName.DirectionOfSupportingAttack && isHostile;
-
-    if (nameText) {
-        styles.push(new Style({
-            geometry: new Point(anchor),
-            text: new Text({
-                text: nameText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    if (showEny) {
-        const nameWidthPx = nameText ? getTextWidth(nameText, fontStyle, labelScale) : 0;
-        const ENY_GAP_PX = 36;
-        const enyBackMap = (nameWidthPx + ENY_GAP_PX) * resolution;
-        const enyAnchor: Coordinate = [
-            anchor[0] - ux * enyBackMap,
-            anchor[1] - uy * enyBackMap,
-        ];
-        styles.push(new Style({
-            geometry: new Point(enyAnchor),
-            text: new Text({
-                text: 'ENY',
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'middle',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-
-    if (dateText) {
-        const DTG_OFFSET_PX = 20;
-        const dtgAnchor = offsetBelow(anchor, p1, p2, resolution, DTG_OFFSET_PX * labelScale);
-        styles.push(new Style({
-            geometry: new Point(dtgAnchor),
-            text: new Text({
-                text: dateText,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                rotation,
-                textAlign,
-                textBaseline: 'top',
-                scale: labelScale,
-                stroke: getHaloStroke(),
-            }),
-        }));
-    }
-}
-
+/** **Ported.** @see scallopPaints.ts, `forwardLineOfOwnTroopsPaint`. */
 export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return (f, resolution) => forwardLineOfOwnTroopsStyleFromLabels(name, readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(forwardLineOfOwnTroopsPaint(), name);
 }
 
-function forwardLineOfOwnTroopsStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const geom = f.getGeometry() as LineString;
-        const coords = geom?.getCoordinates() ?? [];
-        if (coords.length < 2) return [];
 
-        // The scallops are screen-sized: baked into the geometry they were fixed in
-        // metres, so a FLOT drawn zoomed out came back as a row of huge bulges.
-        const scale = decorationScale(coords, false, resolution, WAVE_AMPLITUDE_PX);
-        return [new Style({
-            geometry: new LineString(wavePath(
-                coords,
-                WAVE_WAVELENGTH_PX * scale * resolution,
-                WAVE_AMPLITUDE_PX * scale * resolution,
-                1,
-            )),
-            stroke: new Stroke({
-                color: readHostilityColor(f),
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        })];
-    };
-}
-
+/** **Ported.** @see mobilityPaints.ts, `fieldsOfFirePaint`. */
 export function fieldOfFireStyleFunc(): StyleFunction {
-    return (f, resolution) => fieldOfFireStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(fieldsOfFirePaint());
 }
 
-function fieldOfFireStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const styles: Style[] = [];
 
-        // Thin stroke for the whole MultiLineString (V legs + both arrowheads).
-        styles.push(new Style({
-            stroke: new Stroke({color, width: LINE_WIDTH()}),
-        }));
-
-        const coords0 = (f.getGeometry() as MultiLineString).getCoordinates()[0];
-
-        // Filled "rectangle" on the center of the LEFT leg (P0→P1), rendered as
-        // a thick butt-cap stroke so the ends are square. It is part of the
-        // symbol, so it takes the same standard identity colour as the legs.
-        if (coords0.length >= 2) {
-            const startPoint = getPointAlongSegment(coords0[0], coords0[1], 0.2);
-            const endPoint = getPointAlongSegment(coords0[0], coords0[1], 0.7);
-            styles.push(new Style({
-                geometry: new LineString([startPoint, endPoint]),
-                stroke: new Stroke({
-                    color,
-                    width: 12,
-                    lineCap: 'butt',
-                }),
-            }));
-        }
-
-        // Boxed label at the vertex (middle point of a 3-point V).
-        if (coords0.length >= 3) {
-            const vertex = coords0[1];
-            const labelText = labels?.label ?? '';
-            if (labelText) {
-                styles.push(new Style({
-                    geometry: new Point(vertex),
-                    text: new Text({
-                        text: labelText,
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        padding: [3, 5, 3, 5],
-                        textAlign: 'center',
-                        textBaseline: 'top',
-                        offsetY: 8,
-                        scale: featureLabelScale(f, resolution),
-                    }),
-                }));
-            }
-        }
-
-        return styles;
-    };
-}
-
+/** **Ported.** @see midLabelLinePaints.ts, `munitionFlightPathPaint`. */
 export function munitionFlightPathStyleFunc(): StyleFunction {
-    return (f, resolution) => munitionFlightPathStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(munitionFlightPathPaint());
 }
 
-function munitionFlightPathStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    let dateLabel = getDateLabel(labels);
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-
-        const outlineSegments: Coordinate[][] = [];
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-
-        // Compute the total baseline vector (start → end)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        // Project each vertex onto that baseline to get cumulative "linear" distance
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen; // scalar projection
-        });
-
-        // 4️⃣ Normalize to 0 → baseLen range
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const normalizedProjections = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        // Find segment that crosses the projected midpoint (0.5)
-        const half = 0.5;
-        let midSegmentIndex = 0;
-        for (let i = 0; i < normalizedProjections.length - 1; i++) {
-            if (normalizedProjections[i] <= half && normalizedProjections[i + 1] >= half) {
-                midSegmentIndex = i;
-                break;
-            }
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push([coords[i], coords[i + 1]]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 =
-            (half - normalizedProjections[midSegmentIndex]) /
-            (normalizedProjections[midSegmentIndex + 1] - normalizedProjections[midSegmentIndex]);
-
-        const p1 = coords[midSegmentIndex];
-        const p2 = coords[midSegmentIndex + 1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // Carve a gap sized to fit the "MFP" label at the current scale (half
-        // text width + 4px padding per side), not a fixed fraction of the segment.
-        const mfpFont = fontStyle;
-        const mfpScale = featureLabelScale(f, resolution);
-        const mfpTextWidthPx = getTextWidth('MFP', mfpFont, mfpScale);
-        const mfpHalfGapPx = mfpTextWidthPx / 2 + 4;
-        const gapRatio = (mfpHalfGapPx * resolution) / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep text upright
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-        }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        styles.push(new Style(
-            {
-                geometry: new Point(midGap), // dummy point
-                text: new Text({
-                    text: 'MFP',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: mfpScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({
-                color: getColorByHostility(hostility),
-                width: LINE_WIDTH(),
-            }),
-        });
-
-        const afterStart = coords[1];
-        // Date label: center offset = half text height + 8px so nearest edge is 8px from line
-        const dateOffsetPx = 12 * mfpScale + 8;
-        let startDateLabelCoordinate = offsetCoordinatesUp(start, afterStart, -resolution, dateOffsetPx);
-        let startRotation = getRotation(start, afterStart);
-        styles.push(new Style(
-            {
-                geometry: new Point(startDateLabelCoordinate), // anchored at the line's start
-                text: new Text({
-                    text: dateLabel,
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    rotation: startRotation,
-                    // Left-align so the DTG text begins exactly at the line's start,
-                    // matching the visual convention for MunitionFlightPath.
-                    textAlign: 'left',
-                    textBaseline: 'middle',
-                    scale: mfpScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-        // Base layers
-        styles.push(outlineStyle);
-        return styles;
-    };
-}
 
 const dashStyle = (labels: GraphicLabels) => {
     return (labels.status === TacticalGraphicStatus.planned ||
@@ -4704,12 +1754,9 @@ const dashStyle = (labels: GraphicLabels) => {
     ) ? [12, 8] : undefined;
 };
 
-/**
- * Create a single feature with a style function
- * that draws labels at each segment midpoint with rotation.
- */
+/** **Ported.** @see boundaryPaints.ts, `boundaryPaint`. */
 export function boundariesStyleFunc(): StyleFunction {
-    return (f, resolution) => boundariesStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(boundaryPaint(), TacticalGraphicName.Boundary);
 }
 
 function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
@@ -4915,396 +1962,82 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.LowAltitudeMissileEngagementZone:
         case TacticalGraphicName.HighAltitudeMissileEngagementZone:
         case TacticalGraphicName.ShortRangeAirDefenseEngagementZone:
-            return airCoordinatingAreaStyleFunc(getLabel(name), labels, false);
+            return airCoordinatingAreaStyleFunc(name);
         case TacticalGraphicName.WeaponsFreeZone:
-            return airCoordinatingAreaStyleFunc(getLabel(name), labels, true);
+            return airCoordinatingAreaStyleFunc(name);
         case TacticalGraphicName.AirSpaceCoordinationAreaRectangular:
         case TacticalGraphicName.AirSpaceCoordinationAreaIrregular:
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
-            labels.eff = dateLabel;
-            return airspaceCoordinationAreaStyle(fullLabel, labels);
+            return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.Airfield:
-            return getAirfieldStyle(fullLabel, dateLabel);
+            return getAirfieldStyle(name);
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
         case TacticalGraphicName.NoFireAreaIrregular:
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        padding: [4, 8, 4, 8],
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         case TacticalGraphicName.PositionAreaArtilleryCircular:
         case TacticalGraphicName.PositionAreaArtilleryIrregular:
         case TacticalGraphicName.PositionAreaArtilleryRectangular:
-            // PAA shows four "PAA" labels anchored at the top, bottom, left, and
-            // right of the geometry's bounding box (stored on the label feature
-            // by the base classes).
-            return (feature: FeatureLike, resolution: number) => {
-                const minX = feature.get('polygonMinX') as number | undefined;
-                const minY = feature.get('polygonMinY') as number | undefined;
-                const maxX = feature.get('polygonMaxX') as number | undefined;
-                const maxY = feature.get('polygonMaxY') as number | undefined;
-                if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const cx = (minX + maxX) / 2;
-                const cy = (minY + maxY) / 2;
-                const positions: Array<[number, number]> = [
-                    [cx, maxY], // top edge midpoint
-                    [cx, minY], // bottom edge midpoint
-                    [minX, cy], // left edge midpoint
-                    [maxX, cy], // right edge midpoint
-                ];
-                const styles: Style[] = positions.map(pos => new Style({
-                    geometry: new Point(pos),
-                    text: new Text({
-                        text: 'PAA',
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                }));
-
-                // Name + DTG label centered on the label feature's anchor point
-                // (matches FreeFireArea's treatment).
-                const anchorPoint = feature.getGeometry() as Point;
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (anchorPoint && lines.length > 0) {
-                    styles.push(new Style({
-                        geometry: anchorPoint,
-                        text: new Text({
-                            text: lines.join('\n'),
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-
-                return styles;
-            };
+            return asStyleFunction(positionAreaArtilleryLabelPaint(name), name);
         case TacticalGraphicName.ObstacleFreeArea:
         case TacticalGraphicName.ObstacleRestrictedArea:
-            // Stacked inside the toothed ring: the free area's literal "FREE" over T (the
-            // designation) over W - W1 (the two DTGs, which `getDateLabel` already joins
-            // with the hyphen the plate shows). "FREE" is a line of its own rather than
-            // the `getLabel` prefix, which would set it beside the name instead of above
-            // it. One Text with newlines rather than a style per line, for the same
-            // reason the fire support areas use one: a fixed pixel offset between
-            // separate styles collides with text that grows on zoom.
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const lines = [
-                    name === TacticalGraphicName.ObstacleFreeArea ? 'FREE' : '',
-                    fullLabel.trim(),
-                    dateLabel.trim(),
-                ].filter(line => line.length > 0);
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale: featureLabelScale(feature, resolution),
-                    }),
-                })];
-            };
+            // "FREE" is a line of its own above the designation, not a `getLabel`
+            // prefix — a prefix would set it beside the name, and the plate stacks it.
+            return asStyleFunction(
+                areaLabelStackPaint(name, {
+                    before: name === TacticalGraphicName.ObstacleFreeArea ? ['FREE'] : [],
+                }),
+                name,
+            );
         case TacticalGraphicName.FireSupportAreaIrregular:
-            // FSA Irregular: stack "FSA" / name / DTG1 / DTG2 in a single Text
-            // centered at the polygon centroid. Using "\n" instead of separate
-            // styles keeps the line spacing tied to the font, so the lines
-            // don't drift apart and overlap when the user zooms in (the
-            // default getAreaLabelStyles uses a fixed 18px offsetY which
-            // collides with text growing past 18px at high zoom).
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const lines = [
-                    fullLabel.trim(),
-                    (labels.startDate ?? '').trim(),
-                    (labels.endDate ?? '').trim(),
-                ].filter(s => s && s.length > 0);
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         case TacticalGraphicName.FireSupportAreaRectangular:
         case TacticalGraphicName.FireSupportAreaCircular:
-        case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
-        case TacticalGraphicName.CriticalFriendlyZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
-        case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
-        case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.CallForFireZoneRectangular:
         case TacticalGraphicName.CallForFireZoneCircular:
-        case TacticalGraphicName.DeadSpaceAreaIrregular:
         case TacticalGraphicName.DeadSpaceAreaRectangular:
         case TacticalGraphicName.DeadSpaceAreaCircular:
-        case TacticalGraphicName.BlueKillBoxIrregular:
         case TacticalGraphicName.BlueKillBoxRectangular:
         case TacticalGraphicName.BlueKillBoxCircular:
-        case TacticalGraphicName.PurpleKillBoxIrregular:
         case TacticalGraphicName.PurpleKillBoxRectangular:
         case TacticalGraphicName.PurpleKillBoxCircular:
-            // FSA Rect / Circle (and ATI ZONE / CF ZONE / CENSOR ZONE / CFF
-            // ZONE / DA / BKB / PKB irregular, rect & circle variants — same
-            // layout, the prefix shown comes from getLabel(name)): "<PREFIX>"
-            // and name on separate lines, centered inside the shape. The two
-            // DTGs (W / W1) stack outside on the top-left of its bounding box,
-            // to the left of the left edge, top-aligned with the top edge.
-            // For the circle the bounding box is the imaginary square hugging
-            // the circle; for an irregular polygon it is the geometry's axis-
-            // aligned extent (stored on the label feature by AreaGraphicBase).
-            return (feature: FeatureLike, resolution: number) => {
-                const styles: Style[] = [];
-                const scale = featureLabelScale(feature, resolution);
-
-                const anchorPoint = feature.getGeometry() as Point;
-                const prefix = getLabel(name);
-                const nameLines = [prefix, (labels.label ?? '').trim()].filter(s => s && s.length > 0);
-                if (anchorPoint && nameLines.length > 0) {
-                    styles.push(new Style({
-                        geometry: anchorPoint,
-                        text: new Text({
-                            text: nameLines.join('\n'),
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-
-                const dtg1 = (labels.startDate ?? '').trim();
-                const dtg2 = (labels.endDate ?? '').trim();
-                let dtgAnchor: Coordinate | undefined;
-                const isIrregularZone =
-                    name === TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular ||
-                    name === TacticalGraphicName.CriticalFriendlyZoneIrregular ||
-                    name === TacticalGraphicName.CensorZoneIrregular ||
-                    name === TacticalGraphicName.CallForFireZoneIrregular ||
-                    name === TacticalGraphicName.DeadSpaceAreaIrregular ||
-                    name === TacticalGraphicName.BlueKillBoxIrregular ||
-                    name === TacticalGraphicName.PurpleKillBoxIrregular;
-                if (isIrregularZone) {
-                    // Irregular zones: anchor on the actual upper-leftmost
-                    // vertex of the polygon. Using the bounding-box corner
-                    // (polygonMinX / polygonMaxY) is misleading for irregular
-                    // shapes — that point can sit far away from the geometry.
-                    // "Upper-left vertex" = smallest X; ties broken by largest Y.
-                    const ring = feature.get('polygonRing') as Coordinate[] | undefined;
-                    if (ring && ring.length > 0) {
-                        let best = ring[0];
-                        for (let i = 1; i < ring.length; i++) {
-                            const v = ring[i];
-                            if (v[0] < best[0] || (v[0] === best[0] && v[1] > best[1])) {
-                                best = v;
-                            }
-                        }
-                        dtgAnchor = best;
-                    }
-                } else {
-                    // FSA / rect / circle: bounding-box corner is the right
-                    // anchor (a rectangle's top-left is a vertex, and a circle
-                    // has no vertices — the imaginary square hugging it works).
-                    const minX = feature.get('polygonMinX') as number | undefined;
-                    const maxY = feature.get('polygonMaxY') as number | undefined;
-                    if (minX !== undefined && maxY !== undefined) {
-                        dtgAnchor = [minX, maxY];
-                    }
-                }
-                if (dtgAnchor && (dtg1 || dtg2)) {
-                    const dtgText = [dtg1, dtg2].filter(s => s.length > 0).join('-\n');
-                    styles.push(new Style({
-                        geometry: new Point(dtgAnchor),
-                        text: new Text({
-                            text: dtgText,
-                            font: fontStyle,
-                            fill: new Fill({color: getLabelFillColor()}),
-                            stroke: getHaloStroke(),
-                            textAlign: 'right',
-                            textBaseline: 'top',
-                            offsetX: -10,
-                            scale,
-                        }),
-                    }));
-                }
-                return styles;
-            };
+            // Prefix over name, centred; the two DTGs outside the bounding box's
+            // upper-left. A rectangle's corner is a real vertex and a circle has none,
+            // so the box is the right anchor for both.
+            return asStyleFunction(zoneLabelPaint(name, false), name);
+        case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
+        case TacticalGraphicName.CriticalFriendlyZoneIrregular:
+        case TacticalGraphicName.CensorZoneIrregular:
+        case TacticalGraphicName.CallForFireZoneIrregular:
+        case TacticalGraphicName.DeadSpaceAreaIrregular:
+        case TacticalGraphicName.BlueKillBoxIrregular:
+        case TacticalGraphicName.PurpleKillBoxIrregular:
+            // Same layout, but the DTGs anchor on the real upper-left *vertex*: a
+            // bounding-box corner can sit far outside an irregular shape.
+            return asStyleFunction(zoneLabelPaint(name, true), name);
         case TacticalGraphicName.GroupOrSeriesOfTargets:
-            // Group/Series of Targets: name label sits ON the polygon's
-            // northern-most segment, centered along it and rotated to follow
-            // the segment direction. AreaGraphicBase parks the labels feature
-            // at that segment's midpoint, so feature.getGeometry() is already
-            // the anchor and labelSegmentA/B give the rotation axis.
-            return (feature: FeatureLike, resolution: number) => {
-                const a = feature.get('labelSegmentA') as Coordinate | undefined;
-                const b = feature.get('labelSegmentB') as Coordinate | undefined;
-                const point = feature.getGeometry() as Point;
-                if (!a || !b || !point || !fullLabel?.trim()) return [];
-                return [new Style({
-                    geometry: point,
-                    text: new Text({
-                        text: fullLabel.trim(),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        rotation: getRotation(a, b),
-                        scale: featureLabelScale(feature, resolution),
-                    }),
-                })];
-            };
+            return asStyleFunction(groupOrSeriesOfTargetsLabelPaint(name), name);
         case TacticalGraphicName.SmokeObscurant:
-            // Smoke obscurant labels: name / SMOKE / DTG1- / DTG2 stacked at the
-            // polygon centroid in a single Text so the line spacing tracks the
-            // font scale at every zoom. Present and Planned share the label
-            // layout — Planned just renders the outline dashed (handled in
-            // getStyle).
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                if (!anchorPoint) return [];
-                const scale = featureLabelScale(feature, resolution);
-                const userName = (labels.label ?? '').trim();
-                const dtg1 = (labels.startDate ?? '').trim();
-                const dtg2 = (labels.endDate ?? '').trim();
-                const lines: string[] = [];
-                if (userName) lines.push(userName);
-                lines.push('SMOKE');
-                if (dtg1) lines.push(dtg2 ? `${dtg1}-` : dtg1);
-                if (dtg2) lines.push(dtg2);
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(smokeObscurantLabelPaint(), name);
         case TacticalGraphicName.FreeFireAreaCircular:
         case TacticalGraphicName.FreeFireAreaIrregular:
         case TacticalGraphicName.FreeFireAreaRectangular:
         case TacticalGraphicName.RestrictiveFireAreaCircular:
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
-            // All FireSupportCoordination polygon labels share the opaque-white
-            // halo treatment (matches LimitedAccessArea), and both lines render
-            // in a single Text via "\n" so their spacing scales with the font
-            // instead of drifting at different zoom levels. This only affects
-            // label rendering — hatch fill still applies to NoFireArea only.
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
         case TacticalGraphicName.LimitedAccessArea:
-            return (feature: FeatureLike, resolution: number) => {
-                const anchorPoint = feature.getGeometry() as Point;
-                const scale = featureLabelScale(feature, resolution);
-                const lines: string[] = [];
-                if (fullLabel?.trim()) lines.push(fullLabel.trim());
-                if (dateLabel?.trim()) lines.push(dateLabel.trim());
-                if (lines.length === 0) return [];
-                return [new Style({
-                    geometry: anchorPoint,
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill: new Fill({color: getLabelFillColor()}),
-                        stroke: getHaloStroke(),
-                        padding: [4, 8, 4, 8],
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                })];
-            };
+            return asStyleFunction(areaLabelStackPaint(name), name);
         default:
             return getAreaLabelFn(fullLabel, dateLabel);
     }
 }
 
-/**
- * The crossed runways, written as SVG path data in **map units** — so at scale 1
- * the symbol is a fixed ~400 km across, on every polygon and at every zoom.
- */
-const AIRFIELD_SVG = `M -200000 0 L 200000 0 M -200000 -120000 L 200000 120000`;
-/** Half-extents of the path above, in its own unscaled units. */
-const AIRFIELD_HALF_W = 200000;
-const AIRFIELD_HALF_H = 120000;
-/**
- * Share of the area's shorter side the symbol spans. Matches the fit-to-polygon
- * cap the area's own text block uses, so symbol and text agree about how much
- * room a polygon offers.
- */
-const AIRFIELD_FIT_SHARE = 0.8;
 
 /**
  * Points along the two runway strokes, in unscaled path units, used to test the
@@ -5312,21 +2045,6 @@ const AIRFIELD_FIT_SHARE = 0.8;
  * pass through the centre, so a notch can cut a stroke without containing either
  * of its ends.
  */
-const AIRFIELD_SAMPLES: Coordinate[] = (() => {
-    const segments: [Coordinate, Coordinate][] = [
-        [[-AIRFIELD_HALF_W, 0], [AIRFIELD_HALF_W, 0]],
-        [[-AIRFIELD_HALF_W, -AIRFIELD_HALF_H], [AIRFIELD_HALF_W, AIRFIELD_HALF_H]],
-    ];
-    const STEPS = 8;
-    const pts: Coordinate[] = [];
-    for (const [a, b] of segments) {
-        for (let i = 0; i <= STEPS; i++) {
-            const t = i / STEPS;
-            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-        }
-    }
-    return pts;
-})();
 
 /**
  * Ray-cast point-in-polygon.
@@ -5359,45 +2077,10 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
  *     a bounding-box fit will happily push an arm out through the notch of an
  *     L-shape. `AreaGraphicBase` stamps `polygonRing`, so the real edges are here.
  */
-function airfieldSymbolScale(f: FeatureLike, center: Coordinate): number {
-    const extW = f.get('polygonExtentWidth') as number | undefined;
-    const extH = f.get('polygonExtentHeight') as number | undefined;
-    // Not stamped yet (first render, or a holder that never set a base) — keep
-    // the historical fixed size rather than collapsing the symbol to nothing.
-    if (!extW || !extH) return 1;
 
-    let scale = AIRFIELD_FIT_SHARE * Math.min(extW / (AIRFIELD_HALF_W * 2), extH / (AIRFIELD_HALF_H * 2));
-
-    const ring = f.get('polygonRing') as Coordinate[] | undefined;
-    if (!ring || ring.length < 3) return scale;
-
-    const fits = (s: number) =>
-        AIRFIELD_SAMPLES.every(p => pointInRing([center[0] + p[0] * s, center[1] + p[1] * s], ring));
-
-    // Bounded so it can never run away: 0.9^30 ≈ 0.04 of the bbox fit. Anything
-    // still outside at that point is a degenerate polygon, not a sizing problem.
-    for (let i = 0; i < 30 && !fits(scale); i++) scale *= 0.9;
-    return scale;
-}
-
-export function getAirfieldStyle(fullLabel: string, dateLabel: string): StyleFunction {
-    return (f, res) => {
-        let styles = getAreaLabelStyles(f, res, fullLabel, dateLabel, 0, 36);
-        const center = (f.getGeometry() as Point).getCoordinates();
-        let {geometry} = svgToOpenLayersGeometry(AIRFIELD_SVG, center, airfieldSymbolScale(f, center));
-        styles.push(new Style({
-            geometry: geometry,
-            // The crossed runways are the symbol's own line work, not an
-            // amplifier, so they take the standard identity colour with the
-            // area outline — FM 1-02.2 para 5-3.
-            stroke: new Stroke({
-                color: readHostilityColor(f),
-                width: LINE_WIDTH(),
-            }),
-        }));
-
-        return styles;
-    };
+/** **Ported.** @see airfieldPaints.ts, `airfieldPaint`. */
+export function getAirfieldStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airfieldPaint(areaDefaultLabelPaint(name)), name);
 }
 
 export function getAreaLabelStyles(feature: FeatureLike, resolution: number, textLabel: string, dateLabel: string, rotation: number, offsetY: number = 0) {
@@ -5449,191 +2132,32 @@ export function getAreaLabelFn(textLabel: string, dateLabel: string, rotation: n
  * @param {GraphicLabels} labels The parameterized label values (A, T, X, X1, W, W1).
  * @returns {StyleFunction} An array of OpenLayers Style objects for the labels.
  */
-export function airspaceCoordinationAreaStyle(
-    identifier: string,
-    labels: GraphicLabels,
-): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const anchorPoint = feature.getGeometry() as Point;
-
-        // ── Build text block ──────────────────────────────────────────────────
-        const nameLines: string[] = [];
-        if (identifier?.trim())    nameLines.push(identifier.trim());
-        if (labels.secondId?.trim()) nameLines.push(labels.secondId.trim());
-
-        const altLines: string[] = [];
-        if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${labels.minAltitude}`);
-        if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${labels.maxAltitude}`);
-        if (labels.grid)        altLines.push(`${'GRID:'.padEnd(11)}${labels.grid}`);
-        if (labels.eff)         altLines.push(`${'EFF'.padEnd(11)}${labels.eff}`);
-
-        const allLines = (nameLines.length > 0 && altLines.length > 0)
-            ? [...nameLines, '', ...altLines]
-            : [...nameLines, ...altLines];
-
-        if (allLines.length === 0) return [];
-
-        // ── Measure widest line at scale = 1 ─────────────────────────────────
-        const ctx = measureCtx();
-        ctx.font = fontStyle;
-        const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
-
-        // ── Fit-to-polygon scale cap ──────────────────────────────────────────
-        // Use the shorter bounding-box dimension so the block stays inside the
-        // polygon at every zoom level. Falls back to featureLabelScale alone when
-        // the extent hasn't been stored yet (e.g. first render).
-        const extW = feature.get('polygonExtentWidth')  as number | undefined;
-        const extH = feature.get('polygonExtentHeight') as number | undefined;
-        let fitScale = Infinity;
-        if (extW && extH && maxLineWidth > 0) {
-            const availablePx = Math.min(extW, extH) / resolution * 0.80;
-            fitScale = availablePx / maxLineWidth;
-        }
-        const scale = Math.min(featureLabelScale(feature, resolution), fitScale);
-
-        // ── Center the left-aligned block at the interior point ───────────────
-        const offsetX = -(maxLineWidth * scale) / 2;
-
-        return [new Style({
-            geometry: anchorPoint,
-            text: new Text({
-                text: allLines.join('\n'),
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                textAlign: 'left',
-                textBaseline: 'middle',
-                offsetX,
-                scale,
-            }),
-        })];
-    };
+/** **Ported.** @see airPaints.ts, `airspaceCoordinationAreaLabelPaint`. */
+export function airspaceCoordinationAreaStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airspaceCoordinationAreaLabelPaint(name), name);
 }
 
 
-export function getMissionTaskStyleFn(textLabel: string, rotation: number = 0): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry() as Point;
-        let styles = [];
-
-        styles.push(new Style({
-            geometry: geom,
-            text: new Text({
-                rotation: rotation,
-                text: textLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                scale: featureLabelScale(feature, resolution),
-                stroke: getHaloStroke(),
-            }),
-        }));
-
-        return styles;
-
-    };
-}
-
 /**
- * Mission-task label rendered with the same 24px base font as the
- * ratio-locked block-family graphics. Scale tracks the circle radius
- * (`graphicSize`) so the label grows with the graphic, tuned so a
- * 50px-radius circle (the 100px-diameter floor) renders the label at
- * ~22.5px tall — matching the block-family label size at their minimum.
- */
-export function getRatioLockedMissionTaskStyleFn(textLabel: string): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry() as Point;
-        return [new Style({
-            geometry: geom,
-            text: new Text({
-                text: textLabel,
-                font: RATIO_LOCKED_LABEL_FONT,
-                fill: new Fill({color: getLabelFillColor()}),
-                scale: ratioLockedLabelScale(feature, resolution),
-                stroke: getHaloStroke(),
-                textAlign: 'center',
-                textBaseline: 'middle',
-            }),
-        })];
-    };
-}
-
-/**
- * The font literal every ratio-locked mission-task label renders with. Anything
- * that measures one of those labels (`getTextWidth`) has to pass this same
- * string or the measured width won't match the drawn glyph.
- */
-export const RATIO_LOCKED_LABEL_FONT = 'bold 24px sans-serif';
-/** Declared px size of `RATIO_LOCKED_LABEL_FONT`, for glyph-height math. */
-const RATIO_LOCKED_LABEL_FONT_PX = 24;
-
-/** Clearance between the label's glyph box and each arc end, in screen pixels. */
-const ARC_LABEL_CLEARANCE_PX = 5;
-/**
- * Widest the label gap may open, in degrees of arc either side of the label.
- * Only reached when the circle is small enough that the letter genuinely spans
- * that much of it; past this the arcs would stop reading as a circle at all, so
- * the letter is allowed to overhang instead.
- */
-const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
-
-/** Smallest angle between two directions, in radians — always in [0, π]. */
-function angleBetween(a: number, b: number): number {
-    const d = Math.abs(a - b) % (2 * Math.PI);
-    return d > Math.PI ? 2 * Math.PI - d : d;
-}
-
-/**
- * Trims the end of one arc that runs into the label, back to `halfGap` radians
- * clear of the label axis. Whichever end is nearer the axis is the one cut, so
- * this works for an arc that approaches the label from either side.
+ * The designation a point-anchored mission task carries, at its own anchor.
  *
- * The cut lands **exactly** on the gap edge rather than on the nearest sample:
- * the generator's arcs are 100 points over 160°, and at a large radius one 1.6°
- * step is several pixels — enough for the two sides of the gap to look uneven.
+ * **Ported** — one function for the whole family, because the split between the
+ * ratio-locked letters and the ordinary 16px ones is a property of the graphic and
+ * now lives on `RATIO_LOCKED_MISSION_TASKS` in the core library. There used to be a
+ * second style function here for the ratio-locked half and a holder branch choosing
+ * between the two; the second renderer could not see either, so it drew the whole
+ * family ratio-locked.
  *
- * Angles are measured about the projected centre, and radii are never assumed:
- * a geodesic circle is not quite a circle in EPSG:3857, so anything that
- * reconstructed a point from `graphicSize` would drift off the drawn arc.
+ * `rotation` is for Envelopment's "E", which lies along its approach. @see
+ * paintFunctions.ts, `missionTaskLabelPaint`.
  */
-function cutArcAtLabel(pts: Coordinate[], centre: Coordinate, axis: number, halfGap: number): Coordinate[] {
-    if (pts.length < 2) return pts;
-    const angleAt = (p: Coordinate) => Math.atan2(p[1] - centre[1], p[0] - centre[0]);
-    const clearance = (p: Coordinate) => angleBetween(angleAt(p), axis);
-
-    const fromStart = clearance(pts[0]) <= clearance(pts[pts.length - 1]);
-    const seq = fromStart ? pts : [...pts].reverse();
-
-    let i = 0;
-    while (i < seq.length && clearance(seq[i]) < halfGap) i++;
-    if (i === 0) return pts;        // already clear of the label
-    if (i >= seq.length) return []; // the whole arc is inside the gap
-
-    const before = clearance(seq[i - 1]);
-    const after = clearance(seq[i]);
-    const t = after > before ? (halfGap - before) / (after - before) : 0;
-    const edge: Coordinate = [
-        seq[i - 1][0] + t * (seq[i][0] - seq[i - 1][0]),
-        seq[i - 1][1] + t * (seq[i][1] - seq[i - 1][1]),
-    ];
-    const kept = [edge, ...seq.slice(i)];
-    return fromStart ? kept : kept.reverse();
+export function getMissionTaskStyleFn(name: TacticalGraphicName, rotation: number = 0): StyleFunction {
+    return asStyleFunction(missionTaskLabelPaint(name, rotation), name);
 }
 
-/** Every sub-line of a MultiLineString / GeometryCollection of them, in order. */
-function flattenLineWork(geom: Geometry | RenderFeature | undefined): Coordinate[][] {
-    if (geom instanceof MultiLineString) return geom.getCoordinates() as Coordinate[][];
-    if (geom instanceof LineString) return [geom.getCoordinates() as Coordinate[]];
-    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenLineWork(g));
-    return [];
-}
 
-/** The filled rings alongside that line work — AreaDefense's teeth, and nothing else today. */
-function flattenFilledRings(geom: Geometry | RenderFeature | undefined): Coordinate[][][] {
-    if (geom instanceof Polygon) return [geom.getCoordinates() as Coordinate[][]];
-    if (geom instanceof GeometryCollection) return geom.getGeometries().flatMap(g => flattenFilledRings(g));
-    return [];
-}
+
+
 
 /**
  * The arc-and-arrowhead mission tasks — Secure, Isolate, Retain, Occupy,
@@ -5659,150 +2183,37 @@ function flattenFilledRings(geom: Geometry | RenderFeature | undefined): Coordin
  * everything after them — arrowheads, teeth, radials — is drawn untouched.
  */
 export function arcMissionTaskStyleFunc(name: TacticalGraphicName, ratioLocked: boolean): StyleFunction {
-    const label = getLabel(name);
-    return (feature, resolution) => {
-        const lines = flattenLineWork(feature.getGeometry());
-        if (!lines.length) return [];
-
-        const centre = feature.get('graphicCenter') as Coordinate | undefined;
-        const labelPoint = feature.get('graphicLabelPoint') as Coordinate | undefined;
-        const radius = centre && labelPoint ? Math.hypot(labelPoint[0] - centre[0], labelPoint[1] - centre[1]) : 0;
-
-        if (centre && labelPoint && radius > 0 && label) {
-            const axis = Math.atan2(labelPoint[1] - centre[1], labelPoint[0] - centre[0]);
-            const scale = ratioLocked ? ratioLockedLabelScale(feature, resolution) : featureLabelScale(feature, resolution);
-            const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
-            const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
-
-            const halfWidthPx = getTextWidth(label, font, scale) / 2;
-            const halfHeightPx = (fontPx * scale * CAP_HEIGHT_FRACTION) / 2;
-            // Half-extent of the glyph box along the tangent at the label.
-            const tangentHalfPx =
-                halfWidthPx * Math.abs(Math.sin(axis)) + halfHeightPx * Math.abs(Math.cos(axis)) + ARC_LABEL_CLEARANCE_PX;
-            const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * resolution) / radius);
-
-            for (const i of [0, 1]) {
-                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], centre, axis, halfGap);
-            }
-        }
-
-        const color = readHostilityColor(feature);
-        const stroke = new Stroke({color, width: LINE_WIDTH()});
-        const styles: Style[] = [];
-
-        const drawn = lines.filter(line => line.length >= 2);
-        if (drawn.length) styles.push(new Style({geometry: new MultiLineString(drawn), stroke}));
-
-        // AreaDefense's teeth are solid polygons rather than open outlines; every
-        // other member of the family has none, so this costs them nothing.
-        const rings = flattenFilledRings(feature.getGeometry());
-        if (rings.length) {
-            styles.push(new Style({
-                geometry: new MultiPolygon(rings),
-                fill: new Fill({color}),
-                stroke,
-            }));
-        }
-        return styles;
-    };
+    return asStyleFunction(arcMissionTaskPaint(name, ratioLocked), name);
 }
-
-/**
- * Label height as a fraction of the graphic's `graphicSize` on screen. Lower
- * than `GRAPHIC_LABEL_FRACTION` because mission tasks store a radius where the
- * block family stores a perpendicular size — 0.3 here lines the two families up
- * at their respective minimums. @see getRatioLockedMissionTaskStyleFn
- */
-const RATIO_LOCKED_LABEL_FRACTION = 0.3;
 
 /**
  * Scale of a ratio-locked mission task's label. Exported because the graphic
  * style functions that open a gap for that label have to size the gap from the
  * same number the label is drawn at.
  *
- * Capped at `maxGraphicLabelScale()`, the same ceiling the block family's
- * `featureGraphicLabelScale` stops at — a big circle keeps its one-letter label
- * at a readable size instead of scaling it up without limit. The cap applies to
- * the gap math for free, since both read this one number.
+ * The formula is `ratioLockedLabelScale` in `core/symbology.ts`; this reads the
+ * two inputs off the feature.
  */
 export function ratioLockedLabelScale(feature: FeatureLike, resolution: number): number {
-    const radius = feature.get('graphicSize') as number | undefined;
-    if (radius && radius > 0) {
-        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-        return Math.min(maxGraphicLabelScale(), sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (radius / resolution) / BASE_FONT_SIZE_PX);
-    }
-    return featureLabelScale(feature, resolution);
+    return ratioLockedLabelScaleOf(
+        feature.get('graphicSize') as number | undefined,
+        feature.get('drawingResolution') as number | undefined,
+        resolution,
+    );
 }
 
 /**
- * Which of the two crossed arms renders hashed, by sub-line index into
- * `CrossedMissionTask.generateGraphics` output. Absent = both solid.
- */
-const CROSSED_HASHED_ARM: Partial<Record<TacticalGraphicName, number>> = {
-    // The "/" stroke of the X.
-    [TacticalGraphicName.Suppress]: 0,
-    // The diagonal; the horizontal stays solid.
-    [TacticalGraphicName.Neutralize]: 1,
-};
-
-/** Hash pattern of a doctrinally-broken arm, in screen pixels. */
-const CROSSED_HASH_DASH = [12, 8];
-/**
- * Clearance in screen pixels between the label's glyph box and the arm ends
- * that stop short of it. Added *along the arm*, past where the arm leaves the
- * box — not as padding on the box itself. Padding the box inflates on the
- * diagonals (a 45° ray exits a box grown by `p` some `p × √2` further out), so
- * an X would end up with a visibly wider gap than a cross for the same number.
- */
-const CROSSED_LABEL_CLEARANCE_PX = 7;
-/** Cap height of the label font as a fraction of its declared px size. */
-const CAP_HEIGHT_FRACTION = 0.72;
-
-/**
- * Screen half-width a crossed mission task always renders at — 100 px across,
- * at **every** zoom level.
+ * Re-exported from the map-agnostic half — see `symbology/missionTaskPaints.ts`.
  *
- * These are badges, not areas. They mark a point; nothing about them describes
- * ground extent, so there is no size for the map scale to be right about. The
- * symbol is therefore pinned to the screen outright rather than merely capped:
- * it neither grows on zoom-in nor recedes on zoom-out.
- *
- * That makes the stored `size` irrelevant to what is drawn — the style function
- * divides it straight back out. It still matters as the thing `size` and
- * `resolution` are compared *through*, and as what a non-OpenLayers renderer
- * would fall back on, so it is still saved.
+ * The controller seeds a graphic's stored size from `CROSSED_HALF_WIDTH_PX`, and the
+ * scale is the one the label renders at, so both have to be the same number the
+ * paint function uses.
  */
-export const CROSSED_HALF_WIDTH_PX = 50;
+export {CROSSED_HALF_WIDTH_PX, crossedMissionTaskLabelScale};
 
-/**
- * Label scale for the crossed mission tasks: the ratio-locked family's formula
- * driven off the fixed half-width, so the letter is the same size as the line
- * work is — constant. Exported because the graphic style has to reproduce it to
- * size the gap the letter sits in.
- */
-export function crossedMissionTaskLabelScale(): number {
-    const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    return sizeFactor * RATIO_LOCKED_LABEL_FRACTION * CROSSED_HALF_WIDTH_PX / BASE_FONT_SIZE_PX;
-}
-
-/**
- * The one-letter label of a crossed mission task. Same treatment as
- * `getRatioLockedMissionTaskStyleFn`, but at a constant screen size.
- */
+/** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskLabelPaint`. */
 export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): StyleFunction {
-    const textLabel = getLabel(name);
-    return (feature: FeatureLike) => [new Style({
-        geometry: feature.getGeometry() as Point,
-        text: new Text({
-            text: textLabel,
-            font: RATIO_LOCKED_LABEL_FONT,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: crossedMissionTaskLabelScale(),
-            stroke: getHaloStroke(),
-            textAlign: 'center',
-            textBaseline: 'middle',
-        }),
-    })];
+    return asStyleFunction(crossedMissionTaskLabelPaint(name), name);
 }
 
 /**
@@ -5825,96 +2236,9 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  *
  * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
  */
+/** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskPaint`. */
 export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
-    const label = getLabel(name);
-    const hashedArm = CROSSED_HASHED_ARM[name];
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry();
-        if (!(geom instanceof MultiLineString)) return [];
-        const lines = geom.getCoordinates();
-        if (lines.length < 2) return [];
-
-        const color = readHostilityColor(feature);
-        const strokeFor = (hashed: boolean) => new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: hashed ? CROSSED_HASH_DASH : undefined,
-        });
-
-        // The symbol's centre, as stamped by the holder — the same projected
-        // point the label feature is drawn at.
-        //
-        // **Not the arms' midpoint.** The generator walks out from the centre
-        // with `turf.destination`, which is geodesic; Mercator then stretches
-        // the northern end of a diagonal arm more than the southern one, so the
-        // projected midpoint sits a little north of the true centre. That error
-        // is fixed in map units, so on screen it grew on zoom-in — and since the
-        // geometry is scaled about this point while the label is not, the letter
-        // visibly drifted out of its own gap as you zoomed.
-        const stamped = feature.get('graphicCenter') as number[] | undefined;
-        const [a0, a1] = lines[0];
-        const cx = stamped?.[0] ?? (a0[0] + a1[0]) / 2;
-        const cy = stamped?.[1] ?? (a0[1] + a1[1]) / 2;
-
-        // Scale the symbol about its centre so its half-width is always
-        // `CROSSED_HALF_WIDTH_PX` on screen. `k` is the ratio between the
-        // half-width the geometry was built at and the one we want, so the
-        // stored `size` cancels out entirely and the result is the same number
-        // of pixels at every zoom. No clamp: it grows the geometry on zoom-out
-        // just as it shrinks it on zoom-in.
-        const size = feature.get('graphicSize') as number | undefined;
-        const k = size && size > 0 ? (CROSSED_HALF_WIDTH_PX * resolution) / size : 1;
-        const pinned = (p: number[]): Coordinate => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
-
-        // Half-extents of the label's glyph box, in map units. The scale is the
-        // one the label itself uses — constant, like everything else here.
-        const scale = crossedMissionTaskLabelScale();
-        const halfW = (getTextWidth(label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * resolution;
-        const halfH = (24 * scale * CAP_HEIGHT_FRACTION / 2) * resolution;
-        const clearance = CROSSED_LABEL_CLEARANCE_PX * resolution;
-
-        const styles: Style[] = [];
-        for (let i = 0; i < 2; i++) {
-            const start = pinned(lines[i][0]);
-            const end = pinned(lines[i][1]);
-            const dx = end[0] - start[0];
-            const dy = end[1] - start[1];
-            const len = Math.hypot(dx, dy);
-            const stroke = strokeFor(i === hashedArm);
-            if (len === 0) continue;
-            const ux = dx / len;
-            const uy = dy / len;
-            // Where this direction leaves the label's box: whichever of the two
-            // half-extents it reaches first. A near-horizontal arm therefore
-            // clears the glyph's width, a near-vertical one its height. The
-            // clearance is then added *along the arm*, so every arm stops the
-            // same distance from the glyph whatever angle it comes in at.
-            const boxExit = Math.min(
-                Math.abs(ux) > 1e-9 ? halfW / Math.abs(ux) : Infinity,
-                Math.abs(uy) > 1e-9 ? halfH / Math.abs(uy) : Infinity,
-            );
-            const gap = boxExit + clearance;
-            if (!isFinite(gap) || gap * 2 >= len) {
-                styles.push(new Style({geometry: new LineString([start, end]), stroke}));
-                continue;
-            }
-            styles.push(new Style({
-                geometry: new LineString([start, [cx - ux * gap, cy - uy * gap]]),
-                stroke,
-            }));
-            styles.push(new Style({
-                geometry: new LineString([[cx + ux * gap, cy + uy * gap], end]),
-                stroke,
-            }));
-        }
-
-        // Arrowheads are never hashed — FM 1-02.2 draws Interdict's heads solid
-        // even where the arm they sit on is broken.
-        for (let i = 2; i < lines.length; i++) {
-            styles.push(new Style({geometry: new LineString(lines[i].map(pinned)), stroke: strokeFor(false)}));
-        }
-        return styles;
-    };
+    return asStyleFunction(crossedMissionTaskPaint(name), name);
 }
 
 /**
@@ -5923,60 +2247,9 @@ export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFun
  * covers both: OpenLayers strokes the sub-lines and fills the arrowhead.
  * The "T" comes off the separate label feature.
  */
+/** **Ported.** @see routedTaskPaints.ts, `turnPaint`. */
 export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
-    const label = getLabel(name);
-    return (f, resolution) => {
-        const color = readHostilityColor(f);
-        const stroke = new Stroke({color, width: LINE_WIDTH()});
-        const geom = f.getGeometry();
-        if (!(geom instanceof GeometryCollection)) {
-            return new Style({fill: new Fill({color}), stroke});
-        }
-
-        // Half the gap, in map units, from the glyph as it renders right now.
-        // The label's own scale is zoom-clamped to [0.3, 1.5], so a gap baked
-        // in metres drifted against it: wider than the "T" zoomed in, tighter
-        // than it zoomed out. Measuring here is the only way the two agree at
-        // every zoom. @see conventions.md, "a gap follows what it makes room for"
-        // No letter, no gap: TURN_LABEL_PAD_PX is added on top of the measured
-        // width, so an empty label would still leave 10px of curve missing.
-        const scale = featureLabelScale(f, resolution);
-        const halfGap = label ? (getTextWidth(label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * resolution : 0;
-
-        const styles: Style[] = [];
-        // The curve, for capping the head against the graphic's own on-screen size.
-        const curve = geom.getGeometries()
-            .filter((g): g is MultiLineString => g instanceof MultiLineString)
-            .flatMap(g => g.getCoordinates().flat());
-        for (const sub of geom.getGeometries()) {
-            if (sub instanceof Polygon) {
-                // The arrowhead — filled, never trimmed, and held at a screen size
-                // rather than the metres the generator baked in at draw time.
-                const head = screenSizedArrowHead(sub, curve, resolution);
-                if (head) styles.push(new Style({geometry: head, fill: new Fill({color}), stroke}));
-                continue;
-            }
-            if (!(sub instanceof MultiLineString)) {
-                styles.push(new Style({geometry: sub, stroke}));
-                continue;
-            }
-            // `[curveBeforeLabel, curveAfterLabel]`, meeting exactly at the
-            // arc-length midpoint because the holder passes `labelGap: 0` and
-            // does the cutting here instead. Trim each half back from that
-            // shared inner end.
-            const halves = sub.getCoordinates();
-            halves.forEach((half, i) => {
-                const trimmed =
-                    halfGap > 0
-                        ? i === 0
-                            ? trimFromEnd(half, halfGap)
-                            : trimFromEnd(half.slice().reverse(), halfGap).reverse()
-                        : half;
-                if (trimmed.length >= 2) styles.push(new Style({geometry: new LineString(trimmed), stroke}));
-            });
-        }
-        return styles;
-    };
+    return asStyleFunction(turnPaint(getLabel(name)), name);
 }
 
 /** Padding either side of the "T", in screen pixels. */
@@ -6005,127 +2278,9 @@ function trimFromEnd(coords: number[][], distance: number): Coordinate[] {
     return kept;
 }
 
-/**
- * Label-style function for the doctrinal weapon/sensor range fans.
- *
- * MultiPoint vertex layout, written by `RangeFan.generateLabels` and
- * mirrored on the OL feature by `RangeFanGraphicBase.updateGeometry`:
- *   circular: [center, band1Mid, band2Mid, ...]
- *   sector:   [center, band1Mid, band1LeftAz, band1RightAz,
- *                       band2Mid, band2LeftAz, band2RightAz, ...]
- * The bands array stamped on the label feature carries the resolved
- * azimuth values for each sector band so this fn doesn't need to re-run
- * the resolver.
- */
-export function getRangeFanLabelStyleFn(
-    name: TacticalGraphicName,
-): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        const geom = feature.getGeometry();
-        if (!(geom instanceof MultiPoint)) return [];
-        const coords = geom.getCoordinates();
-        if (coords.length < 2) return [];
-
-        const bands = feature.get('rangeFanBands') as
-            | Array<{
-                  range: number;
-                  label?: string;
-                  altitude?: string;
-                  /** Resolved absolute compass bearings — written by
-                   * RangeFanGraphicBase / RangeFan.generateLabels for the
-                   * style fn to print. The raw user-facing fields on each
-                   * band are deflections from the global center. */
-                  resolvedLeftAz?: number;
-                  resolvedRightAz?: number;
-              }>
-            | undefined;
-        if (!bands || bands.length === 0) return [];
-
-        const shape = feature.get('rangeFanShape') as 'circular' | 'sector' | undefined;
-        const isSector = shape === 'sector' && name === TacticalGraphicName.WeaponSensorRangeFanSector;
-        // Sector packs three vertices per band (mid + leftAz + rightAz);
-        // circular packs one (mid only).
-        const stride = isSector ? 3 : 1;
-
-        const scale = featureLabelScale(feature, resolution);
-        const fill = new Fill({color: getLabelFillColor()});
-        const styles: Style[] = [];
-
-        // Per-band labels. Layout per shape:
-        //   circular — user label (if any), then "MIN RG <km>",
-        //              then "ALT <altitude>" if entered.
-        //   sector   — user label (if any), then "RG <km>",
-        //              then "ALT <altitude>" if entered, plus per-band
-        //              azimuth labels at the arc edges.
-        // The auto range line renders even when no name is typed. Range
-        // values are stored in kilometers.
-        for (let i = 0; i < bands.length; i++) {
-            const midIdx = 1 + i * stride;
-            if (midIdx >= coords.length) break;
-            const band = bands[i];
-            const lines: string[] = [];
-            const labelText = band.label?.trim();
-            if (labelText) lines.push(labelText);
-            if (shape === 'circular') {
-                lines.push(`MIN RG ${formatKm(band.range)}`);
-            } else if (isSector) {
-                lines.push(`RG ${formatKm(band.range)}`);
-            }
-            const altText = band.altitude?.trim();
-            if (altText) lines.push(`ALT ${altText}`);
-            if (lines.length > 0) {
-                styles.push(new Style({
-                    geometry: new Point(coords[midIdx]),
-                    text: new Text({
-                        text: lines.join('\n'),
-                        font: fontStyle,
-                        fill,
-                        stroke: getHaloStroke(),
-                        textAlign: 'center',
-                        textBaseline: 'middle',
-                        scale,
-                    }),
-                }));
-            }
-
-            // Sector: per-band azimuth text at vertices (3i+2) and (3i+3).
-            // Format matches FM 1-02.2 examples ("315", "030").
-            if (isSector) {
-                const leftIdx = midIdx + 1;
-                const rightIdx = midIdx + 2;
-                if (leftIdx < coords.length && band.resolvedLeftAz !== undefined) {
-                    styles.push(new Style({
-                        geometry: new Point(coords[leftIdx]),
-                        text: new Text({
-                            text: formatAzimuth(band.resolvedLeftAz),
-                            font: fontStyle,
-                            fill,
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-                if (rightIdx < coords.length && band.resolvedRightAz !== undefined) {
-                    styles.push(new Style({
-                        geometry: new Point(coords[rightIdx]),
-                        text: new Text({
-                            text: formatAzimuth(band.resolvedRightAz),
-                            font: fontStyle,
-                            fill,
-                            stroke: getHaloStroke(),
-                            textAlign: 'center',
-                            textBaseline: 'middle',
-                            scale,
-                        }),
-                    }));
-                }
-            }
-        }
-
-        return styles;
-    };
+/** **Ported.** @see boundaryPaints.ts, `rangeFanLabelPaint`. */
+export function getRangeFanLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(rangeFanLabelPaint(name), name);
 }
 
 function formatAzimuth(deg: number): string {
@@ -6146,53 +2301,9 @@ function getOffset(distance: number, rotation: number): [number, number] {
     return [offsetX, offsetY];
 }
 
+/** **Ported.** @see securityPaints.ts, `securityOperationLabelPaint`. */
 export function getSecurityOperationLabelStyle(textLabel: string, rotation: number = 0, position: 'left' | 'right' = 'left'): StyleFunction {
-    // Takes neither `feature` nor `resolution`: the label's size no longer
-    // depends on the zoom, and it carries no amplifiers to read off the feature.
-    return () => {
-        const orientation = position === 'left' ? 1 : -1;
-
-        // Constant on-screen size, deliberately NOT `featureLabelScale`.
-        //
-        // That helper returns `sizeFactor × (drawingResolution / resolution)`,
-        // which holds a label at a constant size in *map* units — so it doubles
-        // on screen every time you zoom in a level. Right for a label that
-        // belongs to geometry drawn in map units; wrong here, because every size
-        // in `SecurityOperationGraphicBase` is a pixel constant × the resolution
-        // and the whole graphic holds its on-screen size across a zoom. A label
-        // that grew while its arrows stayed put was the odd one out.
-        //
-        // This is exactly what `featureLabelScale` yields at the moment the
-        // graphic is drawn (`resolution === drawingResolution`), so the label
-        // keeps the size it has always had — it just stops growing from there.
-        const labelScale = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-
-        // The glyph is NOT rotated with the graphic, and `rotation` is spent only on
-        // the sub-pixel nudge below.
-        //
-        // Rotating it turned the C / G / S upside down as soon as the user swung the
-        // graphic past the horizontal, which is exactly what an amplifier must never
-        // do — a label is read by the operator, not by the symbol. The mission tasks
-        // already behave this way: `getMissionTaskStyleFn` takes a rotation and
-        // every caller, Retain included, leaves it at 0.
-        //
-        // The letter still travels with its own arm, because the label *anchor* is
-        // rotated about the centre in `SecurityOperationGraphicBase.placeCoordinates`.
-        // Position follows the graphic; orientation follows the screen.
-        const [offsetX, offsetY] = getOffset(0.5 * orientation, rotation);
-        return new Style({
-            text: new Text({
-                text: textLabel,
-                font: fontStyle,
-                fill: new Fill({color: getLabelFillColor()}),
-                textBaseline: 'middle',
-                scale: labelScale,
-                offsetX,
-                offsetY,
-                stroke: getHaloStroke(),
-            }),
-        });
-    };
+    return asStyleFunction(securityOperationLabelPaint(textLabel, rotation, position));
 }
 
 export const createFeatureWithDashedLines = () => {
@@ -6384,38 +2495,9 @@ function getGraphicGeometryData(
 }
 
 // Complete style function for OpenLayers
+/** **Ported.** @see echelonPaints.ts, `strongPointPaint` — the strong point. */
 function railroadStyleFunction(feature: FeatureLike, resolution: number) {
-    const geometry = feature.getGeometry();
-    // Default to π/2 so the echelon sits on the southernmost segment.
-    // The normal formula in getGraphicGeometryData is the inward normal, so the
-    // target direction is inverted: pointing north (π/2) selects the south-facing edge.
-    // ?? (not ||) ensures an explicit rotation of 0 (east) is still respected.
-    const rotation: number = feature.get('rotation') ?? Math.PI / 2;
-
-    const geoData = getGraphicGeometryData(geometry as Geometry, rotation, resolution);
-    if (!geoData) {
-        return [];
-    }
-
-    const styles = [];
-    const {outlineSegments, midGap, dx, dy} = geoData;
-    // 0 = east, π/2 = north, etc.
-    const hostility = readHostility(feature);
-    const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
-
-    // 6) build styles
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
-    });
-    // Base layers
-    styles.push(outlineStyle);
-    const echelonStyles = createEchelonStyles(midGap, dx, dy, resolution, echelon, getColorByHostility(hostility), featureLabelScale(feature, resolution));
-    styles.push(...echelonStyles);
-    const crossTies = generateCrossTiesForPolygon(new MultiLineString(outlineSegments), resolution, getColorByHostility(hostility));
-    styles.push(...crossTies);
-
-    return styles;
+    return asStyleFunction(strongPointPaint())(feature, resolution);
 }
 
 /** Returns the echelon symbol's half-extent perpendicular to the segment, in screen pixels (unscaled). */
@@ -6618,122 +2700,17 @@ function createEchelonStyles(mid: Coordinate, dx: number, dy: number, resolution
     return styles;
 }
 
+/** **Ported.** @see echelonPaints.ts, `battlePositionPaint`. */
 export function battlePositionStyleFunction(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style[] {
-    const geometry = feature.getGeometry();
-    // Default to π/2 so the echelon sits on the southernmost segment.
-    // getGraphicGeometryData uses the inward normal, so pointing north (π/2) selects the south-facing edge.
-    const rotation: number = feature.get('rotation') ?? Math.PI / 2;
-    const geoData = getGraphicGeometryData(geometry as Geometry, rotation, resolution);
-    if (!geoData) {
-        return [];
-    }
-
-    const hostility = readHostility(feature);
-    const echelon = feature.get('echelon') || TacticalGraphicEchelon.squad;
-    const {outlineSegments, midGap, dx, dy} = geoData;
-
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-
-    // 6) build styles
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({
-            color: getColorByHostility(hostility),
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined
-        }),
-    });
-
-    const echelonStyles = createEchelonStyles(midGap, dx, dy, resolution, echelon, getColorByHostility(hostility), featureLabelScale(feature, resolution));
-
-    return [outlineStyle, ...echelonStyles];
+    return asStyleFunction(battlePositionPaint())(feature, resolution) as Style[];
 }
 
 /**
- * The four affiliation colours, straight from FM 1-02.2. One set, used in every mode —
- * see the palette note above `getDefaultLineColor` for why there is no longer a second.
- *
- * A host re-tints these through `configureTacticalGraphics({hostilityColors})` rather
- * than by editing this table.
+ * The affiliation colour table, the doctrinal lookup and `withOpacity` now live in the
+ * map-agnostic half (`core/symbology.ts`) and are re-exported from the import block at
+ * the top of this file. Nothing about "hostile line work is red" is an OpenLayers fact,
+ * and a second renderer that cannot reach the table has to restate it.
  */
-const HOSTILITY_COLORS = {
-    friend: 'rgba(0, 0, 255, 1)',
-    hostile: 'rgba(255, 0, 0, 1)',
-    neutral: 'rgba(0, 128, 0, 1)',
-    pending: 'rgba(255, 255, 0, 1)',
-} as const;
-
-/**
- * Affiliations that draw as another one. Doctrine gives assumed-friend the friendly
- * blue and suspect/joker the pending yellow, so an override on the affiliation a host
- * actually thinks about (`friend`, `pending`) carries to its alias without their having
- * to name both. An override on the alias itself still wins, for a host that wants them
- * distinguishable.
- */
-const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphicHostility>> = {
-    [TacticalGraphicHostility.assumedFriend]: TacticalGraphicHostility.friend,
-    [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
-};
-
-/**
- * The doctrinal FM 1-02.2 colour for an affiliation, **ignoring any config override**.
- * `undefined` for `unknown`, whose colour is `getDefaultLineColor()` rather than an
- * affiliation colour of its own.
- *
- * Exported because it is a *pure* answer to "what would this be with no override" —
- * something a settings UI needs and cannot get from `getColorByHostility`, which reads
- * the live config. Reading the live config to render a control that edits the live
- * config renders one frame stale: clearing an override re-renders before the host has
- * republished, so the cleared value is still what comes back.
- */
-export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility): string | undefined {
-    switch (HOSTILITY_ALIASES[hostility] ?? hostility) {
-        case TacticalGraphicHostility.friend:
-            return HOSTILITY_COLORS.friend;
-        case TacticalGraphicHostility.hostileFaker:
-            return HOSTILITY_COLORS.hostile;
-        case TacticalGraphicHostility.neutral:
-            return HOSTILITY_COLORS.neutral;
-        case TacticalGraphicHostility.pending:
-            return HOSTILITY_COLORS.pending;
-        default:
-            return undefined;
-    }
-}
-
-export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
-    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
-    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
-    if (override) return override;
-
-    return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
-};
-
-function withOpacity(color: string, alpha: number): string {
-    // rgb()/rgba()
-    const rgb = color.match(
-        /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)/,
-    );
-    if (rgb) {
-        const [, r, g, b] = rgb;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    // #rgb / #rgba / #rrggbb / #rrggbbaa — the default line color is hex, so
-    // hatch/fill helpers that tint it must handle this form too.
-    const hex = color.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
-    if (hex) {
-        let h = hex[1];
-        if (h.length <= 4) h = h.split('').map(c => c + c).join(''); // #rgb(a) → #rrggbb(aa)
-        const r = parseInt(h.slice(0, 2), 16);
-        const g = parseInt(h.slice(2, 4), 16);
-        const b = parseInt(h.slice(4, 6), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    console.warn('Unrecognized color for withOpacity:', color);
-    return color;
-}
 
 export function createDiagonalHatchPattern(
     hostility: TacticalGraphicHostility,
@@ -6760,161 +2737,48 @@ export function createDiagonalHatchPattern(
     return ctx.createPattern(canvas, 'repeat')!;
 }
 
-/**
- * The obstacle areas: belt, group and zone wear their teeth outward, the free and
- * restricted areas inward, and the restricted area alone carries a hatch fill.
- *
- * The geometry is the plain drawn ring — the crenellation is added here, in screen
- * pixels. @see obstacleRing
- */
-export function obstacleAreaStyles(feature: FeatureLike, resolution: number, opts: {outward: boolean, hatched?: boolean}): Style[] {
-    const geometry = feature.getGeometry();
-    if (!(geometry instanceof Polygon)) return [];
 
-    const hostility = readHostility(feature);
-    const color = getColorByHostility(hostility);
-    const toothed = geometry.getCoordinates().map(ring => obstacleRing(ring, resolution, opts.outward));
-
-    return [new Style({
-        geometry: new Polygon(toothed),
-        stroke: new Stroke({color, width: LINE_WIDTH()}),
-        fill: opts.hatched ? new Fill({color: createDiagonalHatchPattern(hostility, 8, 1)}) : undefined,
-    })];
-}
-
-export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number) {
-    return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
-}
-
-/**
- * The fortified area: square merlons standing outward off the drawn ring, in screen
- * pixels. Same reasoning as the obstacle teeth, same winding correction — outward is a
- * property of the ring, not of the order its corners were clicked.
- */
-export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
-    const geometry = feature.getGeometry();
-    if (!(geometry instanceof Polygon)) return [];
-
-    const scale = decorationScale(geometry.getCoordinates()[0], true, resolution, FORTIFIED_HEIGHT_PX);
-    const merlonMap = FORTIFIED_MERLON_PX * scale * resolution;
-    const crenelMap = FORTIFIED_CRENEL_PX * scale * resolution;
-    const heightMap = FORTIFIED_HEIGHT_PX * scale * resolution;
-
-    const rings = geometry.getCoordinates().map(ring =>
-        castellatedPath(ring, merlonMap, crenelMap, heightMap, ringIsClockwise(ring) ? 1 : -1));
-
-    return [new Style({
-        geometry: new Polygon(rings),
-        stroke: new Stroke({color: readHostilityColor(feature), width: LINE_WIDTH()}),
-    })];
-}
 
 // FreeFireAreaCircular: present = solid stroke with no fill; planned = dashed
 // stroke with diagonal hatch fill. Mirrors the polygon FFA rendering so all
 // three FFA variants read the same when their status is set.
+/** **Ported.** @see areaPaints.ts, `freeFireAreaCircularPaint`. */
 export function freeFireAreaCircularStyleFunc(): StyleFunction {
-    return (f, resolution) => freeFireAreaCircularStyleFromLabels(readGraphicLabels(f))(f, resolution);
+    return asStyleFunction(freeFireAreaCircularPaint());
 }
 
-function freeFireAreaCircularStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    return (feature) => {
-        const color = readHostilityColor(feature);
-        const hostility = readHostility(feature);
-        const isPlanned = labels.status === TacticalGraphicStatus.planned;
-        const hatchPattern = isPlanned ? createDiagonalHatchPattern(hostility, 8, 1) : undefined;
 
-        return new Style({
-            fill: hatchPattern ? new Fill({color: hatchPattern}) : undefined,
-            stroke: new Stroke({
-                color,
-                width: LINE_WIDTH(),
-                lineDash: isPlanned ? [12, 8] : undefined,
-            }),
-        });
-    };
+
+/**
+ * ## The ported area styles, as OpenLayers style functions
+ *
+ * Each is `asStyleFunction(...)` over a paint function in `areaPaints.ts`, so one
+ * implementation draws in both renderers.
+ *
+ * **The exported names are kept deliberately.** `openlayerStyles.test.ts` asserts
+ * on three of them — the obstacle teeth's winding correction, the shape-relative
+ * decoration cap, the fortified merlons — and `MissionTaskGraphicBase` calls a
+ * fourth for the circular no-fire areas. Deleting the exports would have deleted
+ * the coverage that proves the port did not change what these draw, which is the
+ * opposite of what the port is for.
+ */
+
+/** Belt / group / zone (outward), free (inward), restricted (inward + hatched). */
+export function obstacleAreaStyles(feature: FeatureLike, resolution: number, opts: {outward: boolean; hatched?: boolean}): Style[] {
+    return asStyleFunction(obstacleAreaPaint(opts))(feature, resolution);
 }
 
-export function groupOrSeriesOfTargetsGraphicStyle(
-    labels: GraphicLabels,
-    feature: FeatureLike,
-    resolution: number,
-): Style[] {
-    const geom = feature.getGeometry();
-    if (!(geom instanceof Polygon)) return [];
-    const ring = geom.getCoordinates()[0];
-    if (!ring || ring.length < 2) return [];
-
-    const color = readHostilityColor(feature);
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-    const stroke = new Stroke({
-        color,
-        width: LINE_WIDTH(),
-        lineDash: isPlanned ? [12, 8] : undefined,
-    });
-
-    let bestIdx = 0;
-    let bestMidY = -Infinity;
-    for (let i = 0; i < ring.length - 1; i++) {
-        const midY = (ring[i][1] + ring[i + 1][1]) / 2;
-        if (midY > bestMidY) {
-            bestMidY = midY;
-            bestIdx = i;
-        }
-    }
-
-    const styles: Style[] = [];
-    const labelText = (labels.label ?? '').trim();
-    const scale = featureLabelScale(feature, resolution);
-    const labelWidthPx = labelText ? getTextWidth(labelText, fontStyle, scale) : 0;
-    const gapHalfMap = labelText ? (labelWidthPx / 2 + 6) * resolution : 0;
-
-    for (let i = 0; i < ring.length - 1; i++) {
-        const a = ring[i];
-        const b = ring[i + 1];
-        if (i === bestIdx && gapHalfMap > 0) {
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const segLen = Math.hypot(dx, dy);
-            if (segLen > 2 * gapHalfMap) {
-                const ux = dx / segLen, uy = dy / segLen;
-                const mx = (a[0] + b[0]) / 2;
-                const my = (a[1] + b[1]) / 2;
-                const gapStart: Coordinate = [mx - ux * gapHalfMap, my - uy * gapHalfMap];
-                const gapEnd: Coordinate = [mx + ux * gapHalfMap, my + uy * gapHalfMap];
-                styles.push(new Style({geometry: new LineString([a, gapStart]), stroke}));
-                styles.push(new Style({geometry: new LineString([gapEnd, b]), stroke}));
-                continue;
-            }
-        }
-        styles.push(new Style({geometry: new LineString([a, b]), stroke}));
-    }
-    return styles;
+export function obstacleRestrictedZoneStyle(feature: FeatureLike, resolution: number): Style[] {
+    return obstacleAreaStyles(feature, resolution, {outward: false, hatched: true});
 }
 
-export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: number): Style {
-    return limitedAccessAreaStyleFromLabels(readGraphicLabels(feature), feature, resolution);
+export function fortifiedAreaStyle(feature: FeatureLike, resolution: number): Style[] {
+    return asStyleFunction(fortifiedAreaPaint())(feature, resolution);
 }
 
-function limitedAccessAreaStyleFromLabels(labels: GraphicLabels, feature: FeatureLike, resolution: number): Style {
-    const color = readHostilityColor(feature);
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-
-    const pattern = createDiagonalHatchPattern(
-        TacticalGraphicHostility.unknown,
-        16,
-        2                    // hatch thickness
-    );
-
-    return new Style({
-        fill: new Fill({
-            color: pattern ?? 'rgba(0,0,0,0)',
-        }),
-        stroke: new Stroke({
-            color,
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined,
-        }),
-    });
+/** The limited-access family, including the circular no-fire area a mission-task holder draws. */
+export function limitedAccessAreaStyleFunc(feature: FeatureLike, resolution: number): Style[] {
+    return asStyleFunction(limitedAccessAreaPaint())(feature, resolution);
 }
 
 export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolution: number) {
@@ -6925,217 +2789,52 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
-    if (name === TacticalGraphicName.Encirclement) return encirclementGraphicStyle(feature, resolution);
-    if (name === TacticalGraphicName.ObstacleRestrictedArea) return obstacleRestrictedZoneStyle(feature, resolution);
-    if (name === TacticalGraphicName.ObstacleFreeArea) return obstacleAreaStyles(feature, resolution, {outward: false});
-    if (name === TacticalGraphicName.FortifiedArea) return fortifiedAreaStyle(feature, resolution);
+    // ── Ported to the paint layer ────────────────────────────────────────────
+    // Every branch below is `asStyleFunction(...)` over a paint function, so the
+    // same implementation draws in OpenLayers and MapLibre. @see areaPaints.ts
+    if (name === TacticalGraphicName.ObstacleRestrictedArea) {
+        return asStyleFunction(obstacleAreaPaint({outward: false, hatched: true}), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.ObstacleFreeArea) {
+        return asStyleFunction(obstacleAreaPaint({outward: false}), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.FortifiedArea) {
+        return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
+    }
     if (
         name === TacticalGraphicName.ObstacleBelt ||
         name === TacticalGraphicName.ObstacleGroup ||
         name === TacticalGraphicName.ObstacleZone
-    ) return obstacleAreaStyles(feature, resolution, {outward: true});
-    if (name === TacticalGraphicName.LimitedAccessArea) return limitedAccessAreaStyleFromLabels(labels, feature, resolution);
+    ) {
+        return asStyleFunction(obstacleAreaPaint({outward: true}), name)(feature, resolution);
+    }
     if (
+        name === TacticalGraphicName.LimitedAccessArea ||
         name === TacticalGraphicName.NoFireAreaCircular ||
         name === TacticalGraphicName.NoFireAreaIrregular ||
         name === TacticalGraphicName.NoFireAreaRectangular ||
         name === TacticalGraphicName.WeaponsFreeZone
-    ) return limitedAccessAreaStyleFromLabels(labels, feature, resolution);
+    ) {
+        return asStyleFunction(limitedAccessAreaPaint(), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.GroupOrSeriesOfTargets) {
-        return groupOrSeriesOfTargetsGraphicStyle(labels, feature, resolution);
+        return asStyleFunction(groupOrSeriesOfTargetsPaint(), name)(feature, resolution);
     }
-    // ✅ Pull hostility-based color if available
-    let color = readHostilityColor(feature);
-
-    const isPlanned = labels.status === TacticalGraphicStatus.planned;
-
-    return new Style({
-        stroke: new Stroke({
-            color: color,
-            width: LINE_WIDTH(),
-            lineDash: isPlanned ? [12, 8] : undefined,
-        }),
-    });
+    if (name === TacticalGraphicName.Encirclement) {
+        return asStyleFunction(encirclementPaint(), name)(feature, resolution);
+    }
+    // Everything else: the plain outline, dashed when planned. **Ported** — 60 of
+    // the 75 area graphics reach this branch. @see paintFunctions.ts, `areaOutlinePaint`.
+    return asStyleFunction(areaOutlinePaint(name), name)(feature, resolution);
 }
 
-export function encirclementGraphicStyle(feature: FeatureLike, resolution: number): Style[] | Style {
-    const hostility = readHostility(feature);
-    let geom = feature.getGeometry();
-    let styles = [
-        new Style({
-            stroke: new Stroke({
-                color: getColorByHostility(hostility),
-                width: LINE_WIDTH(),
-            }),
-        }),
-    ];
-
-    if (!geom || !(geom instanceof GeometryCollection)) {
-        return styles;
-    }
-
-    let geometries = geom.getGeometries();
-
-    geometries.forEach((geom) => {
-        if (!(geom instanceof MultiPoint)) return;
-
-        if (hostility === TacticalGraphicHostility.hostileFaker) {
-            styles.push(
-                new Style({
-                        geometry: new MultiPoint(geom.getCoordinates()),
-                        text: new Text({
-                            text: 'ENY',
-                            font: fontStyle,
-                            // Was getColorByHostility(unknown), which resolves to
-                            // the same #000000 by a confusing route. ENY is an
-                            // amplifier, and amplifiers are black.
-                            fill: new Fill({color: getLabelFillColor()}),
-                            placement: 'point',
-                            scale: featureLabelScale(feature, resolution),
-                        }),
-                    },
-                ));
-        }
-
-    });
-
-    return styles;
-
-}
 
 // --- CONFIGURATION CONSTANTS ---
 const GAP_WIDTH_PX = 40; // The desired width (in screen pixels) for each text gap
 
-/**
- * Generates an array of OpenLayers styles for a polygon feature
- * with two text-labeled gaps along the most outward-facing segment.
- *
- * @param {import('ol/Feature').default} feature The feature to style.
- * @param {number} resolution The current map resolution.
- * @param {number[]} rotation The unit vector [dx, dy] representing the 'outward' direction.
- * @param {(hostility: string) => string} getColorByHostility Function to get color.
- * @returns {Style[]} An array of Style objects.
- */
+/** **Ported.** @see echelonPaints.ts, `unexplodedOrdnanceAreaPaint`. */
 function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: number) {
-// 1) Get the main ring coordinates
-    const geometry = feature.getGeometry() as Polygon;
-    const ring = geometry.getCoordinates()[0];
-
-    if (ring.length < 3) return [];
-
-    let rotation = feature.get('rotation') || 0;
-
-    const unitRot = [Math.cos(rotation), Math.sin(rotation)];
-    const color = readHostilityColor(feature);
-    const gapMapUnits = GAP_WIDTH_PX * resolution;
-
-    // --- NEW LOGIC: FINDING OPPOSITE SEGMENTS ---
-    let maxProjection = -Infinity;
-    let minProjection = Infinity;
-    let maxIndex = -1;
-    let minIndex = -1;
-
-    // 2) Iterate over all segments to find the ones defining the extent along the rotation axis
-    for (let i = 0; i < ring.length - 1; i++) {
-        const [x1, y1] = ring[i];
-        const [x2, y2] = ring[i + 1];
-
-        // Midpoint of the segment
-        const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2;
-
-        // Projection of the midpoint onto the rotation axis
-        // This tells us how far "out" this segment is along the rotation vector
-        const projection = midX * unitRot[0] + midY * unitRot[1];
-
-        if (projection > maxProjection) {
-            maxProjection = projection;
-            maxIndex = i;
-        }
-        if (projection < minProjection) {
-            minProjection = projection;
-            minIndex = i;
-        }
-    }
-
-    // Ensure we found two distinct segments
-    if (maxIndex === minIndex || maxIndex === -1 || minIndex === -1) {
-        // Fallback to a closed outline if opposite segments couldn't be found
-        return [new Style({stroke: new Stroke({color: color, width: LINE_WIDTH()})})];
-    }
-
-    const segmentsToGap = [maxIndex, minIndex];
-    const styles = [];
-    const outlineSegments = [];
-
-    // 3) Process each segment (maxIndex and minIndex) to create the gap and label
-    for (let i = 0; i < ring.length - 1; i++) {
-        const p1 = ring[i];
-        const p2 = ring[i + 1];
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (segmentsToGap.includes(i)) {
-            // This is one of the two segments where we need a gap and a label
-
-            // Gap placement calculation (centered gap)
-            if (segLen < gapMapUnits) {
-                // Segment is too short, just add the full segment to the outline
-                outlineSegments.push([p1, p2]);
-                continue;
-            }
-
-            // Calculate the fraction (t-value) for the start and end of the gap
-            const centerT = 0.5; // Center of the segment
-            const halfGapRatio = (gapMapUnits / 2) / segLen;
-
-            const tStart = centerT - halfGapRatio;
-            const tEnd = centerT + halfGapRatio;
-
-            const tCenter = centerT; // Label is exactly at the midpoint
-
-            // Calculate the coordinates for the break points and the label
-            const breakPoint = (t: number) => [p1[0] + dx * t, p1[1] + dy * t];
-
-            const gapStart = breakPoint(tStart);
-            const gapEnd = breakPoint(tEnd);
-            const labelCoord = breakPoint(tCenter);
-
-            // Add the two line pieces around the gap
-            outlineSegments.push(
-                [p1, gapStart], // Piece before the gap
-                [gapEnd, p2],    // Piece after the gap
-            );
-
-            // Create the label style
-            const labelStyle = new Style({
-                geometry: new Point(labelCoord),
-                text: new Text({
-                    text: 'UXO',
-                    font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
-                    stroke: getHaloStroke(),
-                    placement: 'point',
-                    scale: featureLabelScale(feature, resolution),
-                }),
-            });
-            styles.push(labelStyle);
-
-        } else {
-            // This is a normal perimeter segment, just add it to the outline
-            outlineSegments.push([p1, p2]);
-        }
-    }
-
-    // 4) Create the final perimeter style
-    const outlineStyle = new Style({
-        geometry: new MultiLineString(outlineSegments),
-        stroke: new Stroke({color: color, width: LINE_WIDTH()}),
-    });
-    styles.push(outlineStyle);
-
-    return styles;
+    return asStyleFunction(unexplodedOrdnanceAreaPaint())(feature, resolution);
 }
 
 
@@ -7167,8 +2866,8 @@ export function createAirCoordinatingAreaLabelStyle(
 
     // ── Alt / time block — pad label to 11 chars for rough column alignment ───
     const altLines: string[] = [];
-    if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${labels.minAltitude}`);
-    if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${labels.maxAltitude}`);
+    if (labels.minAltitude) altLines.push(`${'MIN ALT:'.padEnd(11)}${formatAltitude(labels.minAltitude, labels.altitudeDatum)}`);
+    if (labels.maxAltitude) altLines.push(`${'MAX ALT:'.padEnd(11)}${formatAltitude(labels.maxAltitude, labels.altitudeDatum)}`);
     if (labels.startDate)   altLines.push(`${'TIME FROM:'.padEnd(11)}${labels.startDate}`);
     if (labels.endDate)     altLines.push(`${'TIME TO:'.padEnd(11)}${labels.endDate}`);
 
@@ -7182,9 +2881,7 @@ export function createAirCoordinatingAreaLabelStyle(
     // Measure the widest line so we can shift the left-aligned block to center it.
     // offsetX moves the anchor to the left edge of the block; the block then
     // extends rightward by maxLineWidth*scale, keeping it centered overall.
-    const ctx = measureCtx();
-    ctx.font = fontStyle;
-    const maxLineWidth = Math.max(...allLines.map(l => l ? ctx.measureText(l).width : 0));
+    const maxLineWidth = Math.max(...allLines.map(l => (l ? getTextWidth(l, fontStyle, 1) : 0)));
     const offsetX = -(maxLineWidth * scale) / 2;
 
     return [new Style({
@@ -7204,34 +2901,8 @@ export function createAirCoordinatingAreaLabelStyle(
 }
 
 // Full style function that can be assigned to a layer or feature
-export function airCoordinatingAreaStyleFunc(identifier: string, labels: GraphicLabels, hasHatchPattern: boolean): StyleFunction {
-    return (feature, resolution) => {
-        // Fallback Polygon Style (optional, but good practice)
-        const isPlanned = labels.status === TacticalGraphicStatus.planned;
-        const polygonStyle = new Style({
-            // Fixed literals, and not chrome: this is the graphic's own line work. See
-            // the palette note above `getDefaultLineColor`.
-            fill: new Fill({
-                color: 'rgba(255, 100, 100, 0.4)',
-            }),
-            stroke: new Stroke({
-                color: 'rgb(255, 50, 50)',
-                width: LINE_WIDTH(),
-                lineDash: isPlanned ? [12, 8] : undefined,
-            }),
-        });
-
-        // Generate label styles
-        const labelStyles = createAirCoordinatingAreaLabelStyle(feature, identifier, labels, resolution, hasHatchPattern);
-
-        // Return the base polygon style and all the generated label styles
-        return [polygonStyle, ...labelStyles];
-    };
+/** **Ported.** @see airPaints.ts, `airCoordinatingAreaLabelPaint`. */
+export function airCoordinatingAreaStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airCoordinatingAreaLabelPaint(name), name);
 }
 
-export function getTextWidth(text: string, font: string, scale: number): number {
-    const ctx = measureCtx();
-    ctx.font = font; // e.g. "bold 12px sans-serif"
-    const metrics = ctx.measureText(text);
-    return metrics.width * scale;
-}
