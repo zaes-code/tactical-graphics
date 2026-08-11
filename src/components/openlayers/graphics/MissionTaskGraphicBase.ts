@@ -25,7 +25,7 @@ import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
 import {
-    clampEnvelopmentBend,
+    envelopmentBendFrom,
     clampTurnBend,
     ENVELOPMENT_DEFAULT_BEND,
     TacticalGraphicName,
@@ -65,7 +65,7 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  * and forth while the user is only trying to lengthen the hook; requiring a
  * deliberate move to one side keeps the flip available without that.
  */
-const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
+/** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
 
 /**
  * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
@@ -753,13 +753,9 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         const along = dx * Math.cos(theta) + dy * Math.sin(theta);
         const perp = dx * -Math.sin(theta) + dy * Math.cos(theta);
 
-        const radius = Math.max(0, (along - this.size) / 2);
-        // Hold the current flank unless the drag commits to the other one, so a
-        // handle resting on the axis cannot flip on jitter alone.
-        const current = Math.sign(this.bend) || 1;
-        const side = Math.abs(perp) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perp) : current;
-
-        this.bend = clampEnvelopmentBend((side || 1) * (radius / this.size));
+        // The rule itself is the library's, so both renderers bend this graphic by the
+        // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
+        this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
         this.updateGeometry();
     }
 }
