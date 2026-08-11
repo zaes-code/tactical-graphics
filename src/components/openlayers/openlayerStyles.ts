@@ -364,6 +364,29 @@ const createBasemapLayers = () => BASEMAP_ENABLED ? [
     }),
 ] : [];
 
+/**
+ * The backing store never gets *smaller* than the element it fills.
+ *
+ * OpenLayers sizes its canvas at `devicePixelRatio` and scales it to the container
+ * with a CSS transform. Above 1 that transform shrinks — the ordinary HiDPI path,
+ * and fine. Below 1 it **enlarges**, and a browser zoomed to 90% (`devicePixelRatio`
+ * 0.9) gets a 1920x866 canvas stretched over a 2133x962 box by
+ * `transform: matrix(1.11111, …)`. Chrome's compositor can drop that layer
+ * entirely: the canvas paints correctly — its pixels read back as the basemap, every
+ * tile loaded, no error anywhere — and simply never reaches the screen, until any
+ * interaction invalidates the layer and it appears. Diagnosed from a boot recording
+ * of a live blank map; `Ctrl+0` cured it, and a clamp here prevents it.
+ *
+ * Clamping only ever affects a zoomed-*out* page. A real HiDPI display (2), or
+ * Windows at 125% or 150% (1.25, 1.5), passes through untouched and keeps its
+ * sharpness — those downscale, which is the path every retina browser exercises
+ * constantly. This costs a zoomed-out viewer about 20% more pixels per frame.
+ *
+ * Read once at construction, because OL fixes `pixelRatio` there; changing the
+ * browser zoom afterwards has always needed a reload to re-derive it.
+ */
+const canvasPixelRatio = () => Math.max(1, window.devicePixelRatio || 1);
+
 export const createMap = (target: HTMLElement) => {
     let controls = defaults({zoom: false}).extend([
         new ScaleLine({
@@ -373,6 +396,7 @@ export const createMap = (target: HTMLElement) => {
     return new Map({
         controls: controls,
         target: target,
+        pixelRatio: canvasPixelRatio(),
         layers: [
             ...createBasemapLayers(),
         ],
