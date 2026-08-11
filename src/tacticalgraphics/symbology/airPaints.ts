@@ -120,8 +120,8 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.label?.trim()) names.push(props.label.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude)));
+        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
         if (props.startDate) values.push(column('TIME FROM:', props.startDate));
         if (props.endDate) values.push(column('TIME TO:', props.endDate));
 
@@ -151,8 +151,8 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         if (props.secondId?.trim()) names.push(props.secondId.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude)));
+        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
         if (props.grid) values.push(column('GRID:', props.grid));
         // The effective time is the two date-time groups joined, and it **replaces** any
         // `eff` the caller set rather than falling back to it: the OpenLayers dispatcher

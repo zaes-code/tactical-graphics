@@ -926,6 +926,31 @@ export enum TacticalGraphicStatus {
     planned = 'planned',
 }
 
+/**
+ * What an altitude is measured **from**.
+ *
+ * FM 1-02.2's field X carries a number plus the thing it is relative to — the plates
+ * print `1500FT AGL` and `20000FT AGL`, and the field description's own examples are
+ * `1500MSL` and `FL150`. The datum belongs to the *value*, not to the host: two zones on
+ * one map can honestly be one AGL and one MSL, so a global setting could never say so.
+ * That is why this is a graphic property while {@link AltitudeUnit} is configuration.
+ *
+ * - `MSL` — above **mean sea level**. A true height from a real datum.
+ * - `AGL` — above **ground level**. Also a true height, and a different one: 1500 AGL
+ *   over a 3000 ft ridge is 4500 MSL, which is why the two cannot be folded together.
+ * - `FL` — a **flight level**: hundreds of feet of *pressure* altitude against the
+ *   standard 1013.25 hPa setting. Deliberately not a height above anything — above the
+ *   transition altitude every aircraft uses the same reference, so flight levels
+ *   separate aircraft from each other rather than placing them. It renders as `FL150`,
+ *   with no unit and the number meaning 15,000 ft, which is why it takes its own branch
+ *   in `formatAltitude` rather than a suffix.
+ */
+export enum AltitudeDatum {
+    meanSeaLevel = 'MSL',
+    aboveGroundLevel = 'AGL',
+    flightLevel = 'FL',
+}
+
 export enum TacticalGraphicConfidence {
     known = 'known',
     suspected = 'suspected',

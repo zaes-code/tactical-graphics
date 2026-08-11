@@ -125,8 +125,9 @@ tacticalGraphic: {
     startDate: '021200ZJUN26',
     endDate: '021800ZJUN26',
     eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
-    minAltitude: 500,         // a NUMBER, in the configured height unit — see below
+    minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
     maxAltitude: 2000,
+    altitudeDatum: 'AGL',     // MSL | AGL | FL — what those numbers are measured from
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
@@ -159,11 +160,21 @@ tacticalGraphic: {
 
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
-`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`. FM 1-02.2 makes these
-fields free text, and a string still renders untouched, so a `'FL150'` or a `'1500MSL'`
-from another system draws as written — but a number is what the type invites, because it
-is what a program can sort and compare. See
-[Configuring colors and sizes](#configuring-colors-and-sizes).
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`.
+
+`altitudeDatum` says what they are measured **from**, and it is a property rather than a
+setting because two zones on one map can honestly differ: 1500 AGL over a 3000 ft ridge
+is 4500 MSL. It renders after the unit, as the plates print it — `1500FT AGL`.
+
+**`FL` is the exception, and deliberately so.** A flight level is hundreds of feet of
+*pressure* altitude against the standard 1013.25 hPa setting, so it is not a height above
+anything and the configured unit does not apply. Under `FL` the number **is** the level:
+`150` draws as `FL150`, not `FL15000`.
+
+FM 1-02.2 makes these fields free text, so a string still renders untouched — a
+`'FL150'` or a `'1500MSL'` from another system draws exactly as written, datum and all.
+A number plus a datum is what the types invite, because that is what a program can sort
+and compare. See [Configuring colors and sizes](#configuring-colors-and-sizes).
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with

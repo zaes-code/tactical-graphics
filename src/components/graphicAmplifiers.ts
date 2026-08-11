@@ -18,6 +18,7 @@
  */
 
 import type {
+    AltitudeDatum,
     RangeFanConfig,
     RouteDirection,
     TacticalGraphicConfidence,
@@ -45,6 +46,8 @@ export interface GraphicLabels {
     /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
     minAltitude?: number;
     maxAltitude?: number;
+    /** What both are measured from. @see AltitudeDatum */
+    altitudeDatum?: AltitudeDatum;
     /**
      * Full width in metres, edge to edge. The same field the geometry schema uses —
      * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
