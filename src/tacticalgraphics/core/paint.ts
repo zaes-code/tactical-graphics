@@ -356,7 +356,7 @@ export interface PaintFeature {
     rangeFanBands?: Array<{
         range: number;
         label?: string;
-        altitude?: string;
+        altitude?: number;
         resolvedLeftAz?: number;
         resolvedRightAz?: number;
     }>;
