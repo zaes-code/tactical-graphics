@@ -31,7 +31,7 @@ import {
     ALTITUDE_UNIT_SUFFIX,
     getAltitudeUnit,
 } from './config';
-import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
 
@@ -306,11 +306,20 @@ export const formatDistance = (metres: number): string => {
  *
  * @see getAltitudeUnit for why the unit is a host-level setting rather than per symbol.
  */
-export const formatAltitude = (value: string | number | undefined): string => {
+export const formatAltitude = (value: string | number | undefined, datum?: AltitudeDatum): string => {
     if (value === undefined) return '';
     const text = String(value).trim();
-    const height = Number(text);
-    return text !== '' && Number.isFinite(height) ? `${Math.round(height)}${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]}` : text;
+    const altitude = Number(text);
+    if (text === '' || !Number.isFinite(altitude)) return text;
+
+    // **A flight level is not a number of feet with a label on it.** `FL150` is 15,000 ft
+    // of pressure altitude against the standard setting, and the number written is the
+    // level itself — 150. So it takes the prefix and no unit, rather than a suffix.
+    if (datum === AltitudeDatum.flightLevel) return `FL${Math.round(altitude)}`;
+
+    const written = `${Math.round(altitude)}${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]}`;
+    // Spaced, as the plates print it: `1500FT AGL`.
+    return datum ? `${written} ${datum}` : written;
 };
 
 /**

@@ -16,7 +16,7 @@ import {
     SelectChangeEvent,
     Typography,} from '@mui/material';
 import {formatDistance} from './openlayers/openlayerStyles';
-import {ALTITUDE_UNIT_SUFFIX, getAltitudeUnit} from '@zaes/tactical-graphics';
+import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactical-graphics';
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
@@ -89,6 +89,9 @@ function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.dtg2) labels.endDate = stored.endDate ?? nowDtg();
     if (fields.altitude1) labels.minAltitude = stored.minAltitude;
     if (fields.altitude2) labels.maxAltitude = stored.maxAltitude;
+    // One datum for both, since a floor and a ceiling measured from different things
+    // would describe two different volumes. Shown whenever either altitude is.
+    if (fields.altitude1 || fields.altitude2) labels.altitudeDatum = stored.altitudeDatum;
     if (fields.weapon) labels.weapon = stored.weapon ?? '';
     if (fields.grids) {
         labels.secondId = stored.secondId ?? '';
@@ -129,6 +132,18 @@ const confidenceOptions = Object.values(TacticalGraphicConfidence);
 interface TacticalGraphicProperties {
     echelon: TacticalGraphicEchelon | string;
     labels: GraphicLabels;
+}
+
+/**
+ * What to call the altitude input, given the datum it is measured from.
+ *
+ * **A flight level is not an altitude in the configured unit**, so offering "(FT)" beside
+ * it would invite the wrong number: a user thinking in feet types 1500, and `FL1500`
+ * means 150,000 ft. Under `FL` the field *is* the level — 150 — and the label says so.
+ */
+function altitudeFieldLabel(which: 'Minimum' | 'Maximum', datum: AltitudeDatum | undefined): string {
+    if (datum === AltitudeDatum.flightLevel) return `${which} Flight Level`;
+    return `${which} Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`;
 }
 
 const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source}) => {
@@ -582,10 +597,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.altitude1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="min-altitude-input">{`Minimum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}</InputLabel>
+                                            <InputLabel htmlFor="min-altitude-input">{altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}</InputLabel>
                                             <OutlinedInput
                                                 id="min-altitude-input"
-                                                label={`Minimum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}
+                                                label={altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.minAltitude ?? ''}
                                                 onChange={e => {
@@ -608,10 +623,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.altitude2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="max-altitude-input">{`Maximum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}</InputLabel>
+                                            <InputLabel htmlFor="max-altitude-input">{altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}</InputLabel>
                                             <OutlinedInput
                                                 id="max-altitude-input"
-                                                label={`Maximum Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`}
+                                                label={altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
                                                 inputProps={{inputMode: 'numeric'}}
                                                 value={pendingChanges.labels.maxAltitude ?? ''}
                                                 onChange={e => {
@@ -627,6 +642,33 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                     }));
                                                 }}
                                             />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {(fields.altitude1 || fields.altitude2) && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel id="altitude-datum-label">Measured from</InputLabel>
+                                            <Select
+                                                labelId="altitude-datum-label"
+                                                label="Measured from"
+                                                value={pendingChanges.labels.altitudeDatum ?? ''}
+                                                onChange={e => {
+                                                    const v = e.target.value as AltitudeDatum | '';
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, altitudeDatum: v === '' ? undefined : v},
+                                                    }));
+                                                }}
+                                            >
+                                                {/* Unset renders the bare number and its unit, which is what a
+                                                    graphic that does not care about a datum should show. */}
+                                                <MenuItem value="">(none)</MenuItem>
+                                                <MenuItem value={AltitudeDatum.meanSeaLevel}>MSL — above mean sea level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.aboveGroundLevel}>AGL — above ground level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.flightLevel}>FL — flight level</MenuItem>
+                                            </Select>
                                         </FormControl>
                                     </Box>
                                 )}

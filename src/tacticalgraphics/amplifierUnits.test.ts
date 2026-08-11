@@ -21,6 +21,7 @@
  */
 
 import {AltitudeUnit, TacticalGraphicsConfig, configureTacticalGraphics, resetTacticalGraphicsConfig} from './core/config';
+import {AltitudeDatum} from './core/type';
 import type {PaintContext, PaintFeature} from './core/paint';
 import {formatAltitude, formatDistance} from './core/symbology';
 import {TacticalGraphicName} from './core/type';
@@ -109,6 +110,33 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
         for (const value of ['FL150', '1500MSL', '1500']) {
             expect(formatAltitude(value)).not.toMatch(/km/i);
         }
+    });
+
+    it('writes the datum after the unit, as the plates print it', () => {
+        expect(formatAltitude(1500, AltitudeDatum.aboveGroundLevel)).toBe('1500FT AGL');
+        expect(formatAltitude(20000, AltitudeDatum.meanSeaLevel)).toBe('20000FT MSL');
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
+        expect(formatAltitude(450, AltitudeDatum.aboveGroundLevel)).toBe('450M AGL');
+    });
+
+    it('writes a flight level as a prefix, with no unit at all', () => {
+        // `FL150` is 15,000 ft of pressure altitude against the standard setting, and the
+        // number written is the level itself. A unit suffix would say it is a distance,
+        // and the configured unit has nothing to do with it — hence the separate branch.
+        expect(formatAltitude(150, AltitudeDatum.flightLevel)).toBe('FL150');
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Metres}));
+        expect(formatAltitude(150, AltitudeDatum.flightLevel)).toBe('FL150');
+    });
+
+    it('writes the bare number when no datum is given', () => {
+        expect(formatAltitude(1500)).toBe('1500FT');
+    });
+
+    it('leaves a string alone whatever datum is set', () => {
+        // A value already written in doctrine's notation carries its own datum, so
+        // appending another would produce `1500MSL AGL`.
+        expect(formatAltitude('1500MSL' as unknown as number, AltitudeDatum.aboveGroundLevel)).toBe('1500MSL');
+        expect(formatAltitude('FL150' as unknown as number, AltitudeDatum.meanSeaLevel)).toBe('FL150');
     });
 
     it('handles an empty or absent altitude without inventing a unit', () => {

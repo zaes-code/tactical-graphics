@@ -30,6 +30,7 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    AltitudeDatum,
     TacticalGraphicStatus,
 } from './type';
 
@@ -74,6 +75,12 @@ export interface TacticalGraphicProperties {
      */
     minAltitude?: number;
     maxAltitude?: number;
+    /**
+     * What those altitudes are measured from. Applies to both, because a graphic quoting
+     * a floor and a ceiling against two different datums would be describing two
+     * different volumes. @see AltitudeDatum
+     */
+    altitudeDatum?: AltitudeDatum;
 
     eff?: string;
     grid?: string;
