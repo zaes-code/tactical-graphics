@@ -106,9 +106,9 @@ export {default as geometryService} from './core/GeometryService';
 export {
     BASE_FONT_SIZE_PX,
     DEFAULT_LINE_WIDTH,
-    HeightUnit,
-    HEIGHT_UNIT_SUFFIX,
-    getHeightUnit,
+    AltitudeUnit,
+    ALTITUDE_UNIT_SUFFIX,
+    getAltitudeUnit,
     DEFAULT_PALETTE,
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,

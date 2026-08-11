@@ -159,7 +159,7 @@ tacticalGraphic: {
 
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
-`configureTacticalGraphics({heightUnit: HeightUnit.Metres})`. FM 1-02.2 makes these
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`. FM 1-02.2 makes these
 fields free text, and a string still renders untouched, so a `'FL150'` or a `'1500MSL'`
 from another system draws as written — but a number is what the type invites, because it
 is what a program can sort and compare. See

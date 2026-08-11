@@ -56,7 +56,7 @@ export interface TacticalGraphicProperties {
     startDate?: string;
     endDate?: string;
     /**
-     * Altitude or depth, as a **number** in the host's configured {@link HeightUnit}.
+     * Altitude or depth, as a **number** in the host's configured {@link AltitudeUnit}.
      *
      * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
      * in the string", and feet, metres, a flight level and a submerged depth are all
