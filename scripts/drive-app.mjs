@@ -310,8 +310,27 @@ const main = async () => {
             const result = feature.getStyle()(feature, resolution);
             const styles = Array.isArray(result) ? result : result ? [result] : [];
 
+            // **Matched by coordinates, not by object identity.**
+            //
+            // `s.getGeometry() === feature.getGeometry()` held while the style function
+            // reused the feature's own geometry object. It stopped holding when the
+            // route moved onto the shared paint layer, which describes each mark as
+            // plain coordinates and lets the OpenLayers bridge build a fresh geometry
+            // per paint. Nothing about the rendering changed — but the probe then
+            // counted the route line as a third arrow shaft, reported its stroke among
+            // the traffic figure's colours (so a hostile route "proved" the arrows had
+            // gone red), and found no route line at all to read `lineColor` from. Three
+            // failures, one bad assumption, and none of them in the code under test.
             const own = feature.getGeometry();
-            const isRouteLine = s => !!own && s.getGeometry?.() === own;
+            const ownCoords = own?.getCoordinates?.() ?? [];
+            const sameLine = coords =>
+                Array.isArray(coords) &&
+                coords.length === ownCoords.length &&
+                coords.every((p, i) => Math.abs(p[0] - ownCoords[i][0]) < 1e-6 && Math.abs(p[1] - ownCoords[i][1]) < 1e-6);
+            const isRouteLine = s => {
+                const g = s.getGeometry?.();
+                return !!g && g.getType?.() === 'LineString' && sameLine(g.getCoordinates?.());
+            };
             const shaftStyles = styles.filter(
                 s => !isRouteLine(s) && s.getGeometry?.()?.getType?.() === 'LineString' && s.getStroke?.(),
             );
