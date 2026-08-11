@@ -389,6 +389,41 @@ export function clampEnvelopmentBend(bend: number): number {
 }
 
 /**
+ * How far off the axis a drag has to stray before it means the *other* flank, as a
+ * share of the circle's own radius. Below it the hook keeps the side it had, so a
+ * handle resting on the axis cannot flip on jitter alone.
+ */
+export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
+
+/**
+ * The bend an arrow-tip drag asks for, from the cursor's position about the graphic's
+ * own frame.
+ *
+ * **Not the perpendicular offset a turn's bend handle uses**, and that difference is
+ * the whole reason this exists. Envelopment's tip sits at `size + 2 × radius` *along*
+ * the approach and nothing off it, so the perpendicular carries no radius at all —
+ * measuring it read ≈0 and collapsed the hook onto the line, which is exactly what
+ * MapLibre did while OpenLayers, whose holder has always used the rule below, bent it
+ * properly. The two components split the job: distance along the axis past the line's
+ * end is the circle's diameter, and the side the cursor strays to picks the flank.
+ *
+ * All planar, in projected metres — the frame both renderers edit in.
+ */
+export function envelopmentBendFrom(
+    along: number,
+    perpendicular: number,
+    size: number,
+    currentBend: number,
+): number {
+    if (!(size > 0)) return clampEnvelopmentBend(currentBend);
+
+    const radius = Math.max(0, (along - size) / 2);
+    const current = Math.sign(currentBend) || 1;
+    const side = Math.abs(perpendicular) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perpendicular) : current;
+    return clampEnvelopmentBend((side || 1) * (radius / size));
+}
+
+/**
  * Envelopment — a straight approach that hooks into a half circle and ends in an
  * open arrowhead.
  *

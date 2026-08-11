@@ -221,12 +221,13 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
 const BENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Turn,
     TacticalGraphicName.TacticalTurn,
-    // **Envelopment is not one of these**, though it was listed here. The OpenLayers
-    // registry builds it as a plain mission task — only `turn` adds a bend handle on top
-    // of that model — so its first handle rotates and resizes there, while MapLibre read
-    // this contract and used the same handle to set a bend. Dragging it outward grew the
-    // graphic in one engine and collapsed the hook to nothing in the other, which is what
-    // left the "E" stranded beside a symbol that had shrunk away from it.
+    // **Envelopment is one of these after all.** Its registry entry looks like a plain
+    // mission task, which is what this list was briefly trimmed on — but
+    // `EnvelopmentGraphicBase.setBandRange` is the implementation, and it reads handle 0
+    // as a bend and handle 1 as a reach exactly as declared here. Trimming it made
+    // MapLibre resize freely from a handle OpenLayers bends with, so the same drag grew
+    // the graphic 4.6x in one engine and 1.5x in the other. @see envelopmentBendFrom
+    TacticalGraphicName.Envelopment,
 ];
 
 /**
