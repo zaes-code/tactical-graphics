@@ -18,6 +18,8 @@ import {restoreTacticalGraphics, serializeTacticalGraphics} from './persistence'
 import {TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {getSecurityOperationSymbolSize, setSecurityOperationSymbolSize} from './securityOperationSymbol';
 import {isEmpty} from '../../utils/isEmpty';
+import {readViewport, writeViewport} from '../mapViewport';
+import {fromLonLat, toLonLat} from 'ol/proj';
 import type {FeatureCollection} from 'geojson';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import type {MapEngineHandle} from '../mapEngine';
@@ -54,6 +56,24 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         const olMap = createMap(mapRef.current);
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
+
+        // Open where the other engine — or the last visit — left off. Applied before
+        // the first frame, so there is no visible jump from the default view.
+        const storedView = readViewport();
+        if (storedView) {
+            const view = olMap.getView();
+            view.setCenter(fromLonLat([storedView.lon, storedView.lat]));
+            view.setResolution(storedView.resolution);
+        }
+        const rememberView = () => {
+            const view = olMap.getView();
+            const centre = view.getCenter();
+            const resolution = view.getResolution();
+            if (!centre || !resolution) return;
+            const [lon, lat] = toLonLat(centre);
+            writeViewport({lon, lat, resolution});
+        };
+        olMap.on('moveend', rememberView);
 
         // **Force a frame once the page is on screen and its container measured.**
         //
@@ -157,6 +177,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         return () => {
             onReady(null);
             cancelAnimationFrame(firstFrame);
+            olMap.un('moveend', rememberView);
             document.removeEventListener('visibilitychange', revive);
             window.removeEventListener('pageshow', revive);
             olMap.setTarget(undefined);
