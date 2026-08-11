@@ -316,13 +316,17 @@ export {
     DEFAULT_SYMBOL_SIZE_PX,
     MAX_SYMBOL_SIZE_PX,
     MIN_SYMBOL_SIZE_PX,
+    clearGraphicSecuritySymbolProviders,
+    getGraphicSecuritySymbolProvider,
     getSecuritySymbolProvider,
     getSecuritySymbolSize,
     resolveSecuritySymbol,
     securitySymbolRevision,
     securitySymbolSidc,
+    setGraphicSecuritySymbolProvider,
     setSecuritySymbolProvider,
     setSecuritySymbolSize,
+    subscribeSecuritySymbolChange,
     useMilsymbolSecuritySymbols,
 } from './core/securitySymbol';
 export type {MilsymbolModule, SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from './core/securitySymbol';
