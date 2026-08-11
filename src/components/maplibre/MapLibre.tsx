@@ -178,6 +178,20 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
 
         mapRef.current = map;
 
+        // The same first-frame guard the OpenLayers view carries, for the same reason —
+        // a map that sized itself against an unmeasured container, or booted while the
+        // document was hidden, otherwise stays blank until an interaction. MapLibre's
+        // `resize` re-reads the container; `triggerRepaint` asks for the frame.
+        // @see openlayers/OpenLayers.tsx
+        const revive = () => {
+            if (document.visibilityState !== 'visible') return;
+            map.resize();
+            map.triggerRepaint();
+        };
+        const firstFrame = requestAnimationFrame(revive);
+        document.addEventListener('visibilitychange', revive);
+        window.addEventListener('pageshow', revive);
+
         // Both spike paths are built, and which one draws is a runtime switch, so a
         // single capture run can compare them against each other and against
         // OpenLayers without rebuilding. `renderer` is whichever is live.
@@ -286,6 +300,9 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
 
         return () => {
             disposed = true;
+            cancelAnimationFrame(firstFrame);
+            document.removeEventListener('visibilitychange', revive);
+            window.removeEventListener('pageshow', revive);
             interactions?.destroy();
             setPropertiesSource(null);
             onReady(null);
