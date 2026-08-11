@@ -16,9 +16,12 @@
  * 1. The viewport must be 1600x1000. `drawProvenSamples` derives its grid
  *    columns from the map size, so a different viewport reflows the whole
  *    grid and the image stops being comparable to the previous one.
- * 2. The basemap is hidden. The gallery is framed over open ocean, but when
- *    the OSM tiles do load, coastlines and place labels sit behind the
- *    symbols and fight them for legibility.
+ * 2. The basemap is dimmed, not hidden. It was hidden outright, which left the
+ *    symbols floating on flat colour with nothing to place them; at full
+ *    strength, though, coastlines and place labels run under the symbols and
+ *    fight them for legibility. {@link BASEMAP_OPACITY} is the compromise —
+ *    enough coastline to read as a map, faint enough that the line work stays
+ *    the brightest thing in the frame.
  */
 import {chromium} from 'playwright';
 import {mkdirSync} from 'fs';
@@ -34,6 +37,16 @@ const VIEWPORT = {width: 1600, height: 1000};
 const browser = await chromium.launch({headless: !HEADED});
 const page = await browser.newPage({viewport: VIEWPORT, deviceScaleFactor: 1});
 
+/**
+ * How strongly the basemap reads behind the symbols, 0-1.
+ *
+ * Tuned against the dark demo chrome: the graphics are near-white line work, so the
+ * basemap has to sit clearly below them in contrast. Raise it and place labels start
+ * competing with the amplifiers; drop it much further and the coastlines stop being
+ * legible at all, which is the state this replaced.
+ */
+const BASEMAP_OPACITY = 0.35;
+
 console.log(`opening ${URL}`);
 await page.goto(URL, {waitUntil: 'load', timeout: 120_000});
 
@@ -45,14 +58,29 @@ await page.waitForTimeout(2500);
 await page.getByText('Draw all samples', {exact: true}).click();
 
 // See note 2 above. Identified by source rather than layer index so adding a
-// layer to the demo doesn't silently blank the wrong one.
-await page.evaluate(() => {
+// layer to the demo doesn't silently dim the wrong one.
+await page.evaluate(opacity => {
     window.__tacticalGraphics.map
         .getLayers()
         .getArray()
         .filter(l => typeof l.getSource === 'function' && l.getSource()?.getTileGrid)
-        .forEach(l => l.setVisible(false));
-});
+        .forEach(l => l.setOpacity(opacity));
+}, BASEMAP_OPACITY);
+
+// **Wait for the tiles.** While the basemap was hidden it did not matter whether it
+// had loaded; now a shot taken too early catches a half-tiled map, and the missing
+// squares are conspicuous against the ones that arrived. `rendercomplete` fires when
+// every source the frame needs has finished, which is exactly the condition.
+await page.evaluate(
+    () =>
+        new Promise(resolve => {
+            const map = window.__tacticalGraphics.map;
+            const done = () => resolve();
+            map.once('rendercomplete', done);
+            map.render();
+            setTimeout(done, 30_000); // never hang the capture on a slow tile server
+        }),
+);
 
 // Settle: the sweep draws ~200 graphics, each adding several features. Wait for
 // the count to stop climbing rather than guessing at a fixed delay.
