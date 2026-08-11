@@ -120,8 +120,9 @@ tacticalGraphic: {
 
     // Amplifiers — text rendered on the graphic.
     label: '1-508 IN',        // primary designation
-    secondId: 'TF RAIDER',    // secondary designation
-    countryCode: 'USA',       // and secondCountryCode, beside each designation
+    secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    countryCode: 'USA',       // country beside the primary designation
+    secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
     endDate: '021800ZJUN26',
     eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
@@ -742,6 +743,68 @@ center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayer
 away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
 
+#### Worked example: three security operations, three units
+
+Each with its own unit symbol, on **either engine** — every call below is from the façade
+or the root package, so the only thing that differs between OpenLayers and MapLibre is
+the import path in the setup above.
+
+The provider is the global one, keyed on `request.name`. That is enough here because the
+three graphics are three *kinds*; reach for `setGraphicSecuritySymbolProvider` only when
+two graphics of the **same** kind need different symbols.
+
+```ts
+import ms from 'milsymbol';
+import {TacticalGraphicHostility, TacticalGraphicName, setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard identity
+// the library derived from `hostility` survives the swap, and a hostile graphic stays
+// hostile-framed whichever unit goes in.
+const UNIT = {
+    [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
+    [TacticalGraphicName.Guard]: '121000',    // oval + diagonal  — armored cavalry
+    [TacticalGraphicName.Cover]: '120500',    // oval             — armor
+};
+const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
+
+setSecuritySymbolProvider(({name, sidc}) => {
+    const entity = UNIT[name];
+    if (!entity) return undefined;                    // no symbol for anything else
+    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI render.
+    // `sizePx` is what it actually draws at; return a bare string to take the library's.
+    const svg = new ms.Symbol(sidc.slice(0, 10) + entity + sidc.slice(16), {size: UNIT_SIZE_PX * 2}).asSVG();
+    return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
+});
+
+// Placed from data rather than drawn. `hostility` is the only amplifier these three
+// take: the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S,
+// so there is no user label to set.
+const at = (name, coordinates, hostility = TacticalGraphicHostility.friend) => ({
+    type: 'Feature',
+    geometry: {type: 'Point', coordinates},
+    properties: {tacticalGraphic: {name, hostility}},
+});
+
+// `restore` replaces the map's contents, so this is a load rather than an append —
+// snapshot first if you are adding to something already drawn.
+graphics.restore({
+    type: 'FeatureCollection',
+    features: [
+        at(TacticalGraphicName.Screen, [-77.10, 38.89]),
+        at(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker),
+        at(TacticalGraphicName.Cover, [-76.98, 38.89]),
+    ],
+});
+```
+
+The entity codes are illustrative — FM 1-02.2 does not prescribe which unit performs
+which security task, so substitute your own.
+
+Note what you do **not** do here. These three are sized in screen pixels rather than
+meters, so their geometry has to be re-derived whenever the map zooms; the façade
+subscribes for you. Reaching past it to place graphics yourself is where that becomes
+your job — see [Placing graphics from data](#placing-graphics-from-data).
+
 ---
 
 ## Advanced: reaching past the façade
@@ -807,63 +870,6 @@ and grow and shrink as you zoom. The manager does this for you when the user dra
 and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
 with `unwatchResolution` when you remove the graphic, or the listener outlives its
 features.
-
-#### Worked example: three security operations, three units
-
-Placed programmatically, each with its own unit symbol — the per-graphic provider that
-only this subpath offers. Uses the `map`, `source` and `manager` from above.
-
-```ts
-import ms from 'milsymbol';
-import Feature from 'ol/Feature';
-import Point from 'ol/geom/Point';
-import {fromLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
-
-// Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard
-// identity the library derived from `hostility` survives the swap, and a hostile
-// graphic stays hostile-framed whichever unit goes in.
-const UNIT = {
-    [TacticalGraphicName.Screen]: '121300',   // single diagonal — reconnaissance
-    [TacticalGraphicName.Guard]: '121000',    // oval + diagonal  — armored cavalry
-    [TacticalGraphicName.Cover]: '120500',    // oval             — armor
-};
-const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
-
-function placeSecurityOperation(name, lonLat, hostility = TacticalGraphicHostility.friend) {
-    const handler = getController(name, map.getView().getResolution()!);
-    handler.setSymbolId(crypto.randomUUID());
-
-    // This graphic's own provider, overriding whatever is registered globally.
-    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI
-    // render. `sizePx` is what it actually draws at. Return a bare string instead
-    // to take the library's size.
-    handler.setSymbolProvider(({sidc}) => {
-        const unit = sidc.slice(0, 10) + UNIT[name] + sidc.slice(16);
-        const svg = new ms.Symbol(unit, {size: UNIT_SIZE_PX * 2}).asSVG();
-        return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
-    });
-
-    handler.setBaseFeature(new Feature(new Point(fromLonLat(lonLat))));
-
-    // `hostility` is the only amplifier these three take. There is no user label:
-    // the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S.
-    // `label: ''` is here only because the type requires the field.
-    writeGraphicProperties(handler.getFeatures(), name, {label: '', hostility});
-
-    source.addFeatures(handler.getFeatures());
-    manager.watchResolution(handler);   // required — the geometry is screen-pixel sized
-}
-
-placeSecurityOperation(TacticalGraphicName.Screen, [-77.10, 38.89]);
-placeSecurityOperation(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker);
-placeSecurityOperation(TacticalGraphicName.Cover, [-76.98, 38.89]);
-```
-
-The entity codes above are illustrative — FM 1-02.2 does not prescribe which unit
-performs which security task, so substitute your own. The demo's **Draw all samples**
-button uses exactly this mechanism.
 
 #### When you need the restore report
 
@@ -1255,7 +1261,14 @@ a fixed-size badge like Destroy has no resize to offer.
 ## Roadmap
 
 - Complete the remaining graphics from FM 1-02.2.
-- A Cesium 2D/3D view is planned once the OpenLayers graphics are complete. The OpenLayers style functions already read their amplifiers (label, hostility, status, DTGs) from `properties.tacticalGraphic`, but the styling *logic* is still OpenLayers-specific code — a second renderer would first need that logic expressed as portable, renderer-agnostic data.
+- **Leaflet is scoped as a third rendering engine.** The groundwork is done: symbology
+  now lives in the map-agnostic half as paint functions — geometry, colors, and text
+  described in projected meters — and both shipping engines are consumers of it rather
+  than owners. A third engine implements one bridge from those paint descriptions to
+  its own primitives, and inherits every graphic. Leaflet's canvas renderer is the
+  natural fit; the open questions are its lack of a built-in editing interaction and
+  how far its layer model stretches to the screen-space decorations, and both are being
+  assessed before any commitment to a date.
 
 ---
 
@@ -1264,6 +1277,23 @@ a fixed-size badge like Destroy has no resize to offer.
 - [FM 1-02.2, Military Symbols](https://www.battleorder.org/post/symbolsfm) — US Army
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [TurfJS](https://turfjs.org/) — the geospatial math underneath
+
+## About Zaes
+
+[Zaes](https://zaes.com) is a software engineering and consulting firm working with the
+U.S. Department of Defense and enterprise clients, founded in 2017 and operating
+remote-first from Chantilly, VA and Charleston, SC.
+
+The work spans full-stack engineering, enterprise and application architecture,
+geospatial engineering and GIS development, systems integration, UI/UX design, DevOps and
+CI/CD automation, and program management — with domain consulting in DoD and C2 systems,
+and cleared personnel where a program requires it.
+
+This library comes out of that geospatial and C2 work. It is open-sourced because an
+accurate MIL-STD-2525E symbol set is infrastructure rather than an advantage worth
+keeping: every team building a common operational picture rebuilds the same arrows and
+the same amplifier rules, and doing it once, in the open, against the plates is better
+for everyone drawing them.
 
 ## Contributors
 
