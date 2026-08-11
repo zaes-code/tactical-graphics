@@ -228,10 +228,13 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             if (bandLabel) lines.push(bandLabel);
             if (feature.rangeFanShape === 'circular') lines.push(`MIN RG ${formatKm(band.range)}`);
             else if (isSector) lines.push(`RG ${formatKm(band.range)}`);
-            const altitude = band.altitude?.trim();
+            // Not `.trim()` — a band's altitude is a number now, and a legacy string
+            // still has to survive the same call. @see formatAltitude
+            const altitude = band.altitude;
             // The band carries the number; the datum is the graphic's, since every band of one
             // fan is measured from the same thing.
-            if (altitude) lines.push(`ALT ${formatAltitude(altitude, feature.properties.altitudeDatum)}`);
+            const written = formatAltitude(altitude, feature.properties.altitudeDatum);
+            if (written) lines.push(`ALT ${written}`);
             if (lines.length) paints.push(text(coords[midIndex], lines.join('\n')));
 
             if (!isSector) continue;

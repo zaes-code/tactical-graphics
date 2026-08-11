@@ -107,11 +107,27 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  * drawn bearing. The circular variant ignores azimuth fields entirely.
  */
 export interface RangeFanBand {
+    /**
+     * How far the band reaches, in **kilometres**.
+     *
+     * The one distance in this schema that is not metres — `radius`, `width` and
+     * `decorationSize` all are. It is kilometres because a weapon or sensor envelope is
+     * quoted that way and the label prints the number bare, so metres here would put
+     * three zeroes on every ring. Kept rather than corrected: changing it would silently
+     * rescale every range fan already saved by a factor of a thousand.
+     */
     range: number;
     /** Optional user-entered name shown above the auto-generated range line. */
     label?: string;
-    /** Optional altitude string rendered as "ALT <altitude>" below the range label. */
-    altitude?: string;
+    /**
+     * Optional altitude for this band, rendered as `ALT <altitude>` beneath the range.
+     *
+     * A number in the configured {@link AltitudeUnit}, like the graphic's own altitudes,
+     * and measured from the graphic's `altitudeDatum` — every band of one fan shares it,
+     * because a fan quoting each ring against a different datum would not be one picture.
+     * A string still renders untouched. @see formatAltitude
+     */
+    altitude?: number;
     /** Sector only — absolute bearing of the band's left edge, degrees CW from north. */
     leftAzimuthDeg?: number;
     /** Sector only — absolute bearing of the band's right edge, degrees CW from north. */

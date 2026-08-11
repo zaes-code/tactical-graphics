@@ -811,7 +811,12 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                 id={`band-alt-${i}`}
                                                                 label="Altitude"
                                                                 value={band.altitude ?? ''}
-                                                                onChange={e => updateBand(i, {altitude: e.target.value})}
+                                                                onChange={e => {
+                                                                    // Digits in, a number out — the same edge
+                                                                    // conversion the graphic's own altitudes get.
+                                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                                    updateBand(i, {altitude: digits === '' ? undefined : Number(digits)});
+                                                                }}
                                                             />
                                                         </FormControl>
                                                         <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
