@@ -65,11 +65,12 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {clampTurnBend, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {clampTurnBend, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
-import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController} from './controllers/MissionTaskController';
@@ -406,6 +407,20 @@ export function restoreTacticalGraphics(
             }) as Feature;
             const geometry = incoming.getGeometry();
             if (!geometry) throw new Error('base feature has no geometry');
+            // **Tidied on the way in, exactly as a drawn base is.** A saved base can be
+            // short of what its graphic needs — the sample sweep hands a fields-of-fire
+            // two points, and every snapshot written before the draw path started
+            // normalising has the same shape. Left alone, the generator synthesises the
+            // missing leg on every render and the V cannot be reshaped, because there is
+            // no vertex there to drag. MapLibre normalises inside `buildTacticalGraphic`,
+            // which every one of its paths goes through; this is the same door on this
+            // side. @see normalizeDrawnBase
+            if (geometry instanceof LineString) {
+                const tidied = normalizeDrawnBase(name, geometry.getCoordinates().map(c => toLonLat(c)));
+                if (tidied.length !== geometry.getCoordinates().length) {
+                    geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
+                }
+            }
             handler.graphic.base.setGeometry(geometry);
 
             const labels = toLabels(bag);
@@ -462,4 +477,24 @@ export function restoreTacticalGraphics(
     }
 
     return report;
+}
+
+/**
+ * Removes every rendered graphic and its controllers.
+ *
+ * **Not a bare `renderingVectorSource.clear()`.** The source holds the features; the
+ * manager also holds a controller per graphic and a zoom subscription per controller.
+ * Clearing only the source empties the screen and leaves all of that behind — a
+ * snapshot then still reports graphics nobody can see, an export carries them, and
+ * every orphaned listener goes on re-deriving geometry for features that are gone.
+ *
+ * It lived in `sampleGallery.ts`, which is demo-only and stripped from the published
+ * build — so the one correct way to empty a map was the one thing a consumer could not
+ * import. Restoring a snapshot has to clear first, which makes this part of the
+ * save/restore story rather than part of the gallery's.
+ */
+export function clearAllGraphics(manager: TacticalGraphicsManager): void {
+    manager.renderingVectorSource.clear();
+    manager.graphicControllers.length = 0;
+    manager.releaseAllGraphics();
 }

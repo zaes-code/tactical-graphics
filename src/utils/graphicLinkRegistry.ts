@@ -1,12 +1,9 @@
 import type {Feature} from 'ol';
+import type {GraphicLabels} from '../components/graphicAmplifiers';
 import type {LineGraphic} from '../components/openlayers/controllers/LineGraphicController';
 import type {PolygonGraphic} from '../components/openlayers/controllers/PolygonGraphicController';
 import {
-    RangeFanConfig,
-    RouteDirection, TacticalGraphicConfidence,
-    TacticalGraphicEchelon,
-    TacticalGraphicHostility,
-    TacticalGraphicStatus
+    RouteDirection
 } from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../components/openlayers/controllers/MissionTaskController";
 import type {SecurityOperationGraphic} from "../components/openlayers/controllers/SecurityOperationsController";
@@ -29,31 +26,13 @@ export interface LabelableGraphic {
  */
 export type {RangeFanConfig} from '@zaes/tactical-graphics';
 
-export interface GraphicLabels {
-    label: string;
-    countryCode?: string;
-    secondId?: string;
-    secondCountryCode?: string;
-    startDate?: string;
-    endDate?: string;
-    minAltitude?: string;
-    maxAltitude?: string;
-    /**
-     * Full width in metres, edge to edge. The same field the geometry schema uses —
-     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
-     * width rather than a string mirror of it that has to be kept in step.
-     */
-    width?: number;
-    eff?: string;
-    grid?: string;
-    weapon?: string;
-    hostility?: TacticalGraphicHostility;
-    echelon?: TacticalGraphicEchelon;
-    direction?: RouteDirection;
-    status?: TacticalGraphicStatus;
-    confidence?: TacticalGraphicConfidence;
-    rangeFan?: RangeFanConfig;
-}
+/**
+ * **Moved to `components/graphicAmplifiers.ts`** and re-exported here, so this
+ * module's surface is unchanged. It describes amplifiers, not feature links, and
+ * leaving it in a file that imports `ol` made it unreachable from the MapLibre
+ * half — see the note in that file.
+ */
+export type {GraphicLabels};
 
 // SecurityOperationGraphic joined the union when its controller started registering;
 // it holds rotation/scale rather than size/rotation/updateGeom, so it is its own arm.

@@ -265,20 +265,26 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // Horizontal line: from (−2.4r, +r) to (0, +r) — ends at the top of
         // the semicircle.
         const lineLen = 2.4 * r;
-        // Mirroring flips **the hook only** — the P-line, its label and the arrowhead's
-        // anchor all stay put, exactly as the cane graphics keep their route and move just
-        // the cane. Reflecting the whole construction moved the line too, which read as
-        // the graphic jumping rather than the hook changing hands.
-        const line: Position[] = [local(-lineLen, r), local(0, r)];
+        // **The whole construction reflects about the graphic's own axis.** Everything
+        // below carries `m`, so a mirrored pursuit is the same symbol seen the other way
+        // up: the P-line at the bottom, the hook curling over it, the arrowhead at the
+        // top pointing back.
+        //
+        // It used to reverse the *sweep* instead — keeping the line and the arrowhead
+        // where they were and sending the arc the long way round, west through 180°. That
+        // is not a mirrored pursuit; it is a backwards C whose ends no longer sit at the
+        // line and the arrow. The reasoning recorded here was that reflecting the whole
+        // thing "read as the graphic jumping rather than the hook changing hands", and a
+        // graphic that jumps is a smaller price than one that stops being its own symbol.
+        const m = opts.mirrored ? -1 : 1;
+        const line: Position[] = [local(-lineLen, m * r), local(0, m * r)];
 
-        // Semicircle: bulges east, from top (+r) clockwise through east (+r, 0)
-        // to bottom (−r). Center is the graphic's center; planar angles go
-        // 90° → −90° (decreasing = clockwise).
-        // Both sweeps start at the line's end (+r) and finish at the arrowhead (-r); the
-        // mirror is which way round they get there — east through 0, or west through 180.
-        const arc: Position[] = opts.mirrored
-            ? geometryService.createCircularArc(center, rotation, r, 90, 270, 48)
-            : geometryService.createCircularArc(center, rotation, r, 90, -90, 48);
+        // Semicircle bulging **east in both states** — that is what makes this a
+        // reflection rather than a rotation. Unmirrored it runs from the line's end at
+        // the top (+90°) clockwise through east (0°) to the arrowhead at the bottom
+        // (−90°); mirrored it runs the same way round the same bulge, from the line's end
+        // now at the bottom to the arrowhead now at the top.
+        const arc: Position[] = geometryService.createCircularArc(center, rotation, r, m * 90, -m * 90, 48);
 
         // Arrowhead at the end of the arc (bottom), pointing in the tangent
         // direction at that point (≈ −x at rotation 0 — i.e., back toward
@@ -296,7 +302,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // graphic through `local()`.
         const wingHalf = arrowLen * Math.sin((ARROW_LEN_DEG * Math.PI) / 180);
         const crossHalf = wingHalf * 1.3;   // 30% wider than the arrowhead
-        const crossBar: Position[] = [local(0, -r + crossHalf), local(0, -r - crossHalf)];
+        const crossBar: Position[] = [local(0, -m * r + crossHalf), local(0, -m * r - crossHalf)];
 
         return this.asMultiLineStringFeature([line, arc, arrowHead, crossBar]);
     }
@@ -330,8 +336,13 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
             return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
         };
 
-        const arrowTip = at(0, -r);
-        const lineStart = at(-2.4 * r, r);
+        const m = opts.mirrored ? -1 : 1;
+        const arrowTip = at(0, -m * r);
+        // The P-line's free end. It sits a long way off the axis and crosses to the other
+        // side when the graphic reflects, which is what a mirror handle has to do: a
+        // handle that stays put can neither show the state nor be dragged across
+        // anything. The arc's midpoint cannot serve — the bulge stays east either way.
+        const lineStart = at(-2.4 * r, m * r);
 
         return this.asMultiPointFeature([arrowTip, lineStart]);
     }
@@ -347,7 +358,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
         const r = Math.max(size, 1);
-        const x = -1.2 * r, y = r;
+        const x = -1.2 * r, y = (opts.mirrored ? -1 : 1) * r;
         const dist = Math.hypot(x, y);
         const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
         let bearing = 90 - (planarDeg + rotation);
@@ -375,6 +386,41 @@ const ENVELOPMENT_ARC_STEPS = 48;
 export function clampEnvelopmentBend(bend: number): number {
     const magnitude = Math.min(ENVELOPMENT_MAX_BEND, Math.max(ENVELOPMENT_MIN_BEND, Math.abs(bend)));
     return bend < 0 ? -magnitude : magnitude;
+}
+
+/**
+ * How far off the axis a drag has to stray before it means the *other* flank, as a
+ * share of the circle's own radius. Below it the hook keeps the side it had, so a
+ * handle resting on the axis cannot flip on jitter alone.
+ */
+export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
+
+/**
+ * The bend an arrow-tip drag asks for, from the cursor's position about the graphic's
+ * own frame.
+ *
+ * **Not the perpendicular offset a turn's bend handle uses**, and that difference is
+ * the whole reason this exists. Envelopment's tip sits at `size + 2 × radius` *along*
+ * the approach and nothing off it, so the perpendicular carries no radius at all —
+ * measuring it read ≈0 and collapsed the hook onto the line, which is exactly what
+ * MapLibre did while OpenLayers, whose holder has always used the rule below, bent it
+ * properly. The two components split the job: distance along the axis past the line's
+ * end is the circle's diameter, and the side the cursor strays to picks the flank.
+ *
+ * All planar, in projected metres — the frame both renderers edit in.
+ */
+export function envelopmentBendFrom(
+    along: number,
+    perpendicular: number,
+    size: number,
+    currentBend: number,
+): number {
+    if (!(size > 0)) return clampEnvelopmentBend(currentBend);
+
+    const radius = Math.max(0, (along - size) / 2);
+    const current = Math.sign(currentBend) || 1;
+    const side = Math.abs(perpendicular) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perpendicular) : current;
+    return clampEnvelopmentBend((side || 1) * (radius / size));
 }
 
 /**
@@ -498,9 +544,23 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * exact: the run spans `2 * size`, so a quarter along is `0.5 * size` back
      * from the middle.
      */
-    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<Point> {
-        const {center, angle, size} = this.frame(base, opts);
-        return this.asPointFeature(this.at(center, angle, -size * 0.5, 0));
+    /**
+     * **The run's two ends, not the letter's own point.**
+     *
+     * The "E" belongs a quarter of the way along the approach, in the hole the paint
+     * cuts for it. Naming that spot here — geodesically, in 4326 — puts it a little off
+     * the *straight segment* a renderer then draws between the run's reprojected ends,
+     * because 3857's y is not linear in latitude. Measured at 3.5 km off a 4739 km run:
+     * a fraction of a pixel on a small graphic, and growing with every metre you add, so
+     * the letter drifts out of its hole exactly when the graphic gets big.
+     *
+     * Handing over the ends instead lets the paint find the quarter point on the segment
+     * it is actually drawing, in projected metres, which is where the gap is cut too.
+     * Letter and hole then agree by construction at any size and any zoom.
+     * @see envelopmentLabelPaint
+     */
+    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(this.axis(base, opts));
     }
 }
 
@@ -569,11 +629,20 @@ export class MobileDefense extends MovementGraphicBase {
         const arrowPrev = arrowArc[arrowArc.length - 2];
         const arrowHead: Position[] = geometryService.computeArrowheadPoints(arrowPrev, arrowTip, radius, 45);
 
-        // Outward-facing triangles with both base vertices lying on the arc, and
-        // apex perpendicular to the base (not radial). Placed at 33%/67% along
-        // each arc.
-        const triSize = Math.min(radius * 0.9, minorR * 1.1);
+        // Outward-facing triangles with both base vertices lying on the arc, and apex
+        // perpendicular to the base (not radial). Placed at 33%/67% along each arc.
+        //
+        // **The height follows the base, so the triangle stays equilateral.** It used to
+        // be `min(radius * 0.9, minorR * 1.1)` — a height that stops growing once the
+        // arrowhead size caps it, while the base is a chord of the arc and keeps widening
+        // with the ellipse. The triangles therefore flattened as the graphic was resized,
+        // which is the one thing a symbol built from equilateral teeth must not do.
+        //
+        // Geodesic, like every other length in this generator: the base is measured on
+        // the same sphere the apex is projected from, so the three sides agree.
         const triangleFractions = [0.33, 0.67];
+        /** Height of an equilateral triangle, as a share of its base. */
+        const EQUILATERAL_HEIGHT = Math.sqrt(3) / 2;
         const triBaseHalfSpan = 0.05; // fraction of arc length between base vertices (×2)
         const triangles: Position[][] = [];
         const addTriangles = (arc: Position[], perpSign: 1 | -1) => {
@@ -588,7 +657,8 @@ export class MobileDefense extends MovementGraphicBase {
                 // Top arc walks p0→p1 with outward on the left (base − 90);
                 // bottom arc has outward on the right (base + 90).
                 const outBearing = perpSign === 1 ? baseBearing - 90 : baseBearing + 90;
-                const apex = turf.destination(mid, triSize, outBearing, {units: 'meters'}).geometry.coordinates as Position;
+                const base = turf.distance(b1, b2, {units: 'meters'});
+                const apex = turf.destination(mid, base * EQUILATERAL_HEIGHT, outBearing, {units: 'meters'}).geometry.coordinates as Position;
                 triangles.push([b1, apex, b2, b1]);
             }
         };
@@ -618,9 +688,28 @@ export class MobileDefense extends MovementGraphicBase {
      * so emitting fewer than three points tells the OpenLayers holder there is
      * no offset handle to show.
      */
-    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
+    /**
+     * `[end, mirror]`.
+     *
+     * The second is new, and it is what makes the flip reachable. This graphic's only
+     * asymmetry is which half of the ellipse the arrow leaves from, so a user had no way
+     * to swap it: the single end handle rotates and resizes, and there was no dot on the
+     * side that moves. It sits at the top of the current arc — perpendicular from the
+     * midpoint by the ellipse's own minor radius — so dragging it across the major axis
+     * is the gesture, and it moves with the graphic when the flip lands.
+     */
+    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature([baseCoords[baseCoords.length - 1]]);
+        const p0 = baseCoords[0];
+        const p1 = baseCoords[baseCoords.length - 1];
+
+        const center = geometryService.getMidpoint(p0, p1);
+        const minorR = (turf.distance(p0, p1, {units: 'meters'}) / 2) * 0.4;
+        // `perp+` is left of p0→p1, which is the arc an unmirrored graphic uses.
+        const bearing = turf.bearing(p0, p1) - (opts?.mirrored ? -90 : 90);
+        const mirror = turf.destination(center, minorR, bearing, {units: 'meters'}).geometry.coordinates as Position;
+
+        return this.asMultiPointFeature([p1, mirror]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
