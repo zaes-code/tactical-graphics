@@ -11,12 +11,13 @@ import {AttributionControl, Map as MapLibreMap, ScaleControl, setWorkerUrl} from
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
 import {BASEMAP_LAYER_ID, basemapPaint, createBasemapStyle} from './basemapStyle';
-import {resolutionOf} from './projection';
+import {resolutionOf, zoomForResolution} from './projection';
 import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import {drawSpikeSamples} from './spikeDriver';
 import {buildSampleGraphics} from './sampleGallery';
+import {readViewport, writeViewport} from '../mapViewport';
 import type {MapEngineHandle} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
@@ -153,11 +154,16 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
     useEffect(() => {
         if (!containerRef.current) return;
 
+        // Open where the other engine — or the last visit — left off. Given to the
+        // constructor rather than jumped to after `load`, so the default view is never
+        // painted first. A zoom number is not portable between the two engines — 512 px
+        // tiles here against 256 there — so what is stored is metres per pixel.
+        const storedView = readViewport();
         const map = new MapLibreMap({
             container: containerRef.current,
             style: createBasemapStyle(darkMode),
-            center: START_CENTER,
-            zoom: START_ZOOM,
+            center: storedView ? [storedView.lon, storedView.lat] : START_CENTER,
+            zoom: storedView ? zoomForResolution(storedView.resolution) : START_ZOOM,
             // The paint model assumes a north-up, unpitched view: every screen-pixel
             // decoration is sized against a single metres-per-pixel, and a pitched
             // camera does not have one. OpenLayers' 2D renderer has no other mode
@@ -186,6 +192,12 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         map.keyboard.disableRotation();
 
         mapRef.current = map;
+
+        const rememberView = () => {
+            const centre = map.getCenter();
+            writeViewport({lon: centre.lng, lat: centre.lat, resolution: resolutionOf(map)});
+        };
+        map.on('moveend', rememberView);
 
         // The same first-frame guard the OpenLayers view carries, for the same reason —
         // a map that sized itself against an unmeasured container, or booted while the
@@ -229,9 +241,12 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             canvas = new CanvasOverlayRenderer(map);
             native = new NativeLayerRenderer(map);
             // Only one draws at a time; the idle one simply holds no graphics.
-            load();
+            //
+            // **Nothing is drawn here.** This used to `load()` the spike fixture, which
+            // both put seven graphics on a map the user had not asked for and wiped
+            // whatever the engine switch was handing over — `load` clears first. The
+            // fixture is still reachable from the dev hook for comparison runs.
             setReady(true);
-            onReady(handle);
             // The dialog only works against the native path: it hit-tests through
             // `queryRenderedFeatures`, and the canvas overlay puts nothing in the style
             // for that to find. The overlay is a comparison tool, not a working view.
@@ -253,6 +268,14 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                     onModeChange: mode => onInteractionModeChange(mode),
                 });
             }
+
+            // **After `engine` exists, not before.** Every verb on the handle delegates
+            // to `engine?.…`, so announcing readiness first published a handle whose
+            // methods were all no-ops. `MapRendering` restores the outgoing engine's
+            // graphics the moment it hears `onReady`, and that restore went nowhere:
+            // switching to this engine silently dropped every graphic and left the
+            // fixture the mount used to draw. Optional chaining is why it was quiet.
+            onReady(handle);
         });
 
         const handle: MapEngineHandle = {
@@ -309,6 +332,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
 
         return () => {
             disposed = true;
+            map.off('moveend', rememberView);
             cancelAnimationFrame(firstFrame);
             document.removeEventListener('visibilitychange', revive);
             window.removeEventListener('pageshow', revive);
