@@ -41,11 +41,17 @@ export class AreaGraphicBase implements PolygonGraphic {
     }
 
 
-    /** Decoration size in metres — Encirclement's triangles. Stamped, then replayed. */
+    /**
+     * Decoration size in metres — the width of the gaps a hostile Encirclement cuts in
+     * its outline for the "ENY" amplifiers. Stamped, then replayed.
+     *
+     * It used to size the teeth as well; those are drawn in screen space now, so this
+     * only reaches the label gaps. @see encirclementPaint
+     */
     decorationSize: number = 0;
 
     /**
-     * Only Encirclement's generator reads the decoration scalar. Stamping it on the other
+     * Only Encirclement's generator still reads the decoration scalar. Stamping it on the other
      * area graphics puts a number in the bag that nothing consumes and that then has to
      * survive a round trip it has no business being part of.
      */

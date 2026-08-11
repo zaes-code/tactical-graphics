@@ -35,7 +35,14 @@
 import {Feature} from 'ol';
 import {Icon, Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getGraphicSecuritySymbolProvider,
+    getSecuritySymbolProvider,
+    securitySymbolSidc,
+    useMilsymbolSecuritySymbols,
+} from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -43,6 +50,8 @@ import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 export interface SecurityOperationSymbolRequest {
     /** Cover, Guard or Screen. */
     name: TacticalGraphicName;
+    /** This graphic's `symbolId`, when it has one. @see setGraphicSecuritySymbolProvider */
+    graphicId?: string;
     /** The graphic's current affiliation, defaulted to `pending` when it carries none. */
     hostility: TacticalGraphicHostility;
     /** The 30-character MIL-STD-2525E SIDC this library would use. @see securityOperationSidc */
@@ -136,43 +145,21 @@ export function getSecurityOperationSymbolSize(): number {
 }
 
 /**
- * The doctrinal SIDC, with the standard-identity digit left as a placeholder.
- *
- * Version 13, reality context (digit 3), symbol set 10 (land unit). This is the
- * code the controller carried inline, with its 4th digit — a hardcoded `3`,
- * Friend — made substitutable. Digit **4** is standard identity; digit 3 is
- * context, and putting the placeholder there instead produces a valid-looking
- * 30-character code that means something else entirely.
- */
-const SIDC_TEMPLATE = '130#10001413010000000000000000';
-
-/**
- * Standard-identity digit per MIL-STD-2525E, position 4 of the SIDC.
- *
- * `assumedFriend` and `suspectJoker` are distinct identities in the standard and
- * get their own digits here, even though the *colour* accessors alias them onto
- * friend and pending — colour is a rendering choice, identity is what the symbol
- * asserts.
- */
-const IDENTITY_DIGIT: Record<TacticalGraphicHostility, string> = {
-    [TacticalGraphicHostility.pending]: '0',
-    [TacticalGraphicHostility.unknown]: '1',
-    [TacticalGraphicHostility.assumedFriend]: '2',
-    [TacticalGraphicHostility.friend]: '3',
-    [TacticalGraphicHostility.neutral]: '4',
-    [TacticalGraphicHostility.suspectJoker]: '5',
-    [TacticalGraphicHostility.hostileFaker]: '6',
-};
-
-/**
  * The MIL-STD-2525E SIDC for a security operation at a given affiliation.
  *
- * Exported so a host writing its own provider can start from the doctrinal code
- * rather than reverse-engineering one.
+ * **Re-exported, not defined.** This module used to build the code from its own
+ * template and its own identity-digit table, beside an identical pair in
+ * `core/securitySymbol.ts` that MapLibre reads. The two drifted: this half filled
+ * in the echelon and entity digits, that half left them zero, and the same graphic
+ * drew a platoon symbol in OpenLayers and a bare frame in MapLibre. Which SIDC a
+ * symbol carries is a symbology fact, so it lives in the map-agnostic half and both
+ * renderers read it — one code, one place to correct it.
+ *
+ * Kept as an export because a host writing its own provider wants the doctrinal
+ * code rather than a reverse-engineered one, and this subpath's provider contract
+ * is the wider of the two. @see securitySymbolSidc
  */
-export function securityOperationSidc(hostility: TacticalGraphicHostility): string {
-    return SIDC_TEMPLATE.replace('#', IDENTITY_DIGIT[hostility] ?? IDENTITY_DIGIT[TacticalGraphicHostility.pending]);
-}
+export const securityOperationSidc = securitySymbolSidc;
 
 let provider: SecurityOperationSymbolProvider | undefined;
 
@@ -240,6 +227,11 @@ export function useMilsymbolSecurityOperationSymbols(ms: MilsymbolModule, option
         const svg = new ms.Symbol(sidc, {size: sizePx * 2, ...options}).asSVG();
         return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     });
+    // And the renderer-neutral registry, so **one call serves both engines**. A host
+    // that has done this from the OpenLayers entry point should not have to discover
+    // a second function to make the MapLibre view draw the same symbol.
+    // @see core/securitySymbol.ts for why there are two registries at all.
+    useMilsymbolSecuritySymbols(ms as never, options);
 }
 
 /**
@@ -337,13 +329,26 @@ export function securityOperationSymbolStyle(
     name: TacticalGraphicName,
     source: () => Feature | undefined,
     override: () => SecurityOperationSymbolProvider | undefined = () => undefined,
+    graphicId: () => string = () => '',
 ): StyleFunction {
     return () => {
         const labels = readGraphicLabels(source() ?? new Feature());
         const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+        const id = graphicId();
+        // **Four places a provider can come from, most specific first.** The two
+        // OpenLayers ones are supersets — they may return an `ol` `Style` — and the
+        // two shared ones reach both engines from a single call. The shared pair
+        // used to be missed entirely on this side: a host that registered only
+        // `setSecuritySymbolProvider` got symbols in MapLibre and an empty centre
+        // here, while the README called that call application-wide.
+        const active =
+            override() ??
+            (id ? getGraphicSecuritySymbolProvider(id) : undefined) ??
+            provider ??
+            getSecuritySymbolProvider();
         return resolve(
-            {name, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
-            override() ?? provider,
+            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
+            active,
         );
     };
 }

@@ -36,6 +36,7 @@ import {
     getDefaultLabelSize,
     getDefaultLineWidth,
     resetTacticalGraphicsConfig,
+    securitySymbolSidc,
 } from '@zaes/tactical-graphics';
 
 import {
@@ -102,12 +103,14 @@ afterEach(resetTacticalGraphicsConfig);
  * for everybody would still pass.
  */
 /**
- * The airfield's crossed runways are SVG path data in **map units**, so at scale
- * 1 they are a fixed ~400 km across whatever the area's size — which is why a
+ * The airfield's crossed runways are two segments in **map units**, so at scale 1
+ * they are a fixed ~400 km across whatever the area's size — which is why a
  * state-sized airfield used to carry a tiny "x" and a small one was swamped.
  *
- * `AreaGraphicBase` stamps the polygon's extent and its ring onto the label
- * feature, which is the feature these styles run on.
+ * `AreaGraphicBase` stamps the polygon's bounds and its ring onto the label
+ * feature, which is the feature these styles run on. The symbol itself now lives in
+ * `symbology/airfieldPaints.ts` and both renderers draw it; these still run through
+ * the OpenLayers wrapper, which is what a regression would come through.
  */
 describe('the airfield symbol is sized from its polygon', () => {
     const rect = (halfW: number, halfH: number): number[][] => [
@@ -117,11 +120,14 @@ describe('the airfield symbol is sized from its polygon', () => {
     /** Renders the symbol on an area of the given half-extents and reports its size. */
     const crossOn = (halfW: number, halfH: number, ring: number[][] = rect(halfW, halfH), at: number[] = [0, 0]) => {
         const f = new Feature(new Point(at));
-        f.set('polygonExtentWidth', halfW * 2);
-        f.set('polygonExtentHeight', halfH * 2);
+        // The bounds the paint layer reads, which is what `readBounds` builds from.
+        f.set('polygonMinX', -halfW);
+        f.set('polygonMaxX', halfW);
+        f.set('polygonMinY', -halfH);
+        f.set('polygonMaxY', halfH);
         f.set('polygonRing', ring);
 
-        const out = getAirfieldStyle('', '')(f, 1);
+        const out = getAirfieldStyle(TacticalGraphicName.Airfield)(f, 1);
         const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
         const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
         const [minX, minY, maxX, maxY] = geom.getExtent();
@@ -158,11 +164,11 @@ describe('the airfield symbol is sized from its polygon', () => {
         expect(crossOn(1_000_000, 1_000_000, notched).width).toBeLessThan(square.width);
     });
 
-    it('keeps the historical fixed size when the polygon extent has not been stamped', () => {
+    it('keeps the historical fixed size when the polygon bounds have not been stamped', () => {
         // First render, or a holder that never set a base. Falling through to a
         // zero scale would make the symbol vanish rather than merely misfit.
         const bare = new Feature(new Point([0, 0]));
-        const out = getAirfieldStyle('', '')(bare, 1);
+        const out = getAirfieldStyle(TacticalGraphicName.Airfield)(bare, 1);
         const styles = (Array.isArray(out) ? out : out ? [out] : []) as Style[];
         const geom = styles.map(s => s.getGeometry()).find(g => g instanceof MultiLineString) as MultiLineString;
         const [minX, , maxX] = geom.getExtent();
@@ -983,6 +989,33 @@ describe('security operation centre symbol', () => {
     // hostility must not have moved the symbol a Friend graphic renders.
     it('reproduces the historical SIDC for a friendly graphic', () => {
         expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001413010000000000000000');
+    });
+
+    /**
+     * # Both renderers ask milsymbol for the same symbol
+     *
+     * They did not. This subpath built the code from its own template and its own
+     * identity table, beside an identical-looking pair in `core/securitySymbol.ts`
+     * that MapLibre reads — and that one left the echelon and entity digits zero.
+     * Rendered, the difference is 6 drawn elements against 2: OpenLayers drew a
+     * platoon symbol, MapLibre a bare frame. It was reported as MapLibre "clipping
+     * the top", which is what a missing echelon looks like.
+     *
+     * Neither engine's own tests could see it. This one compares them.
+     */
+    it('resolves the identical SIDC in both renderers, for every affiliation', () => {
+        for (const hostility of Object.values(TacticalGraphicHostility)) {
+            expect(securityOperationSidc(hostility)).toBe(securitySymbolSidc(hostility));
+        }
+    });
+
+    it('keeps the echelon and entity digits, which are what milsymbol draws detail from', () => {
+        // Positions 9-10 are the echelon — 14, platoon, the three dots above the
+        // frame — and 11-16 the entity. All zeros is not a neutral default; it is an
+        // empty outline, and it renders without complaint.
+        const sidc = securitySymbolSidc(TacticalGraphicHostility.friend);
+        expect(sidc.slice(8, 10)).toBe('14');
+        expect(sidc.slice(10, 16)).not.toBe('000000');
     });
 
     it('varies only the standard-identity digit, position 4', () => {

@@ -27,14 +27,16 @@ export {
     listTacticalGraphicNames,
     TacticalGraphicError,
     TACTICAL_GRAPHIC_KEY,
+    toGraphicOptions,
 } from './core/render';
 
-export type {TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
+export type {GraphicLabels, TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
 
 // ── Names, categories, symbology ────────────────────────────────────────────
 export {
     TacticalGraphicName,
     TacticalGraphicHostility,
+    AltitudeDatum,
     TacticalGraphicStatus,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
@@ -64,7 +66,7 @@ export type {
  * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
  * them in `RangeFanGraphicBase`.
  */
-export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth} from './graphics/RangeFan';
+export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands} from './graphics/RangeFan';
 
 /**
  * Turn's bend limits and the clamp that enforces them. A renderer that lets the
@@ -78,6 +80,8 @@ export {
     ENVELOPMENT_MIN_BEND,
     ENVELOPMENT_MAX_BEND,
     clampEnvelopmentBend,
+    ENVELOPMENT_FLIP_THRESHOLD,
+    envelopmentBendFrom,
 } from './graphics/FormsOfManeuver';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
@@ -103,6 +107,9 @@ export {default as geometryService} from './core/GeometryService';
 export {
     BASE_FONT_SIZE_PX,
     DEFAULT_LINE_WIDTH,
+    AltitudeUnit,
+    ALTITUDE_UNIT_SUFFIX,
+    getAltitudeUnit,
     DEFAULT_PALETTE,
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
@@ -140,3 +147,190 @@ export type {WireStyle} from './graphics/WireObstacle';
 export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
 export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from './graphics/AntiTankDitch';
 export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
+
+/**
+ * ## Symbology — colours, line weight and label scale
+ *
+ * The doctrinal colour table and the three label-scale formulas, resolved against the
+ * live config. These lived in `openlayerStyles.ts` until the MapLibre work, which made
+ * the problem obvious: not one of them mentions OpenLayers, and a second renderer that
+ * cannot reach them has to reinvent the palette and then drift from it.
+ *
+ * The OpenLayers layer re-exports every name here, so its surface is unchanged and there
+ * is one implementation of each.
+ */
+export {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getDefaultLineColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    graphicLabelScale,
+    labelScale,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+    ratioLockedLabelScale,
+    withOpacity,
+    allowedGestures,
+    supportsHostility,
+    CROSSED_MISSION_TASKS,
+    RADIUS_GRAPHICS,
+    formatDistance,
+    formatAltitude,
+    hasRadiusReadout,
+    GLYPH_CUT_GAP_GRAPHICS,
+    RATIO_LOCKED_MISSION_TASKS,
+} from './core/symbology';
+
+/**
+ * ## Paint lists — what a symbol looks like, as data
+ *
+ * `renderTacticalGraphic` says where a graphic is; a paint list says how it is drawn.
+ * The decorations this library synthesises at render time — obstacle teeth, the gap cut
+ * around a mission task's letter, a screen-sized arrowhead — live in 128 places inside
+ * OpenLayers style functions today, so a raw-GeoJSON consumer gets a skeleton. A paint
+ * function returns those marks as plain data that any renderer can paint.
+ *
+ * @see ai/maplibre-renderer.md
+ */
+export {HANDLE_Z_INDEX, mapPaintGeometry, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
+export type {
+    CircleSpec,
+    FillSpec,
+    HatchSpec,
+    Paint,
+    PaintColor,
+    PaintContext,
+    PaintFeature,
+    PaintFunction,
+    ProjectedGeometry,
+    ProjectedInputGeometry,
+    ProjectedPosition,
+    StrokeSpec,
+    TextSpec,
+} from './core/paint';
+
+/**
+ * ## Symbology — paint functions
+ *
+ * The renderer-agnostic style layer. Three of 69 style functions are ported so far;
+ * `isPaintable` is how a renderer asks whether a graphic has one yet. @see ai/maplibre-renderer.md
+ */
+export {
+    DECORATION_MIN_PX,
+    OBSTACLE_TOOTH_BASE_PX,
+    OBSTACLE_TOOTH_GAP_PX,
+    OBSTACLE_TOOTH_HEIGHT_PX,
+    angleBetween,
+    centreSegmentIndex,
+    crenellatedPath,
+    cutArcAtLabel,
+    decorationScale,
+    obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
+    pathLength,
+    textWidth,
+    uprightRotation,
+} from './symbology/decorations';
+export {
+    PLANNED_DASH_PX,
+    arcMissionTaskPaint,
+    areaFillPaint,
+    areaOutlinePaint,
+    defaultLinePaint,
+    amplifierDash,
+    formatFullLabel,
+    getFullLabel,
+    missionTaskLabelPaint,
+    obstacleLinePaint,
+    phaseLinePaint,
+} from './symbology/paintFunctions';
+export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {
+    encirclementPaint,
+    fortifiedAreaPaint,
+    freeFireAreaCircularPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+    plainOutlinePaint,
+} from './symbology/areaPaints';
+export {
+    areaDateLabel,
+    areaDefaultLabelPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
+} from './symbology/areaLabelPaints';
+export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {directionArrowPaint} from './symbology/linePaints';
+export {routeControlMeasurePaint} from './symbology/routePaints';
+export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';
+export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './symbology/corridorPaints';
+export {retrogradeTaskPaint} from './symbology/retrogradePaints';
+export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
+export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
+export {
+    CROSSED_HALF_WIDTH_PX,
+    barSymbolPaint,
+    baseDefenseZoneLabelPaint,
+    crossedMissionTaskLabelPaint,
+    crossedMissionTaskLabelScale,
+    crossedMissionTaskPaint,
+    movementToContactPaint,
+    pursuitPaint,
+} from './symbology/missionTaskPaints';
+export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
+export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
+export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
+export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
+export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
+export {airfieldPaint} from './symbology/airfieldPaints';
+export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
+export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
+export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
+export {securityOperationLabelPaint} from './symbology/securityPaints';
+export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+export {baseGeometryFor} from './core/render';
+export {CROSSED_MISSION_TASK_PX, arrowheadMetres, crossedMissionTaskMetres, decorationMetres, hasBakedDecoration} from './core/decorationSizes';
+export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
+export {normalizeDrawnBase} from './core/drawnBase';
+export {HANDLE_EDIT_MODES} from './core/engine';
+export type {EditMode, EngineCallbacks, EngineCapabilities, SelectedGraphic, TacticalGraphicsEngine} from './core/engine';
+export type {HandleContract, HandleRole} from './core/handles';
+export {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    clearGraphicSecuritySymbolProviders,
+    getGraphicSecuritySymbolProvider,
+    getSecuritySymbolProvider,
+    getSecuritySymbolSize,
+    resolveSecuritySymbol,
+    securitySymbolRevision,
+    securitySymbolSidc,
+    setGraphicSecuritySymbolProvider,
+    setSecuritySymbolProvider,
+    setSecuritySymbolSize,
+    subscribeSecuritySymbolChange,
+    useMilsymbolSecuritySymbols,
+} from './core/securitySymbol';
+export type {MilsymbolModule, SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from './core/securitySymbol';
+export type {AllowedGestures} from './core/symbology';
+export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
+export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
+export type {GraphicPainters} from './symbology/registry';

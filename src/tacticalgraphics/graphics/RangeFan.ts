@@ -313,3 +313,38 @@ function arcAtAzimuthRange(
     }
     return points;
 }
+
+/**
+ * The band data a renderer needs to label a range fan, resolved from the portable
+ * property bag.
+ *
+ * A fan's bands are amplifiers, and the geometry generator consumes them and emits
+ * only points — the band a given anchor belongs to, and the azimuths a sector's
+ * arms actually ended up at, are not recoverable from the output. Every renderer
+ * therefore has to re-resolve them with the same defaults the generator used, or
+ * its labels drift off the arcs.
+ *
+ * That derivation was written out inside `RangeFanGraphicBase`, so it existed for
+ * one renderer only: MapLibre drew the arcs and none of the three labels, because
+ * `rangeFanLabelPaint` returns nothing without bands to walk.
+ *
+ * `resolvedLeftAz` / `resolvedRightAz` are **absolute** compass bearings, which is
+ * what a sector's arm labels print. The band's own fields are deflections from the
+ * centre, so they cannot be printed directly.
+ */
+export function resolveRangeFanBands(
+    name: TacticalGraphicName,
+    opts: RangeFanOptions | undefined,
+): {shape: 'sector' | 'circular'; bands: RangeFanBand[]} {
+    const isSector = name === TacticalGraphicName.WeaponSensorRangeFanSector;
+    const bands = resolveBands(opts);
+    if (!isSector) return {shape: 'circular', bands};
+
+    return {
+        shape: 'sector',
+        bands: bands.map(band => {
+            const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
+            return {...band, resolvedLeftAz: leftAz, resolvedRightAz: rightAz};
+        }),
+    };
+}

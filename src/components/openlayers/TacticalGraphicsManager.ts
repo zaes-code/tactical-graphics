@@ -12,7 +12,8 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, handleRole, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
@@ -374,7 +375,14 @@ export class TacticalGraphicsManager {
         // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
         // feature has `base` cleared), so an edit-mode drag would fall through
         // to the map and pan it. Claim the drag and stretch the graphic instead.
-        if (this.isModifying()) return !!this.activeController.editStretches;
+        //
+        // **A mirror handle is claimed whatever the mode**, which is the rule MapLibre
+        // states in `applyHandleRole`: a handle with a role means that role, and reading
+        // the mode first would make the same dot do different things depending on a
+        // button. Mobile defense needed it — its controller never opts into
+        // `editStretches`, so an edit-mode drag on its mirror handle was not claimed and
+        // the flip was reachable only from resize. @see handleRole
+        if (this.isModifying()) return this.isMirrorHandleGrab() || !!this.activeController.editStretches;
 
         return this.isRotating() || this.isTranslating() || this.isResizing();
     };
@@ -497,6 +505,13 @@ export class TacticalGraphicsManager {
                 // and the raw cursor; everything else scales uniformly.
                 if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
                     this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
+                } else if (this.isMirrorHandleGrab()) {
+                    // **A mirror handle flips and does nothing else**, which is what the
+                    // retrograde tasks' cane already does on the line path. Falling
+                    // through to `handleResize` made pursuit's handle do two jobs at once:
+                    // measured, a drag on it read `FLIP+resized` where the same gesture on
+                    // a disengage read `FLIP`. @see handleRole
+                    this.mirrorIfDraggedPastAxis(evt, center);
                 } else {
                     this.mirrorIfDraggedPastAxis(evt, center);
                     // Calculate distance to center for scaling
@@ -550,6 +565,15 @@ export class TacticalGraphicsManager {
                     break;
                 }
 
+                // **Before the reshape.** A mirror handle sits off the base entirely, but
+                // `nearestBaseVertexIndex` answers with the nearest vertex however far it
+                // is, so the reshape below would swallow the gesture. It flips and does
+                // nothing else. @see handleRole
+                if (this.mirrorIfMirrorHandle(evt)) {
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
+
                 if (reshaping && this.activeBaseVertex >= 0) {
                     this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
                     this.lastPointerPosition = evt.coordinate;
@@ -565,6 +589,66 @@ export class TacticalGraphicsManager {
                 break;
         }
     };
+
+    /**
+     * Whether the handle just grabbed is the one that flips this graphic.
+     *
+     * Asked at pointer-**down**, so the gesture can be claimed before any mode rule
+     * refuses it. Reads `activeHandleIndex`, which is latched immediately above the
+     * call, so it is the index the drag will use.
+     */
+    private isMirrorHandleGrab(): boolean {
+        const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
+        if (!this.activeController?.setMirrored || !name || this.activeHandleIndex < 0) return false;
+
+        // A point-anchored base is a bare `[x, y]`, so its vertex count is 1 — the line
+        // test alone rejected every one of them and pursuit's mirror handle was never
+        // recognised as one.
+        const drawn = this.activeController.getBaseGeometry() as unknown;
+        const vertices = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]).length : 1;
+
+        return handleRole(name, this.activeHandleIndex, vertices) === 'mirror';
+    }
+
+    /**
+     * Flips a graphic whose grabbed handle is declared a `mirror`, and reports whether
+     * it took the drag.
+     *
+     * The rule and the handle index both come from the library, so the two renderers
+     * cannot disagree about which dot turns a symbol over. Measured against the drawn
+     * line rather than `rotation`: a graphic whose orientation *is* its vertices reports
+     * a rotation of 0 whatever direction it runs, so the perpendicular would be taken
+     * about due east regardless.
+     */
+    private mirrorIfMirrorHandle(evt: MapBrowserEvent): boolean {
+        const controller = this.activeController;
+        const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
+        if (!controller?.setMirrored || !name || this.activeHandleIndex < 0) return false;
+
+        const drawn = controller.getBaseGeometry() as unknown;
+        const line = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]) : undefined;
+        if (!line || line.length < 2) return false;
+        if (handleRole(name, this.activeHandleIndex, line.length) !== 'mirror') return false;
+
+        const from = line[0];
+        const to = line[line.length - 1];
+        const axis = Math.atan2(to[1] - from[1], to[0] - from[0]);
+        // Projected metres, so the midpoint is the plain average — no turf in here.
+        const originX = (from[0] + to[0]) / 2;
+        const originY = (from[1] + to[1]) / 2;
+        const dx = evt.coordinate[0] - originX;
+        const dy = evt.coordinate[1] - originY;
+        const perpendicular = -dx * Math.sin(axis) + dy * Math.cos(axis);
+
+        const resolution = this.map.getView().getResolution() ?? 1;
+        if (Math.abs(perpendicular) >= MIRROR_FLIP_MIN_PX * resolution) {
+            // Negative is the mirrored side, matching every other flip in the library.
+            controller.setMirrored(perpendicular < 0);
+        }
+        // Claimed either way: the handle means "flip", so a drag too small to decide
+        // must not fall through and resize the graphic instead.
+        return true;
+    }
 
     // update the length of a graphic
     handleResize(evt: MapBrowserEvent) {
@@ -882,11 +966,40 @@ export class TacticalGraphicsManager {
 
         this.draw.on('drawend', (e: DrawEvent) => {
             this.lastDrawEndedAt = Date.now() + 1000;
+            this.normalizeDrawnGeometry(name, e);
             tacticalGraphicHandler.onDrawEndFunc(e);
             drawingVectorSource.clear();
             this.graphicControllers.push(tacticalGraphicHandler);
             this.stopDrawing(tacticalGraphicHandler, false);
         });
+    };
+
+    /**
+     * Applies the library's tidy-up to the geometry the user just drew.
+     *
+     * Runs **before** `onDrawEndFunc`, so the holder builds from the base that will be
+     * stored rather than from the raw clicks — otherwise the graphic and its handles
+     * disagree about how many vertices there are.
+     *
+     * The reason it is needed here at all is a double-click: OpenLayers ends a
+     * fields-of-fire at two points, the generator synthesises the second leg on every
+     * render, and the V is frozen because the synthesised leg has no vertex to drag.
+     * Materialising it is invisible — `normalizeDrawnBase` calls the very function the
+     * renderer would have called — but it turns a fixed angle into an editable one.
+     *
+     * Coordinates are projected, so they travel to 4326 and back: the library speaks
+     * geographic degrees and the swing that opens the V is a geodesic one.
+     * @see normalizeDrawnBase
+     */
+    private normalizeDrawnGeometry = (name: TacticalGraphicName, e: DrawEvent) => {
+        const geometry = e.feature?.getGeometry();
+        if (!(geometry instanceof LineString)) return;
+
+        const drawn = geometry.getCoordinates().map(c => toLonLat(c));
+        const normalized = normalizeDrawnBase(name, drawn);
+        if (normalized.length === drawn.length) return;
+
+        geometry.setCoordinates(normalized.map(c => fromLonLat(c as Coordinate)));
     };
 
     /**
@@ -904,6 +1017,14 @@ export class TacticalGraphicsManager {
     handleDrawTacticalGraphic = (name: TacticalGraphicName) => this.startDrawing(name);
 
     addModifyInteraction = () => {
+        // **Idempotent, because it is not always called once.** Each call used to build a
+        // fresh `Modify` and add it while keeping no hold on the previous one, so a
+        // second call left the first on the map — and `removeModifyInteraction` could
+        // only ever take off the newest. Measured through the panel's edit button: two
+        // interactions went on, one came off, and the leftover kept drawing its blue
+        // vertex over every line and polygon in a mode that has no vertices to edit.
+        this.removeModifyInteraction();
+
         // Only allow the base feature (linestring/polygon) for a tactical graphic to be modified
         // once the graphic is modified, the underlying graphic will re-render the tactical graphic from the geometry library.
         let baseFeatures = this.getRenderedFeaturesByProp('base');
@@ -935,5 +1056,8 @@ export class TacticalGraphicsManager {
         let baseFeatures = this.getRenderedFeaturesByProp('base');
         baseFeatures.forEach(feature => feature.set('hidden', true));
         if (this.modify) this.map.removeInteraction(this.modify);
+        // Dropped, not just detached: a handle kept here is one this class would try to
+        // remove a second time and, worse, one it would not replace.
+        this.modify = undefined;
     };
 }

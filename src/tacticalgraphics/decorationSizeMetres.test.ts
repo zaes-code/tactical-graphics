@@ -14,9 +14,22 @@ import * as turf from '@turf/turf';
 
 const LINE: Position[] = [[-77.0, 38.9], [-76.8, 38.9]];
 
+/**
+ * Fields of fire is drawn as a V, and a two-point base now has its second leg
+ * synthesised — a right angle off the drawn one. That leg is legitimately far from
+ * the drawn line, so `reach` would measure it rather than the decoration. Giving it
+ * a base that is already a V keeps the measurement on the thing being pinned.
+ * @see asVee
+ */
+const VEE: Position[] = [[-77.0, 38.9], [-76.9, 38.9], [-76.9, 39.0]];
+
+/** The base each graphic is measured from. */
+const baseFor = (name: TacticalGraphicName): Position[] =>
+    name === TacticalGraphicName.FieldsOfFire ? VEE : LINE;
+
 const build = (name: TacticalGraphicName, decorationSize: number): Feature => ({
     type: 'Feature',
-    geometry: {type: 'LineString', coordinates: LINE},
+    geometry: {type: 'LineString', coordinates: baseFor(name)},
     properties: {tacticalGraphic: {name, decorationSize}},
 });
 
@@ -26,7 +39,7 @@ const metres = (a: Position, b: Position) =>
 /** How far the output strays from the drawn line — graphic and labels together. */
 function reach(name: TacticalGraphicName, decorationSize: number): number {
     const out = renderTacticalGraphic(build(name, decorationSize));
-    const line = turf.lineString(LINE);
+    const line = turf.lineString(baseFor(name));
     let max = 0;
     const consider = (c: Position) => {
         const d = turf.pointToLineDistance(turf.point(c), line, {units: 'meters'});

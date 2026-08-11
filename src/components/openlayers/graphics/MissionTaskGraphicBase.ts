@@ -12,36 +12,29 @@ import {
     createInertHandleFeature,
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
-    featureLabelScale,
     fightingPositionStyleFunc,
-    fontStyle,
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
     getMissionTaskStyleFn,
-    getRatioLockedMissionTaskStyleFn,
-    getTextWidth,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
     barSymbolStyleFunc,
 } from "../openlayerStyles";
-import {LineString, MultiLineString, MultiPoint, Point, Polygon} from "ol/geom";
+import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
 
 import {
-    clampEnvelopmentBend,
+    envelopmentBendFrom,
     clampTurnBend,
     ENVELOPMENT_DEFAULT_BEND,
-    getLabel,
     TacticalGraphicName,
     TURN_DEFAULT_BEND,
+    CROSSED_MISSION_TASKS,
+    RATIO_LOCKED_MISSION_TASKS,
+    arrowheadMetres,
 } from '@zaes/tactical-graphics';
 
-/**
- * Turn's arrowhead length in screen pixels at the drawing zoom. Baked into
- * metres once, so it neither follows a resize nor stays pinned to the screen.
- */
-const TURN_ARROWHEAD_PX = 26;
 /**
  * Turn asks the generator for **no** gap, so its two curve halves meet exactly
  * at the arc-length midpoint, and `turnStyleFunc` cuts the gap itself from the
@@ -61,8 +54,6 @@ const TURN_LABEL_GAP_METRES = 0;
 /** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
 const TURN_TIP_HANDLE = 1;
 
-/** Envelopment's arrowhead length in screen pixels at the drawing zoom. @see TURN_ARROWHEAD_PX */
-const ENVELOPMENT_ARROWHEAD_PX = 22;
 /** Index of the line-end handle in `Envelopment.generateHandles`' output. */
 const ENVELOPMENT_LINE_HANDLE = 1;
 /**
@@ -74,49 +65,7 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  * and forth while the user is only trying to lengthen the hook; requiring a
  * deliberate move to one side keeps the flip available without that.
  */
-const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
-
-/**
- * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing
- * at a one-letter label. They share one generator (`CrossedMissionTask`) and one
- * style function, which needs the name to know which arm is hashed and which
- * ends carry arrowheads.
- */
-const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Destroy,
-    TacticalGraphicName.Interdict,
-    TacticalGraphicName.Neutralize,
-    TacticalGraphicName.Suppress,
-];
-
-/**
- * Mission-task graphics whose label scales with the graphic rather than with
- * the zoom — the block-family treatment: 24 px base font, scale off
- * `graphicSize`.
- *
- * **Turn is deliberately absent.** Its "T" has to hold its size while the curve
- * is resized and stay capped on zoom, which is exactly what the default
- * `getMissionTaskStyleFn` (`featureLabelScale`, clamped to [0.3, 1.5]) already
- * does. Adding it here would make the letter track the curve instead.
- */
-const RATIO_LOCKED_MISSION_TASKS: Set<TacticalGraphicName> = new Set([
-    TacticalGraphicName.Contain,
-    TacticalGraphicName.Control,
-    TacticalGraphicName.Isolate,
-    // The other three arc-and-arrowhead circles. Their letters used to render at
-    // the zoom-anchored 16px default while Isolate's "I" tracked its circle, so
-    // four graphics built from the same arcs disagreed about how big a one-letter
-    // label is. Same treatment now: 24px base font, scale from `graphicSize`,
-    // and the 100px-diameter floor.
-    TacticalGraphicName.Occupy,
-    TacticalGraphicName.Retain,
-    TacticalGraphicName.Secure,
-    // The crossed-line tasks, for the 24px font. Their scale does not actually
-    // come from here — `crossedMissionTaskLabelStyleFn` overrides this entry
-    // with a constant, because the whole symbol is pinned to a fixed screen
-    // size — but leaving them in keeps the family's font literal in one place.
-    ...CROSSED_MISSION_TASKS,
-]);
+/** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
 
 /**
  * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
@@ -176,8 +125,7 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
  */
 const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import {Stroke, Style} from "ol/style";
-import {LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
+import { movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
 import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 
@@ -225,7 +173,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.base.set('drawingResolution', drawingResolution);
         }
         if (name === TacticalGraphicName.FightingPosition) {
-            this.graphic.setStyle(fightingPositionStyleFunc());
+            this.graphic.setStyle(fightingPositionStyleFunc(name));
         }
         // The crossed-line tasks draw their own arms so the gap for the centre
         // label can be measured off the glyph, and so one arm can be hashed.
@@ -248,138 +196,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
-        // MovementToContact: shift the zigzag "contact" side arrows outward so
-        // they don't touch the big arrow's arrowhead edge. B→A
-        // (upperPath[1]→upperPath[0]) is the upper edge — its CCW perpendicular
-        // points outward; I→A (lowerPath[2]→lowerPath[3]) is the lower edge —
-        // its CW perpendicular points outward.
-        //
-        // The offset is a fraction of the arrow's own half-length, NOT the
-        // `n * resolution` screen-pixel form used elsewhere in this file. Both are
-        // "zoom-invariant", but in different frames, and here the pixel form was
-        // the wrong one: the arrow is baked in metres, so a constant *screen*
-        // offset slid the side arrows toward the arrowhead on zoom-in and away
-        // from it on zoom-out. Deriving it from the geometry locks it to the
-        // graphic under zoom and resize alike.
-        //
-        // `n * resolution` is right for things that must stay a fixed size on
-        // screen — text gaps, label padding. It is wrong for anything that must
-        // hold station against the geometry around it.
-        //   MultiLineString layout (see MovementToContact.generateGraphics):
-        //     [0] upperPath, [1] lowerPath,
-        //     [2] upper zigzag line, [3] upper zigzag arrowhead,
-        //     [4] lower zigzag line, [5] lower zigzag arrowhead.
-        // Pursuit: split the horizontal line around its midpoint so the "P"
-        // label always has breathing room. Gap width is derived from the
-        // actual rendered text width at the current zoom (zoom-invariant on
-        // screen). Other sub-lines (arc, arrowhead, crossbar) render as-is.
-        //   MultiLineString layout (see Pursuit.generateGraphics):
-        //     [0] horizontal line, [1] semicircle arc,
-        //     [2] arrowhead, [3] perpendicular crossbar.
+        // Pursuit splits its horizontal line around the "P" so the letter always has
+        // breathing room; the gap is measured off the rendered glyph.
         if (name === TacticalGraphicName.Pursuit) {
-            this.graphic.setStyle((feature, resolution) => {
-                const geom = feature.getGeometry() as MultiLineString;
-                if (!geom) return [];
-                const lines = geom.getCoordinates();
-                const color = readHostilityColor(feature);
-                const stroke = new Stroke({color, width: LINE_WIDTH()});
-
-                const styles: Style[] = [];
-                const horiz = lines[0];
-                if (horiz && horiz.length === 2) {
-                    const [a, b] = horiz;
-                    const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-                    const dx = b[0] - a[0], dy = b[1] - a[1];
-                    const len = Math.hypot(dx, dy);
-                    const scale = featureLabelScale(feature, resolution);
-                    // Measured width of 'P' (screen px) + 4px padding each side,
-                    // then converted to map units by × resolution so the gap
-                    // matches the rendered glyph at every zoom.
-                    const pWidthPx = getTextWidth(getLabel(name), fontStyle, scale);
-                    const gapHalf = (pWidthPx / 2 + 4) * resolution;
-                    if (len > 2 * gapHalf) {
-                        const ux = dx / len, uy = dy / len;
-                        const gapA: Coordinate = [mid[0] - ux * gapHalf, mid[1] - uy * gapHalf];
-                        const gapB: Coordinate = [mid[0] + ux * gapHalf, mid[1] + uy * gapHalf];
-                        styles.push(new Style({geometry: new LineString([a, gapA]), stroke}));
-                        styles.push(new Style({geometry: new LineString([gapB, b]), stroke}));
-                    } else {
-                        // Line is shorter than the label — don't split; render whole.
-                        styles.push(new Style({geometry: new LineString(horiz), stroke}));
-                    }
-                }
-                // Render the remaining sub-lines (arc, arrowhead, crossbar) as-is.
-                for (let i = 1; i < lines.length; i++) {
-                    styles.push(new Style({geometry: new LineString(lines[i]), stroke}));
-                }
-                return styles;
-            });
+            this.graphic.setStyle(pursuitStyleFunc(name));
         }
+        // MovementToContact nudges its zigzag "contact" arrows off the big arrow's
+        // arrowhead edges — by a fraction of the arrow, not a screen constant.
         if (name === TacticalGraphicName.MovementToContact) {
-            // `_resolution` is deliberately unused: everything this style draws is
-            // proportional to the graphic, so nothing here may depend on the zoom.
-            // Reaching for it again is the bug this function used to have.
-            this.graphic.setStyle((feature, _resolution) => {
-                const geom = feature.getGeometry() as MultiLineString;
-                if (!geom) return [];
-                const rawLines = geom.getCoordinates();
-                const defaultColor = readHostilityColor(feature);
-
-                // Recover the arrow's half-length `r` from the geometry. The tip A
-                // sits at local(+r, 0) and the two tail-fin tips E/F at
-                // local(-r, ±0.5r), so A and the E–F midpoint are exactly 2r apart
-                // — no stamped `graphicSize` needed, and it follows a resize for
-                // free. Plain Euclidean math: these are projected EPSG:3857 metres,
-                // so turf must not be used here.
-                const A = rawLines[0]?.[0];
-                const E = rawLines[0]?.[3];
-                const F = rawLines[1]?.[0];
-                let GAP = 0;
-                if (A && E && F) {
-                    const midEF = [(E[0] + F[0]) / 2, (E[1] + F[1]) / 2];
-                    const r = Math.hypot(A[0] - midEF[0], A[1] - midEF[1]) / 2;
-                    GAP = SIDE_ARROW_GAP_RATIO * r;
-                }
-                const perpShift = (
-                    edgeStart: number[],
-                    edgeEnd: number[],
-                    ccw: boolean,
-                ): [number, number] => {
-                    const dx = edgeEnd[0] - edgeStart[0];
-                    const dy = edgeEnd[1] - edgeStart[1];
-                    const len = Math.hypot(dx, dy);
-                    if (len === 0) return [0, 0];
-                    const sign = ccw ? 1 : -1;
-                    return [sign * -dy / len * GAP, sign * dx / len * GAP];
-                };
-                const [uDx, uDy] = (rawLines[0]?.length >= 2)
-                    ? perpShift(rawLines[0][1], rawLines[0][0], true)
-                    : [0, 0];
-                const [lDx, lDy] = (rawLines[1]?.length >= 4)
-                    ? perpShift(rawLines[1][2], rawLines[1][3], false)
-                    : [0, 0];
-                const shift = (line: number[][], dx: number, dy: number): number[][] =>
-                    line.map(pt => [pt[0] + dx, pt[1] + dy]);
-                const lines = rawLines.map((line, i) => {
-                    if (i === 2 || i === 3) return shift(line, uDx, uDy);
-                    if (i === 4 || i === 5) return shift(line, lDx, lDy);
-                    return line;
-                });
-
-                return lines.map((line) => new Style({
-                    geometry: new LineString(line),
-                    stroke: new Stroke({color: defaultColor, width: LINE_WIDTH()}),
-                }));
-            });
+            this.graphic.setStyle(movementToContactStyleFunc());
         }
         // The arc circles draw their own line work so the gap for the letter can
         // be measured off the glyph instead of being a fixed slice of the circle.
         if (ARC_GAP_MISSION_TASKS.includes(name)) {
             this.graphic.setStyle(arcMissionTaskStyleFunc(name, RATIO_LOCKED_MISSION_TASKS.has(name)));
         }
-        this.label.setStyle((feature, resolution) => {
-            return getMissionTaskStyleFn(getLabel(name))(feature, resolution);
-        })
+        // One call for the whole family: `missionTaskLabelPaint` picks the ratio-locked
+        // 24px treatment or the ordinary zoom-anchored one from the name itself, so both
+        // renderers make the same choice. @see RATIO_LOCKED_MISSION_TASKS
+        this.label.setStyle((feature, resolution) => getMissionTaskStyleFn(name)(feature, resolution));
         // BaseDefenseZone uses a hardcoded "BDZ" label whose scale tracks
         // the circle's radius rather than the zoom-anchored
         // featureLabelScale. Override the default mission-task label style
@@ -387,15 +222,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // updateGeometry as `graphicSize`.
         if (name === TacticalGraphicName.BaseDefenseZone) {
             this.label.setStyle(baseDefenseZoneLabelStyleFn());
-        }
-        // Contain and Control share the ratio-locked block-family treatment:
-        // 24px base font, label scales with the circle, and a 100px-diameter
-        // minimum size enforced in updateGeom so the graphic is recognisable
-        // from the first click.
-        if (RATIO_LOCKED_MISSION_TASKS.has(name)) {
-            this.label.setStyle((feature, resolution) =>
-                getRatioLockedMissionTaskStyleFn(getLabel(name))(feature, resolution)
-            );
         }
         // …but the crossed four cap their symbol at 100 px across, and the
         // letter has to stop growing with it. Must come after the block above.
@@ -706,19 +532,14 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
             this.graphic.setStyle(freeFireAreaCircularStyleFunc());
         }
         // NoFireAreaCircular gets the always-hatched LimitedAccessArea fill.
-        // CircularArea generates the outline as a MultiLineString (no interior),
-        // so the style is forced onto a Polygon built from the ring so the hatch
-        // pattern actually fills the circle.
+        //
+        // `CircularArea` emits its outline as a MultiLineString — a ring with no
+        // declared interior — so a hatch applied to it has nothing to fill. That
+        // coercion used to happen here, which meant it existed for OpenLayers and
+        // not for any other renderer; it now lives in `limitedAccessAreaPaint`
+        // (`fillableGeometry`), so both engines close the ring the same way.
         if (name === TacticalGraphicName.NoFireAreaCircular) {
-            this.graphic.setStyle((feature, resolution) => {
-                const style = limitedAccessAreaStyleFunc(feature, resolution);
-                const geom = feature.getGeometry();
-                if (geom instanceof MultiLineString) {
-                    const rings = geom.getCoordinates();
-                    if (rings.length > 0) style.setGeometry(new Polygon(rings));
-                }
-                return style;
-            });
+            this.graphic.setStyle(limitedAccessAreaStyleFunc);
         }
 
         writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);
@@ -759,7 +580,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = TURN_ARROWHEAD_PX * (drawingResolution ?? 1);
+        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -835,14 +656,14 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = ENVELOPMENT_ARROWHEAD_PX * (drawingResolution ?? 1);
+        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and
         // the closure keeps the style honest because the label feature's geometry
         // is re-set on the same update, which is what triggers the redraw.
         this.label.setStyle((feature, resolution) =>
-            getMissionTaskStyleFn(getLabel(name), this.projectedRotation)(feature, resolution));
+            getMissionTaskStyleFn(name, this.projectedRotation)(feature, resolution));
 
         // `updateGeometry` is an arrow property on the base, not a method, so it
         // cannot be overridden — wrap it instead. Every path that rebuilds the
@@ -932,13 +753,9 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         const along = dx * Math.cos(theta) + dy * Math.sin(theta);
         const perp = dx * -Math.sin(theta) + dy * Math.cos(theta);
 
-        const radius = Math.max(0, (along - this.size) / 2);
-        // Hold the current flank unless the drag commits to the other one, so a
-        // handle resting on the axis cannot flip on jitter alone.
-        const current = Math.sign(this.bend) || 1;
-        const side = Math.abs(perp) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perp) : current;
-
-        this.bend = clampEnvelopmentBend((side || 1) * (radius / this.size));
+        // The rule itself is the library's, so both renderers bend this graphic by the
+        // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
+        this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
         this.updateGeometry();
     }
 }
