@@ -375,7 +375,14 @@ export class TacticalGraphicsManager {
         // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
         // feature has `base` cleared), so an edit-mode drag would fall through
         // to the map and pan it. Claim the drag and stretch the graphic instead.
-        if (this.isModifying()) return !!this.activeController.editStretches;
+        //
+        // **A mirror handle is claimed whatever the mode**, which is the rule MapLibre
+        // states in `applyHandleRole`: a handle with a role means that role, and reading
+        // the mode first would make the same dot do different things depending on a
+        // button. Mobile defense needed it — its controller never opts into
+        // `editStretches`, so an edit-mode drag on its mirror handle was not claimed and
+        // the flip was reachable only from resize. @see handleRole
+        if (this.isModifying()) return this.isMirrorHandleGrab() || !!this.activeController.editStretches;
 
         return this.isRotating() || this.isTranslating() || this.isResizing();
     };
@@ -498,6 +505,13 @@ export class TacticalGraphicsManager {
                 // and the raw cursor; everything else scales uniformly.
                 if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
                     this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
+                } else if (this.isMirrorHandleGrab()) {
+                    // **A mirror handle flips and does nothing else**, which is what the
+                    // retrograde tasks' cane already does on the line path. Falling
+                    // through to `handleResize` made pursuit's handle do two jobs at once:
+                    // measured, a drag on it read `FLIP+resized` where the same gesture on
+                    // a disengage read `FLIP`. @see handleRole
+                    this.mirrorIfDraggedPastAxis(evt, center);
                 } else {
                     this.mirrorIfDraggedPastAxis(evt, center);
                     // Calculate distance to center for scaling
@@ -551,19 +565,17 @@ export class TacticalGraphicsManager {
                     break;
                 }
 
-                if (reshaping && this.activeBaseVertex >= 0) {
-                    this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
+                // **Before the reshape.** A mirror handle sits off the base entirely, but
+                // `nearestBaseVertexIndex` answers with the nearest vertex however far it
+                // is, so the reshape below would swallow the gesture. It flips and does
+                // nothing else. @see handleRole
+                if (this.mirrorIfMirrorHandle(evt)) {
                     this.lastPointerPosition = evt.coordinate;
                     break;
                 }
 
-                // A mirror handle flips the graphic and does nothing else, which is the
-                // contract MapLibre already reads from the library. Without it the drag
-                // fell through to `handleResize`, so mobile defense's mirror handle
-                // stretched the ellipse instead of turning it over — measured, a 200px
-                // drag either way moved the far vertex from x=4 to x=15 and never
-                // flipped. @see handleRole
-                if (this.mirrorIfMirrorHandle(evt)) {
+                if (reshaping && this.activeBaseVertex >= 0) {
+                    this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
                     this.lastPointerPosition = evt.coordinate;
                     break;
                 }
@@ -577,6 +589,26 @@ export class TacticalGraphicsManager {
                 break;
         }
     };
+
+    /**
+     * Whether the handle just grabbed is the one that flips this graphic.
+     *
+     * Asked at pointer-**down**, so the gesture can be claimed before any mode rule
+     * refuses it. Reads `activeHandleIndex`, which is latched immediately above the
+     * call, so it is the index the drag will use.
+     */
+    private isMirrorHandleGrab(): boolean {
+        const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
+        if (!this.activeController?.setMirrored || !name || this.activeHandleIndex < 0) return false;
+
+        // A point-anchored base is a bare `[x, y]`, so its vertex count is 1 — the line
+        // test alone rejected every one of them and pursuit's mirror handle was never
+        // recognised as one.
+        const drawn = this.activeController.getBaseGeometry() as unknown;
+        const vertices = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]).length : 1;
+
+        return handleRole(name, this.activeHandleIndex, vertices) === 'mirror';
+    }
 
     /**
      * Flips a graphic whose grabbed handle is declared a `mirror`, and reports whether
