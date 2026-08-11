@@ -168,6 +168,15 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             touchZoomRotate: false,
             // Added explicitly below instead, so the compact form is unambiguous.
             attributionControl: false,
+            // Never a backing store smaller than the element it fills — the same clamp
+            // the OpenLayers view makes, for the same hazard. At 90% browser zoom
+            // MapLibre sizes this canvas 1919x865 inside a 2133x962 box and lets the
+            // browser stretch it, which is the configuration whose OpenLayers twin
+            // Chrome's compositor silently declined to draw. This engine puts a WebGL
+            // surface through a different compositing path, so the fault is not
+            // demonstrated here — the clamp is cheap, and matching the two engines
+            // beats leaving one in the shape that failed. @see openlayerStyles.createMap
+            pixelRatio: Math.max(1, window.devicePixelRatio || 1),
         });
 
         // Required by the OSM Tile Usage Policy — the tiles are donated and the
