@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**228 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**228 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -22,13 +22,13 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 npm install @zaes/tactical-graphics
 ```
 
-The only runtime dependency is [`@turf/turf`](https://turfjs.org/).
+The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 32 packages, all permissively licensed.
 
 Three entry points ship, and you can use any of them on its own:
 
 | Import | What it gives you | Needs |
 |---|---|---|
-| `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | `@turf/turf` only |
+| `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
 | `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
 | `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 

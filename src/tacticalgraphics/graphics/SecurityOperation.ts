@@ -2,7 +2,7 @@ import {MultiLineString, MultiPoint, Feature, Point} from 'geojson';
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {SecurityOperationOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
-import * as turf from "@turf/turf";
+import * as turf from '../core/turf';
 
 /**
  * The symbol's dimensions in screen pixels at scale 1 - the shipped proportions,
