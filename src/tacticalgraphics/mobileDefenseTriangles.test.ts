@@ -12,7 +12,7 @@
  * percent off equilateral is invisible next to an ellipse and obvious in a number.
  */
 
-import * as turf from '@turf/turf';
+import * as turf from './core/turf';
 import {renderTacticalGraphic} from './core/render';
 import {TacticalGraphicName} from './core/type';
 

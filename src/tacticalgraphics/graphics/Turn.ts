@@ -3,7 +3,7 @@ import {TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, GeometryCollection, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
-import * as turf from "@turf/turf";
+import * as turf from '../core/turf';
 
 /**
  * Depth of the bow as a multiple of `size`, when the caller supplies none.
