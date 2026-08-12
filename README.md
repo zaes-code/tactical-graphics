@@ -461,7 +461,7 @@ showing where a new vertex would land are all present in both.
 |---|---|
 | **Label rasterisation** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
 | **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
-| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realise geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
+| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
 
 ### The radius read-out
 
@@ -508,7 +508,7 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 `label` features by default; ask for `handle` too when you are building an editor.
 
 **Geometry is not the whole symbol.** Obstacle teeth, the gap cut around a mission
-task's letter, a screen-sized arrowhead and the rest are synthesised at paint time,
+task's letter, a screen-sized arrowhead and the rest are synthesized at paint time,
 so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
 exported from the root entry point for exactly this — `getPaintFunction(name)`
 returns the marks to draw, in projected meters, with no renderer in them. That is
