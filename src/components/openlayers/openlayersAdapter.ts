@@ -6,7 +6,9 @@ import {StyleFunction} from "ol/style/Style";
 import GeoJSON from "ol/format/GeoJSON";
 import {Coordinate} from 'ol/coordinate';
 import {toLonLat} from "ol/proj";
-import * as turf from "@turf/turf";
+import {point as turfPoint} from '@turf/helpers';
+import {distance as turfDistance} from '@turf/distance';
+import {bearing as turfBearing} from '@turf/bearing';
 import {TacticalGraphicsRegistry} from '@zaes/tactical-graphics';
 import {GraphicOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from "ol/Feature";
@@ -158,15 +160,15 @@ class OpenlayersAdapter {
 
     coordinateToTurfPoint = (coord: number[]): GeoJSONFeature<Point> => {
         let coordinate = toLonLat(coord);
-        return turf.point(coordinate);
+        return turfPoint(coordinate);
     }
 
     getTurfDistance = (start: GeoJSONFeature<Point>, stop: GeoJSONFeature<Point>) => {
-        return turf.distance(start, stop, {units: 'kilometers'});
+        return turfDistance(start, stop, {units: 'kilometers'});
     }
 
     getTurfBearing = (start: GeoJSONFeature<Point>, stop: GeoJSONFeature<Point>) => {
-        return turf.bearing(start, stop);
+        return turfBearing(start, stop);
     }
 
     resizeFeature(feat: Feature, deltaSize: number): Feature {

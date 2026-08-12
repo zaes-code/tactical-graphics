@@ -1,6 +1,6 @@
 import {Feature, LineString, MultiLineString, Point, Polygon, Position} from 'geojson';
 import {Coordinate} from './type';
-import * as turf from '@turf/turf';
+import * as turf from './turf';
 
 /**
  * Most dashes any one line may be broken into.
