@@ -11,7 +11,7 @@ export enum TacticalGraphicCategory {
     Lines = 'Lines',
     MobilityAndCountermobility = 'Mobility and Countermobility Control Measures',
     MovementAndManeuver = 'Movement and Maneuver',
-    OffenceOperationsPlanning = 'Offence Operations Planning',
+    OffenseOperationsPlanning = 'Offense Operations Planning',
     TacticalMissionTasks = 'Tactical Mission Tasks',
     TargetAcquisitionControlMeasures = 'Target Acquisition Control Measures',
     TargetControlMeasures = 'Target Control Measures',
@@ -234,13 +234,13 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.SupportingAxisOfAdvance]:                 TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.TurningMovement]:                  TacticalGraphicCategory.MovementAndManeuver,
 
-    // ── Offence Operations Planning ─────────────────────────────────────────── OK
-    [TacticalGraphicName.Ambush]:                           TacticalGraphicCategory.OffenceOperationsPlanning,
-    [TacticalGraphicName.CordonAndSearch]:                  TacticalGraphicCategory.OffenceOperationsPlanning,
-    [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenceOperationsPlanning,
-    [TacticalGraphicName.Exploitation]:                     TacticalGraphicCategory.OffenceOperationsPlanning,
-    [TacticalGraphicName.MovementToContact]:                TacticalGraphicCategory.OffenceOperationsPlanning,
-    [TacticalGraphicName.Pursuit]:                          TacticalGraphicCategory.OffenceOperationsPlanning,
+    // ── Offense Operations Planning ─────────────────────────────────────────── OK
+    [TacticalGraphicName.Ambush]:                           TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.CordonAndSearch]:                  TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Exploitation]:                     TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.MovementToContact]:                TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Pursuit]:                          TacticalGraphicCategory.OffenseOperationsPlanning,
 
     // ── Tactical Mission Tasks ──────────────────────────────────────────────── OK
     [TacticalGraphicName.AttackByFire]:                     TacticalGraphicCategory.TacticalMissionTasks,
