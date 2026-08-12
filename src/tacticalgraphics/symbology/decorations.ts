@@ -3,14 +3,14 @@
  *
  * Obstacle teeth, fortified merlons, FLOT scallops, the gap cut around a mission
  * task's letter. None of these are in the GeoJSON `renderTacticalGraphic`
- * returns; all of them are synthesised, per frame, from the current view scale.
+ * returns; all of them are synthesized, per frame, from the current view scale.
  * That synthesis happens in 128 places inside `openlayerStyles.ts` today, which
  * is what makes it unreachable from any other renderer — and what leaves a
  * raw-GeoJSON consumer holding a skeleton.
  *
  * This module is the first of those 128 moved out. Everything here is:
  *
- * - **Planar.** Coordinates are EPSG:3857 metres and the math is plain Euclidean
+ * - **Planar.** Coordinates are EPSG:3857 meters and the math is plain Euclidean
  *   vector work — `Math.hypot`, `Math.atan2`, unit vectors. No turf, no
  *   `GeometryService`: both expect geographic degrees, and mixing the two is the
  *   mistake the repo's coordinate rules exist to prevent.
@@ -23,7 +23,7 @@
 
 import type {PaintContext, ProjectedPosition} from '../core/paint';
 
-/** Total length of a path, in projected metres. */
+/** Total length of a path, in projected meters. */
 export function pathLength(path: ProjectedPosition[]): number {
     let total = 0;
     for (let i = 0; i < path.length - 1; i++) {
@@ -37,7 +37,7 @@ export function pathLength(path: ProjectedPosition[]): number {
  * graphic's label goes, so it lands on the middle of the *drawn* line rather than
  * on whichever vertex happens to be central in the array.
  */
-export function centreSegmentIndex(coords: ProjectedPosition[]): number {
+export function centerSegmentIndex(coords: ProjectedPosition[]): number {
     const lengths: number[] = [];
     let total = 0;
     for (let i = 0; i < coords.length - 1; i++) {
@@ -45,10 +45,10 @@ export function centreSegmentIndex(coords: ProjectedPosition[]): number {
         lengths.push(len);
         total += len;
     }
-    let travelled = 0;
+    let traveled = 0;
     for (let i = 0; i < lengths.length; i++) {
-        travelled += lengths[i];
-        if (travelled >= total / 2) return i;
+        traveled += lengths[i];
+        if (traveled >= total / 2) return i;
     }
     return Math.max(0, lengths.length - 1);
 }
@@ -110,7 +110,7 @@ export const OBSTACLE_TOOTH_HEIGHT_PX = 10;
 export const OBSTACLE_TOOTH_BASE_PX = 10;
 export const OBSTACLE_TOOTH_GAP_PX = 10;
 
-/** An obstacle line's tooth size, in projected metres, at the current resolution. */
+/** An obstacle line's tooth size, in projected meters, at the current resolution. */
 export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, resolution: number) {
     const scale = decorationScale(path, closed, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
     return {
@@ -129,7 +129,7 @@ export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, re
 export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
 
 /**
- * An encirclement's tooth size, in projected metres, at the current resolution.
+ * An encirclement's tooth size, in projected meters, at the current resolution.
  *
  * `ring` is the **whole** outline even when the teeth are then laid along its
  * pieces: a hostile encirclement's outline is cut into segments to clear the "ENY"
@@ -215,18 +215,18 @@ export function angleBetween(a: number, b: number): number {
  * the generator's arcs are 100 points over 160°, and at a large radius one 1.6°
  * step is several pixels — enough for the two sides of the gap to look uneven.
  *
- * Angles are measured about the projected centre, and radii are never assumed: a
+ * Angles are measured about the projected center, and radii are never assumed: a
  * geodesic circle is not quite a circle in EPSG:3857, so anything that
  * reconstructed a point from the graphic's size would drift off the drawn arc.
  */
 export function cutArcAtLabel(
     points: ProjectedPosition[],
-    centre: ProjectedPosition,
+    center: ProjectedPosition,
     axis: number,
     halfGap: number,
 ): ProjectedPosition[] {
     if (points.length < 2) return points;
-    const angleAt = (p: ProjectedPosition) => Math.atan2(p[1] - centre[1], p[0] - centre[0]);
+    const angleAt = (p: ProjectedPosition) => Math.atan2(p[1] - center[1], p[0] - center[0]);
     const clearance = (p: ProjectedPosition) => angleBetween(angleAt(p), axis);
 
     const fromStart = clearance(points[0]) <= clearance(points[points.length - 1]);
@@ -267,7 +267,7 @@ export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition):
  * Offsets an anchor perpendicular to a segment, on the side that is **up on
  * screen**, by a constant number of pixels.
  *
- * "Up" is normalised against the map's north rather than taken from the
+ * "Up" is normalized against the map's north rather than taken from the
  * segment's direction of travel: a counter-clockwise perpendicular flips when the
  * same line is drawn right-to-left, which put every label below the line instead
  * of above it. A vertical segment has no up side, so the tie breaks east.
@@ -424,7 +424,7 @@ export function fortifiedRing(ring: ProjectedPosition[], resolution: number): Pr
 const MAX_MITER = 4;
 
 /**
- * A true parallel of `path`, `d` metres to its left (negative for its right).
+ * A true parallel of `path`, `d` meters to its left (negative for its right).
  *
  * Offsets each vertex along the **bisector** of its two segments, lengthened by
  * `1 / cos(half-angle)` — the standard miter. Taking the direction *at* the vertex
@@ -461,7 +461,7 @@ export function parallelPath(path: ProjectedPosition[], d: number): ProjectedPos
 }
 
 /**
- * The point `dist` metres along `path`, with the unit tangent there.
+ * The point `dist` meters along `path`, with the unit tangent there.
  *
  * `null` past the end, rather than clamping to the last vertex — a caller walking a
  * repeating pattern uses that to know when to stop, and a clamped point would stack
@@ -509,17 +509,17 @@ export function projectedMidSegment(coords: ProjectedPosition[]): {index: number
     const min = Math.min(...projected);
     const max = Math.max(...projected);
     const span = max - min;
-    const normalised = projected.map(d => (span === 0 ? 0 : (d - min) / span));
+    const normalized = projected.map(d => (span === 0 ? 0 : (d - min) / span));
 
     let index = 0;
-    for (let i = 0; i < normalised.length - 1; i++) {
-        if (normalised[i] <= 0.5 && normalised[i + 1] >= 0.5) {
+    for (let i = 0; i < normalized.length - 1; i++) {
+        if (normalized[i] <= 0.5 && normalized[i + 1] >= 0.5) {
             index = i;
             break;
         }
     }
-    const denom = normalised[index + 1] - normalised[index];
-    return {index, t: denom === 0 ? 0.5 : (0.5 - normalised[index]) / denom};
+    const denom = normalized[index + 1] - normalized[index];
+    return {index, t: denom === 0 ? 0.5 : (0.5 - normalized[index]) / denom};
 }
 
 /** Scallop dimensions, in screen pixels before {@link decorationScale}. */
@@ -541,10 +541,10 @@ export function offsetPath(path: ProjectedPosition[], sideSign: number, offsetMa
     const total = pathLength(path);
     if (total === 0) return path;
 
-    let travelled = 0;
+    let traveled = 0;
     return path.map((point, i) => {
-        if (i > 0) travelled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
-        const {dir} = pathPointAt(path, Math.min(travelled, total));
+        if (i > 0) traveled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(traveled, total));
         return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as ProjectedPosition;
     });
 }
@@ -607,7 +607,7 @@ export const ARROWHEAD_MAX_SHARE = 0.25;
 /**
  * Redraws a generator-emitted solid arrowhead at a fixed screen size.
  *
- * The generators build their heads in metres — Fix's off the drawn line's length,
+ * The generators build their heads in meters — Fix's off the drawn line's length,
  * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
  * — so resizing the graphic resized the head, and Turn's swelled on screen as you
  * zoomed in. The head is a symbol, not part of the shape: it should hold one size.

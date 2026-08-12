@@ -25,7 +25,7 @@ import {writeGraphicProperties} from "../graphicProperties";
  * Wired through MissionTaskController via the `rangeFan` factory in
  * controllerRegistry.
  */
-/** `RangeFanBand.range` is kilometres; `size` and turf distances are metres. */
+/** `RangeFanBand.range` is kilometers; `size` and turf distances are meters. */
 const KM_TO_M = 1000;
 
 /**
@@ -83,7 +83,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphic.setGeometry(graphic as MultiLineString);
-        // Same split as every other circle graphic: the centre becomes the grey
+        // Same split as every other circle graphic: the center becomes the gray
         // inert dot, and what stays on `handles` is one draggable rim per band,
         // in sorted band order — which is what `setBandRange` indexes into.
         this.publishHandles(handles as MultiPoint);
@@ -126,16 +126,16 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * Drags band `bandIndex`'s ring to `coordinate`. `bandIndex` counts in the
      * **sorted** band order, matching the rim handles `generateHandles` emits.
      *
-     * The new range is the *geodesic* distance from the centre in kilometres —
+     * The new range is the *geodesic* distance from the center in kilometers —
      * `RangeFanBand.range` is km and the generator spends it through
      * `turf.destination`, so measuring the same way is what makes the ring land
      * under the cursor at any latitude. Measuring in EPSG:3857 map units would
      * only agree near the equator.
      *
-     * **Clamped between its neighbours**, which is what keeps an inner ring from
-     * expanding past the outer one. Neighbour clamping rather than a bare
+     * **Clamped between its neighbors**, which is what keeps an inner ring from
+     * expanding past the outer one. Neighbor clamping rather than a bare
      * "not past the outermost" rule, because `resolveBands` re-sorts on every
-     * render: if a ring could cross its neighbour, the sorted index the drag is
+     * render: if a ring could cross its neighbor, the sorted index the drag is
      * holding would start pointing at a different band halfway through the
      * gesture.
      */

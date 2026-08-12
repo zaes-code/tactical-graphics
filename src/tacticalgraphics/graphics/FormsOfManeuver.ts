@@ -312,7 +312,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // plus an edit handle at the beginning of the horizontal "P" line
         // (local (−2.4r, +r)). Both sit on the graphic's outline.
         //
-        // The MissionTask convention's centre handle is deliberately absent: it
+        // The MissionTask convention's center handle is deliberately absent: it
         // rendered in the middle of empty space inside the hook, and it is not
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
@@ -325,7 +325,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         // hook finishes, and the free end of the P-line. The first used to be the middle
         // of the semicircle — geometrically convenient, since it is one radius out and so
         // drives resize cleanly, but it reads as a dot floating on the curve rather than
-        // something you can take hold of. The tip is also one radius from the centre, so
+        // something you can take hold of. The tip is also one radius from the center, so
         // resize behaves identically.
         const at = (x: number, y: number): Position => {
             const dist = Math.hypot(x, y);
@@ -407,7 +407,7 @@ export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
  * properly. The two components split the job: distance along the axis past the line's
  * end is the circle's diameter, and the side the cursor strays to picks the flank.
  *
- * All planar, in projected metres — the frame both renderers edit in.
+ * All planar, in projected meters — the frame both renderers edit in.
  */
 export function envelopmentBendFrom(
     along: number,
@@ -455,8 +455,8 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * point**: `u` along the approach, `v` to its left.
      *
      * Every vertex goes through here, from the *same* origin, and that is the
-     * whole trick. Chaining translations instead — centre to the line's end, then
-     * to the circle's centre, then out to the arc — accumulates the
+     * whole trick. Chaining translations instead — center to the line's end, then
+     * to the circle's center, then out to the arc — accumulates the
      * latitude-dependent scaling each hop applies, and the arc lands beside the
      * line rather than on it. Measured at 13.7 km off a 4739 km run before this,
      * which reads as the circle crossing under the line at the joint.
@@ -484,7 +484,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
         };
     }
 
-    /** `[start, end]` of the straight run, centred on the base point. */
+    /** `[start, end]` of the straight run, centered on the base point. */
     private axis(base: Feature<Point>, opts?: TurnOptions): [Position, Position] {
         const {center, angle, size} = this.frame(base, opts);
         return [this.at(center, angle, -size, 0), this.at(center, angle, size, 0)];
@@ -492,7 +492,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
 
     /**
      * The half circle, from the line's end round to the point the arrowhead sits
-     * on. Its centre is one radius past the line's end, so sweeping φ from π to 0
+     * on. Its center is one radius past the line's end, so sweeping φ from π to 0
      * starts at `u = size` and finishes at `u = size + 2 * radius` — both on the
      * approach's own axis, whatever direction the graphic is aimed.
      */
@@ -516,8 +516,8 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
     }
 
     /**
-     * `[arrowTip, lineEnd, centre]` — the order `EnvelopmentGraphicBase.setBandRange`
-     * relies on, matching Turn's `[bend, tip, centre]` contract. The centre is
+     * `[arrowTip, lineEnd, center]` — the order `EnvelopmentGraphicBase.setBandRange`
+     * relies on, matching Turn's `[bend, tip, center]` contract. The center is
      * split onto the inert feature by `publishHandles`, which preserves order.
      *
      * The circle handle sits on the **arrow tip**, at `size + 2 * radius` along
@@ -540,7 +540,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
     /**
      * A quarter of the way along the straight run — the same place
      * `envelopmentGraphicStyleFunc` opens its gap, so the "E" lands in the hole
-     * left for it rather than beside one. Expressed off the centre so it stays
+     * left for it rather than beside one. Expressed off the center so it stays
      * exact: the run spans `2 * size`, so a quarter along is `0.5 * size` back
      * from the middle.
      */
@@ -551,11 +551,11 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * cuts for it. Naming that spot here — geodesically, in 4326 — puts it a little off
      * the *straight segment* a renderer then draws between the run's reprojected ends,
      * because 3857's y is not linear in latitude. Measured at 3.5 km off a 4739 km run:
-     * a fraction of a pixel on a small graphic, and growing with every metre you add, so
+     * a fraction of a pixel on a small graphic, and growing with every meter you add, so
      * the letter drifts out of its hole exactly when the graphic gets big.
      *
      * Handing over the ends instead lets the paint find the quarter point on the segment
-     * it is actually drawing, in projected metres, which is where the gap is cut too.
+     * it is actually drawing, in projected meters, which is where the gap is cut too.
      * Letter and hole then agree by construction at any size and any zoom.
      * @see envelopmentLabelPaint
      */
@@ -671,7 +671,7 @@ export class MobileDefense extends MovementGraphicBase {
     /**
      * `[p1]` — the far end of the ellipse's major axis, and nothing else.
      *
-     * p1 lands on the centre-line in the gap between the arrowhead and the end
+     * p1 lands on the center-line in the gap between the arrowhead and the end
      * of the bottom arc, across the shape from the "MD" label. The p0 dot is
      * deliberately omitted: it would sit underneath that label, so it read as
      * clutter rather than as something grabbable.
@@ -736,7 +736,7 @@ export class InfiltrationLane extends MovementGraphicBase {
      * i.e. on the graphic, rather than the inherited point a further `radius`
      * out into empty space.
      *
-     * The handle is now one radius off the centre line instead of two, so the
+     * The handle is now one radius off the center line instead of two, so the
      * renderer has to halve its drag sensitivity to compensate — see
      * `OFFSET_SCALE` in the OpenLayers `MovementGraphicBase`.
      */
@@ -864,7 +864,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // emerges from the bulge (planar 0°, distance 2r, matching
         // `generateGraphics`).
         //
-        // The MissionTask convention's centre handle is deliberately absent: it
+        // The MissionTask convention's center handle is deliberately absent: it
         // rendered in the hollow of the arc with nothing under it, and it is not
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base

@@ -37,7 +37,7 @@ export enum InteractionType {
 * */
 
 /**
- * How far from a graphic's centre a resize drag has to start, in screen pixels,
+ * How far from a graphic's center a resize drag has to start, in screen pixels,
  * before its scale ratio means anything. @see TacticalGraphicsManager.handleResize
  */
 const MIN_RESIZE_ORIGIN_PX = 8;
@@ -78,7 +78,7 @@ export class TacticalGraphicsManager {
          * put on the basemap silently repainted every tactical graphic too. The demo's
          * dark-mode `invert()` did exactly that: it was what turned black strokes white,
          * and what crushed pending yellow to a near-black olive. A distinct className is
-         * what keeps the graphics on their own canvas and their own colours.
+         * what keeps the graphics on their own canvas and their own colors.
          */
         className: 'tg-graphics',
         source: this.renderingVectorSource,
@@ -109,7 +109,7 @@ export class TacticalGraphicsManager {
      *
      * Kept rather than fire-and-forget so the listeners can be dropped again.
      * They used not to be: draw and restore each attached one and never removed
-     * it, so a cancelled draw leaked one and a sample sweep — which clears and
+     * it, so a canceled draw leaked one and a sample sweep — which clears and
      * redraws two hundred graphics — leaked a couple of hundred per press, every
      * one of them still re-deriving a graphic that had been removed from the map.
      *
@@ -173,8 +173,8 @@ export class TacticalGraphicsManager {
 
         let interactive: boolean;
         if (this.enableHandleModes().includes(this.currentMode)) {
-            const centreGrabbable = this.isTranslating();
-            interactive = hits.some(f => f.get('handle') && (!f.get('inert') || centreGrabbable));
+            const centerGrabbable = this.isTranslating();
+            interactive = hits.some(f => f.get('handle') && (!f.get('inert') || centerGrabbable));
         } else {
             interactive = hits.length > 0;
         }
@@ -190,7 +190,7 @@ export class TacticalGraphicsManager {
     /**
      * Notified whenever the mode changes, including the changes the manager
      * makes on its own — `stopDrawing` drops back to `view` when a draw finishes
-     * or is cancelled. Without this the host's own copy of the mode silently
+     * or is canceled. Without this the host's own copy of the mode silently
      * diverges: the demo's draw button stayed on "Drawing…" forever, because it
      * renders from React state that nothing was telling.
      *
@@ -212,8 +212,8 @@ export class TacticalGraphicsManager {
         const visible = this.enableHandleModes().includes(this.currentMode);
         this.getRenderedFeaturesByProp('handle').forEach(feature => {
             feature.set('hidden', !visible);
-            // The centre dot is grabbable for a move and nothing else — see
-            // `handleDownEvent`. Publish that so its style can colour itself
+            // The center dot is grabbable for a move and nothing else — see
+            // `handleDownEvent`. Publish that so its style can color itself
             // accordingly rather than claiming "never draggable" in a mode where it is.
             if (feature.get('inert')) feature.set('grabbable', this.isTranslating());
         });
@@ -329,15 +329,15 @@ export class TacticalGraphicsManager {
         });
         if (hits.length === 0) return false;
 
-        // The centre dot is refused as a drag origin for resize — the scale ratio
-        // divides by distance-to-centre, which is ~0 there — and for rotate, where a
+        // The center dot is refused as a drag origin for resize — the scale ratio
+        // divides by distance-to-center, which is ~0 there — and for rotate, where a
         // point on the axis carries no angle. A move has neither problem: translate
-        // applies a plain delta, and the centre is the most natural thing to grab to
+        // applies a plain delta, and the center is the most natural thing to grab to
         // reposition a circle. So it is a live handle in translate mode only.
-        const centreGrabbable = this.isTranslating();
-        const isLive = (f: Feature) => f.get('handle') && (!f.get('inert') || centreGrabbable);
+        const centerGrabbable = this.isTranslating();
+        const isLive = (f: Feature) => f.get('handle') && (!f.get('inert') || centerGrabbable);
         const liveHandle = hits.find(isLive);
-        // Grey handles are visual anchors, not drag origins — but only once no
+        // Gray handles are visual anchors, not drag origins — but only once no
         // live handle is in play, so an inert dot overlapping a real one cannot
         // veto it. Bail before latching any state so a later drag cannot pick up
         // a stale controller.
@@ -351,7 +351,7 @@ export class TacticalGraphicsManager {
         this.activeController = this.getFeatureController(feature);
         if (!this.activeController) return false;
 
-        // Latch whether this gesture started too near the centre to carry a
+        // Latch whether this gesture started too near the center to carry a
         // scale ratio. It has to be decided once, at pointer-down: the drag
         // handlers advance `lastPointerPosition` on every event, so a per-event
         // check would skip only the first move and then scale off a 10-pixel
@@ -548,12 +548,12 @@ export class TacticalGraphicsManager {
 
                 // A graphic whose shape *is* its vertex positions reshapes in **modify**
                 // mode only. Resize keeps its usual meaning — scale the whole graphic
-                // about its centre — because a user who picked "resize" asked for that,
+                // about its center — because a user who picked "resize" asked for that,
                 // not for one corner to move.
                 //
                 // The anchor is skipped here: it moves the graphic, and moving is what
                 // translate mode is for. That leaves it inert under a reshape, the same
-                // contract the inert centre dot has on point-anchored graphics.
+                // contract the inert center dot has on point-anchored graphics.
                 const anchor = this.activeController.anchorVertex;
                 const reshaping = this.isModifying() && !!this.activeController.handleVertexDrag;
 
@@ -603,7 +603,7 @@ export class TacticalGraphicsManager {
 
         // A point-anchored base is a bare `[x, y]`, so its vertex count is 1 — the line
         // test alone rejected every one of them and pursuit's mirror handle was never
-        // recognised as one.
+        // recognized as one.
         const drawn = this.activeController.getBaseGeometry() as unknown;
         const vertices = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]).length : 1;
 
@@ -633,7 +633,7 @@ export class TacticalGraphicsManager {
         const from = line[0];
         const to = line[line.length - 1];
         const axis = Math.atan2(to[1] - from[1], to[0] - from[0]);
-        // Projected metres, so the midpoint is the plain average — no turf in here.
+        // Projected meters, so the midpoint is the plain average — no turf in here.
         const originX = (from[0] + to[0]) / 2;
         const originY = (from[1] + to[1]) / 2;
         const dx = evt.coordinate[0] - originX;
@@ -659,11 +659,11 @@ export class TacticalGraphicsManager {
             Math.pow(this.lastPointerPosition[0] - center[0], 2) + Math.pow(this.lastPointerPosition[1] - center[1], 2),
         );
 
-        // A drag that starts at or near the centre carries no usable scale
+        // A drag that starts at or near the center carries no usable scale
         // ratio: `currentDistance / lastDistance` diverges as `lastDistance`
         // approaches zero. A `> 0` guard is not enough — measured, a nudge a few
-        // pixels off a circle's centre grew `size` by twenty orders of
-        // magnitude. The centre is not a resize origin; ignore the gesture.
+        // pixels off a circle's center grew `size` by twenty orders of
+        // magnitude. The center is not a resize origin; ignore the gesture.
         if (this.resizeOriginNearCenter || lastDistance <= 0) return;
 
         const scaleFactor = currentDistance / lastDistance;
@@ -672,7 +672,7 @@ export class TacticalGraphicsManager {
 
     /**
      * Index of the MultiPoint vertex nearest `coordinate`, or -1 when the
-     * feature is not a MultiPoint. Coordinates are EPSG:3857 metres, so plain
+     * feature is not a MultiPoint. Coordinates are EPSG:3857 meters, so plain
      * Euclidean math is correct here — no turf.
      */
     /** Nearest vertex of a controller's base line to `coordinate`, or -1. */
@@ -709,7 +709,7 @@ export class TacticalGraphicsManager {
 
     /**
      * Squared distance from `point` to the segment `a`→`b`. Coordinates are
-     * EPSG:3857 metres, so plain Euclidean math is correct here — no turf.
+     * EPSG:3857 meters, so plain Euclidean math is correct here — no turf.
      */
     private distanceToSegmentSq(point: Coordinate, a: Coordinate, b: Coordinate): number {
         const dx = b[0] - a[0];
@@ -761,7 +761,7 @@ export class TacticalGraphicsManager {
 
         // Sensitivity. The default halves the drag distance, which suits graphics
         // whose offset spans the full width; a graphic whose offset is measured
-        // from the centre-line (a radius) overrides it to track the cursor 1:1.
+        // from the center-line (a radius) overrides it to track the cursor 1:1.
         const scaleFactor = this.activeController.offsetScale ?? .5;
         const baseWidth = Math.abs(perpendicularDistance) * scaleFactor;
         this.activeController.setOffset?.(baseWidth);
@@ -881,13 +881,13 @@ export class TacticalGraphicsManager {
         this.unlistenDblClickZoomRestore = () => viewport.removeEventListener('mousedown', onMouseDown);
     };
 
-    private stopDrawing = (tacticalGraphicHandler: TacticalGraphicHandler, cancelled: boolean) => {
+    private stopDrawing = (tacticalGraphicHandler: TacticalGraphicHandler, canceled: boolean) => {
         if (this.escKeyHandler) {
             document.removeEventListener('keydown', this.escKeyHandler);
             this.escKeyHandler = undefined;
         }
         this.resumeDoubleClickZoomOnNextClick();
-        if (cancelled) {
+        if (canceled) {
             tacticalGraphicHandler.getFeatures().forEach(f => this.renderingVectorSource.removeFeature(f));
             // The subscription went on at draw start, so an abandoned draw has one
             // to take off again — otherwise it outlives its own features.
@@ -927,7 +927,7 @@ export class TacticalGraphicsManager {
             source: drawingVectorSource,
             type: tacticalGraphicHandler.type,
             // Falls back to the shared draw style rather than to OpenLayers' built-in
-            // editing style, so the configured draw-marker colours apply to every
+            // editing style, so the configured draw-marker colors apply to every
             // graphic — not just the point-anchored ones whose controller styles itself.
             style: tacticalGraphicHandler.drawStyleFunc ?? defaultDrawStyleFunc(),
             maxPoints: tacticalGraphicHandler.maxPoints ?? undefined,
@@ -982,8 +982,8 @@ export class TacticalGraphicsManager {
      * disagree about how many vertices there are.
      *
      * The reason it is needed here at all is a double-click: OpenLayers ends a
-     * fields-of-fire at two points, the generator synthesises the second leg on every
-     * render, and the V is frozen because the synthesised leg has no vertex to drag.
+     * fields-of-fire at two points, the generator synthesizes the second leg on every
+     * render, and the V is frozen because the synthesized leg has no vertex to drag.
      * Materialising it is invisible — `normalizeDrawnBase` calls the very function the
      * renderer would have called — but it turns a fixed angle into an editable one.
      *

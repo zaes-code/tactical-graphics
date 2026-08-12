@@ -50,7 +50,7 @@ export interface CircularAreaOptions extends BaseGraphicOptions {
     radius?: number;
 }
 
-/** Options for the Encirclement graphic which uses a hostility arrow colour. */
+/** Options for the Encirclement graphic which uses a hostility arrow color. */
 export interface EncirclementOptions extends BaseGraphicOptions {
     hostility?: TacticalGraphicHostility;
 }
@@ -71,10 +71,10 @@ export interface RouteOptions extends BaseGraphicOptions {
  * @see SecurityOperation.dimensions
  */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
-    /** Distance from the centre to where each arm's line begins, in metres. */
+    /** Distance from the center to where each arm's line begins, in meters. */
     centerPadding?: number;
     /**
-     * Distance from the centre to the label anchor, in metres.
+     * Distance from the center to the label anchor, in meters.
      *
      * Separate from `centerPadding` so the gap between the label and the line
      * that follows it is a number someone can set, rather than whatever falls out
@@ -108,11 +108,11 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  */
 export interface RangeFanBand {
     /**
-     * How far the band reaches, in **kilometres**.
+     * How far the band reaches, in **kilometers**.
      *
-     * The one distance in this schema that is not metres — `radius`, `width` and
-     * `decorationSize` all are. It is kilometres because a weapon or sensor envelope is
-     * quoted that way and the label prints the number bare, so metres here would put
+     * The one distance in this schema that is not meters — `radius`, `width` and
+     * `decorationSize` all are. It is kilometers because a weapon or sensor envelope is
+     * quoted that way and the label prints the number bare, so meters here would put
      * three zeroes on every ring. Kept rather than corrected: changing it would silently
      * rescale every range fan already saved by a factor of a thousand.
      */
@@ -174,10 +174,10 @@ export interface TurnOptions extends BaseGraphicOptions {
      * negative bends the other way. Defaults to `TURN_DEFAULT_BEND`.
      */
     bend?: number;
-    /** Arrowhead length in **metres**. Defaults to a fraction of `size`. */
+    /** Arrowhead length in **meters**. Defaults to a fraction of `size`. */
     headSize?: number;
     /**
-     * Half the gap left in the curve for the "T", in **metres**. Defaults to a
+     * Half the gap left in the curve for the "T", in **meters**. Defaults to a
      * fraction of `size`. Set it from the rendered glyph where the label does
      * not scale with the graphic. Clamped so a gap can never swallow the curve.
      */

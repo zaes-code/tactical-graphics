@@ -8,13 +8,13 @@
  * one canvas. When that was fixed at source the filter's output got frozen into
  * literals so the change would look like a no-op.
  *
- * Re-tinting doctrinal affiliation colours is a host's call, not the library's, so there
+ * Re-tinting doctrinal affiliation colors is a host's call, not the library's, so there
  * is now exactly one palette — `DEFAULT_PALETTE` — and a config to override it with. The
  * mode flag that used to pick between palettes is gone, and so is the second palette it
- * picked: the library has no concept of light or dark, only colours the host decides. A
+ * picked: the library has no concept of light or dark, only colors the host decides. A
  * host that wants a dark set keeps its own and sends it. These tests hold that: the
  * doctrinal values are what an unconfigured consumer gets, and an override reaches every
- * accessor that should honour it, editor chrome included.
+ * accessor that should honor it, editor chrome included.
  */
 import Feature from 'ol/Feature';
 import {GeometryCollection, LineString, MultiLineString, Point, Polygon} from 'ol/geom';
@@ -134,7 +134,7 @@ describe('the airfield symbol is sized from its polygon', () => {
         return {width: maxX - minX, height: maxY - minY};
     };
 
-    it('grows with the area instead of staying a fixed number of metres', () => {
+    it('grows with the area instead of staying a fixed number of meters', () => {
         const small = crossOn(500_000, 500_000);
         const big = crossOn(5_000_000, 5_000_000);
         expect(big.width / small.width).toBeCloseTo(10, 1);
@@ -259,7 +259,7 @@ describe('the table 5-19 obstacle effects draw no letter and no gap', () => {
 });
 
 describe('the doctrinal palette is what an unconfigured consumer gets', () => {
-    it('uses the FM 1-02.2 affiliation colours', () => {
+    it('uses the FM 1-02.2 affiliation colors', () => {
         expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
         expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
         expect(getColorByHostility(TacticalGraphicHostility.neutral)).toBe('rgba(0, 128, 0, 1)');
@@ -273,12 +273,12 @@ describe('the doctrinal palette is what an unconfigured consumer gets', () => {
             .toBe(getColorByHostility(TacticalGraphicHostility.pending));
     });
 
-    it('falls back to the default line colour for unknown', () => {
+    it('falls back to the default line color for unknown', () => {
         expect(getColorByHostility(TacticalGraphicHostility.unknown)).toBe(getDefaultLineColor());
         expect(getDefaultLineColor()).toBe('#000000');
     });
 
-    it('fills label text to match the line colour', () => {
+    it('fills label text to match the line color', () => {
         expect(getLabelFillColor()).toBe(getDefaultLineColor());
     });
 
@@ -289,7 +289,7 @@ describe('the doctrinal palette is what an unconfigured consumer gets', () => {
 
 describe('editor chrome', () => {
     // Chrome says "you can drag this". It is not part of any symbol, so it must not take
-    // a graphic's affiliation colour — tinting handles by hostility made a hostile
+    // a graphic's affiliation color — tinting handles by hostility made a hostile
     // graphic's handles the same red as its own strokes, and they stopped reading as
     // handles at all. It *is* overridable, which it was not before: these were hardcoded
     // literals behind a mode flag.
@@ -313,7 +313,7 @@ describe('editor chrome', () => {
         expect(getDrawMarkerOutlineColor()).toBe('#654321');
     });
 
-    it('does not move when an affiliation colour is re-tinted', () => {
+    it('does not move when an affiliation color is re-tinted', () => {
         configureTacticalGraphics({
             hostilityColors: {[TacticalGraphicHostility.hostileFaker]: '#ff00ff'},
         });
@@ -346,7 +346,7 @@ describe('DEFAULT_PALETTE is the one palette', () => {
         expect(getDrawMarkerOutlineColor()).toBe(DEFAULT_PALETTE.drawMarkerOutlineColor);
     });
 
-    it('carries no hostilityColors — affiliation colours are the library\'s, not a theme\'s', () => {
+    it('carries no hostilityColors — affiliation colors are the library\'s, not a theme\'s', () => {
         expect((DEFAULT_PALETTE as Record<string, unknown>).hostilityColors).toBeUndefined();
     });
 
@@ -366,13 +366,13 @@ describe('DEFAULT_PALETTE is the one palette', () => {
         expect(getDrawMarkerOutlineColor()).toBe('white');
     });
 
-    it('covers every colour a host palette needs to move', () => {
-        // If a colour is themeable but missing from DEFAULT_PALETTE, a host that builds
+    it('covers every color a host palette needs to move', () => {
+        // If a color is themeable but missing from DEFAULT_PALETTE, a host that builds
         // its set with `{...DEFAULT_PALETTE, ...mine}` silently keeps the light value.
         expect(Object.keys(DEFAULT_PALETTE).sort()).toEqual(Object.keys(HOST_DARK_PALETTE).sort());
     });
 
-    it('leaves affiliation colours untouched when a host palette is applied', () => {
+    it('leaves affiliation colors untouched when a host palette is applied', () => {
         configureTacticalGraphics(HOST_DARK_PALETTE);
         expect(getColorByHostility(TacticalGraphicHostility.friend)).toBe('rgba(0, 0, 255, 1)');
         expect(getColorByHostility(TacticalGraphicHostility.hostileFaker)).toBe('rgba(255, 0, 0, 1)');
@@ -381,17 +381,17 @@ describe('DEFAULT_PALETTE is the one palette', () => {
     });
 });
 
-describe('the draw style applies the marker colours to every graphic', () => {
+describe('the draw style applies the marker colors to every graphic', () => {
     // The marker pair used to reach point-anchored graphics only: theirs was the one
     // controller with a `drawStyleFunc`, and everything else fell through to
     // OpenLayers' hardcoded editing style. `TacticalGraphicsManager` now installs this
-    // as the fallback, so a line or an area honours the config too.
+    // as the fallback, so a line or an area honors the config too.
     const styleFor = (feature: Feature) => {
         const styles = defaultDrawStyleFunc()(feature, 1);
         return (Array.isArray(styles) ? styles : [styles]) as Style[];
     };
 
-    it('marks the cursor point with the draw-marker colours', () => {
+    it('marks the cursor point with the draw-marker colors', () => {
         configureTacticalGraphics({drawMarkerColor: '#123456', drawMarkerOutlineColor: '#654321'});
         const image = styleFor(new Feature(new Point([0, 0])))[0].getImage() as CircleStyle;
         expect(image.getFill()?.getColor()).toBe('#123456');
@@ -406,7 +406,7 @@ describe('the draw style applies the marker colours to every graphic', () => {
         expect(strokes).toContain('#654321');
     });
 
-    it('reads the colours per call, so a config change lands on the next frame', () => {
+    it('reads the colors per call, so a config change lands on the next frame', () => {
         const before = (styleFor(new Feature(new Point([0, 0])))[0].getImage() as CircleStyle)
             .getFill()?.getColor();
         configureTacticalGraphics({drawMarkerColor: '#00ff00'});
@@ -453,7 +453,7 @@ describe('config overrides reach the style layer', () => {
         expect(getLabelFillColor()).toBe('rgb(198,198,198)');
     });
 
-    it('lets label text be overridden away from the line colour', () => {
+    it('lets label text be overridden away from the line color', () => {
         configureTacticalGraphics({defaultLineColor: 'rgb(198,198,198)', labelFillColor: '#ffffff'});
         expect(getDefaultLineColor()).toBe('rgb(198,198,198)');
         expect(getLabelFillColor()).toBe('#ffffff');
@@ -483,7 +483,7 @@ describe('getDoctrinalHostilityColor', () => {
         expect(getDoctrinalHostilityColor(TacticalGraphicHostility.suspectJoker)).toBe('rgba(255, 255, 0, 1)');
     });
 
-    it('has no answer for unknown, whose colour is the default line colour', () => {
+    it('has no answer for unknown, whose color is the default line color', () => {
         expect(getDoctrinalHostilityColor(TacticalGraphicHostility.unknown)).toBeUndefined();
     });
 
@@ -569,7 +569,7 @@ describe('the accessors the style layer reads', () => {
 });
 
 describe('getHaloStroke', () => {
-    // It was a module-level `const`, so its colour was frozen at import and could never
+    // It was a module-level `const`, so its color was frozen at import and could never
     // follow a change — invisible while it was always white, a real bug the moment a
     // host overrode it.
     it('reflects a config change made after module load', () => {
@@ -585,13 +585,13 @@ describe('getHaloStroke', () => {
         expect(getHaloStroke().getColor()).toBe(getLabelHaloColor());
     });
 
-    it('caches one Stroke per colour rather than allocating per call', () => {
+    it('caches one Stroke per color rather than allocating per call', () => {
         expect(getHaloStroke()).toBe(getHaloStroke());
     });
 });
 
 describe('the library default', () => {
-    it('is an empty config, so an unconfigured consumer gets the doctrinal colours', () => {
+    it('is an empty config, so an unconfigured consumer gets the doctrinal colors', () => {
         // A fresh module registry, so this reads the declared default rather than
         // whatever the tests above last set.
         jest.isolateModules(() => {
@@ -664,7 +664,7 @@ describe('obstacle line', () => {
         expect(wx).toBeCloseTo(500, 6);
     });
 
-    it('centres it on the middle drawn segment, not on the chord through the ends', () => {
+    it('centers it on the middle drawn segment, not on the chord through the ends', () => {
         // Bent on purpose: on a straight line the middle of the drawn line and the middle
         // of the straight run between its endpoints are the same point.
         const bent = [[0, 0], [1000, 0], [1400, 800], [2400, 800]];
@@ -775,19 +775,19 @@ describe('obstacle teeth in screen space', () => {
 
     it('holds the same pixel height as the map scales', () => {
         // The whole point: the same symbol, the same size on screen, at every zoom.
-        // Baked into geometry this was fixed in *metres*, so zooming in grew the teeth.
+        // Baked into geometry this was fixed in *meters*, so zooming in grew the teeth.
         for (const resolution of [40, 10, 2, 0.5]) {
             expect(toothHeightPx(resolution)).toBeCloseTo(10, 6);
         }
     });
 
     /** Tallest excursion outside the drawn square, in px. 0 when nothing was added. */
-    const areaToothPx = (sideMetres: number, resolution: number) => {
-        const ring: number[][] = [[0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0]];
+    const areaToothPx = (sideMeters: number, resolution: number) => {
+        const ring: number[][] = [[0, 0], [0, sideMeters], [sideMeters, sideMeters], [sideMeters, 0], [0, 0]];
         const styles = obstacleAreaStyles(new Feature(new Polygon([ring])), resolution, {outward: true});
         const drawn = (styles[0].getGeometry() as Polygon).getCoordinates()[0];
         const offsets = drawn
-            .map(([x, y]) => Math.max(-x, x - sideMetres, -y, y - sideMetres))
+            .map(([x, y]) => Math.max(-x, x - sideMeters, -y, y - sideMeters))
             .filter(d => d > 0.001);
         return (offsets.length ? Math.max(...offsets) : 0) / resolution;
     };
@@ -853,7 +853,7 @@ describe('fortified and wave graphics in screen space', () => {
     // Resolution 40 is deliberately absent: it puts the 4 km line at 100 px, small
     // enough on screen that the shape-relative cap engages. That is the subject of the
     // test below, not a violation of this one.
-    it('sizes the fortified line’s merlons in pixels, not metres', () => {
+    it('sizes the fortified line’s merlons in pixels, not meters', () => {
         const heights = [10, 2, 0.5].map(fortifiedLinePx);
         heights.forEach(h => expect(h).toBeCloseTo(heights[0], 6));
         expect(heights[0]).toBeCloseTo(11, 6);
@@ -958,7 +958,7 @@ describe('fortified and wave graphics in screen space', () => {
             }
         });
 
-        it('draws the enemy side red and the friendly side in the default line colour', () => {
+        it('draws the enemy side red and the friendly side in the default line color', () => {
             const [enemy, friendly] = styles(10);
             expect(enemy.getStroke()!.getColor()).toBe(getColorByHostility(TacticalGraphicHostility.hostileFaker));
             expect(friendly.getStroke()!.getColor()).toBe(getDefaultLineColor());
@@ -972,13 +972,13 @@ describe('fortified and wave graphics in screen space', () => {
 });
 
 /**
- * The centre symbol Cover / Guard / Screen draw between their arms.
+ * The center symbol Cover / Guard / Screen draw between their arms.
  *
  * It used to be a hardcoded SIDC built through a static `import ms from
  * 'milsymbol'`, which made an optional peer dependency mandatory for the whole
  * `/openlayers` entry point and ignored the graphic's affiliation entirely.
  */
-describe('security operation centre symbol', () => {
+describe('security operation center symbol', () => {
     afterEach(() => setSecurityOperationSymbolProvider(undefined));
 
     it('draws nothing until a host registers a provider', () => {
@@ -1055,14 +1055,14 @@ describe('security operation centre symbol', () => {
 });
 
 /**
- * The centre symbol's on-screen size.
+ * The center symbol's on-screen size.
  *
  * It was a hardcoded 25px, and because the library builds the `Icon` around a
  * provider that returns a `src` string, a provider could not change it — passing
  * milsymbol its own `size` looked like it should and only changed the SVG's
  * internal resolution.
  */
-describe('security operation centre symbol size', () => {
+describe('security operation center symbol size', () => {
     afterEach(() => {
         setSecurityOperationSymbolProvider(undefined);
         setSecurityOperationSymbolSize(DEFAULT_SYMBOL_SIZE_PX);
@@ -1098,13 +1098,13 @@ describe('security operation centre symbol size', () => {
 });
 
 /**
- * Per-graphic centre symbols.
+ * Per-graphic center symbols.
  *
  * The provider registration is global — one call configures the whole app — so
  * without an override two Screens can only differ by what they already carry. A
  * map routinely wants a different unit symbol on one than on another.
  */
-describe('per-graphic centre symbol providers', () => {
+describe('per-graphic center symbol providers', () => {
     afterEach(() => setSecurityOperationSymbolProvider(undefined));
 
     const screenFeature = () => {
@@ -1182,7 +1182,7 @@ describe('per-graphic centre symbol providers', () => {
  *
  * A bare string is sized by the global `setSecurityOperationSymbolSize`, and
  * overriding that per graphic used to mean returning a whole `Style` — building a
- * `Style` and an `Icon`, and remembering the centring anchor, to change one number.
+ * `Style` and an `Icon`, and remembering the centering anchor, to change one number.
  *
  * The painted width is deliberately NOT asserted here. `Icon.getWidth()` is
  * documented to return undefined until the image has loaded, and jsdom never loads
@@ -1251,10 +1251,10 @@ describe('provider return shapes', () => {
  * hang off.
  */
 describe('strong point cross ties', () => {
-    /** A square strong point of `sideMetres`, and the tie lengths it renders, in px. */
-    const tiePx = (sideMetres: number, resolution: number): number[] => {
+    /** A square strong point of `sideMeters`, and the tie lengths it renders, in px. */
+    const tiePx = (sideMeters: number, resolution: number): number[] => {
         const ring: number[][] = [
-            [0, 0], [0, sideMetres], [sideMetres, sideMetres], [sideMetres, 0], [0, 0],
+            [0, 0], [0, sideMeters], [sideMeters, sideMeters], [sideMeters, 0], [0, 0],
         ];
         const f = new Feature(new Polygon([ring]));
         writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
@@ -1307,7 +1307,7 @@ describe('strong point cross ties', () => {
  * so "B" tops out where "EX" does.
  */
 describe('size-proportional label scales are capped', () => {
-    /** A feature stamping `graphicSize` metres, drawn at `drawRes` metres per pixel. */
+    /** A feature stamping `graphicSize` meters, drawn at `drawRes` meters per pixel. */
     const sized = (graphicSize: number, drawRes = 10) => {
         const f = new Feature(new Point([0, 0]));
         f.set('graphicSize', graphicSize);
@@ -1426,7 +1426,7 @@ describe('gap labels lie along their line and stay upright', () => {
  * from the rendered text instead.
  */
 describe('arc mission-task circles cut their label gap from the glyph', () => {
-    const CENTRE: [number, number] = [0, 0];
+    const CENTER: [number, number] = [0, 0];
     const STEP_DEG = 1.6;   // matches the generator: 100 samples over 160°
 
     /** One arc of a circle of radius `r`, sampled the way the generator samples it. */
@@ -1451,7 +1451,7 @@ describe('arc mission-task circles cut their label gap from the glyph', () => {
             [[radiusMap, 0], [radiusMap * 0.9, radiusMap * 0.1]],   // stand-in arrowhead
         ]));
         writeGraphicProperties([f], TacticalGraphicName.Secure, {label: ''});
-        f.set('graphicCenter', CENTRE);
+        f.set('graphicCenter', CENTER);
         f.set('graphicLabelPoint', [radiusMap, 0]);
         f.set('graphicSize', radiusMap);
         f.set('drawingResolution', drawRes);

@@ -6,7 +6,7 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * The three anti-tank ditches of FM 1-02.2 table 5-19 - "triangular shaped or wide ditches
  * designed to stop tanks and armor fighting vehicles around a fortified position".
  *
- * A drawn route carrying triangular teeth, in the wire obstacles' mould rather than the
+ * A drawn route carrying triangular teeth, in the wire obstacles' mold rather than the
  * point-dropped explosives': the user draws the ditch's line and the teeth repeat along it
  * at a constant screen size. One symbol in three states:
  *
@@ -22,8 +22,8 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * unless there is a tooth either side of it.
  *
  * The teeth are *not* in the geometry: they are a screen-space decoration, so
- * `antiTankDitchStyleFunc` synthesises them through `decorationScale` exactly as the wire
- * obstacles and the fortified merlons do. Baking them in metres froze them at the drawing
+ * `antiTankDitchStyleFunc` synthesizes them through `decorationScale` exactly as the wire
+ * obstacles and the fortified merlons do. Baking them in meters froze them at the drawing
  * zoom. Fill could not live in the geometry either - a MultiLineString has no fill - so
  * the renderer owns both.
  */
@@ -58,7 +58,7 @@ export const ANTI_TANK_TOOTH_PX = 30;
  *
  * It is the steepest the teeth have been, and steepness is what pinches shut the notch a
  * mine nests in. It stays workable only because the teeth are 30 px: the notch's half-angle
- * sine is exactly 0.5 for an equilateral tooth, so a mine centred at 0.72 of the tooth
+ * sine is exactly 0.5 for an equilateral tooth, so a mine centered at 0.72 of the tooth
  * height clears the edges either side by about 4.7 px, wider than the stroke that draws
  * them. Shrink `ANTI_TANK_TOOTH_PX` and the mines close up again.
  */

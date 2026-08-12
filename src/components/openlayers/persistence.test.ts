@@ -3,7 +3,7 @@
  *
  * The property under test is not "the file looks right" but "the restored graphic is
  * the same object" — same base geometry, same amplifiers, same geometry inputs, same
- * feature set. A graphic can serialise perfectly and still come back un-editable, so
+ * feature set. A graphic can serialize perfectly and still come back un-editable, so
  * every case asserts the holder's own state, not just the picture.
  */
 import VectorSource from 'ol/source/Vector';
@@ -112,18 +112,18 @@ function flatten(value: unknown): number[] {
 }
 
 /**
- * Compares metre coordinates with a 1 mm tolerance.
+ * Compares meter coordinates with a 1 mm tolerance.
  *
  * A snapshot is written in EPSG:4326 and read back into EPSG:3857, and that round trip
- * is not bit-exact — it lands about 2e-7 metres out. Asserting equality would make these
- * tests fail on arithmetic rather than on behaviour.
+ * is not bit-exact — it lands about 2e-7 meters out. Asserting equality would make these
+ * tests fail on arithmetic rather than on behavior.
  */
-function expectMetresClose(actual: number[], expected: number[]): void {
+function expectMetersClose(actual: number[], expected: number[]): void {
     expect(actual).toHaveLength(expected.length);
     actual.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 3));
 }
 
-/** Serialises `from` and restores it onto a fresh manager. */
+/** Serializes `from` and restores it onto a fresh manager. */
 function roundTrip(from: TacticalGraphicsManager) {
     const snapshot = serializeTacticalGraphics(from);
     const to = fakeManager();
@@ -169,7 +169,7 @@ describe('every holder family round-trips', () => {
         const restored = to.graphicControllers[0];
         expect(restored).toBeDefined();
         expect(restored.getSymbolId()).toBe(original.getSymbolId());
-        expectMetresClose(baseCoords(restored), baseCoords(original));
+        expectMetersClose(baseCoords(restored), baseCoords(original));
         // Catches the MovementGraphicBase offset handle, which only exists once the
         // generator has produced enough handle points to justify it.
         expect(restored.getFeatures().length).toBe(original.getFeatures().length);
@@ -189,23 +189,23 @@ describe('every holder family round-trips', () => {
         if (handlerIsSecurityOperation(name)) {
             // A security operation is sized in screen pixels x the *live* map
             // resolution, so restoring it at a different zoom must come back a
-            // different size in metres — that is exactly what holding a constant
+            // different size in meters — that is exactly what holding a constant
             // on-screen size means. Assert the relationship rather than equality:
-            // same centre, width scaled by precisely the resolution ratio.
+            // same center, width scaled by precisely the resolution ratio.
             const width = (g?: Geometry) => {
                 const e = g?.getExtent() ?? [0, 0, 0, 0];
                 return e[2] - e[0];
             };
-            const centre = (g?: Geometry) => {
+            const center = (g?: Geometry) => {
                 const e = g?.getExtent() ?? [0, 0, 0, 0];
                 return (e[0] + e[2]) / 2;
             };
             expect(width(after) / width(before)).toBeCloseTo(VIEW_RES / RES, 6);
-            expect(centre(after)).toBeCloseTo(centre(before), 3);
+            expect(center(after)).toBeCloseTo(center(before), 3);
             return;
         }
 
-        expectMetresClose([...(after?.getExtent() ?? [])], [...(before?.getExtent() ?? [])]);
+        expectMetersClose([...(after?.getExtent() ?? [])], [...(before?.getExtent() ?? [])]);
     });
 });
 
@@ -242,12 +242,12 @@ describe('the snapshot', () => {
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
     });
 
-    it('writes geographic coordinates, not map metres', () => {
+    it('writes geographic coordinates, not map meters', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.PhaseLine);
         const [feature] = serializeTacticalGraphics(from).features;
         const coords = (feature.geometry as {coordinates: number[][]}).coordinates;
-        // 3857 metres would be in the hundreds of thousands.
+        // 3857 meters would be in the hundreds of thousands.
         expect(Math.abs(coords[0][0])).toBeLessThanOrEqual(180);
         expect(Math.abs(coords[0][1])).toBeLessThanOrEqual(90);
     });
@@ -285,7 +285,7 @@ describe('editable state survives', () => {
         const restored = to.graphicControllers[0] as MissionTaskController;
         expect(restored.graphic.size).toBeCloseTo(44_000, 6);
         expect(restored.graphic.rotation).toBeCloseTo(1.1, 6);
-        expectMetresClose(restored.graphic.center, [CX, CY]);
+        expectMetersClose(restored.graphic.center, [CX, CY]);
     });
 
     it('keeps a security operation’s rotation — but no longer its scale', () => {
@@ -386,7 +386,7 @@ describe('the drawing resolution is no longer load-bearing', () => {
         expect(report.failed).toEqual([]);
         // Not "close enough": the guard extends the first segment, so any drift here is
         // the graphic quietly growing a longer line than the user drew.
-        expectMetresClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
+        expectMetersClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
     });
 
     it('still enforces the minimum length on a fresh draw', () => {
@@ -501,7 +501,7 @@ describe('a restored graphic is still editable', () => {
 });
 
 describe('an empty map', () => {
-    it('serialises to an empty collection and restores cleanly', () => {
+    it('serializes to an empty collection and restores cleanly', () => {
         const from = fakeManager();
         const snapshot = serializeTacticalGraphics(from);
         expect(snapshot.features).toHaveLength(0);

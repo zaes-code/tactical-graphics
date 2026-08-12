@@ -150,13 +150,13 @@ export class Contain extends MissionTask {
         let {rotation, size} = opts;
         // Contain is a half-circle, and its label sits due west at 180° rather
         // than at the rotation axis — so the gap opens either side of 180, not
-        // either side of 0. Same knob, different centre.
+        // either side of 0. Same knob, different center.
         const gap = labelGapDegrees(opts);
         const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 180 - gap, 100);
         const lowerArch = geometryService.createCircularArc(center, rotation, size, 180 + gap, 270, 100);
         let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size / 2.5, 7);
 
-        // The center radial sits at ~180° (due-west of centre) — exactly where
+        // The center radial sits at ~180° (due-west of center) — exactly where
         // the C label is anchored. Pull its outer endpoint inward so the line
         // is half its original length and no longer touches the label.
         const middleIdx = Math.floor(radialLineStrings.length / 2);

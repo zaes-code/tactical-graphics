@@ -158,7 +158,7 @@ const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
 
 /**
  * The area graphics with no bespoke style — a plain outline in the affiliation's
- * colour, dashed when planned.
+ * color, dashed when planned.
  *
  * Derived from `getStyleFromLabels`: every `polygon` / `polygonRect` entry that
  * falls past its 15 named special cases. The largest single family in the library.
@@ -227,7 +227,7 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
 
 
 /**
- * The zone families that share one label layout: prefix over name centred, the two
+ * The zone families that share one label layout: prefix over name centered, the two
  * date-time groups outside the shape's upper-left.
  *
  * Split by variant because the date anchor differs. A rectangle's corner is a real
@@ -263,7 +263,7 @@ const ZONE_GRAPHICS_IRREGULAR: readonly TacticalGraphicName[] = [
     TacticalGraphicName.PurpleKillBoxIrregular,
 ];
 
-/** The families whose label is a plain centred stack of designation over dates. */
+/** The families whose label is a plain centered stack of designation over dates. */
 const STACK_LABEL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.NoFireAreaRectangular,
     TacticalGraphicName.NoFireAreaCircular,
@@ -417,7 +417,7 @@ const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
 
 /**
  * The circular areas whose holder installs no style of its own — a bare ring in
- * the affiliation's colour.
+ * the affiliation's color.
  */
 const CIRCULAR_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
@@ -536,7 +536,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.GroupOrSeriesOfTargets]: {graphic: groupOrSeriesOfTargetsPaint()},
         [TacticalGraphicName.Encirclement]: {graphic: encirclementPaint()},
 
-        // One hatched fill under an affiliation-coloured outline.
+        // One hatched fill under an affiliation-colored outline.
         [TacticalGraphicName.LimitedAccessArea]: {graphic: limitedAccessAreaPaint()},
         [TacticalGraphicName.NoFireAreaCircular]: {graphic: limitedAccessAreaPaint()},
         [TacticalGraphicName.NoFireAreaIrregular]: {graphic: limitedAccessAreaPaint()},
@@ -577,7 +577,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: routeControlMeasurePaint(name)};
     }
 
-    // 0.75 for the disrupts, not the 0.6 default: it centres the "D" on the middle
+    // 0.75 for the disrupts, not the 0.6 default: it centers the "D" on the middle
     // prong, which spans 0.5 to 1.0 of the user's drawn base.
     registry[TacticalGraphicName.TacticalBlock] = {graphic: blockPaint(getLabel(TacticalGraphicName.TacticalBlock))};
     registry[TacticalGraphicName.Penetration] = {graphic: blockPaint(getLabel(TacticalGraphicName.Penetration))};
@@ -687,7 +687,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // it takes that holder's fallback — filled, not merely outlined.
     registry[TacticalGraphicName.Exploitation] = {graphic: areaFillPaint()};
     // The point-anchored tasks with no bespoke line work: a plain ring and the
-    // family's centred designation.
+    // family's centered designation.
     for (const name of [
         TacticalGraphicName.Abatis,
         TacticalGraphicName.Ambush,
@@ -718,7 +718,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: plainOutlinePaint(), label: rangeFanLabelPaint(name)};
     }
 
-    // Cover, guard and screen. The line work paints; the centre symbol does not,
+    // Cover, guard and screen. The line work paints; the center symbol does not,
     // because it is injected by the host and no renderer-agnostic description of it
     // exists. A MapLibre view also cannot yet *build* one of these through the
     // public API — the generator wants centerPadding, arrowLength, arrowDepth,

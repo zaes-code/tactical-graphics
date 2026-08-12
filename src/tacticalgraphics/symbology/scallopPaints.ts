@@ -6,7 +6,7 @@
  * redrawn here at a screen size.
  *
  * Both groups exist because their decoration is *screen*-sized. Baked into the
- * geometry a scallop is fixed in metres, so a FLOT drawn zoomed out comes back as
+ * geometry a scallop is fixed in meters, so a FLOT drawn zoomed out comes back as
  * a row of huge bulges; an arrowhead built off the drawn length grows every time
  * the graphic is resized. @see decorationScale
  */
@@ -50,7 +50,7 @@ function vertices(feature: PaintFeature): ProjectedPosition[] {
     return [];
 }
 
-/** The forward line of own troops: one scalloped line in the affiliation's colour. */
+/** The forward line of own troops: one scalloped line in the affiliation's color. */
 export function forwardLineOfOwnTroopsPaint(): LinePaint {
     return (feature, context) => {
         const coords = vertices(feature);
@@ -81,7 +81,7 @@ const LC_LABEL_PAD_PX = 10;
  *
  * **This is the one graphic that draws both identities at once**, so the enemy-side
  * wave goes through the palette rather than a literal red: the pair has to stay
- * balanced when a host recolours the library.
+ * balanced when a host recolors the library.
  *
  * Which side is which is a property of the map, not of the drawing gesture. The
  * enemy-side wave takes the upper side of the line however the user drew it.

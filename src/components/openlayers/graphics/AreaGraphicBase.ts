@@ -7,7 +7,7 @@ import openlayersAdapter from '../openlayersAdapter';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
-import {decorationMetres} from './decorationPx';
+import {decorationMeters} from './decorationPx';
 
 export class AreaGraphicBase implements PolygonGraphic {
     // open layers related
@@ -27,7 +27,7 @@ export class AreaGraphicBase implements PolygonGraphic {
         // Seeded from the drawing resolution; replaced by a stamped value on restore, so
         // the decoration does not get re-derived from whatever zoom the loading session
         // happens to be at. @see setOffset
-        this.decorationSize = decorationMetres(name, this.size);
+        this.decorationSize = decorationMeters(name, this.size);
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
             this.labels.set('drawingResolution', drawingResolution);
@@ -42,7 +42,7 @@ export class AreaGraphicBase implements PolygonGraphic {
 
 
     /**
-     * Decoration size in metres — the width of the gaps a hostile Encirclement cuts in
+     * Decoration size in meters — the width of the gaps a hostile Encirclement cuts in
      * its outline for the "ENY" amplifiers. Stamped, then replayed.
      *
      * It used to size the teeth as well; those are drawn in screen space now, so this

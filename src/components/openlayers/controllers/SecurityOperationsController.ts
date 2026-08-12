@@ -11,7 +11,7 @@ import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 export interface SecurityOperationGraphic extends TacticalGraphic {
     base: Feature<Point>;
     primaryLabel: string;
-    /** Which of Cover / Guard / Screen this is — passed to the centre-symbol provider. */
+    /** Which of Cover / Guard / Screen this is — passed to the center-symbol provider. */
     name: TacticalGraphicName;
 
     getRotation(): number; // radians
@@ -40,14 +40,14 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
         // Installed once, here, rather than rebuilt at `drawend` and again on every
         // restore. It is a StyleFunction, so it resolves the current affiliation each
         // time the feature is drawn — which is what makes changing the hostility
-        // update the centre glyph instead of leaving the one built at draw time.
+        // update the center glyph instead of leaving the one built at draw time.
         this.milSymbolFeature.setStyle(
             securityOperationSymbolStyle(graphic.name, this.sourceFeature, () => this.symbolProvider, () => this.symbolId),
         );
     }
 
     /**
-     * This graphic's own centre-symbol provider, overriding the global one.
+     * This graphic's own center-symbol provider, overriding the global one.
      *
      * Undefined means "use whatever the host registered globally", which is the
      * normal case. The override exists because the global provider is chosen once
@@ -59,7 +59,7 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
     private symbolProvider: SecurityOperationSymbolProvider | undefined;
 
     /**
-     * Gives this graphic its own centre symbol. Pass `undefined` to fall back to
+     * Gives this graphic its own center symbol. Pass `undefined` to fall back to
      * the global provider.
      *
      * The style function reads it per render, so this takes effect on the next
@@ -119,7 +119,7 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
         let center = geom.getCoordinates();
         let newCenter = [center[0] + deltaX, center[1] + deltaY];
         // Move first, then regenerate. The other order regenerated the arrows and labels
-        // around the *previous* centre on every frame, so the graphic trailed the pointer
+        // around the *previous* center on every frame, so the graphic trailed the pointer
         // by one event for the whole drag — and stayed one event behind after it ended.
         geom.setCoordinates(newCenter);
         this.setBaseFeature(baseFeature);
@@ -162,14 +162,14 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
     };
 
     /**
-     * The single place the base moves, so it is also the single place the centre
+     * The single place the base moves, so it is also the single place the center
      * symbol follows it.
      *
      * Positioning the icon used to be the caller's job, and only two of the three
      * callers did it: `onDrawEndFunc` and the restore path set the geometry,
      * `setBaseFeature` did not. Anything that placed a security operation without
      * drawing or restoring it — `drawProvenSamples`, and any consumer building one
-     * programmatically — got the arms and labels with an empty centre, which is
+     * programmatically — got the arms and labels with an empty center, which is
      * exactly what "Draw all samples" showed. Every path routes through here now,
      * `handleTranslate` included.
      */

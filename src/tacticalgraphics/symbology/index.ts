@@ -17,7 +17,7 @@ export {
     OBSTACLE_TOOTH_GAP_PX,
     OBSTACLE_TOOTH_HEIGHT_PX,
     angleBetween,
-    centreSegmentIndex,
+    centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     decorationScale,

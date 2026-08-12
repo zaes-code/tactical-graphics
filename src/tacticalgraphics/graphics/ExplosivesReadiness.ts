@@ -49,17 +49,17 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOption
      * displacement gives.
      *
      * `opts.rotation` is deliberately ignored. The symbol has a fixed heading, and the
-     * controller's resize drag derives an angle from the pointer - so honouring rotation
+     * controller's resize drag derives an angle from the pointer - so honoring rotation
      * here would let a resize quietly turn the graphic.
      */
     private bars(base: Feature<Point>, opts: PointGraphicOptions): Position[][] {
-        const centre = turf.point(base.geometry.coordinates);
+        const center = turf.point(base.geometry.coordinates);
         const span = Math.max(opts?.size ?? 1, 1);
         const half = span / 2;
         const gap = (span * SEPARATION_RATIO) / 2;
 
         const bar = (bearingToAnchor: number): Position[] => {
-            const anchor = turf.destination(centre, gap, bearingToAnchor, {units: 'meters'});
+            const anchor = turf.destination(center, gap, bearingToAnchor, {units: 'meters'});
             return [
                 turf.destination(anchor, half, BAR_BEARING + 180, {units: 'meters'}).geometry.coordinates as Position,
                 turf.destination(anchor, half, BAR_BEARING, {units: 'meters'}).geometry.coordinates as Position,
@@ -74,7 +74,7 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<PointGraphicOption
     }
 
     /**
-     * `[edge, centre]` - edge first, as every `missionTask`-routed graphic must: `handles[0]`
+     * `[edge, center]` - edge first, as every `missionTask`-routed graphic must: `handles[0]`
      * drives rotate and resize, `handles[1]` drives translate.
      *
      * The edge handle sits at the end of the leading bar rather than out on the axis, so the

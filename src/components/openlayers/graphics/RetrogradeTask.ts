@@ -68,9 +68,9 @@ export class RetrogradeTask implements LineGraphic {
 
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
-        // Persist the *effective* metre value, not the viewport factor it came from.
+        // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
-        // consumed is a distance in metres — and that is what a snapshot can carry and a
+        // consumed is a distance in meters — and that is what a snapshot can carry and a
         // restore can replay without knowing anything about zoom. Stamped on every
         // rebuild, not just on a width drag, so a graphic the user never touched still
         // describes itself.
@@ -99,7 +99,7 @@ export class RetrogradeTask implements LineGraphic {
         this.updateGeometry();
         // `size` here is the width the user dragged, not a construction-time constant,
         // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
-        // decoration, and is not a reach from any centre. @see TacticalGraphicProperties.
+        // decoration, and is not a reach from any center. @see TacticalGraphicProperties.
         this.publish();
     }
 
