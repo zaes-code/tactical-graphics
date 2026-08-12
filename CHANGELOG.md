@@ -15,16 +15,39 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+**The next release must be a major.** Two breaking changes are queued below — both
+renames of a public enum member *and* its value.
+
 ### Changed — BREAKING
 
-- **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change. The library implements a US Army field manual and every neighbouring member already used US spelling.
+- **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change.
+- **`AltitudeUnit.Metres` is now `AltitudeUnit.Meters`**, and its value changed from `'metres'` to `'meters'`. Both the member and the string it resolves to change, so anything persisting or comparing the value needs updating.
 
-  **The next release must therefore be a major.** Anything referencing the old member or comparing against the old string needs updating.
+  Both renames are for the same reason: the library implements a US Army field manual for US programs, and the neighboring members already used US spelling — `DefenseOperationsPlanning` sat three lines from `OffenceOperationsPlanning`.
+
+### Changed
+
+- **Depends on the individual `@turf/*` modules instead of the `@turf/turf` meta-package.** No public API changes — `@turf/turf` was never re-exported, so nothing a consumer can import is affected.
+
+  This removes **`marchingsquares`, which is AGPL-3.0**, from the production dependency tree. It was reachable only through `@turf/isobands` and `@turf/isolines`, neither of which this library has ever used; they arrived because the source imported the meta-package rather than the 26 functions it calls. **It was present in every release from 1.0.0 through 2.0.0.**
+
+  | | Before | After |
+  |---|---|---|
+  | Components | 142 | 32 |
+  | Licenses | 126 MIT, 7 ISC, 3 BSD-3-Clause, 2 Unlicense, 3 unreported, 1 AGPL-3.0 | 31 MIT, 1 Unlicense |
+
+  Three components that reported no license at all — `jsts`, `@turf/jsts`, `splaytree-ts` — went with it, so the tree is now fully attributable as well as fully permissive.
+
+  If you vendor, audit or redistribute this package, this is the entry to read. Copyleft in a dependency tree is what software-composition scanners raise first, and several organizations' approved-software policies reject AGPL outright.
 
 ### Added
 
 - `scripts/gen-catalog-svgs.js` — generates one SVG per graphic by asking the library to paint it and transcribing the resulting marks, rather than drawing anything by hand. Internal tooling; not part of the published package.
 - The progress tracker gained a `Graphic Key` column linking each row to its `TacticalGraphicName` member, so the README generator can validate itself against the enum and report graphics separately from doctrinal variants.
+
+### Fixed
+
+- US English throughout the README prose, and a broader word list in the spelling test that guards it — the previous list had eleven terms and missed both "synthesised" and "re-realise", which is how they reached the published README.
 
 ---
 
@@ -43,7 +66,7 @@ symbols you can have.
 ### Changed
 
 - **BREAKING:** the package's second major. Symbology facts that had lived inside OpenLayers holders moved into the map-agnostic half so both engines read one source; consumers reaching past the façade into renderer internals may be affected.
-- The centre-symbol provider is handed the amplifiers and asked for one symbol rather than two, and rasters are keyed on the image so they are not rescaled.
+- The center-symbol provider is handed the amplifiers and asked for one symbol rather than two, and rasters are keyed on the image so they are not rescaled.
 - The sample gallery dims the basemap rather than hiding it.
 
 ### Fixed
@@ -51,7 +74,7 @@ symbols you can have.
 - Neither view can come up blank — a first frame is forced.
 - A canvas is never sized smaller than the box it fills.
 - Route lines are identified by their coordinates rather than by object identity, which a port had made unreliable.
-- A sector fan's range block no longer sits on its own centre axis.
+- A sector fan's range block no longer sits on its own center axis.
 
 ---
 
@@ -130,7 +153,7 @@ Sixteen new graphics, mostly obstacles.
 
 ### Fixed
 
-- Obstacle teeth direction, and the obstacle line's label placement, segment association and colour on restore.
+- Obstacle teeth direction, and the obstacle line's label placement, segment association and color on restore.
 - The obstacle areas get their DTGs.
 
 ### Removed
@@ -151,7 +174,7 @@ however many renderers it has.
 
 ### Removed — BREAKING in effect
 
-- **The dark-mode flag and the library-side dark palette.** A boolean choosing between two hardcoded colour literals is a worse version of the config, and only the host can see its own basemap. Editor chrome became config instead.
+- **The dark-mode flag and the library-side dark palette.** A boolean choosing between two hardcoded color literals is a worse version of the config, and only the host can see its own basemap. Editor chrome became config instead.
 - The `name` field on the crossing-site graphics.
 - The convoy symbols are excluded.
 
@@ -176,7 +199,7 @@ however many renderers it has.
 
 ### Fixed
 
-- The always-visible centre dot, which now also moves the graphic.
+- The always-visible center dot, which now also moves the graphic.
 
 ---
 
@@ -246,7 +269,7 @@ fix like "hostile line work goes red" could never leave the demo.
 
 ### Changed
 
-- Circle graphics resize on edit, with the centre as an inert anchor.
+- Circle graphics resize on edit, with the center as an inert anchor.
 - Edit mode stretches fixed-vertex graphics instead of panning the map.
 - Width handles sit on the graphic, with the drag scale corrected to match.
 - Movement arrowheads land on the user's last vertex.
@@ -255,7 +278,7 @@ fix like "hostile line work goes red" could never leave the demo.
 ### Fixed
 
 - Hostility follows FM Field N: on for 174 graphics, off for the 24 mission tasks that take no identity.
-- Labels stay black under hostility; only strokes take the colour.
+- Labels stay black under hostility; only strokes take the color.
 
 ---
 
