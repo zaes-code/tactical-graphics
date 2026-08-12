@@ -1,7 +1,7 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {PointGraphicOptions, TacticalGraphicName} from '../core/type';
 import {Feature, MultiLineString, MultiPoint, Point, Position} from 'geojson';
-import * as turf from '@turf/turf';
+import * as turf from '../core/turf';
 
 /** Overall length of the route, as a multiple of the chevron's height. */
 const LENGTH_RATIO = 6;

@@ -1,6 +1,6 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
-import * as turf from '@turf/turf';
+import * as turf from './turf';
 import {Feature, MultiLineString} from 'geojson';
 import {
     isTacticalGraphicFeature,
