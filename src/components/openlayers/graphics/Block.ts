@@ -117,7 +117,7 @@ export class Block implements LineGraphic {
                     return clearStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.TacticalDisrupt:
                 case TacticalGraphicName.Disrupt:
-                    // 0.75 places the D at the centre of the middle trident
+                    // 0.75 places the D at the center of the middle trident
                     // prong (which spans 0.5 → 1.0 of the user's base line).
                     return clearStyleFunc(getLabel(name), 0.75)(feature, resolution);
                 default:
@@ -143,7 +143,7 @@ export class Block implements LineGraphic {
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
 
-        // Persist the *effective* metre value rather than the viewport factor behind it.
+        // Persist the *effective* meter value rather than the viewport factor behind it.
         // A ratio-locked name re-derives `size` from the base length on restore and
         // ignores this; the rest have no other record of the size they were built with.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {

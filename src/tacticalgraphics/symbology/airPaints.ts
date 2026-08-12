@@ -1,15 +1,15 @@
 /**
  * # The air-coordinating areas' label blocks
  *
- * Fourteen graphics whose amplifiers are a **block of labelled lines** rather than a
+ * Fourteen graphics whose amplifiers are a **block of labeled lines** rather than a
  * designation: the eleven air-coordinating zones, and the three airspace coordination
  * areas. They were the last families whose layout lived only in `openlayerStyles.ts`,
  * and the registry said so — they fell through to the default area label, which draws
- * a centred designation and nothing else.
+ * a centered designation and nothing else.
  *
  * With only a `label` set the difference is invisible, which is why it survived every
  * sweep until one carried altitudes and date-time groups. Then MapLibre drew two
- * centred labels on top of each other and no altitudes at all, against OpenLayers'
+ * centered labels on top of each other and no altitudes at all, against OpenLayers'
  * six-line block.
  *
  * The two families look alike and are not the same: the zones take the doctrinal
@@ -44,12 +44,12 @@ const FIT_SHARE = 0.8;
 const column = (label: string, value: string) => `${label.padEnd(LABEL_COLUMN)}${value}`;
 
 /**
- * One multi-line label, left-justified, centred on the anchor as a block.
+ * One multi-line label, left-justified, centered on the anchor as a block.
  *
- * **The block is centred by measuring it, not by centring the text.** The lines are
+ * **The block is centered by measuring it, not by centering the text.** The lines are
  * left-justified against each other — that is what puts the values in a column — so
  * the anchor sits at the block's left edge and is then pushed left by half the widest
- * line. Centring the text instead would ragged-edge the columns.
+ * line. Centering the text instead would ragged-edge the columns.
  *
  * A blank line separates the name block from the altitude block, per the MIL-STD-2525E
  * layout. It is an empty string rather than an offset because the renderer owns line

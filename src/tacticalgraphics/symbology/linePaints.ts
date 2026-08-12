@@ -6,7 +6,7 @@
  * rest of `LineGraphicBase`'s style switch.
  *
  * Same rules as everywhere in `symbology/`: planar Euclidean math in EPSG:3857
- * metres, no DOM, screen sizes as `px x resolution`.
+ * meters, no DOM, screen sizes as `px x resolution`.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';

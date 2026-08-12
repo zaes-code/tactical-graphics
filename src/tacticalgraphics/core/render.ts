@@ -60,7 +60,7 @@ export interface TacticalGraphicProperties {
      * Altitude or depth, as a **number** in the host's configured {@link AltitudeUnit}.
      *
      * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
-     * in the string", and feet, metres, a flight level and a submerged depth are all
+     * in the string", and feet, meters, a flight level and a submerged depth are all
      * legal — so this was a string. In practice the properties dialog has only ever
      * accepted digits, which made the freedom theoretical while costing every consumer a
      * value it could not sort, compare or arithmetic on. The unit comes from the config
@@ -87,7 +87,7 @@ export interface TacticalGraphicProperties {
     /** Weapon designation. Today only FinalProtectiveFire renders this. */
     weapon?: string;
 
-    // ── Symbology (affects colour and dash pattern) ─────────────────────────
+    // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
@@ -96,11 +96,11 @@ export interface TacticalGraphicProperties {
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
-     * Radius in **metres**: how far the symbol reaches from its own centre. The circle
+     * Radius in **meters**: how far the symbol reaches from its own center. The circle
      * radius for the arc mission tasks and circular areas, and the half-length of a
      * point-anchored arrow. Defaults are applied per graphic when omitted.
      *
-     * Only for graphics that *have* a centre. A line graphic's arrowhead or teeth are
+     * Only for graphics that *have* a center. A line graphic's arrowhead or teeth are
      * sized by `decorationSize`, which is a different quantity that was briefly and
      * wrongly folded in here.
      */
@@ -111,22 +111,22 @@ export interface TacticalGraphicProperties {
      *
      * Separate from `radius` because it is not a reach from anywhere:
      * `DirectionOfSupportingAttack` is a MultiLineString of the drawn line plus an
-     * arrowhead, and there is no centre to take a radius of. The two were briefly one
+     * arrowhead, and there is no center to take a radius of. The two were briefly one
      * field, which made `radius` mean two unrelated things depending on the graphic.
      *
      * **Caveat, see `ai/decisions.md`:** the generators that read this still consume it as
-     * metres per *screen pixel* and multiply by a pixel count of their own, so a value in
-     * metres comes out ~20x too large. That is the open item this field's existence makes
+     * meters per *screen pixel* and multiply by a pixel count of their own, so a value in
+     * meters comes out ~20x too large. That is the open item this field's existence makes
      * findable rather than hidden inside `radius`.
      */
     decorationSize?: number;
     /**
-     * **Full** width in metres, measured across a drawn line: rail to rail on an
+     * **Full** width in meters, measured across a drawn line: rail to rail on an
      * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
      * and what a properties dialog shows.
      *
      * Full, not half — the generators work in half-widths (the perpendicular offset
-     * from the centreline), so `toGraphicOptions` halves it on the way in and the
+     * from the centerline), so `toGraphicOptions` halves it on the way in and the
      * holders double it on the way out. The doubling is kept inside the library
      * precisely so a consumer never has to know about it: you send the width you
      * would measure on the map.
@@ -157,10 +157,10 @@ export interface TacticalGraphicProperties {
      */
     labelGapDegrees?: number;
     /**
-     * Half the gap left in a bowed curve for its designation, in **metres**. Turn
+     * Half the gap left in a bowed curve for its designation, in **meters**. Turn
      * and the tactical turn are the only readers.
      *
-     * The metres twin of `labelGapDegrees`, and it exists for the same reason: pass
+     * The meters twin of `labelGapDegrees`, and it exists for the same reason: pass
      * 0 when the renderer cuts the gap itself from the rendered glyph, which both of
      * this library's renderers do. Omitting it leaves the generator's fallback of
      * `0.16 * size` — right for a consumer taking the raw GeoJSON, wrong on top of a
@@ -206,7 +206,7 @@ export interface GraphicLabels {
     /** What both are measured from. @see AltitudeDatum */
     altitudeDatum?: AltitudeDatum;
     /**
-     * Full width in metres, edge to edge. The same field the geometry schema uses —
+     * Full width in meters, edge to edge. The same field the geometry schema uses —
      * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
      * width rather than a string mirror of it that has to be kept in step.
      */
@@ -299,7 +299,7 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
  *
  * **Exported** because a renderer sometimes has to see what the generator saw. A
  * range fan's bands are consumed by the generator and survive only as anonymous
- * points, so a renderer labelling them must re-resolve them from the same options —
+ * points, so a renderer labeling them must re-resolve them from the same options —
  * and reconstructing the mapping on its own is how the two ended up disagreeing.
  */
 export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
@@ -318,10 +318,10 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
         // than a fraction of `size`, so it survives a resize. It reached the generator
         // only through an OpenLayers holder override, so every other caller — a second
         // renderer, a consumer of the public API — silently got the fallback ratio and
-        // a visibly smaller arrowhead. It is the same metres the holder stamps.
+        // a visibly smaller arrowhead. It is the same meters the holder stamps.
         headSize: props.decorationSize,
         // Public `width` is a full width; the generators' `radius` is the half-width
-        // offset from the centreline. This is the only place the factor of two lives.
+        // offset from the centerline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
         rotation: props.rotation,
         mirrored: props.mirrored,

@@ -19,7 +19,7 @@ import {TacticalGraphicName} from './core/type';
 /** Points in a closed triangle ring: three corners plus the repeated first. */
 const TRIANGLE_RING = 4;
 
-/** The teeth, as [side, side, side] in metres. */
+/** The teeth, as [side, side, side] in meters. */
 function triangleSides(halfSpanDegrees: number, radius: number): number[][] {
     const rendered = renderTacticalGraphic({
         type: 'Feature',

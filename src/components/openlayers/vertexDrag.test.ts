@@ -2,7 +2,7 @@
  * Vertex dragging: an edit-mode drag on an opted-in graphic moves the grabbed vertex
  * rather than scaling the whole shape.
  *
- * Opt-in matters as much as the behaviour. The line family is overwhelmingly "a drawn path
+ * Opt-in matters as much as the behavior. The line family is overwhelmingly "a drawn path
  * plus decorations", where a uniform resize is what a user expects, so turning this on
  * everywhere would change 40 graphics nobody asked about.
  */

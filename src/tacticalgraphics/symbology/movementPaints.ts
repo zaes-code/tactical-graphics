@@ -126,7 +126,7 @@ function nameAndDate(feature: PaintFeature): string {
  *
  * `atMidpoint` puts it between the two anchors rather than on the first, and
  * `upright` forces horizontal regardless of the graphic's rotation — mobile
- * defence's "MD" sits at the tail of the ellipse and reads horizontally whatever
+ * defense's "MD" sits at the tail of the ellipse and reads horizontally whatever
  * angle the ellipse is at.
  */
 function fixedLetterPaint(
@@ -164,7 +164,7 @@ function fixedLetterPaint(
         const rotation = options.keepFlip
             ? -Math.atan2(y1 - y0, x1 - x0)
             : uprightRotation(coords[0], coords[1]);
-        // Interpolated **in projected metres**, on the segment the renderer draws, so a
+        // Interpolated **in projected meters**, on the segment the renderer draws, so a
         // letter placed a quarter along lands in the hole cut a quarter along.
         const t = options.atFraction ?? 0.5;
         return [text([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
@@ -185,12 +185,12 @@ export const envelopmentLabelPaint = (): MovementPaint =>
     fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION});
 
 /**
- * Mobile defence: "MD" at the tail of the ellipse, horizontal whatever the
+ * Mobile defense: "MD" at the tail of the ellipse, horizontal whatever the
  * graphic's rotation.
  *
  * At `coords[0]` — the p0 vertex, in the gap the two arcs leave open — not the
  * midpoint. The amplifier belongs at the *start* of the graphic; it was briefly
- * centred and reverted at the user's direction. @see ai/decisions.md
+ * centered and reverted at the user's direction. @see ai/decisions.md
  */
 export const mobileDefenseLabelPaint = (): MovementPaint =>
     fixedLetterPaint('MD', {upright: true, align: 'center'});
@@ -241,14 +241,14 @@ export function aviationAxisLabelPaint(): MovementPaint {
 
 /**
  * The axis-of-advance family and the infiltration lane: one "name  DTG" line on
- * the centreline.
+ * the centerline.
  *
  * The axes set it right-aligned just behind the arrowhead, so it reads back down
- * the channel; the infiltration lane centres it on the span instead, because it
+ * the channel; the infiltration lane centers it on the span instead, because it
  * has no arrowhead to sit behind.
  */
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
-    const centred = name === TacticalGraphicName.InfiltrationLane;
+    const centered = name === TacticalGraphicName.InfiltrationLane;
 
     return (feature, context) => {
         const coords = anchors(feature);
@@ -267,11 +267,11 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
         const uy = dy / segLenMap;
         const clearance = 10 * context.resolution;
 
-        const at: ProjectedPosition = centred
+        const at: ProjectedPosition = centered
             ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
             : [c1[0] - ux * clearance, c1[1] - uy * clearance];
 
-        const align: 'left' | 'center' | 'right' = centred ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
+        const align: 'left' | 'center' | 'right' = centered ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
 
         return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
@@ -289,8 +289,8 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
  * doing so silently dropped the symbol and left a bare designation.
  *
  * Anchor layout, published by the generator: `[0..1]` is the text span, `[2]` the
- * twist centre, `[3]` a point giving the direction. The symbol's heading runs from
- * the direction point *toward* the centre, and the stalk stands on whichever
+ * twist center, `[3]` a point giving the direction. The symbol's heading runs from
+ * the direction point *toward* the center, and the stalk stands on whichever
  * perpendicular points up on screen — north is up in EPSG:3857, so the
  * perpendicular with a positive sine is the one to keep.
  *
@@ -324,7 +324,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 
         // `lineColorOf`, not the old `get('hostilityColor') || default`. The two
         // differ only for a feature carrying an affiliation in its amplifier bag but
-        // no stamped colour — which is what restore produces — and there the old
+        // no stamped color — which is what restore produces — and there the old
         // form drew the symbol black on a hostile graphic. Same fix `readHostility`
         // made everywhere else. @see ai/context.md, "Reading a graphic's affiliation"
         const color = lineColorOf(feature);
@@ -407,10 +407,10 @@ export function movementLabelPaint(): MovementPaint {
 
 /**
  * The plain line work for a movement graphic: one stroke in the affiliation
- * colour.
+ * color.
  *
  * Most of the family renders this way — the shape is entirely in the geometry the
- * generator returned. Infiltration, envelopment and mobile defence have bespoke
+ * generator returned. Infiltration, envelopment and mobile defense have bespoke
  * line work and are not routed here.
  */
 export function movementGraphicPaint(): MovementPaint {
@@ -538,9 +538,9 @@ const BRIDGE_DATE_GAP_PX = 12;
  *
  * The date is drawn **horizontal** whatever the crossing's bearing, and aligned so
  * it runs *away* from the graphic: `generateLabels` places the anchor beyond the
- * end, and centring text there would run it back over the crossing. A
+ * end, and centering text there would run it back over the crossing. A
  * more-horizontal crossing therefore aligns left or right by direction; a
- * more-vertical one centres, because horizontal text at a point above or below the
+ * more-vertical one centers, because horizontal text at a point above or below the
  * end does not overlap the axis anyway.
  */
 export function bridgeLabelPaint(): MovementPaint {

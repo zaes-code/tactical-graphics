@@ -65,14 +65,14 @@ export const HANDLE_EDIT_MODES: readonly EditMode[] = ['translate', 'rotate', 'r
  * of offering one that silently does nothing. Both engines currently return every flag
  * true — MapLibre reached draw-and-edit parity in this release — but the shape stays,
  * because a third renderer will arrive unfinished and the honest answer then is a
- * greyed button, not a missing one.
+ * grayed button, not a missing one.
  */
 export interface EngineCapabilities {
     /** Can place a new graphic by drawing on the map. */
     draw: boolean;
     /** Can rotate, resize, translate and reshape an existing graphic. */
     edit: boolean;
-    /** Can serialise every graphic to GeoJSON and rebuild from it. */
+    /** Can serialize every graphic to GeoJSON and rebuild from it. */
     io: boolean;
     /** Why something above is false. One short sentence, shown on a disabled control. */
     unsupportedReason?: string;
@@ -84,7 +84,7 @@ export interface EngineCallbacks {
     onChange?(): void;
     /** The selection moved. `null` when the user clicked empty map. */
     onSelect?(graphic: SelectedGraphic | null): void;
-    /** A draw finished or was cancelled, so a host can un-arm its button. */
+    /** A draw finished or was canceled, so a host can un-arm its button. */
     onDrawEnd?(): void;
     /** The engine changed mode on its own — finishing a draw returns to `view`. */
     onModeChange?(mode: EditMode): void;
@@ -94,7 +94,7 @@ export interface EngineCallbacks {
  * The selected graphic, in the terms both engines share.
  *
  * Deliberately not the engine's own object: OpenLayers would hand back a holder and
- * MapLibre a realised paint bundle, and a host that reads either is no longer portable.
+ * MapLibre a realized paint bundle, and a host that reads either is no longer portable.
  * The base feature and the name are what a properties panel actually needs.
  */
 export interface SelectedGraphic {
@@ -145,7 +145,7 @@ export interface TacticalGraphicsEngine {
      * `configureTacticalGraphics` changes what the symbology answers; it does not tell
      * a map that the answer moved. OpenLayers hides this — its style functions run
      * again on the next frame — while MapLibre bakes each paint result into a GeoJSON
-     * source and keeps drawing the old colours until something re-runs the paints. So a
+     * source and keeps drawing the old colors until something re-runs the paints. So a
      * host's whole theme change is `configureTacticalGraphics(palette)` **and** this.
      */
     refreshStyles(): void;

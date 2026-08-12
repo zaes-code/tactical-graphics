@@ -31,7 +31,7 @@ import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdap
  * Demo-only, like its OpenLayers counterpart — excluded from the published build.
  */
 
-/** Degrees between sample centres. Wide enough that nothing overlaps its neighbour. */
+/** Degrees between sample centers. Wide enough that nothing overlaps its neighbor. */
 const COLUMN_STEP = 9;
 const ROW_STEP = 7;
 /** Half-extent of a sample, in degrees. */
@@ -58,7 +58,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     // **A rectangle gets four corners and an irregular area gets five**, so the sweep
     // tells them apart on sight. Every polygon-based graphic used to get the same square,
     // which made the fourteen rectangular variants indistinguishable from the areas they
-    // exist to be an alternative to — and a catalogue whose whole job is showing what a
+    // exist to be an alternative to — and a catalog whose whole job is showing what a
     // symbol looks like should not hide the one difference between two of them.
     const ring: Geometry = isRectangular(name) ? box(lon, lat) : pentagon(lon, lat);
     return [line, ring, point];
@@ -119,20 +119,20 @@ const SAMPLE_AMPLIFIERS = {
     rangeFan: {
         // **One band**, and no bearings on it — the sector fan then falls back to its
         // own span, which is the plain case worth showing first. The multi-band variants
-        // are separate samples rather than a replacement for this one, so the catalogue
+        // are separate samples rather than a replacement for this one, so the catalog
         // shows both what a fan looks like with a single ring and what stacking does to
         // it. @see EXTRA_SAMPLES
         //
-        // Kilometres, unlike every other distance here. @see RangeFanBand.range
+        // Kilometers, unlike every other distance here. @see RangeFanBand.range
         bands: [{range: 180, label: 'ARTY', altitude: 1500}],
     },
 };
 
 /**
- * A radius for the point-anchored graphics, in metres.
+ * A radius for the point-anchored graphics, in meters.
  *
  * Only read by graphics that take one; the rest ignore it. Sized so a circle lands
- * near the cell it is allotted rather than sprawling over its neighbours.
+ * near the cell it is allotted rather than sprawling over its neighbors.
  */
 const SAMPLE_RADIUS_M = 180_000;
 
@@ -182,7 +182,7 @@ function hostilityFor(
  * **Both sweeps walk this same list**, which they did not used to. `buildSampleGraphics`
  * sorted by category while `sampleFeatureCollection` took the registry's own order, so
  * the engine that builds its own graphics and the engine that restores the collection
- * laid the catalogue out differently — the same fan sat at [26, -47] in one and
+ * laid the catalog out differently — the same fan sat at [26, -47] in one and
  * [-10, -54] in the other. Comparing the two by looking at them was comparing two
  * different pictures.
  */
@@ -197,7 +197,7 @@ interface SampleSpec {
  * rather than their shape.
  *
  * The range fans carry a list of bands, and one band draws nothing like four — the rings
- * nest, the labels stack, and the sector's bearings spread across the arc. A catalogue
+ * nest, the labels stack, and the sector's bearings spread across the arc. A catalog
  * showing only the single-band case shows the shape and hides the graphic.
  */
 const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphicProperties, 'name'>}[] = [
@@ -230,10 +230,10 @@ const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphi
 ];
 
 /**
- * Every sample, in one order, ready for either engine to realise.
+ * Every sample, in one order, ready for either engine to realize.
  *
  * Sorted by category so related symbols sit together, which is what makes the sweep
- * readable as a catalogue rather than a heap.
+ * readable as a catalog rather than a heap.
  */
 function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
     const byCategory = [...PAINTABLE_GRAPHICS].sort((a, b) => {
@@ -258,7 +258,7 @@ function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
         },
     }));
 
-    // Appended, so they take the cells after the catalogue proper and nothing shifts.
+    // Appended, so they take the cells after the catalog proper and nothing shifts.
     EXTRA_SAMPLES.forEach((extra, offset) => {
         specs.push({
             name: extra.name,

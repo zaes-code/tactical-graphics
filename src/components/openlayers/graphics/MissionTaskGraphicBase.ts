@@ -32,7 +32,7 @@ import {
     TURN_DEFAULT_BEND,
     CROSSED_MISSION_TASKS,
     RATIO_LOCKED_MISSION_TASKS,
-    arrowheadMetres,
+    arrowheadMeters,
 } from '@zaes/tactical-graphics';
 
 /**
@@ -50,7 +50,7 @@ import {
  * The zero is renderer-specific: a consumer that omits `labelGap` still gets
  * the generator's own `size`-proportional default.
  */
-const TURN_LABEL_GAP_METRES = 0;
+const TURN_LABEL_GAP_METERS = 0;
 /** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
 const TURN_TIP_HANDLE = 1;
 
@@ -132,7 +132,7 @@ import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicPropert
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
     center: Coordinate = [0, 0];
     /**
-     * The centre the graphic is built around, and — since it is now published from
+     * The center the graphic is built around, and — since it is now published from
      * `getFeatures()` — the only part of a mission task that has to survive a save.
      * Everything else regenerates from it plus `size` / `rotation`.
      *
@@ -140,7 +140,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * interaction may drag" (`getRenderedFeaturesByProp('base')`), which a
      * point-anchored graphic does not: it is reshaped by rotate / resize / translate.
      * Same trick as `mobileDefense` in `controllerRegistry.ts`. The `role` tag, not
-     * this flag, is what identifies the feature when serialising.
+     * this flag, is what identifies the feature when serializing.
      */
     base: Feature<Point> = createCenterBaseFeature();
     rotation: number = 0;
@@ -148,7 +148,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     symbolId: string = '';
 
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
-    /** The centre dot — visual anchor only. @see publishHandles */
+    /** The center dot — visual anchor only. @see publishHandles */
     centerHandle: Feature<MultiPoint> = <Feature<MultiPoint>>createInertHandleFeature();
     graphic: Feature = createFeature();
     /**
@@ -175,7 +175,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc(name));
         }
-        // The crossed-line tasks draw their own arms so the gap for the centre
+        // The crossed-line tasks draw their own arms so the gap for the center
         // label can be measured off the glyph, and so one arm can be hashed.
         if (CROSSED_MISSION_TASKS.includes(name)) {
             this.graphic.setStyle(crossedMissionTaskStyleFunc(name));
@@ -270,11 +270,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // …and on the graphic, for the styles that have to reproduce the
         // label's scale to leave room for it (crossedMissionTaskStyleFunc).
         this.graphic.set('graphicSize', this.size);
-        // The projected centre, for styles that scale the symbol about it. It
+        // The projected center, for styles that scale the symbol about it. It
         // cannot be recovered from the geometry: the generator walks out
         // geodesically and Mercator does not preserve the midpoint.
-        const centre = this.base.getGeometry()?.getCoordinates();
-        if (centre) this.graphic.set('graphicCenter', centre);
+        const center = this.base.getGeometry()?.getCoordinates();
+        if (center) this.graphic.set('graphicCenter', center);
         // …and where the label sits, for the styles that have to open a hole for
         // it. Which direction that is differs per graphic — Contain's is due
         // west, everyone else's is along the rotation axis — so the anchor is
@@ -300,23 +300,23 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     };
 
     /**
-     * Splits the generator's handle set into the draggable ones and the centre,
-     * which is published on a separate grey `inert` feature that
+     * Splits the generator's handle set into the draggable ones and the center,
+     * which is published on a separate gray `inert` feature that
      * `TacticalGraphicsManager.handleDownEvent` refuses to start a drag from.
      *
-     * The centre is worse than useless as a drag origin: `handleResize` scales by
-     * `distanceToCentre(cursor) / distanceToCentre(lastPointer)`, and both are
-     * ~0 there, so a nudge on the centre dot used to blow `size` up by twenty
+     * The center is worse than useless as a drag origin: `handleResize` scales by
+     * `distanceToCenter(cursor) / distanceToCenter(lastPointer)`, and both are
+     * ~0 there, so a nudge on the center dot used to blow `size` up by twenty
      * orders of magnitude.
      *
      * **Matches on position, not index** — the same rule as `visiblePathHandles`.
      * Generators do not agree on an order: the MissionTask convention is
      * `[edge, center]` but the range fans emit `[center, rim]`. "Is this handle
      * on the base point" is the only stable test, and it costs nothing to be
-     * right for a generator that emits no centre handle at all (Ambush, Pursuit).
+     * right for a generator that emits no center handle at all (Ambush, Pursuit).
      *
      * Never leaves the draggable set empty: a generator whose handles all sit on
-     * the centre keeps them, so the graphic cannot end up with nothing to grab.
+     * the center keeps them, so the graphic cannot end up with nothing to grab.
      */
     protected publishHandles(handles: MultiPoint): void {
         const coords = handles.getCoordinates();
@@ -391,7 +391,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     private measureAnchor: Coordinate | undefined;
 
     /**
-     * Redraws the line from the centre handle to the edit handle, or clears it when
+     * Redraws the line from the center handle to the edit handle, or clears it when
      * disarmed.
      *
      * Anchored on the two handles rather than on `center` + `size` so it lands exactly
@@ -421,7 +421,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * bearing is derived from `rotation`, and for these graphics that lands roughly
      * opposite the cursor — measured at 155° out — so drawing to it puts the read-out on
      * the far side of the circle from the hand moving it. Projecting `size` along
-     * centre→anchor keeps the line under the cursor while staying exactly one radius
+     * center→anchor keeps the line under the cursor while staying exactly one radius
      * long, which is the number the label reports.
      *
      * Falls back to the first handle before any gesture has supplied an anchor.
@@ -493,10 +493,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     }
 
     /**
-     * Adopts a new centre point.
+     * Adopts a new center point.
      *
      * Used to be `this.base = base` and nothing else, which left `center` pointing at
-     * the old coordinate: the next rotate or resize — neither passes a centre — would
+     * the old coordinate: the next rotate or resize — neither passes a center — would
      * read the stale `this.center` back out and snap the graphic to where it used to
      * be. Mission tasks are kept out of the Modify interaction so nothing reached this
      * in practice, but it is on the public `TacticalGraphicHandler` interface and the
@@ -562,7 +562,7 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
  * it survives a resize, which is the point: the user sets the sharpness once
  * and stretching the curve does not undo it.
  *
- * The arrowhead is sized in **flat metres off the drawing resolution**, not as
+ * The arrowhead is sized in **flat meters off the drawing resolution**, not as
  * a fraction of `size`, for the same reason — it holds its size while the curve
  * is resized, and grows with the world on zoom-in like any baked geometry. The
  * "T" is the opposite: it uses the default zoom-anchored label scale, capped to
@@ -572,7 +572,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
     /** @see TURN_DEFAULT_BEND */
     bend: number = TURN_DEFAULT_BEND;
     /**
-     * Arrowhead size in metres. Seeded from the drawing resolution and then **stamped**,
+     * Arrowhead size in meters. Seeded from the drawing resolution and then **stamped**,
      * because a restore no longer has that resolution to rebuild it from — the snapshot
      * carries the derived distance instead. @see persistedGeometryState
      */
@@ -580,17 +580,17 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
+        this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
     }
 
     protected generatorOptions(): Record<string, unknown> {
-        return {bend: this.bend, headSize: this.headSize, labelGap: TURN_LABEL_GAP_METRES};
+        return {bend: this.bend, headSize: this.headSize, labelGap: TURN_LABEL_GAP_METERS};
     }
 
     protected persistedGeometryState(): GraphicGeometryState {
         // `headSize` used to be omitted, on the grounds that a restore rebuilt it from
         // the `renderer` bag's `drawingResolution`. That bag is gone, so it has to travel
-        // as what it is — a distance in metres. `bend` is portable either way: a Cesium
+        // as what it is — a distance in meters. `bend` is portable either way: a Cesium
         // view would need it to draw the same curve.
         return {bend: this.bend, decorationSize: this.headSize};
     }
@@ -607,14 +607,14 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * grabbed (`activeHandleIndex >= 0`).
      *
      * Index order is `Turn.generateHandles`' contract — `[bend, arrowTip]`,
-     * the centre having been split off onto the inert feature by
+     * the center having been split off onto the inert feature by
      * `publishHandles`, which preserves order.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const centre = this.base.getGeometry()?.getCoordinates();
-        if (!centre || this.size <= 0) return;
-        const dx = coordinate[0] - centre[0];
-        const dy = coordinate[1] - centre[1];
+        const center = this.base.getGeometry()?.getCoordinates();
+        if (!center || this.size <= 0) return;
+        const dx = coordinate[0] - center[0];
+        const dy = coordinate[1] - center[1];
 
         if (handleIndex === TURN_TIP_HANDLE) {
             // The tip is the far end of the chord, so the cursor gives both of
@@ -651,12 +651,12 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
     bend: number = ENVELOPMENT_DEFAULT_BEND;
-    /** Arrowhead size in metres — stamped, not re-derived. @see TurnGraphicBase.headSize */
+    /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        this.headSize = arrowheadMetres(name, drawingResolution ?? 1) ?? 0;
+        this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and
@@ -724,14 +724,14 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
 
     /**
      * Drags one of Envelopment's two shape handles, in the order
-     * `Envelopment.generateHandles` emits them: `[arrowTip, lineEnd]`, the centre
+     * `Envelopment.generateHandles` emits them: `[arrowTip, lineEnd]`, the center
      * having been split onto the inert feature by `publishHandles`.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const centre = this.base.getGeometry()?.getCoordinates();
-        if (!centre || this.size <= 0) return;
-        const dx = coordinate[0] - centre[0];
-        const dy = coordinate[1] - centre[1];
+        const center = this.base.getGeometry()?.getCoordinates();
+        if (!center || this.size <= 0) return;
+        const dx = coordinate[0] - center[0];
+        const dy = coordinate[1] - center[1];
 
         if (handleIndex === ENVELOPMENT_LINE_HANDLE) {
             // The line's end carries both of the approach's inputs: how long it

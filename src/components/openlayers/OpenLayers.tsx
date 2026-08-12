@@ -67,10 +67,10 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         }
         const rememberView = () => {
             const view = olMap.getView();
-            const centre = view.getCenter();
+            const center = view.getCenter();
             const resolution = view.getResolution();
-            if (!centre || !resolution) return;
-            const [lon, lat] = toLonLat(centre);
+            if (!center || !resolution) return;
+            const [lon, lat] = toLonLat(center);
             writeViewport({lon, lat, resolution});
         };
         olMap.on('moveend', rememberView);
@@ -116,7 +116,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             (window as unknown as Record<string, unknown>).__tacticalGraphics = {
                 map: olMap,
                 manager: tacticalGraphicManager.current,
-                // The centre-symbol controls, so a driving script can change the size
+                // The center-symbol controls, so a driving script can change the size
                 // and read back what the style function resolves. Module-level state,
                 // so this is a handle on it rather than a copy.
                 setSecurityOperationSymbolSize,
@@ -196,7 +196,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     useEffect(() => {
         if (!map) return;
         // Nothing to publish to the library: `MapRendering` is the single writer of the
-        // config, chrome colours included. This effect only swaps the basemap layers and
+        // config, chrome colors included. This effect only swaps the basemap layers and
         // sweeps the drawn features so they re-render.
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
@@ -210,8 +210,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             darkTileLayer.setVisible(false);
             lightTileLayer.setVisible(true);
         }
-        // `hostilityColor` caches a *resolved* colour, so a feature drawn in one mode would
-        // keep that mode's colour forever. Re-derive it before invalidating, or the sweep
+        // `hostilityColor` caches a *resolved* color, so a feature drawn in one mode would
+        // keep that mode's color forever. Re-derive it before invalidating, or the sweep
         // below faithfully re-renders the stale value.
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
             const hostility = f.get('hostility');
@@ -225,7 +225,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
 
     // Re-render already-drawn graphics when any config setting changes — style functions
     // read the config live, but OL caches the rendered output per feature revision, so a
-    // feature that hasn't otherwise changed keeps its old stroke width and colours until
+    // feature that hasn't otherwise changed keeps its old stroke width and colors until
     // something bumps its revision. Same reasoning as the dark-mode sweep above.
     //
     // `MapRendering`'s own effect publishes the config, and child effects run first — but
@@ -237,7 +237,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
             const hostility = f.get('hostility');
             // Same stale-stamp problem as the mode sweep: `hostilityColor` caches a
-            // *resolved* colour, so re-tinting an affiliation has to re-derive it.
+            // *resolved* color, so re-tinting an affiliation has to re-derive it.
             if (hostility && f.get('hostilityColor')) {
                 f.set('hostilityColor', getColorByHostility(hostility));
             }

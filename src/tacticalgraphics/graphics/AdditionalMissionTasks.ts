@@ -55,7 +55,7 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     /**
-     * Bar half-height in metres, derived from the drawn line's own length rather
+     * Bar half-height in meters, derived from the drawn line's own length rather
      * than from `opts.size` — the Fix pattern. `opts.size` is a map-unit value
      * baked at construction time, so driving the bar off it would let the shaft
      * grow on resize while the bar stayed put.
@@ -93,7 +93,7 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
         if (this.isFirePosition()) {
-            // Anchored at the bar's centre. Both fire-position symbols are drawn
+            // Anchored at the bar's center. Both fire-position symbols are drawn
             // shape-only — the style function renders no text — but a library
             // consumer still gets a sane anchor to hang one off.
             return this.asMultiPointFeature([base.geometry.coordinates[0]]);

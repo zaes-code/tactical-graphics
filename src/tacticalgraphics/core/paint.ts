@@ -4,13 +4,13 @@
  * `renderTacticalGraphic` answers "where is this graphic". It does not answer
  * "what does it look like", and today nothing map-agnostic does: the teeth on an
  * obstacle line, the gap cut around a mission task's letter, the arrowhead held
- * at a constant screen size — all of that is synthesised inside an OpenLayers
+ * at a constant screen size — all of that is synthesized inside an OpenLayers
  * `StyleFunction`, in 128 separate places. A consumer reading the raw GeoJSON
  * gets a skeleton.
  *
  * A **paint list** is that missing half, expressed as data. One `Paint` is one
  * mark: a geometry plus how to stroke, fill, letter or dot it. A paint function
- * takes a graphic's realised geometry and the current view scale and returns the
+ * takes a graphic's realized geometry and the current view scale and returns the
  * marks that draw it — no `ol`, no `maplibre-gl`, no canvas, no DOM.
  *
  * ## Why this is not "an OpenLayers Style with the imports removed"
@@ -26,17 +26,17 @@
  *   render. Fifteen sites cut a gap to the width of the glyph that actually
  *   renders; they keep doing that, they just ask someone else to hold the ruler.
  * - **Screen-space quantities are named as such.** Every `*Px` field is screen
- *   pixels and every coordinate is projected metres. That distinction is the one
+ *   pixels and every coordinate is projected meters. That distinction is the one
  *   this repo keeps getting bitten by — a metric offset baked into geometry is
  *   not zoom-invariant, a pixel offset is — so it is in the type names rather
  *   than in a comment.
  *
- * ## Coordinates are projected metres, not degrees
+ * ## Coordinates are projected meters, not degrees
  *
  * {@link ProjectedGeometry} is shape-compatible with GeoJSON and means something
- * different: its coordinates are **EPSG:3857 metres**, the frame the existing
+ * different: its coordinates are **EPSG:3857 meters**, the frame the existing
  * style-function math already works in. That is why it is its own type rather
- * than a reused `geojson` one — a `LineString` holding metres is a lie the
+ * than a reused `geojson` one — a `LineString` holding meters is a lie the
  * compiler should not help tell.
  *
  * A renderer converts on the way out. OpenLayers wants exactly this frame;
@@ -51,11 +51,11 @@
 import {TacticalGraphicProperties} from './render';
 import {TacticalGraphicEchelon} from './type';
 
-/** A single `[x, y]` in projected metres (EPSG:3857). */
+/** A single `[x, y]` in projected meters (EPSG:3857). */
 export type ProjectedPosition = [number, number];
 
 /**
- * A geometry in projected metres.
+ * A geometry in projected meters.
  *
  * Structurally identical to the matching GeoJSON geometry, so converting either
  * way is a coordinate walk and nothing else — but distinct in the type system,
@@ -89,7 +89,7 @@ export type ProjectedInputGeometry =
     | ProjectedGeometry
     | {type: 'GeometryCollection'; geometries: ProjectedGeometry[]};
 
-/** Any CSS colour string. Resolved from the config before it reaches a paint list. */
+/** Any CSS color string. Resolved from the config before it reaches a paint list. */
 export type PaintColor = string;
 
 /** How to stroke a geometry. Widths and dashes are **screen pixels**. */
@@ -107,10 +107,10 @@ export interface StrokeSpec {
  * A repeating fill pattern.
  *
  * The hatched areas — obstacle-restricted, limited-access, the no-fire zones —
- * are filled with diagonal hatching rather than a flat colour, and that is a
+ * are filled with diagonal hatching rather than a flat color, and that is a
  * **symbology** fact: FM 1-02.2 draws them that way, so it belongs here rather
  * than in a renderer. Described as parameters, not as an image, because the two
- * renderers realise it completely differently — a canvas builds a `CanvasPattern`,
+ * renderers realize it completely differently — a canvas builds a `CanvasPattern`,
  * MapLibre needs a registered `fill-pattern` image.
  *
  * Sizes are screen pixels, and `color` already carries its final alpha.
@@ -165,9 +165,9 @@ export interface TextSpec {
      *
      * Separate from `align` because the two renderers separate them: OpenLayers
      * derives justification from `textAlign` unless told otherwise, while MapLibre
-     * takes `text-anchor` and `text-justify` independently and centre-justifies by
+     * takes `text-anchor` and `text-justify` independently and center-justifies by
      * default. A left-aligned block of `MIN ALT: …` / `MAX ALT: …` lines therefore
-     * came out centre-justified in one engine and left-justified in the other, with
+     * came out center-justified in one engine and left-justified in the other, with
      * the values in a ragged column. Defaults to `align`.
      */
     justify?: 'left' | 'center' | 'right';
@@ -182,7 +182,7 @@ export interface TextSpec {
     placement?: 'point' | 'line';
 }
 
-/** A dot mark — handles, the draw marker, the inert centre. Radius is screen pixels. */
+/** A dot mark — handles, the draw marker, the inert center. Radius is screen pixels. */
 export interface CircleSpec {
     radiusPx: number;
     fill?: FillSpec;
@@ -209,13 +209,13 @@ export interface Paint {
 /**
  * What a paint function knows about the current view.
  *
- * Deliberately tiny. Everything else a style function needs — colours, line
+ * Deliberately tiny. Everything else a style function needs — colors, line
  * width, label size — comes from the library config, which lives in this same
  * map-agnostic half precisely so a second renderer inherits it.
  */
 export interface PaintContext {
     /**
-     * Projected metres per screen pixel — OpenLayers' `resolution`, and the
+     * Projected meters per screen pixel — OpenLayers' `resolution`, and the
      * quantity every zoom-invariant size in this library is expressed against.
      *
      * MapLibre reports zoom instead; the two are related by
@@ -238,7 +238,7 @@ export interface PaintContext {
 }
 
 /**
- * The input half of a paint function: a graphic's realised geometry plus
+ * The input half of a paint function: a graphic's realized geometry plus
  * everything stamped on it.
  *
  * This is the renderer-agnostic stand-in for "an OpenLayers feature". The style
@@ -247,7 +247,7 @@ export interface PaintContext {
  * reproduce a size it did not compute.
  */
 export interface PaintFeature {
-    /** The realised geometry, in projected metres. May be a collection. */
+    /** The realized geometry, in projected meters. May be a collection. */
     geometry: ProjectedInputGeometry;
 
     /**
@@ -257,7 +257,7 @@ export interface PaintFeature {
     properties: TacticalGraphicProperties;
 
     /**
-     * The graphic's own size in **metres**, when it has one: a circle's radius, a
+     * The graphic's own size in **meters**, when it has one: a circle's radius, a
      * block arrow's perpendicular extent. Size-proportional label scales need it,
      * and so does anything cutting a gap sized to such a label.
      *
@@ -267,20 +267,20 @@ export interface PaintFeature {
     graphicSize?: number;
 
     /**
-     * The view resolution the graphic was drawn at, in metres per pixel. Anchors
+     * The view resolution the graphic was drawn at, in meters per pixel. Anchors
      * the zoom-relative label scale so a label holds its size at the zoom it was
      * created at. Not persisted — it is live view state, not part of the symbol.
      */
     drawingResolution?: number;
 
-    /** Centre of a point-anchored graphic, in projected metres. */
+    /** Center of a point-anchored graphic, in projected meters. */
     graphicCenter?: ProjectedPosition;
 
-    /** Where a point-anchored graphic's label sits, in projected metres. */
+    /** Where a point-anchored graphic's label sits, in projected meters. */
     graphicLabelPoint?: ProjectedPosition;
 
     /**
-     * The graphic's axis-aligned extent, in projected metres.
+     * The graphic's axis-aligned extent, in projected meters.
      *
      * Stamped by the holder because a **label** feature is a bare anchor point —
      * it does not know the shape it labels. Several area layouts hang their
@@ -291,7 +291,7 @@ export interface PaintFeature {
     bounds?: {minX: number; minY: number; maxX: number; maxY: number};
 
     /**
-     * The drawn polygon's outer ring, in projected metres.
+     * The drawn polygon's outer ring, in projected meters.
      *
      * Only the *irregular* zone variants need it, and they need it because the
      * bounding-box corner is misleading for a shape that is not a rectangle — that
@@ -301,7 +301,7 @@ export interface PaintFeature {
     ring?: ProjectedPosition[];
 
     /**
-     * Two points defining the segment a label lies along, in projected metres.
+     * Two points defining the segment a label lies along, in projected meters.
      *
      * Group-or-series-of-targets writes its designation on the polygon's northern
      * edge, rotated to follow it. Which edge that is was decided when the geometry
@@ -310,13 +310,13 @@ export interface PaintFeature {
     labelSegment?: [ProjectedPosition, ProjectedPosition];
 
     /**
-     * An already-resolved line colour, overriding the affiliation's.
+     * An already-resolved line color, overriding the affiliation's.
      *
-     * A *colour*, not an affiliation — so it is a cache that can go stale, and a
+     * A *color*, not an affiliation — so it is a cache that can go stale, and a
      * host that changes its palette has to re-derive it rather than compare the
      * string. Present because several host paths (a properties dialog, a bulk
-     * import, a theme switch) resolve a colour once and stamp it, and dropping it
-     * would silently re-colour every such feature.
+     * import, a theme switch) resolve a color once and stamp it, and dropping it
+     * would silently re-color every such feature.
      *
      * Absent is the normal case: the paint function asks
      * `getColorByHostility(properties.hostility)` and gets the doctrinal answer,

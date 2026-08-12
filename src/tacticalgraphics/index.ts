@@ -91,16 +91,16 @@ export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
 export {default as geometryService} from './core/GeometryService';
 
 /**
- * Configuration — label size, line width, and the colours. All optional; omit a field
+ * Configuration — label size, line width, and the colors. All optional; omit a field
  * and you get the doctrinal FM 1-02.2 value.
  *
  * Lives in the map-agnostic half deliberately. None of it knows what a renderer is:
- * pixel sizes and affiliation colours are properties of the symbology, so a second
+ * pixel sizes and affiliation colors are properties of the symbology, so a second
  * renderer inherits them rather than reinventing them, and a host configures the library
  * once no matter how many views it has.
  *
  * There is one palette — `DEFAULT_PALETTE`. The library cannot see your basemap, so it
- * never picks colours for you: keep whatever sets your app needs and send one. After
+ * never picks colors for you: keep whatever sets your app needs and send one. After
  * changing anything, tell your renderer to invalidate; with OpenLayers that is
  * `source.forEachFeature(f => f.changed())`.
  */
@@ -128,8 +128,8 @@ export {
 export type {TacticalGraphicsConfigOptions} from './core/config';
 
 /**
- * Override readers, for a renderer resolving a colour. Each returns `undefined` when the
- * host has not overridden that colour, leaving the renderer to supply the doctrinal
+ * Override readers, for a renderer resolving a color. Each returns `undefined` when the
+ * host has not overridden that color, leaving the renderer to supply the doctrinal
  * default — the fallback is the renderer's, because only it knows its own defaults.
  */
 export {
@@ -149,9 +149,9 @@ export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from
 export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
 
 /**
- * ## Symbology — colours, line weight and label scale
+ * ## Symbology — colors, line weight and label scale
  *
- * The doctrinal colour table and the three label-scale formulas, resolved against the
+ * The doctrinal color table and the three label-scale formulas, resolved against the
  * live config. These lived in `openlayerStyles.ts` until the MapLibre work, which made
  * the problem obvious: not one of them mentions OpenLayers, and a second renderer that
  * cannot reach them has to reinvent the palette and then drift from it.
@@ -197,7 +197,7 @@ export {
  * ## Paint lists — what a symbol looks like, as data
  *
  * `renderTacticalGraphic` says where a graphic is; a paint list says how it is drawn.
- * The decorations this library synthesises at render time — obstacle teeth, the gap cut
+ * The decorations this library synthesizes at render time — obstacle teeth, the gap cut
  * around a mission task's letter, a screen-sized arrowhead — live in 128 places inside
  * OpenLayers style functions today, so a raw-GeoJSON consumer gets a skeleton. A paint
  * function returns those marks as plain data that any renderer can paint.
@@ -233,7 +233,7 @@ export {
     OBSTACLE_TOOTH_GAP_PX,
     OBSTACLE_TOOTH_HEIGHT_PX,
     angleBetween,
-    centreSegmentIndex,
+    centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     decorationScale,
@@ -306,7 +306,7 @@ export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {baseGeometryFor} from './core/render';
-export {CROSSED_MISSION_TASK_PX, arrowheadMetres, crossedMissionTaskMetres, decorationMetres, hasBakedDecoration} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, hasBakedDecoration} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
 export {HANDLE_EDIT_MODES} from './core/engine';

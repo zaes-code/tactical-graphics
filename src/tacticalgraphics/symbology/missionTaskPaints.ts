@@ -68,11 +68,11 @@ export function crossedMissionTaskLabelScale(): number {
  * The crossed mission tasks: two arms meeting at a one-letter label, with the arms
  * stopping clear of the glyph.
  *
- * ## The centre is the stamped one, not the arms' midpoint
+ * ## The center is the stamped one, not the arms' midpoint
  *
- * The generator walks out from the centre with a geodesic step, and Mercator then
+ * The generator walks out from the center with a geodesic step, and Mercator then
  * stretches the northern end of a diagonal arm more than the southern one — so the
- * *projected* midpoint sits a little north of the true centre. That error is fixed
+ * *projected* midpoint sits a little north of the true center. That error is fixed
  * in map units, so on screen it grows as you zoom in; and since the geometry is
  * scaled about this point while the label is not, the letter visibly drifts out of
  * its own gap.
@@ -275,7 +275,7 @@ export function pursuitPaint(name: TacticalGraphicName): MissionTaskPaint {
  * arrowhead edge, as a fraction of that arrow's half-length.
  *
  * Expressed against the **graphic** rather than the screen: the arrow is baked in
- * metres, so a constant screen offset slid the side arrows across it as the map
+ * meters, so a constant screen offset slid the side arrows across it as the map
  * zoomed. Both forms are "zoom-invariant"; only one of them is in the same frame
  * as the thing it has to stay clear of.
  */
@@ -340,7 +340,7 @@ export function movementToContactPaint(): MissionTaskPaint {
 }
 
 /**
- * Divisor that turns the base defence zone circle's pixel radius into a label
+ * Divisor that turns the base defense zone circle's pixel radius into a label
  * scale. Lower for a larger label; past a ~68 px radius the cap decides, so this
  * only shapes how the label grows on the way there.
  */
@@ -349,7 +349,7 @@ const BDZ_SCALE_DIVISOR = 45;
 const BDZ_MIN_SCALE = 0.1;
 
 /**
- * The base defence zone's hardcoded "BDZ", scaled off the circle's radius rather
+ * The base defense zone's hardcoded "BDZ", scaled off the circle's radius rather
  * than off the zoom — so it grows and shrinks with the graphic it names.
  */
 export function baseDefenseZoneLabelPaint(): MissionTaskPaint {

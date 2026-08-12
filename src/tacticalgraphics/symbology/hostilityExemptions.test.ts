@@ -9,7 +9,7 @@
  *
  * The demo enforced this by hiding the input. That is a UI convenience and it does
  * nothing about a hostility that arrives in an imported file, from a host writing
- * the property bag directly, or from a sweep that colours everything — which is
+ * the property bag directly, or from a sweep that colors everything — which is
  * exactly what the MapLibre sample sweep did, drawing every mission task red.
  *
  * So these assert the *rendering*, not the field list.
@@ -81,20 +81,20 @@ describe('the paint layer refuses a hostility the symbol does not take', () => {
     });
 
     it('ignores a resolved hostilityColor on an exempt graphic', () => {
-        // The other door: `hostilityColor` is a colour a host already resolved, so
-        // honouring it would let the same value straight back in.
+        // The other door: `hostilityColor` is a color a host already resolved, so
+        // honoring it would let the same value straight back in.
         const feature = hostileFeature(TacticalGraphicName.Breach, {hostilityColor: HOSTILE_RED});
         expect(lineColorOf(feature)).toBe(UNAFFILIATED);
     });
 
-    it('still colours a graphic that does take one', () => {
+    it('still colors a graphic that does take one', () => {
         expect(lineColorOf(hostileFeature(TacticalGraphicName.PhaseLine))).toBe(HOSTILE_RED);
         expect(lineColorOf(hostileFeature(TacticalGraphicName.ObstacleLine))).toBe(HOSTILE_RED);
     });
 
     it('leaves an unnamed feature alone', () => {
         // A paint function can be called on a feature with no name — the parity test
-        // does it — and guessing "exempt" there would silently drop every colour.
+        // does it — and guessing "exempt" there would silently drop every color.
         const feature: PaintFeature = {
             geometry: {type: 'LineString', coordinates: [[0, 0], [1000, 0]]},
             properties: {hostility: TacticalGraphicHostility.hostileFaker} as PaintFeature['properties'],

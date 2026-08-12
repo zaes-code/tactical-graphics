@@ -6,7 +6,7 @@
  *
  * The first two carry an **echelon glyph** — the dots and bars that say squad
  * through brigade — which is drawn rather than lettered, so it is line work and
- * takes the affiliation's colour like the outline it sits in. (The boundary's
+ * takes the affiliation's color like the outline it sits in. (The boundary's
  * echelon is the documented exception that stays black; these are not it.)
  */
 
@@ -38,7 +38,7 @@ const UXO_GAP_WIDTH_PX = 40;
 interface OpenedRing {
     /** Every edge of the ring, with the opening segment split around its gap. */
     outline: ProjectedPosition[][];
-    /** Centre of the gap — where the echelon glyph goes. */
+    /** Center of the gap — where the echelon glyph goes. */
     midGap: ProjectedPosition;
     /** The opening segment's direction. */
     dx: number;
@@ -106,7 +106,7 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
  * Every size is screen pixels multiplied by the label scale, so the glyph grows
  * and shrinks with the amplifiers around it rather than with the map.
  *
- * An unrecognised echelon falls back to the single dot rather than drawing
+ * An unrecognized echelon falls back to the single dot rather than drawing
  * nothing: a position with no readable echelon is still a position.
  */
 export function echelonMarks(
@@ -205,7 +205,7 @@ function crossTies(outline: ProjectedPosition[][], resolution: number, color: st
     const paints: Paint[] = [];
 
     for (const ring of outline) {
-        let travelled = 0;
+        let traveled = 0;
         let lastTie = 0;
         for (let i = 0; i < ring.length - 1; i++) {
             const p1 = ring[i];
@@ -215,8 +215,8 @@ function crossTies(outline: ProjectedPosition[][], resolution: number, color: st
             const segLen = Math.hypot(dx, dy);
             if (segLen === 0) continue;
 
-            const segStart = travelled;
-            const segEnd = travelled + segLen;
+            const segStart = traveled;
+            const segEnd = traveled + segLen;
             while (lastTie + spacing <= segEnd) {
                 lastTie += spacing;
                 if (lastTie < segStart) continue;
@@ -231,7 +231,7 @@ function crossTies(outline: ProjectedPosition[][], resolution: number, color: st
                     stroke: {color, widthPx: LINE_WIDTH()},
                 });
             }
-            travelled = segEnd;
+            traveled = segEnd;
         }
     }
     return paints;
@@ -309,7 +309,7 @@ export function strongPointPaint(): AreaPaint {
  * The pair is found by projecting every segment's midpoint onto that axis and
  * taking the extremes, so the two labels land on opposite sides however many
  * vertices the polygon has. A shape whose extremes collapse onto one segment
- * falls back to a plain closed outline rather than labelling it twice.
+ * falls back to a plain closed outline rather than labeling it twice.
  *
  * A segment shorter than the gap keeps its full length: breaking it would leave
  * nothing of the edge at all.
