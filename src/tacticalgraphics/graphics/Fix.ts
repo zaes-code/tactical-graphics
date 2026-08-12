@@ -2,7 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, GeometryCollection, LineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
-import * as turf from "@turf/turf";
+import * as turf from '../core/turf';
 
 // Layout proportions taken from the 145px floor (50px first segment, 45px
 // triangle band, 50px trailing segment). Driving every dimension off the
