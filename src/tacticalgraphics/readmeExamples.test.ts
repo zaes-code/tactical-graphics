@@ -5,7 +5,7 @@
  */
 import {renderTacticalGraphic, TacticalGraphicName} from './index';
 import type {Feature, MultiLineString} from 'geojson';
-import * as turf from '@turf/turf';
+import * as turf from './core/turf';
 
 const LINE: [number, number][] = [[-77.04, 38.89], [-76.95, 38.95]];
 
