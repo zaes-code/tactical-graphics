@@ -660,9 +660,10 @@ function handlePositions(geometry: GeoJSONFeature['geometry']): ProjectedPositio
 /**
  * Every mark one graphic contributes at this view scale.
  *
- * Returns an empty list for a graphic with no paint function yet — the spike has
- * three of 69 — rather than throwing or drawing a placeholder. `isPaintable` is
- * how a caller finds out in advance.
+ * Returns an empty list for a graphic with no paint function rather than throwing or
+ * drawing a placeholder. That is now the rare case — 215 of the 216 registered names
+ * are paintable — but it is still the honest response, and `isPaintable` is how a
+ * caller finds out in advance.
  */
 export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: PaintContext): Paint[] {
     const painters = getPaintFunction(graphic.name);

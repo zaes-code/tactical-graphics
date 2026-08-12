@@ -224,8 +224,29 @@ export type {
 /**
  * ## Symbology — paint functions
  *
- * The renderer-agnostic style layer. Three of 69 style functions are ported so far;
- * `isPaintable` is how a renderer asks whether a graphic has one yet. @see ai/maplibre-renderer.md
+ * The renderer-agnostic style layer: what a graphic looks like, as data. `isPaintable`
+ * is how a renderer asks whether a graphic has a paint function — true for 215 of the
+ * 216 registered names. @see ai/maplibre-renderer.md
+ *
+ * ### Everything below is a renderer contract, not a helper
+ *
+ * `/openlayers` and `/maplibre` are **separately published entry points**. They consume
+ * the map-agnostic half by package name, exactly as a third-party renderer would:
+ *
+ * ```ts
+ * // src/components/openlayers/graphics/decorationPx.ts
+ * export {decorationMeters} from '@zaes/tactical-graphics';
+ * ```
+ *
+ * So these exports are not incidental surface that leaked out of the barrel — they are
+ * the interface between the geometry and anything that draws it, and un-exporting one
+ * stops the renderer subpaths compiling for every consumer. They look like internals
+ * because their names describe what they compute rather than who they are for; that is
+ * the only reason this needs saying.
+ *
+ * The same applies to the sizing helpers further down (`decorationMeters`,
+ * `arrowheadMeters`, `crossedMissionTaskMeters`) and to the handle contract. **Before
+ * removing anything here, grep `src/components/` — a renderer probably imports it.**
  */
 export {
     DECORATION_MIN_PX,
@@ -306,6 +327,15 @@ export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 export {baseGeometryFor} from './core/render';
+/**
+ * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
+ * about the symbol, not about a map library, so it lives here and both renderers read
+ * it: `maplibreAdapter.ts` imports all three by package name, and the OpenLayers
+ * holders reach them through `graphics/decorationPx.ts`, which re-exports
+ * `decorationMeters` from `@zaes/tactical-graphics` for exactly that reason.
+ *
+ * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
+ */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, hasBakedDecoration} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';

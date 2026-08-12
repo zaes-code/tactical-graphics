@@ -5,10 +5,15 @@
  * where a graphic is; these say what it looks like, and return plain
  * {@link Paint} objects rather than an OpenLayers `Style`.
  *
- * **Partial by design, and currently a spike.** Three of 69 style functions are
- * ported. The point was to measure what porting the other 66 costs and whether a
- * declarative renderer could take them at all — see `ai/maplibre-renderer.md` for
- * the answer.
+ * **No longer a spike.** This began as three ported style functions, to measure what
+ * the rest would cost and whether a declarative renderer could take them at all. The
+ * port is done: `isPaintable` is true for **215 of the 216 registered names**, and both
+ * shipping renderers paint through here rather than owning any symbology of their own.
+ * `ai/maplibre-renderer.md` has the original estimate and how it turned out.
+ *
+ * **Everything exported here is a renderer contract.** `/openlayers` and `/maplibre`
+ * are separately published entry points that consume it by package name, so removing
+ * an export breaks them for consumers. See the note in the root barrel.
  */
 
 export {
