@@ -162,7 +162,7 @@ tacticalGraphic: {
 
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
-`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`.
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Meters})`.
 
 `altitudeDatum` says what they are measured **from**, and it is a property rather than a
 setting because two zones on one map can honestly differ: 1500 AGL over a 3000 ft ridge
