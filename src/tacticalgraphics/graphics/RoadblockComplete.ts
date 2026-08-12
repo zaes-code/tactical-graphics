@@ -1,7 +1,7 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {PointGraphicOptions, TacticalGraphicName} from '../core/type';
 import {Feature, MultiLineString, MultiPoint, Point, Position} from 'geojson';
-import * as turf from '@turf/turf';
+import * as turf from '../core/turf';
 
 /**
  * Horizontal distance between the two crosses, as a fraction of a bar's span.

@@ -1,7 +1,7 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {PointGraphicOptions, TacticalGraphicName} from '../core/type';
 import {Feature, MultiLineString, MultiPoint, Point, Position} from 'geojson';
-import * as turf from '@turf/turf';
+import * as turf from '../core/turf';
 
 /**
  * The three demolition-obstacle readiness states of FM 1-02.2 table 5-19.

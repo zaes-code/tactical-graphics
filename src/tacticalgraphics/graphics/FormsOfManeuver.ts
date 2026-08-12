@@ -1,4 +1,4 @@
-import * as turf from '@turf/turf';
+import * as turf from '../core/turf';
 import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
