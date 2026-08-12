@@ -9,7 +9,7 @@
  * features and switching on which one was grabbed, which works but cannot be read
  * by anything else.
  *
- * **Getting a role wrong is silent.** A drag on a mis-labelled handle does
+ * **Getting a role wrong is silent.** A drag on a mis-labeled handle does
  * something plausible — it resizes instead of setting a width, or bends the wrong
  * graphic — rather than failing, so there is nothing to catch it but knowing.
  */
@@ -26,7 +26,7 @@ import {TacticalGraphicName} from './type';
  * - `reach` — sets both size and bearing from one cursor position: the far end of
  *   a chord carries how long it is and which way it points.
  * - `band` — sets one range-fan band's range, by index.
- * - `centre` — moves the graphic. Found by position, not by index. @see NativeLayerRenderer
+ * - `center` — moves the graphic. Found by position, not by index. @see NativeLayerRenderer
  */
 export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band' | 'mirror';
 
@@ -206,7 +206,7 @@ export function ratioLockOf(name: TacticalGraphicName): number | undefined {
  * sets. A handle drawn three widths out needs a third of the drag.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // The handle sits on the rail itself, one radius off the centre line.
+    // The handle sits on the rail itself, one radius off the center line.
     [TacticalGraphicName.InfiltrationLane]: 1,
     // The handle is the end of the front line, drawn at 3 × size.
     [TacticalGraphicName.Penetration]: 1 / 3,
@@ -233,8 +233,8 @@ const BENT_GRAPHICS: readonly TacticalGraphicName[] = [
 /**
  * One handle per band, so the roles list has no fixed length.
  *
- * `generateHandles` returns `[centre, band0, band1, …]`, so **handle *i* is band
- * *i* − 1**. The centre is index 0, which the renderer also finds by position and
+ * `generateHandles` returns `[center, band0, band1, …]`, so **handle *i* is band
+ * *i* − 1**. The center is index 0, which the renderer also finds by position and
  * treats as a move — that agreement is not a coincidence, but the offset still has
  * to be applied or every band drag would set the wrong ring.
  */
@@ -248,7 +248,7 @@ export const RANGE_FAN_BAND_OFFSET = 1;
 
 /**
  * The corridors. Their generator emits `[...base vertices, ...tangent points]`, and
- * the tail is the **width**: a tangent point sits one radius off the centre line, so
+ * the tail is the **width**: a tangent point sits one radius off the center line, so
  * dragging one sets how wide the corridor is.
  *
  * The split cannot be written as a fixed prefix, which is what every other contract
@@ -256,7 +256,7 @@ export const RANGE_FAN_BAND_OFFSET = 1;
  * says "offset after the vertices" and the caller supplies the count.
  *
  * `offsetScale` is 1 rather than the shared half: the perpendicular distance from the
- * centre line to the handle *is* the radius, so it has to track the cursor 1:1 or the
+ * center line to the handle *is* the radius, so it has to track the cursor 1:1 or the
  * handle runs away from it.
  */
 const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
@@ -338,7 +338,7 @@ export function handleRole(name: TacticalGraphicName, index: number, vertexCount
  * the resolution every time, so a `radius` on one of those means nothing.
  *
  * A renderer choosing a decoration size has to know which it is looking at, or it
- * either ignores a size the user set or honours a number that was never meant as
+ * either ignores a size the user set or honors a number that was never meant as
  * one. @see maplibreAdapter, `bakedDecorationSize`
  */
 export function isMovementGraphic(name: TacticalGraphicName): boolean {
@@ -379,7 +379,7 @@ export function rotationAnchor(geometry: {type: string; coordinates: unknown}): 
     if (geometry.type === 'Point') return positions[0];
     if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
 
-    // Measured in **projected** metres, not degrees. OpenLayers' `getInteriorPoint`
+    // Measured in **projected** meters, not degrees. OpenLayers' `getInteriorPoint`
     // runs on EPSG:3857 coordinates, and Mercator's y is not linear in latitude — the
     // midpoint of 0 deg and 60 deg is 33 deg on screen and 30 deg in degrees. On a tall
     // polygon the two pivots are far enough apart to see.
@@ -486,7 +486,7 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  * Fields of fire is the only one today: its apex. Dragging the apex under a reshape
  * would bend the V about a point the user thinks of as its origin, so OpenLayers
  * makes that vertex inert in modify mode and leaves moving to translate — the same
- * contract the inert centre dot has on a point-anchored graphic.
+ * contract the inert center dot has on a point-anchored graphic.
  *
  * It was the third argument to `vertexLine` in the OpenLayers registry, so MapLibre
  * did not know: measured on a fields of fire in modify mode, dragging the apex was

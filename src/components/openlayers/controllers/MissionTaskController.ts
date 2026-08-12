@@ -23,7 +23,7 @@ export interface MissionTaskGraphic extends TacticalGraphic {
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void;
 
     /**
-     * Arms the radius read-out — the hashed centre-to-edge line with the size in km —
+     * Arms the radius read-out — the hashed center-to-edge line with the size in km —
      * for the duration of a draw or resize gesture. Optional so a host's own holder can
      * skip it; the controller no-ops when it is absent.
      */

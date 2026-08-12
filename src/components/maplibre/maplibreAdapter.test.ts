@@ -49,7 +49,7 @@ describe('projectGeometry', () => {
         expect((projected as {geometries: unknown[]}).geometries).toHaveLength(2);
     });
 
-    it('converts degrees to projected metres', () => {
+    it('converts degrees to projected meters', () => {
         // 180° east is half the projected world — the one value worth pinning, since
         // a wrong radius or a degrees/radians slip would still produce plausible
         // numbers everywhere else.
@@ -107,10 +107,10 @@ describe('buildTacticalGraphic', () => {
     });
 
     /**
-     * The whole-catalogue version of the exemption rule.
+     * The whole-catalog version of the exemption rule.
      *
      * `hostilityExemptions.test.ts` pins `lineColorOf`, which is where the rule is
-     * enforced — but a paint function is free to resolve a colour some other way,
+     * enforced — but a paint function is free to resolve a color some other way,
      * and three of them legitimately do. This runs every graphic through the real
      * generator with a hostile bag and looks at the marks that come out, so a new
      * paint function that reaches for `getColorByHostility` directly is caught.
@@ -118,7 +118,7 @@ describe('buildTacticalGraphic', () => {
      * The line of contact is the one graphic excluded, and it is excluded *because*
      * it draws a red wave: it renders both standard identities at once, by design.
      */
-    it('never paints an exempt graphic in the hostile colour', () => {
+    it('never paints an exempt graphic in the hostile color', () => {
         const hostileRed = getColorByHostility(TacticalGraphicHostility.hostileFaker);
         const offenders: string[] = [];
 

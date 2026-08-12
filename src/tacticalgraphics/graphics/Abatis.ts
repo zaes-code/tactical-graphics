@@ -28,7 +28,7 @@ export class Abatis extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Abatis;
     type: string = 'Point';
 
-    /** Local (x along the route, y across it) → geographic, honouring rotation. */
+    /** Local (x along the route, y across it) → geographic, honoring rotation. */
     private local(center: Position, rotation: number, x: number, y: number): Position {
         const dist = Math.hypot(x, y);
         if (dist === 0) return [center[0], center[1]];
@@ -42,7 +42,7 @@ export class Abatis extends TacticalGraphicsBase<PointGraphicOptions> {
     private path(base: Feature<Point>, opts: PointGraphicOptions): Position[] {
         const center = base.geometry.coordinates;
         const {rotation} = opts;
-        // `size` is the radius the controller drags — centre to the edge handle, which is
+        // `size` is the radius the controller drags — center to the edge handle, which is
         // the trailing end of the route. So the route spans 2 x size, and the chevron's
         // height follows from that rather than the other way round.
         const height = Math.max(opts.size, 1) / (LENGTH_RATIO / 2);
@@ -65,9 +65,9 @@ export class Abatis extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     /**
-     * `[edge, centre, apex]` — the MissionTask convention first: `handles[0]` drives rotate
+     * `[edge, center, apex]` — the MissionTask convention first: `handles[0]` drives rotate
      * and resize, `handles[1]` drives translate. The edge handle is the trailing end of the
-     * route, the furthest point from the centre and so the steadiest thing to scale
+     * route, the furthest point from the center and so the steadiest thing to scale
      * against.
      *
      * The apex is third and exists to be *seen*. Flipping the chevron means dragging a

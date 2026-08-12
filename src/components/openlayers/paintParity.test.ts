@@ -97,13 +97,13 @@ describe('the paint registry matches what OpenLayers routes', () => {
 
     it('hatches the limited-access family and nothing else in it', () => {
         // The hatch is the one piece of area symbology that needs a renderer to
-        // realise a pattern rather than a colour, so it is worth asserting it is
+        // realize a pattern rather than a color, so it is worth asserting it is
         // actually asked for — a dropped `pattern` would render as a flat wash and
         // look merely wrong rather than broken.
         const hatched = getPaintFunction(TacticalGraphicName.LimitedAccessArea)!
             .graphic(toPaintFeature(feature(TacticalGraphicName.LimitedAccessArea, ring()))!, paintContext(RESOLUTION));
         expect(hatched.some(m => m.fill?.pattern?.kind === 'diagonal')).toBe(true);
-        // …and the flat colour is still set, because that is the documented fallback
+        // …and the flat color is still set, because that is the documented fallback
         // for a renderer that cannot build the pattern.
         expect(hatched.find(m => m.fill)?.fill?.color).toBeTruthy();
     });

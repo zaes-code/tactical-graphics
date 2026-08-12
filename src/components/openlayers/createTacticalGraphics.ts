@@ -7,7 +7,7 @@
  *
  * It is a thin wrapper, and deliberately so: `TacticalGraphicsManager` already owns the
  * interactions and `persistence.ts` already owns save and restore. What was missing was
- * never behaviour, it was a *shape* — the demo had assembled these calls into an
+ * never behavior, it was a *shape* — the demo had assembled these calls into an
  * engine-agnostic object and kept it to itself.
  */
 

@@ -32,7 +32,7 @@
  *
  * ```bash
  * npm sbom --sbom-format cyclonedx --omit dev \
- *   | node -e "…" # confirm no AGPL/unknown licences appear
+ *   | node -e "…" # confirm no AGPL/unknown licenses appear
  * ```
  */
 

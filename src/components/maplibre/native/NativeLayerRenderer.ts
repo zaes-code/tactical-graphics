@@ -39,19 +39,19 @@ import {
 } from './paintToLayers';
 
 /**
- * # Path B — realise the geometry, then let MapLibre draw it
+ * # Path B — realize the geometry, then let MapLibre draw it
  *
  * The declarative renderer. Every mark becomes a GeoJSON feature in a source and
  * every source is drawn by a native layer, so the GPU does the work and MapLibre
- * owns labelling and collision.
+ * owns labeling and collision.
  *
  * ## The whole difficulty, in one method
  *
- * {@link realise}. A `line` layer renders what its source holds, and an obstacle
+ * {@link realize}. A `line` layer renders what its source holds, and an obstacle
  * line's teeth are not in the source — they are a function of the current
  * resolution. So the geometry has to be rebuilt and re-uploaded **every time the
  * zoom changes**, which is the cost `ai/maplibre-renderer.md` lists as risk 1 and
- * says the spike must measure rather than estimate. {@link lastRealiseMs} and
+ * says the spike must measure rather than estimate. {@link lastRealizeMs} and
  * {@link lastFeatureCount} are that measurement.
  *
  * Panning is free — the geometry is in world coordinates and MapLibre transforms
@@ -60,7 +60,7 @@ import {
  *
  * ## Debounced to `zoom`, not `render`
  *
- * The overlay redraws per frame because redrawing is cheap. Re-realising is not:
+ * The overlay redraws per frame because redrawing is cheap. Re-realizing is not:
  * it walks every graphic's paint function, reprojects every coordinate to lon/lat
  * and hands MapLibre new GeoJSON to parse and re-tile. Doing that per frame of an
  * eased zoom is what would make this approach untenable, so it is deferred to
@@ -74,7 +74,7 @@ const SOURCE_PREFIX = 'tg-';
 /** The editor's two layers, named so the interaction layer can query them. */
 export const HANDLE_LAYER_ID = 'tg-handle';
 export const SKETCH_LAYER_ID = 'tg-sketch';
-/** The security operations' host-provided centre symbol. @see core/securitySymbol.ts */
+/** The security operations' host-provided center symbol. @see core/securitySymbol.ts */
 export const SYMBOL_ICON_LAYER_ID = 'tg-icon';
 
 /**
@@ -110,7 +110,7 @@ const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 const FONT_STACK = 'Noto Sans Bold';
 
 /** How much the zoom must move mid-gesture before the geometry is rebuilt. */
-const ZOOM_REALISE_THRESHOLD = 0.34;
+const ZOOM_REALIZE_THRESHOLD = 0.34;
 
 /**
  * Shortest gap between two mid-gesture rebuilds, in milliseconds.
@@ -223,28 +223,28 @@ export class NativeLayerRenderer {
      */
     private readonly layerIds: string[] = [];
     private readonly lineLayerKeys = new Set<string>();
-    private lastRealisedZoom = Number.NaN;
+    private lastRealizedZoom = Number.NaN;
     /** When the last rebuild finished, for the mid-gesture throttle. */
-    private lastRealiseEndedAt = 0;
+    private lastRealizeEndedAt = 0;
     private installed = false;
 
-    /** Milliseconds the last geometry realisation took. The number the spike is for. */
-    lastRealiseMs = 0;
-    /** GeoJSON features uploaded on that realisation. */
+    /** Milliseconds the last geometry realization took. The number the spike is for. */
+    lastRealizeMs = 0;
+    /** GeoJSON features uploaded on that realization. */
     lastFeatureCount = 0;
     /** How many times the geometry has been rebuilt since construction. */
-    realiseCount = 0;
+    realizeCount = 0;
     /**
-     * Where the last realisation's time went, in milliseconds.
+     * Where the last realization's time went, in milliseconds.
      *
-     * Kept because "realise costs 26 ms" is not actionable and "22 of the 26 are in
+     * Kept because "realize costs 26 ms" is not actionable and "22 of the 26 are in
      * `setData`" is. Three numbers, taken from a clock that is already running.
      */
-    lastRealiseBreakdown: {paint: number; bucket: number; upload: number} = {paint: 0, bucket: 0, upload: 0};
-    /** How many graphics survived the cull on the last realisation. */
+    lastRealizeBreakdown: {paint: number; bucket: number; upload: number} = {paint: 0, bucket: 0, upload: 0};
+    /** How many graphics survived the cull on the last realization. */
     lastVisibleCount = 0;
-    /** Set while a coalesced rebuild is pending. @see scheduleRealise */
-    private realisePending = false;
+    /** Set while a coalesced rebuild is pending. @see scheduleRealize */
+    private realizePending = false;
     /**
      * The graphic whose handles are showing, or null.
      *
@@ -253,9 +253,9 @@ export class NativeLayerRenderer {
      * not an editor, it is a starfield.
      */
     private selectedId: string | null = null;
-    /** The line being drawn, in projected metres, or null when not drawing. */
+    /** The line being drawn, in projected meters, or null when not drawing. */
     private sketch: ProjectedPosition[] | null = null;
-    /** The radius read-out line, centre to rim, while a graphic is sized. @see setMeasure */
+    /** The radius read-out line, center to rim, while a graphic is sized. @see setMeasure */
     private measure: [ProjectedPosition, ProjectedPosition] | null = null;
     /** Where a drag would add a vertex, while the cursor hovers a segment. @see setVertexHint */
     private vertexHint: ProjectedPosition | null = null;
@@ -272,18 +272,18 @@ export class NativeLayerRenderer {
 
     private readonly onZoom = () => {
         const zoom = this.map.getZoom();
-        if (Math.abs(zoom - this.lastRealisedZoom) < ZOOM_REALISE_THRESHOLD) return;
-        if (performance.now() - this.lastRealiseEndedAt < MID_GESTURE_MIN_INTERVAL_MS) return;
-        this.realise();
+        if (Math.abs(zoom - this.lastRealizedZoom) < ZOOM_REALIZE_THRESHOLD) return;
+        if (performance.now() - this.lastRealizeEndedAt < MID_GESTURE_MIN_INTERVAL_MS) return;
+        this.realize();
     };
-    private readonly onZoomEnd = () => this.realise();
+    private readonly onZoomEnd = () => this.realize();
     /**
      * A pan changes which graphics are on screen, and the cull means the ones that
      * were off it were never uploaded — so a pan has to rebuild, exactly as a zoom
      * does. `moveend` rather than `move`: the cull is generous enough that nothing
      * appears late, and rebuilding every frame of a drag is what this is avoiding.
      */
-    private readonly onMoveEnd = () => this.scheduleRealise();
+    private readonly onMoveEnd = () => this.scheduleRealize();
 
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
@@ -292,11 +292,11 @@ export class NativeLayerRenderer {
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
         map.on('moveend', this.onMoveEnd);
-        // Sources are realised on zoom, so without this a provider registered after
+        // Sources are realized on zoom, so without this a provider registered after
         // the map settled would not appear until something unrelated moved it. The
-        // revision check inside `realiseCentreSymbols` then throws the stale rasters
+        // revision check inside `realizeCenterSymbols` then throws the stale rasters
         // away; this is only what makes it look.
-        this.unsubscribeSymbols = subscribeSecuritySymbolChange(() => this.scheduleRealise());
+        this.unsubscribeSymbols = subscribeSecuritySymbolChange(() => this.scheduleRealize());
     }
 
     private readonly unsubscribeSymbols: () => void;
@@ -344,7 +344,7 @@ export class NativeLayerRenderer {
         // that list is what a click hit-tests against to find a *graphic*, and a
         // handle is not one — the interaction layer queries these by name instead.
         this.map.addLayer(sketchLayer(SKETCH_LAYER_ID, SOURCE_PREFIX + 'sketch', SKETCH_DASH, SKETCH_WIDTH_PX));
-        // The radius read-out: a hashed line in the inert-handle colour, with the
+        // The radius read-out: a hashed line in the inert-handle color, with the
         // distance laid **along** it so it picks up the line's own angle. Same shape as
         // OpenLayers' `createMeasureFeature`. @see setMeasure
         this.map.addLayer(sketchLayer(MEASURE_LAYER_ID, SOURCE_PREFIX + 'measure', MEASURE_DASH, LINE_WIDTH()));
@@ -358,14 +358,14 @@ export class NativeLayerRenderer {
 
     add(graphic: MapLibreTacticalGraphic): void {
         this.graphics.push(graphic);
-        this.scheduleRealise();
+        this.scheduleRealize();
     }
 
     /**
      * Rebuilds once, after the current task finishes, however many times it is asked.
      *
-     * `add` used to realise immediately, which made drawing N graphics cost N full
-     * rebuilds of all N — quadratic, and each one re-serialises every source and
+     * `add` used to realize immediately, which made drawing N graphics cost N full
+     * rebuilds of all N — quadratic, and each one re-serializes every source and
      * makes MapLibre re-tile it in the worker. Drawing the 213-graphic gallery ran
      * 213 rebuilds and took 4.4 s; coalesced it is one rebuild.
      *
@@ -375,21 +375,21 @@ export class NativeLayerRenderer {
      * result, and no frame ever renders the intermediate state. `flush` is there for
      * the synchronous case.
      */
-    private scheduleRealise(): void {
-        if (this.realisePending) return;
-        this.realisePending = true;
+    private scheduleRealize(): void {
+        if (this.realizePending) return;
+        this.realizePending = true;
         Promise.resolve().then(() => {
-            if (!this.realisePending) return;
-            this.realisePending = false;
-            this.realise();
+            if (!this.realizePending) return;
+            this.realizePending = false;
+            this.realize();
         });
     }
 
     /** Runs any pending rebuild now. For a caller that cannot wait a microtask. */
     flush(): void {
-        if (!this.realisePending) return;
-        this.realisePending = false;
-        this.realise();
+        if (!this.realizePending) return;
+        this.realizePending = false;
+        this.realize();
     }
 
     /**
@@ -415,7 +415,7 @@ export class NativeLayerRenderer {
 
     clear(): void {
         this.graphics.length = 0;
-        this.scheduleRealise();
+        this.scheduleRealize();
     }
 
     get count(): number {
@@ -429,9 +429,9 @@ export class NativeLayerRenderer {
      * the marks, reproject every coordinate to lon/lat, and hand MapLibre new
      * GeoJSON. Timed end to end.
      */
-    realise(): void {
+    realize(): void {
         // A scheduled rebuild is now redundant — this one supersedes it.
-        this.realisePending = false;
+        this.realizePending = false;
         const started = performance.now();
         const resolution = resolutionOf(this.map);
         const context: PaintContext = {resolution, measureText: this.measureText};
@@ -495,19 +495,19 @@ export class NativeLayerRenderer {
             (this.map.getSource(lineSourceId(key)) as GeoJSONSource | undefined)?.setData(featureCollection([]));
         }
 
-        this.realiseCentreSymbols(visible);
-        this.realiseEditorMarks();
+        this.realizeCenterSymbols(visible);
+        this.realizeEditorMarks();
         this.lastVisibleCount = visible.length;
-        this.lastRealiseBreakdown = {
+        this.lastRealizeBreakdown = {
             paint: bucketedAt - paintedAt,
             bucket: uploadAt - bucketedAt,
             upload: performance.now() - uploadAt,
         };
-        this.lastRealisedZoom = this.map.getZoom();
+        this.lastRealizedZoom = this.map.getZoom();
         this.lastFeatureCount = features;
-        this.lastRealiseMs = performance.now() - started;
-        this.lastRealiseEndedAt = performance.now();
-        this.realiseCount++;
+        this.lastRealizeMs = performance.now() - started;
+        this.lastRealizeEndedAt = performance.now();
+        this.realizeCount++;
     }
 
     private setData(kind: string, features: Parameters<typeof featureCollection>[0]): void {
@@ -517,8 +517,8 @@ export class NativeLayerRenderer {
     /**
      * Rebuilds the graphics whose **geometry** is a screen size, at the new zoom.
      *
-     * Almost every graphic here is drawn in metres and simply scales with the map, so
-     * a realisation only re-runs the paint functions. The security operations are the
+     * Almost every graphic here is drawn in meters and simply scales with the map, so
+     * a realization only re-runs the paint functions. The security operations are the
      * exception: every dimension of one is a pixel constant, so the generator has to
      * run again with the new resolution or the symbol grows and shrinks with the map
      * instead of holding its size.
@@ -590,14 +590,14 @@ export class NativeLayerRenderer {
     /**
      * Shows the given graphic's handles, or none.
      *
-     * Separate from `realise` because selection changes far more often than geometry
+     * Separate from `realize` because selection changes far more often than geometry
      * does — a click that only moves the selection has no reason to repaint 200
      * graphics.
      */
     select(id: string | null): void {
         if (this.selectedId === id) return;
         this.selectedId = id;
-        this.realiseEditorMarks();
+        this.realizeEditorMarks();
     }
 
     /** The currently selected graphic's id, or null. */
@@ -608,7 +608,7 @@ export class NativeLayerRenderer {
     /**
      * Shows the radius read-out, or clears it.
      *
-     * A hashed line from the centre to the rim with the distance on it, drawn while a
+     * A hashed line from the center to the rim with the distance on it, drawn while a
      * circular graphic is sized — the same chrome as OpenLayers' measure feature, and
      * deliberately the same words: both call `formatDistance`, so the read-out, the
      * other renderer's read-out and the properties dialog cannot disagree about a
@@ -619,7 +619,7 @@ export class NativeLayerRenderer {
      */
     setMeasure(line: [ProjectedPosition, ProjectedPosition] | null): void {
         this.measure = line;
-        this.realiseEditorMarks();
+        this.realizeEditorMarks();
     }
 
     /**
@@ -634,29 +634,29 @@ export class NativeLayerRenderer {
             || (!!this.vertexHint && !!position && this.vertexHint[0] === position[0] && this.vertexHint[1] === position[1]);
         if (same) return;
         this.vertexHint = position;
-        this.realiseEditorMarks();
+        this.realizeEditorMarks();
     }
 
     /** Sets the line being drawn, or clears it. Repaints only the editor chrome. */
     setSketch(points: ProjectedPosition[] | null): void {
         this.sketch = points && points.length ? points : null;
-        this.realiseEditorMarks();
+        this.realizeEditorMarks();
     }
 
     /**
-     * Registers and places the security operations' centre symbols.
+     * Registers and places the security operations' center symbols.
      *
      * The symbol is a single-point icon, which is milsymbol's job rather than this
      * library's — nothing here names milsymbol, and a host that registers no provider
-     * simply gets an empty centre, which is a supported state.
+     * simply gets an empty center, which is a supported state.
      *
      * MapLibre needs the image **registered by name** before a layer can reference
-     * it, and `loadImage` is asynchronous. So a symbol appears on the realisation
+     * it, and `loadImage` is asynchronous. So a symbol appears on the realization
      * *after* the one that first asked for it. That is invisible in practice — the
      * load resolves in a frame or two — and the alternative, blocking a rebuild on a
      * network-shaped call, is not worth it for a decoration.
      */
-    private realiseCentreSymbols(visible: MapLibreTacticalGraphic[]): void {
+    private realizeCenterSymbols(visible: MapLibreTacticalGraphic[]): void {
         // A provider or size change invalidates every rasterised icon, and comparing
         // providers by identity would miss the size half.
         if (this.symbolRevision !== securitySymbolRevision()) {
@@ -668,8 +668,8 @@ export class NativeLayerRenderer {
 
         for (const graphic of visible) {
             if (!SECURITY_OPERATIONS.has(graphic.name)) continue;
-            const centre = graphic.base.geometry;
-            if (centre.type !== 'Point') continue;
+            const center = graphic.base.geometry;
+            if (center.type !== 'Point') continue;
 
             const hostility = graphic.properties.hostility ?? TacticalGraphicHostility.pending;
             const symbol = resolveSecuritySymbol({
@@ -703,7 +703,7 @@ export class NativeLayerRenderer {
 
             features.push({
                 type: 'Feature',
-                geometry: {type: 'Point', coordinates: centre.coordinates as number[]},
+                geometry: {type: 'Point', coordinates: center.coordinates as number[]},
                 properties: {
                     icon: iconId,
                     // `icon-size` is a *multiplier* on the image's own pixels, so the
@@ -744,11 +744,11 @@ export class NativeLayerRenderer {
                 else this.map.addImage(id, image);
                 this.iconSizes.set(id, raster ? wantedPx : image.width || getSecuritySymbolSize());
             }
-            // The image arrived after the realisation that asked for it, so the layer
+            // The image arrived after the realization that asked for it, so the layer
             // has nothing referencing it yet.
-            this.scheduleRealise();
+            this.scheduleRealize();
         };
-        // A provider that hands back an unloadable src gets an empty centre rather than
+        // A provider that hands back an unloadable src gets an empty center rather than
         // a broken-image box, and the failure is not retried on every frame.
         image.onerror = () => this.iconSizes.set(id, getSecuritySymbolSize());
         image.src = src;
@@ -764,11 +764,11 @@ export class NativeLayerRenderer {
      *
      * Deliberately its own pass over its own sources: dragging a handle moves it
      * every frame, and rebuilding every graphic to reflect that would put the whole
-     * realise cost inside a drag.
+     * realize cost inside a drag.
      */
-    private realiseEditorMarks(): void {
+    private realizeEditorMarks(): void {
         this.setData('handles', this.handleBearers().flatMap(graphic => {
-            const centre = centreHandleIndex(graphic);
+            const center = centerHandleIndex(graphic);
             return graphic.handles.map((position, index) => ({
                 type: 'Feature' as const,
                 geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
@@ -776,12 +776,12 @@ export class NativeLayerRenderer {
                     radius: HANDLE_RADIUS_PX,
                     [GRAPHIC_ID_PROPERTY]: graphic.id,
                     handleIndex: index,
-                    // Grey for the centre dot, and the colour has to stay honest: it says
+                    // Gray for the center dot, and the color has to stay honest: it says
                     // "this one will not rotate or resize", which is true — the scale ratio
-                    // divides by distance-to-centre and a point on the axis carries no
+                    // divides by distance-to-center and a point on the axis carries no
                     // angle. It still moves the graphic, which is what the eye expects of a
-                    // centre. @see createInertHandleFeature
-                    color: index === centre ? getInertHandleColor() : getHandleColor(),
+                    // center. @see createInertHandleFeature
+                    color: index === center ? getInertHandleColor() : getHandleColor(),
                 },
             }));
         }));
@@ -828,7 +828,7 @@ export class NativeLayerRenderer {
     setHandleMode(active: boolean): void {
         if (this.handleModeActive === active) return;
         this.handleModeActive = active;
-        this.realiseEditorMarks();
+        this.realizeEditorMarks();
     }
 
     /** The graphic with this id, or undefined. */
@@ -848,7 +848,7 @@ export class NativeLayerRenderer {
         const index = this.graphics.findIndex(g => g.id === id);
         if (index < 0) return;
         this.graphics[index] = next;
-        this.scheduleRealise();
+        this.scheduleRealize();
     }
 
     /**
@@ -878,16 +878,16 @@ export class NativeLayerRenderer {
     }
 
     /**
-     * Which of a graphic's handles is its centre, or -1.
+     * Which of a graphic's handles is its center, or -1.
      *
      * Found by **position**, not by index: the documented order for the
-     * point-anchored family is `[edge, centre]`, but a range fan emits one handle per
+     * point-anchored family is `[edge, center]`, but a range fan emits one handle per
      * band and the corridors emit one per turning point, so an index would be right
      * for one family and wrong for the rest. A handle sitting on the base point is
-     * the centre in every family that has one.
+     * the center in every family that has one.
      */
-    centreHandleOf(graphic: MapLibreTacticalGraphic): number {
-        return centreHandleIndex(graphic);
+    centerHandleOf(graphic: MapLibreTacticalGraphic): number {
+        return centerHandleIndex(graphic);
     }
 
     /**
@@ -938,36 +938,36 @@ export class NativeLayerRenderer {
 }
 
 /**
- * How close a handle must sit to the base point to count as the centre, in metres
+ * How close a handle must sit to the base point to count as the center, in meters
  * per unit of the graphic's own size.
  *
- * Relative rather than absolute: a graphic a kilometre across and one a thousand
- * kilometres across both have a centre, and a fixed tolerance would either miss
+ * Relative rather than absolute: a graphic a kilometer across and one a thousand
+ * kilometers across both have a center, and a fixed tolerance would either miss
  * the first or swallow the second's edge handle.
  */
-const CENTRE_TOLERANCE_FRACTION = 0.01;
+const CENTER_TOLERANCE_FRACTION = 0.01;
 
-/** @see NativeLayerRenderer.centreHandleOf */
-function centreHandleIndex(graphic: MapLibreTacticalGraphic): number {
+/** @see NativeLayerRenderer.centerHandleOf */
+function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
     const base = graphic.base.geometry;
     if (base.type !== 'Point') return -1;
 
-    const centre = toMercator(base.coordinates as [number, number]);
+    const center = toMercator(base.coordinates as [number, number]);
     // Sized against the graphic's own extent, so the tolerance means the same thing
     // whatever scale it was drawn at.
     const bounds = graphic.graphic.bounds;
     const extent = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) : 0;
-    const tolerance = Math.max(1, extent * CENTRE_TOLERANCE_FRACTION);
+    const tolerance = Math.max(1, extent * CENTER_TOLERANCE_FRACTION);
 
     return graphic.handles.findIndex(
-        handle => Math.hypot(handle[0] - centre[0], handle[1] - centre[1]) <= tolerance,
+        handle => Math.hypot(handle[0] - center[0], handle[1] - center[1]) <= tolerance,
     );
 }
 
 /** The source and layer id for a dash pattern. One derivation, used by both passes. */
 const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
 
-/** The three graphics that carry a host-provided centre symbol. */
+/** The three graphics that carry a host-provided center symbol. */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Cover,
     TacticalGraphicName.Guard,
@@ -980,7 +980,7 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
  *
  * Two kinds:
  *
- * - the **security operations**, badges whose every dimension — arm length, centre
+ * - the **security operations**, badges whose every dimension — arm length, center
  *   padding, arrowheads — is a pixel constant times the resolution;
  * - everything with a **baked decoration**, whose `size` is "how big is the
  *   chevron" in screen pixels. Bridge, gap, the fords, the wire obstacles, the
@@ -1020,7 +1020,7 @@ function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition]): Fe
     // **The angle from horizontal, not a compass bearing.** `text-rotate` turns the
     // glyphs clockwise from ordinary left-to-right, so an east-west line wants 0 — a
     // bearing would call that 90 and stand the read-out on end. Negated because these
-    // are projected metres, where y runs north, while a clockwise screen rotation runs
+    // are projected meters, where y runs north, while a clockwise screen rotation runs
     // the other way.
     let rotation = -(Math.atan2(dy, dx) * 180) / Math.PI;
     // Kept upright: past a quarter turn either way the text would read upside down, and

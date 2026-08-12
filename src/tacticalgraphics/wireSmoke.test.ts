@@ -10,8 +10,8 @@ const render = (name: TacticalGraphicName, coords = [[0, 0], [0.05, 0]]) =>
     } as any).graphic as any;
 
 describe('wire obstacles', () => {
-    // The marks are screen-space decorations synthesised in wireObstacleStyleFunc, so the
-    // geometry is the drawn route and nothing else. Baking them here froze them in metres
+    // The marks are screen-space decorations synthesized in wireObstacleStyleFunc, so the
+    // geometry is the drawn route and nothing else. Baking them here froze them in meters
     // at the drawing zoom, which is what made them grow absurdly a few zoom levels in.
     it.each(NAMES.map(n => [String(n), n] as const))('%s returns the drawn route, not the marks', (_l, name) => {
         const g = render(name);

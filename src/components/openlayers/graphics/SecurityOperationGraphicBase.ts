@@ -45,7 +45,7 @@ const MIN_SCALE = (CENTER_PADDING_PX * 1.25) / (2 * ARROW_LENGTH_PX);
 export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     primaryLabel: string;
     /**
-     * The centre point. Published from `getFeatures()` so it survives a save — it is
+     * The center point. Published from `getFeatures()` so it survives a save — it is
      * the only part of this graphic that cannot be regenerated.
      *
      * `base: false` keeps it out of the Modify interaction, which has no vertices to
@@ -97,7 +97,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
      *
      * The rotation no longer tips the letter — see `getSecurityOperationLabelStyle`,
      * where it survives only as a sub-pixel nudge. What moves the label around the
-     * graphic is `placeCoordinates` rotating its anchor about the centre.
+     * graphic is `placeCoordinates` rotating its anchor about the center.
      */
     getLabelStyle = (position: 'left' | 'right'): StyleFunction => {
         return getSecurityOperationLabelStyle(this.primaryLabel, this.rotation, position);

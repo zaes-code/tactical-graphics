@@ -739,7 +739,7 @@ setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global 
 
 It wins over the global provider for that graphic and returns `undefined` to draw no
 center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayers holder,
-`id` on a `MapLibreTacticalGraphic`. Both engines honour it, and both repaint straight
+`id` on a `MapLibreTacticalGraphic`. Both engines honor it, and both repaint straight
 away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
 

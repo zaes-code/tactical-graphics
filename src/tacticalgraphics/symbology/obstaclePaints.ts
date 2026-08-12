@@ -27,7 +27,7 @@ import {
     FORTIFIED_HEIGHT_PX,
     FORTIFIED_MERLON_PX,
     castellatedPath,
-    centreSegmentIndex,
+    centerSegmentIndex,
     decorationScale,
     offsetBelow,
     parallelPath,
@@ -77,10 +77,10 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
         const scale = decorationScale(path, false, context.resolution, WIRE_MARK_PX * style.height);
         const width = WIRE_MARK_PX * scale * context.resolution;
         const height = width * style.height;
-        const railOffset = {under: -height / 2, centre: 0, over: height / 2};
+        const railOffset = {under: -height / 2, center: 0, over: height / 2};
 
         if (style.rail || width <= 0) {
-            for (const at of style.railsAt ?? ['centre']) {
+            for (const at of style.railsAt ?? ['center']) {
                 paints.push({
                     geometry: {type: 'LineString', coordinates: parallelPath(path, railOffset[at])},
                     stroke,
@@ -151,7 +151,7 @@ const MINE_CLEARANCE = 0.5;
  * states the shape exactly.
  *
  * The mine's size is **bounded, not chosen**: the notch is an upward triangle, and
- * a disc centred `mineDepth` down touches both its edges at
+ * a disc centered `mineDepth` down touches both its edges at
  * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it well inside that, because
  * a disc drawn to the limit meets the filled teeth either side and the three merge
  * into one black mass.
@@ -176,10 +176,10 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         const teeth = Math.floor(total / width);
         if (teeth < 1 || (mines && teeth < 2)) return paints;
 
-        // Centre the run, so the pattern sits on the route rather than flush to one end.
+        // Center the run, so the pattern sits on the route rather than flush to one end.
         const lead = (total - teeth * width) / 2;
 
-        /** A point `along` the route, `off` metres to the tooth side of it. */
+        /** A point `along` the route, `off` meters to the tooth side of it. */
         const at = (along: number, off: number): ProjectedPosition | null => {
             const p = walkPath(path, Math.min(Math.max(along, 0), total));
             if (!p) return null;
@@ -206,12 +206,12 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
 
         for (let i = 1; i < teeth; i++) {
-            const centre = at(lead + i * width, -mineDepth);
-            if (!centre) continue;
+            const center = at(lead + i * width, -mineDepth);
+            if (!center) continue;
             const ring: ProjectedPosition[] = [];
             for (let d = 0; d <= 360; d += 20) {
                 const t = (d * Math.PI) / 180;
-                ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
+                ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
             }
             // Mines are mines, not outlines of one: always solid whatever the teeth do,
             // and unstroked for the same reason the filled teeth are.
@@ -224,7 +224,7 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
 
 /**
  * The fortified line: square merlons standing off the drawn line, with the
- * designation below its centre.
+ * designation below its center.
  *
  * Shares `fortifiedRing`'s pattern-fitting with the fortified *area* — a whole
  * number of merlons distributed over the length rather than repeated at a fixed
@@ -255,10 +255,10 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
         const text = getFullLabel(name, feature.properties.label ?? '').trim();
         if (!text) return paints;
 
-        // Under the centre-most drawn segment: the merlons take the upper side, so the
-        // two never compete. `offsetBelow` normalises against the map's down, so the
+        // Under the center-most drawn segment: the merlons take the upper side, so the
+        // two never compete. `offsetBelow` normalizes against the map's down, so the
         // label stays beneath whichever way the line was drawn.
-        const segIdx = centreSegmentIndex(path);
+        const segIdx = centerSegmentIndex(path);
         const a = path[segIdx];
         const b = path[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];

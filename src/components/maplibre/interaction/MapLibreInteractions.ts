@@ -7,7 +7,7 @@
  * OpenLayers gives you `Draw` and `Modify` interactions and a graph of live
  * features to mutate; a controller there transforms rendered geometry and keeps
  * the numbers that produced it on a holder. MapLibre gives you pointer events and
- * a canvas, and its drawn output is derived — realised into GeoJSON sources and
+ * a canvas, and its drawn output is derived — realized into GeoJSON sources and
  * discarded on the next rebuild. So there is nothing to mutate in place, and the
  * only thing worth editing is what survives: the base geometry and the property
  * bag. @see editGeometry.ts
@@ -42,7 +42,7 @@ import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
 import {anchorVertex, baseVertexCount, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
-    centreOf,
+    centerOf,
     insertVertex,
     moveVertex,
     positionsOf,
@@ -115,8 +115,8 @@ const DUPLICATE_CLICK_PX = 4;
  */
 const DRAG_THRESHOLD_PX = 3;
 
-/** Default size for a point-anchored graphic, in metres, when one is drawn fresh. */
-const DEFAULT_RADIUS_METRES = 40_000;
+/** Default size for a point-anchored graphic, in meters, when one is drawn fresh. */
+const DEFAULT_RADIUS_METERS = 40_000;
 
 /** Below this the second draw click landed on the anchor and carries no size. */
 const MIN_DRAWN_RADIUS_M = 1;
@@ -126,7 +126,7 @@ export interface InteractionCallbacks {
     onChange?(): void;
     /** Selection moved. Null when the user clicked empty map. */
     onSelect?(graphic: MapLibreTacticalGraphic | null): void;
-    /** A draw finished or was cancelled, so a host can un-arm its button. */
+    /** A draw finished or was canceled, so a host can un-arm its button. */
     onDrawEnd?(): void;
 }
 
@@ -174,8 +174,8 @@ export class MapLibreInteractions {
         vertex: number;
         /** Where to add a vertex when this drag starts, or -1. @see grabSegment */
         insertAt: number;
-        /** Whether the drag began on the inert centre dot. */
-        onCentre: boolean;
+        /** Whether the drag began on the inert center dot. */
+        onCenter: boolean;
         /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
         onPivot: boolean;
         /** Which handle was grabbed, or -1 for a drag that started on the body. */
@@ -364,11 +364,11 @@ export class MapLibreInteractions {
 
         let interactive: boolean;
         if (HANDLE_MODES.includes(this.mode)) {
-            // Only a handle that would move. The centre dot is inert except in translate,
+            // Only a handle that would move. The center dot is inert except in translate,
             // where it is the one place a user naturally reaches to drag a symbol bodily.
             const grabbed = this.renderer.hitTestHandle(point);
             interactive = !!grabbed
-                && (grabbed.index !== this.renderer.centreHandleOf(grabbed.graphic) || this.mode === 'translate');
+                && (grabbed.index !== this.renderer.centerHandleOf(grabbed.graphic) || this.mode === 'translate');
         } else {
             interactive = !!this.renderer.hitTest(point);
         }
@@ -387,12 +387,12 @@ export class MapLibreInteractions {
      *
      * The second click is a point on the rim: how far it is from the anchor is the
      * radius, and the direction it lies in is the graphic's bearing — both read exactly
-     * as OpenLayers reads them off a Circle sketch. Planar, in projected metres, which is
+     * as OpenLayers reads them off a Circle sketch. Planar, in projected meters, which is
      * also the frame `rotation` is expressed in: degrees counter-clockwise from east, not
      * a compass bearing.
      *
      * Falls back to the default for a one-click draw, so a fixed-size symbol is
-     * unaffected and a cancelled sizing click cannot leave a graphic with no size at all.
+     * unaffected and a canceled sizing click cannot leave a graphic with no size at all.
      */
     private sizeFromDraw(
         name: TacticalGraphicName,
@@ -404,20 +404,20 @@ export class MapLibreInteractions {
         // chevron", which the renderer derives from the zoom — so a placeholder radius
         // here is not a default, it is a wrong answer that outranks the right one:
         // `bakedDecorationSize` cannot tell a placeholder from a genuinely saved size, so
-        // it honoured 40 km where OpenLayers derived 196 km, and the handles that hang off
+        // it honored 40 km where OpenLayers derived 196 km, and the handles that hang off
         // the arrow landed nowhere near it. @see hasBakedDecoration
         if (hasBakedDecoration(name)) return {rotation: 0};
-        if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METRES, rotation: 0};
+        if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
 
-        const centre = toMercator([vertices[0][0], vertices[0][1]]);
+        const center = toMercator([vertices[0][0], vertices[0][1]]);
         const rim = toMercator([vertices[1][0], vertices[1][1]]);
-        const dx = rim[0] - centre[0];
-        const dy = rim[1] - centre[1];
+        const dx = rim[0] - center[0];
+        const dy = rim[1] - center[1];
         const radius = Math.hypot(dx, dy);
 
         // A click on the anchor carries no size and no direction; the default is better
         // than a graphic with a radius of nothing.
-        if (radius < MIN_DRAWN_RADIUS_M) return {radius: DEFAULT_RADIUS_METRES, rotation: 0};
+        if (radius < MIN_DRAWN_RADIUS_M) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
         return {radius, rotation: (Math.atan2(dy, dx) * 180) / Math.PI};
     }
 
@@ -454,7 +454,7 @@ export class MapLibreInteractions {
         // Two corners is a whole rectangle. @see buildBox
         if (isRectangular(name)) return this.sketch.length >= 2;
         const wanted = baseVertexCount(name);
-        // Asked of the **normalised** sketch, not the raw one, so a graphic that defines
+        // Asked of the **normalized** sketch, not the raw one, so a graphic that defines
         // part of its own base counts as finished once the rest is implied: two points
         // of a fields-of-fire are a whole V, because the second leg follows from them.
         // Deriving it here rather than listing the exceptions keeps one source for what
@@ -551,12 +551,12 @@ export class MapLibreInteractions {
 
         this.dragging = {
             graphic,
-            // Grabbing the centre dot always means "move this", whatever mode is
+            // Grabbing the center dot always means "move this", whatever mode is
             // selected. Rotate and resize are both degenerate there — the scale ratio
-            // divides by distance-to-centre and a point on the axis has no angle — and
-            // the centre is the one place a user naturally reaches to drag a symbol
-            // bodily. The dot is drawn grey to say so.
-            onCentre: onHandle && handle === this.renderer.centreHandleOf(graphic),
+            // divides by distance-to-center and a point on the axis has no angle — and
+            // the center is the one place a user naturally reaches to drag a symbol
+            // bodily. The dot is drawn gray to say so.
+            onCenter: onHandle && handle === this.renderer.centerHandleOf(graphic),
             onPivot: this.startedOnPivot(graphic, event.point),
             handle,
             vertex,
@@ -573,11 +573,11 @@ export class MapLibreInteractions {
      * Whether the grab landed on the point a rotate or a resize turns about.
      *
      * Measured in **screen pixels**, because "did the user grab the pivot" is a
-     * question about the cursor, not about the ground: the same few metres is a hit at
+     * question about the cursor, not about the ground: the same few meters is a hit at
      * one zoom and a miss at another.
      */
     private startedOnPivot(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): boolean {
-        const pivot = centreOf(graphic.base.geometry as Parameters<typeof centreOf>[0]);
+        const pivot = centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0]);
         const projected = this.map.project([pivot[0], pivot[1]] as [number, number]);
         return Math.hypot(projected.x - point.x, projected.y - point.y) <= PIVOT_GRAB_PX;
     }
@@ -587,7 +587,7 @@ export class MapLibreInteractions {
             // A rubber band to the cursor, so the user can see the segment they are
             // about to commit rather than only the ones they already have.
             if (this.sketch.length) {
-                const centre = toMercator([this.sketch[0][0], this.sketch[0][1]]);
+                const center = toMercator([this.sketch[0][0], this.sketch[0][1]]);
                 const cursor = toMercator([event.lngLat.lng, event.lngLat.lat]);
                 this.renderer.setSketch(
                     [...this.sketch, [event.lngLat.lng, event.lngLat.lat]].map(p => toMercator([p[0], p[1]])),
@@ -596,7 +596,7 @@ export class MapLibreInteractions {
                 // way a resize does — the second click is otherwise blind, and the number
                 // it is about to commit is the whole point of the gesture.
                 if (baseGeometryFor(this.drawing) === 'Point' && hasRadiusReadout(this.drawing)) {
-                    this.renderer.setMeasure([centre, cursor]);
+                    this.renderer.setMeasure([center, cursor]);
                 }
             }
             return;
@@ -665,13 +665,13 @@ export class MapLibreInteractions {
      * itself off would look like a broken button. @see allowedGestures
      */
     private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
-        // The centre dot is a **shortcut to move**, and only in translate mode. Under
+        // The center dot is a **shortcut to move**, and only in translate mode. Under
         // any other mode the drag falls through to what that mode means, which is what
-        // OpenLayers does: grabbing a security operation's centre rotates it, and a
+        // OpenLayers does: grabbing a security operation's center rotates it, and a
         // gesture the graphic refuses is refused below rather than quietly becoming a
-        // move. Treating the centre as "move" in every mode made a security operation —
+        // move. Treating the center as "move" in every mode made a security operation —
         // which refuses resize — move when the user asked it to resize.
-        if (drag.onCentre && this.mode === 'translate') return translate(before, drag.last, to);
+        if (drag.onCenter && this.mode === 'translate') return translate(before, drag.last, to);
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
@@ -767,7 +767,7 @@ export class MapLibreInteractions {
             case 'reach':
                 return setReach(before, to);
             case 'band':
-                // The fans put their centre first, so the handle index is one ahead of
+                // The fans put their center first, so the handle index is one ahead of
                 // the band it drives. @see RANGE_FAN_BAND_OFFSET
                 return setBandRange(before, drag.handle - RANGE_FAN_BAND_OFFSET, to);
             default:
@@ -788,11 +788,11 @@ export class MapLibreInteractions {
         const radius = graphic.properties.radius;
         if (!radius || radius <= 0) return;
 
-        const centre = toMercator(centreOf(graphic.base.geometry as Parameters<typeof centreOf>[0]) as [number, number]);
+        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0]) as [number, number]);
         // Due east: the direction does not carry meaning, and a line drawn to the rim
         // handle would swing to wherever `rotation` put it — which for the arc tasks is
         // roughly opposite the cursor. @see MissionTaskGraphicBase.measureEdge
-        this.renderer.setMeasure([centre, [centre[0] + radius, centre[1]]]);
+        this.renderer.setMeasure([center, [center[0] + radius, center[1]]]);
     }
 
     private readonly onPointerUp = (): void => {

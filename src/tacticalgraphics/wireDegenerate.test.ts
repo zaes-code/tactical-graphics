@@ -11,7 +11,7 @@ const NAMES = Object.values(TacticalGraphicName).filter(n => String(n).startsWit
 const SKETCHES: [string, number[][]][] = [
     ['one point', [[0, 0]]],
     ['two identical points', [[0, 0], [0, 0]]],
-    ['a sub-metre segment', [[0, 0], [0.000001, 0]]],
+    ['a sub-meter segment', [[0, 0], [0.000001, 0]]],
 ];
 
 describe('wire obstacles mid-draw', () => {
