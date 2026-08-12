@@ -10,7 +10,7 @@
  */
 import {renderTacticalGraphic, TacticalGraphicName} from './index';
 import type {Feature, MultiPoint, Position} from 'geojson';
-import * as turf from '@turf/turf';
+import * as turf from './core/turf';
 
 const LINE: Position[] = [[-77.0, 38.9], [-76.8, 38.9]];
 
