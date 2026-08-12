@@ -28,13 +28,13 @@ import {buildSampleGraphics, sampleFeatureCollection} from '../maplibre/sampleGa
 import {isRectangular} from '@zaes/tactical-graphics';
 
 /**
- * The doctrinal colours below are the light-mode ones, and the palette has had a
+ * The doctrinal colors below are the light-mode ones, and the palette has had a
  * second, dark set since the graphics layer stopped being repainted by the demo's
  * CSS invert filter. Pin the mode rather than lean on the default: these assertions
  * are about FM 1-02.2, and a later change to what the library defaults to must not
  * quietly turn them into assertions about a different palette.
  */
-// (No mode to set: the library has one palette, so the doctrinal colours are simply
+// (No mode to set: the library has one palette, so the doctrinal colors are simply
 // what an unconfigured consumer gets.)
 
 /** Roughly what the sweep frames at; only the ratios under test depend on it. */
@@ -92,9 +92,9 @@ describe('sweeping with a hostility', () => {
         const handler = sample(name);
         applyHostility(handler, name, TacticalGraphicHostility.hostileFaker);
 
-        // Assert the actual colour, not merely that something was stamped: an
+        // Assert the actual color, not merely that something was stamped: an
         // enum member that does not exist reads as undefined, and the default
-        // colour would still make a "was it stamped?" check pass.
+        // color would still make a "was it stamped?" check pass.
         const stamped = handler.getFeatures().filter(f => f.get('hostilityColor') === HOSTILE_RED);
         expect(stamped.length).toBeGreaterThan(0);
     });
@@ -131,7 +131,7 @@ describe('sweeping with a hostility', () => {
 
 /**
  * The seven graphics whose style functions used to hardcode black and ignore the
- * stamped hostility colour. FM 1-02.2 para 5-3 puts every hostile control
+ * stamped hostility color. FM 1-02.2 para 5-3 puts every hostile control
  * measure's line work in red, inner detail included — the airfield's crossed
  * runways and the fields-of-fire rectangle are part of the symbol, not
  * amplifiers. Text amplifiers stay black and are excluded below.
@@ -147,10 +147,10 @@ const FIXED = [
 ];
 
 const BLACKS = ['#000000', 'black', 'rgba(0,0,0,1)', '#000'];
-const normalise = (c: unknown) => String(c).replace(/\s/g, '').toLowerCase();
+const normalize = (c: unknown) => String(c).replace(/\s/g, '').toLowerCase();
 
-/** Every stroke and fill colour a handler renders, ignoring text amplifiers. */
-function strokeColours(handler: ReturnType<typeof getController>): string[] {
+/** Every stroke and fill color a handler renders, ignoring text amplifiers. */
+function strokeColors(handler: ReturnType<typeof getController>): string[] {
     const found: string[] = [];
     handler.getFeatures().forEach(f => {
         const style = f.getStyle();
@@ -160,8 +160,8 @@ function strokeColours(handler: ReturnType<typeof getController>): string[] {
             if (s.getText?.()?.getText?.()) return; // an amplifier — black by rule
             const stroke = s.getStroke?.()?.getColor?.();
             const fill = s.getFill?.()?.getColor?.();
-            if (stroke) found.push(normalise(stroke));
-            if (fill) found.push(normalise(fill));
+            if (stroke) found.push(normalize(stroke));
+            if (fill) found.push(normalize(fill));
         });
     });
     return found;
@@ -172,15 +172,15 @@ describe('hostile line work is red, inner detail included', () => {
         const handler = sample(name);
         applyHostility(handler, name, TacticalGraphicHostility.hostileFaker);
 
-        const colours = strokeColours(handler);
-        expect(colours.length).toBeGreaterThan(0);
-        expect(colours).toContain(normalise(HOSTILE_RED));
-        expect(colours.filter(c => BLACKS.includes(c))).toEqual([]);
+        const colors = strokeColors(handler);
+        expect(colors.length).toBeGreaterThan(0);
+        expect(colors).toContain(normalize(HOSTILE_RED));
+        expect(colors.filter(c => BLACKS.includes(c))).toEqual([]);
     });
 
     it.each(FIXED)('%s is still black with no hostility', name => {
-        const colours = strokeColours(sample(name));
-        expect(colours).not.toContain(normalise(HOSTILE_RED));
+        const colors = strokeColors(sample(name));
+        expect(colors).not.toContain(normalize(HOSTILE_RED));
     });
 });
 
@@ -255,15 +255,15 @@ describe('hostility survives a bag-only stamp, as restore and consumers produce'
     };
 
     it.each(others)('%s paints hostile red from the bag alone', name => {
-        const colours = strokeColours(bagOnly(name));
-        expect(colours.length).toBeGreaterThan(0);
-        expect(colours).toContain(normalise(HOSTILE_RED));
+        const colors = strokeColors(bagOnly(name));
+        expect(colors.length).toBeGreaterThan(0);
+        expect(colors).toContain(normalize(HOSTILE_RED));
     });
 });
 
 /**
  * The sweep's own shapes, which are a documentation decision rather than a rendering
- * one: a catalogue whose job is showing what a symbol looks like must not draw the
+ * one: a catalog whose job is showing what a symbol looks like must not draw the
  * fourteen rectangular variants identically to the irregular areas they exist to be an
  * alternative to. Four corners means a rectangle, five means an area.
  *
@@ -294,14 +294,14 @@ describe('the sample sweep tells rectangles from areas', () => {
 });
 
 /**
- * # The two engines draw the same catalogue
+ * # The two engines draw the same catalog
  *
- * `buildSampleGraphics` (MapLibre realises these directly) and `sampleFeatureCollection`
+ * `buildSampleGraphics` (MapLibre realizes these directly) and `sampleFeatureCollection`
  * (the OpenLayers sweep restores this) are two exits from one list. They were not always:
  * one sorted by category and the other took registry order, so the circular range fan sat
  * in a different cell in each engine and every side-by-side comparison was comparing two
  * different pictures. A pixel diff cannot report that — it sees two full, plausible
- * catalogues — so the ordering is asserted here instead.
+ * catalogs — so the ordering is asserted here instead.
  */
 describe('both engines lay the sweep out identically', () => {
     it('emits the same graphics in the same order', () => {
@@ -321,7 +321,7 @@ describe('both engines lay the sweep out identically', () => {
 /**
  * The range fans are the one family whose interesting variation is in the properties
  * rather than the geometry: a lone band draws a ring, three draw nested rings with the
- * labels sharing the gaps between them. A catalogue with only the first shows the shape
+ * labels sharing the gaps between them. A catalog with only the first shows the shape
  * and hides the graphic, so each fan appears twice.
  */
 describe('the range fans appear once with one band and once with several', () => {
@@ -343,7 +343,7 @@ describe('the range fans appear once with one band and once with several', () =>
 
     it('gives the multi-band sector its own bearings per band, which the circle cannot do', () => {
         // Only the multi-band one. The single-band sample omits them on purpose, so the
-        // catalogue also shows a sector falling back to its own span.
+        // catalog also shows a sector falling back to its own span.
         const bands = sampleFeatureCollection()
             .features.map(f => (f.properties as {tacticalGraphic: TacticalGraphicProperties}).tacticalGraphic)
             .filter(g => g.name === TacticalGraphicName.WeaponSensorRangeFanSector)

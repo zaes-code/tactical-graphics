@@ -6,11 +6,11 @@
  *
  * - **Field AM (distance)** — corridor width. FM 1-02.2 calls for "meters or feet",
  *   7 characters, and table 5-23's plates render it `1200FT`. This library shows
- *   kilometres above 1 km instead, which is a **deliberate departure**: `391 km` is
+ *   kilometers above 1 km instead, which is a **deliberate departure**: `391 km` is
  *   readable at a glance where `391358M` is not, and the quantity is unambiguous
  *   either way. Pinned here so the departure stays a decision rather than a drift.
  * - **Fields X, X1 (altitude or depth)** — "Measurement units shall be displayed in
- *   the string. Examples: 1500MSL FL150", 15 characters. Feet, metres, a flight level
+ *   the string. Examples: 1500MSL FL150", 15 characters. Feet, meters, a flight level
  *   and a submerged depth are all legal, so the unit is a host-level setting and the
  *   number is written in it.
  *
@@ -46,11 +46,11 @@ const labelText = (name: TacticalGraphicName, properties: Record<string, unknown
 // **Reset, not reconfigure.** `configureTacticalGraphics` merges over what is already
 // in force, so handing it an empty config clears nothing and a unit set by one test
 // leaked into the next — which showed up as an assertion expecting feet and getting
-// metres, in a test that had not mentioned either.
+// meters, in a test that had not mentioned either.
 afterEach(() => resetTacticalGraphicsConfig());
 
-describe('field AM — corridor width, in metres and kilometres', () => {
-    it('reads in kilometres above a kilometre and metres below', () => {
+describe('field AM — corridor width, in meters and kilometers', () => {
+    it('reads in kilometers above a kilometer and meters below', () => {
         expect(formatWidthAmplifier('78000')).toBe('78 km');
         expect(formatWidthAmplifier('391357.585')).toBe('391 km');
         expect(formatWidthAmplifier('400')).toBe('400 m');
@@ -79,7 +79,7 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
     });
 
     it('interprets the value in that unit rather than converting it', () => {
-        // 1500 under Metres is 1500 metres, not 457 — the setting says what the number
+        // 1500 under Meters is 1500 meters, not 457 — the setting says what the number
         // already meant. Converting would silently restate every altitude on the map.
         configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
         expect(formatAltitude('1500')).toBe('1500M');

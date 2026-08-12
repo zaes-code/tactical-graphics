@@ -1,5 +1,5 @@
 /**
- * # The lines labelled at their middle
+ * # The lines labeled at their middle
  *
  * Coordinated fire line, engineer work line and munition flight path. Each puts
  * its amplifiers at the **projected** midpoint of the drawn path rather than at
@@ -258,7 +258,7 @@ export function munitionFlightPathPaint(): LinePaint {
             // "up is north" rule the rest of this file uses: it sits to the right of
             // a path drawn eastward and to the left of one drawn westward. That is
             // what the symbol has always done, so it is preserved rather than
-            // quietly normalised — but it is an inconsistency, not a doctrine.
+            // quietly normalized — but it is an inconsistency, not a doctrine.
             amplifier(
                 travelRightOffset(start, afterStart, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
                 dateRangeLabel(feature.properties),

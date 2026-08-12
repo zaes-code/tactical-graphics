@@ -5,7 +5,7 @@
  * and for some families a doctrinal prefix or a repeated marker.
  *
  * Ported from `getAreaLabelStylesFromLabels`, a switch over ~50 graphic names.
- * Most of those names want the same thing — a centred stack of lines at the label
+ * Most of those names want the same thing — a centered stack of lines at the label
  * anchor — so the switch is mostly one layout repeated, and this module is mostly
  * {@link areaLabelStackPaint} with different line lists fed to it.
  *
@@ -19,7 +19,7 @@
  *
  * The one place a second mark is still used is where the two blocks genuinely sit
  * apart — the zone families' date-time group, which hangs outside the shape's
- * upper-left corner while the name sits at its centre.
+ * upper-left corner while the name sits at its center.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -39,7 +39,7 @@ function scaleOf(feature: PaintFeature, context: PaintContext): number {
     return labelScale(feature.drawingResolution, context.resolution);
 }
 
-/** One centred, multi-line text mark at `at`. */
+/** One centered, multi-line text mark at `at`. */
 function stack(at: ProjectedPosition, lines: string[], scale: number, rotation = 0): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
@@ -72,7 +72,7 @@ export function areaDateLabel(feature: PaintFeature): string {
 }
 
 /**
- * The default: designation over date-time group, centred on the anchor.
+ * The default: designation over date-time group, centered on the anchor.
  *
  * What every area graphic gets when its family has no bespoke layout, and the
  * shape most of the bespoke ones are a variation on.
@@ -134,7 +134,7 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
  * in their irregular, rectangular and circular variants.
  *
  * Twenty-three names on one layout: the doctrinal prefix over the user's name,
- * centred in the shape; the two date-time groups stacked **outside** the shape's
+ * centered in the shape; the two date-time groups stacked **outside** the shape's
  * upper-left, right-aligned so they run away from it.
  *
  * **The date anchor differs by variant, and that is the whole subtlety.** A
@@ -195,7 +195,7 @@ function upperLeftCorner(feature: PaintFeature): ProjectedPosition | undefined {
 
 /**
  * Position area for artillery: "PAA" at each of the four edge midpoints of the
- * shape's bounding box, plus the name and date-time group centred.
+ * shape's bounding box, plus the name and date-time group centered.
  *
  * The four markers are what the symbol *is* — the plate shows the word repeated
  * around the area rather than once in the middle — so they are not decoration that

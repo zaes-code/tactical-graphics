@@ -80,8 +80,8 @@ const START_ZOOM = 3;
  *
  * - `canvas` — path A, a 2D overlay synced to the camera. Style functions port
  *   1:1; MapLibre draws only the basemap.
- * - `native` — path B, geometry realised into GeoJSON sources and drawn by
- *   MapLibre's own layers. Real MapLibre rendering, at the cost of re-realising
+ * - `native` — path B, geometry realized into GeoJSON sources and drawn by
+ *   MapLibre's own layers. Real MapLibre rendering, at the cost of re-realizing
  *   geometry on every zoom change.
  *
  * A runtime switch rather than a build flag so one capture run can compare the
@@ -157,7 +157,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         // Open where the other engine — or the last visit — left off. Given to the
         // constructor rather than jumped to after `load`, so the default view is never
         // painted first. A zoom number is not portable between the two engines — 512 px
-        // tiles here against 256 there — so what is stored is metres per pixel.
+        // tiles here against 256 there — so what is stored is meters per pixel.
         const storedView = readViewport();
         const map = new MapLibreMap({
             container: containerRef.current,
@@ -165,7 +165,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             center: storedView ? [storedView.lon, storedView.lat] : START_CENTER,
             zoom: storedView ? zoomForResolution(storedView.resolution) : START_ZOOM,
             // The paint model assumes a north-up, unpitched view: every screen-pixel
-            // decoration is sized against a single metres-per-pixel, and a pitched
+            // decoration is sized against a single meters-per-pixel, and a pitched
             // camera does not have one. OpenLayers' 2D renderer has no other mode
             // either, so disabling these keeps the two engines comparable rather than
             // taking something away. @see projection.ts, ViewTransform
@@ -194,8 +194,8 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         mapRef.current = map;
 
         const rememberView = () => {
-            const centre = map.getCenter();
-            writeViewport({lon: centre.lng, lat: centre.lat, resolution: resolutionOf(map)});
+            const center = map.getCenter();
+            writeViewport({lon: center.lng, lat: center.lat, resolution: resolutionOf(map)});
         };
         map.on('moveend', rememberView);
 

@@ -2,9 +2,9 @@
  * # No graphic may emit an absurd amount of geometry
  *
  * Three of them did: Counterattack and the two fords came back with ~173,000
- * coordinates each, against a catalogue median in the low tens. Their dash period
- * is a fraction of the `radius` *offset* option, which defaults to 20 metres when
- * a caller does not pass one — so a line hundreds of kilometres long was cut into
+ * coordinates each, against a catalog median in the low tens. Their dash period
+ * is a fraction of the `radius` *offset* option, which defaults to 20 meters when
+ * a caller does not pass one — so a line hundreds of kilometers long was cut into
  * 66,600 sub-pixel dashes per rail.
  *
  * It was invisible in every sense that usually catches a bug: the graphic looked
@@ -22,7 +22,7 @@ import type {Feature} from 'geojson';
 /**
  * Most coordinates one graphic may produce.
  *
- * A generous ceiling: the heaviest legitimate graphic in the catalogue is around a
+ * A generous ceiling: the heaviest legitimate graphic in the catalog is around a
  * thousand, so this leaves an order of magnitude of headroom and still catches a
  * runaway three orders out.
  */
@@ -42,7 +42,7 @@ function countPositions(coordinates: unknown): number {
 
 /**
  * A long base line, in degrees. The bug only shows on a line long enough that a
- * metre-scale default period divides into it thousands of times, which is exactly
+ * meter-scale default period divides into it thousands of times, which is exactly
  * the case a fixed default gets wrong.
  */
 const LONG_BASE = {type: 'LineString' as const, coordinates: [[-2, 0], [2, 0]]};

@@ -46,9 +46,9 @@ describe('explosives states of readiness', () => {
         for (const bar of bars) for (const c of bar) expect(Number.isFinite(c[0]) && Number.isFinite(c[1])).toBe(true);
     });
 
-    // Point-dropped and resizable, so `[edge, centre]` - handles[0] drives rotate and
+    // Point-dropped and resizable, so `[edge, center]` - handles[0] drives rotate and
     // resize, handles[1] drives translate. Reversing them silently breaks both gestures.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s emits [edge, centre] handles', (_l, name) => {
+    it.each(NAMES.map(n => [String(n), n] as const))('%s emits [edge, center] handles', (_l, name) => {
         const handles = render(name).handles.geometry.coordinates;
         expect(handles.length).toBe(2);
         expect(handles[1]).toEqual([0, 0]);
@@ -73,7 +73,7 @@ describe('explosives states of readiness', () => {
 
     // Fixed heading. This is not just "no rotate gesture": MissionTaskController's resize
     // drag derives an angle from the pointer and feeds it back as rotation, so a graphic
-    // that honoured rotation would turn as a side effect of being scaled.
+    // that honored rotation would turn as a side effect of being scaled.
     it.each(NAMES.map(n => [String(n), n] as const))('%s ignores rotation entirely', (_l, name) => {
         const at = (rot: number) => JSON.stringify(render(name, 600, rot).graphic.geometry.coordinates);
         expect(at(90)).toEqual(at(0));

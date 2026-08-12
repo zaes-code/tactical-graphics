@@ -18,7 +18,7 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
-import {decorationMetres} from './decorationPx';
+import {decorationMeters} from './decorationPx';
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -29,7 +29,7 @@ import {decorationMetres} from './decorationPx';
  * inherited `leftArrowHeadBase` sits.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // Handle sits on the rail itself, one radius off the centre line.
+    // Handle sits on the rail itself, one radius off the center line.
     [TacticalGraphicName.InfiltrationLane]: 1,
 };
 
@@ -136,7 +136,7 @@ export class MovementGraphicBase implements LineGraphic {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: decorationMetres(this.graphicName, this.resolution), mirrored: this.mirrored}
+            {radius: this.offset, size: decorationMeters(this.graphicName, this.resolution), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
 

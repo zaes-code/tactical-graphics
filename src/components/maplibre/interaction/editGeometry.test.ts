@@ -2,7 +2,7 @@
  * # The edit gestures, without a map
  *
  * These are pure functions of a graphic's description, which is the whole point of
- * writing them that way — the behaviour that matters can be asserted directly
+ * writing them that way — the behavior that matters can be asserted directly
  * instead of inferred from pixels after a synthetic drag.
  *
  * What is worth pinning is not the arithmetic but the **branches**, because each
@@ -15,7 +15,7 @@
 import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import type {Geometry, Position} from 'geojson';
 import {
-    centreOf,
+    centerOf,
     moveVertex,
     positionsOf,
     insertVertex,
@@ -37,7 +37,7 @@ const LINE: Geometry = {type: 'LineString', coordinates: [[0, 0], [2, 0]]};
 const RING: Geometry = {type: 'Polygon', coordinates: [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]]};
 const POINT: Geometry = {type: 'Point', coordinates: [0, 0]};
 
-/** Metres per degree of longitude at the equator, near enough for a tolerance. */
+/** Meters per degree of longitude at the equator, near enough for a tolerance. */
 const DEGREE_M = 111_319;
 
 describe('translate', () => {
@@ -59,9 +59,9 @@ describe('translate', () => {
 
 describe('rotate', () => {
     it('turns a drawn graphic by moving its vertices', () => {
-        // A quarter turn about the centre of a horizontal line makes it vertical.
-        const centre = centreOf(LINE);
-        const turned = rotate({geometry: LINE, properties: props()}, [2, centre[1]], [centre[0], 2]);
+        // A quarter turn about the center of a horizontal line makes it vertical.
+        const center = centerOf(LINE);
+        const turned = rotate({geometry: LINE, properties: props()}, [2, center[1]], [center[0], 2]);
         const [start, end] = positionsOf(turned.geometry);
 
         expect(Math.abs(end[0] - start[0])).toBeLessThan(1e-6);
@@ -78,15 +78,15 @@ describe('rotate', () => {
 });
 
 describe('resize', () => {
-    it('scales a drawn graphic about its centre', () => {
-        const centre = centreOf(LINE);
-        // The cursor starts one degree from the centre and ends two: a doubling.
-        const bigger = resize({geometry: LINE, properties: props()}, [centre[0] + 1, centre[1]], [centre[0] + 2, centre[1]]);
+    it('scales a drawn graphic about its center', () => {
+        const center = centerOf(LINE);
+        // The cursor starts one degree from the center and ends two: a doubling.
+        const bigger = resize({geometry: LINE, properties: props()}, [center[0] + 1, center[1]], [center[0] + 2, center[1]]);
         const [start, end] = positionsOf(bigger.geometry);
 
         expect(end[0] - start[0]).toBeCloseTo(4, 3);
-        // The centre stays put, which is what makes it a scale rather than a move.
-        expect(centreOf(bigger.geometry)[0]).toBeCloseTo(centre[0], 6);
+        // The center stays put, which is what makes it a scale rather than a move.
+        expect(centerOf(bigger.geometry)[0]).toBeCloseTo(center[0], 6);
     });
 
     it('scales a point-anchored graphic by its stored radius', () => {
@@ -96,8 +96,8 @@ describe('resize', () => {
         expect(bigger.properties.radius).toBeCloseTo(2000, 0);
     });
 
-    it('never lets a drag toward the centre turn the shape inside out', () => {
-        // The ratio is floored, so even a drag that lands *on* the centre shrinks
+    it('never lets a drag toward the center turn the shape inside out', () => {
+        // The ratio is floored, so even a drag that lands *on* the center shrinks
         // rather than passing through zero and mirroring the graphic.
         const smaller = resize({geometry: POINT, properties: props({radius: 1000})}, [1, 0], [0, 0]);
         expect(smaller.properties.radius).toBeGreaterThan(0);
@@ -133,7 +133,7 @@ describe('moveVertex', () => {
     });
 });
 
-describe('centreOf', () => {
+describe('centerOf', () => {
     it('turns a drawn line about its first vertex, as OpenLayers does', () => {
         // Not the middle of the extent, which is what this used to be. Every
         // line-family symbol grows from p0 — an axis of advance stretches along its
@@ -141,14 +141,14 @@ describe('centreOf', () => {
         // `coordinates[0]` for exactly that reason. Pivoting about the middle here
         // meant one drag turned the graphic two different ways in the two engines.
         const lopsided: Geometry = {type: 'LineString', coordinates: [[0, 0], [0.1, 0], [0.2, 0], [4, 0]]};
-        expect(centreOf(lopsided)).toEqual([0, 0]);
+        expect(centerOf(lopsided)).toEqual([0, 0]);
     });
 
     it('turns a point-anchored graphic about its own point', () => {
-        expect(centreOf({type: 'Point', coordinates: [3, -2]} as Geometry)).toEqual([3, -2]);
+        expect(centerOf({type: 'Point', coordinates: [3, -2]} as Geometry)).toEqual([3, -2]);
     });
 
-    it('measures a polygon in projected metres, not the mean of the degrees', () => {
+    it('measures a polygon in projected meters, not the mean of the degrees', () => {
         // Mercator stretches with latitude, so the middle of a ring spanning 0° to 60°
         // north sits well north of 30° on screen. `Polygon.getInteriorPoint` runs on
         // projected coordinates, so matching it means projecting here too.
@@ -156,15 +156,15 @@ describe('centreOf', () => {
             type: 'Polygon',
             coordinates: [[[-1, 0], [1, 0], [1, 60], [-1, 60], [-1, 0]]],
         } as Geometry;
-        expect(centreOf(tall)[1]).toBeGreaterThan(33);
+        expect(centerOf(tall)[1]).toBeGreaterThan(33);
     });
 
     it('survives an empty geometry', () => {
-        expect(centreOf({type: 'LineString', coordinates: []})).toEqual([0, 0]);
+        expect(centerOf({type: 'LineString', coordinates: []})).toEqual([0, 0]);
     });
 });
 
-describe('metric behaviour', () => {
+describe('metric behavior', () => {
     it('translates the same distance at the equator and at latitude', () => {
         // A degree of longitude is much shorter at 60° north. A drag of one degree
         // there must move the graphic by *that* distance, not by an equatorial one —
@@ -180,7 +180,7 @@ describe('metric behaviour', () => {
         expect((atLatitude.geometry as {coordinates: Position}).coordinates[1]).toBeCloseTo(60, 6);
     });
 
-    it('keeps a translated line the same length in metres', () => {
+    it('keeps a translated line the same length in meters', () => {
         const moved = translate({geometry: LINE, properties: props()}, [0, 0], [10, 40]);
         const [start, end] = positionsOf(moved.geometry);
         // Still two degrees of longitude apart, since a Mercator offset preserves it.
@@ -200,7 +200,7 @@ describe('setOffset — the width handle', () => {
         expect(widened.properties.width).toBeCloseTo(DEGREE, -3);
     });
 
-    it('honours a graphic that draws its handle closer in', () => {
+    it('honors a graphic that draws its handle closer in', () => {
         // A handle drawn one width out rather than two tracks the cursor 1:1, so the
         // same drag sets twice the width.
         const tight = setOffset({geometry: LINE, properties: props()}, [1, 1], {offsetScale: 1, resolution: 1});
@@ -291,11 +291,11 @@ describe('setBandRange — the range-fan handles', () => {
         }),
     });
 
-    it('sets the band it was given, in kilometres', () => {
+    it('sets the band it was given, in kilometers', () => {
         // One degree of longitude is about 111 km.
         const edited = setBandRange(fan([10, 200, 400]), 1, [1, 0]);
         expect(edited.properties.rangeFan!.bands[1].range).toBeCloseTo(111, 0);
-        // And leaves its neighbours where they were.
+        // And leaves its neighbors where they were.
         expect(edited.properties.rangeFan!.bands[0].range).toBe(10);
         expect(edited.properties.rangeFan!.bands[2].range).toBe(400);
     });

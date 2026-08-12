@@ -220,7 +220,7 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
 
     /**
      * `[center, ...one handle per band]` — each band's handle sits on its own arc
-     * along the *global* centre bearing (the same anchor the band's mid-label
+     * along the *global* center bearing (the same anchor the band's mid-label
      * uses), so every band's range can be dragged independently. Handles follow
      * the **sorted** band order from `resolveBands`.
      */
@@ -330,7 +330,7 @@ function arcAtAzimuthRange(
  *
  * `resolvedLeftAz` / `resolvedRightAz` are **absolute** compass bearings, which is
  * what a sector's arm labels print. The band's own fields are deflections from the
- * centre, so they cannot be printed directly.
+ * center, so they cannot be printed directly.
  */
 export function resolveRangeFanBands(
     name: TacticalGraphicName,

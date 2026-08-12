@@ -8,7 +8,7 @@
  *
  * Split out of `paintFunctions.ts` to keep that file readable, not because they
  * are different in kind. Everything here follows the same rules: planar Euclidean
- * math in EPSG:3857 metres, no DOM, screen sizes as `px × resolution`.
+ * math in EPSG:3857 meters, no DOM, screen sizes as `px × resolution`.
  */
 
 import type {HatchSpec, Paint, PaintContext, PaintFeature} from '../core/paint';
@@ -26,7 +26,7 @@ type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * filled with.
  *
  * A **symbology** fact rather than a rendering one — FM 1-02.2 draws these areas
- * hatched — so it is described here as parameters and realised by whichever
+ * hatched — so it is described here as parameters and realized by whichever
  * renderer is drawing. A canvas builds a `CanvasPattern`; MapLibre registers a
  * `fill-pattern` image. @see HatchSpec
  */
@@ -94,7 +94,7 @@ export function fortifiedAreaPaint(): AreaPaint {
  * The limited-access family — limited access area, the three no-fire areas, and
  * the weapons-free zone. A hatched fill under an outline that dashes when planned.
  *
- * **The hatch is deliberately neutral, not the affiliation colour.** It reads as a
+ * **The hatch is deliberately neutral, not the affiliation color.** It reads as a
  * texture saying "you may not fire here" rather than as line work identifying a
  * side, so it is built from the unaffiliated default whatever the graphic's
  * hostility. The outline still carries the affiliation.
@@ -208,7 +208,7 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * at each label anchor — the amplifiers **only when the graphic is hostile**.
  *
  * The one area graphic whose *form* changes with affiliation rather than only its
- * colour, which is why it cannot fall through to `areaOutlinePaint`.
+ * color, which is why it cannot fall through to `areaOutlinePaint`.
  *
  * **The teeth are drawn here, in screen pixels, not baked by the generator** — the
  * same split the obstacle belt and the fortified area already use, and for the same
@@ -222,8 +222,8 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * Outward is taken from the ring's winding rather than from drawing order, so a ring
  * drawn anticlockwise does not come out with its teeth on the inside.
  *
- * The "ENY" stays in the label colour. Hostile line work goes red; hostile text
- * amplifiers do not — see the hostility colour rule in `ai/decisions.md`.
+ * The "ENY" stays in the label color. Hostile line work goes red; hostile text
+ * amplifiers do not — see the hostility color rule in `ai/decisions.md`.
  */
 export function encirclementPaint(): AreaPaint {
     return (feature, context) => {
@@ -266,7 +266,7 @@ export function encirclementPaint(): AreaPaint {
  * The four circular areas that dash and hatch when planned: free fire, restrictive
  * fire, position area for artillery, and the circular airspace-coordination area.
  *
- * The hatch is the *hostility* colour rather than the line colour, so an unknown
+ * The hatch is the *hostility* color rather than the line color, so an unknown
  * or pending area still washes in its own tint — the same choice
  * {@link limitedAccessAreaPaint} makes, and the reason both take it from
  * `hostilityOf` rather than reusing the stroke.
@@ -286,7 +286,7 @@ export function freeFireAreaCircularPaint(): AreaPaint {
 }
 
 /**
- * A bare outline in the affiliation's colour — **no planned dash**.
+ * A bare outline in the affiliation's color — **no planned dash**.
  *
  * What a holder that installs no style of its own gets, which is most of the
  * circular areas. Distinct from {@link areaOutlinePaint} precisely in the dash:

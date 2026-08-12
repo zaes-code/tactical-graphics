@@ -4,7 +4,7 @@
  * A double-click broke fields of fire in both engines, by two different routes that
  * produced the same complaint — the V angle cannot be modified:
  *
- * - OpenLayers ended the draw at two vertices, and the generator synthesised the
+ * - OpenLayers ended the draw at two vertices, and the generator synthesized the
  *   second leg at a fixed angle on every render. The V was real but frozen: dragging
  *   one leg swung the other with it, so the angle never changed.
  * - MapLibre delivers a double-click's two clicks as ordinary `click`s first, so the

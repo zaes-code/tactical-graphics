@@ -8,7 +8,7 @@
  * ## Why this is in the map-agnostic half
  *
  * Nothing here knows what a renderer is. Label size in pixels, stroke width in pixels,
- * and the affiliation colours are properties of the *symbology* — they mean the same
+ * and the affiliation colors are properties of the *symbology* — they mean the same
  * thing to an OpenLayers style function, a planned Cesium view, or anything else that
  * draws these graphics. Keeping the config beside the geometry means a second renderer
  * inherits it rather than reinventing it, and a host configures the library once no
@@ -22,12 +22,12 @@
  * There is exactly one palette here — `DEFAULT_PALETTE`, the doctrinal one — and the
  * library never swaps it for another. It cannot: only the host knows what its own
  * basemap looks like, whether the map is on a projector or a darkened operations floor,
- * and which of those states it is in right now. A host that wants different colours on a
- * dark basemap keeps that set itself and sends it. The library takes colours, not modes.
+ * and which of those states it is in right now. A host that wants different colors on a
+ * dark basemap keeps that set itself and sends it. The library takes colors, not modes.
  */
 import type {TacticalGraphicHostility} from './type';
 
-/** Base label font size in px. The label-scale formulas all normalise to this. */
+/** Base label font size in px. The label-scale formulas all normalize to this. */
 export const BASE_FONT_SIZE_PX = 16;
 
 /**
@@ -40,7 +40,7 @@ export const BASE_FONT_SIZE_PX = 16;
  */
 export const DEFAULT_LINE_WIDTH = 2;
 
-/** Readable bounds for the line-width setting: below 1px strokes vanish at typical zoom; above 8px they start to obscure the basemap and neighbouring graphics. */
+/** Readable bounds for the line-width setting: below 1px strokes vanish at typical zoom; above 8px they start to obscure the basemap and neighboring graphics. */
 export const MIN_LINE_WIDTH = 1;
 export const MAX_LINE_WIDTH = 8;
 
@@ -61,11 +61,11 @@ export const MAX_LABEL_SIZE = 26;
  * The unit an altitude is entered and displayed in.
  *
  * **A host-level choice, not a per-symbol one.** A picture where one zone is in feet and
- * the next in metres is a picture nobody can read across, so one setting covers the map
+ * the next in meters is a picture nobody can read across, so one setting covers the map
  * and every altitude on it compares.
  *
  * The value is **interpreted in this unit, never converted into it**: 1500 entered
- * under `Feet` is 1500 feet, and the same 1500 under `Metres` is 1500 metres. So this
+ * under `Feet` is 1500 feet, and the same 1500 under `Meters` is 1500 meters. So this
  * is a decision to make once, at start-up, beside the palette — changing it later
  * reinterprets every altitude already entered rather than restating it.
  *
@@ -82,7 +82,7 @@ export const MAX_LABEL_SIZE = 26;
  * Only the first half of (1) is a unit. `MSL` and `AGL` are a *reference datum* — what
  * the number is measured from — which is an independent axis: any datum can be quoted in
  * either unit, so folding them in here would produce an enum whose members cannot be
- * combined and a value that cannot say "metres above ground".
+ * combined and a value that cannot say "meters above ground".
  *
  * A **flight level** is neither. `FL150` is 15,000 ft of *pressure* altitude against the
  * standard 1013.25 hPa datum, so it is deliberately not a true height above anything —
@@ -111,7 +111,7 @@ export const ALTITUDE_UNIT_SUFFIX: Readonly<Record<AltitudeUnit, string>> = Obje
  *
  * `hostilityColors` is a partial map, so overriding one affiliation leaves the others
  * doctrinal. The key is the same `TacticalGraphicHostility` a graphic's properties
- * carry; `unknown` is spelled `defaultLineColor` instead, since that colour is also what
+ * carry; `unknown` is spelled `defaultLineColor` instead, since that color is also what
  * unaffiliated graphics and label text fall back to.
  */
 export interface TacticalGraphicsConfigOptions {
@@ -119,9 +119,9 @@ export interface TacticalGraphicsConfigOptions {
     labelSize?: number;
     /** Stroke width in screen px for every graphic's line work. Default 2. Clamped to [MIN_LINE_WIDTH, MAX_LINE_WIDTH]. */
     lineWidth?: number;
-    /** Per-affiliation line colours. Anything omitted keeps its FM 1-02.2 value. */
+    /** Per-affiliation line colors. Anything omitted keeps its FM 1-02.2 value. */
     hostilityColors?: Partial<Record<TacticalGraphicHostility, string>>;
-    /** Line colour for graphics with no affiliation, and for the `unknown` hostility. Default `#000000`. */
+    /** Line color for graphics with no affiliation, and for the `unknown` hostility. Default `#000000`. */
     defaultLineColor?: string;
     /** Label text fill. Defaults to whatever `defaultLineColor` resolves to, so overriding one moves both. */
     labelFillColor?: string;
@@ -131,7 +131,7 @@ export interface TacticalGraphicsConfigOptions {
     altitudeUnit?: AltitudeUnit;
 
     // ── Editor chrome ────────────────────────────────────────────────────────
-    // Not part of any symbol: these colour the affordances a renderer draws so a user
+    // Not part of any symbol: these color the affordances a renderer draws so a user
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
     // with a graphic's affiliation — which is why they are their own fields rather than
     // derived from the palette above. A renderer without a given affordance ignores its
@@ -139,7 +139,7 @@ export interface TacticalGraphicsConfigOptions {
 
     /** Draggable handle dots. Default opaque red; renderers may apply their own opacity. */
     handleColor?: string;
-    /** Handle dots that are present but not draggable right now. Default 80%-opacity grey. */
+    /** Handle dots that are present but not draggable right now. Default 80%-opacity gray. */
     inertHandleColor?: string;
     /** The marker and sketch line shown while drawing any graphic. Default solid blue. */
     drawMarkerColor?: string;
@@ -214,7 +214,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
 }
 
 /**
- * The one palette: every colour the library falls back to, restated as an explicit set.
+ * The one palette: every color the library falls back to, restated as an explicit set.
  *
  * Two jobs, which is why it is exported rather than left implicit inside the accessors:
  *
@@ -223,9 +223,9 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
  *   instead of once per accessor.
  * - **It is what a host builds its own sets on top of.** `setTacticalGraphicsConfig`
  *   replaces wholesale, so a host swapping palettes has to send a complete one —
- *   `{...DEFAULT_PALETTE, ...myDarkColours}` is the intended shape.
+ *   `{...DEFAULT_PALETTE, ...myDarkColors}` is the intended shape.
  *
- * Note what is **absent**: no `hostilityColors`. The four affiliation colours — friendly
+ * Note what is **absent**: no `hostilityColors`. The four affiliation colors — friendly
  * blue, hostile red, neutral green, pending yellow — are doctrine. They are how an
  * operator identifies a symbol at a glance, and re-tinting them for a display setting
  * makes a graphic mean something slightly different depending on how the app is

@@ -41,7 +41,7 @@ export function clampTurnBend(bend: number): number {
  * curve.
  *
  * Point-anchored: the base point is the midpoint of the curve's chord, so the
- * centre handle sits inside the bow rather than under the label, and `size` is
+ * center handle sits inside the bow rather than under the label, and `size` is
  * the chord's half-length.
  *
  * **`bend` is the sharpness of the turn**, a signed multiple of `size` — it is
@@ -74,7 +74,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         return geometryService.bendLine([chordStart, chordEnd], size, bend, CURVE_STEPS);
     }
 
-    /** Cumulative along-curve distance to each vertex, in metres. */
+    /** Cumulative along-curve distance to each vertex, in meters. */
     private arcLengths(curve: Position[]): number[] {
         const lengths = [0];
         for (let i = 1; i < curve.length; i++) {
@@ -83,7 +83,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         return lengths;
     }
 
-    /** The point `target` metres along the curve, interpolated between vertices. */
+    /** The point `target` meters along the curve, interpolated between vertices. */
     private pointAt(curve: Position[], lengths: number[], target: number): Position {
         if (target <= 0) return curve[0];
         const last = lengths.length - 1;
@@ -99,7 +99,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
     }
 
     /**
-     * Half the gap left for the label, in metres.
+     * Half the gap left for the label, in meters.
      *
      * The table 5-19 obstacle effect has no "T", so it gets no hole to put one
      * in. The OpenLayers path passes `labelGap: 0` for both names and so never
@@ -120,7 +120,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         const arrowHead = geometryService.createArrowHeadPolygon(curve[curve.length - 1], dir, headSize);
 
         // Split the curve around the label rather than drawing through it.
-        // Measured in metres along the curve, not in vertex counts: the caller
+        // Measured in meters along the curve, not in vertex counts: the caller
         // sizes the gap to the glyph, and vertices are not evenly spaced along
         // a Bézier.
         const lengths = this.arcLengths(curve);
@@ -143,7 +143,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
     }
 
     /**
-     * `[bendHandle, arrowTip, centre]` — centre last, per the point-graphic
+     * `[bendHandle, arrowTip, center]` — center last, per the point-graphic
      * convention. The index order is a contract: `TurnGraphicBase.setBandRange`
      * switches on it.
      *
@@ -172,7 +172,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
     generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<Point> {
         const curve = this.curve(base, opts);
         const lengths = this.arcLengths(curve);
-        // The arc-length midpoint — the centre of the gap the graphic leaves.
+        // The arc-length midpoint — the center of the gap the graphic leaves.
         return this.asPointFeature(this.pointAt(curve, lengths, lengths[lengths.length - 1] / 2));
     }
 }

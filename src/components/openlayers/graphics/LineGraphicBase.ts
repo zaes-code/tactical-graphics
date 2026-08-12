@@ -31,7 +31,7 @@ import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
-import {decorationMetres} from './decorationPx';
+import {decorationMeters} from './decorationPx';
 
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
@@ -169,7 +169,7 @@ export class LineGraphicBase implements LineGraphic {
             }
         }
 
-        // Fix: 145px minimum line length — 50px for the F-labelled first
+        // Fix: 145px minimum line length — 50px for the F-labeled first
         // segment, 45px for the three triangles, 50px for the trailing segment
         // leading into the arrowhead. The table 5-19 twin draws no "F" but the
         // geometry is otherwise identical, so it takes the same floor.
@@ -222,7 +222,7 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
-     * The `size` scalar handed to the generator, in metres.
+     * The `size` scalar handed to the generator, in meters.
      *
      * Starts as the draw-time resolution — one screen pixel's worth of ground — and is
      * replaced outright by a restored value. Most graphics in this family ignore `size`
@@ -234,8 +234,8 @@ export class LineGraphicBase implements LineGraphic {
 
     private graphicSize(): number {
         // Per-name, because this holder serves 41 graphics and they do not all bake a
-        // decoration of the same size. @see decorationMetres
-        return this.sizeOverride ?? decorationMetres(this.graphicName, this.resolution ?? 0);
+        // decoration of the same size. @see decorationMeters
+        return this.sizeOverride ?? decorationMeters(this.graphicName, this.resolution ?? 0);
     }
 
     /**
@@ -259,7 +259,7 @@ export class LineGraphicBase implements LineGraphic {
         this.graphics.setGeometry(graphic);
         this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
 
-        // Persist the *effective* metre value rather than the viewport factor it came
+        // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {

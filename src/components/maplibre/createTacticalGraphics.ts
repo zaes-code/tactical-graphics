@@ -110,7 +110,7 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
             options.onChange?.();
         },
 
-        refreshStyles: () => renderer.realise(),
+        refreshStyles: () => renderer.realize(),
 
         destroy() {
             interactions.destroy();

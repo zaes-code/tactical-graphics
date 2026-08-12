@@ -52,7 +52,7 @@ describe('wireObstacleStyleFunc', () => {
             const part = marks.getCoordinates()[0];
             return Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]) / resolution;
         };
-        // Same number of screen pixels at both zooms; only the metre size changes.
+        // Same number of screen pixels at both zooms; only the meter size changes.
         expect(markSpan(40)).toBeCloseTo(markSpan(10), 6);
     });
 

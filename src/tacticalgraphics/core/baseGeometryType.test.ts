@@ -13,7 +13,7 @@ import {TacticalGraphicName, TacticalGraphicsRegistry, renderTacticalGraphic} fr
  * it surfaced only when the MapLibre adapter, which goes through the public API,
  * could not build them.
  *
- * The test is written against behaviour rather than the field, so it stays honest
+ * The test is written against behavior rather than the field, so it stays honest
  * if the guard is ever reimplemented.
  */
 

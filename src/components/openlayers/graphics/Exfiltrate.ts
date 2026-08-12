@@ -55,7 +55,7 @@ export class Exfiltrate implements LineGraphic {
             this.hidesStartHandle,
         )));
 
-        // Persist the *effective* metre value rather than the viewport factor behind it,
+        // Persist the *effective* meter value rather than the viewport factor behind it,
         // so a restore replays a distance instead of re-deriving one from whatever zoom
         // the loading session happens to be at.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {

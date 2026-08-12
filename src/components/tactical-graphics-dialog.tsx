@@ -61,7 +61,7 @@ function defaultRangeFanConfig(): RangeFanConfig {
  * Two of the defaults are load-bearing rather than cosmetic:
  *
  * - **`hostility` is always kept**, even when hidden, because it drives the stroke
- *   colour. Defaulting to `unknown` means editing some other property on a graphic
+ *   color. Defaulting to `unknown` means editing some other property on a graphic
  *   that never had an affiliation does not silently turn it friendly blue — and it
  *   keeps the MUI `Select` controlled from the first render rather than flipping
  *   uncontrolled to controlled.
@@ -100,7 +100,7 @@ function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.rangeFan) {
         // First time opening the editor on this fan: seed a single band at the drawn
         // radius so pressing OK does not snap the geometry to the 1 km fallback.
-        // `graphicSize` is projected metres; the editor works in kilometres.
+        // `graphicSize` is projected meters; the editor works in kilometers.
         labels.rangeFan = stored.rangeFan ?? {
             bands: [{range: selection.graphicSize && selection.graphicSize > 0
                 ? Math.max(0.1, Math.round((selection.graphicSize / 1000) * 10) / 10)
@@ -147,7 +147,7 @@ function altitudeFieldLabel(which: 'Minimum' | 'Maximum', datum: AltitudeDatum |
 }
 
 const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source}) => {
-    /** Geometry read-outs (metres) for the selected graphic. @see readGraphicGeometryState */
+    /** Geometry read-outs (meters) for the selected graphic. @see readGraphicGeometryState */
     const [measured, setMeasured] = useState<GraphicGeometryState>({});
     const [selection, setSelection] = useState<SelectedGraphic | null>(null);
     const [dialogPosition, setDialogPosition] = useState({x: 0, y: 0});
@@ -219,7 +219,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
      * Draws the cone when a graphic is selected, and keeps it attached while the
      * window is resized.
      *
-     * A frame is skipped first: the dialog has to be laid out before its centre can
+     * A frame is skipped first: the dialog has to be laid out before its center can
      * be measured, and on the first render `getBoundingClientRect` reports zeroes.
      */
     useEffect(() => {
@@ -300,8 +300,8 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             >
                 <defs>
                     <linearGradient id="coneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="grey" stopOpacity="0.6"/>
-                        <stop offset="100%" stopColor="grey" stopOpacity="0"/>
+                        <stop offset="0%" stopColor="gray" stopOpacity="0.6"/>
+                        <stop offset="100%" stopColor="gray" stopOpacity="0"/>
                     </linearGradient>
                 </defs>
 

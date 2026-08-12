@@ -37,7 +37,7 @@ export type GraphicFieldSet = {
     altitude2: boolean;
     /** Width field (Airspace Area). */
     width: boolean;
-    /** Circle radius in metres — the graphics a user resizes by a radius. */
+    /** Circle radius in meters — the graphics a user resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
     grids: boolean;
@@ -500,13 +500,13 @@ export {supportsHostility};
 /**
  * The graphics a user sizes by dragging a radius — every name routed through
  * `MissionTaskController`. They are the ones whose `radius` is a real reach from the
- * centre rather than a decoration scalar, so they are the only ones worth showing it for.
+ * center rather than a decoration scalar, so they are the only ones worth showing it for.
  *
  * Listed rather than derived from the controller registry to keep this module free of
  * the holder imports that registry pulls in; the compiler checks every name.
  *
  * Routed through that controller but deliberately absent — sized by a radius internally,
- * but not drawn as a circle, so the number is not a dimension a reader would recognise
+ * but not drawn as a circle, so the number is not a dimension a reader would recognize
  * on the shape in front of them:
  *
  * - **Ambush** — a hooked arrow.

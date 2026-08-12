@@ -4,11 +4,11 @@
  * Route, main supply route and alternate supply route: a line with a
  * traffic-direction figure and identifier at each end.
  *
- * **Everything in the end block is an amplifier, so it takes the label colour and
+ * **Everything in the end block is an amplifier, so it takes the label color and
  * stays black on a hostile route.** Only the route line itself answers to the
  * affiliation — the arrows annotate traffic flow, they are not line work
  * identifying a side. That distinction is doctrinal and easy to lose in a refactor,
- * which is why the two colours are fetched from different accessors here rather
+ * which is why the two colors are fetched from different accessors here rather
  * than from one shared local.
  */
 
@@ -34,7 +34,7 @@ const ROUTE_ALT_ARM_PX = 26;
 /** Floor on the span of a one- or two-way arrow figure. */
 const ROUTE_ARROW_MIN_SPAN_PX = 56;
 
-/** A text amplifier, in the label colour with the usual halo. */
+/** A text amplifier, in the label color with the usual halo. */
 function amplifier(
     at: ProjectedPosition,
     text: string,
@@ -86,7 +86,7 @@ function routeEndPaints(
     const uy = Math.sin(-rotation);
 
     let shiftPx = 0;
-    /** A point `alongPx` screen px along the line, from the row centred `upPx` above it. */
+    /** A point `alongPx` screen px along the line, from the row centered `upPx` above it. */
     const at = (upPx: number, alongPx: number): ProjectedPosition => {
         const [cx, cy] = offsetAbove(anchor, a, b, resolution, upPx);
         const d = (alongPx + shiftPx) * resolution;
@@ -150,8 +150,8 @@ function routeEndPaints(
 
     paints.push(amplifier(at(labelOffsetPx, 0), text, scale, {
         rotation,
-        // Centre the identifier over the arrow figure it caps; with no arrows there
-        // is nothing to centre on, so run it inward off the endpoint.
+        // Center the identifier over the arrow figure it caps; with no arrows there
+        // is nothing to center on, so run it inward off the endpoint.
         align: rows > 0 ? 'center' : endAlign,
         baseline: 'bottom',
     }));

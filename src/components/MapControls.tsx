@@ -63,7 +63,7 @@ interface Props {
     /**
      * What the live engine can actually do.
      *
-     * The panel **greys** what an engine does not support and puts the reason on the
+     * The panel **grays** what an engine does not support and puts the reason on the
      * tooltip, rather than hiding it. A missing control reads as a different app; a
      * live control that silently does nothing is worse still. A disabled one with
      * "MapLibre has no draw interaction yet" is the honest version, and it makes the
@@ -578,7 +578,7 @@ const MapControls: React.FC<Props> = ({
                     }}>
                         Sample Gallery
                     </Typography>
-                    {/* Draw the whole catalogue at one hostility — a one-click check
+                    {/* Draw the whole catalog at one hostility — a one-click check
                         that hostility rendering works everywhere it should. Graphics
                         without the field are drawn unchanged. */}
                     <Select

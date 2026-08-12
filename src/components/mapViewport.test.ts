@@ -2,7 +2,7 @@
  * # The viewport shared between the two engines
  *
  * Three numbers in `localStorage`, read by whichever engine mounts next. The reason
- * it stores **metres per pixel** and not a zoom number is the thing worth pinning: a
+ * it stores **meters per pixel** and not a zoom number is the thing worth pinning: a
  * zoom is not portable between the two renderers, since MapLibre's tiles are 512 px
  * and OpenLayers' are 256, so the same view is `z` in one and `z - 1` in the other.
  *
@@ -30,7 +30,7 @@ describe('a round trip', () => {
 describe('a value that would open a blank map is refused', () => {
     it.each([
         ['not JSON at all', 'not json'],
-        ['a NaN centre', '{"lon":null,"lat":33,"resolution":100}'],
+        ['a NaN center', '{"lon":null,"lat":33,"resolution":100}'],
         ['a missing resolution', '{"lon":13,"lat":33}'],
         ['a zero resolution', '{"lon":13,"lat":33,"resolution":0}'],
         ['a negative resolution', '{"lon":13,"lat":33,"resolution":-5}'],
