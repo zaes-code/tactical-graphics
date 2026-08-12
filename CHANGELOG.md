@@ -13,18 +13,22 @@ the npm publish dates — when a version actually became installable.
 
 ---
 
-## [Unreleased]
+## [2.1.0] — 2026-08-12
 
-### Changed — BREAKING
+### Changed
 
-- **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change. The library implements a US Army field manual and every neighbouring member already used US spelling.
+- **Depends on the individual `@turf/*` modules instead of the `@turf/turf` meta-package.** No public API changes — `@turf/turf` was never re-exported, so nothing a consumer can import is affected. This is a patch-level change shipped as a minor only because the dependency list itself changed.
 
-  **The next release must therefore be a major.** Anything referencing the old member or comparing against the old string needs updating.
+  It removes **`marchingsquares`, which is AGPL-3.0**, from the production dependency tree. It was reachable only through `@turf/isobands` and `@turf/isolines`, neither of which this library has ever used; they arrived because the source imported the meta-package rather than the 26 functions it calls. **It was present in every release from 1.0.0 through 2.0.0.**
 
-### Added
+  | | Before | After |
+  |---|---|---|
+  | Components | 142 | 32 |
+  | Licenses | 126 MIT, 7 ISC, 3 BSD-3-Clause, 2 Unlicense, 3 unreported, 1 AGPL-3.0 | 31 MIT, 1 Unlicense |
 
-- `scripts/gen-catalog-svgs.js` — generates one SVG per graphic by asking the library to paint it and transcribing the resulting marks, rather than drawing anything by hand. Internal tooling; not part of the published package.
-- The progress tracker gained a `Graphic Key` column linking each row to its `TacticalGraphicName` member, so the README generator can validate itself against the enum and report graphics separately from doctrinal variants.
+  Three components that reported no license at all — `jsts`, `@turf/jsts`, `splaytree-ts` — went with it, so the tree is now fully attributable as well as fully permissive.
+
+  **If you vendor, audit or redistribute this package, this is the entry to read.** Copyleft in a dependency tree is what software-composition scanners raise first, and several organizations' approved-software policies reject AGPL outright. Upgrading from any 1.x or 2.0.0 clears it.
 
 ---
 
@@ -296,7 +300,7 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...develop
+[2.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.13.0...v2.0.0
 [1.13.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.11.0...v1.12.0
