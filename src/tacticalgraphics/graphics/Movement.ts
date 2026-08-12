@@ -23,7 +23,7 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
     protected tipOverhang: number = 1.5;
 
     /**
-     * The centre line the arrow body is built from: the user's line with the
+     * The center line the arrow body is built from: the user's line with the
      * arrowhead's overhang taken off the far end.
      */
     protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
@@ -220,12 +220,12 @@ export class AxisOfAttack extends MovementGraphicBase {
 }
 
 /**
- * Emits a 2-point label span lying along the last segment of the arrow's centre
+ * Emits a 2-point label span lying along the last segment of the arrow's center
  * line, ending where the body does. The style function uses this span for
  * rotation + scale and places the right-aligned "name DTG" label just behind the
  * arrowhead.
  *
- * Takes the centre line rather than the base feature: the body stops short of
+ * Takes the center line rather than the base feature: the body stops short of
  * the user's last vertex by the arrowhead's overhang, and a label anchored on
  * the raw vertex would sit inside the head.
  */

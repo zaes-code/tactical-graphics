@@ -1,5 +1,5 @@
 /**
- * # Keying a rasterised centre symbol on the image, not on the graphic
+ * # Keying a rasterised center symbol on the image, not on the graphic
  *
  * The icon id used to be `name`-`hostility`, which assumes those two decide the
  * picture. They do for the library's own provider and not for a host's: one that

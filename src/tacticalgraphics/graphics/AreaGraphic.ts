@@ -106,7 +106,7 @@ export class Obstacle extends TacticalGraphicsBase<EncirclementAreaOptions> {
      * The drawn area, undecorated.
      *
      * The teeth used to be baked in here, sized off the drawing resolution — so they were
-     * 15 px at whatever zoom the user happened to be at and then fixed in metres forever,
+     * 15 px at whatever zoom the user happened to be at and then fixed in meters forever,
      * growing on screen as the map zoomed in. They are crenellation: a feature of the
      * *symbol*, carrying no measurement, which is precisely what belongs in a style
      * function at a constant number of screen pixels. `StrongPoint` has always worked this

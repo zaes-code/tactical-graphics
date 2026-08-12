@@ -1297,7 +1297,7 @@ class GeometryService {
     }
 
     /**
-     * Returns two EPSG:4326 positions that are `radius` metres apart, centred at
+     * Returns two EPSG:4326 positions that are `radius` meters apart, centered at
      * fraction `t` along segment P0→P1.  Pass these as [c0, c1] to generateLabels
      * so that graphicProportionalLabel (OL StyleFunction) derives font scale from
      * `radius` screen pixels — the same approach as FrontalAttack / TurningMovement.
@@ -1324,13 +1324,13 @@ class GeometryService {
     }
 
     /**
-     * Breaks a line into dashes of the given metre lengths.
+     * Breaks a line into dashes of the given meter lengths.
      *
      * **The pattern is clamped against the line's own length**, because it arrives
      * as a fraction of a caller-supplied `radius` and a caller that supplies none
-     * gets a default measured in tens of metres. On a line hundreds of kilometres
+     * gets a default measured in tens of meters. On a line hundreds of kilometers
      * long that produced 66,600 dashes — 133,000 coordinates for one graphic, where
-     * the next heaviest in the whole catalogue has 237. It is invisible on screen
+     * the next heaviest in the whole catalog has 237. It is invisible on screen
      * (the dashes are far below a pixel) and it is most of a frame's work.
      *
      * The floor is a share of the total length, so the clamp only ever engages when
@@ -1546,7 +1546,7 @@ class GeometryService {
         // the symbol reads "C___>" whichever way the line runs.
         //
         // Everything here is expressed **relative to the line's bearing**. It
-        // used to be absolute — the arc's centre was pinned due north of `start`
+        // used to be absolute — the arc's center was pinned due north of `start`
         // and the sweep used fixed compass bearings, with an `end[0] >= start[0]`
         // test to flip it east/west. That held the hook at a fixed compass
         // orientation, so rotating the graphic turned the base line and the
@@ -1555,11 +1555,11 @@ class GeometryService {
         // once the construction follows the bearing, the hook lands on the
         // correct side on its own, and the arc already starts at `start`.
         //
-        // Centre sits one radius off the line at `start`; the arc sweeps the half
+        // Center sits one radius off the line at `start`; the arc sweeps the half
         // that bulges backwards, away from the tip. Its far end is the free point
         // the holder uses as the offset (width) handle.
         const bearing = turf.bearing(start, end);
-        // The centre sits one radius off the line, on whichever side the user chose.
+        // The center sits one radius off the line, on whichever side the user chose.
         const side = mirrored ? 1 : -1;
         const center = turf.destination(turf.point(start), arrowSize, bearing + side * 90, {units: 'meters'});
 
@@ -1586,7 +1586,7 @@ class GeometryService {
 
     /**
      * The "position" bracket shared by the attack-by-fire and support-by-fire
-     * symbols: a bar perpendicular to the shaft, centred on `start`, with a
+     * symbols: a bar perpendicular to the shaft, centered on `start`, with a
      * feather swept back off each end of it.
      *
      * Emitted as ONE polyline `[featherTop, barTop, barBottom, featherBottom]`
@@ -1616,7 +1616,7 @@ class GeometryService {
     /**
      * AttackByFire symbol — the position bracket at `start` plus one shaft out of
      * the bar's midpoint ending in an open arrowhead. `barHalf` is the bar's
-     * half-height in metres; every other dimension is derived from it, so the
+     * half-height in meters; every other dimension is derived from it, so the
      * whole symbol scales uniformly.
      *
      * Returned MultiLineString segments (in order):
@@ -2133,7 +2133,7 @@ class GeometryService {
      *
      * Teeth are placed with `turf.bearing ± 90`, which is a side of *travel* — left or
      * right of the direction the ring is being walked. Which of those is the outside of
-     * the polygon depends entirely on the winding, and nothing normalises the winding of
+     * the polygon depends entirely on the winding, and nothing normalizes the winding of
      * what a user draws: click the corners of an area clockwise and the teeth point out,
      * click the same corners the other way round and every tooth points in. Callers pass
      * a geometric intent (`outward`), so they need this to turn it into a side.

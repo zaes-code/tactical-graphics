@@ -13,16 +13,16 @@ import {TacticalGraphicName} from './type';
  *
  * These constants used to live *inside* the generators as `size * 20` / `size * 15`,
  * which only worked because the holders passed the map resolution into the generator's
- * `size` slot. That made the map-agnostic half consume metres-per-pixel while its schema
- * promised metres, so anyone calling `renderTacticalGraphic` with a real distance got a
+ * `size` slot. That made the map-agnostic half consume meters-per-pixel while its schema
+ * promised meters, so anyone calling `renderTacticalGraphic` with a real distance got a
  * graphic 15-20x too large — silently.
  *
  * Moving them here changes nothing on screen: `20 * resolution` is the same number
  * whichever side of the boundary multiplies. What changes is that the generator now
- * consumes the metres it documents, and the viewport quantity stays in the renderer
+ * consumes the meters it documents, and the viewport quantity stays in the renderer
  * where it belongs.
  *
- * @see ai/decisions.md, "size is metres-per-pixel in six generators"
+ * @see ai/decisions.md, "size is meters-per-pixel in six generators"
  */
 const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.DirectionOfMainAttack]: 20,
@@ -54,12 +54,12 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
 };
 
 /**
- * The default decoration size in metres for `name` at `resolution`.
+ * The default decoration size in meters for `name` at `resolution`.
  *
  * Falls back to 1 px worth for graphics that carry no baked decoration — they ignore the
  * value, and passing the bare resolution is what they got before.
  */
-export const decorationMetres = (name: TacticalGraphicName, resolution: number): number =>
+export const decorationMeters = (name: TacticalGraphicName, resolution: number): number =>
     (DECORATION_PX[name] ?? 1) * resolution;
 
 /**
@@ -68,7 +68,7 @@ export const decorationMetres = (name: TacticalGraphicName, resolution: number):
  * For the graphics in the table above, `size` means "how big is the chevron / the X
  * / the tick", not "how far does this reach" — so it belongs to the renderer, which
  * knows the zoom, rather than to a caller passing a ground distance. Handing one of
- * them a `radius` meant for reach draws a bridge tick kilometres tall.
+ * them a `radius` meant for reach draws a bridge tick kilometers tall.
  *
  * Exported so a renderer can tell the two meanings apart without keeping its own
  * copy of the list.
@@ -98,8 +98,8 @@ const ARROWHEAD_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Envelopment]: 22,
 };
 
-/** The arrowhead length this graphic is drawn with, in metres, or undefined. @see ARROWHEAD_PX */
-export function arrowheadMetres(name: TacticalGraphicName, resolution: number): number | undefined {
+/** The arrowhead length this graphic is drawn with, in meters, or undefined. @see ARROWHEAD_PX */
+export function arrowheadMeters(name: TacticalGraphicName, resolution: number): number | undefined {
     const px = ARROWHEAD_PX[name];
     return px === undefined ? undefined : px * resolution;
 }
@@ -120,9 +120,9 @@ export function arrowheadMetres(name: TacticalGraphicName, resolution: number): 
 export const CROSSED_MISSION_TASK_PX = 50;
 
 /**
- * That half-extent in metres at a given resolution, or `undefined` when there is no
+ * That half-extent in meters at a given resolution, or `undefined` when there is no
  * resolution to spend — a caller with no viewport cannot size a screen-constant symbol.
  */
-export function crossedMissionTaskMetres(drawingResolution?: number): number | undefined {
+export function crossedMissionTaskMeters(drawingResolution?: number): number | undefined {
     return drawingResolution ? CROSSED_MISSION_TASK_PX * drawingResolution : undefined;
 }

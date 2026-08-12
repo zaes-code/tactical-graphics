@@ -37,7 +37,7 @@ const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
  * rather than what it says. Persisting these is what makes a reloaded graphic
  * editable rather than merely visible.
  *
- * Every member is portable: metres and degrees, meaningful to any renderer. Values that
+ * Every member is portable: meters and degrees, meaningful to any renderer. Values that
  * only mean something to *this* renderer — the drawing resolution, and the
  * security-operation `scale` that is only interpretable when multiplied by it — are not
  * here. They live under the snapshot's `renderer` object; see `persistence.ts`.
@@ -91,11 +91,11 @@ export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
  * feature's revision counter does not move. A VectorSource happens to listen
  * for `propertychange` and would redraw anyway, but a feature not yet added to
  * a source, or rendered through any other path, would silently keep its old
- * label. `changed()` restores exactly the behaviour of the `.changed()` calls
+ * label. `changed()` restores exactly the behavior of the `.changed()` calls
  * this function replaced.
  *
  * `geometry` carries the *inputs* a holder needs to reproduce its shape — `size`,
- * `radius`, `rotation`. Without it a graphic serialises to the right picture and the
+ * `radius`, `rotation`. Without it a graphic serializes to the right picture and the
  * wrong state: the rendered geometry survives, but the numbers that produced it live
  * only on the holder instance, so a reloaded graphic cannot be rotated or resized.
  * Only holders whose state the *user* can change need to pass it — anything derived

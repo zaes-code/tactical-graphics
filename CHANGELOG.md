@@ -7,7 +7,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). D
 the npm publish dates — when a version actually became installable.
 
 > **Versions 1.0.0 – 2.0.0 were reconstructed from the commit history after the fact.**
-> This file was added afterwards, so those entries summarise what each release contained
+> This file was added afterwards, so those entries summarize what each release contained
 > rather than being written alongside it. They are accurate but not exhaustive; the
 > commit range between two tags is the complete record.
 
@@ -15,8 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-**The next release must be a major.** Two breaking changes are queued below — both
-renames of a public enum member *and* its value.
+**The next release must be a major.** The breaking changes are queued below — two enum
+renames of a public member *and* its value, plus five exported identifiers respelled.
 
 ### Changed — BREAKING
 
@@ -24,6 +24,18 @@ renames of a public enum member *and* its value.
 - **`AltitudeUnit.Metres` is now `AltitudeUnit.Meters`**, and its value changed from `'metres'` to `'meters'`. Both the member and the string it resolves to change, so anything persisting or comparing the value needs updating.
 
   Both renames are for the same reason: the library implements a US Army field manual for US programs, and the neighboring members already used US spelling — `DefenseOperationsPlanning` sat three lines from `OffenceOperationsPlanning`.
+
+- **Five exported identifiers were respelled to US English**, as part of a sweep of the whole source tree:
+
+  | Was | Is |
+  |---|---|
+  | `decorationMetres` | `decorationMeters` |
+  | `arrowheadMetres` | `arrowheadMeters` |
+  | `crossedMissionTaskMetres` | `crossedMissionTaskMeters` |
+  | `centerSegmentIndex` | `centerSegmentIndex` |
+  | `centerOf` *(MapLibre entry point)* | `centerOf` |
+
+  These are the only renames that reach a consumer. The sweep changed roughly 1,350 further occurrences across 134 files — internal identifiers, comments and documentation — none of which is importable.
 
 ### Changed
 
@@ -47,7 +59,7 @@ renames of a public enum member *and* its value.
 
 ### Fixed
 
-- US English throughout the README prose, and a broader word list in the spelling test that guards it — the previous list had eleven terms and missed both "synthesised" and "re-realise", which is how they reached the published README.
+- US English throughout the README prose and the whole source tree, and a broader word list in the spelling test that guards it. The previous list had eleven terms and did not include `synthesise` or `realise`, which is how both reached the published README.
 
 ---
 
@@ -169,7 +181,7 @@ however many renderers it has.
 
 ### Added
 
-- **`TacticalGraphicsConfig`** and `configureTacticalGraphics`, living beside the geometry rather than in a renderer. Label size, line width, affiliation colours and the default palette.
+- **`TacticalGraphicsConfig`** and `configureTacticalGraphics`, living beside the geometry rather than in a renderer. Label size, line width, affiliation colors and the default palette.
 - The route traffic-direction figure, carried onto the configurable line width.
 
 ### Removed — BREAKING in effect
@@ -311,7 +323,7 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 ### Fixed
 
 - Unspecified hostility no longer turns friendly-blue on edit.
-- `withOpacity` accepts hex colours, not only `rgb()`.
+- `withOpacity` accepts hex colors, not only `rgb()`.
 
 ### Removed
 

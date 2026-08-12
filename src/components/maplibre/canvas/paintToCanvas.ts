@@ -15,7 +15,7 @@ import {toScreen, type ViewTransform} from '../projection';
  * can evaluate.
  *
  * The canvas is a plain overlay above MapLibre's WebGL canvas, so this is
- * CPU-rasterised. That is path A's headline cost — no GPU labelling and no
+ * CPU-rasterised. That is path A's headline cost — no GPU labeling and no
  * collision detection — and its headline benefit: `ctx.measureText` is the same
  * ruler the gap math used, so a hole and the glyph in it cannot drift apart.
  */
@@ -40,7 +40,7 @@ function scaledFont(font: string, scale: number): string {
  * A hatch spec as a `CanvasPattern`, cached on its own values.
  *
  * The overlay redraws every frame, so building the pattern per fill would rebuild
- * it sixty times a second per hatched area. Falls back to the flat colour if a
+ * it sixty times a second per hatched area. Falls back to the flat color if a
  * context cannot be had. @see FillSpec
  */
 const hatchCache: Record<string, CanvasPattern> = {};

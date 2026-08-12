@@ -17,13 +17,13 @@ const ARROWHEAD_RATIO = 0.22;
 const ARROWHEAD_DEG = 30;
 
 /**
- * One of the two straight lines that cross at the symbol's centre.
+ * One of the two straight lines that cross at the symbol's center.
  *
  * Both ends are drawn; `head` puts an open arrowhead on the end in the
  * `+angleDeg` direction only, which is the end FM 1-02.2 marks on Interdict.
  */
 interface CrossArm {
-    /** Planar angle through the centre, degrees, 0 = east, before `rotation`. */
+    /** Planar angle through the center, degrees, 0 = east, before `rotation`. */
     angleDeg: number;
     /** Half-length as a multiple of `opts.size` — the box's half-width. */
     reach: number;
@@ -56,14 +56,14 @@ const CROSS_ARMS: Partial<Record<TacticalGraphicName, CrossArm[]>> = {
  * stroke, "S"), Neutralize (horizontal line plus a hashed diagonal, "N") and
  * Interdict (horizontal and diagonal lines, both arrowheaded, "I").
  *
- * Point-anchored: the user places a centre and the symbol keeps its doctrinal
+ * Point-anchored: the user places a center and the symbol keeps its doctrinal
  * proportions under resize and rotate. Nothing about it is stretchable, so
- * there are no line vertices to edit — `generateHandles` publishes the centre
+ * there are no line vertices to edit — `generateHandles` publishes the center
  * and nothing else.
  *
  * **Sub-line layout**, which `crossedMissionTaskStyleFunc` depends on:
  *   `[0]` first arm, `[1]` second arm, `[2…]` arrowheads.
- * The two arms run right through the centre; the style function is what opens
+ * The two arms run right through the center; the style function is what opens
  * the gap for the label, sized from the glyph it actually renders.
  */
 export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
@@ -99,7 +99,7 @@ export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions
     }
 
     /**
-     * The centre, and only the centre. A crossed mission task has no dimension
+     * The center, and only the center. A crossed mission task has no dimension
      * the user may drag independently — an edge handle would suggest one that
      * does not exist. Resize and rotate work off the symbol itself.
      */

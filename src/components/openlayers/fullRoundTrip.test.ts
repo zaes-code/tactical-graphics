@@ -3,7 +3,7 @@
  *
  * `persistence.test.ts` covers one name per holder family and `resolutionSweep.test.ts`
  * sweeps 32 names. Both have missed real failures this week because the axis was wrong.
- * This one takes the whole registry: draw it, serialise it, restore it onto a fresh
+ * This one takes the whole registry: draw it, serialize it, restore it onto a fresh
  * manager, and compare what came back against what went in.
  */
 import VectorSource from 'ol/source/Vector';

@@ -7,7 +7,7 @@
  * first segment.
  *
  * All three size the gap from the **rendered** glyph. The labels are zoom-clamped
- * while the geometry is not, so a gap baked in metres drifts against the letter
+ * while the geometry is not, so a gap baked in meters drifts against the letter
  * it makes room for — wider zoomed in, tighter zoomed out.
  * @see conventions.md, "a gap follows what it makes room for"
  */
@@ -80,7 +80,7 @@ function trimFromEnd(coords: ProjectedPosition[], distance: number): ProjectedPo
  * empty label would still leave 10 px of curve missing.
  *
  * The arrowhead is filled, never trimmed, and held at a screen size rather than
- * the metres the generator baked in at draw time.
+ * the meters the generator baked in at draw time.
  */
 export function turnPaint(label: string): TaskPaint {
     return (feature, context) => {

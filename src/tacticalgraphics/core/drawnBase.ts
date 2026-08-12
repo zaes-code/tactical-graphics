@@ -8,7 +8,7 @@
  * It exists because a **double-click broke fields of fire in both engines, by two
  * different routes**, and the fix belongs in one place rather than two:
  *
- * - OpenLayers ended the draw at two vertices. The generator then synthesised the
+ * - OpenLayers ended the draw at two vertices. The generator then synthesized the
  *   second leg at a fixed angle on every render, so the V was real but frozen —
  *   dragging a leg swung the other one with it and the angle never changed.
  * - MapLibre delivers a double-click's two clicks as ordinary `click`s first, so the
@@ -18,7 +18,7 @@
  *
  * Both produced the same complaint — the V angle cannot be modified — so both are
  * repaired the same way: drop the repeated vertex, then **materialise** the leg the
- * generator would have synthesised, so it is a real vertex with a real handle that a
+ * generator would have synthesized, so it is a real vertex with a real handle that a
  * user can drag. The default-angle V a double-click produces is then a starting
  * point rather than a cage.
  */
@@ -32,7 +32,7 @@ import {TacticalGraphicName} from './type';
  *
  * Degrees rather than pixels, because this runs after the gesture is over and has no
  * view to ask. Small enough to catch only an exactly-repeated click — about a
- * centimetre at the equator — since a user placing two vertices deliberately close
+ * centimeter at the equator — since a user placing two vertices deliberately close
  * together still means both of them.
  */
 const DUPLICATE_EPSILON_DEG = 1e-7;

@@ -22,7 +22,7 @@ import {lineColorOf, scaleOf} from './paintFunctions';
 
 /** Clearance either side of the letter within its gap, in screen pixels. */
 const GAP_PADDING_PX = 4;
-/** Where along the first segment the gap is centred. */
+/** Where along the first segment the gap is centered. */
 const GAP_POSITION = 0.5;
 
 /**

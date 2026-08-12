@@ -1,10 +1,10 @@
 /**
  * # The security operations
  *
- * Cover, guard and screen: a pair of arrows either side of a centre symbol, with
+ * Cover, guard and screen: a pair of arrows either side of a center symbol, with
  * the operation's letter at the outer end of each arm.
  *
- * **Only the line work and the letters are here.** The centre symbol is injected
+ * **Only the line work and the letters are here.** The center symbol is injected
  * by the host — nothing in this package names milsymbol — so a renderer draws it
  * through the registered provider or draws nothing. @see conventions.md
  */
@@ -23,7 +23,7 @@ type SecurityPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * That helper returns `sizeFactor × (drawingResolution / resolution)`, which
  * holds a label at a constant size in *map* units — so it doubles on screen every
  * time you zoom in a level. Right for a label belonging to geometry drawn in
- * metres; wrong here, because every size in a security operation is a pixel
+ * meters; wrong here, because every size in a security operation is a pixel
  * constant × the resolution and the whole graphic holds its on-screen size across
  * a zoom. A label that grew while its arrows stayed put was the odd one out.
  *
@@ -35,11 +35,11 @@ type SecurityPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * Rotating it turned the letter upside down as soon as the user swung the graphic
  * past the horizontal, which is what an amplifier must never do: a label is read
  * by the operator, not by the symbol. The letter still travels with its own arm,
- * because the label *anchor* is rotated about the centre by the holder. Position
+ * because the label *anchor* is rotated about the center by the holder. Position
  * follows the graphic; orientation follows the screen.
  *
  * `rotation` is therefore spent only on the sub-pixel nudge that keeps the two
- * letters symmetric about the centre.
+ * letters symmetric about the center.
  */
 export function securityOperationLabelPaint(
     label: string,

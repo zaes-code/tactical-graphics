@@ -1,10 +1,10 @@
 /**
- * # Symbology — the colours, weights and label sizes, with no renderer in them
+ * # Symbology — the colors, weights and label sizes, with no renderer in them
  *
  * These accessors used to live in `openlayerStyles.ts`, which made them
  * unreachable from anywhere that is not OpenLayers even though not one of them
  * mentions it. They are the same class of thing as `core/config.ts`, which is
- * already here for exactly this reason: what colour a hostile line is, and how
+ * already here for exactly this reason: what color a hostile line is, and how
  * big a label renders, describe the *symbology* — they would mean the same to a
  * MapLibre view, a Cesium view, or a consumer drawing to a canvas.
  *
@@ -49,10 +49,10 @@ export const LINE_WIDTH = (): number => getDefaultLineWidth();
 /** Text-halo stroke width, in screen pixels. Independent of `LINE_WIDTH` by design. */
 export const HALO_WIDTH = 4;
 
-// ── Colours ──────────────────────────────────────────────────────────────────
+// ── Colors ──────────────────────────────────────────────────────────────────
 
 /**
- * The doctrinal FM 1-02.2 affiliation colours.
+ * The doctrinal FM 1-02.2 affiliation colors.
  *
  * A host re-tints these through `configureTacticalGraphics({hostilityColors})`
  * rather than by editing this table.
@@ -77,9 +77,9 @@ const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphi
 };
 
 /**
- * The doctrinal FM 1-02.2 colour for an affiliation, **ignoring any config override**.
- * `undefined` for `unknown`, whose colour is `getDefaultLineColor()` rather than an
- * affiliation colour of its own.
+ * The doctrinal FM 1-02.2 color for an affiliation, **ignoring any config override**.
+ * `undefined` for `unknown`, whose color is `getDefaultLineColor()` rather than an
+ * affiliation color of its own.
  *
  * Exported because it is a *pure* answer to "what would this be with no override" —
  * something a settings UI needs and cannot get from `getColorByHostility`, which reads
@@ -102,7 +102,7 @@ export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility):
     }
 }
 
-/** An affiliation's line colour: the host's override if there is one, else doctrine. */
+/** An affiliation's line color: the host's override if there is one, else doctrine. */
 export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
     const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
     const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
@@ -111,17 +111,17 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
     return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
 };
 
-/** Default stroke/fill colour for graphics with no specific hostility colour. */
+/** Default stroke/fill color for graphics with no specific hostility color. */
 export function getDefaultLineColor(): string {
     return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
 }
 
-/** Text label fill colour. Follows the default line colour unless overridden on its own. */
+/** Text label fill color. Follows the default line color unless overridden on its own. */
 export function getLabelFillColor(): string {
     return getLabelFillColorOverride() ?? getDefaultLineColor();
 }
 
-/** Text label halo (outline) colour — contrast against the map background. */
+/** Text label halo (outline) color — contrast against the map background. */
 export function getLabelHaloColor(): string {
     return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
 }
@@ -129,7 +129,7 @@ export function getLabelHaloColor(): string {
 /**
  * ## Editor chrome
  *
- * The affordances a user edits a graphic with — handle dots, the inert centre, the draw
+ * The affordances a user edits a graphic with — handle dots, the inert center, the draw
  * marker. Not part of any symbol: they say "you can drag this", and that meaning must
  * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
  * graphic's handles the same red as its own strokes, so they stopped reading as handles
@@ -157,11 +157,11 @@ export function getDrawMarkerOutlineColor(): string {
 }
 
 /**
- * Re-expresses a colour at a given alpha.
+ * Re-expresses a color at a given alpha.
  *
  * Handles both forms the palette can hold: `rgb()`/`rgba()`, and the hex the
- * default line colour is written as. Returns its input unchanged for anything
- * else, so a host's `hsl()` or named colour degrades to full opacity rather than
+ * default line color is written as. Returns its input unchanged for anything
+ * else, so a host's `hsl()` or named color degrades to full opacity rather than
  * to a crash.
  */
 export function withOpacity(color: string, alpha: number): string {
@@ -272,10 +272,10 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 
 /**
- * A distance for a user to read, from metres.
+ * A distance for a user to read, from meters.
  *
- * Metres below a kilometre — a 400 m radius shown as "0.4 km" is both harder to read
- * and less precise than the number it came from. Above that, kilometres: one decimal
+ * Meters below a kilometer — a 400 m radius shown as "0.4 km" is both harder to read
+ * and less precise than the number it came from. Above that, kilometers: one decimal
  * while the figure is small enough for it to mean something, whole numbers beyond
  * 10 km where it is noise.
  *
@@ -284,9 +284,9 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
  * compares them. It was in `openlayerStyles.ts`, which is why MapLibre had no
  * read-out to be consistent with.
  */
-export const formatDistance = (metres: number): string => {
-    if (metres < 1000) return `${Math.round(metres)} m`;
-    const km = metres / 1000;
+export const formatDistance = (meters: number): string => {
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    const km = meters / 1000;
     return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
 };
 
@@ -459,7 +459,7 @@ const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * Whether a graphic's line work takes the standard identity colour at all.
+ * Whether a graphic's line work takes the standard identity color at all.
  *
  * **A symbology fact, not a UI one**, which is why it lives here rather than beside
  * the dialog's field list. FM 1-02.2 gives no amplifier fields to the Chapter 6

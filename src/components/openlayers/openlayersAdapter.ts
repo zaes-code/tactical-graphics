@@ -82,7 +82,7 @@ export interface TacticalGraphicHandler {
      * Moves the base vertex at `vertexIndex` to `coordinate`.
      *
      * For graphics whose shape is the positions of its own vertices — the legs of a
-     * fields-of-fire V — rather than a size scaled about a centre. Present means "drag
+     * fields-of-fire V — rather than a size scaled about a center. Present means "drag
      * this vertex instead of resizing the whole graphic".
      *
      * The index is into the **base geometry**, not the handle feature: `visiblePathHandles`
