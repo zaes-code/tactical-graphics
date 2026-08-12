@@ -96,13 +96,13 @@ export const MAX_LABEL_SIZE = 26;
  * `'FL150'` and `'1500MSL'` still render exactly as doctrine writes them.
  */
 export enum AltitudeUnit {
-    Metres = 'metres',
+    Meters = 'meters',
     Feet = 'feet',
 }
 
 /** What each unit is written as on a label. Matches the plates: `1500FT`, not `1500 ft`. */
 export const ALTITUDE_UNIT_SUFFIX: Readonly<Record<AltitudeUnit, string>> = Object.freeze({
-    [AltitudeUnit.Metres]: 'M',
+    [AltitudeUnit.Meters]: 'M',
     [AltitudeUnit.Feet]: 'FT',
 });
 
