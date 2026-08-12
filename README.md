@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**214 graphics** are implemented and verified today, covering **228 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next.
+**214 graphics** are implemented and verified today, covering **228 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
