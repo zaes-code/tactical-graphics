@@ -8,8 +8,8 @@
  *   - LineGraphicController      → a LineString (2 pts, or `maxPoints`; multi → 3 = 2 segments)
  *   - PolygonGraphicController   → a Polygon (5-sided ring)
  *   - RectangularAreaGraphicController → a Polygon box (4 corners)
- *   - MissionTaskController      → a centre point + radius, via updateGeom()
- *   - SecurityOperationsController → a centre point, via setBaseFeature()
+ *   - MissionTaskController      → a center point + radius, via updateGeom()
+ *   - SecurityOperationsController → a center point, via setBaseFeature()
  *
  * A generator that throws (a genuinely broken graphic) is caught and reported,
  * not fatal — the rest of the sweep still renders.
@@ -59,11 +59,11 @@ import ms from 'milsymbol';
 import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
 
 /**
- * A different unit symbol in the centre of each security operation.
+ * A different unit symbol in the center of each security operation.
  *
  * Cover, Guard and Screen otherwise draw the same generic land unit, which makes
  * three graphics that already look alike harder still to tell apart in a
- * catalogue. It also demonstrates the per-graphic provider — the global one is set
+ * catalog. It also demonstrates the per-graphic provider — the global one is set
  * once for the whole app and cannot, by itself, give two Screens different
  * symbols.
  *
@@ -86,7 +86,7 @@ const SAMPLE_UNIT_FUNCTION_ID: Partial<Record<TacticalGraphicName, string>> = {
  *
  * Returned per symbol as `{src, sizePx}` rather than set through
  * `setSecurityOperationSymbolSize`, which is global — the gallery has no business
- * resizing the centre symbol for the rest of the host's application.
+ * resizing the center symbol for the rest of the host's application.
  */
 const SAMPLE_UNIT_SIZE_PX = 50;
 
@@ -163,7 +163,7 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
  */
 const DECORATED_SAMPLE_SCALE = 3;
 
-/** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
+/** EPSG:3857 meters an area graphic (polygon, rectangle, circle) spans from its center. */
 export const HALF = 30_600;
 /**
  * How much longer a line graphic is drawn than an area graphic. Arrows, axes and
@@ -176,7 +176,7 @@ export const LINE_HALF = HALF * LINE_SCALE;
 /**
  * Spacing, in screen pixels at the resolution the samples are generated at.
  * GAP is the clearance around every sample — the guarantee against touching
- * neighbours; TITLE and HEADING are the bands reserved for a caption and for a
+ * neighbors; TITLE and HEADING are the bands reserved for a caption and for a
  * category banner.
  */
 const GAP_PX = 10;
@@ -210,14 +210,14 @@ const CONTROL_PANEL_PX = 326;
 const VIEW_PADDING_PX = 14;
 
 /** A measured box wider than this is a wrapped or degenerate geometry, not a big graphic. */
-const SANE_METRES = 4_000_000;
+const SANE_METERS = 4_000_000;
 
 export interface SampleSweepResult {
     drawn: number;
     failed: {name: TacticalGraphicName; error: string}[];
 }
 
-/** A sample's rendered extent, relative to the centre it was generated at. */
+/** A sample's rendered extent, relative to the center it was generated at. */
 interface Box {
     dx0: number;
     dy0: number;
@@ -228,7 +228,7 @@ interface Box {
 const boxWidth = (b: Box) => b.dx1 - b.dx0;
 const boxHeight = (b: Box) => b.dy1 - b.dy0;
 
-/** Where one sample ends up: the centre to generate it at, and its caption anchor. */
+/** Where one sample ends up: the center to generate it at, and its caption anchor. */
 interface Placement {
     name: TacticalGraphicName;
     cx: number;
@@ -247,7 +247,7 @@ interface Layout {
     headings: Heading[];
     /** Resolution the samples were measured at — generate at this, or the boxes lie. */
     resolution: number;
-    /** Full span of the packed layout, centred on (0, 0). */
+    /** Full span of the packed layout, centered on (0, 0). */
     width: number;
     height: number;
 }
@@ -295,8 +295,8 @@ export {clearAllGraphics};
  *
  * `hostility`, when given, is applied to every sample that doctrinally accepts
  * one — which makes the sweep a one-click check of hostility rendering across
- * the whole catalogue. Graphics without the field (the Chapter 6 tactical
- * mission tasks) are skipped rather than coloured, so the sweep shows what a
+ * the whole catalog. Graphics without the field (the Chapter 6 tactical
+ * mission tasks) are skipped rather than colored, so the sweep shows what a
  * user could actually produce.
  */
 export function drawProvenSamples(
@@ -478,7 +478,7 @@ function nominalBox(name: TacticalGraphicName): Box {
  * says so, rather than laying out around the garbage.
  */
 function sane(box: Box, name: TacticalGraphicName): Box {
-    if (boxWidth(box) <= SANE_METRES && boxHeight(box) <= SANE_METRES) return box;
+    if (boxWidth(box) <= SANE_METERS && boxHeight(box) <= SANE_METERS) return box;
     // eslint-disable-next-line no-console
     console.warn(`[sample sweep] ${name} measured ${Math.round(boxWidth(box) / 1000)}×${Math.round(boxHeight(box) / 1000)}km — using its nominal size`);
     return nominalBox(name);
@@ -579,7 +579,7 @@ function layoutBlock(
 /**
  * Stands the category blocks in `columns` columns, each block going to whichever
  * column is currently shortest — which keeps the columns level without
- * reordering the categories. Coordinates come out centred on (0, 0) with y up,
+ * reordering the categories. Coordinates come out centered on (0, 0) with y up,
  * ready to hand straight to the generators.
  */
 function assembleColumns(
@@ -607,7 +607,7 @@ function assembleColumns(
         width,
         height,
         layout: {
-            // A cell is [gap/2 | title | box | gap/2]; the box is centred across the
+            // A cell is [gap/2 | title | box | gap/2]; the box is centered across the
             // cell's width and hangs from its top, so captions never collide with the
             // sample above them.
             placements: placed.flatMap(({block, left, top}) => block.cells.map(({name, left: cl, top: ct, box}) => {
@@ -654,7 +654,7 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     });
     if (isEmpty(extent)) return null;
 
-    // A security operation's centre symbol is a Point with an Icon style, and a
+    // A security operation's center symbol is a Point with an Icon style, and a
     // point has no extent — so the measured box counted the arms and the labels and
     // nothing at all for the symbol between them. Cells came out too small and the
     // caption landed on top of the symbol: invisible while the symbol was the
@@ -681,7 +681,7 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
 }
 
-/** Feeds a handler the base geometry its controller expects, centred on (cx, cy). */
+/** Feeds a handler the base geometry its controller expects, centered on (cx, cy). */
 export function applyBaseGeometry(
     handler: TacticalGraphicHandler,
     name: TacticalGraphicName,
@@ -709,7 +709,7 @@ export function applyBaseGeometry(
 // ── geometry synthesis ──────────────────────────────────────────────────────
 
 /**
- * Line vertices centred on (cx, cy): 2 points → 1 segment; 3+ → a shallow
+ * Line vertices centered on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
 function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
@@ -763,7 +763,7 @@ const pointFeature = (coord: Coordinate, id: string, name: TacticalGraphicName) 
 
 /**
  * Word-wraps a caption onto short lines so it stays within its cell instead of
- * bleeding into neighbours. Truncates to `maxLines` with an ellipsis.
+ * bleeding into neighbors. Truncates to `maxLines` with an ellipsis.
  */
 function wrapLabel(text: string, maxChars = 14, maxLines = 2): string {
     const lines: string[] = [];
@@ -781,7 +781,7 @@ function wrapLabel(text: string, maxChars = 14, maxLines = 2): string {
 /**
  * A non-interactive caption above each sample so you can tell which is which.
  * Wrapped and bottom-anchored at the top of the cell so multi-line names grow
- * up into the gap between rows rather than over the graphic or its neighbours.
+ * up into the gap between rows rather than over the graphic or its neighbors.
  */
 function titleFeature(coord: Coordinate, text: string): Feature {
     const f = new Feature(new Point(coord));

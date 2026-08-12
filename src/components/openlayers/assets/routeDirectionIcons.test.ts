@@ -23,7 +23,7 @@ describe('route direction icons', () => {
     });
 
     it('encodes characters that would break a data URI', () => {
-        // '#' would otherwise terminate the URI at the fill colour.
+        // '#' would otherwise terminate the URI at the fill color.
         expect(ONE_WAY_ARROW).not.toContain('#');
         expect(decode(ONE_WAY_ARROW)).toContain('fill="#1f1f1f"');
     });

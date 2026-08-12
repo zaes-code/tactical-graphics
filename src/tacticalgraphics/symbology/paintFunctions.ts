@@ -9,7 +9,7 @@
  * | | ported from | what it proves |
  * |---|---|---|
  * | {@link phaseLinePaint} | `phaseLineStyle` | rotation, upright flip, a gap measured off the glyph |
- * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesised per frame, `decorationScale` against the shape |
+ * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesized per frame, `decorationScale` against the shape |
  * | {@link arcMissionTaskPaint} | `arcMissionTaskStyleFunc` | a gap cut from the *rendered* letter, projected onto a tangent |
  *
  * Each is a transcription of its OpenLayers original — the arithmetic is
@@ -44,7 +44,7 @@ import {
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {
-    centreSegmentIndex,
+    centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     obstacleToothSize,
@@ -64,7 +64,7 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
 }
 
 /**
- * The affiliation a feature draws in. `unknown` resolves to the default line colour.
+ * The affiliation a feature draws in. `unknown` resolves to the default line color.
  *
  * **A graphic whose symbol does not take a standard identity always reads
  * `unknown`**, whatever its properties say. @see supportsHostility
@@ -77,9 +77,9 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
 }
 
 /**
- * The colour a graphic's line work draws in: a host's already-resolved override if
+ * The color a graphic's line work draws in: a host's already-resolved override if
  * there is one, otherwise the affiliation's. `getColorByHostility` resolves
- * `unknown` to the default line colour, so the unaffiliated case is covered too.
+ * `unknown` to the default line color, so the unaffiliated case is covered too.
  *
  * ## Why the exemption is enforced here and not only in the UI
  *
@@ -87,7 +87,7 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * hostile Seize is drawn exactly like any other Seize. The demo enforced that by
  * **hiding the input** — which stops a user picking an identity and does nothing
  * about one that arrives in an imported file, from a host writing the bag
- * directly, or from a sweep that colours everything. MapLibre's sample sweep did
+ * directly, or from a sweep that colors everything. MapLibre's sample sweep did
  * exactly that last thing and drew every mission task red.
  *
  * Hiding a control is a UI convenience; this is the rule. Both halves are kept,
@@ -95,7 +95,7 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * wrong.
  *
  * `hostilityColor` is skipped for the same reason: it is a *resolved* affiliation
- * colour, so honouring it would let the same value back in through the other door.
+ * color, so honoring it would let the same value back in through the other door.
  */
 export function lineColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
@@ -125,14 +125,14 @@ export function halo(): {color: string; widthPx: number} {
  */
 export function axisRotation(feature: PaintFeature): number {
     // Preferred: the axis as *drawn*. A point-anchored label sits on the graphic's own
-    // axis, so the anchor and the centre give the direction directly — in projected
-    // metres, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
+    // axis, so the anchor and the center give the direction directly — in projected
+    // meters, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
     // the same two points for the same reason: EPSG:3857's y is not linear in
     // latitude, so an axis reconstructed from the angle drifts off the drawn line.
-    const centre = feature.graphicCenter;
+    const center = feature.graphicCenter;
     const anchor = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
-    if (centre && anchor && (centre[0] !== anchor[0] || centre[1] !== anchor[1])) {
-        return uprightRotation(anchor, centre);
+    if (center && anchor && (center[0] !== anchor[0] || center[1] !== anchor[1])) {
+        return uprightRotation(anchor, center);
     }
 
     // Fallback for a feature that carries neither: the angle the generator was given.
@@ -160,7 +160,7 @@ const PHASE_LINE_GAP_PX = 8;
  * runs on screen.
  *
  * **Hostile lines prefix their label with "ENY", and the test is the affiliation,
- * not the colour string.** A colour is resolved at stamp time, so a string
+ * not the color string.** A color is resolved at stamp time, so a string
  * compare would both miss a feature stamped under a different palette and be one
  * refactor away from matching some unrelated red.
  */
@@ -244,7 +244,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const text = getFullLabel(name, feature.properties.label ?? '');
         const paints: Paint[] = [];
 
-        const segIdx = centreSegmentIndex(coords);
+        const segIdx = centerSegmentIndex(coords);
         const p1 = coords[segIdx];
         const p2 = coords[segIdx + 1];
 
@@ -337,12 +337,12 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         const lines = paintLineWork(feature.geometry);
         if (!lines.length) return [];
 
-        const centre = feature.graphicCenter;
+        const center = feature.graphicCenter;
         const labelPoint = feature.graphicLabelPoint;
-        const radius = centre && labelPoint ? Math.hypot(labelPoint[0] - centre[0], labelPoint[1] - centre[1]) : 0;
+        const radius = center && labelPoint ? Math.hypot(labelPoint[0] - center[0], labelPoint[1] - center[1]) : 0;
 
-        if (centre && labelPoint && radius > 0 && label) {
-            const axis = Math.atan2(labelPoint[1] - centre[1], labelPoint[0] - centre[0]);
+        if (center && labelPoint && radius > 0 && label) {
+            const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
                 ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
                 : scaleOf(feature, context);
@@ -356,7 +356,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
             const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * context.resolution) / radius);
 
             for (const i of [0, 1]) {
-                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], centre, axis, halfGap);
+                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], center, axis, halfGap);
             }
         }
 
@@ -463,7 +463,7 @@ export function amplifierDash(feature: PaintFeature): number[] | undefined {
  *   in different directions — a line drawn left-to-right overall may turn back on
  *   its final leg — so the side each label is pushed to is decided per endpoint,
  *   not once for the whole line.
- * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalises
+ * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalizes
  *   against north; a plain counter-clockwise perpendicular flips when the same
  *   line is drawn the other way and puts every label underneath.
  *
@@ -554,7 +554,7 @@ export function defaultLinePaint(
 // ── 5. Areas — the plain outline behind 60 of the 75 area graphics ────────────
 
 /**
- * An area's outline: one stroke in the affiliation's colour, dashed when the
+ * An area's outline: one stroke in the affiliation's color, dashed when the
  * status is `planned`.
  *
  * Unremarkable, and the highest-coverage paint function in the library — 60 of
@@ -582,7 +582,7 @@ export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature,
 }
 
 /**
- * A filled shape in the affiliation's colour, outlined in the same.
+ * A filled shape in the affiliation's color, outlined in the same.
  *
  * The fallback for holders that install no dedicated style of their own. Distinct
  * from {@link areaOutlinePaint} because the fill is deliberate here — this is what
@@ -591,7 +591,7 @@ export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature,
  * **The fill is only emitted for a geometry that can hold one.** This is the
  * fallback for a whole family, and several of its members are paths rather than
  * areas — exploitation's zigzag among them. OpenLayers drops a fill on a line
- * silently, so asking for one looked harmless; MapLibre honours it, filling the
+ * silently, so asking for one looked harmless; MapLibre honors it, filling the
  * zigzag in as a solid blob. A mark that means nothing to one renderer and
  * something to another is a mark that should not be emitted.
  */

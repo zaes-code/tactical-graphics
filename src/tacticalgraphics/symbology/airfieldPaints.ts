@@ -7,7 +7,7 @@
  *
  * It was written as an SVG path string and converted through an OpenLayers helper,
  * which is why it read as renderer-specific. It is not: the "path" is two straight
- * segments in projected metres, and every renderer can draw two lines.
+ * segments in projected meters, and every renderer can draw two lines.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -19,7 +19,7 @@ import {lineColorOf} from './paintFunctions';
 type AirfieldPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /**
- * The crossed runways at scale 1, in projected metres from the centre — so the
+ * The crossed runways at scale 1, in projected meters from the center — so the
  * unscaled symbol is ~400 km across, whatever polygon it sits in.
  */
 const HALF_WIDTH = 200_000;
@@ -44,7 +44,7 @@ const SHRINK_FACTOR = 0.9;
 /**
  * Points along both arms, used to test the symbol against the polygon outline.
  *
- * **Endpoints alone are not enough**: both arms pass through the centre, so a notch
+ * **Endpoints alone are not enough**: both arms pass through the center, so a notch
  * in a concave ring can cut a stroke without containing either of its ends.
  */
 const SAMPLES: readonly ProjectedPosition[] = ARMS.flatMap(([a, b]) => {
@@ -61,17 +61,17 @@ const SAMPLES: readonly ProjectedPosition[] = ARMS.flatMap(([a, b]) => {
  * The airfield: the area's ordinary label block, plus the runway symbol at its
  * interior point.
  *
- * The runways take the **standard identity colour**, with the area outline, because
+ * The runways take the **standard identity color**, with the area outline, because
  * they are the symbol's own line work rather than an amplifier — FM 1-02.2 para 5-3.
  */
 export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
     return (feature, context) => {
         const paints = label(feature, context);
-        const centre = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
-        if (!centre) return paints;
+        const center = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
+        if (!center) return paints;
 
-        const scale = symbolScale(feature, centre);
-        const place = ([x, y]: ProjectedPosition): ProjectedPosition => [centre[0] + x * scale, centre[1] + y * scale];
+        const scale = symbolScale(feature, center);
+        const place = ([x, y]: ProjectedPosition): ProjectedPosition => [center[0] + x * scale, center[1] + y * scale];
 
         paints.push({
             geometry: {type: 'MultiLineString', coordinates: ARMS.map(arm => arm.map(place))},
@@ -92,7 +92,7 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
  * Returns 1 when the bounds have not been stamped yet, keeping the historical fixed
  * size rather than collapsing the symbol to nothing on a first render.
  */
-function symbolScale(feature: PaintFeature, centre: ProjectedPosition): number {
+function symbolScale(feature: PaintFeature, center: ProjectedPosition): number {
     const bounds = feature.bounds;
     if (!bounds) return 1;
 
@@ -106,13 +106,13 @@ function symbolScale(feature: PaintFeature, centre: ProjectedPosition): number {
     if (!ring || ring.length < 3) return scale;
 
     const fits = (s: number) =>
-        SAMPLES.every(p => pointInRing(ring, [centre[0] + p[0] * s, centre[1] + p[1] * s]));
+        SAMPLES.every(p => pointInRing(ring, [center[0] + p[0] * s, center[1] + p[1] * s]));
 
     for (let i = 0; i < SHRINK_STEPS && !fits(scale); i++) scale *= SHRINK_FACTOR;
     return scale;
 }
 
-/** Ray casting, in the plane — these are projected metres. */
+/** Ray casting, in the plane — these are projected meters. */
 function pointInRing(ring: readonly ProjectedPosition[], [x, y]: ProjectedPosition): boolean {
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

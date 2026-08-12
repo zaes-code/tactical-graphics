@@ -7,8 +7,8 @@
  * circle at each turning point, an "ACP n" in every circle, the designation along
  * each leg, and a block of properties hanging off the top-left.
  *
- * **Every piece of text here stays in the label colour, including on a hostile
- * corridor.** FM 1-02.2 colours the *lines* of a control measure by standard
+ * **Every piece of text here stays in the label color, including on a hostile
+ * corridor.** FM 1-02.2 colors the *lines* of a control measure by standard
  * identity — the rails and the circle strokes — while text amplifiers stay black.
  * Table 5-3's enemy boundary is the reference: red line, black labels.
  */
@@ -41,7 +41,7 @@ const INFO_BLOCK_OFFSET_PX = -60;
  * Scale for an "ACP n" label — two competing sizes, and the larger wins.
  *
  * - The **floor** is fitted to a fixed assumed circle and capped at the
- *   zoom-anchored scale. It is what keeps a narrow corridor labelled at all;
+ *   zoom-anchored scale. It is what keeps a narrow corridor labeled at all;
  *   fitting to the real circle alone collapses the text to nothing when the
  *   circle is only a few pixels across.
  * - The **grown** size is fitted to the circle's real rendered radius and capped at
@@ -70,27 +70,27 @@ export function acpLabelScale(
 /**
  * Renders the AM (width) amplifier.
  *
- * Stored as bare metres because the properties dialog's Width input accepts digits
+ * Stored as bare meters because the properties dialog's Width input accepts digits
  * only, so the unit is presentation and is added here. Anything non-numeric — feet,
  * free text, an imported value — is shown verbatim rather than mangled.
  *
  * **The same words as every other distance in this library**, which is a deliberate
- * departure from doctrine rather than an oversight. It used to print raw metres with
+ * departure from doctrine rather than an oversight. It used to print raw meters with
  * thousands separators, so a corridor read `391,357.585 M` — three decimal places of a
- * metre, in a number nobody measures a corridor in. It now goes through
- * `formatDistance`: metres below a kilometre, kilometres above.
+ * meter, in a number nobody measures a corridor in. It now goes through
+ * `formatDistance`: meters below a kilometer, kilometers above.
  *
  * FM 1-02.2 defines field AM as "a numeric amplifier that displays a minimum, maximum,
  * or specific distance (range, radius, width, or length) **in meters or feet**", capped
- * at 7 characters, and table 5-23's plates render it `1200FT` / `300FT`. Kilometres are
+ * at 7 characters, and table 5-23's plates render it `1200FT` / `300FT`. Kilometers are
  * not one of the two units it admits — the manual reaches for "km" once in the whole
  * document, in the *speed* amplifier's "kph". Readability won that trade on the user's
  * call: a 391 km corridor written as `391358M` is a number nobody can take in at a
  * glance, and the quantity is unambiguous either way.
  */
 export function formatWidthAmplifier(value: string): string {
-    const metres = Number(value);
-    return value.trim() !== '' && Number.isFinite(metres) ? formatDistance(metres) : value;
+    const meters = Number(value);
+    return value.trim() !== '' && Number.isFinite(meters) ? formatDistance(meters) : value;
 }
 
 /** A text amplifier with the usual halo. */
@@ -126,7 +126,7 @@ function amplifier(
  * "ACP n" in every circle.
  *
  * Painted from the **labels** feature, whose geometry is the MultiPoint of
- * turning points — so `coords[i]` is a circle centre and the midpoint of each
+ * turning points — so `coords[i]` is a circle center and the midpoint of each
  * consecutive pair is a leg.
  */
 export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
@@ -213,7 +213,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
  * The corridor's line work: the rails and the circle at each turning point.
  *
  * The generator emits a collection, and every member of it is stroked in the
- * affiliation colour with no fill — a filled circle would hide whatever the
+ * affiliation color with no fill — a filled circle would hide whatever the
  * corridor passes over, and the ACP label inside it.
  */
 export function airCorridorPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {

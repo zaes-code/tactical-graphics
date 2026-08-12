@@ -1,7 +1,7 @@
 /**
- * `decorationSize` is documented as metres. These pin that it behaves like one.
+ * `decorationSize` is documented as meters. These pin that it behaves like one.
  *
- * Six generators used to multiply it by a pixel count of their own, so a value in metres
+ * Six generators used to multiply it by a pixel count of their own, so a value in meters
  * came out 15-20x too large. It only looked right because the OpenLayers holders passed
  * the map resolution into the slot instead of a distance.
  *
@@ -16,7 +16,7 @@ const LINE: Position[] = [[-77.0, 38.9], [-76.8, 38.9]];
 
 /**
  * Fields of fire is drawn as a V, and a two-point base now has its second leg
- * synthesised — a right angle off the drawn one. That leg is legitimately far from
+ * synthesized — a right angle off the drawn one. That leg is legitimately far from
  * the drawn line, so `reach` would measure it rather than the decoration. Giving it
  * a base that is already a V keeps the measurement on the thing being pinned.
  * @see asVee
@@ -33,7 +33,7 @@ const build = (name: TacticalGraphicName, decorationSize: number): Feature => ({
     properties: {tacticalGraphic: {name, decorationSize}},
 });
 
-const metres = (a: Position, b: Position) =>
+const meters = (a: Position, b: Position) =>
     turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
 
 /** How far the output strays from the drawn line — graphic and labels together. */
@@ -77,7 +77,7 @@ const AFFECTED: [string, TacticalGraphicName][] = [
     ['AssaultCrossing', TacticalGraphicName.AssaultCrossing],
 ];
 
-describe('decorationSize is a distance in metres', () => {
+describe('decorationSize is a distance in meters', () => {
     it.each(AFFECTED)('%s stays within a few multiples of the value it was given', (_l, name) => {
         // A 1 km decoration must not produce a 20 km one. Generous ceiling: some
         // generators legitimately reach a couple of multiples out.

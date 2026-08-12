@@ -27,7 +27,7 @@ export class LineOfContact extends TacticalGraphicsBase {
     type: string = "LineString";
 
     /**
-     * The drawn centreline, undecorated.
+     * The drawn centerline, undecorated.
      *
      * Both waves and the gap between them are drawn in screen space by
      * `lineOfContactStyleFunc`. Baked in here they were sized from the drawing

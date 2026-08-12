@@ -135,7 +135,7 @@ export class AviationDirectionOfAttack extends TacticalGraphicsBase<MovementGrap
     private createBowtie(baseCoords: Position[], size: number): Position[][] {
         const P0 = baseCoords[0];
         const P1 = baseCoords[1];
-        // Was 50/10/10 x a 20px unit; `size` now *is* that unit's worth of metres,
+        // Was 50/10/10 x a 20px unit; `size` now *is* that unit's worth of meters,
         // so the same shape is 2.5 / 0.5 / 0.5 x it.
         const centerDist = 2.5 * size;
         const halfWidth = 0.5 * size;

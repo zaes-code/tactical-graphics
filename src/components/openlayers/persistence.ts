@@ -20,7 +20,7 @@
  * ```
  *
  * `tacticalGraphic` is the **portable description of the symbol** — the same object the
- * map-agnostic `renderTacticalGraphic` consumes. Everything in it is metres, degrees or
+ * map-agnostic `renderTacticalGraphic` consumes. Everything in it is meters, degrees or
  * text: meaningful to any renderer, in any language, forever. There is nothing else,
  * and that is the contract: a record carrying only this bag rebuilds exactly.
  *
@@ -28,8 +28,8 @@
  *
  * `getController(name, res)` derives decoration sizes from the map resolution —
  * `20 * res` arrowheads, `res * 20` block widths, `CENTER_PADDING_PX * res` gaps. By the
- * time the generator sees one it is a distance in **metres**, and a distance is portable;
- * the metres-per-pixel it came from is not. So holders stamp the derived value into
+ * time the generator sees one it is a distance in **meters**, and a distance is portable;
+ * the meters-per-pixel it came from is not. So holders stamp the derived value into
  * `tacticalGraphic` on every rebuild, and a restore replays the distance rather than
  * re-deriving one from whatever zoom the loading session happens to be at.
  *
@@ -226,7 +226,7 @@ export function serializeTacticalGraphics(
 /**
  * Gives a freshly built handler its base geometry.
  *
- * Point-anchored graphics go through `updateGeom`, not `setBaseFeature`: their centre,
+ * Point-anchored graphics go through `updateGeom`, not `setBaseFeature`: their center,
  * size and rotation are cached on the holder and `updateGeom` is the only entry that
  * sets all three together. Shared with the demo's sample gallery, which needs the same
  * dispatch to build graphics without a draw interaction.
@@ -238,7 +238,7 @@ export function applyRestoredGeometry(
 ): void {
     if (handler instanceof MissionTaskController) {
         const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
-        if (!coords || coords.length < 2) throw new Error('point-based graphic has no centre coordinate');
+        if (!coords || coords.length < 2) throw new Error('point-based graphic has no center coordinate');
         // `bend` before `updateGeom`: the holder reads it back out when it
         // regenerates, so setting it afterwards would leave the restored
         // graphic drawn at the default sharpness until the next edit.
@@ -274,7 +274,7 @@ export function applyRestoredGeometry(
     if (handler instanceof SecurityOperationsController) {
         handler.setBaseFeature(base as Feature<Point>);
         if (state.rotation !== undefined) handler.graphic.setRotation(state.rotation);
-        // The centre symbol needs nothing here any more. `setBaseFeature` positions
+        // The center symbol needs nothing here any more. `setBaseFeature` positions
         // it, and its style is a StyleFunction installed in the controller's
         // constructor. This used to place the icon by hand and rebuild the symbol
         // inside a try/catch, because the symbol was built at `drawend` only — a
@@ -317,7 +317,7 @@ export function applyRestoredGeometry(
         // there is nothing to regenerate from until the base is set.
         // `setOffset` takes the holder's own number, and a holder owns exactly one of the
         // three: a half-width for the width family (stored full, so halve it back), a
-        // decoration size for the line families, a radius for anything with a centre.
+        // decoration size for the line families, a radius for anything with a center.
         const scalar = state.width !== undefined ? state.width / 2 : (state.decorationSize ?? state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         // Which side the hook hangs on — user intent, so it has to come back.
@@ -365,7 +365,7 @@ export function restoreTacticalGraphics(
         let added: Feature[] = [];
         try {
             // The current view resolution, and nothing from the file. Holders seed their
-            // decoration sizes from it, then the stamped metre values in `tacticalGraphic`
+            // decoration sizes from it, then the stamped meter values in `tacticalGraphic`
             // overwrite them — so which resolution this is does not affect the result.
             const resolution = manager.map.getView().getResolution();
             if (!resolution || resolution <= 0) {
@@ -410,9 +410,9 @@ export function restoreTacticalGraphics(
             // **Tidied on the way in, exactly as a drawn base is.** A saved base can be
             // short of what its graphic needs — the sample sweep hands a fields-of-fire
             // two points, and every snapshot written before the draw path started
-            // normalising has the same shape. Left alone, the generator synthesises the
+            // normalizing has the same shape. Left alone, the generator synthesizes the
             // missing leg on every render and the V cannot be reshaped, because there is
-            // no vertex there to drag. MapLibre normalises inside `buildTacticalGraphic`,
+            // no vertex there to drag. MapLibre normalizes inside `buildTacticalGraphic`,
             // which every one of its paths goes through; this is the same door on this
             // side. @see normalizeDrawnBase
             if (geometry instanceof LineString) {

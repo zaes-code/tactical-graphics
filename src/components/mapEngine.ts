@@ -20,7 +20,7 @@ import type {FeatureCollection} from 'geojson';
  *
  * An engine says what it supports and the panel **disables** what it does not, with the
  * reason on the tooltip. That is deliberately not the same as hiding the controls: a
- * greyed button with a reason tells you the state of the port, a missing button reads
+ * grayed button with a reason tells you the state of the port, a missing button reads
  * as a different app, and a live button that silently does nothing is the worst of the
  * three. Both engines currently declare everything true; the shape stays because a
  * third renderer will arrive unfinished.

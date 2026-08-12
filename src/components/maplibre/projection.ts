@@ -4,7 +4,7 @@ import type {ProjectedPosition} from '@zaes/tactical-graphics';
 /**
  * # EPSG:3857 ↔ lon/lat, and MapLibre's camera expressed as a `resolution`
  *
- * The paint layer works in **projected metres** — the same EPSG:3857 frame the
+ * The paint layer works in **projected meters** — the same EPSG:3857 frame the
  * OpenLayers style functions have always used — because that is what makes a
  * ported decoration character-for-character the same math as the original. This
  * module is the only place that converts.
@@ -18,10 +18,10 @@ import type {ProjectedPosition} from '@zaes/tactical-graphics';
 /** Earth's radius as EPSG:3857 defines it — a sphere, not the WGS-84 ellipsoid. */
 const R = 6378137;
 
-/** Half the projected world, in metres. `π · R`, i.e. ±20037508.34. */
+/** Half the projected world, in meters. `π · R`, i.e. ±20037508.34. */
 export const MERCATOR_HALF_WORLD = Math.PI * R;
 
-/** Full width of the projected world, in metres. */
+/** Full width of the projected world, in meters. */
 export const MERCATOR_WORLD_SIZE = 2 * MERCATOR_HALF_WORLD;
 
 /**
@@ -31,7 +31,7 @@ export const MERCATOR_WORLD_SIZE = 2 * MERCATOR_HALF_WORLD;
  */
 export const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 
-/** lon/lat degrees → EPSG:3857 metres. */
+/** lon/lat degrees → EPSG:3857 meters. */
 export function toMercator(lonLat: [number, number]): ProjectedPosition {
     const [lon, lat] = lonLat;
     const clamped = Math.max(-MERCATOR_MAX_LATITUDE, Math.min(MERCATOR_MAX_LATITUDE, lat));
@@ -41,7 +41,7 @@ export function toMercator(lonLat: [number, number]): ProjectedPosition {
     ];
 }
 
-/** EPSG:3857 metres → lon/lat degrees. */
+/** EPSG:3857 meters → lon/lat degrees. */
 export function toLonLat(position: ProjectedPosition): [number, number] {
     const [x, y] = position;
     return [
@@ -51,12 +51,12 @@ export function toLonLat(position: ProjectedPosition): [number, number] {
 }
 
 /**
- * MapLibre's zoom as an OpenLayers **resolution**: projected metres per screen
+ * MapLibre's zoom as an OpenLayers **resolution**: projected meters per screen
  * pixel.
  *
  * This is the number every zoom-invariant size in this library is expressed
  * against — `n * resolution` is a constant number of screen pixels at any zoom —
- * so getting it wrong silently mis-sizes all 128 synthesised decorations rather
+ * so getting it wrong silently mis-sizes all 128 synthesized decorations rather
  * than throwing.
  *
  * ## Two traps, both of which produce a plausible-looking wrong map
@@ -68,7 +68,7 @@ export function toLonLat(position: ProjectedPosition): [number, number] {
  *
  * **2. There is no `cos(latitude)` term.** `ai/maplibre-renderer.md` wrote this
  * conversion as `156543.03392 × cos(latitude) / 2^zoom`, which is the formula for
- * *ground* metres per pixel. EPSG:3857 metres already carry the Mercator stretch,
+ * *ground* meters per pixel. EPSG:3857 meters already carry the Mercator stretch,
  * so applying the cosine again double-counts it: at 45° every decoration would
  * come out 30% too small, and correctly sized only on the equator. The doc has
  * been corrected.
@@ -83,7 +83,7 @@ export function zoomForResolution(resolution: number): number {
 }
 
 /**
- * The projected-metres → canvas-pixels transform for one frame.
+ * The projected-meters → canvas-pixels transform for one frame.
  *
  * A flat affine, computed once and applied to every coordinate, rather than
  * calling `map.project()` per point: the sample sweep draws over a thousand
@@ -92,17 +92,17 @@ export function zoomForResolution(resolution: number): number {
  * **Valid for a north-up, unpitched view only.** That is what the demo uses —
  * matching OpenLayers, whose 2D renderer has no other mode — and the MapLibre
  * view disables rotation and pitch to keep it true. A pitched camera has no
- * single metres-per-pixel, so a decoration sized in screen pixels stops being
+ * single meters-per-pixel, so a decoration sized in screen pixels stops being
  * well-defined; supporting it means projecting per point and accepting that a
  * "10 px tooth" is 10 px only at the point it is anchored.
  */
 export interface ViewTransform {
-    /** Projected metres per screen pixel. */
+    /** Projected meters per screen pixel. */
     resolution: number;
     /** Canvas size in CSS pixels. */
     width: number;
     height: number;
-    /** Viewport centre, in projected metres. */
+    /** Viewport center, in projected meters. */
     center: ProjectedPosition;
 }
 
@@ -120,7 +120,7 @@ export function viewTransformOf(map: MapLibreMap): ViewTransform {
     };
 }
 
-/** Projected metres → canvas pixels, north-up. */
+/** Projected meters → canvas pixels, north-up. */
 export function toScreen(position: ProjectedPosition, view: ViewTransform): ProjectedPosition {
     return [
         (position[0] - view.center[0]) / view.resolution + view.width / 2,

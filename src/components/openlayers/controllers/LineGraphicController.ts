@@ -27,8 +27,8 @@ export interface LineGraphic extends TacticalGraphic {
 }
 
 /**
- * Two handles within a millimetre of each other are the same point. Coordinates
- * here are EPSG:3857 metres, and the only error to absorb is the generator's
+ * Two handles within a millimeter of each other are the same point. Coordinates
+ * here are EPSG:3857 meters, and the only error to absorb is the generator's
  * 3857 → 4326 → 3857 round trip, which lands far inside that.
  */
 export const SAME_POINT_EPSILON_M = 1e-3;
@@ -79,7 +79,7 @@ const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,
     TacticalGraphicName.TacticalFix,
-    // The table 5-19 twins of the two above, same behaviour.
+    // The table 5-19 twins of the two above, same behavior.
     TacticalGraphicName.Disrupt,
     TacticalGraphicName.Fix,
     TacticalGraphicName.Breach,
@@ -142,7 +142,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * fields-of-fire V.
      *
      * Expressed as a translate so the grabbed point lands under the cursor, which is what
-     * makes it feel like the centre dot on a point-anchored graphic rather than a corner
+     * makes it feel like the center dot on a point-anchored graphic rather than a corner
      * that drags the shape inside out. `undefined` means every vertex reshapes.
      */
     anchorVertex: number | undefined;

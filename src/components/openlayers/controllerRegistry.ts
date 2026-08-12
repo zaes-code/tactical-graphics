@@ -108,7 +108,7 @@ const turn = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-// Envelopment follows Turn exactly: point-anchored, drawn centre-to-edge so the
+// Envelopment follows Turn exactly: point-anchored, drawn center-to-edge so the
 // first click places it and the second sizes it, with a second handle for the
 // half circle's radius riding the manager's per-handle drag hook.
 const envelopment = (name: TacticalGraphicName, res: number) => {
