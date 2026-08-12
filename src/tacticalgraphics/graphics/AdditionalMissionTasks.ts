@@ -2,7 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
-import * as turf from "@turf/turf";
+import * as turf from '../core/turf';
 
 /**
  * The bar half-height of a fire-position symbol, as a fraction of the shaft the

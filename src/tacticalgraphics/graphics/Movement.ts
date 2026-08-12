@@ -2,7 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
 import geometryService from "../core/GeometryService";
-import * as turf from "@turf/turf";
+import * as turf from '../core/turf';
 
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
