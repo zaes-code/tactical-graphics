@@ -85,6 +85,7 @@ export {
 } from './graphics/FormsOfManeuver';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
+export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
