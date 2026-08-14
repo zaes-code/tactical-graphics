@@ -22,6 +22,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
+import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {uprightRotation} from './decorations';
@@ -394,10 +395,16 @@ export function advanceToContactLabelPaint(): MovementPaint {
         if (!value) return [];
 
         const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
-        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
-            rotation: uprightRotation(c0, c1),
-            align: 'center',
-        })];
+        // **Capped, like every other size-proportional label in the library.**
+        // `spanProportionalScale` is unbounded on its own, and this label is the longest
+        // in the family — a designation and two date-time groups — so on a wide arrow it
+        // outgrew the symbol it names. `maxGraphicLabelScale()` is the same ceiling the
+        // block family, the scallops and the base defense zone already apply.
+        const scale = Math.min(
+            maxGraphicLabelScale(),
+            spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX),
+        );
+        return [text(at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
     };
 }
 

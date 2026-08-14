@@ -204,20 +204,21 @@ export class AdvanceToContact extends SolidManeuverArrow {
         super(TacticalGraphicName.AdvanceToContact);
     }
 
-    /** Each stroke's length, as a share of the arrow's half-width. */
-    private static readonly ZIG_SEG_RATIO = 1.7;
     /**
-     * How far each stroke is turned off the arrow's heading, toward the outside.
+     * The bolt is **FM's bolt**, restated against this head.
      *
-     * The head's flank slopes about 63 degrees, so the bolt has to out-turn it or it
-     * runs along the outline instead of away from it — the zigzag's net drift is about
-     * 58 degrees at this value, which clears.
+     * Both standards draw the same lightning mark; only the count and the arrow it hangs
+     * off differ. So rather than invent proportions, these are `MovementToContact`'s own,
+     * re-expressed as fractions of the **arrowhead's flank** — the feature the bolt
+     * actually attaches to. FM's head has a flank of `0.890 x r` carrying a `0.475 x r`
+     * stroke and a `0.08 x r` head; this head's flank is `sqrt(5) x radius`, so the same
+     * ratios give the same picture at a different head shape.
      */
-    private static readonly ZIG_ANGLE_DEG = 50;
-    /** The bolt's own arrowhead, as a share of the half-width. */
-    private static readonly ZIG_HEAD_RATIO = 0.3;
-    /** How far off the wing the bolt starts, as a share of the half-width. */
-    private static readonly ZIG_CLEARANCE_RATIO = 0.5;
+    private static readonly ZIG_START_T = 0.5;
+    private static readonly ZIG_SEG_PER_FLANK = 0.534;
+    private static readonly ZIG_HEAD_PER_FLANK = 0.09;
+    /** Tilt of each stroke off the heading, toward the outside. FM's value, unchanged. */
+    private static readonly ZIG_ANGLE_DEG = 25;
 
     /**
      * The lightning bolt, leaving the arrowhead's right-hand wing.
@@ -226,7 +227,7 @@ export class AdvanceToContact extends SolidManeuverArrow {
      * frame, because a drawn arrow's head sits at whatever angle the last leg of the
      * route arrived at.
      */
-    private zigzag(wing: Position, centerEnd: Position, heading: number, radius: number): Position[][] {
+    private zigzag(wing: Position, tip: Position, centerEnd: Position, heading: number): Position[][] {
         const walk = (from: Position, distance: number, bearing: number): Position =>
             turf.destination(turf.point(from), distance, bearing, {units: 'meters'}).geometry.coordinates as Position;
 
@@ -237,11 +238,13 @@ export class AdvanceToContact extends SolidManeuverArrow {
         const turn = ((((outward - heading) % 360) + 540) % 360) - 180;
         const tilt = Math.sign(turn) * AdvanceToContact.ZIG_ANGLE_DEG;
 
-        // Started at the wing, which is the widest point of the arrow, so a bolt leaving
-        // it outward and forward stays clear of everything behind it.
-        const start = walk(wing, radius * AdvanceToContact.ZIG_CLEARANCE_RATIO, outward);
+        // Halfway along the flank, **on the outline** — which is where FM's bolts start
+        // too. The mark reads as leaving the arrowhead rather than floating beside it.
+        const flank = turf.distance(turf.point(wing), turf.point(tip), {units: 'meters'});
+        const start = walk(wing, flank * AdvanceToContact.ZIG_START_T,
+            turf.bearing(turf.point(wing), turf.point(tip)));
 
-        const step = radius * AdvanceToContact.ZIG_SEG_RATIO;
+        const step = flank * AdvanceToContact.ZIG_SEG_PER_FLANK;
         const stroke = heading + tilt;
         const k = walk(start, step, stroke);
         // Back down the heading by half a stroke's forward reach, so the second stroke
@@ -250,7 +253,7 @@ export class AdvanceToContact extends SolidManeuverArrow {
         const l = walk(k, back, heading + 180);
         const m = walk(l, step, stroke);
 
-        const head = geometryService.computeArrowheadPoints(l, m, radius * AdvanceToContact.ZIG_HEAD_RATIO, 35);
+        const head = geometryService.computeArrowheadPoints(l, m, flank * AdvanceToContact.ZIG_HEAD_PER_FLANK, 35);
         return [[start, k, l, m], head];
     }
 
@@ -271,7 +274,7 @@ export class AdvanceToContact extends SolidManeuverArrow {
         // **One bolt, on the right-hand flank.** The plate draws a single contact mark,
         // unlike FM's movement to contact, which puts one on each side. Getting this
         // wrong is how the two symbols blur back into one.
-        return this.asMultiLineStringFeature([...arrow, ...this.zigzag(rightWing, centerEnd, heading, radius)]);
+        return this.asMultiLineStringFeature([...arrow, ...this.zigzag(rightWing, tip, centerEnd, heading)]);
     }
 }
 
