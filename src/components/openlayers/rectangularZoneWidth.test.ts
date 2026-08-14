@@ -12,7 +12,7 @@ import {readGraphicLabels} from './graphicProperties';
  *
  * FM 1-02.2 table 5-24 draws these with an `AM` arrow down the edge labelled
  * "Width (M)", and APP-06 states it in words: "two anchor points **and a width,
- * defined in metres**". The width was pure geometry here — a saved zone carried no
+ * defined in meters**". The width was pure geometry here — a saved zone carried no
  * figure a NATO consumer could read back, and none could be typed in.
  *
  * The rendered rectangle was always right, which is why nothing caught this: it is a
@@ -25,7 +25,7 @@ const RESOLUTION = 20;
  * The 13 rectangular *zones*, taken from the library rather than restated here.
  *
  * `TargetAreaRectangular` is excluded although it is also `isRectangular`: APP-06
- * 240802 builds it from **one** anchor point at the centre plus *two* amplifiers —
+ * 240802 builds it from **one** anchor point at the center plus *two* amplifiers —
  * "the target length (AM1) in metres and target width (AM) in metres" — so it is a
  * different construction, not a zone with a width. Giving it the width half alone
  * would read as conformance while being neither model. Left as found and recorded.
@@ -182,7 +182,7 @@ describe('the live width read-out', () => {
  * them outright — "the target length (AM1) in metres and target width (AM) in metres".
  *
  * **FM explicitly permits the four-grid construction we use**, which is why this stayed
- * a drawn rectangle rather than becoming centre-anchored. @see ai/app-6.md
+ * a drawn rectangle rather than becoming center-anchored. @see ai/app-6.md
  */
 describe('the rectangular target files a length as well as a width', () => {
     const TARGET = TacticalGraphicName.TargetAreaRectangular;
@@ -192,7 +192,7 @@ describe('the rectangular target files a length as well as a width', () => {
         expect(getGraphicFields(TARGET).length).toBe(true);
     });
 
-    it('files length across the rectangle and width down it, in ground metres', () => {
+    it('files length across the rectangle and width down it, in ground meters', () => {
         const controller = holderFor(TARGET);
         const bag = readGraphicLabels(controller.graphic.graphic);
         // The fixture is 0.28 degrees of longitude by 0.14 of latitude at 51.5 degrees:

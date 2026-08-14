@@ -240,7 +240,7 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
     ];
     const ACROSS_ROAD = {type: 'LineString' as const, coordinates: [[-0.4, 51.4], [-0.1, 51.6]]};
 
-    it.each(READINESS)('%s builds two rails from a drawn centreline', name => {
+    it.each(READINESS)('%s builds two rails from a drawn centerline', name => {
         const built = buildTacticalGraphic(name, ACROSS_ROAD, {width: 4000}, RESOLUTION);
         expect(built).toBeDefined();
         const g = built!.graphic.geometry as {type: string; coordinates: number[][][]};
@@ -261,5 +261,56 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
 
     it.each(READINESS)('%s offers start, end and a width handle', name => {
         expect(buildTacticalGraphic(name, ACROSS_ROAD, {width: 4000}, RESOLUTION)!.handles).toHaveLength(3);
+    });
+
+    // Envelopment moved from a dropped center to APP-06's three drawn anchor points:
+    // "point 1 defines the beginning of the straight line, point 2 the end, point 3
+    // the diameter". The renderer-independent half of that is the generator, so this
+    // is the second engine agreeing that the same drawn points give the same symbol —
+    // the class of defect a MapLibre parity pass keeps finding is a symbology fact
+    // that only OpenLayers knows.
+    describe('envelopment from drawn anchor points', () => {
+        /** Run west to east, with the third point set north of it by `reach` degrees. */
+        const drawn = (halfRunDeg: number, reachDeg: number) => ({
+            type: 'LineString' as const,
+            coordinates: [[-halfRunDeg, 51.5], [0, 51.5 + reachDeg], [halfRunDeg, 51.5]],
+        });
+
+        it('builds and paints from three drawn points', () => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Envelopment, drawn(0.6, 0.3), {}, RESOLUTION);
+            expect(built).toBeDefined();
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+        });
+
+        it('offers a handle per drawn point', () => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Envelopment, drawn(0.6, 0.3), {}, RESOLUTION);
+            expect(built!.handles.length).toBeGreaterThanOrEqual(3);
+        });
+
+        /** How far the arc reaches off the straight run, in projected meters. */
+        const arcReach = (halfRunDeg: number, reachDeg: number) => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Envelopment, drawn(halfRunDeg, reachDeg), {}, RESOLUTION);
+            const parts = (built!.graphic.geometry as {coordinates: number[][][]}).coordinates;
+            const run = parts[0];
+            const mid = [(run[0][0] + run[1][0]) / 2, (run[0][1] + run[1][1]) / 2];
+            return Math.max(...parts[1].map(p => span(mid, p)));
+        };
+
+        /** The straight run's length, in projected meters. */
+        const runLength = (halfRunDeg: number, reachDeg: number) => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Envelopment, drawn(halfRunDeg, reachDeg), {}, RESOLUTION);
+            const run = (built!.graphic.geometry as {coordinates: number[][][]}).coordinates[0];
+            return span(run[0], run[1]);
+        };
+
+        it('takes the run from points 1 and 2, unaffected by where point 3 went', () => {
+            expect(runLength(0.6, 0.6)).toBeCloseTo(runLength(0.6, 0.15), 0);
+        });
+
+        it('takes the arc from point 3, which is the freedom the conversion bought', () => {
+            // The old model could not express this: `bend` was the only shape input and
+            // the run came from `size`, so the two could never be set independently.
+            expect(arcReach(0.6, 0.6)).toBeGreaterThan(arcReach(0.6, 0.15));
+        });
     });
 });

@@ -2,7 +2,8 @@ import * as turf from '../core/turf';
 import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
-import {Feature, LineString, MultiLineString, MultiPoint, Point, Position} from "geojson";
+import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
+import {frameFromAnchors} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
 
@@ -448,7 +449,19 @@ export function envelopmentBendFrom(
  */
 export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
     name: string = TacticalGraphicName.Envelopment;
-    type: string = 'Point';
+    /**
+     * **Drawn, not dropped.** APP-06 343500: "This symbol requires four anchor points.
+     * Point 1 defines the beginning of the straight line. Point 2 defines the end of
+     * the straight line portion of the graphic. Point 3 defines the diameter. Point 4
+     * defines the orientation of the 180 degree circular arc."
+     *
+     * The shape maths below is untouched — `frame` just reads its center, bearing,
+     * half-length and arc radius off the points the user drew instead of off a `size`
+     * and a `rotation`. That is what makes the approach's length and the arc's diameter
+     * independent, which they were not when one `size` drove both.
+     * @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
 
     /**
      * One point of the graphic, given as local coordinates **relative to the base
@@ -471,21 +484,30 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
         return geometryService.translateCoordinates(center, distance, angle + Math.atan2(v, u));
     }
 
-    /** The approach's local geometry: half-length, circle radius and which flank. */
-    private frame(base: Feature<Point>, opts?: TurnOptions): {center: Position; angle: number; size: number; radius: number; side: number} {
-        const size = opts?.size ?? 1;
+    /**
+     * The approach's local geometry: half-length, circle radius and which flank.
+     *
+     * Read from the drawn anchor points when there are any. `bend` still supplies the
+     * radius for a two-point sketch — mid-draw the interaction hands over a run and
+     * nothing else, and a graphic that drew no arc until its third point landed would
+     * flicker rather than grow.
+     */
+    private frame(base: Feature<LineString>, opts?: TurnOptions): {center: Position; angle: number; size: number; radius: number; side: number} {
+        const drawn = frameFromAnchors(base.geometry.coordinates);
         const bend = clampEnvelopmentBend(opts?.bend ?? ENVELOPMENT_DEFAULT_BEND);
+        const size = drawn?.size ?? opts?.size ?? 1;
+        const reach = drawn?.offset;
         return {
-            center: base.geometry.coordinates,
-            angle: toRadians(opts?.rotation ?? 0),
+            center: drawn?.center ?? base.geometry.coordinates[0] ?? [0, 0],
+            angle: drawn?.angle ?? toRadians(opts?.rotation ?? 0),
             size,
-            radius: Math.abs(bend) * size,
-            side: Math.sign(bend) || 1,
+            radius: reach ?? Math.abs(bend) * size,
+            side: reach !== undefined ? drawn!.side : Math.sign(bend) || 1,
         };
     }
 
     /** `[start, end]` of the straight run, centered on the base point. */
-    private axis(base: Feature<Point>, opts?: TurnOptions): [Position, Position] {
+    private axis(base: Feature<LineString>, opts?: TurnOptions): [Position, Position] {
         const {center, angle, size} = this.frame(base, opts);
         return [this.at(center, angle, -size, 0), this.at(center, angle, size, 0)];
     }
@@ -496,7 +518,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * starts at `u = size` and finishes at `u = size + 2 * radius` — both on the
      * approach's own axis, whatever direction the graphic is aimed.
      */
-    private arc(base: Feature<Point>, opts?: TurnOptions): Position[] {
+    private arc(base: Feature<LineString>, opts?: TurnOptions): Position[] {
         const {center, angle, size, radius, side} = this.frame(base, opts);
         const pts: Position[] = [];
         for (let i = 0; i <= ENVELOPMENT_ARC_STEPS; i++) {
@@ -506,7 +528,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
         return pts;
     }
 
-    generateGraphics(base: Feature<Point>, opts?: TurnOptions): Feature<MultiLineString> {
+    generateGraphics(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiLineString> {
         const size = opts?.size ?? 1;
         const [start, end] = this.axis(base, opts);
         const arc = this.arc(base, opts);
@@ -528,7 +550,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * together. There is deliberately no handle on the start of the run: it is
      * where the "E" stacks, and a dot under the label reads as clutter.
      */
-    generateHandles(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
+    generateHandles(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
         const {center, angle, size, radius} = this.frame(base, opts);
         return this.asMultiPointFeature([
             this.at(center, angle, size + 2 * radius, 0),
@@ -559,7 +581,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * Letter and hole then agree by construction at any size and any zoom.
      * @see envelopmentLabelPaint
      */
-    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
+    generateLabels(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(this.axis(base, opts));
     }
 }

@@ -22,6 +22,7 @@ import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {renderTacticalGraphic} from '../core/render';
+import {anchorsFromFrame} from '../core/anchors';
 import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
 import {envelopmentLabelPaint} from './movementPaints';
@@ -277,10 +278,13 @@ describe('a mission-task letter is sized by which family it is in', () => {
             [(x * Math.PI * R) / 180, Math.log(Math.tan(Math.PI / 4 + (y * Math.PI) / 360)) * R];
 
         for (const rotation of [0, 30, 45, 90, 135, 200, 270, 300, 359]) {
+            // Envelopment is drawn from anchor points now, so the fixture states the
+            // same frame the dropped version used to and lets `anchorsFromFrame` turn it
+            // into the points APP-06 asks for. @see core/anchors.ts
             const rendered = renderTacticalGraphic({
                 type: 'Feature',
-                geometry: {type: 'Point', coordinates: [0, 0]},
-                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, radius: 900_000, rotation}},
+                geometry: {type: 'LineString', coordinates: anchorsFromFrame([0, 0], 900_000, rotation)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, rotation}},
             } as never)!;
 
             // Sub-line 0 is the straight run the "E" lies along.

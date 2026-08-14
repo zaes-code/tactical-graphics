@@ -4,7 +4,7 @@ import {baseGeometryFor, renderTacticalGraphic} from './render';
 import {TacticalGraphicName} from './type';
 
 /**
- * Rules taken verbatim from APP-06 Edition E Chapter 8, pinned as behaviour.
+ * Rules taken verbatim from APP-06 Edition E Chapter 8, pinned as behavior.
  *
  * These are the constructions a geometry test would otherwise never question: the
  * symbol looks plausible whichever way it is built, so only the standard says which
@@ -14,7 +14,7 @@ import {TacticalGraphicName} from './type';
  * @see ai/app-6.md for how the disagreements were found and what was withdrawn.
  */
 
-const metres = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
 
 const lineBase = (name: TacticalGraphicName, coordinates: Position[], props: Record<string, unknown> = {}): Feature => ({
     type: 'Feature',
@@ -45,13 +45,13 @@ describe('APP-06 280100 — abatis', () => {
         const long = drawn(lineBase(TacticalGraphicName.Abatis, LONG, {radius: TOOTH}));
 
         // Points 0 and 2 are the tooth's feet; the route continues from there.
-        const shortTooth = metres(short[0], short[2]);
-        const longTooth = metres(long[0], long[2]);
+        const shortTooth = meters(short[0], short[2]);
+        const longTooth = meters(long[0], long[2]);
 
         expect(shortTooth).toBeCloseTo(TOOTH, 0);
         expect(longTooth).toBeCloseTo(TOOTH, 0);
         // The routes really do differ, or the assertion above proves nothing.
-        expect(metres(long[0], long[long.length - 1])).toBeGreaterThan(metres(short[0], short[short.length - 1]) * 3);
+        expect(meters(long[0], long[long.length - 1])).toBeGreaterThan(meters(short[0], short[short.length - 1]) * 3);
     });
 
     it('follows the road rather than straightening to its endpoints', () => {
@@ -64,16 +64,16 @@ describe('APP-06 280100 — abatis', () => {
     it('never lets the tooth swallow the whole obstacle', () => {
         const tiny: Position[] = [[-77.0, 38.9], [-76.999, 38.9002]];
         const path = drawn(lineBase(TacticalGraphicName.Abatis, tiny, {radius: TOOTH}));
-        const total = metres(tiny[0], tiny[1]);
-        expect(metres(path[0], path[2])).toBeLessThanOrEqual(total / 2 + 1);
+        const total = meters(tiny[0], tiny[1]);
+        expect(meters(path[0], path[2])).toBeLessThanOrEqual(total / 2 + 1);
     });
 
     it('puts the apex on the other side when mirrored', () => {
         const plain = drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH}));
         const flipped = drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH, mirrored: true}));
         // Same feet, apex reflected across the route.
-        expect(metres(plain[0], flipped[0])).toBeCloseTo(0, 1);
-        expect(metres(plain[1], flipped[1])).toBeGreaterThan(TOOTH);
+        expect(meters(plain[0], flipped[0])).toBeCloseTo(0, 1);
+        expect(meters(plain[1], flipped[1])).toBeGreaterThan(TOOTH);
     });
 
     it('offers the two ends and the apex as handles', () => {
@@ -84,7 +84,7 @@ describe('APP-06 280100 — abatis', () => {
 });
 
 describe('APP-06 271201 — demolition readiness states', () => {
-    // "Points 1 and 2 determine the centreline of the symbol and point 3 determines
+    // "Points 1 and 2 determine the centerline of the symbol and point 3 determines
     //  its width."
     const STATES = [
         TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
@@ -98,11 +98,11 @@ describe('APP-06 271201 — demolition readiness states', () => {
         return g.coordinates;
     };
 
-    it.each(STATES)('%s is built from a drawn centreline', name => {
+    it.each(STATES)('%s is built from a drawn centerline', name => {
         expect(baseGeometryFor(name)).toBe('LineString');
     });
 
-    it.each(STATES)('%s lays two rails either side of that centreline', name => {
+    it.each(STATES)('%s lays two rails either side of that centerline', name => {
         const [left, right] = rails(name);
         expect(left).toHaveLength(2);
         expect(right).toHaveLength(2);
@@ -115,7 +115,7 @@ describe('APP-06 271201 — demolition readiness states', () => {
     });
 
     it.each(STATES)('%s spaces the rails by the width it is given', name => {
-        const gapAt = (width: number) => metres(rails(name, width)[0][0], rails(name, width)[1][0]);
+        const gapAt = (width: number) => meters(rails(name, width)[0][0], rails(name, width)[1][0]);
         expect(gapAt(6000)).toBeGreaterThan(gapAt(2000) * 2);
     });
 

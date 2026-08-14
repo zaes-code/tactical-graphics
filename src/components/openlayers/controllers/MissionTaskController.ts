@@ -1,6 +1,7 @@
 import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
-import {Circle as CircleGeom, Geometry, Point} from 'ol/geom';
+import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
+import type {TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -10,7 +11,10 @@ import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 import {drawMarkerStyle} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
-    base: Feature<Point>;
+    name: TacticalGraphicName;
+    base: Feature<Point | LineString>;
+    /** The center, which is holder state — the base may carry anchor points instead. */
+    centerCoordinate(): Coordinate;
     size: number;
     rotation: number;
     /**
@@ -71,7 +75,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     getCenter() {
-        return this.graphic.base.getGeometry()!.getCoordinates();
+        // Not off the base: a graphic converted to APP-06's drawn anchor points keeps
+        // a LineString there, whose coordinates are an array of them.
+        return this.graphic.centerCoordinate();
     }
 
     /**
@@ -87,7 +93,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     getBaseGeometry() {
-        return this.graphic.base.getGeometry()!.getCoordinates();
+        return this.graphic.centerCoordinate();
     }
 
     onResolutionChangeFunc(e: ObjectEvent): void {
@@ -168,8 +174,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     handleTranslate(deltaX: number, deltaY: number): void {
-        let baseCoord = this.graphic.base.getGeometry()!.getCoordinates();
-        let center = [baseCoord[0] + deltaX, baseCoord[1] + deltaY];
+        const baseCoord = this.graphic.centerCoordinate();
+        const center = [baseCoord[0] + deltaX, baseCoord[1] + deltaY];
         this.graphic.updateGeom({center});
     }
 
@@ -184,7 +190,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
-    setBaseFeature(base: Feature<Point>): void {
+    setBaseFeature(base: Feature<Point | LineString>): void {
         this.graphic.setBaseFeature(base);
     }
 }

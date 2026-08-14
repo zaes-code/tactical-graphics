@@ -511,3 +511,79 @@ describe('an empty map', () => {
         expect(report).toEqual({restored: 0, failed: []});
     });
 });
+
+/**
+ * A graphic converted to APP-06's drawn anchor points has to load two shapes of save:
+ * the LineString it writes now, and the Point every version before the conversion
+ * wrote. The second is the one with no second chance — those files already exist.
+ */
+describe('a graphic saved before the anchor-point conversion', () => {
+    /** The base feature a 2.0.0 snapshot held: a Point, with the shape in the bag. */
+    function legacyPointSnapshot(name: TacticalGraphicName, bag: Record<string, unknown>) {
+        return {
+            type: 'FeatureCollection' as const,
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [
+                {
+                    type: 'Feature' as const,
+                    properties: {role: 'base', graphicName: name, symbolId: 'legacy-1', tacticalGraphic: {name, ...bag}},
+                    geometry: {type: 'Point' as const, coordinates: [-0.1, 51.56]},
+                },
+            ],
+        };
+    }
+
+    it('upgrades a Point base to drawn anchor points', () => {
+        const to = fakeManager();
+        const report = restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+
+        expect(report.failed).toEqual([]);
+        expect(report.restored).toBe(1);
+        const base = to.graphicControllers[0].graphic.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        // Two run ends and the point that sets the reach — the APP-06 anchor set.
+        expect((base as LineString).getCoordinates()).toHaveLength(3);
+    });
+
+    it('keeps the bend it was saved with', () => {
+        // The regression this pins: persistence reached for `bend` behind an
+        // `instanceof TurnGraphicBase` test, and envelopment is a *sibling* of that
+        // class. Every saved envelopment silently came back at the default bend —
+        // a shape change no other assertion in this suite could see.
+        const to = fakeManager();
+        restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+
+        const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
+        expect(holder.bend).toBeCloseTo(0.6, 10);
+    });
+
+    it('keeps a negative bend, which is the far side rather than a smaller curve', () => {
+        const to = fakeManager();
+        restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 6000, rotation: 45, bend: -0.5}),
+        );
+
+        const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
+        expect(holder.bend).toBeCloseTo(-0.5, 10);
+    });
+
+    it('is stable once upgraded: saving the anchored form and reloading changes nothing', () => {
+        const first = fakeManager();
+        restoreTacticalGraphics(
+            first,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+        const before = baseCoords(first.graphicControllers[0]);
+
+        const {to} = roundTrip(first);
+        expectMetersClose(baseCoords(to.graphicControllers[0]), before);
+        expect((to.graphicControllers[0].graphic as unknown as {bend: number}).bend).toBeCloseTo(0.6, 10);
+    });
+});
