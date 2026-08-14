@@ -286,6 +286,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Suppress]:                                     BOTH,      // APP-06 342800 Suppress
     [TacticalGraphicName.FightingPosition]:                             FM_ONLY,
     [TacticalGraphicName.LightLine]: APP6_ONLY,  // APP-06 110200 Light Line
+    [TacticalGraphicName.LineGeneric]: APP6_ONLY, // APP-06 110400 Line, Generic
+    [TacticalGraphicName.HandoverLine]: APP6_ONLY, // APP-06 141800 Handover Line (HOL)
+    [TacticalGraphicName.NamedAreaOfInterestLine]: APP6_ONLY, // APP-06 142000 Named Area of Interest Line (NAI)
     [TacticalGraphicName.HoldingLine]: APP6_ONLY,  // APP-06 141500 Holding Line (HL)
     [TacticalGraphicName.NoFireLine]: APP6_ONLY,  // APP-06 260300 No Fire Line
     [TacticalGraphicName.BattlefieldCoordinationLine]: APP6_ONLY,  // APP-06 260400 Battlefield Coordination Line

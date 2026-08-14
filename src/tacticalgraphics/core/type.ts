@@ -381,6 +381,10 @@ export function getLabel(name: TacticalGraphicName) {
             return 'LL';
         case TacticalGraphicName.HoldingLine:
             return 'HL';
+        case TacticalGraphicName.NamedAreaOfInterestLine:
+            return 'NAI';
+        case TacticalGraphicName.HandoverLine:
+            return 'HOL';
         case TacticalGraphicName.NoFireLine:
             return 'NFL';
         case TacticalGraphicName.BattlefieldCoordinationLine:
@@ -649,6 +653,9 @@ export enum TacticalGraphicName {
     LineOfDepartureOrLineOfContact = 'LineOfDepartureOrLineOfContact',
     ProbableLineOfDeployment = 'ProbableLineOfDeployment',
     LightLine = 'LightLine',  // APP-06 110200 Light Line
+    LineGeneric = 'LineGeneric',  // APP-06 110400 Line, Generic
+    HandoverLine = 'HandoverLine',  // APP-06 141800 Handover Line (HOL)
+    NamedAreaOfInterestLine = 'NamedAreaOfInterestLine',  // APP-06 142000 Named Area of Interest Line (NAI)
     HoldingLine = 'HoldingLine',  // APP-06 141500 Holding Line (HL)
     NoFireLine = 'NoFireLine',  // APP-06 260300 No Fire Line
     BattlefieldCoordinationLine = 'BattlefieldCoordinationLine',  // APP-06 260400 Battlefield Coordination Line
@@ -951,6 +958,9 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
+    [TacticalGraphicName.HandoverLine]: 'handover line',
+    [TacticalGraphicName.LineGeneric]: 'line, generic',
     [TacticalGraphicName.AirfieldZone]: 'airfield zone',
     [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',
     [TacticalGraphicName.RestrictedTerrain]: 'restricted terrain',
