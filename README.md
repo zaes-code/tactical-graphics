@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**242 graphics** are implemented and verified today, covering **256 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**246 graphics** are implemented and verified today, covering **260 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 251 supported names.
+the 255 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -987,8 +987,10 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Biological Contaminated Area | Areas |
 | Bridgehead | Areas |
 | Brigade Support Area | Areas |
+| Chemical Contaminated Area | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
@@ -1004,9 +1006,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Named Area Of Interest | Areas |
+| Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
 | Penetration Box | Areas |
 | Pickup Zone | Areas |
+| Radiological Contaminated Area | Areas |
 | Refugee Holding Area | Areas |
 | Restricted Terrain | Areas |
 | Severely Restricted Terrain | Areas |

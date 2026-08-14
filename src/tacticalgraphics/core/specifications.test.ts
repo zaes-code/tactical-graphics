@@ -80,6 +80,11 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
     TacticalGraphicName.NamedAreaOfInterestLine,
+    // One construction, four letters: APP-06 Table 8-19 draws all four the same way.
+    TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.ChemicalContaminatedArea,
+    TacticalGraphicName.NuclearContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedArea,
 ];
 
 describe('graphic specifications', () => {
