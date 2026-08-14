@@ -454,7 +454,7 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             expect((built!.graphic.geometry as {coordinates: number[][][]}).coordinates).toHaveLength(6);
         });
 
-        it('paints the APP-06 route from a drawn line, with one bolt', () => {
+        it('paints the APP-06 route from a drawn line, with a bolt on each flank', () => {
             const built = buildTacticalGraphic(
                 TacticalGraphicName.AdvanceToContact,
                 {type: 'LineString', coordinates: [[-0.42, 51.55], [-0.1, 51.55]]},
@@ -463,8 +463,8 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             );
             expect(built).toBeDefined();
             expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
-            // Body, head, body, then a single bolt and its head.
-            expect((built!.graphic.geometry as {coordinates: number[][][]}).coordinates).toHaveLength(5);
+            // Body, head, body, then a line and a head for each of the two bolts.
+            expect((built!.graphic.geometry as {coordinates: number[][][]}).coordinates).toHaveLength(7);
         });
 
         it('keeps them on opposite base geometries', () => {
