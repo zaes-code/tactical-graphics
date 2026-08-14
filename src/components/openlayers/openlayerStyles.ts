@@ -506,7 +506,14 @@ export const HANDLE_Z_INDEX = 1000;
  * in the sample gallery or a restored map.
  *
  * Dashes are in screen pixels via `resolution`, so the hatching stays the same density at
- * every zoom. The distance is measured in EPSG:3857 meters — Euclidean, no turf.
+ * every zoom.
+ *
+ * The distance is measured in EPSG:3857 meters by default — Euclidean, no turf — which is
+ * what the radius read-out has always shown. **A holder that knows the real ground
+ * distance can say so** by setting `measureMeters` on the feature, and the rectangular
+ * zones do: their width amplifier is filed geodesically, and a hashed line reporting the
+ * projected figure beside it would show two different numbers for one edge (at 51° the
+ * projected one is 1.6x larger).
  */
 export const createMeasureFeature = () => {
     const feature = new Feature();
@@ -519,7 +526,10 @@ export const createMeasureFeature = () => {
         if (!coords || coords.length < 2) return new Style({});
 
         const [a, b] = coords;
-        const text = formatDistance(Math.hypot(b[0] - a[0], b[1] - a[1]));
+        const stated = f.get('measureMeters') as number | undefined;
+        const text = formatDistance(
+            typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
+        );
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the

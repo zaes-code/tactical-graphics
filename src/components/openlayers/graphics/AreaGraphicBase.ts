@@ -1,7 +1,7 @@
 import {Coordinate} from 'ol/coordinate';
 import {Feature} from 'ol';
-import {MultiPoint, Point, Polygon} from 'ol/geom';
-import {createBaseFeature, createHandleFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
+import {LineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import {createBaseFeature, createHandleFeature, createMeasureFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
 import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
@@ -17,6 +17,8 @@ export class AreaGraphicBase implements PolygonGraphic {
     graphic: Feature = assignRole(new Feature(), 'graphic');
     labels: Feature = assignRole(new Feature(), 'label');
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
+    /** The live width read-out. Empty unless a gesture is in progress. @see showMeasure */
+    measure: Feature = createMeasureFeature();
     symbolId: string = '';
     size: number = 1;
 
@@ -115,7 +117,7 @@ export class AreaGraphicBase implements PolygonGraphic {
     };
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.labels, this.handles, this.base];
+        return [this.graphic, this.labels, this.handles, this.measure, this.base];
     }
 
     getCenter = (): Coordinate => {
@@ -181,7 +183,12 @@ export class AreaGraphicBase implements PolygonGraphic {
 
         // A rectangle's width is doctrinal input, so a drag has to write it back.
         // @see rectangleWidthMeters
-        if (isRectangular(this.graphicName)) this.publishRectangleWidth();
+        if (isRectangular(this.graphicName)) {
+            this.publishRectangleWidth();
+            // Mid-gesture the shape changes on every pointer move, so the line has to
+            // be re-derived here rather than only when it is armed.
+            this.refreshMeasure();
+        }
     }
 
     // ── The rectangular zones' width amplifier ──────────────────────────────
@@ -235,6 +242,44 @@ export class AreaGraphicBase implements PolygonGraphic {
      * keeps this correct without re-deriving the Mercator factor: both numbers carry
      * the same 1/cos(lat) inflation, so it cancels.
      */
+    /**
+     * Arms or disarms the width read-out.
+     *
+     * Duck-typed: `TacticalGraphicsManager` already calls `showMeasure` on whatever
+     * holder is being resized, so adding the method is all it takes to opt in. Off by
+     * default, which keeps the hashed line out of a restored map and out of the sample
+     * gallery — neither runs a gesture.
+     *
+     * The width is a **read-out, not an input**, by the same decision the dialog
+     * records: you size a zone by dragging it, and the number should be visible while
+     * you do rather than only afterwards.
+     */
+    showMeasure(active: boolean): void {
+        this.measuring = active;
+        this.refreshMeasure();
+    }
+
+    private measuring = false;
+
+    /**
+     * Draws the width down the rectangle's right edge, which is exactly where FM 1-02.2
+     * table 5-24 puts its `AM` / "Width (M)" arrow.
+     *
+     * The distance is *stated* rather than left to the style function's Euclidean
+     * measure, so the hashed line and the filed amplifier report the same number. They
+     * would otherwise differ by 1/cos(latitude). @see createMeasureFeature
+     */
+    private refreshMeasure(): void {
+        const geom = this.base.getGeometry();
+        if (!this.measuring || !geom || !isRectangular(this.graphicName)) {
+            this.measure.setGeometry(undefined);
+            return;
+        }
+        const [, minY, maxX, maxY] = geom.getExtent();
+        this.measure.set('measureMeters', this.rectangleWidthMeters());
+        this.measure.setGeometry(new LineString([[maxX, minY], [maxX, maxY]]));
+    }
+
     private setRectangleWidth(meters: number): void {
         const geom = this.base.getGeometry();
         const current = this.rectangleWidthMeters();

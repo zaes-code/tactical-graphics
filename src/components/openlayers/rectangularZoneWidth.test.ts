@@ -112,3 +112,63 @@ describe('rectangular zones carry their width in meters', () => {
         expect(groundWidth(controller)).toBeCloseTo(before, -1);
     });
 });
+
+/**
+ * The width read-out, shown live while the zone is being resized.
+ *
+ * Width stays a read-out rather than becoming an input — you size a zone by dragging
+ * it — but the figure has to be visible *while* you drag, not only afterwards in the
+ * properties dialog. Circles have had this since they were built; the polygon holder
+ * had nothing, so a rectangular zone reported its width only after the fact.
+ */
+describe('the live width read-out', () => {
+    it('is empty until a gesture arms it, and empty again after', () => {
+        const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
+        expect(controller.graphic.measure.getGeometry()).toBeUndefined();
+        controller.graphic.showMeasure(true);
+        expect(controller.graphic.measure.getGeometry()).toBeDefined();
+        controller.graphic.showMeasure(false);
+        expect(controller.graphic.measure.getGeometry()).toBeUndefined();
+    });
+
+    it('runs down the right edge, where FM 1-02.2 draws its AM arrow', () => {
+        const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
+        controller.graphic.showMeasure(true);
+        const coords = controller.graphic.measure.getGeometry()!.getCoordinates() as number[][];
+        const [, minY, maxX, maxY] = controller.graphic.base.getGeometry().getExtent();
+        expect(coords[0][0]).toBeCloseTo(maxX, 6);
+        expect(coords[1][0]).toBeCloseTo(maxX, 6);
+        expect([coords[0][1], coords[1][1]].sort((a, b) => a - b)).toEqual([minY, maxY].sort((a, b) => a - b));
+    });
+
+    /**
+     * The reason `measureMeters` exists. The style function measures Euclidean distance
+     * across projected coordinates, which at 51 degrees is 1.6x the ground distance — so
+     * the hashed line would have read 7.2 km beside an amplifier filed as 4.4 km.
+     */
+    it('states the ground distance rather than the projected one', () => {
+        const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
+        controller.graphic.showMeasure(true);
+        const stated = controller.graphic.measure.get('measureMeters') as number;
+        const coords = controller.graphic.measure.getGeometry()!.getCoordinates() as number[][];
+        const projected = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
+
+        expect(stated).toBeCloseTo(groundWidth(controller), -1);
+        expect(projected / stated).toBeGreaterThan(1.5); // ...and they really do differ
+    });
+
+    it('follows the shape while the gesture is still running', () => {
+        const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
+        controller.graphic.showMeasure(true);
+        const before = controller.graphic.measure.get('measureMeters') as number;
+        controller.setBaseFeature(box(0.14)); // twice as tall, mid-drag
+        expect(controller.graphic.measure.get('measureMeters') as number).toBeGreaterThan(before * 1.8);
+    });
+
+    it('stays clear of graphics that are not rectangles', () => {
+        const controller: any = getController(TacticalGraphicName.AssemblyArea, RESOLUTION);
+        controller.setBaseFeature(box());
+        controller.graphic.showMeasure(true);
+        expect(controller.graphic.measure.getGeometry()).toBeUndefined();
+    });
+});
