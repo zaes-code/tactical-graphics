@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**229 graphics** are implemented and verified today, covering **243 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**231 graphics** are implemented and verified today, covering **245 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 238 supported names.
+the 240 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1120,6 +1120,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Turning Movement | Movement and Maneuver |
 | Advance To Contact | Offense Operations Planning |
 | Ambush | Offense Operations Planning |
+| Cordon And Knock | Offense Operations Planning |
 | Cordon And Search | Offense Operations Planning |
 | Counterattack | Offense Operations Planning |
 | Exploitation | Offense Operations Planning |
@@ -1140,6 +1141,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Fix | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
+| Locate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
