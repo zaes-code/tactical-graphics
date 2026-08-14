@@ -11,6 +11,17 @@ import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
 import {decorationMeters} from './decorationPx';
 
+/**
+ * The rectangles that carry a **length** as well as a width.
+ *
+ * Just the target. FM 1-02.2 table 5-25 describes a rectangular target as "greater
+ * than 200 meters in length and width described by four grids **or by a center grid,
+ * a length, width, and an altitude**" — so both dimensions are its own amplifiers,
+ * where a fire-support or target-acquisition zone gets its length from the two anchor
+ * points APP-06 gives it.
+ */
+const CARRIES_LENGTH: TacticalGraphicName[] = [TacticalGraphicName.TargetAreaRectangular];
+
 export class AreaGraphicBase implements PolygonGraphic {
     // open layers related
     base: Feature<Polygon> = <Feature<Polygon>>createBaseFeature();
@@ -227,11 +238,28 @@ export class AreaGraphicBase implements PolygonGraphic {
         return Math.round(this.rectangleWidthMeters());
     }
 
-    /** Mirror the drawn width into the bag, without disturbing the other amplifiers. */
+    /**
+     * The rectangle's length — the dimension **along** it, east to west — in ground
+     * meters. Only the rectangular target files one.
+     *
+     * FM 1-02.2 table 5-25 draws it as `AM1` across the top and APP-06 240802 names it
+     * "the target length (AM1) in metres". Every other rectangle here takes its length
+     * from the two anchor points instead, so filing one would be a number nothing set.
+     */
+    private rectangleLengthMeters(): number {
+        const geom = this.base.getGeometry();
+        if (!geom) return 0;
+        const [minX, minY, maxX, maxY] = geom.getExtent();
+        const midY = (minY + maxY) / 2;
+        return getDistance(toLonLat([minX, midY]), toLonLat([maxX, midY]));
+    }
+
+    /** Mirror the drawn dimensions into the bag, without disturbing the other amplifiers. */
     private publishRectangleWidth(): void {
         const width = this.widthAmplifier();
-        if (this.graphicLabels.width === width) return;
-        this.graphicLabels = {...this.graphicLabels, width};
+        const length = CARRIES_LENGTH.includes(this.graphicName) ? Math.round(this.rectangleLengthMeters()) : undefined;
+        if (this.graphicLabels.width === width && this.graphicLabels.length === length) return;
+        this.graphicLabels = {...this.graphicLabels, width, ...(length !== undefined ? {length} : {})};
         writeGraphicProperties(this.getFeatures(), this.graphicName, this.graphicLabels, this.stampedGeometry());
     }
 

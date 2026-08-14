@@ -37,6 +37,8 @@ export type GraphicFieldSet = {
     altitude2: boolean;
     /** Width field (Airspace Area). */
     width: boolean;
+    /** Rectangle length in meters — only the rectangular target carries one. */
+    length: boolean;
     /** Circle radius in meters — the graphics a user resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
@@ -60,7 +62,7 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
@@ -76,6 +78,7 @@ function f(
         altitude1: false,
         altitude2: false,
         width: false,
+        length: false,
         radius: false,
         grids: false,
         weapon: false,
@@ -443,7 +446,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FireSupportAreaRectangular]: {...(f(true, false, true, true, false)), width: true},
     [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.TargetAreaRectangular]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.TargetAreaRectangular]: {...(NAME_FIELD_ONLY), width: true, length: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.HighDensityAirspaceControlZone]: AIRSPACE_COORDINATION_AREA,
     [TacticalGraphicName.RestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,

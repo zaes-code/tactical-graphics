@@ -587,6 +587,13 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {fields.length && measured.length !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">Length</Typography>
+                                        <Typography id="length-readout" variant="body2">{formatDistance(measured.length)}</Typography>
+                                    </Box>
+                                )}
+
                                 {fields.radius && measured.radius !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <Typography variant="caption" color="text.secondary">Radius</Typography>

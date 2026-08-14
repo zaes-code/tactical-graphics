@@ -148,7 +148,11 @@ tacticalGraphic: {
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
     width: 600,               // FULL width across a drawn line — rail to rail on an axis
-                              // of advance, edge to edge on a corridor
+                              // of advance, edge to edge on a corridor, and the across
+                              // dimension of a rectangular zone
+    length: 1120,             // FULL length ALONG the graphic. Only the rectangular
+                              // target carries both; every other rectangle takes its
+                              // length from the anchor points instead
     rotation: 45,             // degrees, counter-clockwise from east (point graphics)
     mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
                               // withdrawal, the chevron on an abatis
@@ -204,7 +208,7 @@ rangeFan: {
 | `leftAzimuthDeg` / `rightAzimuthDeg` | sector fan only: this band's own edges, degrees clockwise from north. Omit them and the band spans the sector |
 
 **`range` is in kilometers, and it is the only distance here that is not meters.**
-`radius`, `width` and `decorationSize` are all meters. A range fan is quoted in
+`radius`, `width`, `length` and `decorationSize` are all meters. A range fan is quoted in
 kilometers because that is how an envelope is written and the label prints the number
 bare — meters would put three zeroes on every ring. It is a wart, and it stays one: the
 alternative silently rescales every range fan already saved by a factor of a thousand.
@@ -234,7 +238,8 @@ are all in meters and none of them overlap — a graphic reads one.
 | Field | Means | Graphics |
 |---|---|---|
 | `radius` | reach from the symbol's own center | circles and point-anchored symbols |
-| `width` | **full** width across a drawn line | axes of advance, corridors |
+| `width` | **full** width across a drawn line | axes of advance, corridors, rectangular zones |
+| `length` | **full** length along the graphic | the rectangular target, which is the only one that carries both |
 | `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
 
 **`radius` — a circle, sized from its center:**
