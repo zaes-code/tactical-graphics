@@ -82,3 +82,54 @@ describe('APP-06 280100 — abatis', () => {
         expect((handles.geometry as {coordinates: Position[]}).coordinates).toHaveLength(3);
     });
 });
+
+describe('APP-06 271201 — demolition readiness states', () => {
+    // "Points 1 and 2 determine the centreline of the symbol and point 3 determines
+    //  its width."
+    const STATES = [
+        TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+        TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+        TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    ];
+    const ROUTE: Position[] = [[-0.4, 51.4], [-0.1, 51.6]];
+
+    const rails = (name: TacticalGraphicName, width = 2000, coords = ROUTE) => {
+        const g = renderTacticalGraphic(lineBase(name, coords, {width})).graphic.geometry as MultiLineString;
+        return g.coordinates;
+    };
+
+    it.each(STATES)('%s is built from a drawn centreline', name => {
+        expect(baseGeometryFor(name)).toBe('LineString');
+    });
+
+    it.each(STATES)('%s lays two rails either side of that centreline', name => {
+        const [left, right] = rails(name);
+        expect(left).toHaveLength(2);
+        expect(right).toHaveLength(2);
+        // Both rails run parallel to the drawn line...
+        const bearing = (p: Position[]) => turf.bearing(turf.point(p[0]), turf.point(p[1]));
+        expect(bearing(left)).toBeCloseTo(bearing(right), 1);
+        // ...and sit on opposite sides of it.
+        const drawnBearing = turf.bearing(turf.point(ROUTE[0]), turf.point(ROUTE[1]));
+        expect(bearing(left)).toBeCloseTo(drawnBearing, 1);
+    });
+
+    it.each(STATES)('%s spaces the rails by the width it is given', name => {
+        const gapAt = (width: number) => metres(rails(name, width)[0][0], rails(name, width)[1][0]);
+        expect(gapAt(6000)).toBeGreaterThan(gapAt(2000) * 2);
+    });
+
+    // The defect this replaced: a fixed 45° bearing meant the pair could not be laid
+    // across a road running any other way.
+    it.each(STATES)('%s takes its bearing from the road, not from a constant', name => {
+        const east = rails(name, 2000, [[-0.4, 51.5], [0.1, 51.5]])[0];
+        const north = rails(name, 2000, [[-0.4, 51.3], [-0.4, 51.7]])[0];
+        const bearing = (p: Position[]) => turf.bearing(turf.point(p[0]), turf.point(p[1]));
+        expect(Math.abs(bearing(east) - bearing(north))).toBeGreaterThan(45);
+    });
+
+    it.each(STATES)('%s offers the movement contract: start, end and a width handle', name => {
+        const handles = renderTacticalGraphic(lineBase(name, ROUTE, {width: 2000})).handles;
+        expect((handles.geometry as {coordinates: Position[]}).coordinates).toHaveLength(3);
+    });
+});

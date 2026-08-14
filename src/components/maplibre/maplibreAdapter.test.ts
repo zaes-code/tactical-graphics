@@ -233,4 +233,33 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
         const built = buildTacticalGraphic(TacticalGraphicName.Abatis, ABATIS_ROUTE, {}, RESOLUTION);
         expect(built!.handles).toHaveLength(3);
     });
+    const READINESS = [
+        TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+        TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+        TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    ];
+    const ACROSS_ROAD = {type: 'LineString' as const, coordinates: [[-0.4, 51.4], [-0.1, 51.6]]};
+
+    it.each(READINESS)('%s builds two rails from a drawn centreline', name => {
+        const built = buildTacticalGraphic(name, ACROSS_ROAD, {width: 4000}, RESOLUTION);
+        expect(built).toBeDefined();
+        const g = built!.graphic.geometry as {type: string; coordinates: number[][][]};
+        expect(g.type).toBe('MultiLineString');
+        expect(g.coordinates).toHaveLength(2);
+        expect(paintTacticalGraphic(built!, context).length).toBe(2);
+    });
+
+    it.each(READINESS)('%s widens with the width property', name => {
+        const gapAt = (width: number) => {
+            const g = buildTacticalGraphic(name, ACROSS_ROAD, {width}, RESOLUTION)!.graphic.geometry as {
+                coordinates: number[][][];
+            };
+            return span(g.coordinates[0][0], g.coordinates[1][0]);
+        };
+        expect(gapAt(12000)).toBeGreaterThan(gapAt(4000) * 2);
+    });
+
+    it.each(READINESS)('%s offers start, end and a width handle', name => {
+        expect(buildTacticalGraphic(name, ACROSS_ROAD, {width: 4000}, RESOLUTION)!.handles).toHaveLength(3);
+    });
 });

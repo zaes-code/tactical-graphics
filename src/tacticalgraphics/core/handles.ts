@@ -143,6 +143,11 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FrontalAttack,
     TacticalGraphicName.TurningMovement,
     TacticalGraphicName.Infiltration,
+    // The demolition obstacles. APP-06 271201 builds them from a centreline and a
+    // width, which is this contract exactly. @see ai/app-6.md "F2"
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
     // FlankAttack and DoubleEnvelopment are routed here by the controller registry
     // but are commented out of the enum — see ai/excluded-graphics.md. Listing them
     // would not compile, which is the enum doing its job.
