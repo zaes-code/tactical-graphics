@@ -115,9 +115,36 @@ export interface StrokeSpec {
  *
  * Sizes are screen pixels, and `color` already carries its final alpha.
  */
+/**
+ * The strokes that make up one hatch tile, in tile pixels.
+ *
+ * **The tile's geometry is symbology, not rendering.** Three renderers rasterise a hatch
+ * — the OpenLayers paint bridge, MapLibre's canvas path and MapLibre's native path — and
+ * every one of them drew a single hard-coded diagonal. Adding `cross` to {@link HatchSpec}
+ * therefore compiled, type-checked, and rendered *identically to diagonal* in all three:
+ * a new symbol distinguished only by texture would have shipped looking like the old one.
+ *
+ * So the segments are described here and the renderers only stroke them. A fourth kind
+ * is then one case in one place rather than three parallel edits nobody links together.
+ */
+export function hatchTileSegments(spec: HatchSpec): Array<[number, number, number, number]> {
+    const n = spec.sizePx;
+    // Bottom-left to top-right, which is the diagonal every existing hatch already drew.
+    const rising: [number, number, number, number] = [0, n, n, 0];
+    if (spec.kind === 'diagonal') return [rising];
+    // Crossed: the same stroke mirrored, so the two kinds share a density and differ
+    // only in whether the second set is present.
+    return [rising, [0, 0, n, n]];
+}
+
 export interface HatchSpec {
-    /** Only diagonal hatching exists today; named so a second pattern can be added. */
-    kind: 'diagonal';
+    /**
+     * `diagonal` is a single set of parallel strokes; `cross` is two sets at opposing
+     * angles. APP-06 tells restricted terrain and *severely* restricted terrain apart by
+     * exactly that difference, so it is a symbology fact both renderers must honor
+     * rather than a texture one of them happens to draw.
+     */
+    kind: 'diagonal' | 'cross';
     color: PaintColor;
     /** Side of the repeating tile. */
     sizePx: number;

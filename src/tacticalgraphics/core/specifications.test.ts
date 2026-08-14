@@ -67,6 +67,12 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.PenetrationBox,
     TacticalGraphicName.Area,
     TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.AreaGeneric,
+    TacticalGraphicName.ZoneOfFire,
+    // Distinguished from each other by hatch texture alone, which is why the tile
+    // geometry moved into the library. @see hatchTileSegments
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
 ];
 
 describe('graphic specifications', () => {

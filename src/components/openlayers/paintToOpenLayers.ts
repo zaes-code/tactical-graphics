@@ -3,7 +3,7 @@ import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
 import RenderFeature from 'ol/render/Feature';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName, hatchTileSegments} from '@zaes/tactical-graphics';
 import type {
     FillSpec,
     HatchSpec,
@@ -88,8 +88,12 @@ function buildHatch(spec: HatchSpec): CanvasPattern | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    // The tile's strokes come from the library, so `cross` cannot silently render as
+    // `diagonal` here while looking right somewhere else. @see hatchTileSegments
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
 
     return ctx.createPattern(canvas, 'repeat');

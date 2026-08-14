@@ -205,7 +205,7 @@ export {
  *
  * @see ai/maplibre-renderer.md
  */
-export {HANDLE_Z_INDEX, mapPaintGeometry, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
+export {HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
 export type {
     CircleSpec,
     FillSpec,
@@ -281,6 +281,7 @@ export {
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
 export {
+    dashedOutlinePaint,
     encirclementPaint,
     fortifiedAreaPaint,
     freeFireAreaCircularPaint,
@@ -288,6 +289,7 @@ export {
     limitedAccessAreaPaint,
     obstacleAreaPaint,
     plainOutlinePaint,
+    restrictedTerrainPaint,
 } from './symbology/areaPaints';
 export {
     areaDateLabel,

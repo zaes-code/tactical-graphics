@@ -1,7 +1,7 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
+import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -138,8 +138,10 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
 
     return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
