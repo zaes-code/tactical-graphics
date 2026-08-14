@@ -177,6 +177,7 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
+    TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.Airfield,
     TacticalGraphicName.AirheadLine,
     TacticalGraphicName.AreaOfOperations,
@@ -375,7 +376,11 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (AIRSPACE_COORDINATION_AREAS.includes(name)) return airspaceCoordinationAreaLabelPaint(name);
     // The airfield's label block is the ordinary one; what is bespoke is the runway
     // symbol drawn over it, which the paint wraps around the label. @see airfieldPaint
-    if (name === TacticalGraphicName.Airfield) return airfieldPaint(areaDefaultLabelPaint(name));
+    // Airfield zone is the same runway glyph on a drawn area; APP-06 120400 carries an
+    // H amplifier rather than a text label, and the glyph is the symbol either way.
+    if (name === TacticalGraphicName.Airfield || name === TacticalGraphicName.AirfieldZone) {
+        return airfieldPaint(areaDefaultLabelPaint(name));
+    }
     if (
         name === TacticalGraphicName.PositionAreaArtilleryCircular ||
         name === TacticalGraphicName.PositionAreaArtilleryIrregular ||

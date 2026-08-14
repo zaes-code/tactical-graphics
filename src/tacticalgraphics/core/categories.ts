@@ -48,6 +48,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.WeaponsFreeZone]:                          TacticalGraphicCategory.AirspaceCoordinatingMeasures,
 
     // ── Areas ──────────────────────────────────────────────────────────────── OK
+    [TacticalGraphicName.AirfieldZone]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.Airfield]:                         TacticalGraphicCategory.Areas,
     [TacticalGraphicName.AirheadLine]:                      TacticalGraphicCategory.Areas,
     [TacticalGraphicName.AreaOfOperations]:                 TacticalGraphicCategory.Areas,

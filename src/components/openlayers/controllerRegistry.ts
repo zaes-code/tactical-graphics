@@ -218,6 +218,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.EngagementArea]:                        polygon,
     [TacticalGraphicName.RefugeeHoldingArea]:                    polygon,
     [TacticalGraphicName.BrigadeSupportArea]:                    polygon,
+    [TacticalGraphicName.AirfieldZone]: polygon,
     [TacticalGraphicName.Airfield]:                              polygon,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
