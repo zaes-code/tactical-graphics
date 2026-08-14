@@ -93,6 +93,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ChemicalContaminatedArea]: APP6_ONLY, // APP-06 271800 Chemical Contaminated Area
     [TacticalGraphicName.NuclearContaminatedArea]: APP6_ONLY, // APP-06 271900 Nuclear Contaminated Area
     [TacticalGraphicName.RadiologicalContaminatedArea]: APP6_ONLY, // APP-06 272000 Radiological Contaminated Area
+    [TacticalGraphicName.ArtilleryManeuverArea]: APP6_ONLY, // APP-06 242400 Artillery Manoeuvre Area (AMA)
+    [TacticalGraphicName.ArtilleryReservedArea]: APP6_ONLY, // APP-06 242500 Artillery Reserved Area (ARA)
     [TacticalGraphicName.AssemblyArea]:                                 BOTH,      // APP-06 150200 Assembly Area (AA)
     [TacticalGraphicName.BaseCamp]:                                     BOTH,      // APP-06 120500 Base Camp
     [TacticalGraphicName.EngagementArea]:                               BOTH,      // APP-06 151300 Engagement Area (EA)

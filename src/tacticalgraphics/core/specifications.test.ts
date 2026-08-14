@@ -85,6 +85,9 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.ChemicalContaminatedArea,
     TacticalGraphicName.NuclearContaminatedArea,
     TacticalGraphicName.RadiologicalContaminatedArea,
+    // The two that write their abbreviation into their own broken boundary.
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
 ];
 
 describe('graphic specifications', () => {

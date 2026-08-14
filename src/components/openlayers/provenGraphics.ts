@@ -24,6 +24,8 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.AreaDefense,
     TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.AreaOfOperations,
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,

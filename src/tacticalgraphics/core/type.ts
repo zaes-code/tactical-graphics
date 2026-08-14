@@ -261,6 +261,10 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ASLT';
         case TacticalGraphicName.AreaOfOperations:
             return 'AO';
+        case TacticalGraphicName.ArtilleryReservedArea:
+            return 'ARA';
+        case TacticalGraphicName.ArtilleryManeuverArea:
+            return 'AMA';
         case TacticalGraphicName.ZoneOfFire:
             return 'ZF';
         case TacticalGraphicName.JointTacticalActionArea:
@@ -700,6 +704,8 @@ export enum TacticalGraphicName {
     ChemicalContaminatedArea = 'ChemicalContaminatedArea',
     NuclearContaminatedArea = 'NuclearContaminatedArea',
     RadiologicalContaminatedArea = 'RadiologicalContaminatedArea',
+    ArtilleryManeuverArea = 'ArtilleryManeuverArea',
+    ArtilleryReservedArea = 'ArtilleryReservedArea',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -962,6 +968,8 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.ArtilleryReservedArea]: 'artillery reserved area',
+    [TacticalGraphicName.ArtilleryManeuverArea]: 'artillery maneuver area',
     [TacticalGraphicName.RadiologicalContaminatedArea]: 'radiological contaminated area',
     [TacticalGraphicName.NuclearContaminatedArea]: 'nuclear contaminated area',
     [TacticalGraphicName.ChemicalContaminatedArea]: 'chemical contaminated area',
