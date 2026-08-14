@@ -172,3 +172,39 @@ describe('the live width read-out', () => {
         expect(controller.graphic.measure.getGeometry()).toBeUndefined();
     });
 });
+
+/**
+ * The rectangular target carries **both** dimensions, and is the only rectangle that
+ * does.
+ *
+ * FM 1-02.2 table 5-25: "greater than 200 meters in length and width described by four
+ * grids **or by a center grid, a length, width, and an altitude**". APP-06 240802 names
+ * them outright — "the target length (AM1) in metres and target width (AM) in metres".
+ *
+ * **FM explicitly permits the four-grid construction we use**, which is why this stayed
+ * a drawn rectangle rather than becoming centre-anchored. @see ai/app-6.md
+ */
+describe('the rectangular target files a length as well as a width', () => {
+    const TARGET = TacticalGraphicName.TargetAreaRectangular;
+
+    it('offers both fields', () => {
+        expect(getGraphicFields(TARGET).width).toBe(true);
+        expect(getGraphicFields(TARGET).length).toBe(true);
+    });
+
+    it('files length across the rectangle and width down it, in ground metres', () => {
+        const controller = holderFor(TARGET);
+        const bag = readGraphicLabels(controller.graphic.graphic);
+        // The fixture is 0.28 degrees of longitude by 0.14 of latitude at 51.5 degrees:
+        // wider than it is tall on the ground, and by more than the 2:1 of the degrees
+        // because a degree of longitude is shorter up there.
+        expect(bag.length).toBeGreaterThan(bag.width!);
+        expect(bag.width).toBeCloseTo(groundWidth(controller), -2);
+    });
+
+    it('is the only rectangle that files a length', () => {
+        for (const name of RECTANGULAR) {
+            expect(readGraphicLabels(holderFor(name).graphic.graphic).length).toBeUndefined();
+        }
+    });
+});

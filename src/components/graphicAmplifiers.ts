@@ -41,5 +41,5 @@ export type {GraphicLabels};
  */
 export type GraphicGeometryState = Pick<
     TacticalGraphicProperties,
-    'radius' | 'decorationSize' | 'width' | 'rotation' | 'bend' | 'mirrored'
+    'radius' | 'decorationSize' | 'width' | 'length' | 'rotation' | 'bend' | 'mirrored'
 >;
