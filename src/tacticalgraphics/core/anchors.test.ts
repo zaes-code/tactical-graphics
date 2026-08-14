@@ -1,6 +1,7 @@
 import {Position} from 'geojson';
 import * as turf from './turf';
-import {anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, runAndArcFromAnchors} from './anchors';
+import {anchorsForBow, anchorsForRunAndArc, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors} from './anchors';
+import geometryService from './GeometryService';
 
 /**
  * The conversion has to be exact in both directions, because a restore round-trips
@@ -124,5 +125,58 @@ describe('run-and-arc anchor points', () => {
         const frame = runAndArcFromAnchors(anchorsForRunAndArc(CENTER, 4000, 1500, 0, 1).slice(0, 2))!;
         expect(frame.size).toBeCloseTo(4000, 3);
         expect(frame.radius).toBeUndefined();
+    });
+});
+
+/**
+ * The bow, which is Turn's shape. The extra thing to pin here beyond the round trip is
+ * that the third point lands **on the curve the generator draws** — it is the apex of a
+ * quadratic Bezier, at half the control point's offset, and using the control point
+ * instead would put a handle in space the symbol never passes through.
+ */
+describe('bow anchor points', () => {
+    it('rejects a chord too short to have a direction', () => {
+        expect(bowFromAnchors(undefined)).toBeUndefined();
+        expect(bowFromAnchors([CENTER])).toBeUndefined();
+        expect(bowFromAnchors([CENTER, CENTER])).toBeUndefined();
+    });
+
+    it.each([
+        [5000, 0.4, 0],
+        [5000, -0.4, 0],
+        [12000, 0.9, 65],
+        [12000, -0.9, -155],
+        [900, 0.25, 179],
+    ])('round-trips size %p bend %p rotation %p', (size, bend, rotation) => {
+        const frame = bowFromAnchors(anchorsForBow(CENTER, size, rotation, bend))!;
+
+        expect(meters(frame.center, CENTER)).toBeLessThan(1);
+        expect(frame.size).toBeCloseTo(size, 3);
+        expect(frame.bend).toBeCloseTo(bend, 9);
+        const drift = ((((frame.angle * 180) / Math.PI - rotation) % 360) + 540) % 360 - 180;
+        expect(drift).toBeCloseTo(0, 6);
+    });
+
+    it('numbers the points tip first, the way APP-06 does', () => {
+        const [tip, rear] = anchorsForBow(CENTER, 5000, 0, 0.4);
+        // At rotation 0 the symbol aims east, so the tip is the eastern end.
+        expect(tip[0]).toBeGreaterThan(rear[0]);
+    });
+
+    it('puts the third point on the curve, not on the Bezier control point', () => {
+        const size = 5000, bend = 0.6;
+        const marker = anchorsForBow(CENTER, size, 0, bend)[2];
+        const curve = geometryService.bendLine(
+            [anchorsForBow(CENTER, size, 0, bend)[1], anchorsForBow(CENTER, size, 0, bend)[0]],
+            size,
+            bend,
+            32,
+        );
+        const apex = curve[16];
+        expect(meters(marker, apex)).toBeLessThan(size / 500);
+    });
+
+    it('leaves the bend unset for a two-point sketch', () => {
+        expect(bowFromAnchors(anchorsForBow(CENTER, 5000, 0, 0.4).slice(0, 2))!.bend).toBeUndefined();
     });
 });

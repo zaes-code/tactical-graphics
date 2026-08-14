@@ -1,7 +1,9 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import * as turf from './turf';
-import {Feature, MultiLineString} from 'geojson';
+import {Feature, MultiLineString, Position} from 'geojson';
+import {anchorsForBow} from './anchors';
+import {TURN_DEFAULT_BEND} from '../graphics/Turn';
 import {
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
@@ -224,12 +226,22 @@ describe('crossed mission tasks', () => {
 });
 
 describe('Turn', () => {
-    const turn = () => renderTacticalGraphic(pointTask(TacticalGraphicName.TacticalTurn));
+    // Since the APP-06 conversion the base is 270504's three anchor points rather than a
+    // dropped center. Built from the same center, size and bend the dropped form used,
+    // so every assertion below is still asking the same question of the same shape.
+    const TURN_CENTER: Position = [-77.0, 38.9];
+    const turn = () =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, 1000, 0, TURN_DEFAULT_BEND)},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn}},
+        });
 
     it('publishes [bend, arrowTip, center] — the center last, per the point convention', () => {
         const coords = (turn().handles.geometry as any).coordinates as number[][];
         expect(coords).toHaveLength(3);
-        expect(coords[2]).toEqual([-77.0, 38.9]);
+        expect(coords[2][0]).toBeCloseTo(TURN_CENTER[0], 9);
+        expect(coords[2][1]).toBeCloseTo(TURN_CENTER[1], 9);
     });
 
     it('puts the arrow-tip handle on the point of the arrowhead', () => {
@@ -259,9 +271,14 @@ describe('Turn', () => {
     });
 
     it('bends more sharply for a larger bend, and the other way for a negative one', () => {
+        // The bow is a drawn point now, so it is set by moving anchor point 3 rather
+        // than by an amplifier. Same question, stated the way the symbol states it.
         const apexOf = (bend: number) => {
-            const f = pointTask(TacticalGraphicName.TacticalTurn);
-            (f.properties as any).tacticalGraphic.bend = bend;
+            const f: Feature = {
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, 1000, 0, bend)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn}},
+            };
             const [curve] = (renderTacticalGraphic(f).graphic.geometry as any).geometries;
             return (curve.coordinates[0] as number[][]).slice(-1)[0];
         };
@@ -273,9 +290,11 @@ describe('Turn', () => {
 
     it('sizes the arrowhead off headSize, so a resize leaves it alone', () => {
         const headSpan = (size: number) => {
-            const f = pointTask(TacticalGraphicName.TacticalTurn);
-            (f.properties as any).tacticalGraphic.radius = size;
-            (f.properties as any).tacticalGraphic.headSize = 300;
+            const f: Feature = {
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, size, 0, TURN_DEFAULT_BEND)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn, headSize: 300}},
+            };
             const [, head] = (renderTacticalGraphic(f, {headSize: 300} as any).graphic.geometry as any).geometries;
             const ring = head.coordinates[0] as number[][];
             const xs = ring.map(p => p[0]);
