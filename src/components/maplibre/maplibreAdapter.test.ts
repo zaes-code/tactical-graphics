@@ -322,4 +322,73 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             expect(arcReach(0.6, 0.6)).toBeGreaterThan(arcReach(0.6, 0.15));
         });
     });
+
+    // Pursue's three points, APP-06 344000. Unlike Envelop the diameter runs *across*
+    // the straight line, so this is a different reader and worth its own coverage on
+    // the second engine rather than assuming the family carries.
+    describe('pursuit from drawn anchor points', () => {
+        /** Line running west to east, hook hanging `radiusDeg` off its end. */
+        const drawn = (runDeg: number, radiusDeg: number, side = 1) => ({
+            type: 'LineString' as const,
+            coordinates: [
+                [-runDeg, 51.5 + side * radiusDeg],
+                [0, 51.5 + side * radiusDeg],
+                [0, 51.5 - side * radiusDeg],
+            ],
+        });
+
+        const parts = (runDeg: number, radiusDeg: number, side = 1) => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(runDeg, radiusDeg, side), {}, RESOLUTION);
+            expect(built).toBeDefined();
+            return (built!.graphic.geometry as {coordinates: number[][][]}).coordinates;
+        };
+
+        it('builds and paints line, arc, arrowhead and crossbar', () => {
+            const built = buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(0.9, 0.25), {}, RESOLUTION);
+            expect(parts(0.9, 0.25)).toHaveLength(4);
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+        });
+
+        it('sizes the line and the hook independently', () => {
+            const lineOf = (r: number, rad: number) => span(parts(r, rad)[0][0], parts(r, rad)[0][1]);
+            const hookOf = (r: number, rad: number) => {
+                const arc = parts(r, rad)[1];
+                return span(arc[0], arc[arc.length - 1]);
+            };
+            // Same hook, longer line.
+            expect(lineOf(1.8, 0.25)).toBeGreaterThan(lineOf(0.9, 0.25) * 1.9);
+            expect(hookOf(1.8, 0.25)).toBeCloseTo(hookOf(0.9, 0.25), 0);
+            // Same line, bigger hook — the proportion the dropped form fixed at 2.4.
+            expect(hookOf(0.9, 0.5)).toBeGreaterThan(hookOf(0.9, 0.25) * 1.9);
+        });
+
+        it('hangs the hook on the side point 3 was drawn', () => {
+            // The arc's apex is forward of the line either way; what flips is which side
+            // of the line the whole construction sits on.
+            const apexOf = (side: number): number[] => {
+                const arc = parts(0.9, 0.25, side)[1];
+                return arc[Math.floor(arc.length / 2)];
+            };
+            const lineY = (side: number) => parts(0.9, 0.25, side)[0][0][1];
+            expect(Math.sign(apexOf(1)[1] - lineY(1))).toBe(-Math.sign(apexOf(-1)[1] - lineY(-1)));
+        });
+
+        it('curls forward, away from point 1, on either side', () => {
+            // With only three points there is nothing left to state which way the arc
+            // goes round, so it is a convention: away from where the pursuit came from.
+            // Measured across the line rather than along it, the previous assertion
+            // cannot see this at all — both sweeps put the apex at the same latitude.
+            for (const side of [1, -1]) {
+                const [line, arc] = parts(0.9, 0.25, side);
+                const join = line[1];
+                const apex = arc[Math.floor(arc.length / 2)];
+                expect(apex[0]).toBeGreaterThan(join[0]);
+            }
+        });
+
+        it('offers the arrowhead tip and the line start as handles', () => {
+            expect(buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(0.9, 0.25), {}, RESOLUTION)!.handles)
+                .toHaveLength(2);
+        });
+    });
 });

@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -899,5 +899,46 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
         this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
         this.updateGeometry();
+    }
+}
+
+/**
+ * Pursuit — a straight line with a half-circle hook on its end.
+ *
+ * APP-06 344000 draws it from three points, and the third of them is the arrowhead's
+ * tip. The one thing this holder carries that the others do not is `lineRatio`: the
+ * drawn form lets the straight line be any length relative to the hook, where the
+ * dropped form fixed it at 2.4 radii, and without somewhere to keep it the next
+ * regeneration would quietly snap a hand-drawn line back to that constant.
+ *
+ * @see Pursuit in the core library for the shape, and core/anchors.ts for the points.
+ */
+export class PursuitGraphicBase extends MissionTaskGraphicBase {
+    /** The straight line's length as a multiple of the hook's radius. */
+    private lineRatio = HOOK_DEFAULT_LINE_RATIO;
+
+    protected anchorPoints(): Position[] {
+        return anchorsForHook(
+            toLonLat(this.center) as Position,
+            this.size,
+            this.rotation,
+            this.mirrored ? -1 : 1,
+            this.lineRatio,
+        );
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = hookFromAnchors(coords);
+        if (!frame) return false;
+
+        // Every one of these is the library's answer, not this holder's: which drawn
+        // point carries the aim, and which way round "mirrored" runs. @see hookPose
+        const pose = hookPose(frame);
+        this.center = fromLonLat(pose.center as Coordinate);
+        this.rotation = pose.rotationDegrees;
+        this.mirrored = pose.side < 0;
+        this.lineRatio = pose.lineRatio;
+        this.updateGeom({size: pose.radius});
+        return true;
     }
 }

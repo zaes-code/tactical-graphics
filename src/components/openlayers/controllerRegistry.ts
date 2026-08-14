@@ -12,6 +12,7 @@ import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {
     CircularAreaGraphicBase,
     EnvelopmentGraphicBase,
+    PursuitGraphicBase,
     MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
@@ -113,6 +114,15 @@ const turn = (name: TacticalGraphicName, res: number) => {
 // half circle's radius riding the manager's per-handle drag hook.
 const envelopment = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new EnvelopmentGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Pursuit needs its own holder for the same reason envelopment does: APP-06 draws it
+// from anchor points, and the points have to be written and read back in that symbol's
+// own layout. @see PursuitGraphicBase
+const pursuit = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new PursuitGraphicBase(name, res, res));
     controller.editStretches = true;
     return controller;
 };
@@ -405,7 +415,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FrontalAttack]:      movement(),
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),
-    [TacticalGraphicName.Pursuit]:            missionTask,
+    [TacticalGraphicName.Pursuit]:            pursuit,
     [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
