@@ -37,6 +37,12 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.AssaultCrossing]: 15,
     [TacticalGraphicName.Encirclement]: 20,
 
+    // Abatis. APP-06 280100 is explicit that "the size of the tooth does not change"
+    // as the drawn line lengthens, which is precisely what this table is for. Sized
+    // between the wire marks (14) and the anti-tank teeth (30): it is one tooth
+    // rather than a run of them, so it has to read on its own.
+    [TacticalGraphicName.Abatis]: 26,
+
     // The wire obstacles. Their mark width is the unit the whole density ladder is built
     // from — gaps are counted in mark widths — so this one number sets both the size of
     // the X and the spacing between groups. Omitting them was not a missing tuning value

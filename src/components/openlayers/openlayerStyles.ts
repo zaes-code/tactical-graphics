@@ -1647,6 +1647,18 @@ export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunct
 }
 
 /**
+ * Abatis: a drawn route carrying one fixed-size chevron. The whole symbol is in the
+ * geometry, so a plain stroke draws it.
+ *
+ * It cannot fall through to `defaultLineStyle`, which returns nothing at all for a
+ * MultiLineString — that is what left the obstacle invisible when it stopped being
+ * point-anchored. **Ported.** @see paintFunctions.ts, `plainOutlinePaint`.
+ */
+export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
+}
+
+/**
  * FortifiedLine: a continuous baseline plus rectangular teeth (merlons)
  * bumping up from it. Geometry is a MultiLineString — sub-line [0] is the
  * baseline, sub-lines [1..N] are each tooth as 4 points (leftBase, leftTop,
