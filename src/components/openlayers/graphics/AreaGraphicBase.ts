@@ -4,7 +4,9 @@ import {MultiPoint, Point, Polygon} from 'ol/geom';
 import {createBaseFeature, createHandleFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
+import {toLonLat} from 'ol/proj';
+import {getDistance} from 'ol/sphere';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
 import {decorationMeters} from './decorationPx';
@@ -85,6 +87,21 @@ export class AreaGraphicBase implements PolygonGraphic {
             }
         }
 
+        // A width typed into the dialog restretches the rectangle. The guard compares
+        // against the exact string a drag writes, so the holder's own write can never
+        // loop back in here as a resize. @see publishRectangleWidth
+        // A meter of slack: the amplifier is stamped rounded, so re-stamping the value
+        // a drag just wrote must not read as an edit and restretch the shape.
+        if (isRectangular(this.graphicName) && labels.width !== undefined && Math.abs(Number(labels.width) - this.widthAmplifier()) > 1) {
+            const meters = Number(labels.width);
+            if (Number.isFinite(meters) && meters > 0) {
+                this.graphicLabels = labels;
+                this.setRectangleWidth(meters);
+                this.setBaseFeature(this.base);
+                return;
+            }
+        }
+
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         writeGraphicProperties(this.getFeatures(), this.graphicName, labels, this.stampedGeometry());
@@ -161,5 +178,77 @@ export class AreaGraphicBase implements PolygonGraphic {
                 this.labels.set('labelSegmentB', b);
             }
         }
+
+        // A rectangle's width is doctrinal input, so a drag has to write it back.
+        // @see rectangleWidthMeters
+        if (isRectangular(this.graphicName)) this.publishRectangleWidth();
+    }
+
+    // ── The rectangular zones' width amplifier ──────────────────────────────
+    //
+    // FM 1-02.2 table 5-24 draws these with an `AM` arrow down the edge labelled
+    // "Width (M)", and APP-06 says the same in words: "two anchor points **and a
+    // width, defined in metres**... points 1 and 2 will be located in the centre of
+    // two opposing sides of the rectangle".
+    //
+    // We let the user drag a box, which produces the same rectangle — but the width
+    // was pure geometry, so a saved zone carried no figure a NATO consumer could read
+    // back, and none could be typed in. The two now drive each other, exactly as
+    // `AirCorridor` does: a drag writes the amplifier, a typed amplifier resizes the
+    // shape. @see ai/app-6.md, "F2"
+    //
+    // **Not printed on the symbol.** FM's construct examples show only the
+    // designation and the date-time group; the width is an input, not a label.
+
+    /**
+     * The rectangle's width — the extent *across* it — in ground meters.
+     *
+     * Measured geodesically rather than from the projected extent: the amplifier is a
+     * number a user reads and types, and projected meters are inflated by 1/cos(lat),
+     * which at 51° would show a 10 km zone as 16 km.
+     */
+    private rectangleWidthMeters(): number {
+        const geom = this.base.getGeometry();
+        if (!geom) return 0;
+        const [minX, minY, maxX, maxY] = geom.getExtent();
+        const midX = (minX + maxX) / 2;
+        return getDistance(toLonLat([midX, minY]), toLonLat([midX, maxY]));
+    }
+
+    /** The amplifier value a drag writes: whole ground meters, as the bag holds it. */
+    private widthAmplifier(): number {
+        return Math.round(this.rectangleWidthMeters());
+    }
+
+    /** Mirror the drawn width into the bag, without disturbing the other amplifiers. */
+    private publishRectangleWidth(): void {
+        const width = this.widthAmplifier();
+        if (this.graphicLabels.width === width) return;
+        this.graphicLabels = {...this.graphicLabels, width};
+        writeGraphicProperties(this.getFeatures(), this.graphicName, this.graphicLabels, this.stampedGeometry());
+    }
+
+    /**
+     * Restretch the rectangle about its own centre to `meters` of ground width.
+     *
+     * Scaling the projected half-height by the ratio of requested to measured width
+     * keeps this correct without re-deriving the Mercator factor: both numbers carry
+     * the same 1/cos(lat) inflation, so it cancels.
+     */
+    private setRectangleWidth(meters: number): void {
+        const geom = this.base.getGeometry();
+        const current = this.rectangleWidthMeters();
+        if (!geom || !(current > 0) || !(meters > 0)) return;
+
+        const [minX, minY, maxX, maxY] = geom.getExtent();
+        const midY = (minY + maxY) / 2;
+        const half = ((maxY - minY) / 2) * (meters / current);
+        geom.setCoordinates([[
+            [minX, midY - half],
+            [maxX, midY - half],
+            [maxX, midY + half],
+            [minX, midY + half],
+            [minX, midY - half],
+        ]]);
     }
 }
