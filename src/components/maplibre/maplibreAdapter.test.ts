@@ -166,3 +166,71 @@ describe('buildTacticalGraphic', () => {
         expect(() => buildTacticalGraphic(TacticalGraphicName.PhaseLine, geometry)).not.toThrow();
     });
 });
+
+/**
+ * The APP-06 constructions, through MapLibre's own build-and-paint path.
+ *
+ * The two renderers share the paint layer, so a geometry assertion in
+ * `core/app6Conformance.test.ts` already covers what both of them draw. What is
+ * *not* shared is this adapter — the decoration size it supplies, and whether it
+ * hands the painter a feature the painter recognises. That is the half that broke
+ * when abatis stopped being point-anchored, so it is the half tested here.
+ *
+ * MapLibre cannot be checked in a browser from this harness: its render loop is
+ * driven by `requestAnimationFrame`, which a hidden automation tab never fires, so
+ * the map's style never loads. @see ai/app-6.md, "Verifying MapLibre"
+ */
+describe('APP-06 constructions through the MapLibre adapter', () => {
+    // At RESOLUTION the tooth is 26 km of ground, so both fixtures are drawn well
+    // clear of it: a route shorter than twice the tooth is clamped on purpose, and
+    // comparing a clamped tooth against an unclamped one proves nothing.
+    const ABATIS_ROUTE = {
+        type: 'LineString' as const,
+        coordinates: [[-3.0, 51.0], [-1.5, 51.3], [0.5, 51.0], [2.0, 51.4]],
+    };
+    const ABATIS_SHORT = {type: 'LineString' as const, coordinates: [[-1.2, 51.0], [-0.2, 51.0]]};
+
+    /** Distance in projected meters between two points of the painted line work. */
+    const span = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+    const abatisPath = (geometry: typeof ABATIS_ROUTE) => {
+        const built = buildTacticalGraphic(TacticalGraphicName.Abatis, geometry, {}, RESOLUTION);
+        expect(built).toBeDefined();
+        const g = built!.graphic.geometry;
+        expect(g.type).toBe('MultiLineString');
+        return (g as {coordinates: number[][][]}).coordinates[0];
+    };
+
+    it('builds abatis from a drawn route and paints it', () => {
+        const built = buildTacticalGraphic(TacticalGraphicName.Abatis, ABATIS_ROUTE, {}, RESOLUTION);
+        expect(built).toBeDefined();
+        expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+    });
+
+    it('sizes the tooth from the zoom, not from the length of the obstacle', () => {
+        const long = abatisPath(ABATIS_ROUTE);
+        const short = abatisPath(ABATIS_SHORT);
+
+        // Points 0 and 2 are the tooth's feet, whatever the route does after them.
+        const longTooth = span(long[0], long[2]);
+        const shortTooth = span(short[0], short[2]);
+
+        expect(longTooth).toBeGreaterThan(0);
+        // Compared as a ratio, not an absolute: the tooth is a fixed *geodesic* size and
+        // these are *projected* meters, so Mercator stretches it slightly differently at
+        // each fixture's latitude. 2% is far tighter than the 5x a length-driven tooth
+        // would show, and loose enough not to pin the projection's arithmetic.
+        expect(Math.abs(shortTooth - longTooth) / longTooth).toBeLessThan(0.02);
+        // ...and the two routes are genuinely different lengths.
+        expect(span(long[0], long[long.length - 1])).toBeGreaterThan(span(short[0], short[short.length - 1]) * 3);
+    });
+
+    it('keeps the route’s own vertices, so the obstacle can follow a road', () => {
+        expect(abatisPath(ABATIS_ROUTE).length).toBeGreaterThan(3);
+    });
+
+    it('offers a handle per end plus the chevron apex', () => {
+        const built = buildTacticalGraphic(TacticalGraphicName.Abatis, ABATIS_ROUTE, {}, RESOLUTION);
+        expect(built!.handles).toHaveLength(3);
+    });
+});

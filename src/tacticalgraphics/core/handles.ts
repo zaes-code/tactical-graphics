@@ -558,7 +558,9 @@ export function isRectangular(name: TacticalGraphicName): boolean {
 const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     // FireSupportStation, PointTarget and TargetReferencePoint belong here too and
     // are commented out of the enum. @see ai/excluded-graphics.md
-TacticalGraphicName.Abatis,
+    // Abatis is deliberately absent: it became a drawn multi-vertex route, so an edit
+    // drag has to move the vertex under the cursor rather than resize the whole
+    // obstacle. @see ai/app-6.md "F1"
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
     TacticalGraphicName.Ambush,
     TacticalGraphicName.AreaDefense,
