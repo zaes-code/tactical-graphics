@@ -1,4 +1,5 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
+import {ARC_TIC_FRACTION, arcTicCount} from '../core/symbology';
 import {Feature, MultiLineString, MultiPoint, Point, GeometryCollection, Position} from "geojson";
 import {Coordinate, PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
@@ -120,8 +121,8 @@ export class Retain extends MissionTask {
         let {rotation, size} = opts;
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
-        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size / 2.5, 6);
-        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size / 2.5, 5);
+        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size * ARC_TIC_FRACTION, arcTicCount(130));
+        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size * ARC_TIC_FRACTION, arcTicCount(100));
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperRadialLineStrings).geometry,
@@ -154,7 +155,7 @@ export class Contain extends MissionTask {
         const gap = labelGapDegrees(opts);
         const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 180 - gap, 100);
         const lowerArch = geometryService.createCircularArc(center, rotation, size, 180 + gap, 270, 100);
-        let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size / 2.5, 7);
+        let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size * ARC_TIC_FRACTION, arcTicCount(210));
 
         // The center radial sits at ~180° (due-west of center) — exactly where
         // the C label is anchored. Pull its outer endpoint inward so the line
