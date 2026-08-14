@@ -89,6 +89,10 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ZoneOfFire]: APP6_ONLY, // APP-06 242600 Zone of Fire
     [TacticalGraphicName.RestrictedTerrain]: APP6_ONLY, // APP-06 152400 Restricted Terrain
     [TacticalGraphicName.SeverelyRestrictedTerrain]: APP6_ONLY, // APP-06 152500 Severely Restricted Terrain
+    [TacticalGraphicName.BiologicalContaminatedArea]: APP6_ONLY, // APP-06 271700 Biological Contaminated Area
+    [TacticalGraphicName.ChemicalContaminatedArea]: APP6_ONLY, // APP-06 271800 Chemical Contaminated Area
+    [TacticalGraphicName.NuclearContaminatedArea]: APP6_ONLY, // APP-06 271900 Nuclear Contaminated Area
+    [TacticalGraphicName.RadiologicalContaminatedArea]: APP6_ONLY, // APP-06 272000 Radiological Contaminated Area
     [TacticalGraphicName.AssemblyArea]:                                 BOTH,      // APP-06 150200 Assembly Area (AA)
     [TacticalGraphicName.BaseCamp]:                                     BOTH,      // APP-06 120500 Base Camp
     [TacticalGraphicName.EngagementArea]:                               BOTH,      // APP-06 151300 Engagement Area (EA)
