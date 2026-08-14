@@ -19,9 +19,16 @@ import {
     PAINTABLE_GRAPHICS,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    anchorsForArcAndArrow,
+    anchorsForBow,
+    anchorsForHook,
+    anchorsForRunAndArc,
+    anchorsFromFrame,
+    baseGeometryFor,
     getColorByHostility,
     resetTacticalGraphicsConfig,
     supportsHostility,
+    usesDrawnAnchors,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 
@@ -389,6 +396,42 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
         it('offers the arrowhead tip and the line start as handles', () => {
             expect(buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(0.9, 0.25), {}, RESOLUTION)!.handles)
                 .toHaveLength(2);
+        });
+    });
+
+    /**
+     * Every symbol moved onto drawn anchor points, built and painted through the second
+     * engine from the points the library itself writes.
+     *
+     * The point of going through `anchorsFor*` rather than hand-laying coordinates is
+     * that it is the *library's* answer being fed to the *renderer's* build path — which
+     * is exactly the seam every MapLibre parity defect so far has hidden in: a symbology
+     * fact that only the OpenLayers holder knew.
+     */
+    describe('the converted symbols build and paint on this engine', () => {
+        const CENTER = [-0.1, 51.5];
+        const CONVERTED: [TacticalGraphicName, number[][]][] = [
+            [TacticalGraphicName.Envelopment, anchorsForRunAndArc(CENTER, 40_000, 15_000, 25, 1)],
+            [TacticalGraphicName.Pursuit, anchorsForHook(CENTER, 20_000, 25, 1)],
+            [TacticalGraphicName.Turn, anchorsForBow(CENTER, 30_000, 25, 0.5)],
+            [TacticalGraphicName.TacticalTurn, anchorsForBow(CENTER, 30_000, 25, -0.5)],
+            [TacticalGraphicName.Contain, anchorsFromFrame(CENTER, 25_000, 25 - 90)],
+            [TacticalGraphicName.Ambush, anchorsForArcAndArrow(CENTER, 25_000, 25, 2)],
+        ];
+
+        it.each(CONVERTED)('%s', (name, coordinates) => {
+            const built = buildTacticalGraphic(name, {type: 'LineString', coordinates}, {}, RESOLUTION);
+            expect(built).toBeDefined();
+            expect(built!.graphic.geometry).toBeDefined();
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+            expect(built!.handles.length).toBeGreaterThan(0);
+        });
+
+        it('declares each of them as taking a drawn base', () => {
+            for (const [name] of CONVERTED) {
+                expect(usesDrawnAnchors(name)).toBe(true);
+                expect(baseGeometryFor(name)).toBe('LineString');
+            }
         });
     });
 });
