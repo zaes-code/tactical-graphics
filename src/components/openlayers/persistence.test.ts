@@ -544,8 +544,9 @@ describe('a graphic saved before the anchor-point conversion', () => {
         expect(report.restored).toBe(1);
         const base = to.graphicControllers[0].graphic.base.getGeometry();
         expect(base).toBeInstanceOf(LineString);
-        // Two run ends and the point that sets the reach — the APP-06 anchor set.
-        expect((base as LineString).getCoordinates()).toHaveLength(3);
+        // APP-06 343500's four: the run's two ends, the semicircle's far foot, and the
+        // point that says which flank it bulges to.
+        expect((base as LineString).getCoordinates()).toHaveLength(4);
     });
 
     it('keeps the bend it was saved with', () => {

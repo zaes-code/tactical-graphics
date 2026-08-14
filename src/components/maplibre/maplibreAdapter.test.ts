@@ -270,10 +270,19 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
     // the class of defect a MapLibre parity pass keeps finding is a symbology fact
     // that only OpenLayers knows.
     describe('envelopment from drawn anchor points', () => {
-        /** Run west to east, with the third point set north of it by `reach` degrees. */
-        const drawn = (halfRunDeg: number, reachDeg: number) => ({
+        /**
+         * APP-06 343500's four points, laid out west to east along 51.5 degrees north:
+         * the run's two ends, then the semicircle's far foot two radii past the end,
+         * then a point on the flank it bulges to.
+         */
+        const drawn = (halfRunDeg: number, radiusDeg: number) => ({
             type: 'LineString' as const,
-            coordinates: [[-halfRunDeg, 51.5], [0, 51.5 + reachDeg], [halfRunDeg, 51.5]],
+            coordinates: [
+                [-halfRunDeg, 51.5],
+                [halfRunDeg, 51.5],
+                [halfRunDeg + 2 * radiusDeg, 51.5],
+                [halfRunDeg + radiusDeg, 51.5 + radiusDeg],
+            ],
         });
 
         it('builds and paints from three drawn points', () => {
