@@ -110,6 +110,32 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * The graphics APP-06 defines from **drawn anchor points** rather than a dropped
+ * center, and which this library is converting to match.
+ *
+ * > This symbol requires four anchor points. Point 1 defines the beginning of the
+ * > straight line. Point 2 defines the end of the straight line portion of the
+ * > graphic. Point 3 defines the diameter. (343500 Envelop)
+ *
+ * Each of these grew here as a center plus a `size` and a `rotation`, so the symbol is
+ * right but its proportions are not the user's to set. Converting one means its base
+ * geometry becomes a `LineString` carrying those points — which is what `core/anchors.ts`
+ * converts to and from, so the shape maths each generator already has is untouched.
+ *
+ * **The list is the conversion's progress**, and a name is added only once its
+ * generator, its holder and its restore path all agree. Exported so a renderer, a
+ * restore shim and a test all ask the same question.
+ */
+const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Envelopment,
+];
+
+/** @see DRAWN_ANCHOR_GRAPHICS */
+export function usesDrawnAnchors(name: TacticalGraphicName): boolean {
+    return DRAWN_ANCHOR_GRAPHICS.includes(name);
+}
+
+/**
  * Whether this graphic can be flipped to the other side of its own line.
  *
  * Exported so a renderer, a properties panel or a test can ask without keeping its own
@@ -123,7 +149,7 @@ export function supportsMirror(name: TacticalGraphicName): boolean {
 const SHAPE_ONLY: HandleContract = {roles: [], repeating: 'shape'};
 
 /**
- * The movement and manoeuvre family. `generateHandles` returns
+ * The movement and maneuver family. `generateHandles` returns
  * `[start, end, offset]`, and the third is present only on the graphics that have
  * a width to set.
  */
@@ -143,7 +169,7 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FrontalAttack,
     TacticalGraphicName.TurningMovement,
     TacticalGraphicName.Infiltration,
-    // The demolition obstacles. APP-06 271201 builds them from a centreline and a
+    // The demolition obstacles. APP-06 271201 builds them from a centerline and a
     // width, which is this contract exactly. @see ai/app-6.md "F2"
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,

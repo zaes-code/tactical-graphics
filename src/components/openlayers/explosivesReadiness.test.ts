@@ -14,8 +14,8 @@ const ARMED = TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable;
 const NAMES = [PLANNED, SAFE, ARMED];
 
 /**
- * The three readiness states are a **drawn centreline with a width**, per APP-06
- * 271201 — "points 1 and 2 determine the centreline of the symbol and point 3
+ * The three readiness states are a **drawn centerline with a width**, per APP-06
+ * 271201 — "points 1 and 2 determine the centerline of the symbol and point 3
  * determines its width" — with FM 1-02.2's plate agreeing. They were point-anchored
  * at a fixed 45° bearing until 2026-08-13, so a demolition could not be laid across a
  * road running any other way. @see ai/app-6.md, "F2"

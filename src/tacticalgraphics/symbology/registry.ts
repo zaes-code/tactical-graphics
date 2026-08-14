@@ -465,7 +465,7 @@ const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
 ];
 
 /**
- * The movement and manoeuvre family. Each draws plain line work and an amplifier
+ * The movement and maneuver family. Each draws plain line work and an amplifier
  * chosen per graphic — the table mirrors what `LineGraphicBase`'s movement switch
  * used to do inline.
  */

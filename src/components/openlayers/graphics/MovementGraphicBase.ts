@@ -105,7 +105,7 @@ export class MovementGraphicBase implements LineGraphic {
             this.graphic.setStyle(mobileDefenseGraphicStyleFunc());
         }
         // The demolition obstacles moved here from the mission-task holder when they
-        // became centreline-plus-width graphics, and their dashing came with them:
+        // became centerline-plus-width graphics, and their dashing came with them:
         // which of the two rails is hashed is what separates planned from safe from
         // armed. @see BAR_SYMBOL_DASHES, ai/app-6.md "F2"
         if (BAR_SYMBOL_GRAPHIC_NAMES.includes(name)) {

@@ -325,13 +325,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Abatis takes a drawn route with as many vertices as the road needs, so it is a
     // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
     [TacticalGraphicName.Abatis]:                 line(),
-    // The demolition family is a drawn centreline with a width, so it takes the
+    // The demolition family is a drawn centerline with a width, so it takes the
     // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: movement(2),
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: movement(2),
     // Roadblock complete stays point-dropped: its symbol is two overlapping X's,
-    // which no centreline-and-width rule in APP-06 describes. @see ai/app-6.md "F2"
+    // which no centerline-and-width rule in APP-06 describes. @see ai/app-6.md "F2"
     [TacticalGraphicName.RoadblockCompleteExecuted]: roadblockComplete,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
