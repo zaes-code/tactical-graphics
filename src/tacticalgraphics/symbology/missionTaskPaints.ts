@@ -270,16 +270,6 @@ export function pursuitPaint(name: TacticalGraphicName): MissionTaskPaint {
     };
 }
 
-/**
- * How far movement to contact's zigzag "contact" arrows sit off the big arrow's
- * arrowhead edge, as a fraction of that arrow's half-length.
- *
- * Expressed against the **graphic** rather than the screen: the arrow is baked in
- * meters, so a constant screen offset slid the side arrows across it as the map
- * zoomed. Both forms are "zoom-invariant"; only one of them is in the same frame
- * as the thing it has to stay clear of.
- */
-const SIDE_ARROW_GAP_RATIO = 0.12;
 
 /**
  * Movement to contact: the big arrow, with the two pairs of side arrows nudged
@@ -298,42 +288,13 @@ export function movementToContactPaint(): MissionTaskPaint {
     return feature => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
-        const rawLines = geometry.coordinates;
-
-        const tip = rawLines[0]?.[0];
-        const finA = rawLines[0]?.[3];
-        const finB = rawLines[1]?.[0];
-        let gap = 0;
-        if (tip && finA && finB) {
-            const midFins = [(finA[0] + finB[0]) / 2, (finA[1] + finB[1]) / 2];
-            const r = Math.hypot(tip[0] - midFins[0], tip[1] - midFins[1]) / 2;
-            gap = SIDE_ARROW_GAP_RATIO * r;
-        }
-
-        const perpShift = (from: ProjectedPosition, to: ProjectedPosition, ccw: boolean): [number, number] => {
-            const dx = to[0] - from[0];
-            const dy = to[1] - from[1];
-            const len = Math.hypot(dx, dy);
-            if (len === 0) return [0, 0];
-            const sign = ccw ? 1 : -1;
-            return [((sign * -dy) / len) * gap, ((sign * dx) / len) * gap];
-        };
-
-        // The upper edge runs B→A, whose counter-clockwise perpendicular points out
-        // of the arrow; the lower edge runs I→A, whose clockwise one does.
-        const [upperDx, upperDy] = rawLines[0]?.length >= 2 ? perpShift(rawLines[0][1], rawLines[0][0], true) : [0, 0];
-        const [lowerDx, lowerDy] = rawLines[1]?.length >= 4 ? perpShift(rawLines[1][2], rawLines[1][3], false) : [0, 0];
-        const shift = (line: ProjectedPosition[], dx: number, dy: number): ProjectedPosition[] =>
-            line.map(p => [p[0] + dx, p[1] + dy] as ProjectedPosition);
-
         const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH()};
-        return rawLines.map((line, i) => ({
-            geometry: {
-                type: 'LineString' as const,
-                coordinates: i === 2 || i === 3 ? shift(line, upperDx, upperDy)
-                    : i === 4 || i === 5 ? shift(line, lowerDx, lowerDy)
-                    : line,
-            },
+        // Every member is a plain stroke. This used to shift the two contact bolts off
+        // the arrow's outline here, in projected space, because the generator started
+        // them *on* the flank; they now start clear of the wing, so the offset is part
+        // of the shape both renderers read rather than something one of them applies.
+        return geometry.coordinates.map(line => ({
+            geometry: {type: 'LineString' as const, coordinates: line},
             stroke,
         }));
     };
