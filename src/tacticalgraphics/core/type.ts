@@ -696,6 +696,10 @@ export enum TacticalGraphicName {
     RestrictedTerrain = 'RestrictedTerrain',
     SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
     AirfieldZone = 'AirfieldZone',
+    BiologicalContaminatedArea = 'BiologicalContaminatedArea',
+    ChemicalContaminatedArea = 'ChemicalContaminatedArea',
+    NuclearContaminatedArea = 'NuclearContaminatedArea',
+    RadiologicalContaminatedArea = 'RadiologicalContaminatedArea',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -958,6 +962,10 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.RadiologicalContaminatedArea]: 'radiological contaminated area',
+    [TacticalGraphicName.NuclearContaminatedArea]: 'nuclear contaminated area',
+    [TacticalGraphicName.ChemicalContaminatedArea]: 'chemical contaminated area',
+    [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
     [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
     [TacticalGraphicName.HandoverLine]: 'handover line',
     [TacticalGraphicName.LineGeneric]: 'line, generic',

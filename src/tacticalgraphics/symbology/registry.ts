@@ -28,6 +28,7 @@
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
+import {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './cbrnPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
@@ -289,6 +290,14 @@ const ZONE_GRAPHICS_BOXED: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BlueKillBoxCircular,
     TacticalGraphicName.PurpleKillBoxRectangular,
     TacticalGraphicName.PurpleKillBoxCircular,
+];
+
+/** The four CBRN contaminated areas, and the hazard letter each carries. */
+export const CBRN_AREAS: ReadonlyArray<readonly [TacticalGraphicName, string]> = [
+    [TacticalGraphicName.BiologicalContaminatedArea, 'B'],
+    [TacticalGraphicName.ChemicalContaminatedArea, 'C'],
+    [TacticalGraphicName.NuclearContaminatedArea, 'N'],
+    [TacticalGraphicName.RadiologicalContaminatedArea, 'R'],
 ];
 
 const ZONE_GRAPHICS_IRREGULAR: readonly TacticalGraphicName[] = [
@@ -644,6 +653,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
     registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
 
+    for (const [name, letter] of CBRN_AREAS) {
+        registry[name] = {
+            graphic: cbrnContaminatedAreaPaint(),
+            label: cbrnMarkPaint(letter, areaDefaultLabelPaint(name)),
+        };
+    }
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
     }

@@ -280,6 +280,8 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {CBRN_AREAS} from './symbology/registry';
+export {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './symbology/cbrnPaints';
 export {
     dashedOutlinePaint,
     encirclementPaint,
