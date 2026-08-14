@@ -74,6 +74,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Boundary]:                                     BOTH,      // APP-06 110100 Boundary
     [TacticalGraphicName.CoordinatedFireLine]:                          BOTH,      // APP-06 260200 Coordinated Fire Line (CFL)
     [TacticalGraphicName.EngineerWorkLine]:                             BOTH,      // APP-06 110300 Engineer Work Line
+    [TacticalGraphicName.AirfieldZone]: APP6_ONLY, // APP-06 120400 Airfield Zone
     [TacticalGraphicName.Airfield]:                                     BOTH,      // APP-06 131900 Airfield
     [TacticalGraphicName.AreaOfOperations]:                             BOTH,      // APP-06 120100 Area of Operations
     [TacticalGraphicName.BombArea]: APP6_ONLY, // APP-06 240808 Bomb Area

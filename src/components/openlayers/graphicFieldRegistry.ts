@@ -420,6 +420,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
+    [TacticalGraphicName.AirfieldZone]: AREA_SIMPLE,
     [TacticalGraphicName.Airfield]: AREA_SIMPLE,
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
