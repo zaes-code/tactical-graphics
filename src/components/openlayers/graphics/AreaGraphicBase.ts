@@ -206,7 +206,7 @@ export class AreaGraphicBase implements PolygonGraphic {
     //
     // FM 1-02.2 table 5-24 draws these with an `AM` arrow down the edge labelled
     // "Width (M)", and APP-06 says the same in words: "two anchor points **and a
-    // width, defined in metres**... points 1 and 2 will be located in the centre of
+    // width, defined in meters**... points 1 and 2 will be located in the center of
     // two opposing sides of the rectangle".
     //
     // We let the user drag a box, which produces the same rectangle — but the width
@@ -264,7 +264,7 @@ export class AreaGraphicBase implements PolygonGraphic {
     }
 
     /**
-     * Restretch the rectangle about its own centre to `meters` of ground width.
+     * Restretch the rectangle about its own center to `meters` of ground width.
      *
      * Scaling the projected half-height by the ratio of requested to measured width
      * keeps this correct without re-deriving the Mercator factor: both numbers carry

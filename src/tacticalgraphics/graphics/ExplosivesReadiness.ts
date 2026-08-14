@@ -6,13 +6,13 @@ import geometryService from '../core/GeometryService';
 /**
  * The three demolition readiness states of FM 1-02.2 table 5-19.
  *
- * **A drawn centreline with a width**, which is how both standards build them.
+ * **A drawn centerline with a width**, which is how both standards build them.
  * APP-06 Ed E (271201) states it for the whole family:
  *
  * > This symbol requires three anchor points. Points 1 and 2 define the endpoints of
  * > the symbol and point 3 defines the location of one side of the symbol.
  * >
- * > Points 1 and 2 determine the **centreline** of the symbol and point 3 determines
+ * > Points 1 and 2 determine the **centerline** of the symbol and point 3 determines
  * > its **width**.
  *
  * FM 1-02.2's plate agrees: its examples lay the pair across a road at whatever angle
@@ -31,7 +31,7 @@ import geometryService from '../core/GeometryService';
  * It shares the family's amplifiers and its `BAR_SYMBOL_DASHES` lookup, but APP-06 draws
  * it as *two overlapping X's* — four strokes, not two rails — and that shape is already
  * right. Its draw-rule cell is inherited rather than stated, so nothing in the standard
- * says how a centreline would lay those four strokes out. @see RoadblockComplete
+ * says how a centerline would lay those four strokes out. @see RoadblockComplete
  *
  * The dashing is a stroke property and a MultiLineString cannot say "this part dashed,
  * that one not", so the geometry is emitted here in a fixed order — **left rail first**
@@ -47,7 +47,7 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
     }
 
     /**
-     * The two rails, left first, offset either side of the drawn centreline.
+     * The two rails, left first, offset either side of the drawn centerline.
      *
      * `radius` is the half-width — the generators' name for it, filled from the public
      * `width` property — so the pair spans `2 × radius` across the route, exactly as

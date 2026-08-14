@@ -92,10 +92,35 @@ describe(`every registered graphic round-trips (${NAMES.length} names)`, () => {
         expect(after.featureCount).toBe(before.featureCount);
         expect(after.symbolId).toBe(before.symbolId);
         expect(after.baseExtent).toEqual(before.baseExtent);
-        expect(after.geometryState).toEqual(before.geometryState);
-        expect(after.labels).toEqual(before.labels);
+        // Numbers compared to 9 significant figures, not exactly. A graphic converted to
+        // APP-06's drawn anchor points **derives** its frame from geometry on every
+        // rebuild rather than carrying a stored scalar, so a save and a restore agree to
+        // floating-point precision and no further: an envelopment came back with a
+        // rotation of 3.3e-13 instead of 0 and a bend differing in the 14th decimal.
+        // Insisting on exact equality there asserts the arithmetic, not the round trip.
+        expectStateClose(after.geometryState, before.geometryState);
+        // The amplifier bag carries the geometry inputs too, so it drifts the same way.
+        expectStateClose(after.labels as unknown as Record<string, unknown>, before.labels as unknown as Record<string, unknown>);
     });
 });
+
+/** Compares two geometry-state bags, allowing floating-point drift on the numbers. */
+function expectStateClose(after: Record<string, unknown>, before: Record<string, unknown>): void {
+    // The union, and an absent key treated as undefined: the amplifier bag carries
+    // optional fields, and one side writing `undefined` where the other omits the key
+    // entirely is not a round-trip failure.
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    for (const key of keys) {
+        const a = after[key];
+        const b = before[key];
+        if (typeof a === 'number' && typeof b === 'number') {
+            const scale = Math.max(1, Math.abs(b));
+            expect(Math.abs(a - b) / scale).toBeLessThan(1e-9);
+        } else {
+            expect(a).toEqual(b);
+        }
+    }
+}
 
 /** Holds the destination manager so the assertions can reach it. */
 let lastManager: TacticalGraphicsManager | undefined;

@@ -1,4 +1,8 @@
 import {Coordinate} from "ol/coordinate";
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
+import {anchorsFromFrame, frameFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
 import {Feature} from "ol";
@@ -28,6 +32,7 @@ import {
     envelopmentBendFrom,
     clampTurnBend,
     ENVELOPMENT_DEFAULT_BEND,
+    clampEnvelopmentBend,
     TacticalGraphicName,
     TURN_DEFAULT_BEND,
     CROSSED_MISSION_TASKS,
@@ -142,7 +147,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * Same trick as `mobileDefense` in `controllerRegistry.ts`. The `role` tag, not
      * this flag, is what identifies the feature when serializing.
      */
-    base: Feature<Point> = createCenterBaseFeature();
+    base: Feature<Point | LineString> = createCenterBaseFeature() as Feature<Point | LineString>;
     rotation: number = 0;
     size: number;
     symbolId: string = '';
@@ -273,7 +278,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // The projected center, for styles that scale the symbol about it. It
         // cannot be recovered from the geometry: the generator walks out
         // geodesically and Mercator does not preserve the midpoint.
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (center) this.graphic.set('graphicCenter', center);
         // …and where the label sits, for the styles that have to open a hole for
         // it. Which direction that is differs per graphic — Contain's is due
@@ -320,7 +325,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     protected publishHandles(handles: MultiPoint): void {
         const coords = handles.getCoordinates();
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center) {
             this.handles.setGeometry(handles);
             this.centerHandle.setGeometry(new MultiPoint([]));
@@ -479,7 +484,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         this.size = newSize;
         this.center = center || this.center;
-        this.base.getGeometry()!.setCoordinates(this.center);
+        this.writeBase();
         this.updateGeometry();
         this.refreshMeasure();
     }
@@ -502,11 +507,69 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * in practice, but it is on the public `TacticalGraphicHandler` interface and the
      * manager calls it by symbolId.
      */
-    setBaseFeature(base: Feature<Point>) {
+    setBaseFeature(base: Feature<Point | LineString>) {
         this.base = base;
-        const coords = base.getGeometry()?.getCoordinates();
+        const geometry = base.getGeometry();
+        if (!geometry) return;
+
+        // A converted graphic's base carries APP-06's anchor points, so the frame is
+        // read back out of them rather than taken as a bare center. @see writeBase
+        if (geometry instanceof LineString) {
+            const frame = frameFromAnchors(geometry.getCoordinates().map(c => toLonLat(c)) as Position[]);
+            if (!frame) return;
+            this.adoptFrame(frame);
+            return;
+        }
+
+        const coords = (geometry as Point).getCoordinates();
         if (!coords || coords.length < 2) return;
         this.updateGeom({center: coords as Coordinate});
+    }
+
+    /**
+     * The center, which is holder state rather than something to read back off the base.
+     *
+     * It used to come from `this.base.getGeometry().getCoordinates()`, which is a
+     * coordinate for a point base and an array of them for an anchored one — so every
+     * style that consumed it silently got a nested array the moment a graphic converted.
+     */
+    centerCoordinate(): Coordinate {
+        return this.center;
+    }
+
+    /**
+     * Writes the base geometry: APP-06's anchor points for a converted graphic, the
+     * bare center for everything else.
+     *
+     * Doing it here rather than in each holder is what lets the conversion be a
+     * one-name-at-a-time change: the drag logic above works entirely in
+     * center / size / rotation and never learns that the base grew vertices.
+     */
+    private writeBase(): void {
+        if (!usesDrawnAnchors(this.name)) {
+            const geometry = this.base.getGeometry();
+            if (geometry instanceof LineString) this.base.setGeometry(new Point(this.center));
+            else (geometry as Point | undefined)?.setCoordinates(this.center);
+            return;
+        }
+        const {offset, side} = this.anchorReach();
+        const anchors = anchorsFromFrame(toLonLat(this.center) as Position, this.size, this.rotation, offset, side);
+        this.base.setGeometry(new LineString(anchors.map(c => fromLonLat(c as Coordinate))));
+    }
+
+    /**
+     * How far off its own axis this graphic's third anchor point sits, and on which
+     * side. Overridden by the holders whose symbol has a reach — Envelopment's arc.
+     */
+    protected anchorReach(): {offset?: number; side: number} {
+        return {side: this.mirrored ? -1 : 1};
+    }
+
+    /** Takes center, length and bearing from anchor points the user drew. */
+    protected adoptFrame(frame: DrawnFrame): void {
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
     }
 }
 
@@ -571,6 +634,19 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
 export class TurnGraphicBase extends MissionTaskGraphicBase {
     /** @see TURN_DEFAULT_BEND */
     bend: number = TURN_DEFAULT_BEND;
+
+    /**
+     * Restore's way in to the curve's sharpness, clamped by *this* family's rule.
+     *
+     * Persistence used to reach for `bend` behind an `instanceof TurnGraphicBase`
+     * check, which quietly skipped `EnvelopmentGraphicBase` — it is a sibling, not a
+     * subclass — so a saved envelopment came back at the default sharpness however it
+     * was drawn. The clamps genuinely differ between the two, so the setter is virtual
+     * rather than the field being read directly.
+     */
+    setBend(value: number): void {
+        this.bend = clampTurnBend(value);
+    }
     /**
      * Arrowhead size in meters. Seeded from the drawing resolution and then **stamped**,
      * because a restore no longer has that resolution to rebuild it from — the snapshot
@@ -611,7 +687,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * `publishHandles`, which preserves order.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
@@ -651,6 +727,35 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
     bend: number = ENVELOPMENT_DEFAULT_BEND;
+
+    /** @see TurnGraphicBase.setBend — the same hook, this family's clamp. */
+    setBend(value: number): void {
+        this.bend = clampEnvelopmentBend(value);
+    }
+
+    /**
+     * The arc's radius and flank, which is what APP-06's third anchor point sets.
+     *
+     * `bend` is a signed multiple of the half-length, so the reach it describes is
+     * `|bend| x size` and its sign is the side. Publishing it here is what puts the
+     * third point on the base geometry at the place the arc actually bulges to.
+     */
+    protected anchorReach(): {offset?: number; side: number} {
+        const bend = clampEnvelopmentBend(this.bend);
+        return {offset: Math.abs(bend) * this.size, side: Math.sign(bend) || 1};
+    }
+
+    /**
+     * Adopting drawn points sets the bend as well as the run, so a graphic restored or
+     * imported from anchor points comes back with the arc it was saved with rather than
+     * the family default.
+     */
+    protected adoptFrame(frame: DrawnFrame): void {
+        if (frame.offset !== undefined && frame.size > 0) {
+            this.bend = clampEnvelopmentBend((frame.offset / frame.size) * frame.side);
+        }
+        super.adoptFrame(frame);
+    }
     /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;
 
@@ -728,7 +833,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
      * having been split onto the inert feature by `publishHandles`.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
