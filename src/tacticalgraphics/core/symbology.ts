@@ -348,7 +348,11 @@ export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
     TacticalGraphicName.Isolate,
-    TacticalGraphicName.MovementToContact,
+    // Movement to contact is deliberately absent. It is sized by a radius like the
+    // rest of this list, but it is a **badge**, not an area: FM 1-02.2 table 5-10
+    // draws it with no amplifier of any kind, and a distance is not one of the
+    // things the symbol says. Reporting one put a measurement on the properties
+    // dialog and a hashed read-out under the cursor that meant nothing.
     TacticalGraphicName.NoFireAreaCircular,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.PositionAreaArtilleryCircular,
