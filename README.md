@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**231 graphics** are implemented and verified today, covering **245 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**234 graphics** are implemented and verified today, covering **248 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 240 supported names.
+the 243 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -976,6 +976,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Weapons Free Zone | Airspace Coordinating Measures |
 | Airfield | Areas |
 | Airhead Line | Areas |
+| Area | Areas |
 | Area Of Operations | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
@@ -997,10 +998,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
 | Human Terrain | Areas |
+| Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Named Area Of Interest | Areas |
 | Objective Area | Areas |
+| Penetration Box | Areas |
 | Pickup Zone | Areas |
 | Refugee Holding Area | Areas |
 | Strong Point | Areas |

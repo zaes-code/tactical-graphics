@@ -61,6 +61,12 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // existing construction exactly -- only the letter is theirs.
     TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.Locate,
+    // Three APP-06 areas with no FM counterpart. Two carry no label at all -- the
+    // plate's template cell is a bare outline -- which the switch default already
+    // returns, so they need no case.
+    TacticalGraphicName.PenetrationBox,
+    TacticalGraphicName.Area,
+    TacticalGraphicName.JointTacticalActionArea,
 ];
 
 describe('graphic specifications', () => {
