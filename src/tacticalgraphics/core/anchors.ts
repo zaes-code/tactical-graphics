@@ -257,3 +257,141 @@ export function anchorsForRunAndArc(
     const flank = Math.sign(side) || 1;
     return [at(-size, 0), at(size, 0), at(size + 2 * radius, 0), at(size + radius, flank * radius)];
 }
+
+/**
+ * # A straight line with a hook on its end — Pursue's three points
+ *
+ * APP-06 344000: "Point 1 defines the beginning of the straight line. Point 2 defines
+ * the end of the straight line portion of the graphic. Point 3 defines the diameter and
+ * orientation of the 180 degree circular arc and the tip of the arrowhead."
+ *
+ * So points 2 and 3 are again the ends of the arc's diameter — but unlike Envelop, the
+ * standard's template runs that diameter **across** the straight line rather than along
+ * it: the line arrives at the top of the hook and the arrowhead leaves from the bottom.
+ * That is why this is a separate reader instead of a three-point call into
+ * `runAndArcFromAnchors`, which projects onto the axis and would flatten the hook.
+ *
+ * With only three points there is nothing left to state which way the arc bulges, so it
+ * is a convention rather than an input: **away from point 1**, which is the direction
+ * the pursuit was already heading. The plate draws it exactly that way.
+ */
+export interface HookFrame {
+    /** Point 1 — the free end of the straight line, where the letter sits. */
+    start: Position;
+    /** Point 2 — where the line meets the arc, and one end of the diameter. */
+    join: Position;
+    /** Point 3 — the arrowhead's tip, and the arc's far end. */
+    tip: Position;
+    /** Midpoint of join → tip, which is the arc's center. */
+    center: Position;
+    /** Half the diameter. */
+    radius: number;
+    /** Planar radians CCW from east, center → join: where the sweep starts. */
+    startAngle: number;
+    /** `+1` to sweep counter-clockwise from join round to tip, `-1` clockwise. */
+    sweep: number;
+}
+
+export function hookFromAnchors(coords: Position[] | undefined): HookFrame | undefined {
+    if (!coords || coords.length < 3) return undefined;
+
+    const [start, join, tip] = coords;
+    const diameter = meters(join, tip);
+    if (!isFinite(diameter) || diameter < MIN_SIZE_M) return undefined;
+
+    const center = turf.destination(turf.point(join), diameter / 2, turf.bearing(turf.point(join), turf.point(tip)), {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    const radius = diameter / 2;
+    const startAngle = planarAngle(center, join);
+
+    // Which way round: whichever sweep puts the arc's apex farther from point 1. The
+    // two candidates are a quarter turn either side of the diameter, so this is a
+    // straight comparison rather than a sign convention that has to be kept in step
+    // with however the caller happened to order its points.
+    const apex = (sweep: number): Position =>
+        turf.destination(turf.point(center), radius, 90 - toDegrees(startAngle + (sweep * Math.PI) / 2), {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+    const sweep = meters(start, apex(1)) >= meters(start, apex(-1)) ? 1 : -1;
+
+    return {start, join, tip, center, radius, startAngle, sweep};
+}
+
+/**
+ * The inverse, in the terms a dropped Pursue was built from: the arc's center, its
+ * radius, the aim of the straight line, and which side the hook falls on.
+ *
+ * `lineRatio` is the straight line's length as a multiple of the radius — the symbol's
+ * own proportion, which the dropped form had no way to vary and a drawn one does.
+ */
+export function anchorsForHook(
+    center: Position,
+    radius: number,
+    rotationDegrees = 0,
+    side = 1,
+    lineRatio = 2.4,
+): Position[] {
+    const angle = toRadians(rotationDegrees);
+    const at = (u: number, v: number): Position => {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return center;
+        const bearing = 90 - toDegrees(angle + Math.atan2(v, u));
+        return turf.destination(turf.point(center), distance, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+    };
+    const flank = Math.sign(side) || 1;
+    return [at(-lineRatio * radius, flank * radius), at(0, flank * radius), at(0, -flank * radius)];
+}
+
+/**
+ * A hook expressed the way a holder carries it: a center, a radius, an aim, a flank
+ * and the line's own proportion.
+ *
+ * This lives here rather than in the renderer because it is a statement about what the
+ * symbol *is* — which of the drawn points is the aim, and which way is "mirrored" — and
+ * both renderers have to answer it identically. A holder that worked it out itself
+ * would be the exact shape of defect the MapLibre parity pass keeps turning up.
+ */
+export interface HookPose {
+    center: Position;
+    radius: number;
+    /** The **straight line's** aim in degrees, not the diameter's: they are square. */
+    rotationDegrees: number;
+    /** `+1` hook on the left of the line, `-1` on the right. */
+    side: number;
+    /** The line's length as a multiple of the radius. */
+    lineRatio: number;
+}
+
+/** The default proportion of the dropped form, kept as the fallback for a degenerate hook. */
+export const HOOK_DEFAULT_LINE_RATIO = 2.4;
+
+export function hookPose(frame: HookFrame): HookPose {
+    const {center, radius, startAngle, start} = frame;
+    const distance = meters(center, start);
+    const toStart = distance > 0 ? planarAngle(center, start) : startAngle;
+
+    // **Every angle here is measured from the center**, for the reason
+    // `frameFromAnchors` gives at length: `anchorsForHook` spokes its points out of the
+    // center, and on a sphere the bearing from point 1 to point 2 is not the bearing
+    // they were placed on. Taking the aim as `planarAngle(start, join)` instead — which
+    // reads as the obvious thing — moved a 77 km pursuit 120 m on every save/restore.
+    //
+    // The join sits a quarter turn off the aim, on whichever flank the hook is, so the
+    // aim is one of two candidates half a turn apart. The line runs *back* from the
+    // join, so the right one is whichever puts point 1 behind the center along it —
+    // exactly one of the two can, because flipping the candidate flips the sign.
+    const candidate = (side: number): number => startAngle - (side * Math.PI) / 2;
+    const along = (angle: number): number => distance * Math.cos(toStart - angle);
+    const side = along(candidate(1)) < 0 ? 1 : -1;
+    const angle = candidate(side);
+
+    return {
+        center,
+        radius,
+        rotationDegrees: toDegrees(angle),
+        side,
+        lineRatio: radius > 0 ? Math.abs(along(angle)) / radius : HOOK_DEFAULT_LINE_RATIO,
+    };
+}

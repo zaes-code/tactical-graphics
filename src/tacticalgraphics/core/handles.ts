@@ -128,6 +128,7 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
  */
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Envelopment,
+    TacticalGraphicName.Pursuit,
 ];
 
 /** @see DRAWN_ANCHOR_GRAPHICS */
