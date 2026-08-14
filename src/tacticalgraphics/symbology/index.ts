@@ -70,6 +70,13 @@ export {
 } from './areaLabelPaints';
 
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './protectionLinePaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';

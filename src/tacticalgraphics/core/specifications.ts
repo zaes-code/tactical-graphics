@@ -251,6 +251,11 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.WireDoubleStrandConcertina]:                   BOTH,      // APP-06 290308 Double Strand Concertina
     [TacticalGraphicName.WireTripleStrandConcertina]:                   BOTH,      // APP-06 290309 Triple Strand Concertina
     [TacticalGraphicName.ObstacleLine]:                                 BOTH,      // APP-06 290100 Obstacle Line
+    [TacticalGraphicName.Mineline]:                                     APP6_ONLY, // APP-06 290101 Mineline
+    [TacticalGraphicName.MineCluster]:                                  APP6_ONLY, // APP-06 290400 Mine Cluster
+    [TacticalGraphicName.TripWire]:                                     APP6_ONLY, // APP-06 290500 Trip Wire
+    [TacticalGraphicName.RaftSite]:                                     APP6_ONLY, // APP-06 290800 Raft Site
+    [TacticalGraphicName.FortifiedPosition]:                            APP6_ONLY, // APP-06 291000 Fortified Position
     [TacticalGraphicName.TacticalFix]:                                  BOTH,      // APP-06 341100 Fix
     [TacticalGraphicName.TacticalTurn]:                                 BOTH,      // APP-06 344700 Turn
     [TacticalGraphicName.Block]:                                        BOTH,      // APP-06 270501 Block
