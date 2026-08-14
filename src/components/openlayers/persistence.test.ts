@@ -575,6 +575,45 @@ describe('a graphic saved before the anchor-point conversion', () => {
         expect(holder.bend).toBeCloseTo(-0.5, 10);
     });
 
+    it('upgrades a pursuit too, to its own three-point layout', () => {
+        // Pursue is 344000, three points, with the diameter across the line rather than
+        // along it. Same shim, different shape — which is the case a family-wide
+        // assertion would have missed.
+        const to = fakeManager();
+        const report = restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Pursuit, {radius: 9000, rotation: 0}),
+        );
+
+        expect(report.failed).toEqual([]);
+        const base = to.graphicControllers[0].graphic.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        expect((base as LineString).getCoordinates()).toHaveLength(3);
+    });
+
+    it('keeps a pursuit line-to-hook proportion that is not the dropped default', () => {
+        // The dropped form fixed the line at 2.4 radii. A drawn one can be anything, and
+        // the holder has to carry that or the next regeneration snaps it back.
+        const from = fakeManager();
+        restoreTacticalGraphics(
+            from,
+            legacyPointSnapshot(TacticalGraphicName.Pursuit, {radius: 9000, rotation: 0}),
+        );
+        const handler = from.graphicControllers[0];
+        const coords = (handler.graphic.base.getGeometry() as LineString).getCoordinates();
+        // Stretch the straight line to twice its drawn length, leaving the hook alone.
+        const stretched = coords.slice();
+        stretched[0] = [coords[1][0] - (coords[1][0] - coords[0][0]) * 2, coords[1][1]];
+        handler.graphic.base.setGeometry(new LineString(stretched));
+        handler.setBaseFeature(handler.graphic.base);
+
+        const {to} = roundTrip(from);
+        const after = (to.graphicControllers[0].graphic.base.getGeometry() as LineString).getCoordinates();
+        const run = Math.hypot(after[1][0] - after[0][0], after[1][1] - after[0][1]);
+        const diameter = Math.hypot(after[2][0] - after[1][0], after[2][1] - after[1][1]);
+        expect(run / (diameter / 2)).toBeCloseTo(4.8, 1);
+    });
+
     it('is stable once upgraded: saving the anchored form and reloading changes nothing', () => {
         const first = fakeManager();
         restoreTacticalGraphics(

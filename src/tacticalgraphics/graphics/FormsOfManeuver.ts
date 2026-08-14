@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {runAndArcFromAnchors} from "../core/anchors";
+import {anchorsForHook, HookFrame, hookFromAnchors, runAndArcFromAnchors} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
 
@@ -245,127 +245,112 @@ export class TurningMovement extends SolidManeuverArrow {
 // semicircle radius; the horizontal line is 2.4·size long.
 export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Pursuit;
-    type: string = 'Point';
+    /**
+     * **Drawn, not dropped.** APP-06 344000: "This symbol requires three anchor points.
+     * Point 1 defines the beginning of the straight line. Point 2 defines the end of the
+     * straight line portion of the graphic. Point 3 defines the diameter and orientation
+     * of the 180 degree circular arc and the tip of the arrowhead."
+     *
+     * Points 2 and 3 are the ends of the arc's diameter, and the standard's template
+     * runs that diameter **across** the straight line: the line arrives at the top of
+     * the hook and the arrowhead leaves from the bottom. The line's length and the
+     * hook's size are therefore two separate things the user sets, where the dropped
+     * form fixed the line at 2.4 x the radius forever.
+     * @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
 
-    generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const center = base.geometry.coordinates;
-        const {rotation, size} = opts;
-        const r = Math.max(size, 1);
+    /** Half-angle of the arrowhead's wings, and its length as a share of the radius. */
+    private static readonly ARROW_ANGLE_DEG = 30;
+    private static readonly ARROW_LEN_RATIO = 0.25;
+    /** The crossbar is drawn wider than the arrowhead's wing span, by this much. */
+    private static readonly CROSSBAR_OVERHANG = 1.3;
 
-        // Convert a local Cartesian offset (x east, y north in meters) to a
-        // geographic position, applying `rotation` (planar deg, 0 = east).
-        const local = (x: number, y: number): Position => {
-            const dist = Math.hypot(x, y);
-            if (dist === 0) return [center[0], center[1]];
-            const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
-            let bearing = 90 - (planarDeg + rotation);
-            bearing = ((bearing % 360) + 360) % 360;
-            return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
-        };
+    /**
+     * The hook's geometry, read off the drawn points.
+     *
+     * A base that is not three points yet — mid-draw, or a save written before the
+     * conversion — is turned into three and read back through the same function, so
+     * there is exactly one path that decides what this symbol looks like. Building the
+     * fallback as points rather than as a parallel set of formulas is what stops the
+     * dropped and drawn forms drifting apart.
+     */
+    private frame(base: Feature<any>, opts?: PointGraphicOptions): HookFrame | undefined {
+        const coords = base.geometry?.coordinates;
+        const drawn = Array.isArray(coords?.[0]) ? hookFromAnchors(coords as Position[]) : undefined;
+        if (drawn) return drawn;
 
-        // Horizontal line: from (−2.4r, +r) to (0, +r) — ends at the top of
-        // the semicircle.
-        const lineLen = 2.4 * r;
-        // **The whole construction reflects about the graphic's own axis.** Everything
-        // below carries `m`, so a mirrored pursuit is the same symbol seen the other way
-        // up: the P-line at the bottom, the hook curling over it, the arrowhead at the
-        // top pointing back.
-        //
-        // It used to reverse the *sweep* instead — keeping the line and the arrowhead
-        // where they were and sending the arc the long way round, west through 180°. That
-        // is not a mirrored pursuit; it is a backwards C whose ends no longer sit at the
-        // line and the arrow. The reasoning recorded here was that reflecting the whole
-        // thing "read as the graphic jumping rather than the hook changing hands", and a
-        // graphic that jumps is a smaller price than one that stops being its own symbol.
-        const m = opts.mirrored ? -1 : 1;
-        const line: Position[] = [local(-lineLen, m * r), local(0, m * r)];
-
-        // Semicircle bulging **east in both states** — that is what makes this a
-        // reflection rather than a rotation. Unmirrored it runs from the line's end at
-        // the top (+90°) clockwise through east (0°) to the arrowhead at the bottom
-        // (−90°); mirrored it runs the same way round the same bulge, from the line's end
-        // now at the bottom to the arrowhead now at the top.
-        const arc: Position[] = geometryService.createCircularArc(center, rotation, r, m * 90, -m * 90, 48);
-
-        // Arrowhead at the end of the arc (bottom), pointing in the tangent
-        // direction at that point (≈ −x at rotation 0 — i.e., back toward
-        // the horizontal line's start).
-        const ARROW_LEN_DEG = 30;
-        const arrowLen = r * 0.25;
-        const arrowFrom = arc[arc.length - 2];
-        const arrowTip = arc[arc.length - 1];
-        const arrowHead = geometryService.computeArrowheadPoints(arrowFrom, arrowTip, arrowLen, ARROW_LEN_DEG);
-
-        // Perpendicular crossbar at the arrowhead tip, slightly wider than the
-        // arrowhead's wing span (= 2·arrowLen·sin(angle)). In the graphic's
-        // local frame the tangent is along −x (LEFT), so the crossbar runs
-        // vertically through the tip in local coords and rotates with the
-        // graphic through `local()`.
-        const wingHalf = arrowLen * Math.sin((ARROW_LEN_DEG * Math.PI) / 180);
-        const crossHalf = wingHalf * 1.3;   // 30% wider than the arrowhead
-        const crossBar: Position[] = [local(0, -m * r + crossHalf), local(0, -m * r - crossHalf)];
-
-        return this.asMultiLineStringFeature([line, arc, arrowHead, crossBar]);
+        const center = (Array.isArray(coords?.[0]) ? coords[0] : coords) as Position | undefined;
+        if (!center) return undefined;
+        const radius = Math.max(opts?.size ?? 1, 1);
+        const side = opts?.mirrored ? -1 : 1;
+        return hookFromAnchors(anchorsForHook(center, radius, opts?.rotation ?? 0, side));
     }
 
-    generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // [edge, lineStart] — edge handle at the east end of the semicircle,
-        // plus an edit handle at the beginning of the horizontal "P" line
-        // (local (−2.4r, +r)). Both sit on the graphic's outline.
-        //
-        // The MissionTask convention's center handle is deliberately absent: it
-        // rendered in the middle of empty space inside the hook, and it is not
-        // load-bearing — `handleCircleDrag` picks its operation from the global
-        // interaction mode and does its angle/scale maths against the base
-        // point, never against the handle the user grabbed.
-        const center = base.geometry.coordinates;
-        const {rotation, size} = opts;
-        const r = Math.max(size, 1);
-
-        // Both handles sit at an **end** of the drawn path: the arrowhead tip where the
-        // hook finishes, and the free end of the P-line. The first used to be the middle
-        // of the semicircle — geometrically convenient, since it is one radius out and so
-        // drives resize cleanly, but it reads as a dot floating on the curve rather than
-        // something you can take hold of. The tip is also one radius from the center, so
-        // resize behaves identically.
-        const at = (x: number, y: number): Position => {
-            const dist = Math.hypot(x, y);
-            if (dist === 0) return [center[0], center[1]];
-            const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
-            let bearing = 90 - (planarDeg + rotation);
-            bearing = ((bearing % 360) + 360) % 360;
-            return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
-        };
-
-        const m = opts.mirrored ? -1 : 1;
-        const arrowTip = at(0, -m * r);
-        // The P-line's free end. It sits a long way off the axis and crosses to the other
-        // side when the graphic reflects, which is what a mirror handle has to do: a
-        // handle that stays put can neither show the state nor be dragged across
-        // anything. The arc's midpoint cannot serve — the bulge stays east either way.
-        const lineStart = at(-2.4 * r, m * r);
-
-        return this.asMultiPointFeature([arrowTip, lineStart]);
+    /** The semicircle, swept from the line's end round to the arrowhead's tip. */
+    private arc(frame: HookFrame): Position[] {
+        const points: Position[] = [];
+        for (let i = 0; i <= PURSUIT_ARC_STEPS; i++) {
+            const angle = frame.startAngle + (frame.sweep * Math.PI * i) / PURSUIT_ARC_STEPS;
+            points.push(geometryService.translateCoordinates(frame.center, frame.radius, angle));
+        }
+        return points;
     }
 
-    generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
-        // "P" label sits at the midpoint of the horizontal line: (−1.2r, ±r).
-        // The label position rotates with the graphic, but the label text
-        // itself is rendered un-rotated (see MissionTaskGraphicBase →
-        // getMissionTaskStyleFn with rotation = 0).
-        //
-        // It has to take the same reflection as the line it names, or a mirrored graphic
-        // leaves its "P" floating where the line used to be.
-        const center = base.geometry.coordinates;
-        const {rotation, size} = opts;
-        const r = Math.max(size, 1);
-        const x = -1.2 * r, y = (opts.mirrored ? -1 : 1) * r;
-        const dist = Math.hypot(x, y);
-        const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
-        let bearing = 90 - (planarDeg + rotation);
-        bearing = ((bearing % 360) + 360) % 360;
-        const labelPos = turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
-        return this.asPointFeature(labelPos);
+    generateGraphics(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiLineString> {
+        const frame = this.frame(base, opts);
+        if (!frame) return this.asMultiLineStringFeature([]);
+
+        const arc = this.arc(frame);
+        const tip = arc[arc.length - 1];
+        const approach = arc[arc.length - 2];
+
+        const arrowLen = frame.radius * Pursuit.ARROW_LEN_RATIO;
+        const arrowHead = geometryService.computeArrowheadPoints(approach, tip, arrowLen, Pursuit.ARROW_ANGLE_DEG);
+
+        // The bar across the tip, perpendicular to the direction the arrow is travelling
+        // in. Taken off the arc's own last step rather than from a local frame, so it
+        // stays square to the arrowhead however the hook was drawn.
+        const wingHalf = arrowLen * Math.sin(toRadians(Pursuit.ARROW_ANGLE_DEG));
+        const crossHalf = wingHalf * Pursuit.CROSSBAR_OVERHANG;
+        const heading = toRadians(90 - turf.bearing(turf.point(approach), turf.point(tip)));
+        const crossBar: Position[] = [
+            geometryService.translateCoordinates(tip, crossHalf, heading + Math.PI / 2),
+            geometryService.translateCoordinates(tip, crossHalf, heading - Math.PI / 2),
+        ];
+
+        return this.asMultiLineStringFeature([[frame.start, frame.join], arc, arrowHead, crossBar]);
+    }
+
+    /**
+     * `[arrowTip, lineStart]` — the order the holder and controller rely on, unchanged
+     * by the conversion. Both still sit at an end of the drawn path, which is now
+     * literally true: they are anchor points 3 and 1.
+     *
+     * The mission-task convention's center handle stays deliberately absent. It rendered
+     * in the middle of the empty space inside the hook, and it is not load-bearing.
+     */
+    generateHandles(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiPoint> {
+        const frame = this.frame(base, opts);
+        if (!frame) return this.asMultiPointFeature([]);
+        return this.asMultiPointFeature([frame.tip, frame.start]);
+    }
+
+    /**
+     * "P" at the middle of the straight line, which is the run it names.
+     *
+     * Kept as a single point rather than handing the paint the line's two ends the way
+     * Envelopment does: this label is not set into a gap cut in the line, so a fraction
+     * of a pixel of projection drift has nothing to fall out of alignment with.
+     */
+    generateLabels(base: Feature<any>, opts?: PointGraphicOptions): Feature<any> {
+        const frame = this.frame(base, opts);
+        if (!frame) return this.asPointFeature([0, 0]);
+        const span = turf.distance(turf.point(frame.start), turf.point(frame.join), {units: 'meters'});
+        const bearing = turf.bearing(turf.point(frame.start), turf.point(frame.join));
+        const middle = turf.destination(turf.point(frame.start), span / 2, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+        return this.asPointFeature(middle);
     }
 }
 
@@ -382,6 +367,8 @@ export const ENVELOPMENT_MAX_BEND = 1.2;
 const ENVELOPMENT_HEAD_RATIO = 0.3;
 /** Arc sampling density — enough that the half circle reads smooth at any zoom. */
 const ENVELOPMENT_ARC_STEPS = 48;
+/** Segments in Pursue's semicircle. Matches the arc the dropped form drew. */
+const PURSUIT_ARC_STEPS = 48;
 
 /** Keeps the half circle inside the range the shape stays readable over. */
 export function clampEnvelopmentBend(bend: number): number {
