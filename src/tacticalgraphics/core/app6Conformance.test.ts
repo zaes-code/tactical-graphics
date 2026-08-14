@@ -170,9 +170,9 @@ describe('advance to contact is drawn, not dropped', () => {
         expect(bentBody.length).toBeGreaterThan(straightBody.length);
     });
 
-    it('emits the body, the head and a single bolt', () => {
-        // [leftBody, head, rightBody, bolt, boltHead] — one contact mark, per the plate.
-        expect(members(ROUTE)).toHaveLength(5);
+    it('emits the body, the head and a bolt on each flank', () => {
+        // [leftBody, head, rightBody, boltA, headA, boltB, headB].
+        expect(members(ROUTE)).toHaveLength(7);
     });
 
     /**
@@ -195,27 +195,41 @@ describe('advance to contact is drawn, not dropped', () => {
         return {
             wing: Math.abs(local(leftWing)[1]),
             bolt: lines[3].map(local),
+            other: lines[5].map(local),
         };
     };
 
-    it('keeps the whole bolt on one side of the axis', () => {
-        const {bolt} = inArrowFrame(ROUTE);
+    it('keeps each bolt on its own side of the axis', () => {
+        const {bolt, other} = inArrowFrame(ROUTE);
         const side = Math.sign(bolt[0][1]);
         expect(side).not.toBe(0);
         expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
+        expect(other.every(p => Math.sign(p[1]) === -side)).toBe(true);
     });
 
-    it('leaves the arrowhead flank and drifts clear of the head', () => {
-        // It starts **on** the outline, halfway along the flank — the same place FM's
-        // bolts start, which is what makes the mark read as leaving the arrowhead rather
-        // than floating beside it. It then runs forward and outward, finishing past the
-        // tip and further off the axis than it began.
+    it('draws the two as mirror images of each other', () => {
+        const {bolt, other} = inArrowFrame(ROUTE);
+        bolt.forEach((p, i) => {
+            expect(p[0]).toBeCloseTo(other[i][0], 2);
+            expect(p[1]).toBeCloseTo(-other[i][1], 2);
+        });
+    });
+
+    it('stands clear of the arrowhead rather than touching it', () => {
+        // The gap is the point of this one. Distance from the flank — the segment from
+        // the wing at (0, wing) to the tip at (1, 0) — has to be positive for every
+        // vertex, or the mark reads as growing out of the outline instead of beside it.
         const {wing, bolt} = inArrowFrame(ROUTE);
+        const norm = Math.hypot(wing, 1);
+        const clearance = (p: number[]) => (wing * p[0] + Math.abs(p[1]) - wing) / norm;
+        expect(Math.min(...bolt.map(clearance))).toBeGreaterThan(0.05);
+    });
+
+    it('runs forward and outward from the flank, the way the badge does', () => {
+        const {bolt} = inArrowFrame(ROUTE);
         const start = bolt[0];
         const end = bolt[bolt.length - 1];
-        expect(start[0]).toBeCloseTo(0.5, 2);
-        expect(Math.abs(start[1])).toBeCloseTo(wing / 2, 2);
-        expect(end[0]).toBeGreaterThan(1);
+        expect(end[0]).toBeGreaterThan(start[0]);
         expect(Math.abs(end[1])).toBeGreaterThan(Math.abs(start[1]));
     });
 
@@ -226,8 +240,8 @@ describe('advance to contact is drawn, not dropped', () => {
         const {bolt} = inArrowFrame(BENT);
         const side = Math.sign(bolt[0][1]);
         expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
-        expect(bolt[0][0]).toBeGreaterThan(0.35);
-        expect(bolt[0][0]).toBeLessThan(0.65);
+        expect(bolt[0][0]).toBeGreaterThan(0.4);
+        expect(bolt[0][0]).toBeLessThan(0.95);
         expect(bolt[bolt.length - 1][0]).toBeGreaterThan(1);
     });
 });
@@ -252,7 +266,7 @@ describe('movement to contact and advance to contact are different symbols', () 
         expect(baseGeometryFor(TacticalGraphicName.AdvanceToContact)).toBe('LineString');
     });
 
-    it('movement to contact carries two contact bolts, advance to contact one', () => {
+    it('draws both from a different base: a point against a route', () => {
         const badge = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'Point', coordinates: [-0.3, 51.55]},
@@ -266,8 +280,8 @@ describe('movement to contact and advance to contact are different symbols', () 
             geometry: {type: 'LineString', coordinates: [[-0.42, 51.55], [-0.20, 51.55]]} as never,
             properties: {tacticalGraphic: {name: TacticalGraphicName.AdvanceToContact, radius: 1400}},
         });
-        // Three members of body and head, then one line and one head for the single bolt.
-        expect((route.graphic.geometry as {coordinates: Position[][]}).coordinates).toHaveLength(5);
+        // Three members of body and head, then a line and a head for each of two bolts.
+        expect((route.graphic.geometry as {coordinates: Position[][]}).coordinates).toHaveLength(7);
     });
 
     /**

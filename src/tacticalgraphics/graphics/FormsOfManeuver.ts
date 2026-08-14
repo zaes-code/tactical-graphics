@@ -219,6 +219,17 @@ export class AdvanceToContact extends SolidManeuverArrow {
     private static readonly ZIG_HEAD_PER_FLANK = 0.09;
     /** Tilt of each stroke off the heading, toward the outside. FM's value, unchanged. */
     private static readonly ZIG_ANGLE_DEG = 25;
+    /**
+     * Clear space between the arrowhead's flank and the bolt that leaves it.
+     *
+     * FM applies the same gap, but in its **renderer** — `movementToContactPaint` shifts
+     * the bolts off the outline in projected meters. Doing it in the geometry instead
+     * means both engines get it from one place, which is the standing rule here.
+     *
+     * `0.12 x r` against FM's half-length, and its flank is `0.890 x r`, so the gap is
+     * this share of the flank whatever shape the head is.
+     */
+    private static readonly ZIG_GAP_PER_FLANK = 0.135;
 
     /**
      * The lightning bolt, leaving the arrowhead's right-hand wing.
@@ -238,11 +249,17 @@ export class AdvanceToContact extends SolidManeuverArrow {
         const turn = ((((outward - heading) % 360) + 540) % 360) - 180;
         const tilt = Math.sign(turn) * AdvanceToContact.ZIG_ANGLE_DEG;
 
-        // Halfway along the flank, **on the outline** — which is where FM's bolts start
-        // too. The mark reads as leaving the arrowhead rather than floating beside it.
         const flank = turf.distance(turf.point(wing), turf.point(tip), {units: 'meters'});
-        const start = walk(wing, flank * AdvanceToContact.ZIG_START_T,
-            turf.bearing(turf.point(wing), turf.point(tip)));
+        const flankBearing = turf.bearing(turf.point(wing), turf.point(tip));
+        // Halfway along the flank, then lifted clear of it. The lift is perpendicular to
+        // the flank rather than to the arrow, so the gap is even along the whole mark
+        // instead of closing up toward the tip.
+        const lift = flankBearing + Math.sign(turn) * 90;
+        const start = walk(
+            walk(wing, flank * AdvanceToContact.ZIG_START_T, flankBearing),
+            flank * AdvanceToContact.ZIG_GAP_PER_FLANK,
+            lift,
+        );
 
         const step = flank * AdvanceToContact.ZIG_SEG_PER_FLANK;
         const stroke = heading + tilt;
@@ -265,16 +282,21 @@ export class AdvanceToContact extends SolidManeuverArrow {
         // `[leftEnd, leftWing, tip, rightWing, rightEnd]`.
         const head = arrow[1];
         if (!head || head.length < 5) return this.asMultiLineStringFeature(arrow);
-        const [, , tip, rightWing] = head;
+        const [, leftWing, tip, rightWing] = head;
 
         const centerline = this.arrowCenterline(base, radius);
         const centerEnd = centerline[centerline.length - 1];
         const heading = turf.bearing(turf.point(centerEnd), turf.point(tip));
 
-        // **One bolt, on the right-hand flank.** The plate draws a single contact mark,
-        // unlike FM's movement to contact, which puts one on each side. Getting this
-        // wrong is how the two symbols blur back into one.
-        return this.asMultiLineStringFeature([...arrow, ...this.zigzag(rightWing, tip, centerEnd, heading)]);
+        // **One bolt per flank**, as on FM's badge. The extracted template appeared to
+        // show a single mark, but that template is itself a crop and the symbol runs off
+        // its top edge — the upper bolt was outside the picture, not absent from the
+        // symbol. Trusting the crop is the same mistake `ai/app-6.md` records twice.
+        return this.asMultiLineStringFeature([
+            ...arrow,
+            ...this.zigzag(leftWing, tip, centerEnd, heading),
+            ...this.zigzag(rightWing, tip, centerEnd, heading),
+        ]);
     }
 }
 
