@@ -143,6 +143,7 @@ import {
     frontalAttackLabelPaint,
     infiltrationLabelPaint,
     mobileDefenseLabelPaint,
+    advanceToContactLabelPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
     retrogradeTaskPaint,
@@ -956,6 +957,7 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: Paint
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+    [TacticalGraphicName.AdvanceToContact]: advanceToContactLabelPaint,
 };
 
 /** The four that share the axis-of-advance layout, which needs its own name. */

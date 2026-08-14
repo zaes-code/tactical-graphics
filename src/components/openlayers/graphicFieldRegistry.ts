@@ -362,6 +362,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Forms of maneuver (no user label) ────────────────────────────────────
     [TacticalGraphicName.MovementToContact]: SHAPE_ONLY,
+    // APP-06 342900's template carries three amplifier boxes -- T over the body and
+    // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
+    // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
+    [TacticalGraphicName.AdvanceToContact]: MOVEMENT_ARROW,
     [TacticalGraphicName.FrontalAttack]: SHAPE_ONLY,
     [TacticalGraphicName.TurningMovement]: SHAPE_ONLY,
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,

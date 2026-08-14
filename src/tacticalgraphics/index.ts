@@ -304,7 +304,7 @@ export {routeControlMeasurePaint} from './symbology/routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';
 export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './symbology/corridorPaints';
 export {retrogradeTaskPaint} from './symbology/retrogradePaints';
-export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
+export {advanceToContactLabelPaint, attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
 export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
 export {
     CROSSED_HALF_WIDTH_PX,
