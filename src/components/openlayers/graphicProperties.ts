@@ -123,11 +123,12 @@ export function writeGraphicProperties(
 export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryState {
     const bag = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
     if (!bag) return {};
-    const {radius, decorationSize, width, rotation, bend, mirrored} = bag;
+    const {radius, decorationSize, width, length, rotation, bend, mirrored} = bag;
     const state: GraphicGeometryState = {};
     if (radius !== undefined) state.radius = radius;
     if (decorationSize !== undefined) state.decorationSize = decorationSize;
     if (width !== undefined) state.width = width;
+    if (length !== undefined) state.length = length;
     if (rotation !== undefined) state.rotation = rotation;
     if (bend !== undefined) state.bend = bend;
     if (mirrored !== undefined) state.mirrored = mirrored;
