@@ -8,6 +8,7 @@ import {
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
     infiltrationGraphicStyleFunc,
+    barSymbolStyleFunc,
     mobileDefenseGraphicStyleFunc,
     movementGraphicPathStyleFunc,
 } from '../openlayerStyles';
@@ -32,6 +33,16 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle sits on the rail itself, one radius off the center line.
     [TacticalGraphicName.InfiltrationLane]: 1,
 };
+
+/**
+ * The demolition obstacles, whose line work is a pair of rails stroked differently
+ * per readiness state rather than the movement family's arrow.
+ */
+const BAR_SYMBOL_GRAPHIC_NAMES: TacticalGraphicName[] = [
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+];
 
 export class MovementGraphicBase implements LineGraphic {
     offset: number;
@@ -92,6 +103,13 @@ export class MovementGraphicBase implements LineGraphic {
         }
         if (name === TacticalGraphicName.MobileDefense) {
             this.graphic.setStyle(mobileDefenseGraphicStyleFunc());
+        }
+        // The demolition obstacles moved here from the mission-task holder when they
+        // became centreline-plus-width graphics, and their dashing came with them:
+        // which of the two rails is hashed is what separates planned from safe from
+        // armed. @see BAR_SYMBOL_DASHES, ai/app-6.md "F2"
+        if (BAR_SYMBOL_GRAPHIC_NAMES.includes(name)) {
+            this.graphic.setStyle(barSymbolStyleFunc(name));
         }
 
         writeGraphicProperties([this.graphic, this.labels, this.handles, this.base], name, this.graphicLabels);
