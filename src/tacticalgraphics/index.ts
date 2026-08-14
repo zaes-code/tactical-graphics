@@ -304,6 +304,13 @@ export {
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './symbology/protectionLinePaints';
 export {directionArrowPaint} from './symbology/linePaints';
 export {routeControlMeasurePaint} from './symbology/routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';

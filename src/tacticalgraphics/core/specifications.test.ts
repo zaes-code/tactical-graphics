@@ -79,6 +79,11 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // nothing decorating the line itself. Line generic carries no letter at all.
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
+    TacticalGraphicName.Mineline,
+    TacticalGraphicName.MineCluster,
+    TacticalGraphicName.TripWire,
+    TacticalGraphicName.RaftSite,
+    TacticalGraphicName.FortifiedPosition,
     TacticalGraphicName.NamedAreaOfInterestLine,
     // One construction, four letters: APP-06 Table 8-19 draws all four the same way.
     TacticalGraphicName.BiologicalContaminatedArea,

@@ -203,6 +203,11 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ObstacleFreeArea]:                 TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleGroup]:                    TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleLine]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Mineline]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MineCluster]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.TripWire]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.RaftSite]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.FortifiedPosition]:                TacticalGraphicCategory.FieldFortification,
     [TacticalGraphicName.ObstacleRestrictedArea]:           TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleZone]:                     TacticalGraphicCategory.MobilityAndCountermobility,
     // [TacticalGraphicName.RoadblockComplete]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet

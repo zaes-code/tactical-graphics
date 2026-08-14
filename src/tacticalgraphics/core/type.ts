@@ -387,6 +387,10 @@ export function getLabel(name: TacticalGraphicName) {
             return 'HL';
         case TacticalGraphicName.NamedAreaOfInterestLine:
             return 'NAI';
+        // The letter the template sets at *both* ends of a mineline, which is the
+        // symbol's only distinguishing mark. @see minelinePaint
+        case TacticalGraphicName.Mineline:
+            return 'N';
         case TacticalGraphicName.HandoverLine:
             return 'HOL';
         case TacticalGraphicName.NoFireLine:
@@ -891,6 +895,15 @@ export enum TacticalGraphicName {
     WireDoubleStrandConcertina = 'WireDoubleStrandConcertina',
     WireTripleStrandConcertina = 'WireTripleStrandConcertina',
     ObstacleLine = 'ObstacleLine',
+
+    // APP-06 protection lines (Tables 8-17 and 8-18). None has an FM 1-02.2
+    // counterpart. @see graphics/ProtectionLine.ts
+    Mineline = 'Mineline',                        // APP-06 290101 Mineline
+    MineCluster = 'MineCluster',                  // APP-06 290400 Mine Cluster
+    TripWire = 'TripWire',                        // APP-06 290500 Trip Wire
+    RaftSite = 'RaftSite',                        // APP-06 290800 Raft Site
+    FortifiedPosition = 'FortifiedPosition',      // APP-06 291000 Fortified Position
+
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',
 
@@ -976,6 +989,11 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
     [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
     [TacticalGraphicName.HandoverLine]: 'handover line',
+    [TacticalGraphicName.Mineline]: 'mineline',
+    [TacticalGraphicName.MineCluster]: 'mine cluster',
+    [TacticalGraphicName.TripWire]: 'trip wire',
+    [TacticalGraphicName.RaftSite]: 'raft site',
+    [TacticalGraphicName.FortifiedPosition]: 'fortified position',
     [TacticalGraphicName.LineGeneric]: 'line, generic',
     [TacticalGraphicName.AirfieldZone]: 'airfield zone',
     [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',

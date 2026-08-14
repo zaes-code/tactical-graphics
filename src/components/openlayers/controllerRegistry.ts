@@ -344,6 +344,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ForwardLineOfOwnTroops]:           line(),
     [TacticalGraphicName.LineOfContact]:                    line(),
     [TacticalGraphicName.ObstacleLine]:                     line(),
+    // The mineline extends with extra vertices; the other four are defined by two
+    // anchor points and nothing else, so their draw stops at two.
+    [TacticalGraphicName.Mineline]:                         line(),
+    [TacticalGraphicName.MineCluster]:                      line(2),
+    [TacticalGraphicName.TripWire]:                         line(2),
+    [TacticalGraphicName.RaftSite]:                         line(2),
+    [TacticalGraphicName.FortifiedPosition]:                line(2),
     [TacticalGraphicName.DirectionOfMainAttack]:            line(),
     [TacticalGraphicName.DirectionOfSupportingAttack]:      line(),
     [TacticalGraphicName.DirectionOfMainAttackFeint]:       line(),

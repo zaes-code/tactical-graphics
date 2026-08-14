@@ -231,6 +231,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
+    // Only the mineline takes a modifier; the other four carry no amplifier at all.
+    [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
+    [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
+    [TacticalGraphicName.TripWire]: SHAPE_ONLY,
+    [TacticalGraphicName.RaftSite]: SHAPE_ONLY,
+    [TacticalGraphicName.FortifiedPosition]: SHAPE_ONLY,
     // Table 5-9 (direction of attack): T + W/W1 per FM construct examples.
     [TacticalGraphicName.DirectionOfMainAttack]: MOVEMENT_ARROW,
     [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
