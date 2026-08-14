@@ -161,7 +161,9 @@ import {
     areaOutlinePaint,
     defaultLinePaint,
     encirclementPaint,
+    dashedOutlinePaint,
     fortifiedAreaPaint,
+    restrictedTerrainPaint,
     freeFireAreaCircularPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
@@ -2824,6 +2826,18 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     }
     if (name === TacticalGraphicName.FortifiedArea) {
         return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
+    }
+    // APP-06 242600 note 1: broken line in *all* status depictions, so the dash belongs
+    // to the symbol rather than to `plannedDash`.
+    if (name === TacticalGraphicName.ZoneOfFire) {
+        return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
+    }
+    // The pair APP-06 tells apart by hatch texture alone. @see hatchTileSegments
+    if (name === TacticalGraphicName.RestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.SeverelyRestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint({dense: true}), name)(feature, resolution);
     }
     if (
         name === TacticalGraphicName.ObstacleBelt ||

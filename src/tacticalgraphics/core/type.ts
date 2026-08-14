@@ -261,6 +261,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ASLT';
         case TacticalGraphicName.AreaOfOperations:
             return 'AO';
+        case TacticalGraphicName.ZoneOfFire:
+            return 'ZF';
         case TacticalGraphicName.JointTacticalActionArea:
             return 'JTAA';
         case TacticalGraphicName.HumanTerrain:
@@ -682,6 +684,10 @@ export enum TacticalGraphicName {
     PenetrationBox = 'PenetrationBox',
     Area = 'Area',
     JointTacticalActionArea = 'JointTacticalActionArea',
+    AreaGeneric = 'AreaGeneric',
+    ZoneOfFire = 'ZoneOfFire',
+    RestrictedTerrain = 'RestrictedTerrain',
+    SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -944,6 +950,10 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',
+    [TacticalGraphicName.RestrictedTerrain]: 'restricted terrain',
+    [TacticalGraphicName.ZoneOfFire]: 'zone of fire',
+    [TacticalGraphicName.AreaGeneric]: 'area, generic',
     [TacticalGraphicName.JointTacticalActionArea]: 'joint tactical action area',
     [TacticalGraphicName.Area]: 'area',
     [TacticalGraphicName.PenetrationBox]: 'penetration box',

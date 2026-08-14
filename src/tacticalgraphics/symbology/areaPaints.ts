@@ -299,3 +299,49 @@ export function plainOutlinePaint(): AreaPaint {
         stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
     }];
 }
+
+/**
+ * An outline that is **always** broken, whatever the graphic's status.
+ *
+ * APP-06 242600 note 1: *"The boundary, if displayed, shall be a broken line in all
+ * status depictions."* That is the distinction from `plainOutlinePaint`, whose dash is
+ * `plannedDash` and so appears only when the graphic is planned. Zone of fire is dashed
+ * because that is the symbol, not because of its status.
+ */
+export function dashedOutlinePaint(): AreaPaint {
+    return feature => [{
+        geometry: strokeableGeometry(feature),
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
+    }];
+}
+
+/**
+ * A hatched area under a solid outline — the restricted-terrain pair.
+ *
+ * Unlike {@link limitedAccessAreaPaint} the outline never dashes and the hatch is the
+ * affiliation color rather than a neutral: these areas say "the ground here is hard to
+ * move through", which belongs to whoever is describing it, where a no-fire hatch is a
+ * prohibition that reads the same for every side.
+ *
+ * `dense` is the severely-restricted variant. APP-06 draws it cross-hatched against the
+ * single diagonal of plain restricted terrain, so the two are told apart by texture
+ * alone and the difference has to survive into both renderers. @see HatchSpec
+ */
+export function restrictedTerrainPaint(options: {dense?: boolean} = {}): AreaPaint {
+    return feature => {
+        const color = lineColorOf(feature);
+        return [{
+            geometry: fillableGeometry(feature),
+            fill: {
+                color: withOpacity(color, 0.2),
+                pattern: {
+                    kind: options.dense ? 'cross' : 'diagonal',
+                    color: withOpacity(color, 0.35),
+                    sizePx: 10,
+                    lineWidthPx: 1,
+                },
+            },
+            stroke: {color, widthPx: LINE_WIDTH()},
+        }];
+    };
+}

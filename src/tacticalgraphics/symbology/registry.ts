@@ -86,7 +86,9 @@ import {
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
+    dashedOutlinePaint,
     obstacleAreaPaint,
+    restrictedTerrainPaint,
     freeFireAreaCircularPaint,
     plainOutlinePaint,
 } from './areaPaints';
@@ -189,6 +191,7 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.PenetrationBox,
     TacticalGraphicName.Area,
     TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.AssemblyArea,
     TacticalGraphicName.AttackPosition,
     TacticalGraphicName.BaseCamp,
@@ -569,6 +572,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleZone]: {graphic: obstacleAreaPaint({outward: true})},
         [TacticalGraphicName.ObstacleFreeArea]: {graphic: obstacleAreaPaint({outward: false})},
         [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
+        // APP-06 242600 note 1: the boundary is a broken line in *all* status
+        // depictions, so the dash is the symbol rather than a status.
+        [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
+        // Told apart from each other by texture alone. @see hatchTileSegments
+        [TacticalGraphicName.RestrictedTerrain]: {graphic: restrictedTerrainPaint()},
+        [TacticalGraphicName.SeverelyRestrictedTerrain]: {graphic: restrictedTerrainPaint({dense: true})},
 
         [TacticalGraphicName.FortifiedArea]: {graphic: fortifiedAreaPaint()},
         [TacticalGraphicName.GroupOrSeriesOfTargets]: {graphic: groupOrSeriesOfTargetsPaint()},

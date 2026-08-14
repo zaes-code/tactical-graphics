@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**234 graphics** are implemented and verified today, covering **248 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**238 graphics** are implemented and verified today, covering **252 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 243 supported names.
+the 247 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -978,6 +978,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Airhead Line | Areas |
 | Area | Areas |
 | Area Of Operations | Areas |
+| Area, Generic | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
 | Attack Position | Areas |
@@ -1006,6 +1007,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Penetration Box | Areas |
 | Pickup Zone | Areas |
 | Refugee Holding Area | Areas |
+| Restricted Terrain | Areas |
+| Severely Restricted Terrain | Areas |
 | Strong Point | Areas |
 | Target Area Of Interest | Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Areas |
@@ -1183,6 +1186,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Terminally Guided Munition Footprint | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan, Circular | Target Acquisition Control Measures |
+| Zone Of Fire | Target Acquisition Control Measures |
 | Zone Of Responsibility, Circular | Target Acquisition Control Measures |
 | Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
 | Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |

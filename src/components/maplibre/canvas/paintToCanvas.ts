@@ -1,3 +1,4 @@
+import {hatchTileSegments} from '@zaes/tactical-graphics';
 import type {FillSpec, HatchSpec, Paint, ProjectedGeometry, ProjectedPosition, StrokeSpec, TextSpec} from '@zaes/tactical-graphics';
 import {toScreen, type ViewTransform} from '../projection';
 
@@ -66,8 +67,10 @@ function buildHatch(spec: HatchSpec): CanvasPattern | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
     return ctx.createPattern(canvas, 'repeat');
 }
