@@ -14,6 +14,7 @@ import {
     finalProtectiveFireStyleFunc,
     abatisStyleFunc,
     fortifiedLineStyleFunc,
+    protectionLineStyleFunc,
     wireObstacleStyleFunc,
     antiTankDitchStyleFunc,
     forwardLineOfOwnTroopsStyleFunc,
@@ -92,6 +93,12 @@ export class LineGraphicBase implements LineGraphic {
                     return antiTankDitchStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Mineline:
+                case TacticalGraphicName.MineCluster:
+                case TacticalGraphicName.TripWire:
+                case TacticalGraphicName.RaftSite:
+                case TacticalGraphicName.FortifiedPosition:
+                    return protectionLineStyleFunc(name)(feature, resolution);
                 // The chevron is in the geometry, so a plain stroke draws it. Not the
                 // default: `defaultLinePaint` returns nothing for a MultiLineString.
                 case TacticalGraphicName.Abatis:

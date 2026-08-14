@@ -33,6 +33,13 @@ import {cardinalBoundaryPaint, cardinalLabelPaint} from './cardinalLabelPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+import {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './protectionLinePaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -575,6 +582,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
+
+        // ── APP-06's protection lines ────────────────────────────────────────
+        [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},
+        [TacticalGraphicName.MineCluster]: {graphic: mineClusterPaint()},
+        [TacticalGraphicName.TripWire]: {graphic: tripWirePaint()},
+        [TacticalGraphicName.RaftSite]: {graphic: raftSitePaint()},
+        [TacticalGraphicName.FortifiedPosition]: {graphic: fortifiedPositionPaint()},
         [TacticalGraphicName.ProbableLineOfDeployment]: {
             graphic: defaultLinePaint(TacticalGraphicName.ProbableLineOfDeployment, {
                 alwaysDashed: true,

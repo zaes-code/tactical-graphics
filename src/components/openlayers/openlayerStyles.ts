@@ -155,6 +155,11 @@ import {
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     fortifiedLinePaint,
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
     smokeObscurantLabelPaint,
     wireObstaclePaint,
     zoneLabelPaint,
@@ -1686,6 +1691,28 @@ export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/**
+ * APP-06's five protection lines. @see protectionLinePaints.ts
+ *
+ * One entry point rather than five: the holder switch names the graphic, and every one
+ * of these is `asStyleFunction` over a paint of the same name, so a per-graphic wrapper
+ * would be five identical lines.
+ */
+export function protectionLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    switch (name) {
+        case TacticalGraphicName.MineCluster:
+            return asStyleFunction(mineClusterPaint(), name);
+        case TacticalGraphicName.TripWire:
+            return asStyleFunction(tripWirePaint(), name);
+        case TacticalGraphicName.RaftSite:
+            return asStyleFunction(raftSitePaint(), name);
+        case TacticalGraphicName.FortifiedPosition:
+            return asStyleFunction(fortifiedPositionPaint(), name);
+        default:
+            return asStyleFunction(minelinePaint(name), name);
+    }
+}
+
 /** **Ported.** @see obstaclePaints.ts, `fortifiedLinePaint`. */
 export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(fortifiedLinePaint(name), name);

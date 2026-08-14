@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**248 graphics** are implemented and verified today, covering **262 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**253 graphics** are implemented and verified today, covering **267 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 257 supported names.
+the 262 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1034,6 +1034,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Relief In Place | Enabling Operations Planning |
 | Screen | Enabling Operations Planning |
 | Fighting Position | Field Fortification Symbols |
+| Fortified Position | Field Fortification Symbols |
 | Fortified/Trench Line | Field Fortification Symbols |
 | Fields Of Fire/Sector Of Fire | Fire Support Coordination Control Measures |
 | Free-Fire Area, Circular | Fire Support Coordination Control Measures |
@@ -1095,6 +1096,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Mine Cluster | Mobility and Countermobility Control Measures |
+| Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
 | Obstacle Group | Mobility and Countermobility Control Measures |
@@ -1102,11 +1105,13 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Raft Site | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Trip Wire | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
 | Wire, Double Fence | Mobility and Countermobility Control Measures |

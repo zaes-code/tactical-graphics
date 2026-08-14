@@ -1,6 +1,7 @@
 import {IGraphicGenerator, TacticalGraphicName} from "./type";
 import {AirCorridor} from "../graphics/AirCorridor";
 import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
+import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
 import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
 import {
     AreaDefense,
@@ -331,6 +332,11 @@ const obstacleFreeGraphics = [
 obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new ObstacleFree(name)));
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
+TacticalGraphicsRegistry.register(new Mineline());
+TacticalGraphicsRegistry.register(new MineCluster());
+TacticalGraphicsRegistry.register(new TripWire());
+TacticalGraphicsRegistry.register(new RaftSite());
+TacticalGraphicsRegistry.register(new FortifiedPosition());
 
 // Security Operations
 let securityOperationGraphics = [
