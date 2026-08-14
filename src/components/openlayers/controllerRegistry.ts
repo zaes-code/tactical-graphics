@@ -315,7 +315,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Exploitation]: block,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
-    [TacticalGraphicName.Abatis]:                 missionTask,
+    // Abatis takes a drawn route with as many vertices as the road needs, so it is a
+    // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
+    [TacticalGraphicName.Abatis]:                 line(),
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: explosivesReadiness,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: explosivesReadiness,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: explosivesReadiness,

@@ -689,12 +689,16 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // The point-anchored tasks with no bespoke line work: a plain ring and the
     // family's centered designation.
     for (const name of [
-        TacticalGraphicName.Abatis,
         TacticalGraphicName.Ambush,
         TacticalGraphicName.FightingPosition,
     ]) {
         registry[name] = {graphic: plainOutlinePaint(), label: missionTaskLabelPaint(name)};
     }
+    // Abatis is a drawn route carrying one fixed-size chevron, so the whole symbol is
+    // in the geometry and a plain stroke draws it. It has no doctrinal designation —
+    // it sat in the group above and took `missionTaskLabelPaint`, which rendered
+    // nothing for it. @see Abatis, ai/app-6.md "F1"
+    registry[TacticalGraphicName.Abatis] = {graphic: plainOutlinePaint()};
 
     // Turn's "T" comes off its own label feature, so the graphic painter takes the
     // letter only to size the gap it cuts for it.
