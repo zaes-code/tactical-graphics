@@ -44,6 +44,7 @@ import {
     Infiltration,
     InfiltrationLane,
     MobileDefense,
+    AdvanceToContact,
     MovementToContact,
     Pursuit,
     ReliefInPlace,
@@ -335,6 +336,7 @@ retrogradeTasks.forEach(name => TacticalGraphicsRegistry.register(new Retrograde
 
 // Forms of Maneuver — movement arrow variants
 TacticalGraphicsRegistry.register(new MovementToContact());
+TacticalGraphicsRegistry.register(new AdvanceToContact());
 TacticalGraphicsRegistry.register(new FrontalAttack());
 // TacticalGraphicsRegistry.register(new FlankAttack());
 TacticalGraphicsRegistry.register(new TurningMovement());

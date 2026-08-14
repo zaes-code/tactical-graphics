@@ -247,6 +247,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.Exploitation]:                     TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.MovementToContact]:                TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.AdvanceToContact]:                 TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.Pursuit]:                          TacticalGraphicCategory.OffenseOperationsPlanning,
 
     // ── Tactical Mission Tasks ──────────────────────────────────────────────── OK

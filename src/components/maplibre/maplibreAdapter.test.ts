@@ -434,4 +434,42 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             }
         });
     });
+
+    /**
+     * The two contact symbols on the second engine. They are separate graphics — FM's
+     * badge and APP-06 342900's route — and the failure mode if they ever merge again is
+     * silent, since both are hollow arrows with lightning bolts.
+     */
+    describe('movement to contact and advance to contact both paint here', () => {
+        it('paints the FM badge from a dropped point', () => {
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.MovementToContact,
+                {type: 'Point', coordinates: [-0.3, 51.55]},
+                {radius: 40_000, rotation: 0},
+                RESOLUTION,
+            );
+            expect(built).toBeDefined();
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+            // Two body halves plus a line and a head for each of the two bolts.
+            expect((built!.graphic.geometry as {coordinates: number[][][]}).coordinates).toHaveLength(6);
+        });
+
+        it('paints the APP-06 route from a drawn line, with one bolt', () => {
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.AdvanceToContact,
+                {type: 'LineString', coordinates: [[-0.42, 51.55], [-0.1, 51.55]]},
+                {width: 8000},
+                RESOLUTION,
+            );
+            expect(built).toBeDefined();
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+            // Body, head, body, then a single bolt and its head.
+            expect((built!.graphic.geometry as {coordinates: number[][][]}).coordinates).toHaveLength(5);
+        });
+
+        it('keeps them on opposite base geometries', () => {
+            expect(baseGeometryFor(TacticalGraphicName.MovementToContact)).toBe('Point');
+            expect(baseGeometryFor(TacticalGraphicName.AdvanceToContact)).toBe('LineString');
+        });
+    });
 });

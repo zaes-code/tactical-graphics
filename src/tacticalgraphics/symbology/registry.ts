@@ -50,6 +50,7 @@ import {
     baseDefenseZoneLabelPaint,
     crossedMissionTaskLabelPaint,
     crossedMissionTaskPaint,
+    advanceToContactPaint,
     movementToContactPaint,
     pursuitPaint,
 } from './missionTaskPaints';
@@ -68,6 +69,7 @@ import {
     infiltrationGraphicPaint,
     mobileDefenseGraphicPaint,
     movementGraphicPaint,
+    advanceToContactLabelPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
 } from './movementPaints';
@@ -679,6 +681,15 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.MovementToContact] = {
         graphic: movementToContactPaint(),
         label: missionTaskLabelPaint(TacticalGraphicName.MovementToContact),
+    };
+    // APP-06's advance to contact: a different symbol, so a different paint. Its bolt
+    // needs no screen-space offset because it leaves the wing already clear of the
+    // outline, where FM's badge starts its two on the flank. @see AdvanceToContact
+    registry[TacticalGraphicName.AdvanceToContact] = {
+        graphic: advanceToContactPaint(),
+        // APP-06 342900's T and W . W1 boxes -- the amplifier set FM's badge does not
+        // carry at all. @see advanceToContactLabelPaint for why it is one line.
+        label: advanceToContactLabelPaint(),
     };
     // Its label is the one hardcoded string in the family, and it tracks the circle
     // rather than the zoom.

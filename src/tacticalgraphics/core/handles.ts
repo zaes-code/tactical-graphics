@@ -172,6 +172,7 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FordEasy,
     TacticalGraphicName.FordDifficult,
     TacticalGraphicName.FrontalAttack,
+    TacticalGraphicName.AdvanceToContact,
     TacticalGraphicName.TurningMovement,
     TacticalGraphicName.Infiltration,
     // The demolition obstacles. APP-06 271201 builds them from a centerline and a
@@ -616,6 +617,7 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
     TacticalGraphicName.Isolate,
+    TacticalGraphicName.MovementToContact,
     TacticalGraphicName.NoFireAreaCircular,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.PositionAreaArtilleryCircular,

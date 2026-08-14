@@ -48,30 +48,160 @@ class SolidManeuverArrow extends MovementGraphicBase {
     }
 }
 
+// ─── MovementToContact — hollow arrow with back V-notch + two zigzag "contact" ─
+// Point-based (resize + rotate only). At rotation = 0 the arrow points east.
+// `size` is the big arrow's half-length (so full length = 2 * size).
+//
+// Composition (all in one MultiLineString):
+//   1. Big outlined arrow: body rectangle + flared arrowhead + V-notched back.
+//   2. Two lightning-bolt "contact" arrows emerging from the upper/lower
+//      arrowhead edges, each tipped with a small arrowhead.
+export class MovementToContact extends TacticalGraphicsBase<PointGraphicOptions> {
+    name: string = TacticalGraphicName.MovementToContact;
+    type: string = 'Point';
+
+    generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        const center = base.geometry.coordinates;
+        const {rotation, size} = opts;
+        const r = Math.max(size, 1);
+
+        // Convert a local Cartesian offset (x east, y north) in meters to a
+        // geographic position, applying `rotation` in planar degrees (0 = east,
+        // 90 = north). Matches the bearing convention used by Ambush.
+        const local = (x: number, y: number): Position => {
+            const dist = Math.hypot(x, y);
+            if (dist === 0) return [center[0], center[1]];
+            const planarDeg = (Math.atan2(y, x) * 180) / Math.PI;
+            let bearing = 90 - (planarDeg + rotation);
+            bearing = ((bearing % 360) + 360) % 360;
+            return turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position;
+        };
+
+        // ── Big arrow outline (V-notch removed, back is open) ─────────
+        // Vertices D and G removed; the upper body/fin is now one diagonal
+        // segment CE, the lower is one diagonal segment HF. Fin tips E/F
+        // flare outward (|y| = yFin) farther than the shoulders C/H
+        // (|y| = yBody), so EF > CH.
+        const xTip      =  r;
+        const xShoulder =  0.30 * r;   // body ↔ arrowhead boundary
+        const xFinTip   = -r;          // tail fin outer tip (leftmost)
+        const yBody     =  0.30 * r;   // half body thickness at the shoulders (C, H)
+        const yFin      =  0.50 * r;   // half fin-tip span (E, F) — bigger than yBody
+        const yWing     =  0.55 * r;   // half arrowhead flare (B, I)
+
+        // Upper half — vertices A B C E (A = tip).
+        const upperPath: Position[] = [
+            local(xTip,       0),        // A  arrow tip
+            local(xShoulder,  yWing),    // B  upper wing
+            local(xShoulder,  yBody),    // C  upper shoulder
+            local(xFinTip,    yFin),     // E  upper tail fin outer tip (open end)
+        ];
+
+        // Lower half — vertices F H I (then back to A = tip).
+        const lowerPath: Position[] = [
+            local(xFinTip,   -yFin),     // F  lower tail fin outer tip (open end)
+            local(xShoulder, -yBody),    // H  lower shoulder
+            local(xShoulder, -yWing),    // I  lower wing
+            local(xTip,       0),        //    back to A (tip)
+        ];
+
+        // ── Lightning-bolt "contact" side arrows ───────────────────────
+        // Each side arrow starts at 25% along the arrowhead edge (B→A for
+        // upper, I→A for lower). Segments JK and LM are parallel outward
+        // strokes tilted ZIG_ANGLE_DEG off horizontal (toward the big
+        // arrow's forward direction); KL joins K horizontally back to
+        // directly above J so LM lives in the same forward x-range as JK.
+        //   J (start) → K (outer, +angle from J)
+        //             → L (directly above/below J, via horizontal KL)
+        //             → M (+angle from L; arrowhead on outermost line)
+        const ZIG_START_T    = 0.5;
+        const ZIG_SEG_LEN    = 0.475 * r;    // length of each outward stroke (JK, LM) — 5% shorter than 0.5r
+        const ZIG_ANGLE_DEG  = 25;           // tilt of JK/LM from forward axis
+        const ZIG_HEAD_R     = 0.08 * r;
+
+        const sideArrow = (side: 1 | -1): Position[][] => {
+            const wingX = xShoulder, wingY = side * yWing;
+            const sx = wingX + ZIG_START_T * (xTip - wingX);
+            const sy = wingY + ZIG_START_T * (0    - wingY);
+            const out = side;
+
+            const ang = ZIG_ANGLE_DEG * Math.PI / 180;
+            const dx = ZIG_SEG_LEN * Math.cos(ang);   // forward step per stroke
+            const dy = ZIG_SEG_LEN * Math.sin(ang);   // outward step per stroke
+
+            // KL joins K back to L horizontally, with KL length = dx/2
+            // (half the forward step per stroke). LM stays parallel to JK.
+            const p0: [number, number] = [sx,              sy];
+            const p1: [number, number] = [sx + dx,         sy + out * dy];         // K (outer)
+            const p2: [number, number] = [sx + dx / 2,     sy + out * dy];         // L (half-back from K)
+            const p3: [number, number] = [sx + 3 * dx / 2, sy + out * 2 * dy];     // M (arrow, outermost)
+
+            const line: Position[] = [local(...p0), local(...p1), local(...p2), local(...p3)];
+            const head = geometryService.computeArrowheadPoints(line[2], line[3], ZIG_HEAD_R, 35);
+            return [line, head];
+        };
+
+        const [upperLine, upperHead] = sideArrow(1);
+        const [lowerLine, lowerHead] = sideArrow(-1);
+
+        // Index layout (used by the debug style in MissionTaskGraphicBase to
+        // label vertices A..I):
+        //   [0] upperPath — vertices A B C D E (5 points)
+        //   [1] lowerPath — vertices F G H I A (5 points, returns to tip=A)
+        //   [2..5] side-arrow lines and heads
+        return this.asMultiLineStringFeature([
+            upperPath,
+            lowerPath,
+            upperLine, upperHead,
+            lowerLine, lowerHead,
+        ]);
+    }
+
+    generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        // [edge, center] — edge handle at the arrow tip (planar 0° + rotation,
+        // distance = size). Matches the MissionTask convention.
+        const center = base.geometry.coordinates;
+        const edge = geometryService.createCircularArc(center, opts.rotation, opts.size, 0, 1, 1)[0];
+        return this.asMultiPointFeature([edge, center]);
+    }
+
+    generateLabels(base: Feature<any>, _opts: PointGraphicOptions): Feature<any> {
+        return this.asPointFeature(base.geometry.coordinates);
+    }
+}
+
 /**
- * # Movement to contact — a drawn arrow with two "contact" zigzags at its head
+ * # Advance to contact — APP-06's drawn route arrow
  *
- * **Drawn, not dropped.** APP-06 342900: "The symbol requires N anchor points, where N
- * is between 3 and 50. Point 1 defines the tip of the arrowhead. Point N-1 defines the
- * rear of the symbol. Point N defines the back of the arrowhead."
+ * **Not the same symbol as movement to contact, despite naming the same operation.**
+ * NATO calls the operation "advance to contact" and the US Army calls it "movement to
+ * contact", and the two standards draw it differently enough that one graphic cannot
+ * serve both:
  *
- * So it is a path with a width, which is exactly the model every other arrow in this
- * library already uses — this was the odd one out, a fixed badge dropped on a point
- * that could not follow a route. It now rides `SolidManeuverArrow` like its siblings
- * and the body is theirs; what is added here is the pair of lightning-bolt contact
- * arrows.
+ * | | FM 1-02.2 movement to contact | APP-06 342900 advance to contact |
+ * |---|---|---|
+ * | construction | fixed badge on one point | drawn route, N points, 3 to 50 |
+ * | head | flared, swept-back fins | square shoulders |
+ * | contact bolts | **two**, upper and lower | **one**, lower flank |
+ * | amplifiers | none on the template | T, W, W1 |
+ *
+ * The evidence that these are separate symbols rather than one under two names: FM never
+ * uses the phrase "advance to contact"; APP-06 has no "movement to contact"; and JMSML,
+ * the data behind MIL-STD-2525, carries neither — 342900 does not exist there at all. So
+ * the code belongs to this graphic alone, and `MovementToContact` is FM-only.
+ *
+ * APP-06 342900: "The symbol requires N anchor points, where N is between 3 and 50.
+ * Point 1 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol.
+ * Point N defines the back of the arrowhead."
  *
  * **Vertex order is this library's, not APP-06's.** The standard numbers from the tip
  * backwards; every drawn arrow here runs rear-to-tip, because that is the direction a
- * user draws a route and the direction the whole movement family already stores. The
- * finding being fixed is that the symbol was point-anchored where APP-06 wants it
- * drawn; renumbering the movement family's vertices is a separate change, and doing it
- * to one member would only make this the odd one out again in a new way.
- * @see ai/app-6.md "F3"
+ * user draws a route and the direction the whole movement family already stores.
+ * @see ai/app-6.md
  */
-export class MovementToContact extends SolidManeuverArrow {
+export class AdvanceToContact extends SolidManeuverArrow {
     constructor() {
-        super(TacticalGraphicName.MovementToContact);
+        super(TacticalGraphicName.AdvanceToContact);
     }
 
     /** Each stroke's length, as a share of the arrow's half-width. */
@@ -79,10 +209,9 @@ export class MovementToContact extends SolidManeuverArrow {
     /**
      * How far each stroke is turned off the arrow's heading, toward the outside.
      *
-     * The dropped form used 25 degrees against a shallow head. This head's flank slopes
-     * about 63 degrees, so the bolt has to out-turn it or it runs along the outline
-     * instead of away from it — the zigzag's net drift is about 58 degrees at this
-     * value, which clears.
+     * The head's flank slopes about 63 degrees, so the bolt has to out-turn it or it
+     * runs along the outline instead of away from it — the zigzag's net drift is about
+     * 58 degrees at this value, which clears.
      */
     private static readonly ZIG_ANGLE_DEG = 50;
     /** The bolt's own arrowhead, as a share of the half-width. */
@@ -91,40 +220,37 @@ export class MovementToContact extends SolidManeuverArrow {
     private static readonly ZIG_CLEARANCE_RATIO = 0.5;
 
     /**
-     * One lightning bolt, leaving a wing of the arrowhead.
+     * The lightning bolt, leaving the arrowhead's right-hand wing.
      *
      * Built from bearings off the arrow's own heading rather than in a local planar
-     * frame. The dropped form could use a frame because it was a rigid badge; a drawn
-     * arrow's head sits at whatever angle the last leg of the route arrived at.
+     * frame, because a drawn arrow's head sits at whatever angle the last leg of the
+     * route arrived at.
      */
     private zigzag(wing: Position, centerEnd: Position, heading: number, radius: number): Position[][] {
         const walk = (from: Position, distance: number, bearing: number): Position =>
             turf.destination(turf.point(from), distance, bearing, {units: 'meters'}).geometry.coordinates as Position;
 
-        // **Outward is read off the geometry, not off which argument this is.** The wing
-        // is a perpendicular offset from the centerline's end, so the bearing from that
-        // end out to the wing *is* the outward direction. Naming one wing "left" and
-        // passing a sign got it backwards, and sent both bolts across the axis to cross
-        // each other over the arrowhead.
+        // **Outward is read off the geometry, not asserted.** The wing is a perpendicular
+        // offset from the centerline's end, so the bearing from that end out to the wing
+        // *is* the outward direction — there is no left/right sign to get backwards.
         const outward = turf.bearing(turf.point(centerEnd), turf.point(wing));
         const turn = ((((outward - heading) % 360) + 540) % 360) - 180;
-        const tilt = Math.sign(turn) * MovementToContact.ZIG_ANGLE_DEG;
+        const tilt = Math.sign(turn) * AdvanceToContact.ZIG_ANGLE_DEG;
 
-        // Started at the wing rather than partway along the flank toward the tip: the
-        // wing is the widest point of the arrow, so a bolt leaving it outward and
-        // forward stays clear of everything behind it.
-        const start = walk(wing, radius * MovementToContact.ZIG_CLEARANCE_RATIO, outward);
+        // Started at the wing, which is the widest point of the arrow, so a bolt leaving
+        // it outward and forward stays clear of everything behind it.
+        const start = walk(wing, radius * AdvanceToContact.ZIG_CLEARANCE_RATIO, outward);
 
-        const step = radius * MovementToContact.ZIG_SEG_RATIO;
+        const step = radius * AdvanceToContact.ZIG_SEG_RATIO;
         const stroke = heading + tilt;
         const k = walk(start, step, stroke);
         // Back down the heading by half a stroke's forward reach, so the second stroke
         // covers the same ground as the first rather than running away from it.
-        const back = (step * Math.cos(toRadians(MovementToContact.ZIG_ANGLE_DEG))) / 2;
+        const back = (step * Math.cos(toRadians(AdvanceToContact.ZIG_ANGLE_DEG))) / 2;
         const l = walk(k, back, heading + 180);
         const m = walk(l, step, stroke);
 
-        const head = geometryService.computeArrowheadPoints(l, m, radius * MovementToContact.ZIG_HEAD_RATIO, 35);
+        const head = geometryService.computeArrowheadPoints(l, m, radius * AdvanceToContact.ZIG_HEAD_RATIO, 35);
         return [[start, k, l, m], head];
     }
 
@@ -133,21 +259,19 @@ export class MovementToContact extends SolidManeuverArrow {
         const arrow = super.generateGraphics(base, opts).geometry.coordinates;
 
         // `SolidManeuverArrow` emits `[leftBody, head, rightBody]`, and the head runs
-        // `[leftEnd, leftWing, tip, rightWing, rightEnd]` — the three middle points are
-        // the flanks and the point the bolts hang off.
+        // `[leftEnd, leftWing, tip, rightWing, rightEnd]`.
         const head = arrow[1];
         if (!head || head.length < 5) return this.asMultiLineStringFeature(arrow);
-        const [, leftWing, tip, rightWing] = head;
+        const [, , tip, rightWing] = head;
 
         const centerline = this.arrowCenterline(base, radius);
         const centerEnd = centerline[centerline.length - 1];
         const heading = turf.bearing(turf.point(centerEnd), turf.point(tip));
 
-        return this.asMultiLineStringFeature([
-            ...arrow,
-            ...this.zigzag(leftWing, centerEnd, heading, radius),
-            ...this.zigzag(rightWing, centerEnd, heading, radius),
-        ]);
+        // **One bolt, on the right-hand flank.** The plate draws a single contact mark,
+        // unlike FM's movement to contact, which puts one on each side. Getting this
+        // wrong is how the two symbols blur back into one.
+        return this.asMultiLineStringFeature([...arrow, ...this.zigzag(rightWing, centerEnd, heading, radius)]);
     }
 }
 

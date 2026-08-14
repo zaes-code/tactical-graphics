@@ -2,6 +2,7 @@ import {Feature, LineString, MultiLineString, Position} from 'geojson';
 import * as turf from './turf';
 import {baseGeometryFor, renderTacticalGraphic} from './render';
 import {TacticalGraphicName} from './type';
+import {getSpecifications, TacticalGraphicSpecification} from './specifications';
 
 /**
  * Rules taken verbatim from APP-06 Edition E Chapter 8, pinned as behavior.
@@ -135,16 +136,16 @@ describe('APP-06 271201 — demolition readiness states', () => {
 });
 
 /**
- * Movement to contact, APP-06 342900: "The symbol requires N anchor points, where N is
- * between 3 and 50." It was a fixed badge dropped on a single point, which could not
- * follow a route at all; it is now a drawn arrow like the rest of the movement family.
+ * Advance to contact, APP-06 342900: "The symbol requires N anchor points, where N is
+ * between 3 and 50." A drawn route arrow — and a **different symbol** from FM 1-02.2's
+ * movement to contact, which is why it is its own graphic. @see the pair of tests below.
  *
- * The bolts are asserted in the arrow's **own frame** rather than by eye. Both of the
- * first two attempts at them looked plausible in a screenshot and were wrong in a way
+ * The bolt is asserted in the arrow's **own frame** rather than by eye. Both of the
+ * first two attempts at it looked plausible in a screenshot and were wrong in a way
  * only numbers showed: one ran the strokes back along the head's flank, and the next
- * sent both across the axis to cross over the arrowhead.
+ * put them on the wrong side entirely.
  */
-describe('movement to contact is drawn, not dropped', () => {
+describe('advance to contact is drawn, not dropped', () => {
     const ROUTE = {type: 'LineString' as const, coordinates: [[-0.42, 51.55], [-0.20, 51.55]]};
     const BENT = {type: 'LineString' as const, coordinates: [[-0.05, 51.5], [0.06, 51.58], [0.2, 51.6]]};
 
@@ -152,14 +153,14 @@ describe('movement to contact is drawn, not dropped', () => {
         renderTacticalGraphic({
             type: 'Feature',
             geometry: geometry as never,
-            properties: {tacticalGraphic: {name: TacticalGraphicName.MovementToContact, radius}},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.AdvanceToContact, radius}},
         });
 
     const members = (geometry: typeof ROUTE, radius = 1400) =>
         (render(geometry, radius).graphic.geometry as {coordinates: Position[][]}).coordinates;
 
     it('takes a LineString base', () => {
-        expect(baseGeometryFor(TacticalGraphicName.MovementToContact)).toBe('LineString');
+        expect(baseGeometryFor(TacticalGraphicName.AdvanceToContact)).toBe('LineString');
         expect(() => render(ROUTE)).not.toThrow();
     });
 
@@ -169,9 +170,9 @@ describe('movement to contact is drawn, not dropped', () => {
         expect(bentBody.length).toBeGreaterThan(straightBody.length);
     });
 
-    it('emits the body, the head and two bolts', () => {
-        // [leftBody, head, rightBody, upperBolt, upperHead, lowerBolt, lowerHead]
-        expect(members(ROUTE)).toHaveLength(7);
+    it('emits the body, the head and a single bolt', () => {
+        // [leftBody, head, rightBody, bolt, boltHead] — one contact mark, per the plate.
+        expect(members(ROUTE)).toHaveLength(5);
     });
 
     /**
@@ -193,37 +194,74 @@ describe('movement to contact is drawn, not dropped', () => {
         };
         return {
             wing: Math.abs(local(leftWing)[1]),
-            upper: lines[3].map(local),
-            lower: lines[5].map(local),
+            bolt: lines[3].map(local),
         };
     };
 
-    it('keeps each bolt on its own side of the axis', () => {
-        const {upper, lower} = inArrowFrame(ROUTE);
-        expect(upper.every(p => p[1] < 0)).toBe(true);
-        expect(lower.every(p => p[1] > 0)).toBe(true);
+    it('keeps the whole bolt on one side of the axis', () => {
+        const {bolt} = inArrowFrame(ROUTE);
+        const side = Math.sign(bolt[0][1]);
+        expect(side).not.toBe(0);
+        expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
     });
 
-    it('keeps both bolts outside the arrowhead', () => {
+    it('keeps the bolt outside the arrowhead', () => {
         // Beyond the wings, which are the widest part of the symbol — so a bolt clear of
         // them is clear of the whole outline.
-        const {wing, upper, lower} = inArrowFrame(ROUTE);
-        expect(Math.min(...upper.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
-        expect(Math.min(...lower.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
-    });
-
-    it('draws them as mirror images of each other', () => {
-        const {upper, lower} = inArrowFrame(ROUTE);
-        upper.forEach((p, i) => {
-            expect(p[0]).toBeCloseTo(lower[i][0], 2);
-            expect(p[1]).toBeCloseTo(-lower[i][1], 2);
-        });
+        const {wing, bolt} = inArrowFrame(ROUTE);
+        expect(Math.min(...bolt.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
     });
 
     it('holds that shape on a bent route, where the head arrives at an angle', () => {
-        const {wing, upper, lower} = inArrowFrame(BENT);
-        expect(upper.every(p => p[1] < 0)).toBe(true);
-        expect(lower.every(p => p[1] > 0)).toBe(true);
-        expect(Math.min(...upper.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
+        const {wing, bolt} = inArrowFrame(BENT);
+        const side = Math.sign(bolt[0][1]);
+        expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
+        expect(Math.min(...bolt.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
+    });
+});
+
+/**
+ * The other half of the split, and the reason it exists.
+ *
+ * FM 1-02.2 table 5-10 draws movement to contact as a **badge**: a fixed arrow with
+ * flared, swept-back fins and a contact bolt on *each* flank, dropped on one point with
+ * unit symbols beside it. APP-06 342900 draws a route with square shoulders and *one*
+ * bolt. Nothing in either standard is the other: FM never says "advance to contact",
+ * APP-06 has no "movement to contact", and JMSML — the data behind MIL-STD-2525 —
+ * carries neither, so 342900 is APP-06's alone.
+ *
+ * This pins the two apart, because the failure mode is silent: both are hollow arrows
+ * with lightning bolts, and one quietly standing in for the other is exactly what
+ * happened once already.
+ */
+describe('movement to contact and advance to contact are different symbols', () => {
+    it('movement to contact is dropped on a point; advance to contact is drawn', () => {
+        expect(baseGeometryFor(TacticalGraphicName.MovementToContact)).toBe('Point');
+        expect(baseGeometryFor(TacticalGraphicName.AdvanceToContact)).toBe('LineString');
+    });
+
+    it('movement to contact carries two contact bolts, advance to contact one', () => {
+        const badge = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [-0.3, 51.55]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.MovementToContact, radius: 4000, rotation: 0}},
+        });
+        // The badge is [upperPath, lowerPath] then a line and a head per bolt.
+        expect((badge.graphic.geometry as {coordinates: Position[][]}).coordinates).toHaveLength(6);
+
+        const route = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[-0.42, 51.55], [-0.20, 51.55]]} as never,
+            properties: {tacticalGraphic: {name: TacticalGraphicName.AdvanceToContact, radius: 1400}},
+        });
+        // Three members of body and head, then one line and one head for the single bolt.
+        expect((route.graphic.geometry as {coordinates: Position[][]}).coordinates).toHaveLength(5);
+    });
+
+    it('files them under one specification each, not both', () => {
+        expect(getSpecifications(TacticalGraphicName.MovementToContact))
+            .toEqual([TacticalGraphicSpecification.FM1_02_2]);
+        expect(getSpecifications(TacticalGraphicName.AdvanceToContact))
+            .toEqual([TacticalGraphicSpecification.APP6]);
     });
 });
