@@ -261,6 +261,16 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ASLT';
         case TacticalGraphicName.AreaOfOperations:
             return 'AO';
+        case TacticalGraphicName.HumanTerrain:
+            return 'HT';
+        case TacticalGraphicName.EnemyPrisonerOfWarHoldingArea:
+            return 'EPW HOLDING AREA';
+        case TacticalGraphicName.Bridgehead:
+            return 'BA';
+        case TacticalGraphicName.TerminallyGuidedMunitionFootprint:
+            return 'TGMF';
+        case TacticalGraphicName.BombArea:
+            return 'BOMB';
 
         case TacticalGraphicName.BaseCamp:
         case TacticalGraphicName.GuerrillaBase:
@@ -658,6 +668,11 @@ export enum TacticalGraphicName {
     // area graphics
     Airfield = 'Airfield',
     AreaOfOperations = 'AreaOfOperations',
+    BombArea = 'BombArea',
+    TerminallyGuidedMunitionFootprint = 'TerminallyGuidedMunitionFootprint',
+    Bridgehead = 'Bridgehead',
+    EnemyPrisonerOfWarHoldingArea = 'EnemyPrisonerOfWarHoldingArea',
+    HumanTerrain = 'HumanTerrain',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -918,6 +933,8 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: 'enemy prisoner of war holding area',
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: 'terminally guided munition footprint',
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',

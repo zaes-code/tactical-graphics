@@ -51,6 +51,12 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.ZoneOfResponsibilityIrregular,
     TacticalGraphicName.ZoneOfResponsibilityRectangular,
     TacticalGraphicName.ZoneOfResponsibilityCircular,
+    // Plain labelled areas APP-06 carries and FM 1-02.2 does not. Labels off the plates.
+    TacticalGraphicName.BombArea,
+    TacticalGraphicName.TerminallyGuidedMunitionFootprint,
+    TacticalGraphicName.Bridgehead,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    TacticalGraphicName.HumanTerrain,
 ];
 
 describe('graphic specifications', () => {
