@@ -123,7 +123,7 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
 // Pursuit needs its own holder for the same reason envelopment does: APP-06 draws it
 // from anchor points, and the points have to be written and read back in that symbol's
 // own layout. @see PursuitGraphicBase
-// Ambush recovers its centre from the chord of its arc, so it reads and writes its own
+// Ambush recovers its center from the chord of its arc, so it reads and writes its own
 // point layout too. @see AmbushGraphicBase
 const ambush = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new AmbushGraphicBase(name, res, res));
@@ -131,7 +131,7 @@ const ambush = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-// Contain draws the two ends of its arc rather than a centre and an edge, so it needs
+// Contain draws the two ends of its arc rather than a center and an edge, so it needs
 // its own holder for the same reason envelopment and pursuit do. @see ContainGraphicBase
 const contain = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new ContainGraphicBase(name, res, res));
@@ -429,9 +429,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     //     new SearchAreaController(new SearchArea(name)),
 
     // ── Forms of maneuver (movement arrows) ────────────────────────────────
-    // Drawn now, not dropped: APP-06 342900 builds it from a path and a width, which
-    // is the movement family's own model. @see MovementToContact
-    [TacticalGraphicName.MovementToContact]:  movement(),
+    [TacticalGraphicName.MovementToContact]:  missionTask,
+    // APP-06 342900 builds it from a path and a width, which is the movement
+    // family's own model. @see AdvanceToContact
+    [TacticalGraphicName.AdvanceToContact]:   movement(),
     [TacticalGraphicName.FrontalAttack]:      movement(),
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),

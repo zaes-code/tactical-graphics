@@ -1,7 +1,7 @@
 /**
- * # Movement and manoeuvre labels
+ * # Movement and maneuver labels
  *
- * The amplifiers on the axis-of-advance arrows and the forms of manoeuvre. The
+ * The amplifiers on the axis-of-advance arrows and the forms of maneuver. The
  * arrows themselves are line work drawn by the graphic feature; everything here
  * paints the **labels** feature, whose geometry is a MultiPoint of anchor spans
  * the generator publishes.
@@ -13,7 +13,7 @@
  * arrow rather than with the zoom. That is what keeps a designation inside the
  * channel of the arrow that carries it.
  *
- * The one-letter forms of manoeuvre (IN, E, MD, T, A, CATK) use the ordinary
+ * The one-letter forms of maneuver (IN, E, MD, T, A, CATK) use the ordinary
  * zoom-anchored scale instead: they are a fixed mark on the symbol rather than
  * text that has to fit a space. Mixing the two makes a letter either vanish on a
  * short arrow or swamp a long one. @see ai/conventions.md, "Pick the right
@@ -121,7 +121,7 @@ function nameAndDate(feature: PaintFeature): string {
  * A fixed one- or two-letter amplifier at the first anchor, laid along the first
  * span.
  *
- * Used by the forms of manoeuvre whose plate carries a specific letter — the
+ * Used by the forms of maneuver whose plate carries a specific letter — the
  * user's own label is deliberately ignored, because the letter *is* the symbol.
  *
  * `atMidpoint` puts it between the two anchors rather than on the first, and
@@ -370,6 +370,34 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         });
 
         return paints;
+    };
+}
+
+/**
+ * Advance to contact's amplifiers: APP-06 342900's `T` and `W . W1`, on one line
+ * centered along the body.
+ *
+ * **One line, not two, and that is the point.** `movementLabelPaint` puts the date on a
+ * second span offset by `c1 - c0`, which works for the crossing graphics because their
+ * label anchors are a whole segment apart. This arrow's anchors come from
+ * `labelCoordsAtFraction`, so they sit its own half-width apart — a few pixels — and the
+ * date lands on top of the designation. Joining them through `nameAndDate` cannot
+ * collide however wide the arrow is drawn.
+ */
+export function advanceToContactLabelPaint(): MovementPaint {
+    return (feature, context) => {
+        const coords = anchors(feature);
+        if (coords.length < 2) return [];
+
+        const [c0, c1] = coords;
+        const value = nameAndDate(feature);
+        if (!value) return [];
+
+        const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
+        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+            rotation: uprightRotation(c0, c1),
+            align: 'center',
+        })];
     };
 }
 

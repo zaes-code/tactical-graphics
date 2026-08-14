@@ -3,7 +3,7 @@ import {TacticalGraphicName} from './type';
 /**
  * The published symbology specifications this library implements.
  *
- * A graphic belongs to one, the other, or both. The two catalogues of control
+ * A graphic belongs to one, the other, or both. The two catalogs of control
  * measures are very close to identical -- what differs is mostly naming, so the
  * common case is {@link TacticalGraphicSpecification.APP6} and
  * {@link TacticalGraphicSpecification.FM1_02_2} together.
@@ -13,7 +13,7 @@ import {TacticalGraphicName} from './type';
  * the key keeps the form people still search for.
  */
 export enum TacticalGraphicSpecification {
-    /** US Army FM 1-02.2, *Military Symbols*. The catalogue this library was built from. */
+    /** US Army FM 1-02.2, *Military Symbols*. The catalog this library was built from. */
     FM1_02_2 = 'FM 1-02.2',
     /** NATO APP-06, *NATO Joint Military Symbology*, Edition E Version 2 (October 2025). */
     APP6 = 'APP-06',
@@ -38,7 +38,7 @@ const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust.
  *
- * **222 graphics: 208 in both catalogues, 7 FM 1-02.2 only, 7 APP-06 only.** The axis
+ * **223 graphics: 207 in both catalogs, 8 FM 1-02.2 only, 8 APP-06 only.** The axis
  * runs both ways, which it did not when it was first added -- every graphic was then
  * in FM 1-02.2, so filtering by that specification hid nothing. Count it, don't trust
  * it. See `ai/app-6.md` for the source document and how the mapping was derived.
@@ -233,7 +233,10 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.AviationDirectionOfAttack]:                    BOTH,      // APP-06 140601 Aviation
     [TacticalGraphicName.Infiltration]:                                 BOTH,      // APP-06 343800 Infiltrate
     [TacticalGraphicName.InfiltrationLane]:                             BOTH,      // APP-06 140800 Infiltration Lane
-    [TacticalGraphicName.MovementToContact]:                            BOTH,      // APP-06 342900 Advance to Contact
+    // FM only. APP-06's advance to contact names the same operation but is a
+    // different symbol -- see AdvanceToContact below, and ai/app-6.md.
+    [TacticalGraphicName.MovementToContact]:                            FM_ONLY,
+    [TacticalGraphicName.AdvanceToContact]:                             APP6_ONLY, // APP-06 342900 Advance to Contact
     [TacticalGraphicName.FrontalAttack]:                                BOTH,      // APP-06 152700 Frontal Attack
     [TacticalGraphicName.TurningMovement]:                              BOTH,      // APP-06 152900 Turning Movement
     [TacticalGraphicName.Pursuit]:                                      BOTH,      // APP-06 344000 Pursue

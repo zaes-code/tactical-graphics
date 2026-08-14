@@ -12,6 +12,11 @@ const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.DelayLine,
     TacticalGraphicName.FightingPosition,
     TacticalGraphicName.KillZone,
+    // FM's movement to contact and APP-06's advance to contact name the same operation
+    // and are drawn differently enough to be two graphics: a dropped badge with two
+    // contact bolts and flared fins, against a drawn route with one bolt and square
+    // shoulders. @see AdvanceToContact, ai/app-6.md
+    TacticalGraphicName.MovementToContact,
     TacticalGraphicName.ObstacleGroup,
     TacticalGraphicName.PassageLane,
     TacticalGraphicName.UnmannedAircraftCorridor,
@@ -26,6 +31,7 @@ const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
  * before being added; none of them appears there.
  */
 const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
+    TacticalGraphicName.AdvanceToContact,
     TacticalGraphicName.BattlefieldCoordinationLine,
     TacticalGraphicName.ExtractionZone,
     TacticalGraphicName.FighterEngagementZone,

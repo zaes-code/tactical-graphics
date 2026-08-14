@@ -838,6 +838,8 @@ export enum TacticalGraphicName {
     Infiltration = 'Infiltration',
     InfiltrationLane = "InfiltrationLane",
     MovementToContact = 'MovementToContact',
+    /** APP-06 342900. A different symbol from MovementToContact, not a rename. @see AdvanceToContact */
+    AdvanceToContact = 'AdvanceToContact',
     FrontalAttack = 'FrontalAttack',
     // FlankAttack = 'FlankAttack',
     TurningMovement = 'TurningMovement',
