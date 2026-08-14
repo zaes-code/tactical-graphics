@@ -153,6 +153,10 @@ const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.LineOfDeparture,
     TacticalGraphicName.LineOfDepartureOrLineOfContact,
     TacticalGraphicName.ReleaseLine,
+    TacticalGraphicName.LightLine,
+    TacticalGraphicName.HoldingLine,
+    TacticalGraphicName.NoFireLine,
+    TacticalGraphicName.BattlefieldCoordinationLine,
     TacticalGraphicName.RestrictiveFireLine,
 ];
 
@@ -190,6 +194,9 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaRectangular,
     TacticalGraphicName.DetaineeHoldingArea,
     TacticalGraphicName.DivisionSupportArea,
+    TacticalGraphicName.FighterEngagementZone,
+    TacticalGraphicName.ExtractionZone,
+    TacticalGraphicName.RegimentalSupportArea,
     TacticalGraphicName.DropZone,
     TacticalGraphicName.EngagementArea,
     TacticalGraphicName.FireSupportAreaIrregular,
@@ -312,6 +319,7 @@ const AIR_COORDINATING_ZONES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
     TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone,
     TacticalGraphicName.WeaponEngagementZone,
+    TacticalGraphicName.FighterEngagementZone,
     TacticalGraphicName.JointEngagementZone,
     TacticalGraphicName.MissileEngagementZone,
     TacticalGraphicName.LowAltitudeMissileEngagementZone,

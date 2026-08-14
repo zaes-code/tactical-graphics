@@ -20,6 +20,12 @@ export enum TacticalGraphicSpecification {
 }
 
 const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6] as const;
+/**
+ * NATO defines these and FM 1-02.2 does not — the mirror image of `FM_ONLY`, and the
+ * reason this axis is worth having at all. Searched for by name in the manual's text
+ * before being added; none of them appears.
+ */
+const APP6_ONLY = [TacticalGraphicSpecification.APP6] as const;
 const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
 
 /**
@@ -30,8 +36,12 @@ const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
  *
  * The trailing comment on each APP-06 entry is its entity code from Annex A,
  * Table A-32, so a claim can be checked against the standard rather than taken on
- * trust. 208 graphics appear in both catalogues; 7 are FM 1-02.2 only.
- * See `ai/app-6.md` for the source document and how the mapping was derived.
+ * trust.
+ *
+ * **222 graphics: 208 in both catalogues, 7 FM 1-02.2 only, 7 APP-06 only.** The axis
+ * runs both ways, which it did not when it was first added -- every graphic was then
+ * in FM 1-02.2, so filtering by that specification hid nothing. Count it, don't trust
+ * it. See `ai/app-6.md` for the source document and how the mapping was derived.
  */
 export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = {
     [TacticalGraphicName.BaseDefenseZone]:                              BOTH,      // APP-06 170800 Base Defence Zone
@@ -248,6 +258,13 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.SupportByFire]:                                BOTH,      // APP-06 152100 Support by Fire
     [TacticalGraphicName.Suppress]:                                     BOTH,      // APP-06 342800 Suppress
     [TacticalGraphicName.FightingPosition]:                             FM_ONLY,
+    [TacticalGraphicName.LightLine]: APP6_ONLY,  // APP-06 110200 Light Line
+    [TacticalGraphicName.HoldingLine]: APP6_ONLY,  // APP-06 141500 Holding Line (HL)
+    [TacticalGraphicName.NoFireLine]: APP6_ONLY,  // APP-06 260300 No Fire Line
+    [TacticalGraphicName.BattlefieldCoordinationLine]: APP6_ONLY,  // APP-06 260400 Battlefield Coordination Line
+    [TacticalGraphicName.FighterEngagementZone]: APP6_ONLY,  // APP-06 171400 Fighter Engagement Zone (FEZ)
+    [TacticalGraphicName.ExtractionZone]: APP6_ONLY,  // APP-06 150700 Extraction Zone (EZ)
+    [TacticalGraphicName.RegimentalSupportArea]: APP6_ONLY,  // APP-06 310500 Regimental Support Area
     [TacticalGraphicName.FortifiedLine]:                                BOTH,      // APP-06 290900 Fortified Line
 };
 

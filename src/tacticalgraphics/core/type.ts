@@ -359,6 +359,20 @@ export function getLabel(name: TacticalGraphicName) {
             return 'FSCL';
         case TacticalGraphicName.CommonSensorBoundary:
             return 'CSB';
+        case TacticalGraphicName.LightLine:
+            return 'LL';
+        case TacticalGraphicName.HoldingLine:
+            return 'HL';
+        case TacticalGraphicName.NoFireLine:
+            return 'NFL';
+        case TacticalGraphicName.BattlefieldCoordinationLine:
+            return 'BCL';
+        case TacticalGraphicName.FighterEngagementZone:
+            return 'FEZ';
+        case TacticalGraphicName.ExtractionZone:
+            return 'EZ';
+        case TacticalGraphicName.RegimentalSupportArea:
+            return 'RSA';
         case TacticalGraphicName.RestrictiveFireLine:
             return 'RFL';
         case TacticalGraphicName.IntelligenceCoordinationLine:
@@ -601,6 +615,13 @@ export enum TacticalGraphicName {
     LineOfDeparture = 'LineOfDeparture',
     LineOfDepartureOrLineOfContact = 'LineOfDepartureOrLineOfContact',
     ProbableLineOfDeployment = 'ProbableLineOfDeployment',
+    LightLine = 'LightLine',  // APP-06 110200 Light Line
+    HoldingLine = 'HoldingLine',  // APP-06 141500 Holding Line (HL)
+    NoFireLine = 'NoFireLine',  // APP-06 260300 No Fire Line
+    BattlefieldCoordinationLine = 'BattlefieldCoordinationLine',  // APP-06 260400 Battlefield Coordination Line
+    FighterEngagementZone = 'FighterEngagementZone',  // APP-06 171400 Fighter Engagement Zone (FEZ)
+    ExtractionZone = 'ExtractionZone',  // APP-06 150700 Extraction Zone (EZ)
+    RegimentalSupportArea = 'RegimentalSupportArea',  // APP-06 310500 Regimental Support Area
     IdentificationFriendOrFoeOff = 'IdentificationFriendOrFoeOff',
     IdentificationFriendOrFoeOn = 'IdentificationFriendOrFoeOn',
     // boundaries with symbol modifiers

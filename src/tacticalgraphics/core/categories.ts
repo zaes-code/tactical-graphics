@@ -30,6 +30,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.HighDensityAirspaceControlZone]:           TacticalGraphicCategory.AirspaceCoordinatingMeasures,
     [TacticalGraphicName.IdentificationFriendOrFoeOff]:             TacticalGraphicCategory.AirspaceCoordinatingMeasures,
     [TacticalGraphicName.IdentificationFriendOrFoeOn]:              TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.FighterEngagementZone]: TacticalGraphicCategory.AirspaceCoordinatingMeasures,
     [TacticalGraphicName.JointEngagementZone]:                      TacticalGraphicCategory.AirspaceCoordinatingMeasures,
     [TacticalGraphicName.LowAltitudeMissileEngagementZone]:         TacticalGraphicCategory.AirspaceCoordinatingMeasures,
     [TacticalGraphicName.LowLevelTransitRoute]:                     TacticalGraphicCategory.AirspaceCoordinatingMeasures,
@@ -59,6 +60,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.CorpsSupportArea]:                 TacticalGraphicCategory.Areas,
     [TacticalGraphicName.DetaineeHoldingArea]:              TacticalGraphicCategory.Areas,
     [TacticalGraphicName.DivisionSupportArea]:              TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ExtractionZone]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RegimentalSupportArea]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.DropZone]:                         TacticalGraphicCategory.Areas,
     [TacticalGraphicName.Encirclement]:                     TacticalGraphicCategory.Areas,
     [TacticalGraphicName.EngagementArea]:                   TacticalGraphicCategory.Areas,
@@ -134,6 +137,10 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.PhaseLine]:                        TacticalGraphicCategory.Lines,
     [TacticalGraphicName.ProbableLineOfDeployment]:         TacticalGraphicCategory.Lines,
     [TacticalGraphicName.ReleaseLine]:                      TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LightLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.HoldingLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.NoFireLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BattlefieldCoordinationLine]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.RestrictiveFireLine]:              TacticalGraphicCategory.Lines,
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
