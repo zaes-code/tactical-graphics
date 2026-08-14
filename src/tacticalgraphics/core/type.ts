@@ -441,6 +441,21 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.CallForFireZoneCircular:
             return 'CFF ZONE';
 
+        case TacticalGraphicName.TargetBuildUpAreaIrregular:
+        case TacticalGraphicName.TargetBuildUpAreaRectangular:
+        case TacticalGraphicName.TargetBuildUpAreaCircular:
+            return 'TBA';
+
+        case TacticalGraphicName.TargetValueAreaIrregular:
+        case TacticalGraphicName.TargetValueAreaRectangular:
+        case TacticalGraphicName.TargetValueAreaCircular:
+            return 'TVAR';
+
+        case TacticalGraphicName.ZoneOfResponsibilityIrregular:
+        case TacticalGraphicName.ZoneOfResponsibilityRectangular:
+        case TacticalGraphicName.ZoneOfResponsibilityCircular:
+            return 'ZOR';
+
         case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
@@ -730,6 +745,15 @@ export enum TacticalGraphicName {
     CallForFireZoneRectangular = 'CallForFireZoneRectangular',
     CallForFireZoneCircular = 'CallForFireZoneCircular',
 
+    TargetBuildUpAreaIrregular = 'TargetBuildUpAreaIrregular',
+    TargetBuildUpAreaRectangular = 'TargetBuildUpAreaRectangular',
+    TargetBuildUpAreaCircular = 'TargetBuildUpAreaCircular',
+    TargetValueAreaIrregular = 'TargetValueAreaIrregular',
+    TargetValueAreaRectangular = 'TargetValueAreaRectangular',
+    TargetValueAreaCircular = 'TargetValueAreaCircular',
+    ZoneOfResponsibilityIrregular = 'ZoneOfResponsibilityIrregular',
+    ZoneOfResponsibilityRectangular = 'ZoneOfResponsibilityRectangular',
+    ZoneOfResponsibilityCircular = 'ZoneOfResponsibilityCircular',
     CensorZoneIrregular = 'CensorZoneIrregular',
     CensorZoneRectangular = 'CensorZoneRectangular',
     CensorZoneCircular = 'CensorZoneCircular',

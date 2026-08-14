@@ -61,8 +61,8 @@ const groundWidth = (controller: any): number => {
 };
 
 describe('rectangular zones carry their width in meters', () => {
-    it('covers all thirteen rectangular zones', () => {
-        expect(RECTANGULAR).toHaveLength(13);
+    it('covers all sixteen rectangular zones', () => {
+        expect(RECTANGULAR).toHaveLength(16);
     });
 
     it.each(RECTANGULAR)('%s offers a width field in the dialog', name => {
