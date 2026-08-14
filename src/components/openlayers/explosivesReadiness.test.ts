@@ -5,6 +5,7 @@ import {TacticalGraphicName, renderTacticalGraphic} from '@zaes/tactical-graphic
 import {barSymbolStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import {getController} from './controllerRegistry';
+import {LineGraphicController} from './controllers/LineGraphicController';
 import {PointDropController} from './controllers/MissionTaskController';
 
 const PLANNED = TacticalGraphicName.ExplosivesPlannedStateOfReadiness;
@@ -12,17 +13,25 @@ const SAFE = TacticalGraphicName.ExplosivesStateOfReadiness1Safe;
 const ARMED = TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable;
 const NAMES = [PLANNED, SAFE, ARMED];
 
-/** Screen pixels the symbol is dropped at - keep in step with controllerRegistry. */
-const EXPLOSIVES_DEFAULT_PX = 100;
-
-const render = (name: TacticalGraphicName, radius = 600, rotation = 0) =>
+/**
+ * The three readiness states are a **drawn centreline with a width**, per APP-06
+ * 271201 — "points 1 and 2 determine the centreline of the symbol and point 3
+ * determines its width" — with FM 1-02.2's plate agreeing. They were point-anchored
+ * at a fixed 45° bearing until 2026-08-13, so a demolition could not be laid across a
+ * road running any other way. @see ai/app-6.md, "F2"
+ *
+ * Roadblock complete is **not** in this family's construction: APP-06 draws it as two
+ * overlapping X's and its rule cell is inherited rather than stated, so it stays
+ * point-dropped. Its own describe block below still holds it to the plate.
+ */
+const render = (name: TacticalGraphicName, width = 1200, coords = [[0, 0], [0.4, 0.4]]) =>
     renderTacticalGraphic({
         type: 'Feature',
-        geometry: {type: 'Point', coordinates: [0, 0]},
-        properties: {tacticalGraphic: {name, radius, rotation}},
+        geometry: {type: 'LineString', coordinates: coords},
+        properties: {tacticalGraphic: {name, width}},
     } as any) as any;
 
-/** Which bars the style function dashes, leading bar first. */
+/** Which bars the style function dashes, left rail first. */
 const dashes = (name: TacticalGraphicName) => {
     const bars = render(name).graphic.geometry.coordinates;
     const styles = barSymbolStyleFunc(name)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
@@ -31,28 +40,29 @@ const dashes = (name: TacticalGraphicName) => {
 
 describe('explosives states of readiness', () => {
     // The three are one shape; the dashing is the entire difference between them, so it is
-    // the only thing worth asserting hard. Straight off the FM 1-02.2 table 5-19 plates.
+    // the only thing worth asserting hard. Straight off the FM 1-02.2 table 5-19 plates,
+    // and APP-06's templates draw them identically.
     it('dashes each state the way the plate does', () => {
         expect(dashes(PLANNED)).toEqual([true, true]);
         expect(dashes(SAFE)).toEqual([true, false]); // left hashed, right solid
         expect(dashes(ARMED)).toEqual([false, false]);
     });
 
-    it.each(NAMES.map(n => [String(n), n] as const))('%s draws two parallel bars', (_l, name) => {
+    it.each(NAMES.map(n => [String(n), n] as const))('%s draws two parallel rails', (_l, name) => {
         const bars = render(name).graphic.geometry.coordinates;
         expect(bars.length).toBe(2);
         const heading = (b: number[][]) => Math.atan2(b[1][1] - b[0][1], b[1][0] - b[0][0]);
-        expect(heading(bars[0])).toBeCloseTo(heading(bars[1]), 6);
+        expect(heading(bars[0])).toBeCloseTo(heading(bars[1]), 3);
         for (const bar of bars) for (const c of bar) expect(Number.isFinite(c[0]) && Number.isFinite(c[1])).toBe(true);
     });
 
-    // Point-dropped and resizable, so `[edge, center]` - handles[0] drives rotate and
-    // resize, handles[1] drives translate. Reversing them silently breaks both gestures.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s emits [edge, center] handles', (_l, name) => {
+    // The movement family's contract: `[start, end, width]`. Reversing it silently breaks
+    // both the vertex drag and the width drag.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s emits [start, end, width] handles', (_l, name) => {
         const handles = render(name).handles.geometry.coordinates;
-        expect(handles.length).toBe(2);
-        expect(handles[1]).toEqual([0, 0]);
-        expect(Math.hypot(handles[0][0], handles[0][1])).toBeGreaterThan(0);
+        expect(handles.length).toBe(3);
+        expect(handles[0]).toEqual([0, 0]);
+        expect(handles[1][0]).toBeCloseTo(0.4, 6);
     });
 
     it.each(NAMES.map(n => [String(n), n] as const))('%s carries no amplifiers but does carry hostility', (_l, name) => {
@@ -63,40 +73,31 @@ describe('explosives states of readiness', () => {
         expect(fields.hostility).toBe(true);
     });
 
-    it('scales with radius', () => {
-        const span = (r: number) => {
-            const xs = render(ARMED, r).graphic.geometry.coordinates.flat().map((c: number[]) => c[0]);
-            return Math.max(...xs) - Math.min(...xs);
+    // The whole point of the change: the symbol lies along whatever the user drew,
+    // rather than at a fixed 45°.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s follows the drawn line’s bearing', (_l, name) => {
+        const heading = (coords: number[][]) => {
+            const b = render(name, 1200, coords).graphic.geometry.coordinates[0];
+            return Math.atan2(b[1][1] - b[0][1], b[1][0] - b[0][0]);
         };
-        expect(span(1200)).toBeGreaterThan(span(600));
+        const east = heading([[0, 0], [0.5, 0]]);
+        const north = heading([[0, 0], [0, 0.5]]);
+        expect(Math.abs(east - north)).toBeGreaterThan(1); // radians: nowhere near parallel
     });
 
-    // Fixed heading. This is not just "no rotate gesture": MissionTaskController's resize
-    // drag derives an angle from the pointer and feeds it back as rotation, so a graphic
-    // that honored rotation would turn as a side effect of being scaled.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s ignores rotation entirely', (_l, name) => {
-        const at = (rot: number) => JSON.stringify(render(name, 600, rot).graphic.geometry.coordinates);
-        expect(at(90)).toEqual(at(0));
-        expect(at(217)).toEqual(at(0));
-    });
-
-    // The plate has both bars spanning the same vertical extent - they are displaced
-    // horizontally, not perpendicular to their own heading, which would stagger them.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s starts and ends both bars at the same Y', (_l, name) => {
-        const [left, right] = render(name).graphic.geometry.coordinates;
-        expect(left[0][1]).toBeCloseTo(right[0][1], 9);
-        expect(left[1][1]).toBeCloseTo(right[1][1], 9);
-        // ...and the left bar really is the left one, which is what EXPLOSIVES_DASHED indexes.
-        expect(left[0][0]).toBeLessThan(right[0][0]);
-        // Diagonal, not vertical or horizontal.
-        expect(left[1][1]).toBeGreaterThan(left[0][1]);
-        expect(left[1][0]).toBeGreaterThan(left[0][0]);
+    it('separates the rails by the width it is given', () => {
+        const gap = (width: number) => {
+            const [left, right] = render(ARMED, width).graphic.geometry.coordinates;
+            return Math.hypot(left[0][0] - right[0][0], left[0][1] - right[0][1]);
+        };
+        expect(gap(4000)).toBeGreaterThan(gap(1200));
     });
 
     it('survives geometry it cannot draw', () => {
         for (const name of NAMES) {
             expect(() => barSymbolStyleFunc(name)(new Feature({geometry: new MultiLineString([])}) as any, 20)).not.toThrow();
             expect(() => barSymbolStyleFunc(name)(new Feature({geometry: new Point([0, 0])}) as any, 20)).not.toThrow();
+            expect(() => render(name, 1200, [[0, 0]])).not.toThrow();
         }
     });
 
@@ -110,33 +111,25 @@ describe('explosives states of readiness', () => {
     it.each(NAMES.map(n => [String(n), n] as const))('%s dashes visibly at map scale', (_l, name) => {
         const res = 20;
         const handler: any = getController(name, res);
-        handler.graphic.updateGeom({size: res * EXPLOSIVES_DEFAULT_PX, center: [500000, 2000000], rotation: 0});
+        handler.setBaseFeature(new Feature({geometry: new (require('ol/geom/LineString').default)([[500000, 2000000], [502000, 2002000]])}));
         const graphic = handler.getFeatures().find((f: any) => f.get('role') === 'graphic');
         const styles = (graphic.getStyle() as any)(graphic, res);
 
-        const barPx = EXPLOSIVES_DEFAULT_PX;
+        // The rails are ~2800 m long at this base, i.e. 140 px at resolution 20.
+        const railPx = 140;
         for (const st of styles) {
-            const dash = st.getStroke().getLineDash();
+            const dash = st.getStroke()?.getLineDash();
             if (!dash) continue;
-            // A dash longer than the bar it is drawn on is indistinguishable from solid.
-            expect(Math.max(...dash)).toBeLessThan(barPx / 2);
+            // A dash longer than the rail it is drawn on is indistinguishable from solid.
+            expect(Math.max(...dash)).toBeLessThan(railPx / 2);
         }
     });
 
-    // One click drops it at a default size; resizing is a later, separate gesture.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s is dropped by a single click and stays resizable', (_l, name) => {
+    // Drawn as a two-point line now, not dropped by one click.
+    it.each(NAMES.map(n => [String(n), n] as const))('%s is drawn as a two-point line', (_l, name) => {
         const controller: any = getController(name, 20);
-        expect(controller).toBeInstanceOf(PointDropController);
-        expect(controller.type).toBe('Point');
-
-        const before = controller.graphic.size;
-        controller.handleResize(500);
-        expect(controller.graphic.size).not.toBe(before);
-
-        // ...but never rotatable.
-        const rotation = controller.graphic.rotation;
-        controller.handleRotate(45);
-        expect(controller.graphic.rotation).toBe(rotation);
+        expect(controller).toBeInstanceOf(LineGraphicController);
+        expect(controller.maxPoints).toBe(2);
     });
 });
 
