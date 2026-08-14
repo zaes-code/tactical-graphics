@@ -434,6 +434,42 @@ export function ratioLockedLabelScale(graphicSize: number | undefined, drawingRe
 export const CAP_HEIGHT_FRACTION = 0.72;
 
 /**
+ * Tic length on the arc mission tasks, as a fraction of the graphic's radius.
+ *
+ * APP-06 sets it against the letter rather than against the circle:
+ *
+ * > The default tic length should be the same as the text height of the identifying
+ * > letter. Spacing between the tics should also be the height of the identifying
+ * > letter. (151204 Contain; 151205 Retain states the length half)
+ *
+ * **Derived, not measured.** These labels are ratio-locked, so the letter's cap height
+ * is a fixed share of the radius at every zoom: the scale is
+ * `RATIO_LOCKED_LABEL_FRACTION x radiusPx / BASE_FONT_SIZE_PX`, rendered at
+ * `RATIO_LOCKED_LABEL_FONT_PX`, of which `CAP_HEIGHT_FRACTION` is the capital. Writing
+ * the 0.324 out as a literal would silently stop matching the letter the first time any
+ * of those four moved.
+ *
+ * Contain and Retain both drew their tics at `size / 2.5` — 0.4 of the radius, about a
+ * quarter too long — and spaced them nearly twice as far apart as the letter is tall.
+ */
+export const ARC_TIC_FRACTION =
+    RATIO_LOCKED_LABEL_FRACTION * (RATIO_LOCKED_LABEL_FONT_PX / BASE_FONT_SIZE_PX) * CAP_HEIGHT_FRACTION;
+
+/**
+ * How many tics span `spanDegrees` of arc at that spacing, counting both ends.
+ *
+ * The spacing APP-06 asks for is a *chord* — one letter-height along the rim — so the
+ * angular step is `2 * asin(fraction / 2)` rather than the fraction itself. At the
+ * radius these graphics are drawn the difference is small, but it grows with the
+ * fraction and getting it wrong puts the last tic through the label's gap.
+ */
+export function arcTicCount(spanDegrees: number): number {
+    const stepDegrees = (2 * Math.asin(Math.min(ARC_TIC_FRACTION / 2, 1)) * 180) / Math.PI;
+    if (!(stepDegrees > 0)) return 2;
+    return Math.max(2, Math.round(Math.abs(spanDegrees) / stepDegrees) + 1);
+}
+
+/**
  * Graphics that draw both standard identities at once, so selecting one is
  * meaningless. Line of contact is the whole set: FM 1-02.2's line control measure
  * table prints it as two opposed waves - the enemy side red, the friendly side
