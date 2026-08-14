@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {anchorsForHook, HookFrame, hookFromAnchors, runAndArcFromAnchors} from "../core/anchors";
+import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, HookFrame, hookFromAnchors, runAndArcFromAnchors} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
 
@@ -813,12 +813,36 @@ export class Infiltration extends MovementGraphicBase {
 
 export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Ambush;
-    type: string = 'Point';
+    /**
+     * **Drawn, not dropped.** APP-06 141700: "Point 1 is the tip of the arrowhead.
+     * Points 2 and 3 define the endpoints of the curved line on the back side of the
+     * symbol."
+     *
+     * The center is never drawn — it is recovered from the chord, which works because
+     * the curved line spans a known 120 degrees. Point 1 is honored as a real tip, so
+     * how far the arrow reaches is now the user's to set; the dropped form fixed it at
+     * two radii. @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
+
+    /** The circle behind the arc, read off the drawn points or from the options. */
+    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} {
+        const coords = base.geometry?.coordinates;
+        const anchored = Array.isArray(coords?.[0]);
+        const drawn = anchored ? arcAndArrowFromAnchors(coords as Position[]) : undefined;
+        if (drawn) {
+            return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI, radius: drawn.radius, reach: drawn.arrowReach};
+        }
+        return {
+            center: (anchored ? coords[0] : coords) as Position,
+            rotation: opts.rotation ?? 0,
+            radius: Math.max(opts.size ?? 1, 1),
+            reach: ARC_ARROW_DEFAULT_REACH,
+        };
+    }
 
     generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const center = base.geometry.coordinates;
-        const {rotation, size} = opts;
-        const r = Math.max(size, 1);
+        const {center, rotation, radius: r, reach} = this.frame(base, opts);
 
         // Point at polar (distance, planar angle) from center, with `rotation` applied.
         const polar = (dist: number, planarDeg: number): Position => {
@@ -848,7 +872,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // Arrow: emerges from the convex bulge (planar 0°, distance r) and
         // extends one radius further outward (tip at planar 0°, distance 2r).
         const arrowBase = polar(r, 0);
-        const arrowTip = polar(2 * r, 0);
+        const arrowTip = polar(reach * r, 0);
         const arrowHead = geometryService.computeArrowheadPoints(arrowBase, arrowTip, r * 0.25, 30);
 
         return this.asMultiLineStringFeature([arc, ...lines, [arrowBase, arrowTip], arrowHead]);
@@ -865,15 +889,14 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
         // point, never against the handle the user grabbed.
-        const center = base.geometry.coordinates;
-        const r = Math.max(opts.size, 1);
-        const arcEnd = geometryService.createCircularArc(center, opts.rotation, r, 60, 61, 1)[0];
-        const arrowTip = geometryService.createCircularArc(center, opts.rotation, 2 * r, 0, 1, 1)[0];
+        const {center, rotation, radius: r, reach} = this.frame(base, opts);
+        const arcEnd = geometryService.createCircularArc(center, rotation, r, 60, 61, 1)[0];
+        const arrowTip = geometryService.createCircularArc(center, rotation, reach * r, 0, 1, 1)[0];
         return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
-        return this.asPointFeature(base.geometry.coordinates);
+        return this.asPointFeature(this.frame(base, opts).center);
     }
 }
 

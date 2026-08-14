@@ -12,6 +12,8 @@ import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {
     CircularAreaGraphicBase,
     EnvelopmentGraphicBase,
+    AmbushGraphicBase,
+    ContainGraphicBase,
     PursuitGraphicBase,
     MissionTaskGraphicBase,
     TurnGraphicBase,
@@ -121,6 +123,22 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
 // Pursuit needs its own holder for the same reason envelopment does: APP-06 draws it
 // from anchor points, and the points have to be written and read back in that symbol's
 // own layout. @see PursuitGraphicBase
+// Ambush recovers its centre from the chord of its arc, so it reads and writes its own
+// point layout too. @see AmbushGraphicBase
+const ambush = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new AmbushGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Contain draws the two ends of its arc rather than a centre and an edge, so it needs
+// its own holder for the same reason envelopment and pursuit do. @see ContainGraphicBase
+const contain = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new ContainGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
 const pursuit = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new PursuitGraphicBase(name, res, res));
     controller.editStretches = true;
@@ -369,7 +387,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Retain]:        missionTask,
     [TacticalGraphicName.CordonAndSearch]: missionTask,
     [TacticalGraphicName.Control]:       missionTask,
-    [TacticalGraphicName.Contain]:       missionTask,
+    [TacticalGraphicName.Contain]:       contain,
     [TacticalGraphicName.Occupy]:        missionTask,
     [TacticalGraphicName.AreaDefense]:   missionTask,
     // Point-anchored bowed arrow with a draggable bend — see Turn.ts.
@@ -425,7 +443,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
     // ── Ambush (point-based arc graphic) ───────────────────────────────────
-    [TacticalGraphicName.Ambush]: missionTask,
+    [TacticalGraphicName.Ambush]: ambush,
 
     // ── Field fortification ────────────────────────────────────────────────
     [TacticalGraphicName.FightingPosition]: missionTask,
