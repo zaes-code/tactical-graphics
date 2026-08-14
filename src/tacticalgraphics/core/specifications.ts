@@ -81,6 +81,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Bridgehead]: APP6_ONLY, // APP-06 120800 Bridgehead
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: APP6_ONLY, // APP-06 310200 Enemy Prisoner of War Holding Area
     [TacticalGraphicName.HumanTerrain]: APP6_ONLY, // APP-06 370100 Human Terrain
+    [TacticalGraphicName.PenetrationBox]: APP6_ONLY, // APP-06 151900 Penetration Box
+    [TacticalGraphicName.Area]: APP6_ONLY, // APP-06 150100 Area
+    [TacticalGraphicName.JointTacticalActionArea]: APP6_ONLY, // APP-06 150501 Joint Tactical Action Area (JTAA)
     [TacticalGraphicName.AssemblyArea]:                                 BOTH,      // APP-06 150200 Assembly Area (AA)
     [TacticalGraphicName.BaseCamp]:                                     BOTH,      // APP-06 120500 Base Camp
     [TacticalGraphicName.EngagementArea]:                               BOTH,      // APP-06 151300 Engagement Area (EA)
