@@ -261,6 +261,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ASLT';
         case TacticalGraphicName.AreaOfOperations:
             return 'AO';
+        case TacticalGraphicName.JointTacticalActionArea:
+            return 'JTAA';
         case TacticalGraphicName.HumanTerrain:
             return 'HT';
         case TacticalGraphicName.EnemyPrisonerOfWarHoldingArea:
@@ -677,6 +679,9 @@ export enum TacticalGraphicName {
     Bridgehead = 'Bridgehead',
     EnemyPrisonerOfWarHoldingArea = 'EnemyPrisonerOfWarHoldingArea',
     HumanTerrain = 'HumanTerrain',
+    PenetrationBox = 'PenetrationBox',
+    Area = 'Area',
+    JointTacticalActionArea = 'JointTacticalActionArea',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -939,6 +944,9 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.JointTacticalActionArea]: 'joint tactical action area',
+    [TacticalGraphicName.Area]: 'area',
+    [TacticalGraphicName.PenetrationBox]: 'penetration box',
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: 'enemy prisoner of war holding area',
     [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: 'terminally guided munition footprint',
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
