@@ -57,6 +57,10 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.Bridgehead,
     TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
     TacticalGraphicName.HumanTerrain,
+    // Two mission tasks APP-06 draws that FM 1-02.2 does not name. Both reuse an
+    // existing construction exactly -- only the letter is theirs.
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.Locate,
 ];
 
 describe('graphic specifications', () => {

@@ -304,6 +304,10 @@ export function getLabel(name: TacticalGraphicName) {
             return "R";
         case TacticalGraphicName.CordonAndSearch:
             return "C/S";
+        case TacticalGraphicName.CordonAndKnock:
+            return "C/K";
+        case TacticalGraphicName.Locate:
+            return 'LOC';
         case TacticalGraphicName.Occupy:
             return "O";
         case TacticalGraphicName.AreaDefense:
@@ -712,6 +716,8 @@ export enum TacticalGraphicName {
     Isolate = 'Isolate',
     Retain = 'Retain',
     Control = 'Control',
+    CordonAndKnock = 'CordonAndKnock',
+    Locate = 'Locate',
     CordonAndSearch = 'CordonAndSearch',
     Contain = 'Contain',
     Occupy = 'Occupy',

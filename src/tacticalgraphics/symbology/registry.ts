@@ -120,7 +120,9 @@ export interface GraphicPainters {
 const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Locate,
     TacticalGraphicName.Isolate,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,

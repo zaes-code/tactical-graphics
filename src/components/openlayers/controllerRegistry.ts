@@ -396,6 +396,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Secure]:        missionTask,
     [TacticalGraphicName.Isolate]:       missionTask,
     [TacticalGraphicName.Retain]:        missionTask,
+    [TacticalGraphicName.CordonAndKnock]: missionTask,
+    [TacticalGraphicName.Locate]: missionTask,
     [TacticalGraphicName.CordonAndSearch]: missionTask,
     [TacticalGraphicName.Control]:       missionTask,
     [TacticalGraphicName.Contain]:       contain,
