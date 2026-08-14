@@ -161,7 +161,10 @@ import {
     areaOutlinePaint,
     defaultLinePaint,
     encirclementPaint,
+    CARDINAL_LABEL_AREAS,
     CBRN_AREAS,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
     dashedOutlinePaint,
@@ -2001,6 +2004,15 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.Airfield:
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        case TacticalGraphicName.ArtilleryManeuverArea:
+        case TacticalGraphicName.ArtilleryReservedArea:
+            return asStyleFunction(
+                cardinalLabelPaint(
+                    CARDINAL_LABEL_AREAS.find(([area]) => area === name)![1],
+                    areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
         case TacticalGraphicName.BiologicalContaminatedArea:
         case TacticalGraphicName.ChemicalContaminatedArea:
         case TacticalGraphicName.NuclearContaminatedArea:
@@ -2850,6 +2862,11 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     // The yellow hatch; the triangle and its letter ride the label feature below.
     if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    // The outline broken at four cardinal points; the abbreviation fills each break.
+    const cardinal = CARDINAL_LABEL_AREAS.find(([area]) => area === name);
+    if (cardinal) {
+        return asStyleFunction(cardinalBoundaryPaint(cardinal[1]), name)(feature, resolution);
     }
     // The pair APP-06 tells apart by hatch texture alone. @see hatchTileSegments
     if (name === TacticalGraphicName.RestrictedTerrain) {

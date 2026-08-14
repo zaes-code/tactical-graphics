@@ -69,6 +69,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ChemicalContaminatedArea]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.NuclearContaminatedArea]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.RadiologicalContaminatedArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ArtilleryManeuverArea]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ArtilleryReservedArea]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
     [TacticalGraphicName.AssemblyArea]:                     TacticalGraphicCategory.Areas,
     [TacticalGraphicName.AttackPosition]:                   TacticalGraphicCategory.Areas,
     [TacticalGraphicName.BaseCamp]:                         TacticalGraphicCategory.Areas,
