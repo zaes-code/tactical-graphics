@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -670,6 +670,24 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     setBend(value: number): void {
         this.bend = clampTurnBend(value);
+    }
+
+    /**
+     * APP-06 270504's three points: the arrowhead's tip, the rear, and a marker on the
+     * bow. Tip first, which is the standard's numbering. @see anchorsForBow
+     */
+    protected anchorPoints(): Position[] {
+        return anchorsForBow(toLonLat(this.center) as Position, this.size, this.rotation, clampTurnBend(this.bend));
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = bowFromAnchors(coords);
+        if (!frame) return false;
+        if (frame.bend !== undefined) this.bend = clampTurnBend(frame.bend);
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
+        return true;
     }
     /**
      * Arrowhead size in meters. Seeded from the drawing resolution and then **stamped**,

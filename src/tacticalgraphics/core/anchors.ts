@@ -395,3 +395,70 @@ export function hookPose(frame: HookFrame): HookPose {
         lineRatio: radius > 0 ? Math.abs(along(angle)) / radius : HOOK_DEFAULT_LINE_RATIO,
     };
 }
+
+/**
+ * # A bowed arrow — Turn's anchor points
+ *
+ * APP-06 270504: "Point 1 defines the tip of the arrowhead and point 2 defines the rear
+ * of the symbol. Point 3 defines the 90 degree arc... Point 3 indicates on which side of
+ * the line the arc is placed."
+ *
+ * **Tip first.** That ordering looks backwards next to how the symbol is drawn, but it
+ * is the standard's, and this family keeps it — Movement to Contact numbers its points
+ * the same way. Storing them in any other order would make the saved geometry a private
+ * arrangement rather than the thing APP-06 describes.
+ *
+ * The rule's own point count says "two" and then names a third; the text is internally
+ * inconsistent in the source. The third point is honored, since a symbol that can bow
+ * either way needs something to say which.
+ */
+export interface BowFrame {
+    /** Midpoint of the chord — where a dropped turn would have been centered. */
+    center: Position;
+    /** Planar radians CCW from east, rear → tip. */
+    angle: number;
+    /** Half the chord's length. */
+    size: number;
+    /**
+     * How deep the bow is, as a signed multiple of `size`, or undefined when the sketch
+     * has only its two ends yet. Sign is the side the arc is placed.
+     */
+    bend?: number;
+}
+
+export function bowFromAnchors(coords: Position[] | undefined): BowFrame | undefined {
+    if (!coords || coords.length < 2) return undefined;
+
+    const [tip, rear] = coords;
+    const chord = meters(rear, tip);
+    if (!isFinite(chord) || chord < MIN_SIZE_M) return undefined;
+
+    const center = turf.destination(turf.point(rear), chord / 2, turf.bearing(turf.point(rear), turf.point(tip)), {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    const angle = planarAngle(center, tip);
+    const size = chord / 2;
+
+    const frame: BowFrame = {center, angle, size};
+    if (coords.length >= 3) {
+        const bow = localOf(center, angle, coords[2]);
+        // The apex sits at half the control point's offset, because the curve is a
+        // quadratic Bezier and its midpoint is halfway to the control. Negated because
+        // `bendLine` offsets clockwise from the chord and `localOf` measures to its left.
+        if (size > 0) frame.bend = (-2 * bow.v) / size;
+    }
+    return frame;
+}
+
+/** The inverse: `[tip, rear, bowMarker]`, APP-06's own numbering. */
+export function anchorsForBow(center: Position, size: number, rotationDegrees = 0, bend = 0): Position[] {
+    const angle = toRadians(rotationDegrees);
+    const at = (u: number, v: number): Position => {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return center;
+        const bearing = 90 - toDegrees(angle + Math.atan2(v, u));
+        return turf.destination(turf.point(center), distance, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+    };
+    return [at(size, 0), at(-size, 0), at(0, (-bend * size) / 2)];
+}
