@@ -17,6 +17,24 @@ const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.UnmannedAircraftCorridor,
 ];
 
+/**
+ * The mirror image: graphics NATO defines and FM 1-02.2 does not.
+ *
+ * These are what make the specification axis worth having. Until they were added
+ * every graphic in the registry was in FM 1-02.2, so filtering by it hid nothing and
+ * the axis only ever ran one way. Each was searched for by name in the manual's text
+ * before being added; none of them appears there.
+ */
+const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
+    TacticalGraphicName.BattlefieldCoordinationLine,
+    TacticalGraphicName.ExtractionZone,
+    TacticalGraphicName.FighterEngagementZone,
+    TacticalGraphicName.HoldingLine,
+    TacticalGraphicName.LightLine,
+    TacticalGraphicName.NoFireLine,
+    TacticalGraphicName.RegimentalSupportArea,
+];
+
 describe('graphic specifications', () => {
     const names = Object.keys(GRAPHIC_SPECIFICATIONS) as TacticalGraphicName[];
 
@@ -32,10 +50,9 @@ describe('graphic specifications', () => {
         }
     });
 
-    it('puts every graphic in FM 1-02.2, which is the catalogue the library was built from', () => {
-        for (const name of names) {
-            expect(hasSpecification(name, TacticalGraphicSpecification.FM1_02_2)).toBe(true);
-        }
+    it('lists only the pinned exceptions as absent from FM 1-02.2', () => {
+        const absent = names.filter(name => !hasSpecification(name, TacticalGraphicSpecification.FM1_02_2));
+        expect(absent.sort()).toEqual(APP6_ONLY_GRAPHICS.slice().sort());
     });
 
     it('lists only the pinned exceptions as absent from APP-06', () => {
@@ -43,10 +60,15 @@ describe('graphic specifications', () => {
         expect(absent.sort()).toEqual(FM_ONLY_GRAPHICS.slice().sort());
     });
 
-    it('partitions the registry between APP-06 and the FM-only exceptions', () => {
+    it('partitions the registry both ways', () => {
         const inApp6 = listNamesBySpecification(TacticalGraphicSpecification.APP6);
+        const inFm = listNamesBySpecification(TacticalGraphicSpecification.FM1_02_2);
         expect(inApp6.length + FM_ONLY_GRAPHICS.length).toBe(names.length);
-        expect(listNamesBySpecification(TacticalGraphicSpecification.FM1_02_2).length).toBe(names.length);
+        expect(inFm.length + APP6_ONLY_GRAPHICS.length).toBe(names.length);
+        // Neither specification covers the whole registry on its own, which is the
+        // whole point of carrying the axis.
+        expect(inApp6.length).toBeLessThan(names.length);
+        expect(inFm.length).toBeLessThan(names.length);
     });
 
     it('returns names in enum declaration order', () => {
