@@ -73,6 +73,8 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // geometry moved into the library. @see hatchTileSegments
     TacticalGraphicName.RestrictedTerrain,
     TacticalGraphicName.SeverelyRestrictedTerrain,
+    // The same runway glyph as Airfield, on a drawn area.
+    TacticalGraphicName.AirfieldZone,
 ];
 
 describe('graphic specifications', () => {

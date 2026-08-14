@@ -13,6 +13,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
     TacticalGraphicName.Airfield,
+    TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.AirheadLine,
     TacticalGraphicName.AlternateSupplyRoute,
     TacticalGraphicName.Ambush,

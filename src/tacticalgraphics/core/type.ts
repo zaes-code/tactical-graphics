@@ -688,6 +688,7 @@ export enum TacticalGraphicName {
     ZoneOfFire = 'ZoneOfFire',
     RestrictedTerrain = 'RestrictedTerrain',
     SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
+    AirfieldZone = 'AirfieldZone',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -950,6 +951,7 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.AirfieldZone]: 'airfield zone',
     [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',
     [TacticalGraphicName.RestrictedTerrain]: 'restricted terrain',
     [TacticalGraphicName.ZoneOfFire]: 'zone of fire',

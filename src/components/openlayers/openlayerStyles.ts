@@ -1996,6 +1996,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
             return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.Airfield:
+        case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
