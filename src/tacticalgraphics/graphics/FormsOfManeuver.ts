@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {frameFromAnchors} from "../core/anchors";
+import {runAndArcFromAnchors} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
 
@@ -455,10 +455,13 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * the straight line portion of the graphic. Point 3 defines the diameter. Point 4
      * defines the orientation of the 180 degree circular arc."
      *
-     * The shape maths below is untouched — `frame` just reads its center, bearing,
-     * half-length and arc radius off the points the user drew instead of off a `size`
-     * and a `rotation`. That is what makes the approach's length and the arc's diameter
-     * independent, which they were not when one `size` drove both.
+     * Points 2 and 3 are therefore the **feet of the semicircle**, and the standard's
+     * own template puts both of them on the run's continuation — which is exactly where
+     * the construction below already had them. So the shape math is untouched: `frame`
+     * reads its center, bearing, half-length and arc radius off the points the user
+     * drew instead of off a `size` and a `rotation`. That is what makes the approach's
+     * length and the arc's diameter independent, which they were not when one `size`
+     * drove both.
      * @see core/anchors.ts, ai/app-6.md "F3"
      */
     type: string = 'LineString';
@@ -493,16 +496,19 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * flicker rather than grow.
      */
     private frame(base: Feature<LineString>, opts?: TurnOptions): {center: Position; angle: number; size: number; radius: number; side: number} {
-        const drawn = frameFromAnchors(base.geometry.coordinates);
+        const drawn = runAndArcFromAnchors(base.geometry.coordinates);
         const bend = clampEnvelopmentBend(opts?.bend ?? ENVELOPMENT_DEFAULT_BEND);
         const size = drawn?.size ?? opts?.size ?? 1;
-        const reach = drawn?.offset;
         return {
             center: drawn?.center ?? base.geometry.coordinates[0] ?? [0, 0],
             angle: drawn?.angle ?? toRadians(opts?.rotation ?? 0),
             size,
-            radius: reach ?? Math.abs(bend) * size,
-            side: reach !== undefined ? drawn!.side : Math.sign(bend) || 1,
+            // `bend` is the fallback, not the input: it is what a two-point sketch and a
+            // pre-conversion save both still speak. Once point 3 exists the drawn
+            // diameter wins, which is the whole freedom the conversion buys — the
+            // approach's length and the arc's size stop being the same number.
+            radius: drawn?.radius ?? Math.abs(bend) * size,
+            side: drawn?.radius !== undefined ? drawn.side : Math.sign(bend) || 1,
         };
     }
 

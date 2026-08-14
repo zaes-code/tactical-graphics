@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsFromFrame, frameFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -515,9 +515,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // A converted graphic's base carries APP-06's anchor points, so the frame is
         // read back out of them rather than taken as a bare center. @see writeBase
         if (geometry instanceof LineString) {
-            const frame = frameFromAnchors(geometry.getCoordinates().map(c => toLonLat(c)) as Position[]);
-            if (!frame) return;
-            this.adoptFrame(frame);
+            this.adoptAnchors(geometry.getCoordinates().map(c => toLonLat(c)) as Position[]);
             return;
         }
 
@@ -552,14 +550,40 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             else (geometry as Point | undefined)?.setCoordinates(this.center);
             return;
         }
+        this.base.setGeometry(new LineString(this.anchorPoints().map(c => fromLonLat(c as Coordinate))));
+    }
+
+    /**
+     * The anchor points APP-06 describes this symbol by, in lon/lat.
+     *
+     * **Virtual, because the eight symbols being converted do not share a point
+     * layout.** Envelop spends four points on a run and a half circle, Pursue three on
+     * the same shape, Contain two on a semicircle's opening, Movement to Contact
+     * anywhere from three to fifty. A single reader would have to be told which it was
+     * looking at, which is the switch this replaces. The default is the generic
+     * run-with-an-offset form; a holder whose symbol is built differently overrides
+     * this and `adoptAnchors` together, and they must stay exact inverses.
+     */
+    protected anchorPoints(): Position[] {
         const {offset, side} = this.anchorReach();
-        const anchors = anchorsFromFrame(toLonLat(this.center) as Position, this.size, this.rotation, offset, side);
-        this.base.setGeometry(new LineString(anchors.map(c => fromLonLat(c as Coordinate))));
+        return anchorsFromFrame(toLonLat(this.center) as Position, this.size, this.rotation, offset, side);
+    }
+
+    /**
+     * Read holder state back out of drawn anchor points. `false` means the points do
+     * not describe a usable frame — a click rather than a drag — and the caller should
+     * leave the holder alone rather than snap it to a degenerate shape.
+     */
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = frameFromAnchors(coords);
+        if (!frame) return false;
+        this.adoptFrame(frame);
+        return true;
     }
 
     /**
      * How far off its own axis this graphic's third anchor point sits, and on which
-     * side. Overridden by the holders whose symbol has a reach — Envelopment's arc.
+     * side. Overridden by the holders whose symbol has a reach.
      */
     protected anchorReach(): {offset?: number; side: number} {
         return {side: this.mirrored ? -1 : 1};
@@ -734,27 +758,40 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     }
 
     /**
-     * The arc's radius and flank, which is what APP-06's third anchor point sets.
+     * APP-06 343500's four points: the run, then the semicircle's two feet, then the
+     * flank it bulges to.
      *
-     * `bend` is a signed multiple of the half-length, so the reach it describes is
-     * `|bend| x size` and its sign is the side. Publishing it here is what puts the
-     * third point on the base geometry at the place the arc actually bulges to.
+     * `bend` is a signed multiple of the half-length, so the arc's radius is
+     * `|bend| x size` and its sign is the side. Writing the points out here is what
+     * makes the saved base self-describing — the diameter is on the geometry, not
+     * inferred from an amplifier a foreign reader would have to know about.
      */
-    protected anchorReach(): {offset?: number; side: number} {
+    protected anchorPoints(): Position[] {
         const bend = clampEnvelopmentBend(this.bend);
-        return {offset: Math.abs(bend) * this.size, side: Math.sign(bend) || 1};
+        return anchorsForRunAndArc(
+            toLonLat(this.center) as Position,
+            this.size,
+            Math.abs(bend) * this.size,
+            this.rotation,
+            Math.sign(bend) || 1,
+        );
     }
 
     /**
-     * Adopting drawn points sets the bend as well as the run, so a graphic restored or
+     * The exact inverse. Sets the bend as well as the run, so a graphic restored or
      * imported from anchor points comes back with the arc it was saved with rather than
      * the family default.
      */
-    protected adoptFrame(frame: DrawnFrame): void {
-        if (frame.offset !== undefined && frame.size > 0) {
-            this.bend = clampEnvelopmentBend((frame.offset / frame.size) * frame.side);
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = runAndArcFromAnchors(coords);
+        if (!frame) return false;
+        if (frame.radius !== undefined && frame.size > 0) {
+            this.bend = clampEnvelopmentBend((frame.radius / frame.size) * frame.side);
         }
-        super.adoptFrame(frame);
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
+        return true;
     }
     /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;

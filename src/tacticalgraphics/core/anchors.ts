@@ -141,3 +141,119 @@ export function anchorsFromFrame(
     // Inserted *before* the run's end, which is where `frameFromAnchors` looks for it.
     return [start, walk(offset, bearingOf(angle + (side * Math.PI) / 2)), end];
 }
+
+/**
+ * # A straight run with a half circle on its end
+ *
+ * The second anchor shape, and the one APP-06 spends the most points on. Two symbols
+ * are built this way and they differ only in how many points they use to say it:
+ *
+ * - **Envelop** (343500) takes *four*. "Point 1 defines the beginning of the straight
+ *   line. Point 2 defines the end of the straight line portion of the graphic. Point 3
+ *   defines the diameter. Point 4 defines the orientation of the 180 degree circular
+ *   arc."
+ * - **Pursue** (344000) takes *three*, folding the last two together: "Point 3 defines
+ *   the diameter and orientation of the 180 degree circular arc and the tip of the
+ *   arrowhead."
+ *
+ * So points 2 and 3 are the **feet of the semicircle** — the ends of its diameter — and
+ * the remaining point says which side of the run it bulges to. Both feet lie on the
+ * run's own continuation, which is why the arrowhead lands on the axis by construction
+ * rather than by the user lining it up.
+ *
+ * `radius` is half that diameter, because every arc in this library is drawn from one.
+ */
+export interface RunAndArcFrame {
+    /** Midpoint of the straight run. The generators lay their axis about it. */
+    center: Position;
+    /** Planar radians CCW from east, point 1 → point 2. */
+    angle: number;
+    /** Half the run's length. */
+    size: number;
+    /**
+     * Half the diameter set by point 3, or undefined when the sketch has not reached
+     * that point yet — mid-draw the interaction hands over a run and nothing else, and
+     * a symbol that drew no arc until its third click would flicker rather than grow.
+     */
+    radius?: number;
+    /** Which flank the arc bulges to: `+1` left of the run, `-1` right. */
+    side: number;
+}
+
+/** Local coordinates of `p` about `center`: `u` along `angle`, `v` to its left. */
+function localOf(center: Position, angle: number, p: Position): {u: number; v: number} {
+    const distance = meters(center, p);
+    if (distance === 0) return {u: 0, v: 0};
+    const delta = planarAngle(center, p) - angle;
+    return {u: distance * Math.cos(delta), v: distance * Math.sin(delta)};
+}
+
+/**
+ * Read a run-and-arc frame off the points the user drew.
+ *
+ * Point 3 is **projected onto the run's axis** rather than taken where it fell. The
+ * diameter lies along the approach in APP-06's own template — both feet sit on the
+ * line — so the component across the axis is not a second degree of freedom the symbol
+ * has; honoring it would bend the graphic into a shape the standard does not draw.
+ * The across component is not wasted, though: on Pursue, which has no fourth point, its
+ * sign is what says which way the hook turns.
+ */
+export function runAndArcFromAnchors(coords: Position[] | undefined): RunAndArcFrame | undefined {
+    if (!coords || coords.length < 2) return undefined;
+
+    const [start, end] = coords;
+    const span = meters(start, end);
+    if (!isFinite(span) || span < MIN_SIZE_M) return undefined;
+
+    const center = turf.destination(turf.point(start), span / 2, turf.bearing(turf.point(start), turf.point(end)), {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    // From the center, for the reason `frameFromAnchors` gives: it is the only way the
+    // two directions here stay exact inverses once great circles converge.
+    const angle = planarAngle(center, end);
+    const size = span / 2;
+
+    const frame: RunAndArcFrame = {center, angle, size, side: 1};
+
+    if (coords.length >= 3) {
+        const foot = localOf(center, angle, coords[2]);
+        const diameter = foot.u - size;
+        if (diameter > 0) frame.radius = diameter / 2;
+        // Pursue's third point carries the orientation too. A fourth point overrides it.
+        if (foot.v !== 0) frame.side = Math.sign(foot.v);
+    }
+    if (coords.length >= 4) {
+        const orient = localOf(center, angle, coords[3]);
+        if (orient.v !== 0) frame.side = Math.sign(orient.v);
+    }
+    return frame;
+}
+
+/**
+ * The inverse: the four anchor points that describe this frame.
+ *
+ * Point 4 is placed at the **apex of the arc**, which is the one spot on the drawn
+ * shape that is unambiguously on the bulge side — a point merely offset from the axis
+ * would sit in empty space and read as a stray handle. Pursue keeps only the first
+ * three of these; the fourth is what makes Envelop's orientation independent.
+ *
+ * @param rotationDegrees the run's aim, in the schema's unit
+ */
+export function anchorsForRunAndArc(
+    center: Position,
+    size: number,
+    radius: number,
+    rotationDegrees = 0,
+    side = 1,
+): Position[] {
+    const angle = toRadians(rotationDegrees);
+    const at = (u: number, v: number): Position => {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return center;
+        const bearing = 90 - toDegrees(angle + Math.atan2(v, u));
+        return turf.destination(turf.point(center), distance, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+    };
+    const flank = Math.sign(side) || 1;
+    return [at(-size, 0), at(size, 0), at(size + 2 * radius, 0), at(size + radius, flank * radius)];
+}
