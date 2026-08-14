@@ -414,6 +414,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ChemicalContaminatedArea]: AREA_SIMPLE,
     [TacticalGraphicName.NuclearContaminatedArea]: AREA_SIMPLE,
     [TacticalGraphicName.RadiologicalContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.ArtilleryManeuverArea]: {...(TARGET_ACQUISITION_AREA)},
+    [TacticalGraphicName.ArtilleryReservedArea]: {...(TARGET_ACQUISITION_AREA)},
     [TacticalGraphicName.AssemblyArea]: AREA_SIMPLE,
     [TacticalGraphicName.EngagementArea]: AREA_SIMPLE,
     [TacticalGraphicName.RefugeeHoldingArea]: AREA_SIMPLE,
