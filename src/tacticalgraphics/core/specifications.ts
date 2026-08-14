@@ -116,12 +116,12 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Cover]:                                        BOTH,      // APP-06 342201 Cover
     [TacticalGraphicName.Guard]:                                        BOTH,      // APP-06 342202 Guard
     [TacticalGraphicName.Screen]:                                       BOTH,      // APP-06 342203 Screen
-    [TacticalGraphicName.TacticalBlock]:                                BOTH,      // APP-06 270501 Block
+    [TacticalGraphicName.TacticalBlock]:                                BOTH,      // APP-06 340100 Block
     [TacticalGraphicName.Breach]:                                       BOTH,      // APP-06 340200 Breach
     [TacticalGraphicName.Bypass]:                                       BOTH,      // APP-06 340300 Bypass
     [TacticalGraphicName.Canalize]:                                     BOTH,      // APP-06 340400 Canalize
     [TacticalGraphicName.Clear]:                                        BOTH,      // APP-06 340500 Clear
-    [TacticalGraphicName.TacticalDisrupt]:                              BOTH,      // APP-06 270502 Disrupt
+    [TacticalGraphicName.TacticalDisrupt]:                              BOTH,      // APP-06 341000 Disrupt
     [TacticalGraphicName.Penetration]:                                  BOTH,      // APP-06 341800 Penetrate
     [TacticalGraphicName.Exploitation]:                                 BOTH,      // APP-06 343100 Exploit/Exploitation
     [TacticalGraphicName.Disengage]:                                    BOTH,      // APP-06 344400 Disengage
@@ -149,6 +149,15 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.CallForFireZoneIrregular]:                     BOTH,      // APP-06 241201 Irregular
     [TacticalGraphicName.CallForFireZoneRectangular]:                   BOTH,      // APP-06 241202 Rectangular
     [TacticalGraphicName.CallForFireZoneCircular]:                      BOTH,      // APP-06 241203 Circular
+    [TacticalGraphicName.TargetBuildUpAreaIrregular]:   APP6_ONLY, // APP-06 241701 Irregular
+    [TacticalGraphicName.TargetBuildUpAreaRectangular]: APP6_ONLY, // APP-06 241702 Rectangular
+    [TacticalGraphicName.TargetBuildUpAreaCircular]:    APP6_ONLY, // APP-06 241703 Circular
+    [TacticalGraphicName.TargetValueAreaIrregular]:   APP6_ONLY, // APP-06 241801 Irregular
+    [TacticalGraphicName.TargetValueAreaRectangular]: APP6_ONLY, // APP-06 241802 Rectangular
+    [TacticalGraphicName.TargetValueAreaCircular]:    APP6_ONLY, // APP-06 241803 Circular
+    [TacticalGraphicName.ZoneOfResponsibilityIrregular]:   APP6_ONLY, // APP-06 241901 Irregular
+    [TacticalGraphicName.ZoneOfResponsibilityRectangular]: APP6_ONLY, // APP-06 241902 Rectangular
+    [TacticalGraphicName.ZoneOfResponsibilityCircular]:    APP6_ONLY, // APP-06 241903 Circular
     [TacticalGraphicName.CensorZoneIrregular]:                          BOTH,      // APP-06 241301 Irregular
     [TacticalGraphicName.CensorZoneRectangular]:                        BOTH,      // APP-06 241302 Rectangular
     [TacticalGraphicName.CensorZoneCircular]:                           BOTH,      // APP-06 241303 Circular
@@ -221,8 +230,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.WireDoubleStrandConcertina]:                   BOTH,      // APP-06 290308 Double Strand Concertina
     [TacticalGraphicName.WireTripleStrandConcertina]:                   BOTH,      // APP-06 290309 Triple Strand Concertina
     [TacticalGraphicName.ObstacleLine]:                                 BOTH,      // APP-06 290100 Obstacle Line
-    [TacticalGraphicName.TacticalFix]:                                  BOTH,      // APP-06 270503 Fix
-    [TacticalGraphicName.TacticalTurn]:                                 BOTH,      // APP-06 270504 Turn
+    [TacticalGraphicName.TacticalFix]:                                  BOTH,      // APP-06 341100 Fix
+    [TacticalGraphicName.TacticalTurn]:                                 BOTH,      // APP-06 344700 Turn
     [TacticalGraphicName.Block]:                                        BOTH,      // APP-06 270501 Block
     [TacticalGraphicName.Disrupt]:                                      BOTH,      // APP-06 270502 Disrupt
     [TacticalGraphicName.Fix]:                                          BOTH,      // APP-06 270503 Fix

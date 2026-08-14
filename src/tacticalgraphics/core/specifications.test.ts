@@ -39,6 +39,18 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.LightLine,
     TacticalGraphicName.NoFireLine,
     TacticalGraphicName.RegimentalSupportArea,
+    // Three target-acquisition zone families APP-06 carries and FM 1-02.2 does not:
+    // target build-up area (TBA), target value area (TVAR) and zone of responsibility
+    // (ZOR). Labels read off the plates, not inferred from the names.
+    TacticalGraphicName.TargetBuildUpAreaIrregular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaIrregular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityIrregular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
 ];
 
 describe('graphic specifications', () => {
