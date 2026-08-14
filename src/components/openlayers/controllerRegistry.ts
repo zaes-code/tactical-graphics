@@ -411,7 +411,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     //     new SearchAreaController(new SearchArea(name)),
 
     // ── Forms of maneuver (movement arrows) ────────────────────────────────
-    [TacticalGraphicName.MovementToContact]:  missionTask,
+    // Drawn now, not dropped: APP-06 342900 builds it from a path and a width, which
+    // is the movement family's own model. @see MovementToContact
+    [TacticalGraphicName.MovementToContact]:  movement(),
     [TacticalGraphicName.FrontalAttack]:      movement(),
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),

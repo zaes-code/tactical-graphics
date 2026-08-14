@@ -122,13 +122,6 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
 ];
-/**
- * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
- * arrowhead edge, as a fraction of that arrow's half-length `r`. Expressed against
- * the graphic rather than the screen so the two stay locked together at every zoom
- * — see the note in the constructor.
- */
-const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import { movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
 import {getGraphicFields} from '../graphicFieldRegistry';
