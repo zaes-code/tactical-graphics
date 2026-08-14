@@ -75,6 +75,11 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.SeverelyRestrictedTerrain,
     // The same runway glyph as Airfield, on a drawn area.
     TacticalGraphicName.AirfieldZone,
+    // Three APP-06 lines that are simple lines here: drawn, labelled at both ends,
+    // nothing decorating the line itself. Line generic carries no letter at all.
+    TacticalGraphicName.LineGeneric,
+    TacticalGraphicName.HandoverLine,
+    TacticalGraphicName.NamedAreaOfInterestLine,
 ];
 
 describe('graphic specifications', () => {
