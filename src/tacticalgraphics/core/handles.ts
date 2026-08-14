@@ -127,6 +127,8 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
  * restore shim and a test all ask the same question.
  */
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Ambush,
+    TacticalGraphicName.Contain,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,

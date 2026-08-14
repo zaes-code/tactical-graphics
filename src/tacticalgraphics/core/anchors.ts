@@ -462,3 +462,108 @@ export function anchorsForBow(center: Position, size: number, rotationDegrees = 
     };
     return [at(size, 0), at(-size, 0), at(0, (-bend * size) / 2)];
 }
+
+/**
+ * # An arc with an arrow off its back — Ambush's three points
+ *
+ * APP-06 141700: "Point 1 is the tip of the arrowhead. Points 2 and 3 define the
+ * endpoints of the curved line on the back side of the symbol."
+ *
+ * The curved line spans 120 degrees, so points 2 and 3 sit a third of a circle apart
+ * and their chord is `2 * radius * sin(60)`. That fixes the radius without needing the
+ * center to be drawn — the center is recovered from the chord instead, which is the
+ * whole reason this reader exists rather than a centre-and-edge pair.
+ *
+ * Point 1 is honored as an actual tip rather than only a direction, so the arrow's
+ * reach is a proportion the user sets. The dropped form fixed it at two radii.
+ */
+export interface ArcAndArrowFrame {
+    /** Center of the circle the arc is cut from. */
+    center: Position;
+    /** Planar radians CCW from east: the direction the arrow points. */
+    angle: number;
+    /** Radius of the arc. */
+    radius: number;
+    /** How far the tip sits from the center, as a multiple of the radius. */
+    arrowReach: number;
+}
+
+/** The arc's half-span. @see ArcAndArrowFrame */
+const ARC_HALF_SPAN_DEG = 60;
+/** Where the dropped form put the tip: two radii out along the axis. */
+export const ARC_ARROW_DEFAULT_REACH = 2;
+
+export function arcAndArrowFromAnchors(coords: Position[] | undefined): ArcAndArrowFrame | undefined {
+    if (!coords || coords.length < 3) return undefined;
+
+    const [tip, upper, lower] = coords;
+    const chord = meters(upper, lower);
+    if (!isFinite(chord) || chord < MIN_SIZE_M) return undefined;
+
+    const chordMid = turf.destination(turf.point(upper), chord / 2, turf.bearing(turf.point(upper), turf.point(lower)), {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+
+    // **The center is solved for, not stepped to.** It is never drawn, so it has to be
+    // recovered — and the obvious recovery, "half a radius back along the axis from the
+    // chord's midpoint", is a planar identity that a sphere does not honor exactly. It
+    // left a 55 km ambush moving 0.1 m on every save/restore, which compounds.
+    //
+    // Two facts pin it exactly instead. The center lies on the geodesic running from
+    // point 1 through the chord's midpoint and out the far side, by the symmetry of the
+    // construction; and at the true center the half-chord is `radius * sin(60)`, because
+    // the arc spans 120 degrees. So walk out along that geodesic until the second holds.
+    // **The bearing at the midpoint, not at the tip.** `turf.bearing(a, b)` is the
+    // initial bearing at `a`; walking from the midpoint on the bearing measured at the
+    // tip follows a different great circle entirely, and the solve then converges on the
+    // wrong line — it put a 1.2 km ambush a full radius out.
+    const outward = turf.bearing(turf.point(chordMid), turf.point(tip)) + 180;
+    const at = (distance: number): Position =>
+        turf.destination(turf.point(chordMid), distance, outward, {units: 'meters'}).geometry.coordinates as Position;
+    // The condition is an **angle**, not a length. "Half the chord is `radius * sin(60)`"
+    // is another planar identity — the chord is a geodesic distance and the sine rule
+    // for it is not the flat one — and using it left the center 4.7 m out, worse than
+    // the approximation it replaced. What the writer guarantees exactly is that it
+    // placed this point 60 degrees off the axis, so that is what to solve for.
+    const subtended = (distance: number): number => {
+        const at1 = at(distance);
+        const delta = toDegrees(planarAngle(at1, upper) - planarAngle(at1, tip));
+        return (((delta % 360) + 540) % 360) - 180;
+    };
+    // A quarter turn at the chord's own midpoint, falling through 60 as the point walks
+    // away from the tip — so it brackets, and it is monotonic between.
+    const miss = (distance: number): number => subtended(distance) - ARC_HALF_SPAN_DEG;
+
+    let low = 0;
+    let high = Math.max(4 * (chord / 2), MIN_SIZE_M);
+    while (miss(high) > 0 && high < 1e9) high *= 2;
+    for (let i = 0; i < 80; i++) {
+        const mid = (low + high) / 2;
+        if (miss(mid) > 0) low = mid;
+        else high = mid;
+    }
+
+    const center = at((low + high) / 2);
+    const radius = meters(center, upper);
+    return {
+        center,
+        angle: planarAngle(center, tip),
+        radius,
+        arrowReach: radius > 0 ? meters(center, tip) / radius : ARC_ARROW_DEFAULT_REACH,
+    };
+}
+
+/** The inverse: `[tip, upperArcEnd, lowerArcEnd]`, APP-06's own numbering. */
+export function anchorsForArcAndArrow(
+    center: Position,
+    radius: number,
+    rotationDegrees = 0,
+    arrowReach = ARC_ARROW_DEFAULT_REACH,
+): Position[] {
+    const angle = toRadians(rotationDegrees);
+    const polar = (distance: number, planarDegrees: number): Position =>
+        turf.destination(turf.point(center), distance, 90 - toDegrees(angle + toRadians(planarDegrees)), {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+    return [polar(arrowReach * radius, 0), polar(radius, ARC_HALF_SPAN_DEG), polar(radius, -ARC_HALF_SPAN_DEG)];
+}
