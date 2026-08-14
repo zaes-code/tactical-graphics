@@ -457,8 +457,11 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.FireSupportAreaCircular:
             return 'FSA';
 
+        // HIDACZ, not HDACZ. FM 1-02.2 prints the abbreviation on the symbol's own
+        // example block and uses HIDACZ there; the manual contains no occurrence of
+        // HDACZ at all, and MIL-STD-2525 and APP-06 agree on the longer form.
         case TacticalGraphicName.HighDensityAirspaceControlZone:
-            return 'HDACZ';
+            return 'HIDACZ';
         case TacticalGraphicName.RestrictedOperationsZone:
             return 'ROZ';
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:

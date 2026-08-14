@@ -41,6 +41,7 @@ import type {EditMode} from '@zaes/tactical-graphics';
 import type {MapEngineCapabilities} from './mapEngine';
 import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
+import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
 
 interface Props {
     onDrawTacticalGraphics(): void;
@@ -76,6 +77,8 @@ interface GraphicOption {
     label: string;
     value: TacticalGraphicName;
     category: string;
+    /** The specifications that define this graphic — FM 1-02.2, APP-06, or both. */
+    specifications: readonly TacticalGraphicSpecification[];
     isNew?: boolean;
 }
 
@@ -121,7 +124,32 @@ const NEW_GRAPHICS = new Set<TacticalGraphicName>([
 const CATEGORY_ORDER: string[] = Object.values(TacticalGraphicCategory);
 const ALL_CATEGORIES: TacticalGraphicCategory[] = Object.values(TacticalGraphicCategory);
 
+const ALL_SPECIFICATIONS: TacticalGraphicSpecification[] = Object.values(TacticalGraphicSpecification);
+
+/**
+ * How the panel filters by standard.
+ *
+ * Deliberately three exclusive choices rather than a checkbox per specification.
+ * Every graphic in the registry is in FM 1-02.2, so "FM 1-02.2" as a tick box
+ * hides nothing and reads as broken; the question a user actually has is either
+ * "show me what NATO has" or "show me what NATO does *not* have".
+ */
+type SpecificationFilter = 'all' | 'app6' | 'fmOnly';
+
+const SPECIFICATION_FILTERS: {value: SpecificationFilter; label: string; help: string}[] = [
+    {value: 'all', label: 'All', help: 'Every graphic in the registry'},
+    {value: 'app6', label: 'In APP-06', help: 'Graphics NATO APP-06 Edition E also defines'},
+    {value: 'fmOnly', label: 'FM only', help: 'Graphics FM 1-02.2 defines and APP-06 does not'},
+];
+
+function matchesSpecificationFilter(option: GraphicOption, filter: SpecificationFilter): boolean {
+    if (filter === 'all') return true;
+    const inApp6 = option.specifications.includes(TacticalGraphicSpecification.APP6);
+    return filter === 'app6' ? inApp6 : !inApp6;
+}
+
 const LS_CATEGORIES = 'tg_enabledCategories';
+const LS_SPECIFICATION_FILTER = 'tg_specificationFilter';
 
 function loadEnabledCategories(): Set<TacticalGraphicCategory> {
     try {
@@ -139,11 +167,20 @@ function loadEnabledCategories(): Set<TacticalGraphicCategory> {
     return new Set(ALL_CATEGORIES);
 }
 
+function loadSpecificationFilter(): SpecificationFilter {
+    try {
+        const raw = localStorage.getItem(LS_SPECIFICATION_FILTER);
+        if (raw && SPECIFICATION_FILTERS.some(f => f.value === raw)) return raw as SpecificationFilter;
+    } catch {}
+    return 'all';
+}
+
 const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
     .map(val => ({
         label: getDisplayName(val),
         value: val,
         category: GRAPHIC_CATEGORIES[val] ?? 'Other',
+        specifications: getSpecifications(val),
         isNew: NEW_GRAPHICS.has(val),
     }))
     .sort((a, b) => {
@@ -176,6 +213,7 @@ const MapControls: React.FC<Props> = ({
     const [search, setSearch] = useState('');
     const [filterOpen, setFilterOpen] = useState(false);
     const [enabledCategories, setEnabledCategories] = useState<Set<TacticalGraphicCategory>>(loadEnabledCategories);
+    const [specificationFilter, setSpecificationFilter] = useState<SpecificationFilter>(loadSpecificationFilter);
     const listRef = useRef<HTMLDivElement>(null);
     /** The hidden file input the Import button clicks on the user's behalf. */
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -184,9 +222,16 @@ const MapControls: React.FC<Props> = ({
         localStorage.setItem(LS_CATEGORIES, JSON.stringify(Array.from(enabledCategories)));
     }, [enabledCategories]);
 
+    useEffect(() => {
+        localStorage.setItem(LS_SPECIFICATION_FILTER, specificationFilter);
+    }, [specificationFilter]);
+
     const visibleOptions = useMemo(
-        () => ALL_OPTIONS.filter(o => enabledCategories.has(o.category as TacticalGraphicCategory)),
-        [enabledCategories]
+        () => ALL_OPTIONS.filter(o =>
+            enabledCategories.has(o.category as TacticalGraphicCategory) &&
+            matchesSpecificationFilter(o, specificationFilter)
+        ),
+        [enabledCategories, specificationFilter]
     );
 
     const filtered = useMemo(() => {
@@ -199,6 +244,8 @@ const MapControls: React.FC<Props> = ({
     }, [search, visibleOptions]);
 
     const hiddenCategoryCount = ALL_CATEGORIES.length - enabledCategories.size;
+    /** Graphics the two filters are hiding between them — what the badge counts. */
+    const hiddenGraphicCount = ALL_OPTIONS.length - visibleOptions.length;
 
     // Group filtered options by category, preserving CATEGORY_ORDER
     const groups = useMemo(() => {
@@ -259,26 +306,48 @@ const MapControls: React.FC<Props> = ({
                 gap: 1,
                 flexShrink: 0,
             }}>
-                <Typography sx={{
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: 'primary.main',
-                    flexGrow: 1,
-                }}>
-                    Tactical Graphics
-                </Typography>
-                <Tooltip title={hiddenCategoryCount > 0 ? `Filter categories (${hiddenCategoryCount} hidden)` : 'Filter categories'}>
+                <Box sx={{flexGrow: 1, minWidth: 0}}>
+                    <Typography sx={{
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: 'primary.main',
+                    }}>
+                        Tactical Graphics
+                    </Typography>
+                    {/*
+                     * The two standards this library implements. Worth stating in the
+                     * header rather than burying in the filter: which catalogue a symbol
+                     * comes from is the first thing a NATO user asks, and until now the
+                     * app only ever claimed FM 1-02.2 by implication.
+                     */}
+                    <Typography sx={{fontSize: '0.6rem', letterSpacing: '0.06em', color: 'text.secondary', mt: 0.15}}>
+                        {specificationFilter === 'all'
+                            ? ALL_SPECIFICATIONS.join(' · ')
+                            : specificationFilter === 'app6'
+                                ? `${TacticalGraphicSpecification.APP6} only`
+                                : `${TacticalGraphicSpecification.FM1_02_2} only`}
+                    </Typography>
+                </Box>
+                <Tooltip title={hiddenGraphicCount > 0 ? `Filter graphics (${hiddenGraphicCount} hidden)` : 'Filter graphics'}>
                     <IconButton
                         size="small"
                         onClick={() => setFilterOpen(true)}
-                        sx={{color: hiddenCategoryCount > 0 ? 'primary.main' : 'text.secondary', '&:hover': {color: 'primary.main'}}}
+                        sx={{color: hiddenGraphicCount > 0 ? 'primary.main' : 'text.secondary', '&:hover': {color: 'primary.main'}}}
                     >
+                        {/*
+                         * A dot, not a count. Filtering to APP-06 hides 7 and filtering
+                         * to FM-only hides 208, so a numeric badge renders "99+" for a
+                         * filter that is working exactly as asked. The list already
+                         * states how many graphics survive; the badge only needs to say
+                         * that a filter is on.
+                         */}
                         <Badge
-                            badgeContent={hiddenCategoryCount > 0 ? hiddenCategoryCount : null}
+                            variant="dot"
+                            invisible={hiddenGraphicCount === 0}
                             color="primary"
-                            sx={{'& .MuiBadge-badge': {fontSize: '0.55rem', minWidth: 14, height: 14, p: '0 3px'}}}
+                            sx={{'& .MuiBadge-badge': {minWidth: 6, height: 6}}}
                         >
                             <FilterAltIcon fontSize="small"/>
                         </Badge>
@@ -684,7 +753,7 @@ const MapControls: React.FC<Props> = ({
             </Box>
         </Paper>
 
-        {/* Category filter modal */}
+        {/* Specification + category filter modal */}
         <Dialog
             open={filterOpen}
             onClose={() => setFilterOpen(false)}
@@ -694,7 +763,7 @@ const MapControls: React.FC<Props> = ({
         >
             <DialogTitle sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1, pr: 1}}>
                 <Typography sx={{fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase'}}>
-                    Filter Categories
+                    Filter Graphics
                 </Typography>
                 <IconButton onClick={() => setFilterOpen(false)} size="small" sx={{color: 'text.secondary', '&:hover': {color: 'text.primary'}}}>
                     <CloseIcon fontSize="small"/>
@@ -704,6 +773,41 @@ const MapControls: React.FC<Props> = ({
             <Divider/>
 
             <DialogContent sx={{pt: 1.5, pb: 2}}>
+                <Typography sx={{fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5}}>
+                    Specification
+                </Typography>
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    fullWidth
+                    value={specificationFilter}
+                    onChange={(_, next) => {
+                        // MUI hands back null when the active button is clicked again;
+                        // keep the current filter rather than dropping to no selection.
+                        if (next) setSpecificationFilter(next as SpecificationFilter);
+                    }}
+                    sx={{mb: 1}}
+                >
+                    {SPECIFICATION_FILTERS.map(({value, label, help}) => {
+                        const count = ALL_OPTIONS.filter(o => matchesSpecificationFilter(o, value)).length;
+                        return (
+                            <Tooltip key={value} title={help}>
+                                <ToggleButton value={value} sx={{fontSize: '0.68rem', py: 0.4, textTransform: 'none'}}>
+                                    {label}
+                                    <Box component="span" sx={{ml: 0.5, fontSize: '0.6rem', color: 'text.disabled'}}>
+                                        {count}
+                                    </Box>
+                                </ToggleButton>
+                            </Tooltip>
+                        );
+                    })}
+                </ToggleButtonGroup>
+
+                <Divider sx={{my: 1}}/>
+
+                <Typography sx={{fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5}}>
+                    Category
+                </Typography>
                 <Box sx={{display: 'flex', gap: 1, mb: 1.5}}>
                     <Button
                         size="small"
