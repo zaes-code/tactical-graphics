@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**224 graphics** are implemented and verified today, covering **238 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**229 graphics** are implemented and verified today, covering **243 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 233 supported names.
+the 238 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -984,16 +984,19 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Bridgehead | Areas |
 | Brigade Support Area | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
 | Drop Zone | Areas |
 | Encirclement | Areas |
+| Enemy Prisoner Of War Holding Area | Areas |
 | Engagement Area | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
+| Human Terrain | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Named Area Of Interest | Areas |
@@ -1150,6 +1153,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Blue Kill Box, Circular | Target Acquisition Control Measures |
 | Blue Kill Box, Irregular | Target Acquisition Control Measures |
 | Blue Kill Box, Rectangular | Target Acquisition Control Measures |
+| Bomb Area | Target Acquisition Control Measures |
 | Call For Fire Zone, Circular | Target Acquisition Control Measures |
 | Call For Fire Zone, Irregular | Target Acquisition Control Measures |
 | Call For Fire Zone, Rectangular | Target Acquisition Control Measures |
@@ -1171,6 +1175,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Target Value Area, Circular | Target Acquisition Control Measures |
 | Target Value Area, Irregular | Target Acquisition Control Measures |
 | Target Value Area, Rectangular | Target Acquisition Control Measures |
+| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan, Circular | Target Acquisition Control Measures |
 | Zone Of Responsibility, Circular | Target Acquisition Control Measures |

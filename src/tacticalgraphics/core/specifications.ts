@@ -76,6 +76,11 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.EngineerWorkLine]:                             BOTH,      // APP-06 110300 Engineer Work Line
     [TacticalGraphicName.Airfield]:                                     BOTH,      // APP-06 131900 Airfield
     [TacticalGraphicName.AreaOfOperations]:                             BOTH,      // APP-06 120100 Area of Operations
+    [TacticalGraphicName.BombArea]: APP6_ONLY, // APP-06 240808 Bomb Area
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: APP6_ONLY, // APP-06 242000 Terminally Guided Munition Footprint (TGMF)
+    [TacticalGraphicName.Bridgehead]: APP6_ONLY, // APP-06 120800 Bridgehead
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: APP6_ONLY, // APP-06 310200 Enemy Prisoner of War Holding Area
+    [TacticalGraphicName.HumanTerrain]: APP6_ONLY, // APP-06 370100 Human Terrain
     [TacticalGraphicName.AssemblyArea]:                                 BOTH,      // APP-06 150200 Assembly Area (AA)
     [TacticalGraphicName.BaseCamp]:                                     BOTH,      // APP-06 120500 Base Camp
     [TacticalGraphicName.EngagementArea]:                               BOTH,      // APP-06 151300 Engagement Area (EA)
