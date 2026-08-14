@@ -7,7 +7,9 @@ import {
     CircularArea,
     Contain,
     Control,
+    CordonAndKnock,
     CordonAndSearch,
+    Locate,
     Isolate,
     Occupy,
     Retain,
@@ -259,6 +261,8 @@ areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new AreaGraph
 //Mission Task Graphics
 TacticalGraphicsRegistry.register(new Control());
 TacticalGraphicsRegistry.register(new CordonAndSearch());
+TacticalGraphicsRegistry.register(new CordonAndKnock());
+TacticalGraphicsRegistry.register(new Locate());
 TacticalGraphicsRegistry.register(new Isolate());
 TacticalGraphicsRegistry.register(new Retain());
 TacticalGraphicsRegistry.register(new Secure());

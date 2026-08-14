@@ -285,3 +285,20 @@ export class CircularArea extends MissionTask {
     };
 
 }
+
+/**
+ * Cordon and knock (APP-06 342600) -- the same construction as cordon and search, which
+ * is what the plate draws: a circle with outward triangles and an arrowhead. Only the
+ * letter differs, `C/K` against `C/S`.
+ */
+export class CordonAndKnock extends CordonAndSearch {
+    name: string = TacticalGraphicName.CordonAndKnock;
+}
+
+/**
+ * Locate (APP-06 343900) -- the plain arc-and-arrowhead circle the mission-task family
+ * is built on, carrying `LOC`. Same body as secure; the letter is the symbol.
+ */
+export class Locate extends Secure {
+    name: string = TacticalGraphicName.Locate;
+}

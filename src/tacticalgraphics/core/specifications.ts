@@ -114,6 +114,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Isolate]:                                      BOTH,      // APP-06 341500 Isolate
     [TacticalGraphicName.Retain]:                                       BOTH,      // APP-06 151205 Retain
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
+    [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
+    [TacticalGraphicName.Locate]: APP6_ONLY, // APP-06 343900 Locate
     [TacticalGraphicName.CordonAndSearch]:                              BOTH,      // APP-06 342700 Cordon and Search
     [TacticalGraphicName.Contain]:                                      BOTH,      // APP-06 151204 Contain
     [TacticalGraphicName.Occupy]:                                       BOTH,      // APP-06 341700 Occupy
