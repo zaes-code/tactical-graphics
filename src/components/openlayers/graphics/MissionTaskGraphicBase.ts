@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -587,6 +587,63 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.center = fromLonLat(frame.center as Coordinate);
         this.rotation = (frame.angle * 180) / Math.PI;
         this.updateGeom({size: frame.size});
+    }
+}
+
+/**
+ * Contain — the one arc mission task APP-06 builds from the arc's two ends.
+ *
+ * Its six siblings are "point 1 defines the centre point... point 2 defines the start
+ * point and radius", which is the centre-and-edge pair this library already drew. This
+ * one names the ends of the semicircle's opening, and those sit a quarter turn either
+ * side of the aim — so the generic anchor pair is used, rotated by that quarter turn.
+ * @see Contain in the core library, and OPENING_QUARTER_TURN there.
+ */
+export class ContainGraphicBase extends MissionTaskGraphicBase {
+    /** @see Contain — the arc spans 90 to 270 degrees about the center. */
+    private static readonly OPENING_QUARTER_TURN = 90;
+
+    protected anchorPoints(): Position[] {
+        return anchorsFromFrame(
+            toLonLat(this.center) as Position,
+            this.size,
+            this.rotation - ContainGraphicBase.OPENING_QUARTER_TURN,
+        );
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = frameFromAnchors(coords);
+        if (!frame) return false;
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI + ContainGraphicBase.OPENING_QUARTER_TURN;
+        this.updateGeom({size: frame.size});
+        return true;
+    }
+}
+
+/**
+ * Ambush — a 120 degree arc with an arrow off its back.
+ *
+ * Carries `arrowReach` for the same reason Pursuit carries `lineRatio`: APP-06 141700
+ * makes point 1 the arrowhead's actual tip, so how far the arrow reaches is a
+ * proportion the user set by drawing, and a holder that knew only centre / size /
+ * rotation would snap it back to the family default on the next regeneration.
+ */
+export class AmbushGraphicBase extends MissionTaskGraphicBase {
+    private arrowReach = ARC_ARROW_DEFAULT_REACH;
+
+    protected anchorPoints(): Position[] {
+        return anchorsForArcAndArrow(toLonLat(this.center) as Position, this.size, this.rotation, this.arrowReach);
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = arcAndArrowFromAnchors(coords);
+        if (!frame) return false;
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.arrowReach = frame.arrowReach;
+        this.updateGeom({size: frame.radius});
+        return true;
     }
 }
 

@@ -1,6 +1,6 @@
 import {Position} from 'geojson';
 import * as turf from './turf';
-import {anchorsForBow, anchorsForRunAndArc, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors} from './anchors';
+import {anchorsForArcAndArrow, anchorsForBow, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors} from './anchors';
 import geometryService from './GeometryService';
 
 /**
@@ -178,5 +178,46 @@ describe('bow anchor points', () => {
 
     it('leaves the bend unset for a two-point sketch', () => {
         expect(bowFromAnchors(anchorsForBow(CENTER, 5000, 0, 0.4).slice(0, 2))!.bend).toBeUndefined();
+    });
+});
+
+/** Ambush's arc-and-arrow: the radius comes from the chord, the aim and reach from the tip. */
+describe('arc-and-arrow anchor points', () => {
+    it('needs all three points', () => {
+        expect(arcAndArrowFromAnchors(undefined)).toBeUndefined();
+        expect(arcAndArrowFromAnchors([CENTER, CENTER])).toBeUndefined();
+        expect(arcAndArrowFromAnchors([CENTER, CENTER, CENTER])).toBeUndefined();
+    });
+
+    it.each([
+        [4000, 0, 2],
+        [4000, 90, 2],
+        [9000, -125, 3.4],
+        [1200, 175, 1.2],
+    ])('round-trips radius %p rotation %p reach %p', (radius, rotation, reach) => {
+        const frame = arcAndArrowFromAnchors(anchorsForArcAndArrow(CENTER, radius, rotation, reach))!;
+
+        // Micrometres, not metres. The center is *solved* for rather than stepped to, so
+        // there is no approximation left to leave slack for — and a loose bound here is
+        // exactly what hid the two wrong solves this went through, both of which landed
+        // metres out and looked fine against a one-metre tolerance.
+        expect(meters(frame.center, CENTER)).toBeLessThan(1e-6);
+        expect(frame.radius).toBeCloseTo(radius, 6);
+        expect(frame.arrowReach).toBeCloseTo(reach, 4);
+        const drift = ((((frame.angle * 180) / Math.PI - rotation) % 360) + 540) % 360 - 180;
+        expect(drift).toBeCloseTo(0, 6);
+    });
+
+    it('puts both arc ends one radius from the center', () => {
+        const [, upper, lower] = anchorsForArcAndArrow(CENTER, 4000, 20);
+        expect(meters(CENTER, upper)).toBeCloseTo(4000, 2);
+        expect(meters(CENTER, lower)).toBeCloseTo(4000, 2);
+    });
+
+    it('recovers the center from the chord alone, since it is never drawn', () => {
+        // The chord of a 120 degree arc is radius * 2 * sin(60), which is what fixes the
+        // radius without a center point — the property the whole reader rests on.
+        const [, upper, lower] = anchorsForArcAndArrow(CENTER, 4000, 0);
+        expect(meters(upper, lower)).toBeCloseTo(2 * 4000 * Math.sin(Math.PI / 3), 1);
     });
 });

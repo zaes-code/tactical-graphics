@@ -4,6 +4,14 @@ import {Feature, MultiLineString, MultiPoint, Point, GeometryCollection, Positio
 import {Coordinate, PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
+import {frameFromAnchors} from "../core/anchors";
+
+/**
+ * The quarter turn between the aim of a contain and the line joining its arc's two
+ * ends. The arc spans 90 to 270 degrees about the center, so the opening is square to
+ * the direction the symbol faces.
+ */
+const OPENING_QUARTER_TURN = 90;
 
 /**
  * Half the gap the arc-and-arrowhead circles leave for their one-letter label,
@@ -145,10 +153,45 @@ export class Secure extends MissionTask {
 
 export class Contain extends MissionTask {
     name: string = TacticalGraphicName.Contain;
+    /**
+     * **Drawn, not dropped.** APP-06 151204: "This symbol requires two anchor points.
+     * Points 1 and 2 define the endpoints of the semicircle's opening... Points 1 and 2
+     * determine the diameter of the semicircle."
+     *
+     * The odd one out among the arc mission tasks. The other six — retain, secure,
+     * isolate, occupy, control, area defense — are "point 1 defines the centre point of
+     * the graphic and point 2 defines the graphic's start point and radius", which is
+     * the centre-and-edge pair this library already draws. Contain names the arc's two
+     * *ends* instead, so it is the only one of the seven that had to move.
+     * @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
 
-    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        let center = base.geometry.coordinates;
-        let {rotation, size} = opts;
+    /**
+     * Where the semicircle's opening sits, in the terms the shape math below wants.
+     *
+     * The arc runs from 90 degrees to 270 degrees about the center, so its two ends are
+     * a quarter turn either side of the aim — which is why the generic reader is asked
+     * for a frame rotated by that quarter turn rather than being given a new one of its
+     * own. A base that is still a bare point resolves from the options, so a save
+     * written before the conversion keeps loading.
+     */
+    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; size: number} {
+        const coords = base.geometry?.coordinates;
+        const anchored = Array.isArray(coords?.[0]);
+        const drawn = anchored ? frameFromAnchors(coords as Position[]) : undefined;
+        if (drawn) {
+            return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI + OPENING_QUARTER_TURN, size: drawn.size};
+        }
+        return {
+            center: (anchored ? coords[0] : coords) as Position,
+            rotation: opts.rotation ?? 0,
+            size: opts.size ?? 1,
+        };
+    }
+
+    generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        const {center, rotation, size} = this.frame(base, opts);
         // Contain is a half-circle, and its label sits due west at 180° rather
         // than at the rotation axis — so the gap opens either side of 180, not
         // either side of 0. Same knob, different center.
@@ -173,11 +216,18 @@ export class Contain extends MissionTask {
         return this.asMultiLineStringFeature([upperArch, lowerArch, ...radialLineStrings]);
     }
 
-    generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {
-        let center = base.geometry.coordinates;
-        let labelPoint = geometryService.translateCoordinates(center, -opts.size, toRadians(opts.rotation));
+    /** `[edge, center]` — the family's order, now read off the drawn opening. */
+    generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        const {center, rotation, size} = this.frame(base, opts);
+        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        return this.asMultiPointFeature([lowerArch[0], center]);
+    }
+
+    generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<Point> {
+        const {center, rotation, size} = this.frame(base, opts);
+        const labelPoint = geometryService.translateCoordinates(center, -size, toRadians(rotation));
         return this.asPointFeature(labelPoint);
-    };
+    }
 }
 
 export class Occupy extends MissionTask {
