@@ -6,6 +6,7 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 /** Graphics whose shape + label are verified — the "Draw all samples" set. */
 export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.Abatis,
+    TacticalGraphicName.AdvanceToContact,
     TacticalGraphicName.AirCorridor,
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,

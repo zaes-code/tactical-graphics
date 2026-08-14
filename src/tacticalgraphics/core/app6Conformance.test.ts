@@ -205,18 +205,30 @@ describe('advance to contact is drawn, not dropped', () => {
         expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
     });
 
-    it('keeps the bolt outside the arrowhead', () => {
-        // Beyond the wings, which are the widest part of the symbol — so a bolt clear of
-        // them is clear of the whole outline.
+    it('leaves the arrowhead flank and drifts clear of the head', () => {
+        // It starts **on** the outline, halfway along the flank — the same place FM's
+        // bolts start, which is what makes the mark read as leaving the arrowhead rather
+        // than floating beside it. It then runs forward and outward, finishing past the
+        // tip and further off the axis than it began.
         const {wing, bolt} = inArrowFrame(ROUTE);
-        expect(Math.min(...bolt.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
+        const start = bolt[0];
+        const end = bolt[bolt.length - 1];
+        expect(start[0]).toBeCloseTo(0.5, 2);
+        expect(Math.abs(start[1])).toBeCloseTo(wing / 2, 2);
+        expect(end[0]).toBeGreaterThan(1);
+        expect(Math.abs(end[1])).toBeGreaterThan(Math.abs(start[1]));
     });
 
     it('holds that shape on a bent route, where the head arrives at an angle', () => {
-        const {wing, bolt} = inArrowFrame(BENT);
+        // Looser than the straight case on purpose: the frame is built from the head's
+        // own wings and tip, and a bend skews it slightly, so the start lands near the
+        // flank's midpoint rather than exactly on it.
+        const {bolt} = inArrowFrame(BENT);
         const side = Math.sign(bolt[0][1]);
         expect(bolt.every(p => Math.sign(p[1]) === side)).toBe(true);
-        expect(Math.min(...bolt.map(p => Math.abs(p[1])))).toBeGreaterThan(wing);
+        expect(bolt[0][0]).toBeGreaterThan(0.35);
+        expect(bolt[0][0]).toBeLessThan(0.65);
+        expect(bolt[bolt.length - 1][0]).toBeGreaterThan(1);
     });
 });
 
@@ -256,6 +268,44 @@ describe('movement to contact and advance to contact are different symbols', () 
         });
         // Three members of body and head, then one line and one head for the single bolt.
         expect((route.graphic.geometry as {coordinates: Position[][]}).coordinates).toHaveLength(5);
+    });
+
+    /**
+     * The bolts are the same mark on both symbols — only the count differs — so their
+     * proportions are asserted against each other rather than against literals. FM's
+     * head is much shallower than the drawn arrow's, so the shared quantity has to be
+     * the stroke measured **against the flank it hangs off**, not against the graphic.
+     */
+    it('draws the same lightning mark on both, scaled to each head', () => {
+        // **Geodesic, not planar.** A hypot over raw lon/lat degrees compresses longitude
+        // by cos(latitude), and the flank runs mostly across the arrow while the stroke
+        // runs mostly along it — so a planar ratio is skewed by the projection rather
+        // than by the shape, which is the thing under test.
+        const strokePerFlank = (flankFrom: Position, flankTo: Position, bolt: Position[]) => {
+            const span = (a: Position, b: Position) =>
+                turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+            return span(bolt[0], bolt[1]) / span(flankFrom, flankTo);
+        };
+
+        const badge = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [-0.3, 51.55]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.MovementToContact, radius: 40_000, rotation: 0}},
+        });
+        const badgeParts = (badge.graphic.geometry as {coordinates: Position[][]}).coordinates;
+        // upperPath is [tip, wing, shoulder, fin]; its flank is wing -> tip.
+        const badgeRatio = strokePerFlank(badgeParts[0][1], badgeParts[0][0], badgeParts[2]);
+
+        const route = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[-0.42, 51.55], [-0.1, 51.55]]} as never,
+            properties: {tacticalGraphic: {name: TacticalGraphicName.AdvanceToContact, width: 9000}},
+        });
+        const routeParts = (route.graphic.geometry as {coordinates: Position[][]}).coordinates;
+        // head is [leftEnd, leftWing, tip, rightWing, rightEnd]; the bolt hangs off the right.
+        const routeRatio = strokePerFlank(routeParts[1][3], routeParts[1][2], routeParts[3]);
+
+        expect(routeRatio).toBeCloseTo(badgeRatio, 2);
     });
 
     it('files them under one specification each, not both', () => {
