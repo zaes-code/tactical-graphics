@@ -156,6 +156,18 @@ const TARGET_ACQUISITION_AREA = f(true, false, true, true, false);
 /** Area with echelon modifier (BattlePosition, StrongPoint). */
 const ECH = f(true, false, false, false, true, {echelon: true});
 
+/**
+ * The 13 rectangular zones carry a **width in meters** on top of their family's
+ * amplifiers. FM 1-02.2 table 5-24 draws it as an `AM` arrow down the edge labelled
+ * "Width (M)", and APP-06 states it in words. It is an input rather than a printed
+ * label: FM's own construct examples show only the designation and the DTGs.
+ *
+ * Spread onto each entry rather than added to `FIRE_SUPPORT_AREA` /
+ * `TARGET_ACQUISITION_AREA`, because those constants are shared with the circular and
+ * irregular variants — a circle takes a radius and an irregular area takes neither.
+ * @see AreaGraphicBase, ai/app-6.md "F2"
+ */
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
@@ -384,44 +396,44 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
     [TacticalGraphicName.FreeFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.FreeFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.FreeFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.FreeFireAreaCircular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.NoFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.NoFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.NoFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.NoFireAreaCircular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.RestrictiveFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.RestrictiveFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.RestrictiveFireAreaCircular]: FIRE_SUPPORT_AREA,
     // Table 5-24 (fire support coordination): para 5-42 requires T and W/W1.
     [TacticalGraphicName.PositionAreaArtilleryIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.PositionAreaArtilleryRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.PositionAreaArtilleryCircular]: FIRE_SUPPORT_AREA,
     // Table 5-26 template: T, AM (width), W, W1.
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CallForFireZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CallForFireZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CallForFireZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CallForFireZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CensorZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CensorZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CensorZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CensorZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CriticalFriendlyZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CriticalFriendlyZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CriticalFriendlyZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CriticalFriendlyZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.DeadSpaceAreaIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.DeadSpaceAreaRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.DeadSpaceAreaRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.DeadSpaceAreaCircular]: TARGET_ACQUISITION_AREA,
     // Table 5-26 kill boxes: same template as target acquisition areas.
     [TacticalGraphicName.BlueKillBoxIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.BlueKillBoxRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.BlueKillBoxRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.BlueKillBoxCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.PurpleKillBoxIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.PurpleKillBoxRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.PurpleKillBoxRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.PurpleKillBoxCircular]: TARGET_ACQUISITION_AREA,
     // Table 5-25 (fire support / target areas): all variants should match.
     [TacticalGraphicName.FireSupportAreaIrregular]: f(true, false, true, true, false),
-    [TacticalGraphicName.FireSupportAreaRectangular]: f(true, false, true, true, false),
+    [TacticalGraphicName.FireSupportAreaRectangular]: {...(f(true, false, true, true, false)), width: true},
     [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.TargetAreaRectangular]: NAME_FIELD_ONLY,
@@ -440,7 +452,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, true,
-        {width: false, altitude1: true, altitude2: true, grids: true}),
+        {width: true, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
