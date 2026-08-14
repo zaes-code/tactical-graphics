@@ -129,23 +129,29 @@ const ALL_SPECIFICATIONS: TacticalGraphicSpecification[] = Object.values(Tactica
 /**
  * How the panel filters by standard.
  *
- * Deliberately three exclusive choices rather than a checkbox per specification.
- * Every graphic in the registry is in FM 1-02.2, so "FM 1-02.2" as a tick box
- * hides nothing and reads as broken; the question a user actually has is either
- * "show me what NATO has" or "show me what NATO does *not* have".
+ * Exclusive choices rather than a checkbox per specification, and the last three
+ * are a genuine partition: every graphic is in both catalogues, or in exactly one.
+ *
+ * It was three options while every graphic in the registry was in FM 1-02.2 — an
+ * "FM 1-02.2" tick box hid nothing then and read as broken. Now that NATO defines
+ * seven the manual does not, both "only" halves are worth asking for.
  */
-type SpecificationFilter = 'all' | 'app6' | 'fmOnly';
+type SpecificationFilter = 'all' | 'both' | 'fmOnly' | 'app6Only';
 
 const SPECIFICATION_FILTERS: {value: SpecificationFilter; label: string; help: string}[] = [
     {value: 'all', label: 'All', help: 'Every graphic in the registry'},
-    {value: 'app6', label: 'In APP-06', help: 'Graphics NATO APP-06 Edition E also defines'},
-    {value: 'fmOnly', label: 'FM only', help: 'Graphics FM 1-02.2 defines and APP-06 does not'},
+    {value: 'both', label: 'Both', help: 'Defined by FM 1-02.2 and NATO APP-06 alike'},
+    {value: 'fmOnly', label: 'FM only', help: 'FM 1-02.2 defines these and APP-06 does not'},
+    {value: 'app6Only', label: 'APP-06 only', help: 'NATO APP-06 defines these and FM 1-02.2 does not'},
 ];
 
 function matchesSpecificationFilter(option: GraphicOption, filter: SpecificationFilter): boolean {
     if (filter === 'all') return true;
     const inApp6 = option.specifications.includes(TacticalGraphicSpecification.APP6);
-    return filter === 'app6' ? inApp6 : !inApp6;
+    const inFm = option.specifications.includes(TacticalGraphicSpecification.FM1_02_2);
+    if (filter === 'both') return inApp6 && inFm;
+    if (filter === 'fmOnly') return inFm && !inApp6;
+    return inApp6 && !inFm;
 }
 
 const LS_CATEGORIES = 'tg_enabledCategories';
@@ -323,11 +329,11 @@ const MapControls: React.FC<Props> = ({
                      * app only ever claimed FM 1-02.2 by implication.
                      */}
                     <Typography sx={{fontSize: '0.6rem', letterSpacing: '0.06em', color: 'text.secondary', mt: 0.15}}>
-                        {specificationFilter === 'all'
-                            ? ALL_SPECIFICATIONS.join(' · ')
-                            : specificationFilter === 'app6'
+                        {specificationFilter === 'fmOnly'
+                            ? `${TacticalGraphicSpecification.FM1_02_2} only`
+                            : specificationFilter === 'app6Only'
                                 ? `${TacticalGraphicSpecification.APP6} only`
-                                : `${TacticalGraphicSpecification.FM1_02_2} only`}
+                                : ALL_SPECIFICATIONS.join(' · ')}
                     </Typography>
                 </Box>
                 <Tooltip title={hiddenGraphicCount > 0 ? `Filter graphics (${hiddenGraphicCount} hidden)` : 'Filter graphics'}>
