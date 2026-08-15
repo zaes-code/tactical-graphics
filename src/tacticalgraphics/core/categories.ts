@@ -285,6 +285,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     // ── Offense Operations Planning ─────────────────────────────────────────── OK
     [TacticalGraphicName.Ambush]:                           TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.CordonAndKnock]: TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Deny]: TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Locate]: TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.CordonAndSearch]:                  TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenseOperationsPlanning,

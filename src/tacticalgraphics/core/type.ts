@@ -393,6 +393,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'N';
         case TacticalGraphicName.Capture:
             return 'C';
+        case TacticalGraphicName.Deny:
+            return 'D';
         case TacticalGraphicName.Escort:
             return 'E';
         case TacticalGraphicName.Demonstration:
@@ -915,6 +917,7 @@ export enum TacticalGraphicName {
     BattlePositionPreparedButNotOccupied = 'BattlePositionPreparedButNotOccupied',  // APP-06 151202 / FM 1-02.2 table 5-5
     // The three that share one four-point construction. @see graphics/SweptArcTask.ts
     Capture = 'Capture',                          // APP-06 343000 Capture
+    Deny = 'Deny',                                // APP-06 343400 Deny
     Escort = 'Escort',                            // APP-06 343600 Escort
     Demonstration = 'Demonstration',              // APP-06 343300 Demonstration/Demonstrate
     Evacuate = 'Evacuate',                        // APP-06 344500 Evacuate
