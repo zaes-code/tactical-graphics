@@ -288,6 +288,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.Deny]: TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Locate]: TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.CordonAndSearch]:                  TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.CounterattackByFire]:              TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.Exploitation]:                     TacticalGraphicCategory.OffenseOperationsPlanning,
     [TacticalGraphicName.MovementToContact]:                TacticalGraphicCategory.OffenseOperationsPlanning,

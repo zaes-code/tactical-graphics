@@ -977,6 +977,8 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: Paint
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    // The by-fire variant carries the same `CATK` amplifier; only the line work differs.
+    [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
     [TacticalGraphicName.AdvanceToContact]: advanceToContactLabelPaint,

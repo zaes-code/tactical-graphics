@@ -661,6 +661,7 @@ export enum TacticalGraphicName {
     AviationAxisOfAdvance = 'AviationAxisOfAdvance',
     AttackHelicopterAxisOfAdvance = 'AttackHelicopterAxisOfAdvance',
     Counterattack = 'Counterattack',
+    CounterattackByFire = 'CounterattackByFire',  // APP-06 340700 Counter-Attack by Fire
 
     //phase lines
     PhaseLine = 'PhaseLine',

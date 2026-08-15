@@ -40,7 +40,7 @@ import {PassageLane} from "../graphics/PassageLane";
 import {Fix} from "../graphics/Fix";
 import {Turn} from "../graphics/Turn";
 import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackFeint, DirectionOfSupportingAttack} from "../graphics/Direction";
-import {AttackHelicopterAxisOfAdvance, AviationAxisOfAdvance, AxisOfAttack, Counterattack, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
+import {AttackHelicopterAxisOfAdvance, AviationAxisOfAdvance, AxisOfAttack, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
 import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
 import {Exploitation} from "../graphics/Exploitation";
@@ -117,6 +117,7 @@ TacticalGraphicsRegistry.register(new MainAttackFeint());
 TacticalGraphicsRegistry.register(new SupportingAttack());
 TacticalGraphicsRegistry.register(new AxisOfAttack());
 TacticalGraphicsRegistry.register(new Counterattack());
+TacticalGraphicsRegistry.register(new CounterattackByFire());
 
 let airCorridorGraphics = [
     TacticalGraphicName.AirCorridor,

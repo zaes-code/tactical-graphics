@@ -303,6 +303,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.AviationAxisOfAdvance]: movement(),
     [TacticalGraphicName.SupportingAxisOfAdvance]:    movement(),
     [TacticalGraphicName.Counterattack]:       movement(),
+    [TacticalGraphicName.CounterattackByFire]: movement(),
     [TacticalGraphicName.InfiltrationLane]:     movement(),
 
     // ── Engineer / crossing (movement base, max 2 pts) ────────────────────

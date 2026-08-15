@@ -73,6 +73,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.CordonAndSearch,
     TacticalGraphicName.CorpsSupportArea,
     TacticalGraphicName.Counterattack,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.Cover,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.CriticalFriendlyZoneIrregular,
