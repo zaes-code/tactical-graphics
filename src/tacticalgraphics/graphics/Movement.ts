@@ -262,6 +262,22 @@ export class MainAttack extends MovementGraphicBase {
     }
 }
 
+/**
+ * Avenue of approach (APP-06 152300) — the axis of advance's solid hollow arrow, carrying
+ * `AA` instead of a bare designation.
+ *
+ * > Points 1 through N-1 and 2 determine the symbol's centreline and Point N determines
+ * > the width.
+ *
+ * Which is `MainAttack`'s construction exactly, so it is that class under another name
+ * rather than a second copy of the same arrow. What the plate adds and this does not is a
+ * free-text amplifier at **each** intermediate anchor point — the Example reads "ENY"
+ * twice down the tail — and the schema carries one label per graphic, not one per vertex.
+ */
+export class AvenueOfApproach extends MainAttack {
+    name: string = TacticalGraphicName.AvenueOfApproach;
+}
+
 export class MainAttackFeint extends MovementGraphicBase {
     name: string = TacticalGraphicName.MainAxisOfAdvanceFeint;
 

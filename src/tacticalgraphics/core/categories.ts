@@ -276,6 +276,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.FrontalAttack]:                    TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.Infiltration]:                     TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.InfiltrationLane]:                     TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.AvenueOfApproach]:                 TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.MainAxisOfAdvance]:                TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]:           TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.Penetration]:                      TacticalGraphicCategory.MovementAndManeuver,

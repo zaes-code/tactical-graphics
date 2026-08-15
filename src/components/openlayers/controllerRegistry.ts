@@ -298,6 +298,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Movement (arrow) graphics ──────────────────────────────────────────
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]:        movement(),
+    [TacticalGraphicName.AvenueOfApproach]:    movement(),
     [TacticalGraphicName.MainAxisOfAdvance]:   movement(),
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: movement(),
     [TacticalGraphicName.AviationAxisOfAdvance]: movement(),
