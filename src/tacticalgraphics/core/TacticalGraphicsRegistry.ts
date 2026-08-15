@@ -4,6 +4,7 @@ import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
 import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
 import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {SweptArcTask} from "../graphics/SweptArcTask";
+import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
 import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
 import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
@@ -349,6 +350,8 @@ for (const bypass of [
     TacticalGraphicsRegistry.register(new ObstacleBypass(bypass));
 }
 TacticalGraphicsRegistry.register(new DecisionLine());
+TacticalGraphicsRegistry.register(new Escort());
+TacticalGraphicsRegistry.register(new Demonstration());
 for (const swept of [TacticalGraphicName.Capture, TacticalGraphicName.Evacuate, TacticalGraphicName.Recover]) {
     TacticalGraphicsRegistry.register(new SweptArcTask(swept));
 }

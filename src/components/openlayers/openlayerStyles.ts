@@ -159,6 +159,8 @@ import {
     fortifiedPositionPaint,
     mobilityCorridorPaint,
     obstacleBypassPaint,
+    demonstrationPaint,
+    escortPaint,
     sweptArcTaskPaint,
     mineClusterPaint,
     minelinePaint,
@@ -1706,6 +1708,14 @@ export function nestedZoneStyleFunc(name: TacticalGraphicName): StyleFunction {
 /** The three obstacle bypasses. @see obstacleBypassPaints.ts */
 export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(obstacleBypassPaint(name), name);
+}
+
+/** Escort and demonstration. @see escortAndDemonstrationPaints.ts */
+export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const paint = name === TacticalGraphicName.Escort
+        ? escortPaint(getLabel(name))
+        : demonstrationPaint(getLabel(name));
+    return asStyleFunction(paint, name);
 }
 
 /** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
