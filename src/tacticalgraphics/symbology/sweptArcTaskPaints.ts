@@ -11,7 +11,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
-import {endMarkScale} from './decorations';
+import {endMarkScale, solidArrowHead} from './decorations';
 import {lineColorOf, scaleOf} from './paintFunctions';
 
 type SweptArcPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -46,27 +46,15 @@ export function sweptArcTaskPaint(letter: string): SweptArcPaint {
 
         const scale = endMarkScale(arc, context.resolution, ARROWHEAD_PX);
         if (scale > 0) {
-            const tip = arc[arc.length - 1];
-            const before = arc[arc.length - 2];
-            const dx = tip[0] - before[0];
-            const dy = tip[1] - before[1];
-            const len = Math.hypot(dx, dy);
-            if (len > 0) {
-                const size = ARROWHEAD_PX * scale * context.resolution;
-                const theta = (ARROWHEAD_HALF_ANGLE_DEG * Math.PI) / 180;
-                const barb = (sign: number): ProjectedPosition => {
-                    // The incoming direction turned back on itself by ±the half angle.
-                    const cos = Math.cos(sign * theta);
-                    const sin = Math.sin(sign * theta);
-                    const bx = (-dx / len) * cos - (-dy / len) * sin;
-                    const by = (-dx / len) * sin + (-dy / len) * cos;
-                    return [tip[0] + bx * size, tip[1] + by * size];
-                };
-                paints.push({
-                    geometry: {type: 'MultiLineString', coordinates: [[barb(-1), tip], [tip, barb(1)]]},
-                    stroke,
-                });
-            }
+            const head = solidArrowHead(
+                arc[arc.length - 2],
+                arc[arc.length - 1],
+                ARROWHEAD_PX * scale * context.resolution,
+                ARROWHEAD_HALF_ANGLE_DEG,
+            );
+            // Filled, not stroked: the plate's head is solid, and a stroked outline would
+            // sit half a line width proud of the shape on every side.
+            if (head) paints.push({geometry: {type: 'Polygon', coordinates: [head]}, fill: {color}});
         }
 
         const midIndex = Math.floor(arc.length / 2);

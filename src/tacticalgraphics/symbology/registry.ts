@@ -42,6 +42,7 @@ import {
 } from './protectionLinePaints';
 import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
+import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -591,6 +592,9 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.Recover]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Recover))},
         [TacticalGraphicName.DecisionLine]: {graphic: decisionLinePaint()},
         [TacticalGraphicName.MobilityCorridor]: {graphic: mobilityCorridorPaint()},
+        [TacticalGraphicName.ObstacleBypassEasy]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassEasy)},
+        [TacticalGraphicName.ObstacleBypassDifficult]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassDifficult)},
+        [TacticalGraphicName.ObstacleBypassImpossible]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassImpossible)},
         [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},
         [TacticalGraphicName.MineCluster]: {graphic: mineClusterPaint()},
         [TacticalGraphicName.TripWire]: {graphic: tripWirePaint()},

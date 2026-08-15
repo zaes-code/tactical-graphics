@@ -354,6 +354,11 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
     [TacticalGraphicName.MobilityCorridor]:                 line(),
+    // Three anchor points: two arrow tips and the rear. Handle 2 is the rear, which is
+    // the one that moves the whole shape.
+    [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3, 2),
+    [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3, 2),
+    [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3, 2),
     [TacticalGraphicName.Mineline]:                         line(),
     [TacticalGraphicName.MineCluster]:                      line(2),
     [TacticalGraphicName.TripWire]:                         line(2),
