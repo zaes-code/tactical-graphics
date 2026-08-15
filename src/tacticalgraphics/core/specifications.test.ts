@@ -79,6 +79,9 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // nothing decorating the line itself. Line generic carries no letter at all.
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
     TacticalGraphicName.DecisionLine,
     TacticalGraphicName.MobilityCorridor,
     TacticalGraphicName.Mineline,

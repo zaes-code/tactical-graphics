@@ -347,6 +347,11 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ObstacleLine]:                     line(),
     // The mineline extends with extra vertices; the other four are defined by two
     // anchor points and nothing else, so their draw stops at two.
+    // Four anchor points, each meaning something different, so every one is draggable.
+    // Handle 0 is the circle's centre and moves the whole graphic.
+    [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
+    [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
     [TacticalGraphicName.MobilityCorridor]:                 line(),
     [TacticalGraphicName.Mineline]:                         line(),

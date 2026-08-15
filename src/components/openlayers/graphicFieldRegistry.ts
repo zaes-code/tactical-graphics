@@ -237,6 +237,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
     // Only the mineline takes a modifier; the other four carry no amplifier at all.
     // The decision line's two fields are drawn as `T/AS`, joined by a slash.
+    // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
+    [TacticalGraphicName.Capture]: SHAPE_ONLY,
+    [TacticalGraphicName.Evacuate]: SHAPE_ONLY,
+    [TacticalGraphicName.Recover]: SHAPE_ONLY,
     [TacticalGraphicName.DecisionLine]: DECISION_LINE,
     // Field B (echelon) is mandatory on a mobility corridor; field H is the free text.
     [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,

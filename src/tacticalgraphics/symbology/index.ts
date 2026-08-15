@@ -78,6 +78,7 @@ export {
     tripWirePaint,
 } from './protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
+export {sweptArcTaskPaint} from './sweptArcTaskPaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
