@@ -551,6 +551,7 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AviationAxisOfAdvance,
     TacticalGraphicName.SupportingAxisOfAdvance,
     TacticalGraphicName.Counterattack,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,
@@ -580,6 +581,7 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => ReturnTyp
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
 };

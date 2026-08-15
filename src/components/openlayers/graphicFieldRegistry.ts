@@ -292,6 +292,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: MOVEMENT_ARROW,
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: MOV,
+    [TacticalGraphicName.CounterattackByFire]: MOV,
     // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
     // the crossing-site symbols carry no name.
     [TacticalGraphicName.Bridge]: SHAPE_ONLY,
