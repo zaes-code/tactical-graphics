@@ -143,6 +143,7 @@ const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Control,
     TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
     TacticalGraphicName.Locate,
     TacticalGraphicName.Isolate,
     TacticalGraphicName.Occupy,

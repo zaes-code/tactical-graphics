@@ -386,6 +386,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Isolate]: MISSION_TASK,
     [TacticalGraphicName.Retain]: MISSION_TASK,
     [TacticalGraphicName.CordonAndKnock]: MISSION_TASK,
+    [TacticalGraphicName.Deny]: MISSION_TASK,
     [TacticalGraphicName.Locate]: MISSION_TASK,
     [TacticalGraphicName.CordonAndSearch]: MISSION_TASK,
     [TacticalGraphicName.Control]: MISSION_TASK,

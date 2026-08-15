@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**267 graphics** are implemented and verified today, covering **280 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**268 graphics** are implemented and verified today, covering **281 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 276 supported names.
+the 277 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1163,6 +1163,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
 | Demonstration | Tactical Mission Tasks |
+| Deny | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
 | Disengage | Tactical Mission Tasks |
 | Disrupt | Tactical Mission Tasks |
