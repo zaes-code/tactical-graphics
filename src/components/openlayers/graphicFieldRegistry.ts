@@ -252,6 +252,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.PsyOpsZoneIrregular]: AREA_SIMPLE,
+    // Every rectangular variant offers the across-dimension as a typed field.
+    [TacticalGraphicName.PsyOpsZoneRectangular]: {...AREA_SIMPLE, width: true},
+    [TacticalGraphicName.PsyOpsZoneCircular]: AREA_SIMPLE,
     [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,

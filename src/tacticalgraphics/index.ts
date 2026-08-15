@@ -323,6 +323,7 @@ export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
+export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
 export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
 export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
 export {directionArrowPaint} from './symbology/linePaints';

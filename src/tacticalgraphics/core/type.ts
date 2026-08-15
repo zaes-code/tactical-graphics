@@ -929,6 +929,9 @@ export enum TacticalGraphicName {
     DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
     MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
     // FM 1-02.2 table 5-28 "CBRN Contour Lines", and APP-06's own codes.
+    PsyOpsZoneIrregular = 'PsyOpsZoneIrregular',      // APP-06 242701 PsyOps Zone, Irregular
+    PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
+    PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
     MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
     MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
     RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
@@ -1028,6 +1031,9 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.HandoverLine]: 'handover line',
     [TacticalGraphicName.DecisionLine]: 'decision line',
     [TacticalGraphicName.MobilityCorridor]: 'mobility corridor',
+    [TacticalGraphicName.PsyOpsZoneIrregular]: 'PsyOps zone, irregular',
+    [TacticalGraphicName.PsyOpsZoneRectangular]: 'PsyOps zone, rectangular',
+    [TacticalGraphicName.PsyOpsZoneCircular]: 'PsyOps zone, circular',
     [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',
     [TacticalGraphicName.RadiationDoseRateContourLine]: 'radiation dose rate contour line',
