@@ -137,6 +137,7 @@ export class MovementGraphicBase implements LineGraphic {
                 case TacticalGraphicName.MainAxisOfAdvance:
                 case TacticalGraphicName.AviationAxisOfAdvance:
                 case TacticalGraphicName.SupportingAxisOfAdvance:
+                case TacticalGraphicName.AvenueOfApproach:
                 case TacticalGraphicName.Counterattack:
                 default:
                     return movementGraphicPathStyleFunc(name)(feature, resolution);

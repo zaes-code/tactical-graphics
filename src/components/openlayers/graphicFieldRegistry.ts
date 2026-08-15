@@ -285,6 +285,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
+    [TacticalGraphicName.AvenueOfApproach]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvance]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.SupportingAxisOfAdvance]: MOVEMENT_ARROW,

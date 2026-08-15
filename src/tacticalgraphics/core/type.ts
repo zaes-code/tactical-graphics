@@ -393,6 +393,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'N';
         case TacticalGraphicName.Capture:
             return 'C';
+        case TacticalGraphicName.AvenueOfApproach:
+            return 'AA';
         case TacticalGraphicName.Deny:
             return 'D';
         case TacticalGraphicName.Escort:
@@ -660,6 +662,7 @@ export enum TacticalGraphicName {
     SupportingAxisOfAdvance = 'SupportingAxisOfAdvance',
     AviationAxisOfAdvance = 'AviationAxisOfAdvance',
     AttackHelicopterAxisOfAdvance = 'AttackHelicopterAxisOfAdvance',
+    AvenueOfApproach = 'AvenueOfApproach',        // APP-06 152300 Avenue of Approach
     Counterattack = 'Counterattack',
     CounterattackByFire = 'CounterattackByFire',  // APP-06 340700 Counter-Attack by Fire
 

@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**269 graphics** are implemented and verified today, covering **282 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**270 graphics** are implemented and verified today, covering **283 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 278 supported names.
+the 279 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1132,6 +1132,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
+| Avenue Of Approach | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
 | Direction Of Main Attack | Movement and Maneuver |
 | Direction Of Main Attack Feint | Movement and Maneuver |

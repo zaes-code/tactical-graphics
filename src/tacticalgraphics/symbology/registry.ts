@@ -78,6 +78,7 @@ import {
     attackHelicopterAxisLabelPaint,
     aviationAxisLabelPaint,
     axisOfAdvanceLabelPaint,
+    avenueOfApproachLabelPaint,
     counterattackLabelPaint,
     envelopmentLabelPaint,
     frontalAttackLabelPaint,
@@ -545,6 +546,7 @@ const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
  * used to do inline.
  */
 const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AvenueOfApproach,
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvanceFeint,
@@ -580,6 +582,7 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => ReturnTyp
     [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.AvenueOfApproach]: avenueOfApproachLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
     [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,

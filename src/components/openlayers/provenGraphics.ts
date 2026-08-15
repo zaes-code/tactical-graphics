@@ -35,6 +35,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,
     TacticalGraphicName.AttackPosition,
+    TacticalGraphicName.AvenueOfApproach,
     TacticalGraphicName.AviationAxisOfAdvance,
     TacticalGraphicName.AviationDirectionOfAttack,
     TacticalGraphicName.BaseCamp,
