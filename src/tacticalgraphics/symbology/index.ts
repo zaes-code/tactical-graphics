@@ -83,6 +83,7 @@ export {obstacleBypassPaint} from './obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './movementPaints';
 export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
+export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';

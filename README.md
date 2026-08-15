@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**273 graphics** are implemented and verified today, covering **286 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**275 graphics** are implemented and verified today, covering **288 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -138,6 +138,7 @@ tacticalGraphic: {
     confidence: 'confirmed',  // rendered where doctrine shows a reliability rating
     echelon: 'battalion',
     direction: 'ONE_WAY',     // route graphics
+    mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -921,7 +922,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 282 supported names.
+the 284 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1105,6 +1106,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
+| Mined Area, Fenced | Mobility and Countermobility Control Measures |
+| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
 | Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
 | Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
