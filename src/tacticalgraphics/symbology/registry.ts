@@ -40,6 +40,7 @@ import {
     raftSitePaint,
     tripWirePaint,
 } from './protectionLinePaints';
+import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -584,6 +585,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
 
         // ── APP-06's protection lines ────────────────────────────────────────
+        [TacticalGraphicName.DecisionLine]: {graphic: decisionLinePaint()},
+        [TacticalGraphicName.MobilityCorridor]: {graphic: mobilityCorridorPaint()},
         [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},
         [TacticalGraphicName.MineCluster]: {graphic: mineClusterPaint()},
         [TacticalGraphicName.TripWire]: {graphic: tripWirePaint()},
@@ -815,6 +818,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
 
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
+    // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint
+    registry[TacticalGraphicName.BattlePositionPreparedButNotOccupied] = {graphic: battlePositionPaint({alwaysDashed: true})};
     registry[TacticalGraphicName.StrongPoint] = {graphic: strongPointPaint()};
     registry[TacticalGraphicName.UnexplodedExplosiveOrdnanceArea] = {graphic: unexplodedOrdnanceAreaPaint()};
 
@@ -866,6 +871,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         ...CIRCULAR_AREA_GRAPHICS,
         ...CIRCULAR_HATCHED_WHEN_PLANNED,
         TacticalGraphicName.BattlePosition,
+        TacticalGraphicName.BattlePositionPreparedButNotOccupied,
         TacticalGraphicName.StrongPoint,
         TacticalGraphicName.UnexplodedExplosiveOrdnanceArea,
     ]) {

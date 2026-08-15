@@ -245,8 +245,13 @@ function outerRing(feature: PaintFeature): ProjectedPosition[] | null {
 /**
  * Battle position: the outline broken open on the facing side with the echelon
  * glyph in the gap, dashed when planned.
+ *
+ * `alwaysDashed` is APP-06 151202, "battle position prepared (P) but not occupied" —
+ * a *different symbol*, not a status. Its template is drawn broken and its Example
+ * reads "(P) MARS", so the break is the symbol saying nobody is there yet, and it
+ * has to survive a graphic whose status is present. @see 242600, same reasoning.
  */
-export function battlePositionPaint(): AreaPaint {
+export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPaint {
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
@@ -261,7 +266,9 @@ export function battlePositionPaint(): AreaPaint {
                 stroke: {
                     color,
                     widthPx: LINE_WIDTH(),
-                    dashPx: feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined,
+                    dashPx: opts.alwaysDashed || feature.properties.status === TacticalGraphicStatus.planned
+                        ? PLANNED_DASH_PX
+                        : undefined,
                 },
             },
             ...echelonMarks(
