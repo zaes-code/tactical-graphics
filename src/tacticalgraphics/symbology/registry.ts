@@ -49,6 +49,7 @@ import {
 import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
+import {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
 import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 import {directionArrowPaint} from './linePaints';
@@ -854,6 +855,15 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of PSYOPS_ZONES) {
         registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(() => [])};
     }
+    // The two mine areas: different outlines, the same row of mines inside.
+    registry[TacticalGraphicName.MinefieldDynamicDepiction] = {
+        graphic: minefieldAreaPaint(),
+        label: mineFillPaint(),
+    };
+    registry[TacticalGraphicName.MinedAreaFenced] = {
+        graphic: minedAreaFencedPaint(),
+        label: mineFillPaint(),
+    };
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
     // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint
     registry[TacticalGraphicName.BattlePositionPreparedButNotOccupied] = {graphic: battlePositionPaint({alwaysDashed: true})};

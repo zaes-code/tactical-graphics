@@ -29,6 +29,8 @@ export type GraphicFieldSet = {
     status: boolean;
     /** Echelon selector (BattlePosition, StrongPoint, Boundary). */
     echelon: boolean;
+    /** Mine-type selector (the two mine areas). @see TacticalGraphicMineType */
+    mineType: boolean;
     /** Route direction selector (Route / MSR / ASR). */
     direction: boolean;
     /** Min altitude inputs (airspace graphics). */
@@ -62,7 +64,7 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'mineType' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
@@ -74,6 +76,7 @@ function f(
         hostility: false,
         status,
         echelon: false,
+        mineType: false,
         direction: false,
         altitude1: false,
         altitude2: false,
@@ -103,6 +106,8 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * map, which is the same trap "Label Plate" was.
  */
 const OBSTACLE_LINE = f(true, false, false, false, false);
+/** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
+const MINE_AREA = f(true, false, true, true, false, {mineType: true});
 /** Decision line: the two end-of-line fields APP-06 writes as `T/AS`. */
 const DECISION_LINE = f(true, true, false, false, false);
 /** Mobility corridor: free text plus the echelon its own note makes mandatory. */
@@ -252,6 +257,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
+    // Free text plus the mine type the area is filled with.
+    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA,
+    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
     [TacticalGraphicName.PsyOpsZoneIrregular]: AREA_SIMPLE,
     // Every rectangular variant offers the across-dimension as a typed field.
     [TacticalGraphicName.PsyOpsZoneRectangular]: {...AREA_SIMPLE, width: true},

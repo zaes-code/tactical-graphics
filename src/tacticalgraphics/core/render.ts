@@ -28,6 +28,7 @@ import {
     RouteDirection,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
+    TacticalGraphicMineType,
     TacticalGraphicHostility,
     TacticalGraphicName,
     AltitudeDatum,
@@ -93,6 +94,12 @@ export interface TacticalGraphicProperties {
     confidence?: TacticalGraphicConfidence;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /**
+     * Which mine the two mine areas draw inside themselves — APP-06 Table 8-24's
+     * Sector 1 Modifier, restricted to its seven primitive types.
+     * @see TacticalGraphicMineType
+     */
+    mineType?: TacticalGraphicMineType;
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
@@ -229,6 +236,8 @@ export interface GraphicLabels {
     hostility?: TacticalGraphicHostility;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /** @see TacticalGraphicProperties.mineType */
+    mineType?: TacticalGraphicMineType;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;

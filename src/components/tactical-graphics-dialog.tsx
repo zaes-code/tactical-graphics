@@ -28,6 +28,7 @@ import {
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
+    TacticalGraphicMineType,
     TacticalGraphicName,
     TacticalGraphicStatus
 } from '@zaes/tactical-graphics';
@@ -521,6 +522,29 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {Object.values(RouteDirection).map(h => (
+                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.mineType && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Mine type</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.mineType ?? ''}
+                                                label="Mine type"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicMineType>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, mineType: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicMineType) as TacticalGraphicMineType[]).map(h => (
                                                     <MenuItem key={h} value={h}>{h}</MenuItem>
                                                 ))}
                                             </Select>

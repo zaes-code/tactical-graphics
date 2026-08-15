@@ -40,6 +40,7 @@ export {
     TacticalGraphicStatus,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
+    TacticalGraphicMineType,
     RouteDirection,
     getLabel,
     getDisplayName,
@@ -324,6 +325,7 @@ export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
+export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
 export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
 export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
 export {directionArrowPaint} from './symbology/linePaints';
