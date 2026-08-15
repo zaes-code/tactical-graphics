@@ -147,10 +147,29 @@ function paintsFor(name, resolution) {
     const projectedBase = project(baseGeom);
     const out = [];
 
+    // The area painters that set a glyph *inside* a shape need to know the shape: the
+    // CBRN triangle, the airfield's runways, the PsyOps loudspeaker and the mine row all
+    // ask `fitSymbolScale` how much room there is, and the artillery areas and the
+    // radiation contour cut their boundary at a bearing from its centre. Both read
+    // `ring` / `bounds`, which live on the feature rather than in its geometry because
+    // the mark rides the *label* point while the shape is the polygon.
+    //
+    // Without them `fitSymbolScale` returns 1 and the break painters return nothing, so
+    // those thumbnails came out as a bare outline or a glyph the size of the world.
+    const ring = projectedBase && projectedBase.type === 'Polygon' ? projectedBase.coordinates[0] : undefined;
+    const bounds = ring && ring.length
+        ? {
+            minX: Math.min(...ring.map(p => p[0])),
+            minY: Math.min(...ring.map(p => p[1])),
+            maxX: Math.max(...ring.map(p => p[0])),
+            maxY: Math.max(...ring.map(p => p[1])),
+        }
+        : undefined;
+
     const run = (fn, geom) => {
         if (!fn || !geom) return null;
         try {
-            const r = fn({geometry: geom, properties: props, graphicSize: AMPLIFIERS.radius}, ctx);
+            const r = fn({geometry: geom, properties: props, graphicSize: AMPLIFIERS.radius, ring, bounds}, ctx);
             return Array.isArray(r) ? r : [];
         } catch (e) {
             return null;

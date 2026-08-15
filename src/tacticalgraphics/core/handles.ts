@@ -515,6 +515,37 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Retirement]: 2,
     [TacticalGraphicName.ForwardPassageOfLines]: 2,
     [TacticalGraphicName.RearwardPassageOfLines]: 2,
+    [TacticalGraphicName.ReliefInPlace]: 2,
+
+    // Two anchor points, the symbol built between them. These were capped in the
+    // OpenLayers registry and nowhere else until 2026-08-15, which is the exact failure
+    // this table's header describes: MapLibre had no limit, so its draw waited for a
+    // double-click a fixed-vertex graphic never sends.
+    [TacticalGraphicName.AssaultCrossing]: 2,
+    [TacticalGraphicName.Bridge]: 2,
+    [TacticalGraphicName.Gap]: 2,
+    [TacticalGraphicName.FordEasy]: 2,
+    [TacticalGraphicName.FordDifficult]: 2,
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 2,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 2,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 2,
+    [TacticalGraphicName.MineCluster]: 2,
+    [TacticalGraphicName.TripWire]: 2,
+    [TacticalGraphicName.RaftSite]: 2,
+    [TacticalGraphicName.FortifiedPosition]: 2,
+
+    // Three: two arrow tips and a rear, or a centre and two ends.
+    [TacticalGraphicName.ObstacleBypassEasy]: 3,
+    [TacticalGraphicName.ObstacleBypassDifficult]: 3,
+    [TacticalGraphicName.ObstacleBypassImpossible]: 3,
+    [TacticalGraphicName.Escort]: 3,
+    [TacticalGraphicName.MinimumSafeDistanceZone]: 3,
+
+    // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
+    [TacticalGraphicName.Capture]: 4,
+    [TacticalGraphicName.Evacuate]: 4,
+    [TacticalGraphicName.Recover]: 4,
+    [TacticalGraphicName.Demonstration]: 4,
 };
 
 /**
