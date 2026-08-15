@@ -48,6 +48,7 @@ import {
 } from './protectionLinePaints';
 import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
+import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 import {directionArrowPaint} from './linePaints';
@@ -849,6 +850,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         // the same text twice.
         label: contourLineLabelPaint(() => []),
     };
+    // Three shapes, one construction: an outline and a loudspeaker inside it.
+    for (const name of PSYOPS_ZONES) {
+        registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(() => [])};
+    }
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
     // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint
     registry[TacticalGraphicName.BattlePositionPreparedButNotOccupied] = {graphic: battlePositionPaint({alwaysDashed: true})};

@@ -230,6 +230,8 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.PickupZone,
     TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.RadiationDoseRateContourLine,
+    TacticalGraphicName.PsyOpsZoneIrregular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.Airfield,
     TacticalGraphicName.BattlePosition,
     TacticalGraphicName.BattlePositionPreparedButNotOccupied,
@@ -317,6 +319,7 @@ let circularAreaGraphicNames = [
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.TargetAreaCircular,
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.PsyOpsZoneCircular,
 ]
 circularAreaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new CircularArea(name)));
 

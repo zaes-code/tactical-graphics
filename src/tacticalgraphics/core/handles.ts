@@ -571,6 +571,7 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
 ];
 
 /**
