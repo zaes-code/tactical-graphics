@@ -155,7 +155,9 @@ import {
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     fortifiedLinePaint,
+    decisionLinePaint,
     fortifiedPositionPaint,
+    mobilityCorridorPaint,
     mineClusterPaint,
     minelinePaint,
     raftSitePaint,
@@ -1691,6 +1693,14 @@ export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
+export function endGlyphLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(
+        name === TacticalGraphicName.DecisionLine ? decisionLinePaint() : mobilityCorridorPaint(),
+        name,
+    );
+}
+
 /**
  * APP-06's five protection lines. @see protectionLinePaints.ts
  *
@@ -2868,6 +2878,10 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
+    // APP-06 151202 — the same outline and echelon, broken whatever the status says.
+    if (name === TacticalGraphicName.BattlePositionPreparedButNotOccupied) {
+        return asStyleFunction(battlePositionPaint({alwaysDashed: true}), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
     // ── Ported to the paint layer ────────────────────────────────────────────
     // Every branch below is `asStyleFunction(...)` over a paint function, so the

@@ -391,6 +391,10 @@ export function getLabel(name: TacticalGraphicName) {
         // symbol's only distinguishing mark. @see minelinePaint
         case TacticalGraphicName.Mineline:
             return 'N';
+        // Not an abbreviation of the name — "(P)" is drawn as part of the symbol, ahead
+        // of whatever the position is called. The Example reads "(P) MARS".
+        case TacticalGraphicName.BattlePositionPreparedButNotOccupied:
+            return '(P)';
         case TacticalGraphicName.HandoverLine:
             return 'HOL';
         case TacticalGraphicName.NoFireLine:
@@ -898,6 +902,9 @@ export enum TacticalGraphicName {
 
     // APP-06 protection lines (Tables 8-17 and 8-18). None has an FM 1-02.2
     // counterpart. @see graphics/ProtectionLine.ts
+    BattlePositionPreparedButNotOccupied = 'BattlePositionPreparedButNotOccupied',  // APP-06 151202 / FM 1-02.2 table 5-5
+    DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
+    MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
     Mineline = 'Mineline',                        // APP-06 290101 Mineline
     MineCluster = 'MineCluster',                  // APP-06 290400 Mine Cluster
     TripWire = 'TripWire',                        // APP-06 290500 Trip Wire
@@ -989,6 +996,8 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
     [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
     [TacticalGraphicName.HandoverLine]: 'handover line',
+    [TacticalGraphicName.DecisionLine]: 'decision line',
+    [TacticalGraphicName.MobilityCorridor]: 'mobility corridor',
     [TacticalGraphicName.Mineline]: 'mineline',
     [TacticalGraphicName.MineCluster]: 'mine cluster',
     [TacticalGraphicName.TripWire]: 'trip wire',

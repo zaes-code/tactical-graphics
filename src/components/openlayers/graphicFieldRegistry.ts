@@ -103,6 +103,10 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * map, which is the same trap "Label Plate" was.
  */
 const OBSTACLE_LINE = f(true, false, false, false, false);
+/** Decision line: the two end-of-line fields APP-06 writes as `T/AS`. */
+const DECISION_LINE = f(true, true, false, false, false);
+/** Mobility corridor: free text plus the echelon its own note makes mandatory. */
+const MOBILITY_CORRIDOR = f(true, false, false, false, false, {echelon: true});
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
@@ -232,6 +236,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
     // Only the mineline takes a modifier; the other four carry no amplifier at all.
+    // The decision line's two fields are drawn as `T/AS`, joined by a slash.
+    [TacticalGraphicName.DecisionLine]: DECISION_LINE,
+    // Field B (echelon) is mandatory on a mobility corridor; field H is the free text.
+    [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
     [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
     [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
     [TacticalGraphicName.TripWire]: SHAPE_ONLY,
@@ -438,6 +446,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AirfieldZone]: AREA_SIMPLE,
     [TacticalGraphicName.Airfield]: AREA_SIMPLE,
     [TacticalGraphicName.BattlePosition]: ECH,
+    [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
     [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
     [TacticalGraphicName.FreeFireAreaIrregular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.FreeFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},

@@ -2,6 +2,7 @@ import {IGraphicGenerator, TacticalGraphicName} from "./type";
 import {AirCorridor} from "../graphics/AirCorridor";
 import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
 import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
+import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
 import {
     AreaDefense,
@@ -223,6 +224,7 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.Airfield,
     TacticalGraphicName.BattlePosition,
+    TacticalGraphicName.BattlePositionPreparedButNotOccupied,
     TacticalGraphicName.StrongPoint,
 
     TacticalGraphicName.FreeFireAreaIrregular,
@@ -333,6 +335,8 @@ obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new Obsta
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
 TacticalGraphicsRegistry.register(new Mineline());
+TacticalGraphicsRegistry.register(new DecisionLine());
+TacticalGraphicsRegistry.register(new MobilityCorridor());
 TacticalGraphicsRegistry.register(new MineCluster());
 TacticalGraphicsRegistry.register(new TripWire());
 TacticalGraphicsRegistry.register(new RaftSite());
