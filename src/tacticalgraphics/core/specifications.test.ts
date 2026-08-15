@@ -80,6 +80,7 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
     TacticalGraphicName.Capture,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.Deny,
     TacticalGraphicName.Escort,
     TacticalGraphicName.Demonstration,
