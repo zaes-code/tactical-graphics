@@ -244,6 +244,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.DecisionLine]: DECISION_LINE,
     // Field B (echelon) is mandatory on a mobility corridor; field H is the free text.
     [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
+    [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
+    [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
+    [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
     [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
     [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
     [TacticalGraphicName.TripWire]: SHAPE_ONLY,

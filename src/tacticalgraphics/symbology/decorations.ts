@@ -140,6 +140,42 @@ export function endFrame(path: ProjectedPosition[], atStart: boolean) {
     return {origin: p, u, v: [-u[1], u[0]] as ProjectedPosition};
 }
 
+/**
+ * A **solid** arrowhead as a closed ring: two barbs meeting at `tip`, opening back along
+ * `tip → from`, with the base closed between them.
+ *
+ * Filled rather than stroked, because that is what the plates draw — an open V reads as a
+ * lighter mark than the line it terminates, and the two forms are not interchangeable in a
+ * symbology where some arrowheads are deliberately open. Returns nothing for a zero-length
+ * direction, which is a graphic still being drawn.
+ *
+ * @param sizeMap barb length in projected meters
+ * @param halfAngleDeg half the angle between the barbs
+ */
+export function solidArrowHead(
+    from: ProjectedPosition,
+    tip: ProjectedPosition,
+    sizeMap: number,
+    halfAngleDeg: number,
+): ProjectedPosition[] | null {
+    const dx = tip[0] - from[0];
+    const dy = tip[1] - from[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0 || sizeMap <= 0) return null;
+
+    const theta = (halfAngleDeg * Math.PI) / 180;
+    const barb = (sign: number): ProjectedPosition => {
+        const cos = Math.cos(sign * theta);
+        const sin = Math.sin(sign * theta);
+        const bx = (-dx / len) * cos - (-dy / len) * sin;
+        const by = (-dx / len) * sin + (-dy / len) * cos;
+        return [tip[0] + bx * sizeMap, tip[1] + by * sizeMap];
+    };
+    const left = barb(-1);
+    const right = barb(1);
+    return [tip, left, right, tip];
+}
+
 /** Obstacle-line tooth dimensions, in screen pixels before `decorationScale`. */
 export const OBSTACLE_TOOTH_HEIGHT_PX = 10;
 export const OBSTACLE_TOOTH_BASE_PX = 10;

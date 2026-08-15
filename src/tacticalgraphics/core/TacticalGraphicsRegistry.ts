@@ -4,6 +4,7 @@ import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
 import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
 import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {SweptArcTask} from "../graphics/SweptArcTask";
+import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
 import {
     AreaDefense,
@@ -336,6 +337,13 @@ obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new Obsta
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
 TacticalGraphicsRegistry.register(new Mineline());
+for (const bypass of [
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]) {
+    TacticalGraphicsRegistry.register(new ObstacleBypass(bypass));
+}
 TacticalGraphicsRegistry.register(new DecisionLine());
 for (const swept of [TacticalGraphicName.Capture, TacticalGraphicName.Evacuate, TacticalGraphicName.Recover]) {
     TacticalGraphicsRegistry.register(new SweptArcTask(swept));

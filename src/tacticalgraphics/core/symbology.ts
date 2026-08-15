@@ -513,8 +513,24 @@ const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
  * an imported file or from a host that writes the bag itself. The other half is
  * {@link getColorByHostility}'s caller refusing it - see `lineColorOf`.
  */
+/**
+ * The three obstacle bypasses, whose own row says so in as many words:
+ *
+ * > Obstacle bypass symbols indicate a mobility function and should be rendered in black.
+ *
+ * A third reason, distinct from both sets above: these have something to change and are
+ * told not to, like the mission-task twins, but the instruction is the standard's own
+ * rather than an inference from what they twin.
+ */
+const MOBILITY_FUNCTION_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
+    if (MOBILITY_FUNCTION_SYMBOLS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
 

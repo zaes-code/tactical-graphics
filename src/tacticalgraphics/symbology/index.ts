@@ -79,6 +79,7 @@ export {
 } from './protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 export {sweptArcTaskPaint} from './sweptArcTaskPaints';
+export {obstacleBypassPaint} from './obstacleBypassPaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
