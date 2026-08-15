@@ -129,6 +129,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Retain]:                                       BOTH,      // APP-06 151205 Retain
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
     [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
+    [TacticalGraphicName.PsyOpsZoneIrregular]: APP6_ONLY, // APP-06 242701 PsyOps Zone, Irregular
+    [TacticalGraphicName.PsyOpsZoneRectangular]: APP6_ONLY, // APP-06 242702 PsyOps Zone, Rectangular
+    [TacticalGraphicName.PsyOpsZoneCircular]: APP6_ONLY, // APP-06 242703 PsyOps Zone, Circular
     [TacticalGraphicName.AvenueOfApproach]: APP6_ONLY, // APP-06 152300 Avenue of Approach
     [TacticalGraphicName.CounterattackByFire]: APP6_ONLY, // APP-06 340700 Counter-Attack by Fire
     [TacticalGraphicName.Deny]: APP6_ONLY, // APP-06 343400 Deny

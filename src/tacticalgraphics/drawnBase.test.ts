@@ -91,8 +91,8 @@ describe('isRectangular', () => {
         expect([...flagged].sort()).toEqual([...named].sort());
     });
 
-    it('covers the seventeen the registry draws as boxes', () => {
-        expect(names.filter(isRectangular)).toHaveLength(17);
+    it('covers the eighteen the registry draws as boxes', () => {
+        expect(names.filter(isRectangular)).toHaveLength(18);
     });
 
     it('does not catch the irregular or circular variants of the same areas', () => {

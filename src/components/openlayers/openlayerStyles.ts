@@ -180,6 +180,9 @@ import {
     contourLineBoundaryPaint,
     contourLineLabelPaint,
     nestedZonePaint,
+    PSYOPS_ZONES,
+    psyOpsMarkPaint,
+    psyOpsZonePaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
     dashedOutlinePaint,
@@ -2075,6 +2078,11 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.Airfield:
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // The loudspeaker rides the label feature; the outline belongs to the polygon.
+        case TacticalGraphicName.PsyOpsZoneIrregular:
+        case TacticalGraphicName.PsyOpsZoneRectangular:
+        case TacticalGraphicName.PsyOpsZoneCircular:
+            return asStyleFunction(psyOpsMarkPaint(() => []), name);
         // The dose goes in the break and nowhere else, so there is no centre block under
         // it — the base painter draws nothing rather than repeating the text.
         case TacticalGraphicName.RadiationDoseRateContourLine:
@@ -2941,6 +2949,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     // The yellow hatch; the triangle and its letter ride the label feature below.
     if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    if (PSYOPS_ZONES.includes(name)) {
+        return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);
     }
     // One break at the top, holding the dose the operator typed.
     if (name === TacticalGraphicName.RadiationDoseRateContourLine) {
