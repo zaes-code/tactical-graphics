@@ -41,6 +41,7 @@ import {
     tripWirePaint,
 } from './protectionLinePaints';
 import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
+import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -585,6 +586,9 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
 
         // ── APP-06's protection lines ────────────────────────────────────────
+        [TacticalGraphicName.Capture]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Capture))},
+        [TacticalGraphicName.Evacuate]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Evacuate))},
+        [TacticalGraphicName.Recover]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Recover))},
         [TacticalGraphicName.DecisionLine]: {graphic: decisionLinePaint()},
         [TacticalGraphicName.MobilityCorridor]: {graphic: mobilityCorridorPaint()},
         [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},

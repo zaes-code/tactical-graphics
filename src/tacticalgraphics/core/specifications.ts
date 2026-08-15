@@ -252,6 +252,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.WireTripleStrandConcertina]:                   BOTH,      // APP-06 290309 Triple Strand Concertina
     [TacticalGraphicName.ObstacleLine]:                                 BOTH,      // APP-06 290100 Obstacle Line
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:            BOTH,      // APP-06 151202 Battle Position Prepared (P) but Not Occupied
+    [TacticalGraphicName.Capture]:                                      APP6_ONLY, // APP-06 343000 Capture
+    [TacticalGraphicName.Evacuate]:                                     APP6_ONLY, // APP-06 344500 Evacuate
+    [TacticalGraphicName.Recover]:                                      APP6_ONLY, // APP-06 344600 Recover
     [TacticalGraphicName.DecisionLine]:                                 APP6_ONLY, // APP-06 110500 Decision Line
     [TacticalGraphicName.MobilityCorridor]:                             APP6_ONLY, // APP-06 142100 Mobility Corridor
     [TacticalGraphicName.Mineline]:                                     APP6_ONLY, // APP-06 290101 Mineline

@@ -15,6 +15,7 @@ import {
     abatisStyleFunc,
     fortifiedLineStyleFunc,
     endGlyphLineStyleFunc,
+    sweptArcTaskStyleFunc,
     protectionLineStyleFunc,
     wireObstacleStyleFunc,
     antiTankDitchStyleFunc,
@@ -94,6 +95,10 @@ export class LineGraphicBase implements LineGraphic {
                     return antiTankDitchStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Capture:
+                case TacticalGraphicName.Evacuate:
+                case TacticalGraphicName.Recover:
+                    return sweptArcTaskStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.DecisionLine:
                 case TacticalGraphicName.MobilityCorridor:
                     return endGlyphLineStyleFunc(name)(feature, resolution);
