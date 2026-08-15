@@ -257,6 +257,10 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Recover]:                                      APP6_ONLY, // APP-06 344600 Recover
     [TacticalGraphicName.DecisionLine]:                                 APP6_ONLY, // APP-06 110500 Decision Line
     [TacticalGraphicName.MobilityCorridor]:                             APP6_ONLY, // APP-06 142100 Mobility Corridor
+    // FM 1-02.2 table 5-28 draws both under "CBRN Contour Lines".
+    [TacticalGraphicName.MinimumSafeDistanceZone]:                      BOTH,      // APP-06 272100 Minimum Safe Distance Zone
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]:            BOTH,      // APP-06 272101 Multiple Strike (STRIKWARN)
+    [TacticalGraphicName.RadiationDoseRateContourLine]:                 BOTH,      // APP-06 272200 Radiation Dose Rate Contour Lines
     [TacticalGraphicName.ObstacleBypassEasy]:                           APP6_ONLY, // APP-06 270601 Obstacle Bypass Easy
     [TacticalGraphicName.ObstacleBypassDifficult]:                      APP6_ONLY, // APP-06 270602 Obstacle Bypass Difficult
     [TacticalGraphicName.ObstacleBypassImpossible]:                     APP6_ONLY, // APP-06 270603 Obstacle Bypass Impossible

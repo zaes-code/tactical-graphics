@@ -915,6 +915,10 @@ export enum TacticalGraphicName {
     Recover = 'Recover',                          // APP-06 344600 Recover
     DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
     MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
+    // FM 1-02.2 table 5-28 "CBRN Contour Lines", and APP-06's own codes.
+    MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
+    MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
+    RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
     ObstacleBypassEasy = 'ObstacleBypassEasy',            // APP-06 270601 Obstacle Bypass Easy
     ObstacleBypassDifficult = 'ObstacleBypassDifficult',  // APP-06 270602 Obstacle Bypass Difficult
     ObstacleBypassImpossible = 'ObstacleBypassImpossible',// APP-06 270603 Obstacle Bypass Impossible
@@ -1011,6 +1015,9 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.HandoverLine]: 'handover line',
     [TacticalGraphicName.DecisionLine]: 'decision line',
     [TacticalGraphicName.MobilityCorridor]: 'mobility corridor',
+    [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',
+    [TacticalGraphicName.RadiationDoseRateContourLine]: 'radiation dose rate contour line',
     [TacticalGraphicName.Mineline]: 'mineline',
     [TacticalGraphicName.MineCluster]: 'mine cluster',
     [TacticalGraphicName.TripWire]: 'trip wire',

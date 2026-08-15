@@ -1,16 +1,17 @@
 /**
- * # Areas that write their own name into the boundary
+ * # Boundaries that write their own label into a break in themselves
  *
- * The artillery manoeuvre area and the artillery reserved area are drawn as an ordinary
- * area whose outline is **interrupted four times**, with the abbreviation sitting in each
- * break. APP-06 242400 says it outright:
+ * Five graphics so far, and the mechanics are the same for all of them: shoot a ray from
+ * the shape's centre at a given bearing, find where it leaves the outline, cut a gap there
+ * and set the text in it.
  *
- * > The letters AMA in[terrupting the] symbol bound[ary] are to be positioned at the four
- * > cardinal points of the boundary.
- *
- * Nothing else in this library cuts an outline at a bearing, so the mechanics live here.
- * They are shared by both graphics because only the abbreviation differs, and two copies
- * of a gap calculation are two places for the gap to stop matching the text in it.
+ * - The artillery manoeuvre and reserved areas break **four** times. APP-06 242400 says it
+ *   outright: *"The letters AMA in[terrupting the] symbol bound[ary] are to be positioned
+ *   at the four cardinal points of the boundary."*
+ * - The radiation dose rate contour line breaks **once**, at the top, and the text is the
+ *   dose the operator typed rather than a fixed abbreviation.
+ * - The two minimum safe distance zones break each of their **two nested rings** on the
+ *   same side, numbering them 1 and 2.
  *
  * **The gap is measured from the rendered glyph, not guessed.** `PaintContext.measureText`
  * is handed the same font the label is drawn with — a gap sized at one font and filled at
@@ -31,8 +32,8 @@ const CARDINALS = [Math.PI / 2, 0, -Math.PI / 2, Math.PI] as const;
 /** Clear space either side of the text inside its break, in screen pixels. */
 const GAP_PADDING_PX = 6;
 
-/** Centroid of a ring, good enough to shoot the four rays from. */
-function ringCenter(ring: readonly ProjectedPosition[]): ProjectedPosition {
+/** Centroid of a ring, good enough to shoot the rays from. */
+export function ringCenter(ring: readonly ProjectedPosition[]): ProjectedPosition {
     let x = 0;
     let y = 0;
     for (const [px, py] of ring) {
@@ -145,6 +146,124 @@ function outerRing(feature: PaintFeature): ProjectedPosition[] | undefined {
 /** Half the break each label needs, in projected meters. */
 function halfBreak(context: PaintContext, label: string, scale: number): number {
     return ((textWidth(context, label, fontStyle, scale) + GAP_PADDING_PX * 2) / 2) * context.resolution;
+}
+
+
+/**
+ * A ring cut at each of `angles`, with the point in the middle of each gap.
+ *
+ * The single primitive under all of this: everything below differs only in how many
+ * bearings it passes and what text it sets in the resulting gaps.
+ */
+export function breakRingAt(
+    ring: readonly ProjectedPosition[],
+    center: ProjectedPosition,
+    angles: readonly number[],
+    halfGapMap: number,
+): {runs: ProjectedPosition[][]; spots: ProjectedPosition[]} {
+    const crossings = angles
+        .map(angle => crossingAt(ring, center, angle))
+        .filter((d): d is number => d !== undefined);
+
+    const spots = crossings
+        .map(d => alongRing(ring, d)?.point)
+        .filter((p): p is ProjectedPosition => p !== undefined);
+
+    const breaks = crossings.map(d => [d - halfGapMap, d + halfGapMap] as const);
+    return {runs: ringWithBreaks(ring, breaks), spots};
+}
+
+/** The label mark this family sets in a gap, always upright. @see cardinalLabelPaint */
+function breakLabel(at: ProjectedPosition, text: string, color: string, scale: number): Paint {
+    return {
+        geometry: {type: 'Point', coordinates: at},
+        text: {
+            text,
+            font: fontStyle,
+            fill: color,
+            halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+            align: 'center',
+            baseline: 'middle',
+            scale,
+        },
+    };
+}
+
+/** Straight up: the one break the contour line cuts sits at the top of the shape. */
+const NORTH = [Math.PI / 2] as const;
+
+/**
+ * APP-06 272200 radiation dose rate contour line: an ordinary area outline broken once at
+ * the top, with the dose set in the break.
+ *
+ * The text is the operator's, not a fixed abbreviation — the Example reads "30 CGH" — so
+ * an unlabelled contour draws an unbroken ring rather than an empty notch.
+ */
+export function contourLineBoundaryPaint(): CardinalPaint {
+    return (feature, context) => {
+        const ring = outerRing(feature);
+        if (!ring) return [];
+
+        const color = lineColorOf(feature);
+        const stroke = {color, widthPx: LINE_WIDTH()};
+        const text = (feature.properties.label ?? '').trim();
+        if (!text) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
+
+        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const {runs} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
+        return [{geometry: {type: 'MultiLineString', coordinates: runs}, stroke}];
+    };
+}
+
+/** The dose in that break, over whatever the area's ordinary label paint drew. */
+export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
+    return (feature, context) => {
+        const paints = base(feature, context);
+        const ring = feature.ring;
+        const text = (feature.properties.label ?? '').trim();
+        if (!ring || ring.length < 4 || !text) return paints;
+
+        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const {spots} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
+        for (const at of spots) paints.push(breakLabel(at, text, lineColorOf(feature), scale));
+        return paints;
+    };
+}
+
+/** Straight out to the right: where both zone rings carry their number. */
+const EAST = [0] as const;
+
+/**
+ * APP-06 272100 minimum safe distance zone and 272101 its multiple-strike form: two nested
+ * rings, each broken on the **same side** with its number in the gap.
+ *
+ * The generator hands both graphics over in the same shape — a two-part MultiLineString,
+ * inner ring first — so one paint serves both, which is the point of building them
+ * together. The numbers are the symbol rather than an amplifier: they say which ring is
+ * which, and a zone drawn without them is two anonymous outlines.
+ */
+export function nestedZonePaint(): CardinalPaint {
+    return (feature, context) => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiLineString') return [];
+
+        const color = lineColorOf(feature);
+        const stroke = {color, widthPx: LINE_WIDTH()};
+        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const paints: Paint[] = [];
+
+        geometry.coordinates.slice(0, 2).forEach((ring, index) => {
+            const text = String(index + 1);
+            // Both rings are shot from the *inner* ring's centre, so the two gaps line up
+            // radially and the numbers read outward as a pair rather than drifting apart
+            // on an off-centre outer ring.
+            const center = ringCenter(geometry.coordinates[0]);
+            const {runs, spots} = breakRingAt(ring, center, EAST, halfBreak(context, text, scale));
+            paints.push({geometry: {type: 'MultiLineString', coordinates: runs}, stroke});
+            for (const at of spots) paints.push(breakLabel(at, text, color, scale));
+        });
+        return paints;
+    };
 }
 
 /** The outline, broken at the four cardinal points. */

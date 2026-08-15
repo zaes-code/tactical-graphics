@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**262 graphics** are implemented and verified today, covering **275 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**265 graphics** are implemented and verified today, covering **278 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 271 supported names.
+the 274 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1005,11 +1005,14 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
+| Minimum Safe Distance Zone | Areas |
+| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
 | Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
 | Penetration Box | Areas |
 | Pickup Zone | Areas |
+| Radiation Dose Rate Contour Line | Areas |
 | Radiological Contaminated Area | Areas |
 | Refugee Holding Area | Areas |
 | Restricted Terrain | Areas |

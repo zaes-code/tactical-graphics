@@ -225,6 +225,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.RefugeeHoldingArea]:                    polygon,
     [TacticalGraphicName.BrigadeSupportArea]:                    polygon,
     [TacticalGraphicName.AirfieldZone]: polygon,
+    [TacticalGraphicName.RadiationDoseRateContourLine]: polygon,
     [TacticalGraphicName.Airfield]:                              polygon,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
@@ -356,6 +357,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.MobilityCorridor]:                 line(),
     // Three anchor points: two arrow tips and the rear. Handle 2 is the rear, which is
     // the one that moves the whole shape.
+    // Centre, then the two radii. Handle 0 is the centre and moves the whole zone.
+    [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3, 0),
+    // An even number of points, half per ring, so the draw cannot be capped.
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 6, 0),
     [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3, 2),
     [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3, 2),
     [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3, 2),
