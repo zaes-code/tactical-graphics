@@ -281,7 +281,14 @@ export {
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
 export {CARDINAL_LABEL_AREAS, CBRN_AREAS} from './symbology/registry';
-export {cardinalBoundaryPaint, cardinalLabelPaint} from './symbology/cardinalLabelPaints';
+export {
+    breakRingAt,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './symbology/boundaryBreakPaints';
 export {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './symbology/cbrnPaints';
 export {
     dashedOutlinePaint,
