@@ -321,6 +321,7 @@ export {
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
+export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
 export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
 export {directionArrowPaint} from './symbology/linePaints';
