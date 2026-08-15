@@ -5,6 +5,7 @@ import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../g
 import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {SweptArcTask} from "../graphics/SweptArcTask";
 import {ObstacleBypass} from "../graphics/ObstacleBypass";
+import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
 import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
 import {
     AreaDefense,
@@ -224,6 +225,7 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.KillZone,
     TacticalGraphicName.PickupZone,
     TacticalGraphicName.AirfieldZone,
+    TacticalGraphicName.RadiationDoseRateContourLine,
     TacticalGraphicName.Airfield,
     TacticalGraphicName.BattlePosition,
     TacticalGraphicName.BattlePositionPreparedButNotOccupied,
@@ -337,6 +339,8 @@ obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new Obsta
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
 TacticalGraphicsRegistry.register(new Mineline());
+TacticalGraphicsRegistry.register(new MinimumSafeDistanceZone());
+TacticalGraphicsRegistry.register(new MinimumSafeDistanceMultipleStrike());
 for (const bypass of [
     TacticalGraphicName.ObstacleBypassEasy,
     TacticalGraphicName.ObstacleBypassDifficult,

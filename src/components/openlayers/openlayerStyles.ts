@@ -174,6 +174,9 @@ import {
     CBRN_AREAS,
     cardinalBoundaryPaint,
     cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
     dashedOutlinePaint,
@@ -1695,6 +1698,11 @@ export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** The two minimum safe distance zones. @see boundaryBreakPaints.ts, `nestedZonePaint` */
+export function nestedZoneStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(nestedZonePaint(), name);
+}
+
 /** The three obstacle bypasses. @see obstacleBypassPaints.ts */
 export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(obstacleBypassPaint(name), name);
@@ -2053,6 +2061,10 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.Airfield:
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // The dose goes in the break and nowhere else, so there is no centre block under
+        // it — the base painter draws nothing rather than repeating the text.
+        case TacticalGraphicName.RadiationDoseRateContourLine:
+            return asStyleFunction(contourLineLabelPaint(() => []), name);
         case TacticalGraphicName.ArtilleryManeuverArea:
         case TacticalGraphicName.ArtilleryReservedArea:
             return asStyleFunction(
@@ -2915,6 +2927,10 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     // The yellow hatch; the triangle and its letter ride the label feature below.
     if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    // One break at the top, holding the dose the operator typed.
+    if (name === TacticalGraphicName.RadiationDoseRateContourLine) {
+        return asStyleFunction(contourLineBoundaryPaint(), name)(feature, resolution);
     }
     // The outline broken at four cardinal points; the abbreviation fills each break.
     const cardinal = CARDINAL_LABEL_AREAS.find(([area]) => area === name);

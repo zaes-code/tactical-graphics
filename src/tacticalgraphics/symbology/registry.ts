@@ -29,7 +29,13 @@
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
 import {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './cbrnPaints';
-import {cardinalBoundaryPaint, cardinalLabelPaint} from './cardinalLabelPaints';
+import {
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './boundaryBreakPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
@@ -592,6 +598,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.Recover]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Recover))},
         [TacticalGraphicName.DecisionLine]: {graphic: decisionLinePaint()},
         [TacticalGraphicName.MobilityCorridor]: {graphic: mobilityCorridorPaint()},
+        [TacticalGraphicName.MinimumSafeDistanceZone]: {graphic: nestedZonePaint()},
+        [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: {graphic: nestedZonePaint()},
         [TacticalGraphicName.ObstacleBypassEasy]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassEasy)},
         [TacticalGraphicName.ObstacleBypassDifficult]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassDifficult)},
         [TacticalGraphicName.ObstacleBypassImpossible]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassImpossible)},
@@ -825,6 +833,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.ReliefInPlace] = {graphic: reliefInPlacePaint('RIP')};
     registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
 
+    // The contour line's dose sits in a single break at the top of the outline.
+    registry[TacticalGraphicName.RadiationDoseRateContourLine] = {
+        graphic: contourLineBoundaryPaint(),
+        // Nothing under it: the dose belongs in the break, and a centre block would be
+        // the same text twice.
+        label: contourLineLabelPaint(() => []),
+    };
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
     // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint
     registry[TacticalGraphicName.BattlePositionPreparedButNotOccupied] = {graphic: battlePositionPaint({alwaysDashed: true})};

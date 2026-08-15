@@ -13,7 +13,13 @@
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
-import {cardinalBoundaryPaint, cardinalLabelPaint} from './cardinalLabelPaints';
+import {
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './boundaryBreakPaints';
 
 const context = (resolution: number): PaintContext => ({
     resolution,
@@ -108,5 +114,67 @@ describe('the cardinal-label boundary', () => {
                 .reduce((total, run) => total + run.length, 0);
         // A wider label eats more of the ring, so fewer sampled points survive.
         expect(spanOf(long[0])).toBeLessThan(spanOf(short[0]));
+    });
+});
+
+describe('APP-06 272200 — the radiation dose rate contour line', () => {
+    const doseFeature = (label?: string): PaintFeature => ({
+        geometry: {type: 'Polygon', coordinates: [RING]},
+        properties: {name: TacticalGraphicName.RadiationDoseRateContourLine, label},
+        ring: RING,
+    });
+
+    it('breaks the outline once, at the top', () => {
+        const [paint] = contourLineBoundaryPaint()(doseFeature('30 CGH'), context(400));
+        const runs = (paint.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+        // One break in a closed ring leaves one or two runs, depending on whether it
+        // straddles the seam. @see the note on counting runs above.
+        expect(runs.length).toBeLessThanOrEqual(2);
+
+        const spot = (contourLineLabelPaint(() => [])(doseFeature('30 CGH'), context(400))[0]
+            .geometry as {coordinates: ProjectedPosition}).coordinates;
+        expect(spot[1]).toBeGreaterThan(Math.abs(spot[0]));
+    });
+
+    it('leaves the ring whole when no dose has been entered', () => {
+        // An empty notch reads as a rendering fault; an unbroken contour reads as a
+        // contour whose dose has not been filled in yet, which is what it is.
+        const [paint] = contourLineBoundaryPaint()(doseFeature(), context(400));
+        expect(paint.geometry.type).toBe('LineString');
+        expect(contourLineLabelPaint(() => [])(doseFeature(), context(400))).toEqual([]);
+    });
+
+    it('sets the text the operator typed, not a fixed abbreviation', () => {
+        const paints = contourLineLabelPaint(() => [])(doseFeature('300 CGH'), context(400));
+        expect(paints.map(p => p.text?.text)).toEqual(['300 CGH']);
+    });
+});
+
+describe('APP-06 272100 / 272101 — the minimum safe distance zones', () => {
+    /** Two nested rings, inner first, as both generators hand them over. */
+    const nested = (): PaintFeature => ({
+        geometry: {
+            type: 'MultiLineString',
+            coordinates: [hexagon(120_000), hexagon(220_000)],
+        },
+        properties: {name: TacticalGraphicName.MinimumSafeDistanceZone},
+    });
+
+    it('numbers the inner ring 1 and the outer ring 2', () => {
+        const paints = nestedZonePaint()(nested(), context(400));
+        const labels = paints.filter(p => p.text);
+        expect(labels.map(p => p.text!.text)).toEqual(['1', '2']);
+
+        // The 2 sits further out than the 1 — the order of the rings is the whole
+        // meaning of the numbers, and a swapped pair says the opposite thing.
+        const at = labels.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        expect(Math.hypot(...at[1])).toBeGreaterThan(Math.hypot(...at[0]));
+    });
+
+    it('breaks both rings on the same side, so the numbers read outward as a pair', () => {
+        const paints = nestedZonePaint()(nested(), context(400));
+        const at = paints.filter(p => p.text)
+            .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        for (const [x, y] of at) expect(x).toBeGreaterThan(Math.abs(y));
     });
 });

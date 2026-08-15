@@ -244,6 +244,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.DecisionLine]: DECISION_LINE,
     // Field B (echelon) is mandatory on a mobility corridor; field H is the free text.
     [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
+    // The numbers 1 and 2 are the symbol, not an amplifier the operator sets.
+    [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
+    // The dose the operator typed goes in the break: "30 CGH".
+    [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
