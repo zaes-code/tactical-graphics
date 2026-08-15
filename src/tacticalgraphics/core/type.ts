@@ -391,6 +391,12 @@ export function getLabel(name: TacticalGraphicName) {
         // symbol's only distinguishing mark. @see minelinePaint
         case TacticalGraphicName.Mineline:
             return 'N';
+        case TacticalGraphicName.Capture:
+            return 'C';
+        case TacticalGraphicName.Evacuate:
+            return 'E';
+        case TacticalGraphicName.Recover:
+            return 'R';
         // Not an abbreviation of the name — "(P)" is drawn as part of the symbol, ahead
         // of whatever the position is called. The Example reads "(P) MARS".
         case TacticalGraphicName.BattlePositionPreparedButNotOccupied:
@@ -903,6 +909,10 @@ export enum TacticalGraphicName {
     // APP-06 protection lines (Tables 8-17 and 8-18). None has an FM 1-02.2
     // counterpart. @see graphics/ProtectionLine.ts
     BattlePositionPreparedButNotOccupied = 'BattlePositionPreparedButNotOccupied',  // APP-06 151202 / FM 1-02.2 table 5-5
+    // The three that share one four-point construction. @see graphics/SweptArcTask.ts
+    Capture = 'Capture',                          // APP-06 343000 Capture
+    Evacuate = 'Evacuate',                        // APP-06 344500 Evacuate
+    Recover = 'Recover',                          // APP-06 344600 Recover
     DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
     MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
     Mineline = 'Mineline',                        // APP-06 290101 Mineline

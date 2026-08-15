@@ -158,6 +158,7 @@ import {
     decisionLinePaint,
     fortifiedPositionPaint,
     mobilityCorridorPaint,
+    sweptArcTaskPaint,
     mineClusterPaint,
     minelinePaint,
     raftSitePaint,
@@ -1693,6 +1694,11 @@ export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
+export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
+}
+
 /** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
 export function endGlyphLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(

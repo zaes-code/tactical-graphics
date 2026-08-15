@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**256 graphics** are implemented and verified today, covering **269 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**259 graphics** are implemented and verified today, covering **272 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 265 supported names.
+the 268 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1152,12 +1152,14 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Breach | Tactical Mission Tasks |
 | Bypass | Tactical Mission Tasks |
 | Canalize | Tactical Mission Tasks |
+| Capture | Tactical Mission Tasks |
 | Clear | Tactical Mission Tasks |
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
 | Disengage | Tactical Mission Tasks |
 | Disrupt | Tactical Mission Tasks |
+| Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
@@ -1165,6 +1167,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Locate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
+| Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |

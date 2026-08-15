@@ -312,6 +312,7 @@ export {
     tripWirePaint,
 } from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
+export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {directionArrowPaint} from './symbology/linePaints';
 export {routeControlMeasurePaint} from './symbology/routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';
