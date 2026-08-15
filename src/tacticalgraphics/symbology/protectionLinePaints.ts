@@ -11,26 +11,15 @@
  * screen size, and a screen size is computed here rather than baked into the geometry at
  * whatever zoom the user drew at.
  *
- * ## Why these do not use `decorationScale`
- *
- * `decorationScale` caps a decoration at 5% of an open path's length, which is right for a
- * pattern that repeats along it — a tooth a twentieth of the line long is already
- * prominent, and there are twenty of them. These marks appear **once**, at an end, and 5%
- * of the shaft would put a raft site's arrowhead below the visibility floor on anything
- * but a very long one. `endMarkScale` below applies the same idea at a share that suits a
- * single mark, and drops it at the same floor.
+ * The mark size comes from `endMarkScale` rather than `decorationScale`, for the reason
+ * given where it is defined: a cap tuned for a pattern repeating twenty times along a line
+ * is the wrong cap for one mark at its end.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {
-    DECORATION_MIN_PX,
-    centerSegmentIndex,
-    offsetAbove,
-    pathLength,
-    uprightRotation,
-} from './decorations';
+import {centerSegmentIndex, endFrame, endMarkScale, offsetAbove, uprightRotation} from './decorations';
 import {PLANNED_DASH_PX, amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
 
 type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -38,42 +27,12 @@ type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[]
 /** Screen-pixel clearance between the line and the nearest edge of an amplifier. */
 const LABEL_OFFSET_PX = 8;
 
-/** Share of a path's on-screen length a single end mark may span before it shrinks. */
-const END_MARK_MAX_SHARE = 0.3;
-
 /** The path a line graphic was drawn along. */
 function drawnPath(feature: PaintFeature): ProjectedPosition[] {
     const geometry = feature.geometry;
     if (geometry.type === 'LineString' || geometry.type === 'MultiPoint') return geometry.coordinates;
     if (geometry.type === 'MultiLineString') return geometry.coordinates[0] ?? [];
     return [];
-}
-
-/**
- * How much to shrink a one-off end mark so it still fits the line it sits on, 0–1.
- *
- * Zero means "do not draw it": below `DECORATION_MIN_PX` an arrowhead is a thickening of
- * the stroke rather than a symbol, and the same floor applies here as everywhere else.
- */
-function endMarkScale(path: ProjectedPosition[], resolution: number, markPx: number): number {
-    const availablePx = pathLength(path) / resolution;
-    const scale = Math.max(0, Math.min(1, (availablePx * END_MARK_MAX_SHARE) / markPx));
-    return markPx * scale < DECORATION_MIN_PX ? 0 : scale;
-}
-
-/**
- * A frame at one end of the path: the unit vector **into** the line and the unit normal
- * to its left, so a mark can be written in the standard's own terms.
- */
-function endFrame(path: ProjectedPosition[], atStart: boolean) {
-    const p = atStart ? path[0] : path[path.length - 1];
-    const q = atStart ? path[1] : path[path.length - 2];
-    const dx = q[0] - p[0];
-    const dy = q[1] - p[1];
-    const len = Math.hypot(dx, dy);
-    if (len === 0) return null;
-    const u: ProjectedPosition = [dx / len, dy / len];
-    return {origin: p, u, v: [-u[1], u[0]] as ProjectedPosition};
 }
 
 /** A text amplifier with the usual halo. */

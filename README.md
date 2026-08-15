@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**253 graphics** are implemented and verified today, covering **267 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**256 graphics** are implemented and verified today, covering **269 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 262 supported names.
+the 265 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1054,6 +1054,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Bridgehead Line | Lines |
 | Common Sensor Boundary | Lines |
 | Coordinated Fire Line | Lines |
+| Decision Line | Lines |
 | Delay Line | Lines |
 | Engineer Work Line | Lines |
 | Final Coordination Line | Lines |
@@ -1067,6 +1068,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Line Of Departure | Lines |
 | Line Of Departure Or Line Of Contact | Lines |
 | Line, Generic | Lines |
+| Mobility Corridor | Lines |
 | Named Area Of Interest Line | Lines |
 | Phase Line | Lines |
 | Probable Line Of Deployment | Lines |

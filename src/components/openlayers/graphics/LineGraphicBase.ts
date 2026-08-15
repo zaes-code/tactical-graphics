@@ -14,6 +14,7 @@ import {
     finalProtectiveFireStyleFunc,
     abatisStyleFunc,
     fortifiedLineStyleFunc,
+    endGlyphLineStyleFunc,
     protectionLineStyleFunc,
     wireObstacleStyleFunc,
     antiTankDitchStyleFunc,
@@ -93,6 +94,9 @@ export class LineGraphicBase implements LineGraphic {
                     return antiTankDitchStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.DecisionLine:
+                case TacticalGraphicName.MobilityCorridor:
+                    return endGlyphLineStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.Mineline:
                 case TacticalGraphicName.MineCluster:
                 case TacticalGraphicName.TripWire:

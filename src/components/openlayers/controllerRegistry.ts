@@ -236,6 +236,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.KillZone]:                              polygon,
     [TacticalGraphicName.PickupZone]:                            polygon,
     [TacticalGraphicName.BattlePosition]:                        polygon,
+    [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:     polygon,
     [TacticalGraphicName.StrongPoint]:                           polygon,
     [TacticalGraphicName.FreeFireAreaIrregular]:                 polygon,
     [TacticalGraphicName.NoFireAreaIrregular]:                   polygon,
@@ -346,6 +347,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ObstacleLine]:                     line(),
     // The mineline extends with extra vertices; the other four are defined by two
     // anchor points and nothing else, so their draw stops at two.
+    [TacticalGraphicName.DecisionLine]:                     line(),
+    [TacticalGraphicName.MobilityCorridor]:                 line(),
     [TacticalGraphicName.Mineline]:                         line(),
     [TacticalGraphicName.MineCluster]:                      line(2),
     [TacticalGraphicName.TripWire]:                         line(2),
