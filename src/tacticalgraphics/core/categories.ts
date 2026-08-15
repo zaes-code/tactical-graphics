@@ -205,6 +205,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ObstacleGroup]:                    TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ObstacleLine]:                     TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.Capture]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Escort]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Demonstration]:                    TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Evacuate]:                         TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.Recover]:                          TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.DecisionLine]:                     TacticalGraphicCategory.Lines,
