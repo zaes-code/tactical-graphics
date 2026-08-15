@@ -248,6 +248,36 @@ export function aviationAxisLabelPaint(): MovementPaint {
  * the channel; the infiltration lane centers it on the span instead, because it
  * has no arrowhead to sit behind.
  */
+/**
+ * The avenue of approach's amplifier: `AA` and whatever the operator called it, set just
+ * behind the arrowhead.
+ *
+ * Placed like an axis of advance's — same clearance, same proportional scale — but it
+ * carries a **fixed prefix** where that family carries none, so it cannot simply be
+ * another entry in `AXIS_OF_ADVANCE_LABELS`. The plate reads `AA` followed by field T.
+ */
+export function avenueOfApproachLabelPaint(): MovementPaint {
+    return (feature, context) => {
+        const coords = anchors(feature);
+        if (coords.length < 2) return [];
+
+        const [c0, c1] = coords;
+        const dx = c1[0] - c0[0];
+        const dy = c1[1] - c0[1];
+        const segLenMap = Math.hypot(dx, dy);
+        if (segLenMap === 0) return [];
+
+        const value = ['AA', nameAndDate(feature)].filter(Boolean).join(' ');
+        const clearance = 10 * context.resolution;
+        const at: ProjectedPosition = [c1[0] - (dx / segLenMap) * clearance, c1[1] - (dy / segLenMap) * clearance];
+
+        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+            rotation: uprightRotation(c0, c1),
+            align: c1[0] >= c0[0] ? 'right' : 'left',
+        })];
+    };
+}
+
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
     const centered = name === TacticalGraphicName.InfiltrationLane;
 
