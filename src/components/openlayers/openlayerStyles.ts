@@ -158,6 +158,7 @@ import {
     decisionLinePaint,
     fortifiedPositionPaint,
     mobilityCorridorPaint,
+    obstacleBypassPaint,
     sweptArcTaskPaint,
     mineClusterPaint,
     minelinePaint,
@@ -1694,6 +1695,11 @@ export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** The three obstacle bypasses. @see obstacleBypassPaints.ts */
+export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(obstacleBypassPaint(name), name);
+}
+
 /** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
 export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);

@@ -915,6 +915,9 @@ export enum TacticalGraphicName {
     Recover = 'Recover',                          // APP-06 344600 Recover
     DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
     MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
+    ObstacleBypassEasy = 'ObstacleBypassEasy',            // APP-06 270601 Obstacle Bypass Easy
+    ObstacleBypassDifficult = 'ObstacleBypassDifficult',  // APP-06 270602 Obstacle Bypass Difficult
+    ObstacleBypassImpossible = 'ObstacleBypassImpossible',// APP-06 270603 Obstacle Bypass Impossible
     Mineline = 'Mineline',                        // APP-06 290101 Mineline
     MineCluster = 'MineCluster',                  // APP-06 290400 Mine Cluster
     TripWire = 'TripWire',                        // APP-06 290500 Trip Wire

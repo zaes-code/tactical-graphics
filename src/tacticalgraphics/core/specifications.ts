@@ -257,6 +257,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Recover]:                                      APP6_ONLY, // APP-06 344600 Recover
     [TacticalGraphicName.DecisionLine]:                                 APP6_ONLY, // APP-06 110500 Decision Line
     [TacticalGraphicName.MobilityCorridor]:                             APP6_ONLY, // APP-06 142100 Mobility Corridor
+    [TacticalGraphicName.ObstacleBypassEasy]:                           APP6_ONLY, // APP-06 270601 Obstacle Bypass Easy
+    [TacticalGraphicName.ObstacleBypassDifficult]:                      APP6_ONLY, // APP-06 270602 Obstacle Bypass Difficult
+    [TacticalGraphicName.ObstacleBypassImpossible]:                     APP6_ONLY, // APP-06 270603 Obstacle Bypass Impossible
     [TacticalGraphicName.Mineline]:                                     APP6_ONLY, // APP-06 290101 Mineline
     [TacticalGraphicName.MineCluster]:                                  APP6_ONLY, // APP-06 290400 Mine Cluster
     [TacticalGraphicName.TripWire]:                                     APP6_ONLY, // APP-06 290500 Trip Wire

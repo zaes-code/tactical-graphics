@@ -112,16 +112,16 @@ describe('APP-06 343000 / 344500 / 344600 — the swept-arc tasks', () => {
         const texts = paints.filter(p => p.text).map(p => p.text!.text);
         expect(texts).toEqual(['E']);
 
-        // Selected by shape, not by position in the list: the circle-and-arc paint is
-        // *also* a two-part MultiLineString, and matching on that alone picks it instead.
-        const head = paints.find(p =>
-            p.geometry.type === 'MultiLineString'
-            && p.geometry.coordinates.length === 2
-            && p.geometry.coordinates.every(part => part.length === 2));
+        // The head is a *filled* triangle, as the plate draws it — an open V reads lighter
+        // than the line it terminates, and this symbology uses both forms deliberately.
+        const head = paints.find(p => p.geometry.type === 'Polygon' && p.fill);
         expect(head).toBeDefined();
-        const barbs = (head!.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
-        // Both barbs meet at the tip; a head drawn as one polyline would fail this.
-        expect(barbs[0][1]).toEqual(barbs[1][0]);
+        const ring = (head!.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
+        expect(ring).toHaveLength(4);
+        // Apex on the arc's own end, and the ring closed.
+        expect(ring[0]).toEqual(ring[3]);
+        expect(ring[0]).toEqual(
+            (paints[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates[1].slice(-1)[0]);
     });
 
     it('is the letter alone that tells the three apart', () => {

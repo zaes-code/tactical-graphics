@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**259 graphics** are implemented and verified today, covering **272 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**262 graphics** are implemented and verified today, covering **275 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -921,7 +921,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 268 supported names.
+the 271 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -1101,6 +1101,9 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Mine Cluster | Mobility and Countermobility Control Measures |
 | Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
 | Obstacle Group | Mobility and Countermobility Control Measures |
 | Obstacle Line | Mobility and Countermobility Control Measures |
