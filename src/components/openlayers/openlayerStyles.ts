@@ -183,6 +183,9 @@ import {
     PSYOPS_ZONES,
     psyOpsMarkPaint,
     psyOpsZonePaint,
+    mineFillPaint,
+    minedAreaFencedPaint,
+    minefieldAreaPaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
     dashedOutlinePaint,
@@ -2078,6 +2081,10 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.Airfield:
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // The row of mines rides the label feature, like the loudspeaker below it.
+        case TacticalGraphicName.MinefieldDynamicDepiction:
+        case TacticalGraphicName.MinedAreaFenced:
+            return asStyleFunction(mineFillPaint(), name);
         // The loudspeaker rides the label feature; the outline belongs to the polygon.
         case TacticalGraphicName.PsyOpsZoneIrregular:
         case TacticalGraphicName.PsyOpsZoneRectangular:
@@ -2949,6 +2956,12 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     // The yellow hatch; the triangle and its letter ride the label feature below.
     if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
+        return asStyleFunction(minefieldAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinedAreaFenced) {
+        return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);
     }
     if (PSYOPS_ZONES.includes(name)) {
         return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);

@@ -932,6 +932,8 @@ export enum TacticalGraphicName {
     PsyOpsZoneIrregular = 'PsyOpsZoneIrregular',      // APP-06 242701 PsyOps Zone, Irregular
     PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
     PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
+    MinefieldDynamicDepiction = 'MinefieldDynamicDepiction',  // APP-06 270707 Minefield, Dynamic Depiction
+    MinedAreaFenced = 'MinedAreaFenced',                      // APP-06 270801 Mined Area, Fenced
     MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
     MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
     RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
@@ -1034,6 +1036,8 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.PsyOpsZoneIrregular]: 'PsyOps zone, irregular',
     [TacticalGraphicName.PsyOpsZoneRectangular]: 'PsyOps zone, rectangular',
     [TacticalGraphicName.PsyOpsZoneCircular]: 'PsyOps zone, circular',
+    [TacticalGraphicName.MinefieldDynamicDepiction]: 'minefield, dynamic depiction',
+    [TacticalGraphicName.MinedAreaFenced]: 'mined area, fenced',
     [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',
     [TacticalGraphicName.RadiationDoseRateContourLine]: 'radiation dose rate contour line',
@@ -1099,6 +1103,24 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
 export function getDisplayName(name: TacticalGraphicName): string {
     if (name in DISPLAY_NAME_OVERRIDES) return DISPLAY_NAME_OVERRIDES[name]!;
     return name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+/**
+ * The mine types of APP-06 Table 8-24, codes 13 through 19.
+ *
+ * The table lists about forty codes; these seven are the primitives and the rest are
+ * combinations of two or three of them, drawn across the icon's three slots. Only the
+ * primitives are modelled — @see minePaints.ts for what expressing a combination would
+ * take, and why it is not here.
+ */
+export enum TacticalGraphicMineType {
+    unspecified = 'Unspecified Mine',
+    antipersonnel = 'Antipersonnel Mine',
+    antipersonnelDirectional = 'Antipersonnel Mine with Directional Effects',
+    antitank = 'Antitank Mine',
+    antitankAntihandling = 'Antitank Mine with Antihandling Device',
+    wideAreaAntitank = 'Wide Area Antitank Mine',
+    mineCluster = 'Mine Cluster',
 }
 
 export enum TacticalGraphicEchelon {

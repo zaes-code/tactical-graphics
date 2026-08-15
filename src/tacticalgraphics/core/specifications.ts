@@ -129,6 +129,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Retain]:                                       BOTH,      // APP-06 151205 Retain
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
     [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
+    [TacticalGraphicName.MinefieldDynamicDepiction]: APP6_ONLY, // APP-06 270707 Minefield, Dynamic Depiction
+    [TacticalGraphicName.MinedAreaFenced]: APP6_ONLY, // APP-06 270801 Mined Area, Fenced
     [TacticalGraphicName.PsyOpsZoneIrregular]: APP6_ONLY, // APP-06 242701 PsyOps Zone, Irregular
     [TacticalGraphicName.PsyOpsZoneRectangular]: APP6_ONLY, // APP-06 242702 PsyOps Zone, Rectangular
     [TacticalGraphicName.PsyOpsZoneCircular]: APP6_ONLY, // APP-06 242703 PsyOps Zone, Circular

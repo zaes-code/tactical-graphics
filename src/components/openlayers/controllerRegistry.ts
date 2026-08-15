@@ -226,6 +226,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.BrigadeSupportArea]:                    polygon,
     [TacticalGraphicName.AirfieldZone]: polygon,
     [TacticalGraphicName.RadiationDoseRateContourLine]: polygon,
+    [TacticalGraphicName.MinefieldDynamicDepiction]: polygon,
+    [TacticalGraphicName.MinedAreaFenced]: polygon,
     [TacticalGraphicName.PsyOpsZoneIrregular]: polygon,
     [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
     [TacticalGraphicName.PsyOpsZoneCircular]: circularArea,

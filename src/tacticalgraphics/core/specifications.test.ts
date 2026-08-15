@@ -80,6 +80,8 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
     TacticalGraphicName.Capture,
+    TacticalGraphicName.MinefieldDynamicDepiction,
+    TacticalGraphicName.MinedAreaFenced,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,

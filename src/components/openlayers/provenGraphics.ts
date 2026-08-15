@@ -164,6 +164,8 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.MainAxisOfAdvanceFeint,
     TacticalGraphicName.MainSupplyRoute,
     TacticalGraphicName.MineCluster,
+    TacticalGraphicName.MinedAreaFenced,
+    TacticalGraphicName.MinefieldDynamicDepiction,
     TacticalGraphicName.Mineline,
     TacticalGraphicName.MinimumRiskRoute,
     TacticalGraphicName.MinimumSafeDistanceMultipleStrike,
