@@ -15,6 +15,7 @@ import {
     Control,
     CordonAndKnock,
     CordonAndSearch,
+    Deny,
     Locate,
     Isolate,
     Occupy,
@@ -288,6 +289,7 @@ TacticalGraphicsRegistry.register(new Control());
 TacticalGraphicsRegistry.register(new CordonAndSearch());
 TacticalGraphicsRegistry.register(new CordonAndKnock());
 TacticalGraphicsRegistry.register(new Locate());
+TacticalGraphicsRegistry.register(new Deny());
 TacticalGraphicsRegistry.register(new Isolate());
 TacticalGraphicsRegistry.register(new Retain());
 TacticalGraphicsRegistry.register(new Secure());

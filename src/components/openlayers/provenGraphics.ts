@@ -84,6 +84,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.DelayLine,
     TacticalGraphicName.Demonstration,
+    TacticalGraphicName.Deny,
     TacticalGraphicName.Destroy,
     TacticalGraphicName.DetaineeHoldingArea,
     TacticalGraphicName.DirectionOfMainAttack,

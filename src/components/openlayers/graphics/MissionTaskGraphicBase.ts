@@ -107,6 +107,13 @@ const RATIO_LOCKED_MIN_RADIUS_PX = 50;
  * the graphic, while the label inside it is capped. A 30° hole that fits a
  * letter on a small circle is four times too big on a large one.
  *
+ * **`CordonAndKnock` and `Locate` were missing from this list until 2026-08-14.** Both
+ * were added to the family in `symbology/registry.ts` without being added here, so
+ * OpenLayers gave them the generator's fixed 30° hole while their siblings measured
+ * theirs — visible as a gap two or three times wider than "C/K" and "LOC" need, and
+ * invisible to every test, because nothing asserts on the size of a hole. It is the
+ * two-lists problem this file's header warns about, in its mildest form.
+ *
  * `AreaDefense` is in the set too, and is the only member whose teeth are solid
  * polygons rather than open outlines — `arcMissionTaskStyleFunc` fills those
  * separately, which is why it replaces the fill-and-stroke style this class used
@@ -116,8 +123,11 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AreaDefense,
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
     TacticalGraphicName.Isolate,
+    TacticalGraphicName.Locate,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,

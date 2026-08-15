@@ -102,6 +102,41 @@ export class CordonAndSearch extends MissionTask {
     }
 }
 
+/**
+ * Deny (APP-06 343400) — the family's arc and arrowhead with **outward** spikes, and a
+ * letter in the opening.
+ *
+ * > The radius will be long enough for the graphic to encompass the area being denied.
+ * > The opening will be a 30 degree arc of the circle. […] The opening will be on the
+ * > friendly side of the graphic.
+ *
+ * Thirty degrees is exactly what `DEFAULT_LABEL_GAP_DEGREES` already produces, so a
+ * static GeoJSON consumer gets the opening the rule names; a live renderer passes 0 and
+ * cuts the gap from the rendered glyph instead, which is how the whole family works.
+ *
+ * The spikes point **out**, unlike cordon and search's, which is the only thing in the
+ * construction that differs — `computeIsoscelesApexPoint` reads the sign of the height as
+ * "toward the centroid" or away from it.
+ */
+export class Deny extends MissionTask {
+    name: string = TacticalGraphicName.Deny;
+
+    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
+        const center = base.geometry.coordinates;
+        const {rotation, size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
+        const arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
+
+        const upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 20, 170, -size / 3, 5, 8);
+        const lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 215, 340, -size / 3, 4, 8);
+        return this.asGeometryCollectionFeature([
+            this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
+            this.asMultiLineStringFeature(upperTriangles).geometry,
+            this.asMultiLineStringFeature(lowerTriangles).geometry,
+        ]);
+    }
+}
+
 export class Isolate extends MissionTask {
     name: string = TacticalGraphicName.Isolate;
 
