@@ -156,7 +156,19 @@ function paintsFor(name, resolution) {
     //
     // Without them `fitSymbolScale` returns 1 and the break painters return nothing, so
     // those thumbnails came out as a bare outline or a glyph the size of the world.
-    const ring = projectedBase && projectedBase.type === 'Polygon' ? projectedBase.coordinates[0] : undefined;
+    // The ring is the *drawn shape*, which is the base for an area the user traced and the
+    // rendered graphic for one built from a centre and a radius — the circular variants
+    // take a Point base, so reading only the base leaves them with no shape at all and a
+    // glyph fitted to nothing.
+    const projectedGraphic = project(render.graphic && render.graphic.geometry);
+    const ringOf = geom => {
+        if (!geom) return undefined;
+        if (geom.type === 'Polygon') return geom.coordinates[0];
+        if (geom.type === 'MultiLineString') return geom.coordinates[0];
+        if (geom.type === 'LineString' && geom.coordinates.length > 3) return geom.coordinates;
+        return undefined;
+    };
+    const ring = ringOf(projectedBase) || ringOf(projectedGraphic);
     const bounds = ring && ring.length
         ? {
             minX: Math.min(...ring.map(p => p[0])),
