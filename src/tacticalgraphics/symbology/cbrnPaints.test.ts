@@ -1,15 +1,25 @@
 /**
  * # The CBRN contamination mark
  *
- * Three things about it were wrong until 2026-08-17, and all three are the kind that render
- * plausibly:
+ * The mark is an **X**: two long strokes crossing under the letter, each running from a
+ * filled blob at one upper corner through the crossing to the *opposite* lower foot.
  *
- * - The triangle was an **outline**, so the yellow hatch ran straight through it. The plate
- *   shows the hatch stopping at its edge, which only happens if the shape is opaque.
- * - The mark inside it was drawn **upside down** — a stem rising from one foot and forking
- *   into two, which reads as a `Y`. The plate has one apex and *two* feet.
- * - The area's designation was anchored on the same point as the triangle, so the two were
- *   drawn through each other.
+ * It took four readings of the plate to get there, and every wrong one rendered plausibly:
+ *
+ * 1. A stem rising from one foot and forking into two — a `Y`, i.e. upside down.
+ * 2. Two discs floating above a separate arch: the right parts, unconnected.
+ * 3. Two teardrops above an arch — what looks like a comma's tail at 150 dpi is the stroke
+ *    *continuing through* the blob toward the far foot.
+ * 4. The right structure at the wrong proportions.
+ *
+ * The lesson is the resolution. The contact sheets crop at 150 dpi, which distinguishes a
+ * triangle from a square and cannot distinguish a disc from a comma from the end of a
+ * stroke. The geometry in `cbrnPaints.ts` is measured off a 600 dpi render by thresholding
+ * and isolating the mark as a connected component — a pixel profile, not a squint.
+ *
+ * Two other things about this symbol were also wrong and are pinned below: the triangle was
+ * an **outline**, so the yellow hatch ran through it, and the area's designation was
+ * anchored on the same point as the triangle, so the two were drawn over each other.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -42,7 +52,16 @@ const marks = (label?: string): Paint[] =>
     cbrnMarkPaint('B', areaDefaultLabelPaint(TacticalGraphicName.BiologicalContaminatedArea))(
         labelFeature(label), context());
 
-/** Every y-coordinate of a paint's geometry, however nested. */
+/** The two crossing strokes. */
+const strokes = (painted: Paint[]) =>
+    painted.filter(p => p.geometry.type === 'LineString' && p.stroke)
+        .map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates);
+
+/** The two filled blobs — polygons with a fill and no stroke, unlike the triangle. */
+const blobs = (painted: Paint[]) =>
+    painted.filter(p => p.geometry.type === 'Polygon' && p.fill && !p.stroke)
+        .map(p => (p.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0]);
+
 const ys = (paint: Paint): number[] => {
     const g = paint.geometry as {type: string; coordinates: unknown};
     if (g.type === 'Point') return [(g.coordinates as ProjectedPosition)[1]];
@@ -61,34 +80,45 @@ describe('APP-06 Table 8-19 — the contamination mark', () => {
         expect(triangle!.fill?.color).toBe(getLabelHaloColor());
     });
 
-    it('draws the mark with two feet, not one', () => {
-        // The `Y` test. The arch is a single open path whose ends are its two feet, and
-        // both sit below its apex; a `Y` has one end below and two above.
-        const arch = marks().find(p =>
-            p.geometry.type === 'LineString'
-            && (p.geometry.coordinates as ProjectedPosition[]).length > 8);
-        expect(arch).toBeDefined();
+    it('draws two strokes that cross, not two that meet', () => {
+        const [a, b] = strokes(marks());
+        expect(a).toBeDefined();
+        expect(b).toBeDefined();
 
-        const path = (arch!.geometry as {coordinates: ProjectedPosition[]}).coordinates;
-        const apex = Math.max(...path.map(p => p[1]));
-        const first = path[0][1];
-        const last = path[path.length - 1][1];
-
-        expect(first).toBeLessThan(apex);
-        expect(last).toBeLessThan(apex);
-        // Symmetric about the axis: the two feet are the same height and opposite sides.
-        expect(first).toBeCloseTo(last, 6);
-        expect(Math.sign(path[0][0])).toBe(-Math.sign(path[path.length - 1][0]));
+        // Each runs from an upper blob to the *opposite* lower foot, so the sign of x flips
+        // between its ends. Two strokes meeting at a point — the `Y` and the arch this went
+        // through — never do that, which is what makes this the load-bearing assertion.
+        for (const path of [a, b]) {
+            expect(Math.sign(path[0][0])).toBe(-Math.sign(path[path.length - 1][0]));
+            expect(path[0][1]).toBeGreaterThan(path[path.length - 1][1]);
+        }
+        expect(a[0][0]).toBeCloseTo(-b[0][0], 6);
     });
 
-    it('keeps the two lobes above the arch, as the plate has them', () => {
-        const lobes = marks().filter(p => p.circle);
-        expect(lobes).toHaveLength(2);
-        const arch = marks().find(p =>
-            p.geometry.type === 'LineString'
-            && (p.geometry.coordinates as ProjectedPosition[]).length > 8)!;
-        const archApex = Math.max(...ys(arch));
-        for (const lobe of lobes) expect(ys(lobe)[0]).toBeGreaterThan(archApex);
+    it('caps the upper end of each stroke with a blob', () => {
+        const painted = marks();
+        const rings = blobs(painted);
+        expect(rings).toHaveLength(2);
+        expect(painted.some(p => p.circle)).toBe(false);
+
+        for (const path of strokes(painted)) {
+            const [x, y] = path[0];
+            const covered = rings.some(ring => {
+                const rx = ring.map(p => p[0]);
+                const ry = ring.map(p => p[1]);
+                return x >= Math.min(...rx) && x <= Math.max(...rx)
+                    && y >= Math.min(...ry) && y <= Math.max(...ry);
+            });
+            expect(covered).toBe(true);
+        }
+    });
+
+    it('makes the blobs taller than they are wide, as the plate draws them', () => {
+        for (const ring of blobs(marks())) {
+            const w = Math.max(...ring.map(p => p[0])) - Math.min(...ring.map(p => p[0]));
+            const h = Math.max(...ring.map(p => p[1])) - Math.min(...ring.map(p => p[1]));
+            expect(h).toBeGreaterThan(w);
+        }
     });
 
     it('lifts the designation clear of the triangle instead of through it', () => {
