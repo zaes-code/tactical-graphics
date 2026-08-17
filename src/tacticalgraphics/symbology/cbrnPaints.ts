@@ -64,49 +64,93 @@ const LABEL_BLOCK_PX = 20;
 const INSET = 0.62;
 
 /**
- * The contamination mark, traced off a 600 dpi render of the plate's own Example cell.
+ * The contamination mark: two crossed **arcs**, each rooted in a disc.
  *
- * It is an **X**: two long strokes crossing just under the letter. Each runs from a filled
- * blob at one upper corner, through the crossing, and on to the *opposite* lower foot, the
- * lower halves bowing outward as they fall.
+ * Each arm leaves a filled disc at one upper corner, sweeps inward and down to the crossing
+ * on the axis, then curves away to a blunt end low on the *opposite* side — inboard of the
+ * discs, not splayed past them. The two are mirror images, so the pair reads as an `X` with
+ * heavy upper corners and two near-vertical legs beneath.
  *
- * Three earlier readings of it were wrong, and each rendered plausibly enough to survive:
+ * Six earlier readings were wrong, and every one of them rendered plausibly:
  *
  * 1. A stem rising from one foot and forking into two — a `Y`. Upside down.
  * 2. Two discs floating above a separate arch. The right parts, unconnected.
- * 3. Two teardrops above an arch. Wrong again: what looked like a tail at 150 dpi is the
- *    stroke *continuing through* the blob and on to the far foot.
+ * 3. Two teardrops above an arch: what looks like a comma's tail is the arm *continuing
+ *    through* the disc toward the far side.
+ * 4. The right structure with the discs at a third of their size.
+ * 5. Solid arms tapering to a point, which reads as two needles rather than two spoons.
+ * 6. Straight stems splayed past the discs, which loses the curve entirely.
  *
- * The lesson is in the resolution. The contact sheets crop at 150 dpi, which is enough to
- * tell a triangle from a square and not enough to tell a disc from a comma from the end of a
- * stroke. Anything at glyph scale has to be read at 600.
+ * **The lesson is that a raster cannot settle this.** Every wrong reading above came from
+ * measuring a bitmap — the conformance sheets crop the plates at 150 dpi, which tells a
+ * triangle from a square and cannot tell a disc from a comma from the end of a tapering arm,
+ * and even a clean 600 dpi thresholding leaves the curve's shape a judgement call. The
+ * numbers below are instead transcribed from a **vector** reference: two cubic Béziers and a
+ * circle, so there is nothing left to infer.
  *
- * Every number below is **measured, not eyeballed**: the plate's Example cell is rendered at
- * 600 dpi, thresholded, and the mark isolated as a connected component, so the blob centres,
- * the crossing height and the feet come off a pixel profile rather than a squint.
+ * Its own frame was `viewBox="0 0 542 253"`, discs of `r=65` at `(79,66)` and `(463,66)`, and
+ * a `stroke-width` of 17 with butt caps. Everything here is that, divided by the mark's
+ * half-width of 257 and flipped to y-up, with the crossing at `(271,80)` as the origin.
  *
- * Coordinates are projected metres at scale 1, against the triangle: its top edge is
- * `+HALF_HEIGHT` and its apex `-HALF_HEIGHT`.
+ * The frame is therefore the mark's own: `x` in half-widths either side of the crossing, `y`
+ * up from it, both scaled by {@link MARK_HALF_WIDTH} and placed in the triangle at
+ * {@link CROSS_Y}.
  */
-const CROSS_Y = 20_500;
-const BLOB_X = 62_300;
-const BLOB_Y = 47_700;
-/** The blobs are **ellipses**, half again as tall as they are wide. */
-const BLOB_RX = 24_400;
-const BLOB_RY = 32_100;
-const FOOT_X = 33_100;
-const FOOT_Y = -41_900;
+const MARK_HALF_WIDTH = 80_000;
+const CROSS_Y = 55_000;
 
-/** How many points each falling leg and each blob is drawn with. */
-const LEG_STEPS = 14;
-const BLOB_STEPS = 20;
+/** The disc at one arm's upper end. A circle: not an oval, and not a teardrop. */
+const BOWL_AT: ProjectedPosition = [-0.747, 0.054];
+const BOWL_RADIUS = 0.253;
+const BOWL_STEPS = 28;
 
-/** A closed ring approximating an ellipse. */
-function ellipse(center: ProjectedPosition, rx: number, ry: number): ProjectedPosition[] {
+/** The arm's width. Constant along it — the reference strokes one path, it does not taper. */
+const STEM_WIDTH = 0.0661;
+
+/**
+ * One arm, as the two cubics the reference draws: `[P0, C1, C2, crossing, C3, C4, P2]`.
+ *
+ * The crossing is shared, so the two halves join with a continuous tangent and the arm reads
+ * as one sweep rather than as two curves meeting. Note that `P0` sits *inside* the disc
+ * rather than on its rim — the disc is where the arm begins, not an ornament stuck onto it.
+ */
+const ARM: readonly ProjectedPosition[] = [
+    [-0.747, 0.28],
+    [-0.459, 0.28],
+    [-0.183, 0.156],
+    [0, 0],
+    [0.23, -0.195],
+    [0.366, -0.428],
+    [0.401, -0.665],
+];
+
+/** Samples per cubic. */
+const ARM_STEPS = 16;
+
+/** One arm's centreline, sampled. `side` mirrors it, which is what makes the pair cross. */
+function armPath(side: number): ProjectedPosition[] {
+    const p = ARM.map(([x, y]): ProjectedPosition => [side * x, y]);
+    const out: ProjectedPosition[] = [];
+    for (let seg = 0; seg < 2; seg++) {
+        const [a, b, c, d] = [p[seg * 3], p[seg * 3 + 1], p[seg * 3 + 2], p[seg * 3 + 3]];
+        // The second cubic skips t=0, which is the first one's endpoint.
+        for (let i = seg === 0 ? 0 : 1; i <= ARM_STEPS; i++) {
+            const t = i / ARM_STEPS;
+            const u = 1 - t;
+            out.push([0, 1].map(k =>
+                u * u * u * a[k] + 3 * u * u * t * b[k] + 3 * u * t * t * c[k] + t * t * t * d[k],
+            ) as ProjectedPosition);
+        }
+    }
+    return out;
+}
+
+/** One arm's disc, as a closed ring. */
+function bowl(side: number): ProjectedPosition[] {
     const ring: ProjectedPosition[] = [];
-    for (let i = 0; i <= BLOB_STEPS; i++) {
-        const t = (i / BLOB_STEPS) * 2 * Math.PI;
-        ring.push([center[0] + Math.cos(t) * rx, center[1] + Math.sin(t) * ry]);
+    for (let i = 0; i <= BOWL_STEPS; i++) {
+        const t = (i / BOWL_STEPS) * 2 * Math.PI;
+        ring.push([side * BOWL_AT[0] + Math.cos(t) * BOWL_RADIUS, BOWL_AT[1] + Math.sin(t) * BOWL_RADIUS]);
     }
     return ring;
 }
@@ -149,7 +193,11 @@ export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
         // The designation goes *above the triangle*, and how far above is only knowable
         // here: the triangle was just fitted to whatever area it landed in.
         const paints = label(
-            liftedAnchor(feature, HALF_HEIGHT * scale + (LABEL_CLEARANCE_PX + LABEL_BLOCK_PX) * context.resolution),
+            liftedAnchor(
+                feature,
+                HALF_HEIGHT * scale + (LABEL_CLEARANCE_PX + LABEL_BLOCK_PX) * context.resolution,
+                LABEL_CLEARANCE_PX * context.resolution,
+            ),
             context,
         );
         const stroke = {color, widthPx: LINE_WIDTH()};
@@ -167,7 +215,7 @@ export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
             stroke,
         });
         paints.push({
-            geometry: {type: 'Point', coordinates: at(0, 96_000)},
+            geometry: {type: 'Point', coordinates: at(0, 120_000)},
             text: {
                 text: letter,
                 font: fontStyle,
@@ -178,35 +226,32 @@ export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
                 scale: (HALF_HEIGHT * scale) / (context.resolution * 44),
             },
         });
-        // The X. Each stroke runs blob -> crossing -> *opposite* foot, so the pair reads as
-        // two continuous lines rather than four spokes meeting at a point.
-        for (const side of [-1, 1]) {
-            const stroke_ = [at(side * BLOB_X, BLOB_Y), at(0, CROSS_Y)];
-            // The falling half bows outward: a quadratic whose control sits directly above
-            // the foot leaves the crossing steeply and arrives near-vertical, which is the
-            // shape the plate draws.
-            const footX = -side * FOOT_X;
-            for (let i = 1; i <= LEG_STEPS; i++) {
-                const t = i / LEG_STEPS;
-                const u = 1 - t;
-                stroke_.push(at(
-                    (2 * u * t + t * t) * footX,
-                    u * u * CROSS_Y + 2 * u * t * ((CROSS_Y + FOOT_Y) / 2) + t * t * FOOT_Y,
-                ));
-            }
-            paints.push({geometry: {type: 'LineString', coordinates: stroke_}, stroke});
-        }
+        // The arms, then the discs over them, so each disc swallows its arm's start rather
+        // than being cut by it. Butt caps, as the reference has: a round cap would round off
+        // the blunt lower ends, which is one of the few things every reading of this symbol
+        // has agreed on.
+        //
+        // The arm's width is derived from `scale` rather than taken from `LINE_WIDTH()`: this
+        // is part of a symbol that was just fitted to the area it landed in, so a constant
+        // screen weight would read as spindly on a large one and as a blot on a small one. It
+        // is the same reasoning that sizes the letter above.
+        const markPx = (v: number): number => (v * MARK_HALF_WIDTH * scale) / context.resolution;
+        const mark = (x: number, y: number): ProjectedPosition =>
+            at(x * MARK_HALF_WIDTH, y * MARK_HALF_WIDTH + CROSS_Y);
 
-        // The blobs last, so they cap the strokes rather than being cut by them.
         for (const side of [-1, 1]) {
             paints.push({
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [ellipse([side * BLOB_X, BLOB_Y], BLOB_RX, BLOB_RY).map(([x, y]) => at(x, y))],
-                },
+                geometry: {type: 'LineString', coordinates: armPath(side).map(([x, y]) => mark(x, y))},
+                stroke: {color, widthPx: markPx(STEM_WIDTH), cap: 'butt', join: 'round'},
+            });
+        }
+        for (const side of [-1, 1]) {
+            paints.push({
+                geometry: {type: 'Polygon', coordinates: [bowl(side).map(([x, y]) => mark(x, y))]},
                 fill: {color},
             });
         }
+
         return paints;
     };
 }
