@@ -121,8 +121,30 @@ export function fitLabelScale(
  * that fitted it. A 30 px lift clears the glyph on a small area and sits inside it on a
  * large one, which was the first attempt at this.
  */
-export function liftedAnchor(feature: PaintFeature, metres: number): PaintFeature {
+export function liftedAnchor(feature: PaintFeature, metres: number, padMetres = 0): PaintFeature {
     if (feature.geometry.type !== 'Point' || !metres) return feature;
     const [x, y] = feature.geometry.coordinates;
-    return {...feature, geometry: {type: 'Point', coordinates: [x, y + metres]}};
+
+    // **Clamped to the ring**, and this is not a nicety. The lift is a glyph height plus a
+    // screen-pixel clearance, and a screen constant is metres at whatever the current
+    // resolution is: 30 px is 60 km zoomed out far enough. On a squat area that sum lands the
+    // anchor *above* the shape, at which point `fitLabelScale` correctly reports that no
+    // scale fits and the designation disappears — a worse failure than the overlap the lift
+    // exists to fix. Rising only as far as the outline allows costs the label some room and
+    // keeps it on the map.
+    const ring = feature.ring;
+    const inside = (l: number) => pointInRing(ring!, [x, y + l + padMetres]);
+    let lift = metres;
+    if (ring && ring.length >= 3 && !inside(lift)) {
+        let low = 0;
+        let high = lift;
+        for (let i = 0; i < SEARCH_STEPS; i++) {
+            const mid = (low + high) / 2;
+            if (inside(mid)) low = mid;
+            else high = mid;
+        }
+        lift = low;
+    }
+    if (!lift) return feature;
+    return {...feature, geometry: {type: 'Point', coordinates: [x, y + lift]}};
 }

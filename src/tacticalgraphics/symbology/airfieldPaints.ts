@@ -59,7 +59,11 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
         const scale = fitSymbolScale(feature, center, HALF_WIDTH, HALF_HEIGHT, SAMPLES);
         // Above the runways, by however tall they came out. @see liftedAnchor
         const paints = label(
-            liftedAnchor(feature, HALF_HEIGHT * scale + (LABEL_CLEARANCE_PX + LABEL_BLOCK_PX) * context.resolution),
+            liftedAnchor(
+                feature,
+                HALF_HEIGHT * scale + (LABEL_CLEARANCE_PX + LABEL_BLOCK_PX) * context.resolution,
+                LABEL_CLEARANCE_PX * context.resolution,
+            ),
             context,
         );
         const place = ([x, y]: ProjectedPosition): ProjectedPosition => [center[0] + x * scale, center[1] + y * scale];
