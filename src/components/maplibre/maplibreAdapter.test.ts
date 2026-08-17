@@ -114,6 +114,54 @@ describe('buildTacticalGraphic', () => {
     });
 
     /**
+     * The invariant `NativeLayerRenderer`'s fill-layer order rests on.
+     *
+     * A patterned fill and a solid one cannot share a MapLibre layer — an unknown
+     * `fill-pattern` makes the feature draw as nothing, ignoring `fill-color` beside
+     * it — so they are two layers, and **paint order does not survive between them.**
+     * Within a layer the source's feature order decides; across the two it is the
+     * order the layers were added, once, for every graphic on the map.
+     *
+     * The renderer adds the pattern layer first, so hatches sit under solid fills.
+     * That is correct only while a hatch is always an area's own background wash and
+     * a solid fill is always foreground — an arrowhead, a tooth, a glyph. It holds
+     * for all 247 paintable graphics today, and it is exactly the kind of assumption
+     * that a new graphic breaks silently: on OpenLayers it would look right, because
+     * OpenLayers draws the paint list in order and has no such constraint.
+     *
+     * That asymmetry is the reason this is asserted rather than commented. The bug it
+     * came from was the reverse order erasing the CBRN triangle's opaque fill — the
+     * z-order fix worked on one engine and was inverted on the other.
+     */
+    it('never emits a hatched fill after a solid one, which the fill-layer order assumes', () => {
+        const offenders: string[] = [];
+
+        for (const name of PAINTABLE_GRAPHICS) {
+            const candidates = [
+                {type: 'Polygon' as const, coordinates: [[[-2, -2], [2, -2], [2, 2], [-2, 2], [-2, -2]]]},
+                {type: 'LineString' as const, coordinates: [[-2, 0], [2, 0]]},
+                {type: 'Point' as const, coordinates: [0, 0]},
+            ];
+            const built = candidates
+                .map(geometry => buildTacticalGraphic(name, geometry, {radius: 180_000, rotation: 0}))
+                .find(Boolean);
+            if (!built) continue;
+
+            const fills = paintTacticalGraphic(built, context).filter(paint => paint.fill);
+            let sawSolid = false;
+            for (const paint of fills) {
+                if (paint.fill?.pattern) {
+                    if (sawSolid) offenders.push(name);
+                } else {
+                    sawSolid = true;
+                }
+            }
+        }
+
+        expect(offenders).toEqual([]);
+    });
+
+    /**
      * The whole-catalog version of the exemption rule.
      *
      * `hostilityExemptions.test.ts` pins `lineColorOf`, which is where the rule is
