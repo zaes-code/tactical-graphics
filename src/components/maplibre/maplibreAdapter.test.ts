@@ -141,6 +141,7 @@ describe('buildTacticalGraphic', () => {
         // Quartering the resolution is zooming in two levels. A symbol with a ground size
         // quadruples on screen; a pinned one does not move at all.
         for (const name of [
+            TacticalGraphicName.Destroy,
             TacticalGraphicName.Interdict,
             TacticalGraphicName.Neutralize,
             TacticalGraphicName.Suppress,
@@ -148,9 +149,9 @@ describe('buildTacticalGraphic', () => {
         ]) {
             expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(4, 2);
         }
-        // Destroy is the last fixed-size crossed task, and the security operations are
-        // badges. Both are here so that unpinning the others cannot quietly take them too.
-        for (const name of [TacticalGraphicName.Destroy, TacticalGraphicName.Cover]) {
+        // The security operations are the last fixed-size symbols, and are here so that
+        // unpinning the crossed tasks cannot quietly take them too.
+        for (const name of [TacticalGraphicName.Cover, TacticalGraphicName.Screen]) {
             expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(1, 2);
         }
     });

@@ -12,9 +12,6 @@ import {
     type ProjectedInputGeometry,
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
-    CROSSED_MISSION_TASKS,
-    allowedGestures,
-    crossedMissionTaskMeters,
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMeters,
@@ -437,27 +434,22 @@ function securityOperationSize(
 }
 
 /**
- * The crossed mission tasks' size, which is a screen constant and not a user's choice.
+ * **Gone, and deliberately not replaced.** This used to overwrite the caller's `radius`
+ * for all four crossed mission tasks, correctly, while all four were fixed-size badges
+ * pinned to a screen constant.
  *
- * After the caller's properties, like `securityOperationSize` and for the same reason:
- * a radius arriving from a saved snapshot or a sweep is a number in meters from some
- * other zoom, and honoring it draws the symbol at the wrong size. A graphic that refuses
- * resize has no size of its own a caller may set. @see CROSSED_MISSION_TASK_PX
+ * They all carry a real size as of 2026-08-17, and the override is why unpinning them did
+ * not work the first time: the paint, the controller, the handles and the gesture table
+ * were all changed and the symbols still came out the same width, because the number was
+ * replaced on the way in. **The size was stored, the handle moved, and nothing looked
+ * wrong at the zoom the graphic was placed at.** When a graphic's category changes, hunt
+ * for the code that *overwrites* a property, not the code that reads it — a reader that
+ * ignores a value at least leaves it visible in the data.
  *
- * **Only the ones that still refuse it.** This applied to all four crossed tasks until
- * 2026-08-17, when interdict, neutralize and suppress gained a real size — and an
- * override that outranks the caller is invisible from the outside: the size was stored,
- * the handle moved, and the symbol came back the same width, because the number was
- * replaced on the way in. Destroy is the last one that means it. @see allowedGestures
+ * `CROSSED_MISSION_TASK_PX` and `crossedMissionTaskMeters` stay exported: they shipped in
+ * 2.0.0 and removing them is a consumer's breaking change, not a tidy-up.
+ * @see dropSizePx, which is what a renderer should ask now.
  */
-function crossedMissionTaskSize(
-    name: TacticalGraphicName,
-    drawingResolution?: number,
-): Partial<TacticalGraphicProperties> {
-    if (!CROSSED_MISSION_TASKS.includes(name) || allowedGestures(name).resize) return {};
-    const radius = crossedMissionTaskMeters(drawingResolution);
-    return radius ? {radius} : {};
-}
 
 /** @see securityOperationSize */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
@@ -547,7 +539,6 @@ export function buildTacticalGraphic(
         // meters from some other zoom, and honoring it draws the symbol at the wrong
         // size. @see allowedGestures
         ...securityOperationSize(name, drawingResolution),
-        ...crossedMissionTaskSize(name, drawingResolution),
         ...bakedDecorationSize(name, properties, drawingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
