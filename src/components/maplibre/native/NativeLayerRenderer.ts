@@ -333,12 +333,23 @@ export class NativeLayerRenderer {
         for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
-        this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
+        // **The hatch goes under the solid fills, and the order is load-bearing.** These two
+        // share one source, so within each the paint list's order survives — but between
+        // them it does not, and whichever layer is added last wins for every graphic at
+        // once. Added the other way round, a CBRN area's yellow hatch drew straight over the
+        // opaque triangle meant to stop it, undoing on this engine the exact z-order fix
+        // that had just been made on the other.
+        //
+        // Safe because a hatch in this library is always an area's own background wash and a
+        // solid fill is always foreground — an arrowhead, a tooth, a glyph. Not an assumption
+        // to leave implicit, so `maplibreAdapter.test.ts` asserts it over the whole registry:
+        // no graphic emits a patterned fill after a solid one.
         this.map.addLayer(patternFillLayer('tg-fill-pattern', SOURCE_PREFIX + 'fills'));
+        this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
         this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
-        this.layerIds.push('tg-fill', 'tg-fill-pattern', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
+        this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
 
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a

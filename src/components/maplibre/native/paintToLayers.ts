@@ -331,6 +331,12 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
  *
  * Filtering on the property instead gives each case its own layer and neither can
  * silently swallow the other.
+ *
+ * **The price is that paint order no longer holds between the two.** Within one layer the
+ * source's feature order decides, so a paint list's order survives; across the two it is the
+ * order the layers were added, which applies to every graphic at once. `NativeLayerRenderer`
+ * therefore adds the pattern layer **first**, so hatches sit under solid fills — see the note
+ * there for why that is the right way round and what asserts it stays true.
  */
 export function fillLayer(id: string, source: string): LayerSpecification {
     return {
