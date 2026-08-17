@@ -12,6 +12,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {
+    allowedGestures,
     CAP_HEIGHT_FRACTION,
     fontStyle,
     maxGraphicLabelScale,
@@ -58,10 +59,17 @@ const CROSSED_HASH_DASH = [12, 8];
  */
 const CROSSED_LABEL_CLEARANCE_PX = 7;
 
-/** The label scale of a crossed mission task — constant, like the symbol. */
-export function crossedMissionTaskLabelScale(): number {
+/**
+ * The label scale of a crossed mission task, ratio-locked to the symbol's half-width.
+ *
+ * `halfWidthPx` defaults to the pinned constant, which is right for Destroy and for any
+ * caller asking about the family in the abstract. A symbol that carries a real size passes
+ * the half-width it actually renders at, so the letter stays the same fraction of the glyph
+ * however large the operator drags it.
+ */
+export function crossedMissionTaskLabelScale(halfWidthPx: number = CROSSED_HALF_WIDTH_PX): number {
     const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
-    return (sizeFactor * RATIO_LOCKED_LABEL_FRACTION * CROSSED_HALF_WIDTH_PX) / BASE_FONT_SIZE_PX;
+    return (sizeFactor * RATIO_LOCKED_LABEL_FRACTION * halfWidthPx) / BASE_FONT_SIZE_PX;
 }
 
 /**
@@ -109,11 +117,22 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         const cx = feature.graphicCenter?.[0] ?? (a0[0] + a1[0]) / 2;
         const cy = feature.graphicCenter?.[1] ?? (a0[1] + a1[1]) / 2;
 
+        // **Pinned only if the symbol refuses a resize.** Destroy is a badge: it marks a
+        // task at a place and describes no ground extent, so it holds a constant screen
+        // size and the stored size is divided straight back out. Its three siblings carry
+        // a real size as of 2026-08-17, so there is nothing to divide out and `k` is 1.
         const size = feature.graphicSize;
-        const k = size && size > 0 ? (CROSSED_HALF_WIDTH_PX * context.resolution) / size : 1;
+        const fixed = !allowedGestures(name).resize;
+        const k = fixed && size && size > 0 ? (CROSSED_HALF_WIDTH_PX * context.resolution) / size : 1;
         const pinned = (p: ProjectedPosition): ProjectedPosition => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
 
-        const scale = crossedMissionTaskLabelScale();
+        // The label is ratio-locked to the symbol, so it has to be measured against the
+        // half-width the symbol actually comes out at. Pinned that is the constant; unpinned
+        // it is whatever the size works out to on screen, and using the constant there would
+        // leave one fixed-size word in a graphic that scales around it — a legible label on a
+        // small one and a speck on a large one, with the arms' gap wrong to match.
+        const halfWidthPx = fixed || !size || size <= 0 ? CROSSED_HALF_WIDTH_PX : size / context.resolution;
+        const scale = crossedMissionTaskLabelScale(halfWidthPx);
         const halfW = (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * context.resolution;
         const halfH = ((RATIO_LOCKED_LABEL_FONT_PX * scale * CAP_HEIGHT_FRACTION) / 2) * context.resolution;
         const clearance = CROSSED_LABEL_CLEARANCE_PX * context.resolution;
