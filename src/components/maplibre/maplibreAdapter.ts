@@ -18,6 +18,7 @@ import {
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMeters,
     RANGE_FANS,
+    outerRingOf,
     ratioLockOf,
     resolveRangeFanBands,
     toGraphicOptions,
@@ -598,7 +599,10 @@ export function buildTacticalGraphic(
         // bare anchor point and cannot work them out for itself, so whichever layer
         // owns the holder has to supply them. Here that is this adapter.
         bounds: boundsOf(graphicGeometry),
-        ring: outerRingOf(projectGeometry(baseGeometry)),
+        // The base first — an area the operator traced *is* its own outline — then the
+        // rendered shape, which is where a circular variant's outline comes from, since its
+        // base is a single point. @see outerRingOf
+        ring: outerRingOf(projectGeometry(baseGeometry)) ?? outerRingOf(graphicGeometry),
         // A range fan's bands reach the generator and come back as anonymous points,
         // so the label paint has to re-resolve them with the generator's own
         // defaults. `RangeFanGraphicBase` does the same call. @see resolveRangeFanBands
@@ -643,12 +647,6 @@ function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['b
 }
 
 /** The outer ring of a polygon base, for the irregular zones' vertex anchor. */
-function outerRingOf(geometry: ProjectedInputGeometry | undefined): ProjectedPosition[] | undefined {
-    if (geometry?.type === 'Polygon') return geometry.coordinates[0];
-    if (geometry?.type === 'MultiPolygon') return geometry.coordinates[0]?.[0];
-    return undefined;
-}
-
 function handlePositions(geometry: GeoJSONFeature['geometry']): ProjectedPosition[] {
     const projected = projectGeometry(geometry);
     if (!projected) return [];

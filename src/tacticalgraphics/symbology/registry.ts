@@ -58,7 +58,7 @@ import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} fro
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
-import {airfieldPaint} from './airfieldPaints';
+import {airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 import {securityOperationLabelPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
@@ -204,7 +204,6 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
     TacticalGraphicName.AirfieldZone,
-    TacticalGraphicName.Airfield,
     TacticalGraphicName.AirheadLine,
     TacticalGraphicName.AreaOfOperations,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
@@ -416,9 +415,12 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (AIRSPACE_COORDINATION_AREAS.includes(name)) return airspaceCoordinationAreaLabelPaint(name);
     // The airfield's label block is the ordinary one; what is bespoke is the runway
     // symbol drawn over it, which the paint wraps around the label. @see airfieldPaint
-    // Airfield zone is the same runway glyph on a drawn area; APP-06 120400 carries an
-    // H amplifier rather than a text label, and the glyph is the symbol either way.
-    if (name === TacticalGraphicName.Airfield || name === TacticalGraphicName.AirfieldZone) {
+    // Airfield zone is the runway glyph fitted inside a drawn area; APP-06 120400 carries
+    // an H amplifier rather than a text label, and the glyph is the symbol either way.
+    //
+    // The **airfield** itself is not here: 131900 is a one-point static symbol and gets its
+    // own pair below, which is the whole difference between the two graphics.
+    if (name === TacticalGraphicName.AirfieldZone) {
         return airfieldPaint(areaDefaultLabelPaint(name));
     }
     if (
@@ -863,6 +865,11 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.MinedAreaFenced] = {
         graphic: minedAreaFencedPaint(),
         label: mineFillPaint(),
+    };
+    // The point airfield: arms pinned to a screen size, designation beside them.
+    registry[TacticalGraphicName.Airfield] = {
+        graphic: airfieldPointPaint(),
+        label: airfieldPointLabelPaint(TacticalGraphicName.Airfield),
     };
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
     // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint

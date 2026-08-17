@@ -133,7 +133,49 @@ function makeBase(name) {
     return {type: 'LineString', coordinates: pts};
 }
 
-const AMPLIFIERS = {radius: 900, rotation: 0, width: 500, rangeFan: undefined, decorationSize: undefined};
+/**
+ * **Every amplifier the schema carries, filled in.**
+ *
+ * The catalog used to send a bare `radius` and nothing else, so its thumbnails showed line
+ * work and no text — and a plate dense with `T`, `W` and `B` boxes had nothing to be
+ * compared against. Filling the whole bag makes each thumbnail show what an operator
+ * actually ends up with: the designation, the dates, the echelon, the altitudes, the mine
+ * type, all in the layout the symbol puts them in.
+ *
+ * Two fields are deliberately left out. `hostility` would tint all 283 symbols, and these
+ * are being compared against black-and-white plates; `status` would dash them, which is a
+ * *different symbol* on the several graphics whose broken line is doctrinal rather than a
+ * status. Both would be showing something other than the thing under review.
+ */
+const AMPLIFIERS = {
+    // Geometry inputs.
+    radius: 900,
+    rotation: 0,
+    width: 500,
+    decorationSize: undefined,
+
+    // Text amplifiers.
+    label: 'ALPHA',
+    secondId: 'BRAVO',
+    countryCode: 'USA',
+    secondCountryCode: 'CAN',
+    startDate: '021200ZJUN26',
+    endDate: '021800ZJUN26',
+    eff: '021200Z-021800Z',
+    weapon: 'M252 81mm',
+    grid: '18SUJ2345',
+    minAltitude: 500,
+    maxAltitude: 2000,
+    altitudeDatum: 'AGL',
+
+    // Selectors.
+    echelon: 'Battalion/Squadron',
+    direction: 'ONE_WAY',
+    mineType: 'Antitank Mine',
+
+    // The range fans draw one ring per band and nothing without them.
+    rangeFan: {bands: [{range: 12, label: 'MIN'}, {range: 28, altitude: '3000FT AGL'}]},
+};
 
 // ── Paint collection ────────────────────────────────────────────────────────
 function paintsFor(name, resolution) {

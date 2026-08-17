@@ -24,6 +24,7 @@ import {fontStyle, formatAltitude, getLabelFillColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
 import {getFullLabel, halo, scaleOf} from './paintFunctions';
+import {fitLabelScale} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
 type AirPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -66,7 +67,17 @@ function labelBlock(
     if (lines.length === 0 || feature.geometry.type !== 'Point') return [];
 
     const widest = Math.max(...lines.map(line => (line ? textWidth(context, line, fontStyle, 1) : 0)));
-    const scale = fitToPolygon ? Math.min(scaleOf(feature, context), fitScale(feature, context, widest)) : scaleOf(feature, context);
+    // Two caps, and the block has to clear both. `fitScale` measures against the bounding
+    // box's shorter side and knows nothing about how many lines there are; `fitLabelScale`
+    // measures the whole block against the drawn ring, which is what an operator sees.
+    // The box cap stays because it is the only one available before a ring is stamped.
+    const scale = fitToPolygon
+        ? Math.min(
+            scaleOf(feature, context),
+            fitScale(feature, context, widest),
+            fitLabelScale(feature, context, feature.geometry.coordinates, lines, fontStyle, scaleOf(feature, context)),
+        )
+        : scaleOf(feature, context);
 
     return [{
         geometry: feature.geometry,

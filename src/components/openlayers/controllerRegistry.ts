@@ -231,7 +231,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PsyOpsZoneIrregular]: polygon,
     [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
     [TacticalGraphicName.PsyOpsZoneCircular]: circularArea,
-    [TacticalGraphicName.Airfield]:                              polygon,
+    // Dropped on one click and static, like the crossed tasks: no resize, no rotate.
+    [TacticalGraphicName.Airfield]:                              crossedTask,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
     [TacticalGraphicName.FighterEngagementZone]: polygon,
