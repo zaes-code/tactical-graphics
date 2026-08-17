@@ -21,7 +21,7 @@
  * the whole difference between a crossed task and an airfield.
  */
 
-import {allowedGestures, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {allowedGestures, dropSizePx, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {MissionTaskController} from './controllers/MissionTaskController';
 
@@ -80,6 +80,24 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         }).toEqual({rotate: allowed.rotate, resize: allowed.resize});
     });
 
+    /**
+     * The other half of the same problem, and the one that actually reached a user.
+     *
+     * OpenLayers says "one click drops this" by giving the controller `type: 'Point'`;
+     * MapLibre has to be told, and the only thing it can read is `dropSizePx`. While
+     * MapLibre inferred it from `allowedGestures(name).resize` instead, the two agreed
+     * only by coincidence — and stopped agreeing the moment a one-click graphic became
+     * resizable, at which point the airfield took two clicks on one engine and one on the
+     * other. The completed roadblock had been wrong the whole time.
+     */
+    it('drops on one click in OpenLayers exactly when the portable table says it should', () => {
+        const oneClick = names.filter(name => (getController(name, 100) as {type?: string})?.type === 'Point');
+        const table = names.filter(name => dropSizePx(name) !== undefined);
+
+        expect(table.length).toBeGreaterThan(0);
+        expect([...oneClick].sort()).toEqual([...table].sort());
+    });
+
     it('really does refuse something, rather than agreeing that everything is allowed', () => {
         // The assertion above passes trivially if no controller refuses anything, which
         // is close to what the table said before the resize-only pair was added.
@@ -90,11 +108,15 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         expect(refusing.length).toBeGreaterThan(5);
 
         // The three kinds of refusal, named so a change to any one of them is deliberate.
-        expect(allowedGestures(TacticalGraphicName.Suppress).resize).toBe(false);
-        expect(allowedGestures(TacticalGraphicName.Suppress).rotate).toBe(false);
+        // Destroy is the last fixed-size crossed task: the other three became resizable on
+        // 2026-08-17 and are pinned here so that is not undone by accident.
+        expect(allowedGestures(TacticalGraphicName.Destroy).resize).toBe(false);
+        expect(allowedGestures(TacticalGraphicName.Destroy).rotate).toBe(false);
         expect(allowedGestures(TacticalGraphicName.Cover).rotate).toBe(true);
         expect(allowedGestures(TacticalGraphicName.Cover).resize).toBe(false);
-        expect(allowedGestures(TacticalGraphicName.Airfield).resize).toBe(true);
-        expect(allowedGestures(TacticalGraphicName.Airfield).rotate).toBe(false);
+        for (const name of [TacticalGraphicName.Airfield, TacticalGraphicName.Suppress]) {
+            expect(allowedGestures(name).resize).toBe(true);
+            expect(allowedGestures(name).rotate).toBe(false);
+        }
     });
 });

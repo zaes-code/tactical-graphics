@@ -13,6 +13,7 @@ import {
     type ProjectedPosition,
     SECURITY_OPERATION_PX,
     CROSSED_MISSION_TASKS,
+    allowedGestures,
     crossedMissionTaskMeters,
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
@@ -440,14 +441,20 @@ function securityOperationSize(
  *
  * After the caller's properties, like `securityOperationSize` and for the same reason:
  * a radius arriving from a saved snapshot or a sweep is a number in meters from some
- * other zoom, and honoring it draws the symbol at the wrong size. These graphics refuse
- * resize, so there is no size of theirs a caller may set. @see CROSSED_MISSION_TASK_PX
+ * other zoom, and honoring it draws the symbol at the wrong size. A graphic that refuses
+ * resize has no size of its own a caller may set. @see CROSSED_MISSION_TASK_PX
+ *
+ * **Only the ones that still refuse it.** This applied to all four crossed tasks until
+ * 2026-08-17, when interdict, neutralize and suppress gained a real size — and an
+ * override that outranks the caller is invisible from the outside: the size was stored,
+ * the handle moved, and the symbol came back the same width, because the number was
+ * replaced on the way in. Destroy is the last one that means it. @see allowedGestures
  */
 function crossedMissionTaskSize(
     name: TacticalGraphicName,
     drawingResolution?: number,
 ): Partial<TacticalGraphicProperties> {
-    if (!CROSSED_MISSION_TASKS.includes(name)) return {};
+    if (!CROSSED_MISSION_TASKS.includes(name) || allowedGestures(name).resize) return {};
     const radius = crossedMissionTaskMeters(drawingResolution);
     return radius ? {radius} : {};
 }

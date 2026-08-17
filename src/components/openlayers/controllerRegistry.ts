@@ -6,7 +6,7 @@
  * 300-line switch statement.
  */
 
-import {AIRFIELD_DROP_HALF_WIDTH_PX, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {
@@ -156,38 +156,28 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
  * `editStretches` stays off: there is nothing to stretch.
  */
 /**
- * Dropped whole on a single click like the crossed tasks, and resizable afterwards - the
- * user places it, then scales it if they need to. There is no vertex to drag, so the
- * shape's integrity is never at risk, and rotation stays off: `PointDropController`
- * no-ops it and the generator ignores it besides.
+ * Every one-click graphic: the crossed mission tasks, the airfield, the completed
+ * roadblock. One click plants it whole, and whether it may then be scaled or turned is
+ * the portable table's business rather than this factory's.
  *
- * `res * 100` — twice Suppress's `res * 50`, which was only the starting point these were
- * specified from, not the size they landed on.
+ * **The drop size comes from `dropSizePx`, not from a literal here.** It used to be
+ * `res * 50`, `res * 34` and `res * 100` in three separate factories, which is the same
+ * fact stated three times in the half of the codebase MapLibre cannot see — so MapLibre
+ * had to guess at one-click-ness from `allowedGestures`, and guessed wrong the moment a
+ * one-click graphic became resizable.
+ *
+ * It is a screen size converted at the moment of the drop: a metre default is a different
+ * symbol at every zoom, and at a low one it lands a few pixels across with its handles
+ * piled on top of each other.
  */
-const roadblockComplete = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(new MissionTaskGraphicBase(name, res * 100, res), res * 100, true);
-
-const crossedTask = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
-
-/**
- * The point airfield (131900): one click drops it, then the operator scales it.
- *
- * Resizable, unlike the crossed tasks, and for the reason that separates the two: a crossed
- * task is a badge that means "this task, here", where an airfield covers ground. `res * 34`
- * is {@link AIRFIELD_DROP_HALF_WIDTH_PX} worth of metres at the placing zoom — a starting
- * size only, converted once and then owned by the graphic, **not** divided back out by the
- * paint the way a screen-pinned symbol's is.
- *
- * Rotation stays off: `PointDropController` no-ops it and the row gives the symbol one
- * orientation.
- */
-const airfield = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(
-        new MissionTaskGraphicBase(name, res * AIRFIELD_DROP_HALF_WIDTH_PX, res),
-        res * AIRFIELD_DROP_HALF_WIDTH_PX,
-        true,
+const pointDrop = (name: TacticalGraphicName, res: number) => {
+    const size = res * (dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX);
+    return new PointDropController(
+        new MissionTaskGraphicBase(name, size, res),
+        size,
+        allowedGestures(name).resize,
     );
+};
 
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
@@ -251,7 +241,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
     [TacticalGraphicName.PsyOpsZoneCircular]: circularArea,
     // Dropped on one click and static, like the crossed tasks: no resize, no rotate.
-    [TacticalGraphicName.Airfield]:                              airfield,
+    [TacticalGraphicName.Airfield]:                              pointDrop,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
     [TacticalGraphicName.FighterEngagementZone]: polygon,
@@ -443,7 +433,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: movement(2),
     // Roadblock complete stays point-dropped: its symbol is two overlapping X's,
     // which no centerline-and-width rule in APP-06 describes. @see ai/app-6.md "F2"
-    [TacticalGraphicName.RoadblockCompleteExecuted]: roadblockComplete,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: pointDrop,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),
@@ -551,10 +541,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FollowAndSupport]: block,
 
     // ── Crossed-line mission tasks (one click drops a fixed-size badge) ─────
-    [TacticalGraphicName.Destroy]:    crossedTask,
-    [TacticalGraphicName.Interdict]:  crossedTask,
-    [TacticalGraphicName.Neutralize]: crossedTask,
-    [TacticalGraphicName.Suppress]:   crossedTask,
+    [TacticalGraphicName.Destroy]:    pointDrop,
+    [TacticalGraphicName.Interdict]:  pointDrop,
+    [TacticalGraphicName.Neutralize]: pointDrop,
+    [TacticalGraphicName.Suppress]:   pointDrop,
 
     // ── Exfiltrate (multi-vertex route + arrowhead) ─────────────────────────
     [TacticalGraphicName.Exfiltrate]: exfiltrate,

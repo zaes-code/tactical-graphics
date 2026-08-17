@@ -114,6 +114,48 @@ describe('buildTacticalGraphic', () => {
     });
 
     /**
+     * A symbol that carries a real size must render at it, and a pinned one must not.
+     *
+     * The distinction is invisible at the zoom a graphic was placed at — both look right —
+     * so it only shows as "the symbol did not change when I zoomed", which reads as the map
+     * working rather than as a defect. Interdict, neutralize and suppress became resizable
+     * on 2026-08-17 and *still came out pinned*, because `crossedMissionTaskSize` replaced
+     * the caller's radius on the way in: the size was stored, the handle moved, and the
+     * symbol came back the same width.
+     */
+    it('scales a resizable symbol with the map and holds a pinned one still', () => {
+        const widthPx = (name: TacticalGraphicName, resolution: number): number => {
+            const built = buildTacticalGraphic(
+                name, {type: 'Point', coordinates: [0, 0]}, {radius: 20_000, rotation: 0}, resolution);
+            const xs: number[] = [];
+            for (const paint of paintTacticalGraphic(built!, {...context, resolution})) {
+                const geometry = paint.geometry;
+                if (geometry.type === 'LineString') xs.push(...geometry.coordinates.map(c => c[0]));
+                if (geometry.type === 'MultiLineString') {
+                    for (const line of geometry.coordinates) xs.push(...line.map(c => c[0]));
+                }
+            }
+            return (Math.max(...xs) - Math.min(...xs)) / resolution;
+        };
+
+        // Quartering the resolution is zooming in two levels. A symbol with a ground size
+        // quadruples on screen; a pinned one does not move at all.
+        for (const name of [
+            TacticalGraphicName.Interdict,
+            TacticalGraphicName.Neutralize,
+            TacticalGraphicName.Suppress,
+            TacticalGraphicName.Airfield,
+        ]) {
+            expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(4, 2);
+        }
+        // Destroy is the last fixed-size crossed task, and the security operations are
+        // badges. Both are here so that unpinning the others cannot quietly take them too.
+        for (const name of [TacticalGraphicName.Destroy, TacticalGraphicName.Cover]) {
+            expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(1, 2);
+        }
+    });
+
+    /**
      * The invariant `NativeLayerRenderer`'s fill-layer order rests on.
      *
      * A patterned fill and a solid one cannot share a MapLibre layer — an unknown

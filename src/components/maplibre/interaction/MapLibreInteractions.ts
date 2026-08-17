@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -286,16 +286,28 @@ export class MapLibreInteractions {
 
         const wants = baseGeometryFor(name);
         if (wants === 'Point') {
-            // **A graphic that can be resized is sized by the draw**, in two clicks: the
-            // first plants the anchor, the second sets how far out it reaches and which
-            // way it faces. That is what OpenLayers does — its point-anchored graphics
-            // draw through a Circle interaction whose radius the gesture supplies — and
-            // finishing on the first click instead dropped every one of them at a fixed
-            // default. At a typical zoom that is a symbol a few pixels across, with its
-            // handles piled on top of each other and nothing grabbable.
+            // **A one-click graphic is done on the first click**, whether or not it can
+            // afterwards be resized. It is dropped at `dropSizePx` worth of metres and the
+            // operator drags its edge handle if they want it bigger — which is what
+            // OpenLayers' `PointDropController` does, and the two engines have to agree
+            // about it or the same button behaves differently depending on the renderer.
             //
-            // A fixed-size symbol takes the first click and is done: there is no size for
-            // a second click to give it. @see allowedGestures
+            // This used to key off `allowedGestures(name).resize`, on the reasoning that a
+            // resizable point graphic is *sized by the draw* in two clicks. True of the
+            // point-anchored graphics OpenLayers draws through a Circle interaction, and
+            // false of every one-click drop — so the airfield took two clicks here and one
+            // there the moment it stopped being a fixed-size badge, and the completed
+            // roadblock had been doing it all along. @see dropSizePx
+            if (dropSizePx(name) !== undefined) {
+                this.finishDraw([position]);
+                return;
+            }
+
+            // **A graphic that can be resized is otherwise sized by the draw**, in two
+            // clicks: the first plants the anchor, the second sets how far out it reaches
+            // and which way it faces. Finishing on the first click instead dropped these at
+            // a fixed metre default, which at a typical zoom is a symbol a few pixels
+            // across with its handles piled on top of each other and nothing grabbable.
             if (!allowedGestures(name).resize) {
                 this.finishDraw([position]);
                 return;
@@ -407,6 +419,12 @@ export class MapLibreInteractions {
         // it honored 40 km where OpenLayers derived 196 km, and the handles that hang off
         // the arrow landed nowhere near it. @see hasBakedDecoration
         if (hasBakedDecoration(name)) return {rotation: 0};
+        // A one-click drop has no second vertex to measure, and its size is a screen size
+        // converted here — the same number OpenLayers hands its holder. Falling through to
+        // `DEFAULT_RADIUS_METERS` is what made these land at a fixed metre size regardless
+        // of zoom. @see dropSizePx
+        const drop = dropSizePx(name);
+        if (drop !== undefined) return {radius: drop * resolutionOf(this.map), rotation: 0};
         if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
 
         const center = toMercator([vertices[0][0], vertices[0][1]]);
