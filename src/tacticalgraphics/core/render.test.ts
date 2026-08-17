@@ -195,29 +195,18 @@ describe('crossed mission tasks', () => {
     ];
 
     /**
-     * Destroy alone. Its three siblings became resizable on 2026-08-17 and now emit
-     * `[edge, center]` like every other point-anchored graphic; Destroy stays a pinned
-     * badge, and an edge handle on it would offer a dimension that cannot change — the
-     * drag would store a number the paint divides straight back out.
+     * All four, as of 2026-08-17. They were fixed-size badges pinned to a constant 100 px,
+     * so the centre was the only handle worth publishing — an edge handle would have
+     * offered a dimension that could not change. They now cover ground and scale with it.
      */
-    it('Destroy publishes the center as its only handle', () => {
-        const {handles} = renderTacticalGraphic(pointTask(TacticalGraphicName.Destroy));
+    it.each(CROSSED)('%s publishes [edge, center], so the edge can be dragged', name => {
+        const {handles} = renderTacticalGraphic(pointTask(name));
         const coords = (handles.geometry as any).coordinates;
-        expect(coords).toHaveLength(1);
-        expect(coords[0]).toEqual([-77.0, 38.9]);
+        expect(coords).toHaveLength(2);
+        // Edge first — the order the controllers depend on. The centre is the anchor.
+        expect(coords[1]).toEqual([-77.0, 38.9]);
+        expect(coords[0]).not.toEqual([-77.0, 38.9]);
     });
-
-    it.each([TacticalGraphicName.Interdict, TacticalGraphicName.Neutralize, TacticalGraphicName.Suppress])(
-        '%s publishes [edge, center], so the edge can be dragged',
-        name => {
-            const {handles} = renderTacticalGraphic(pointTask(name));
-            const coords = (handles.geometry as any).coordinates;
-            expect(coords).toHaveLength(2);
-            // Edge first — the order the controllers depend on. The centre is the anchor.
-            expect(coords[1]).toEqual([-77.0, 38.9]);
-            expect(coords[0]).not.toEqual([-77.0, 38.9]);
-        },
-    );
 
     it.each(CROSSED)('%s emits both arms whole, centered on the base point', name => {
         const {graphic} = renderTacticalGraphic(pointTask(name));
