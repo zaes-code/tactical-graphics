@@ -76,17 +76,28 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
     };
 }
 
-/** Screen half-width of the point airfield's runway, in pixels. Static, per the row. */
-export const AIRFIELD_HALF_WIDTH_PX = 34;
+/**
+ * Half-width the point airfield is **dropped** at, in screen pixels at the placing zoom.
+ *
+ * A starting size, not a fixed one — see {@link airfieldPointPaint}. It is read once, when
+ * the controller converts it to metres for the drop, and never again.
+ */
+export const AIRFIELD_DROP_HALF_WIDTH_PX = 34;
 
 /**
- * The **point** airfield (131900): the two crossed arms at a constant screen size, with the
- * designation set beside the runway's right-hand end.
+ * The **point** airfield (131900): the two crossed arms, with the designation set beside the
+ * runway's right-hand end.
  *
- * Pinned the way the crossed mission tasks are — the generator lays the arms out against
- * `size`, and `k` divides that back out so the symbol is the same number of pixels at every
- * zoom. The row says "Size/Shape. Static", which is the standard saying the size is not the
- * operator's to set.
+ * **Drawn at its own size in metres, so it scales with the map.** It was pinned to a constant
+ * screen size until 2026-08-17, on a reading of the row's "Size/Shape. Static" as "the size
+ * is not the operator's". That was wrong twice over: the phrase describes how the symbol
+ * responds to its *anchor points* — a static symbol does not change shape as they move, and
+ * this one has only the one — and a symbol welded to the screen is a symbol that does not
+ * mark a place on the ground. An airfield covers a real extent, so it grows when you zoom in.
+ *
+ * So there is nothing to divide out here: the arms are painted as the generator laid them
+ * out. The operator sets the extent by dragging the edge handle, and it is stored in metres
+ * like every other resizable graphic's.
  *
  * Distinct from {@link airfieldPaint}, which fits the same glyph *inside a drawn boundary*
  * for the airfield **zone** (120400). The two were one paint until 2026-08-17 and rendered
@@ -97,17 +108,8 @@ export function airfieldPointPaint(): AirfieldPaint {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString' || geometry.coordinates.length < 2) return [];
 
-        const arms = geometry.coordinates;
-        const [a0, a1] = arms[0];
-        const cx = feature.graphicCenter?.[0] ?? (a0[0] + a1[0]) / 2;
-        const cy = feature.graphicCenter?.[1] ?? (a0[1] + a1[1]) / 2;
-
-        const size = feature.graphicSize;
-        const k = size && size > 0 ? (AIRFIELD_HALF_WIDTH_PX * context.resolution) / size : 1;
-        const pin = (p: ProjectedPosition): ProjectedPosition => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
-
         return [{
-            geometry: {type: 'MultiLineString', coordinates: arms.map(arm => arm.map(pin))},
+            geometry,
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         }];
     };
@@ -115,6 +117,9 @@ export function airfieldPointPaint(): AirfieldPaint {
 
 /** Clearance between the runway's end and the designation beside it, in screen pixels. */
 const AIRFIELD_LABEL_GAP_PX = 8;
+
+/** Fallback half-width, in metres, for a feature carrying no size. */
+const AIRFIELD_FALLBACK_HALF_WIDTH = 2_000;
 
 /**
  * The point airfield's designation, set to the right of the runway rather than through it.
@@ -129,7 +134,10 @@ export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPain
         const text = getFullLabel(name, feature.properties.label ?? '').trim();
         if (!center || !text) return [];
 
-        const offset = (AIRFIELD_HALF_WIDTH_PX + AIRFIELD_LABEL_GAP_PX) * context.resolution;
+        // The runway's reach is metres now, so the clearance is the only part in pixels — a
+        // gap that shrank with the zoom would close up long before the glyph did.
+        const reach = feature.graphicSize && feature.graphicSize > 0 ? feature.graphicSize : AIRFIELD_FALLBACK_HALF_WIDTH;
+        const offset = reach + AIRFIELD_LABEL_GAP_PX * context.resolution;
         return [{
             geometry: {type: 'Point', coordinates: [center[0] + offset, center[1]]},
             text: {
