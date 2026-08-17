@@ -64,22 +64,52 @@ const LABEL_BLOCK_PX = 20;
 const INSET = 0.62;
 
 /**
- * The contamination mark, measured off the plate: two filled lobes, and beneath and between
- * them an **arch** — a curve whose two legs point down.
+ * The contamination mark, traced off a 600 dpi render of the plate's own Example cell.
  *
- * It was drawn upside down until 2026-08-17: a stem rising from a single foot and forking
- * into two, which reads as a `Y`. The plate has one apex and *two* feet.
+ * It is an **X**: two long strokes crossing just under the letter. Each runs from a filled
+ * blob at one upper corner, through the crossing, and on to the *opposite* lower foot, the
+ * lower halves bowing outward as they fall.
+ *
+ * Three earlier readings of it were wrong, and each rendered plausibly enough to survive:
+ *
+ * 1. A stem rising from one foot and forking into two — a `Y`. Upside down.
+ * 2. Two discs floating above a separate arch. The right parts, unconnected.
+ * 3. Two teardrops above an arch. Wrong again: what looked like a tail at 150 dpi is the
+ *    stroke *continuing through* the blob and on to the far foot.
+ *
+ * The lesson is in the resolution. The contact sheets crop at 150 dpi, which is enough to
+ * tell a triangle from a square and not enough to tell a disc from a comma from the end of a
+ * stroke. Anything at glyph scale has to be read at 600.
+ *
+ * Every number below is **measured, not eyeballed**: the plate's Example cell is rendered at
+ * 600 dpi, thresholded, and the mark isolated as a connected component, so the blob centres,
+ * the crossing height and the feet come off a pixel profile rather than a squint.
+ *
+ * Coordinates are projected metres at scale 1, against the triangle: its top edge is
+ * `+HALF_HEIGHT` and its apex `-HALF_HEIGHT`.
  */
-const LOBE_RADIUS = 20_000;
-const LOBE_X = 51_000;
-const LOBE_Y = 52_000;
+const CROSS_Y = 20_500;
+const BLOB_X = 62_300;
+const BLOB_Y = 47_700;
+/** The blobs are **ellipses**, half again as tall as they are wide. */
+const BLOB_RX = 24_400;
+const BLOB_RY = 32_100;
+const FOOT_X = 33_100;
+const FOOT_Y = -41_900;
 
-/** The arch: apex on the axis between the lobes, legs splaying down and out. */
-const ARCH_APEX_Y = 44_000;
-const ARCH_FOOT_X = 28_000;
-const ARCH_FOOT_Y = -35_000;
-/** How many points the arch is sampled at. */
-const ARCH_STEPS = 16;
+/** How many points each falling leg and each blob is drawn with. */
+const LEG_STEPS = 14;
+const BLOB_STEPS = 20;
+
+/** A closed ring approximating an ellipse. */
+function ellipse(center: ProjectedPosition, rx: number, ry: number): ProjectedPosition[] {
+    const ring: ProjectedPosition[] = [];
+    for (let i = 0; i <= BLOB_STEPS; i++) {
+        const t = (i / BLOB_STEPS) * 2 * Math.PI;
+        ring.push([center[0] + Math.cos(t) * rx, center[1] + Math.sin(t) * ry]);
+    }
+    return ring;
+}
 
 /** The area's fill and outline. The glyph rides the label feature. */
 export function cbrnContaminatedAreaPaint(): CbrnPaint {
@@ -148,20 +178,35 @@ export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
                 scale: (HALF_HEIGHT * scale) / (context.resolution * 44),
             },
         });
-        // The lobes are filled discs; the stem forks up between them.
+        // The X. Each stroke runs blob -> crossing -> *opposite* foot, so the pair reads as
+        // two continuous lines rather than four spokes meeting at a point.
+        for (const side of [-1, 1]) {
+            const stroke_ = [at(side * BLOB_X, BLOB_Y), at(0, CROSS_Y)];
+            // The falling half bows outward: a quadratic whose control sits directly above
+            // the foot leaves the crossing steeply and arrives near-vertical, which is the
+            // shape the plate draws.
+            const footX = -side * FOOT_X;
+            for (let i = 1; i <= LEG_STEPS; i++) {
+                const t = i / LEG_STEPS;
+                const u = 1 - t;
+                stroke_.push(at(
+                    (2 * u * t + t * t) * footX,
+                    u * u * CROSS_Y + 2 * u * t * ((CROSS_Y + FOOT_Y) / 2) + t * t * FOOT_Y,
+                ));
+            }
+            paints.push({geometry: {type: 'LineString', coordinates: stroke_}, stroke});
+        }
+
+        // The blobs last, so they cap the strokes rather than being cut by them.
         for (const side of [-1, 1]) {
             paints.push({
-                geometry: {type: 'Point', coordinates: at(side * LOBE_X, LOBE_Y)},
-                circle: {radiusPx: (LOBE_RADIUS * scale) / context.resolution, fill: {color}},
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [ellipse([side * BLOB_X, BLOB_Y], BLOB_RX, BLOB_RY).map(([x, y]) => at(x, y))],
+                },
+                fill: {color},
             });
         }
-        // A parabola through the apex and both feet — smooth, and symmetric by construction.
-        const arch: ProjectedPosition[] = [];
-        for (let i = 0; i <= ARCH_STEPS; i++) {
-            const t = (i / ARCH_STEPS) * 2 - 1;
-            arch.push(at(t * ARCH_FOOT_X, ARCH_APEX_Y - (ARCH_APEX_Y - ARCH_FOOT_Y) * t * t));
-        }
-        paints.push({geometry: {type: 'LineString', coordinates: arch}, stroke});
         return paints;
     };
 }
