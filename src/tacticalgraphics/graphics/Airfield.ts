@@ -13,10 +13,15 @@
  * draws these two differently on purpose: the zone is a piece of ground with a boundary
  * the operator traces, the airfield is a place.
  *
- * "Static" means the size is not the operator's, so the arms are pinned to a screen size
- * in the paint layer, exactly as the crossed mission tasks are. The geometry here is
- * expressed against `opts.size` so a static GeoJSON consumer still gets a shape of a
- * sensible extent. @see airfieldPointPaint, crossedMissionTaskPaint
+ * **"Static" describes the anchor points, not the extent.** It says the symbol does not
+ * change shape as its anchors move — and with a single anchor there is nothing it could
+ * change in response to. It was read as "the size is not the operator's" until 2026-08-17,
+ * which pinned the arms to a constant screen size in the paint layer; the symbol then stayed
+ * the same size on screen at every zoom, so it marked a point on the *display* rather than an
+ * extent on the ground. It is dropped at a sensible size and resized from the edge handle
+ * like any other point-anchored graphic. @see airfieldPointPaint
+ *
+ * Rotation stays off. The row gives the symbol one orientation and the controller no-ops it.
  */
 
 import {Feature, MultiLineString, MultiPoint, Point, Position} from 'geojson';
@@ -55,11 +60,18 @@ export class Airfield extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     /**
-     * The centre, and only the centre. A static symbol has no dimension the operator may
-     * drag, and an edge handle would suggest one that does not exist.
+     * `[edge, center]` — **edge first**, which is the order every point-anchored graphic
+     * emits and which the controllers depend on: `handles[0]` drives the resize,
+     * `handles[1]` the translate.
+     *
+     * The edge is the runway's own right-hand end, so the handle sits on the thing being
+     * measured rather than floating beside it.
      */
-    generateHandles(base: Feature<Point>): Feature<MultiPoint> {
-        return this.asMultiPointFeature([base.geometry.coordinates]);
+    generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        const {rotation, size} = opts;
+        const edge = geometryService.translateCoordinates(
+            base.geometry.coordinates, size * ARMS[0].reach, toRadians(ARMS[0].angleDeg + rotation));
+        return this.asMultiPointFeature([edge, base.geometry.coordinates]);
     }
 
     generateLabels(base: Feature<Point>): Feature<Point> {
