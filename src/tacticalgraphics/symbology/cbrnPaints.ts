@@ -92,6 +92,13 @@ const INSET = 0.62;
  * a `stroke-width` of 17 with butt caps. Everything here is that, divided by the mark's
  * half-width of 257 and flipped to y-up, with the crossing at `(271,80)` as the origin.
  *
+ * **This deliberately does not match APP-06's own plate, and must not be "corrected" to it.**
+ * The two genuinely disagree below the crossing: the plate's arms bend to near-vertical and
+ * stop about a third of the way out, where the reference splays them wider and sets the discs
+ * at the full half-width. The reference is the more legible mark at the size these render,
+ * and following it is a confirmed decision — asked and answered, 2026-08-17. It is on the
+ * conformance review page as a departure. @see ai/decisions.md
+ *
  * The frame is therefore the mark's own: `x` in half-widths either side of the crossing, `y`
  * up from it, both scaled by {@link MARK_HALF_WIDTH} and placed in the triangle at
  * {@link CROSS_Y}.
