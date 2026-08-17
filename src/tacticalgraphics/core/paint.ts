@@ -483,3 +483,31 @@ export function mapPaintGeometry<T extends ProjectedGeometry>(geometry: T, fn: (
             return {type: 'MultiPolygon', coordinates: geometry.coordinates.map(poly => poly.map(ring => ring.map(fn)))} as T;
     }
 }
+
+/**
+ * The closed outline of a projected geometry, or nothing if it has none.
+ *
+ * Every area label and every glyph-inside-a-shape needs this, and both renderers were
+ * working it out for themselves — which is how the *circular* variants ended up with no
+ * outline at all. A circular area's **base** is a point, so a rule that reads only the base
+ * finds nothing, and the label cap and the glyph fit both silently did nothing for them.
+ *
+ * A `MultiLineString` counts only when its first part is **closed**, which is what
+ * separates a generated circle from a drawn route. Treating an open line as a ring would
+ * hand `pointInRing` a shape with no inside.
+ */
+export function outerRingOf(geometry: ProjectedInputGeometry | undefined): ProjectedPosition[] | undefined {
+    if (!geometry) return undefined;
+    if (geometry.type === 'Polygon') return geometry.coordinates[0];
+    if (geometry.type === 'MultiPolygon') return geometry.coordinates[0]?.[0];
+
+    const parts = geometry.type === 'MultiLineString' ? geometry.coordinates
+        : geometry.type === 'LineString' ? [geometry.coordinates]
+        : [];
+    const first = parts[0];
+    if (!first || first.length < 4) return undefined;
+    const a = first[0];
+    const b = first[first.length - 1];
+    const closed = Math.abs(a[0] - b[0]) < 1 && Math.abs(a[1] - b[1]) < 1;
+    return closed ? first : undefined;
+}

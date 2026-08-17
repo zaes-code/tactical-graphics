@@ -133,9 +133,11 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Secure,
 ];
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import { movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
+import {airfieldPointLabelStyleFn, airfieldPointStyleFunc, movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
 import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
+import {fromOlGeometry} from "../paintToOpenLayers";
+import {outerRingOf} from "@zaes/tactical-graphics";
 
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
     center: Coordinate = [0, 0];
@@ -182,6 +184,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc(name));
+        }
+        // The airfield is a one-point static symbol: two crossed arms pinned to a screen
+        // size, and its designation set *beside* them rather than through the crossing,
+        // which is where the ordinary mission-task label would put it.
+        if (name === TacticalGraphicName.Airfield) {
+            this.graphic.setStyle(airfieldPointStyleFunc());
         }
         // The crossed-line tasks draw their own arms so the gap for the center
         // label can be measured off the glyph, and so one arm can be hashed.
@@ -230,6 +238,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // updateGeometry as `graphicSize`.
         if (name === TacticalGraphicName.BaseDefenseZone) {
             this.label.setStyle(baseDefenseZoneLabelStyleFn());
+        }
+        if (name === TacticalGraphicName.Airfield) {
+            this.label.setStyle(airfieldPointLabelStyleFn(name));
         }
         // …but the crossed four cap their symbol at 100 px across, and the
         // letter has to stop growing with it. Must come after the block above.
@@ -300,6 +311,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.label.set('polygonMinY', minY);
             this.label.set('polygonMaxX', maxX);
             this.label.set('polygonMaxY', maxY);
+            // …and the outline itself, which is what caps a label to the shape it sits in.
+            // A circular area's *base* is a single point, so unlike `AreaGraphicBase` there
+            // is no traced ring to read — the ring is the circle this holder just drew.
+            // Without it `fitLabelScale` has nothing to measure against and every circular
+            // variant's designation grows straight through its own outline. @see outerRingOf
+            this.label.set('polygonRing', outerRingOf(fromOlGeometry(graphicGeom)));
         }
 
         // `size` and `rotation` are the whole of a mission task's editable state; keep

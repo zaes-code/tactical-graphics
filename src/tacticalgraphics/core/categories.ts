@@ -49,6 +49,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Areas ──────────────────────────────────────────────────────────────── OK
     [TacticalGraphicName.AirfieldZone]: TacticalGraphicCategory.Areas,
+    // A point symbol since 2026-08-17, but it stays in the Areas menu group: an operator
+    // looking for an airfield looks where the airfield zone is.
     [TacticalGraphicName.Airfield]:                         TacticalGraphicCategory.Areas,
     [TacticalGraphicName.AirheadLine]:                      TacticalGraphicCategory.Areas,
     [TacticalGraphicName.AreaOfOperations]:                 TacticalGraphicCategory.Areas,
