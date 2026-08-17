@@ -88,7 +88,13 @@ const toMetres = ([lon, lat]) => [(lon * Math.PI) / 180 * R, Math.log(Math.tan(M
 const project = geom => {
     if (!geom) return null;
     if (geom.type === 'GeometryCollection') return {type: 'GeometryCollection', geometries: geom.geometries.map(project)};
-    const walk = c => (Array.isArray(c[0]) ? c.map(walk) : toMetres(c));
+    // **An empty array stays empty.** `Array.isArray(c[0])` is false for `[]`, so without
+    // this an empty MultiPoint — which is what a graphic with no label anchor emits —
+    // became `toMetres([])`, i.e. one position of `[NaN, NaN]`. A paint reading it saw two
+    // finite-looking anchors, passed its own "fewer than two" guard, and wrote a label at
+    // `x="NaN"`. Both fords shipped that way. The library was never wrong; this is a
+    // harness bug, and the harness is the thing nobody checks.
+    const walk = c => (c.length === 0 ? [] : Array.isArray(c[0]) ? c.map(walk) : toMetres(c));
     return {type: geom.type, coordinates: walk(geom.coordinates)};
 };
 
