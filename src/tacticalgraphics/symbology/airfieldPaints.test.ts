@@ -5,6 +5,12 @@
  * same drawn boundary — which meant two graphics with one appearance and a name in a menu
  * to tell them apart. APP-06 draws them differently on purpose: 131900 is one anchor point
  * and "Size/Shape. Static", 120400 is at least three anchor points and a traced boundary.
+ *
+ * "Static" was then read as "the size is not the operator's", which pinned the airfield to a
+ * constant screen size — so it stayed the same size at every zoom and marked a point on the
+ * display rather than an extent on the ground. The phrase describes how a symbol responds to
+ * its *anchor points*, and this one has a single anchor to respond to. It carries a size in
+ * metres, the operator drags it, and it scales with the map.
  */
 
 import type {Feature, MultiLineString, Position} from 'geojson';
@@ -13,7 +19,7 @@ import * as turf from '../core/turf';
 import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
-import {AIRFIELD_HALF_WIDTH_PX, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
+import {airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 
 const context = (resolution: number): PaintContext => ({
     resolution,
@@ -84,22 +90,20 @@ describe('APP-06 131900 — airfield', () => {
         expect(between).toBeLessThan(50);
     });
 
-    // "Size/Shape. Static." — the size is not the operator's to set.
-    it('holds the same screen size at every zoom', () => {
-        // The invariant that matters: four times the resolution, the same pixels.
-        expect(armWidthPx(painted(200), 200)).toBeCloseTo(armWidthPx(painted(50), 50), 6);
+    it('holds its ground size, so it grows on screen as you zoom in', () => {
+        // The invariant, and the one that was inverted: a quarter of the resolution is four
+        // times the pixels. A symbol pinned to the screen returns the same number at both,
+        // which is exactly what this asserted until 2026-08-17.
+        expect(armWidthPx(painted(50), 50) / armWidthPx(painted(200), 200)).toBeCloseTo(4, 6);
     });
 
-    it('lands within a Mercator factor of its nominal screen width', () => {
-        // Not exactly `2 x AIRFIELD_HALF_WIDTH_PX`, and the gap is not a bug. The pin
-        // divides out `graphicSize`, which the holder sets in **projected** metres, while
-        // this fixture hands the generator a radius in *ground* metres and the generator
-        // walks geodesically. At 38.9° the two differ by sec(lat) ≈ 1.29. In the app both
-        // sides are projected metres and the pin is exact.
-        const width = armWidthPx(painted(200), 200);
-        const nominal = AIRFIELD_HALF_WIDTH_PX * 2;
-        expect(width).toBeGreaterThan(nominal);
-        expect(width / nominal).toBeCloseTo(1 / Math.cos((38.9 * Math.PI) / 180), 1);
+    it('paints the arms the generator laid out, without rescaling them', () => {
+        // Nothing between the geometry and the mark now. Stated as its own assertion because
+        // the failure it guards against — a pin quietly reintroduced — leaves a symbol that
+        // still looks correct at the zoom it was placed at.
+        const arms = built().coordinates.map(arm => arm.map(project));
+        const painted0 = (painted(200)[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+        expect(painted0).toEqual(arms);
     });
 
     it('sets its designation beside the runway, not through the crossing', () => {
@@ -107,12 +111,14 @@ describe('APP-06 131900 — airfield', () => {
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
             properties: {name: TacticalGraphicName.Airfield, label: 'JOINT'},
+            graphicSize: SIZE,
         } as PaintFeature, context(200));
 
         expect(label.text?.text).toBe('JOINT');
         const at = (label.geometry as {coordinates: ProjectedPosition}).coordinates;
-        // Clear of the arms' own right-hand end, and on the axis.
-        expect((at[0] - center[0]) / 200).toBeGreaterThan(AIRFIELD_HALF_WIDTH_PX);
+        // Clear of the arms' own right-hand end, and on the axis. Measured against the
+        // graphic's metre size, because that is what the runway's reach is now.
+        expect(at[0] - center[0]).toBeGreaterThan(SIZE);
         expect(at[1]).toBeCloseTo(center[1], 6);
     });
 });

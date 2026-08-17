@@ -582,6 +582,24 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Screen,
 ]);
 
+/**
+ * The point-anchored symbols the operator **scales but does not turn**.
+ *
+ * Both are dropped whole on one click and then sized — an airfield covers ground, a
+ * completed roadblock spans a road — but each has a single doctrinal orientation, so
+ * `PointDropController` no-ops the rotate for both.
+ *
+ * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
+ * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
+ * one engine and did nothing on the other. That is the standing failure mode for anything
+ * decided in a holder: the table is portable, the controller is not.
+ * @see ai/conventions.md — "A symbology fact never lives in a holder"
+ */
+const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Airfield,
+    TacticalGraphicName.RoadblockCompleteExecuted,
+]);
+
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     // A point-anchored graphic has one vertex and dragging it is a move, not a
     // reshape — so `modify` is off and `translate` covers it.
@@ -592,6 +610,9 @@ export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     }
     if (ROTATE_ONLY_SYMBOLS.has(name)) {
         return {translate: true, rotate: true, resize: false, modify: false};
+    }
+    if (RESIZE_ONLY_SYMBOLS.has(name)) {
+        return {translate: true, rotate: false, resize: true, modify: false};
     }
     return {translate: true, rotate: true, resize: true, modify: !pointAnchored};
 }

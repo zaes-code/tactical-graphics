@@ -6,7 +6,7 @@
  * 300-line switch statement.
  */
 
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {AIRFIELD_DROP_HALF_WIDTH_PX, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {
@@ -170,6 +170,25 @@ const roadblockComplete = (name: TacticalGraphicName, res: number) =>
 const crossedTask = (name: TacticalGraphicName, res: number) =>
     new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
 
+/**
+ * The point airfield (131900): one click drops it, then the operator scales it.
+ *
+ * Resizable, unlike the crossed tasks, and for the reason that separates the two: a crossed
+ * task is a badge that means "this task, here", where an airfield covers ground. `res * 34`
+ * is {@link AIRFIELD_DROP_HALF_WIDTH_PX} worth of metres at the placing zoom — a starting
+ * size only, converted once and then owned by the graphic, **not** divided back out by the
+ * paint the way a screen-pinned symbol's is.
+ *
+ * Rotation stays off: `PointDropController` no-ops it and the row gives the symbol one
+ * orientation.
+ */
+const airfield = (name: TacticalGraphicName, res: number) =>
+    new PointDropController(
+        new MissionTaskGraphicBase(name, res * AIRFIELD_DROP_HALF_WIDTH_PX, res),
+        res * AIRFIELD_DROP_HALF_WIDTH_PX,
+        true,
+    );
+
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
     controller.editStretches = true;
@@ -232,7 +251,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
     [TacticalGraphicName.PsyOpsZoneCircular]: circularArea,
     // Dropped on one click and static, like the crossed tasks: no resize, no rotate.
-    [TacticalGraphicName.Airfield]:                              crossedTask,
+    [TacticalGraphicName.Airfield]:                              airfield,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
     [TacticalGraphicName.FighterEngagementZone]: polygon,

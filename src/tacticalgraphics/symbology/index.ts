@@ -107,7 +107,7 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
-export {AIRFIELD_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
+export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 export type {ResolvedRangeFanBand} from './boundaryPaints';
