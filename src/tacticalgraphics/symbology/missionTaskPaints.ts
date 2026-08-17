@@ -12,7 +12,6 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {
-    allowedGestures,
     CAP_HEIGHT_FRACTION,
     fontStyle,
     maxGraphicLabelScale,
@@ -58,6 +57,29 @@ const CROSSED_HASH_DASH = [12, 8];
  * visibly wider gap than a cross for the same number.
  */
 const CROSSED_LABEL_CLEARANCE_PX = 7;
+
+/**
+ * The half-width a crossed task's label is sized against: the symbol's own on screen,
+ * **capped at the size it is dropped at**.
+ *
+ * Two different complaints, one number. Ratio-locked outright, the letter grows without
+ * limit as the operator drags the symbol out — a `D` the size of a building. Fixed
+ * outright, it does not shrink when the graphic does, so zooming out leaves a full-size
+ * letter sitting in a symbol that has become a few pixels of line work, which is what these
+ * looked like until 2026-08-17.
+ *
+ * So it tracks the symbol *downward* and stops at the drop size going up. Below the cap the
+ * label and the graphic shrink together; above it the graphic keeps growing and the label
+ * stays legible at the size it was designed at.
+ *
+ * The arms' gap is measured from the same number, because the gap has to fit the label that
+ * actually renders. Two calls to one rule rather than the rule twice.
+ */
+function crossedLabelHalfWidthPx(feature: PaintFeature, context: PaintContext): number {
+    const size = feature.graphicSize;
+    if (!size || size <= 0) return CROSSED_HALF_WIDTH_PX;
+    return Math.min(size / context.resolution, CROSSED_HALF_WIDTH_PX);
+}
 
 /**
  * The label scale of a crossed mission task, ratio-locked to the symbol's half-width.
@@ -117,22 +139,10 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         const cx = feature.graphicCenter?.[0] ?? (a0[0] + a1[0]) / 2;
         const cy = feature.graphicCenter?.[1] ?? (a0[1] + a1[1]) / 2;
 
-        // **Pinned only if the symbol refuses a resize.** Destroy is a badge: it marks a
-        // task at a place and describes no ground extent, so it holds a constant screen
-        // size and the stored size is divided straight back out. Its three siblings carry
-        // a real size as of 2026-08-17, so there is nothing to divide out and `k` is 1.
-        const size = feature.graphicSize;
-        const fixed = !allowedGestures(name).resize;
-        const k = fixed && size && size > 0 ? (CROSSED_HALF_WIDTH_PX * context.resolution) / size : 1;
-        const pinned = (p: ProjectedPosition): ProjectedPosition => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k];
-
-        // The label is ratio-locked to the symbol, so it has to be measured against the
-        // half-width the symbol actually comes out at. Pinned that is the constant; unpinned
-        // it is whatever the size works out to on screen, and using the constant there would
-        // leave one fixed-size word in a graphic that scales around it — a legible label on a
-        // small one and a speck on a large one, with the arms' gap wrong to match.
-        const halfWidthPx = fixed || !size || size <= 0 ? CROSSED_HALF_WIDTH_PX : size / context.resolution;
-        const scale = crossedMissionTaskLabelScale(halfWidthPx);
+        // **Nothing is divided out any more.** All four crossed tasks carry a real size as
+        // of 2026-08-17, so the arms are drawn where the generator put them and the symbol
+        // scales with the map like the ground it covers.
+        const scale = crossedMissionTaskLabelScale(crossedLabelHalfWidthPx(feature, context));
         const halfW = (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * context.resolution;
         const halfH = ((RATIO_LOCKED_LABEL_FONT_PX * scale * CAP_HEIGHT_FRACTION) / 2) * context.resolution;
         const clearance = CROSSED_LABEL_CLEARANCE_PX * context.resolution;
@@ -140,8 +150,8 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         const paints: Paint[] = [];
 
         for (let i = 0; i < 2; i++) {
-            const start = pinned(lines[i][0]);
-            const end = pinned(lines[i][1]);
+            const start = lines[i][0];
+            const end = lines[i][1];
             const dx = end[0] - start[0];
             const dy = end[1] - start[1];
             const len = Math.hypot(dx, dy);
@@ -174,7 +184,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         // where the arm they sit on is broken.
         for (let i = 2; i < lines.length; i++) {
             paints.push({
-                geometry: {type: 'LineString', coordinates: lines[i].map(pinned)},
+                geometry: {type: 'LineString', coordinates: lines[i]},
                 stroke: strokeFor(false),
             });
         }
@@ -186,7 +196,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
 /** The one-letter label of a crossed mission task, at its constant scale. */
 export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): MissionTaskPaint {
     const label = getLabel(name);
-    return feature => {
+    return (feature, context) => {
         if (!label || feature.geometry.type !== 'Point') return [];
         return [{
             geometry: feature.geometry,
@@ -197,7 +207,7 @@ export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): Mission
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
-                scale: crossedMissionTaskLabelScale(),
+                scale: crossedMissionTaskLabelScale(crossedLabelHalfWidthPx(feature, context)),
             },
         }];
     };

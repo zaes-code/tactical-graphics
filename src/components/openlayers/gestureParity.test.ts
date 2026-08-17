@@ -107,14 +107,18 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         });
         expect(refusing.length).toBeGreaterThan(5);
 
-        // The three kinds of refusal, named so a change to any one of them is deliberate.
-        // Destroy is the last fixed-size crossed task: the other three became resizable on
-        // 2026-08-17 and are pinned here so that is not undone by accident.
-        expect(allowedGestures(TacticalGraphicName.Destroy).resize).toBe(false);
-        expect(allowedGestures(TacticalGraphicName.Destroy).rotate).toBe(false);
+        // The two kinds of refusal, named so a change to either is deliberate.
+        //
+        // The security operations are the library's only remaining fixed-size symbols:
+        // they mark a screening force rather than an extent of ground, so they turn but do
+        // not scale. Every crossed mission task left that group on 2026-08-17.
         expect(allowedGestures(TacticalGraphicName.Cover).rotate).toBe(true);
         expect(allowedGestures(TacticalGraphicName.Cover).resize).toBe(false);
-        for (const name of [TacticalGraphicName.Airfield, TacticalGraphicName.Suppress]) {
+        for (const name of [
+            TacticalGraphicName.Airfield,
+            TacticalGraphicName.Destroy,
+            TacticalGraphicName.Suppress,
+        ]) {
             expect(allowedGestures(name).resize).toBe(true);
             expect(allowedGestures(name).rotate).toBe(false);
         }

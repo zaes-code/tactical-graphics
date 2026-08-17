@@ -562,18 +562,6 @@ export interface AllowedGestures {
 }
 
 /**
- * Destroy. A fixed-size symbol: the paint pins it to a constant 100 px across at every
- * zoom, so a stored size is divided straight back out and neither gesture can reach it.
- *
- * Its three siblings — interdict, neutralize and suppress — left this set on 2026-08-17.
- * They are dropped on one click like Destroy, but they then carry a real size, scale with
- * the map, and resize from the edge handle. @see RESIZE_ONLY_SYMBOLS, dropSizePx
- */
-const FIXED_SIZE_SYMBOLS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Destroy,
-]);
-
-/**
  * The security operations. They rotate — the arms point somewhere — but they are
  * badges and do not resize; every dimension is a screen constant.
  */
@@ -586,9 +574,15 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
 /**
  * The point-anchored symbols the operator **scales but does not turn**.
  *
- * Both are dropped whole on one click and then sized — an airfield covers ground, a
- * completed roadblock spans a road — but each has a single doctrinal orientation, so
- * `PointDropController` no-ops the rotate for both.
+ * Each is dropped whole on one click and then sized — an airfield covers ground, a
+ * completed roadblock spans a road, a crossed mission task covers the area the task
+ * applies to — but each has a single doctrinal orientation, so `PointDropController`
+ * no-ops the rotate.
+ *
+ * **All four crossed tasks are here as of 2026-08-17.** They were fixed-size badges,
+ * pinned to a constant 100 px so a stored size was divided straight back out. The
+ * security operations still are, and stay out of this set: they mark a screening force,
+ * not an extent of ground. @see ROTATE_ONLY_SYMBOLS
  *
  * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
  * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
@@ -599,6 +593,7 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
+    TacticalGraphicName.Destroy,
     TacticalGraphicName.Interdict,
     TacticalGraphicName.Neutralize,
     TacticalGraphicName.Suppress,
@@ -661,9 +656,6 @@ export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     // reshape — so `modify` is off and `translate` covers it.
     const pointAnchored = baseGeometryFor(name) === 'Point';
 
-    if (FIXED_SIZE_SYMBOLS.has(name)) {
-        return {translate: true, rotate: false, resize: false, modify: false};
-    }
     if (ROTATE_ONLY_SYMBOLS.has(name)) {
         return {translate: true, rotate: true, resize: false, modify: false};
     }
