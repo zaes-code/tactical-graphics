@@ -34,6 +34,7 @@ import {
 import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
+import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -561,15 +562,15 @@ export interface AllowedGestures {
 }
 
 /**
- * The four crossed mission tasks. Fixed-size symbols: the style pins them to a
- * constant 100 px across at every zoom, so a stored size is divided straight back
- * out and neither gesture can reach the picture.
+ * Destroy. A fixed-size symbol: the paint pins it to a constant 100 px across at every
+ * zoom, so a stored size is divided straight back out and neither gesture can reach it.
+ *
+ * Its three siblings — interdict, neutralize and suppress — left this set on 2026-08-17.
+ * They are dropped on one click like Destroy, but they then carry a real size, scale with
+ * the map, and resize from the edge handle. @see RESIZE_ONLY_SYMBOLS, dropSizePx
  */
 const FIXED_SIZE_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Destroy,
-    TacticalGraphicName.Interdict,
-    TacticalGraphicName.Neutralize,
-    TacticalGraphicName.Suppress,
 ]);
 
 /**
@@ -598,7 +599,62 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
 ]);
+
+/** How far a security operation's arm reaches from the centre, in screen pixels. */
+const SECURITY_OPERATION_REACH_PX =
+    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
+
+/**
+ * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by
+ * being defined at all, the statement that the graphic *is* a one-click drop.
+ *
+ * **Both engines need this and neither owned it.** OpenLayers had it as a literal in each
+ * controller factory (`res * 50`, `res * 34`, `res * 100`) and MapLibre had no idea these
+ * graphics existed as a family: it decided one-click-ness from `allowedGestures(name).resize`
+ * instead, on the reasoning that a resizable point graphic is *sized by the draw* in two
+ * clicks. That is true of the graphics OpenLayers draws through a Circle interaction and
+ * false of every one below, so the moment the airfield became resizable it took two clicks
+ * on MapLibre and one on OpenLayers.
+ *
+ * **In pixels, converted at the moment of the drop.** A metre default is a different symbol
+ * at every zoom — a few pixels across when zoomed out, with its handles piled on top of each
+ * other and nothing grabbable. A pixel default lands the same size on screen wherever the
+ * operator is working, and is then stored as the metres it came to.
+ */
+const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    // The crossed tasks, fixed and resizable alike: the size the family has always
+    // been drawn at. @see CROSSED_HALF_WIDTH_PX
+    [TacticalGraphicName.Destroy]: 50,
+    [TacticalGraphicName.Interdict]: 50,
+    [TacticalGraphicName.Neutralize]: 50,
+    [TacticalGraphicName.Suppress]: 50,
+    [TacticalGraphicName.Airfield]: 34,
+    // Twice the crossed tasks', which was only the number these were specified from
+    // rather than the size they landed on.
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
+    // The security operations, whose arms reach label padding + gap + arrow. Computed
+    // from the table the generator lays them out with rather than restated, so the drop
+    // cannot drift away from the symbol. They are pinned, so nothing *renders* from this
+    // — but a stored size that means something beats `DEFAULT_RADIUS_METERS`, which is
+    // what they were getting.
+    [TacticalGraphicName.Cover]: SECURITY_OPERATION_REACH_PX,
+    [TacticalGraphicName.Guard]: SECURITY_OPERATION_REACH_PX,
+    [TacticalGraphicName.Screen]: SECURITY_OPERATION_REACH_PX,
+};
+
+/**
+ * The size a one-click graphic is dropped at, or `undefined` if it is not one.
+ *
+ * A renderer asks two things of this: whether to finish the draw on the first click, and
+ * how big to make what it just dropped. @see DROP_SIZE_PX
+ */
+export function dropSizePx(name: TacticalGraphicName): number | undefined {
+    return DROP_SIZE_PX[name];
+}
 
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     // A point-anchored graphic has one vertex and dragging it is a move, not a

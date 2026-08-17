@@ -185,6 +185,7 @@ export {
     ratioLockedLabelScale,
     withOpacity,
     allowedGestures,
+    dropSizePx,
     supportsHostility,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
