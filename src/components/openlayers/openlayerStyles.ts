@@ -96,6 +96,8 @@ import {
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
     airfieldPaint,
+    airfieldPointLabelPaint,
+    airfieldPointPaint,
     plainOutlinePaint,
     areaDefaultLabelPaint,
     airCorridorLabelPaint,
@@ -1715,6 +1717,16 @@ export function nestedZoneStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(nestedZonePaint(), name);
 }
 
+/** The point airfield's crossed arms. @see airfieldPaints.ts, `airfieldPointPaint` */
+export function airfieldPointStyleFunc(): StyleFunction {
+    return asStyleFunction(airfieldPointPaint(), TacticalGraphicName.Airfield);
+}
+
+/** Its designation, beside the runway rather than through it. */
+export function airfieldPointLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airfieldPointLabelPaint(name), name);
+}
+
 /** The three obstacle bypasses. @see obstacleBypassPaints.ts */
 export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(obstacleBypassPaint(name), name);
@@ -2078,7 +2090,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirSpaceCoordinationAreaIrregular:
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
             return airspaceCoordinationAreaStyle(name);
-        case TacticalGraphicName.Airfield:
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
         // The row of mines rides the label feature, like the loudspeaker below it.
@@ -2176,8 +2187,13 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
         case TacticalGraphicName.LimitedAccessArea:
             return asStyleFunction(areaLabelStackPaint(name), name);
+        // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
+        // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been
+        // reading `areaDefaultLabelPaint` all along, so the two engines were drawing the same
+        // label through two implementations — and only one of them could be given the cap
+        // that keeps a designation inside its own outline. @see fitLabelScale
         default:
-            return getAreaLabelFn(fullLabel, dateLabel);
+            return asStyleFunction(areaDefaultLabelPaint(name), name);
     }
 }
 
@@ -2224,44 +2240,6 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
 /** **Ported.** @see airfieldPaints.ts, `airfieldPaint`. */
 export function getAirfieldStyle(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(airfieldPaint(areaDefaultLabelPaint(name)), name);
-}
-
-export function getAreaLabelStyles(feature: FeatureLike, resolution: number, textLabel: string, dateLabel: string, rotation: number, offsetY: number = 0) {
-    const geom = feature.getGeometry() as Point;
-    let styles = [];
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: textLabel,
-            font: fontStyle,
-            offsetY: offsetY,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            stroke: getHaloStroke(),
-        }),
-    }));
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: dateLabel,
-            font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            offsetY: 18 + offsetY,
-            stroke: getHaloStroke(),
-        }),
-    }));
-    return styles;
-}
-
-export function getAreaLabelFn(textLabel: string, dateLabel: string, rotation: number = 0): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        return getAreaLabelStyles(feature, resolution, textLabel, dateLabel, rotation);
-    };
 }
 
 /**

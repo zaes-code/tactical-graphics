@@ -1,6 +1,7 @@
 import {IGraphicGenerator, TacticalGraphicName} from "./type";
 import {AirCorridor} from "../graphics/AirCorridor";
 import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
+import {Airfield} from "../graphics/Airfield";
 import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
 import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {SweptArcTask} from "../graphics/SweptArcTask";
@@ -234,7 +235,6 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.MinedAreaFenced,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
-    TacticalGraphicName.Airfield,
     TacticalGraphicName.BattlePosition,
     TacticalGraphicName.BattlePositionPreparedButNotOccupied,
     TacticalGraphicName.StrongPoint,
@@ -325,6 +325,8 @@ let circularAreaGraphicNames = [
 ]
 circularAreaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new CircularArea(name)));
 
+// APP-06 131900 is a one-point symbol, not an area. @see graphics/Airfield.ts
+TacticalGraphicsRegistry.register(new Airfield());
 TacticalGraphicsRegistry.register(new EncirclementArea());
 TacticalGraphicsRegistry.register(new FortifiedArea());
 
