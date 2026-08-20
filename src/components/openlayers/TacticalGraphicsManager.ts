@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, allowedGestures, handleRole, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, allowedGestures, handleRole, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -58,6 +58,16 @@ const MIN_RESIZE_ORIGIN_PX = 8;
  * flip it back and forth. @see TacticalGraphicHandler.setMirrored
  */
 const MIRROR_FLIP_MIN_PX = 6;
+
+/**
+ * How far from a graphic a selection click may land, in screen pixels.
+ *
+ * Matches the radius MapLibre's `hitTest` uses, so a click selects the same thing on
+ * both engines. Only for *selection* — the handle hit test in `handleDownEvent` stays
+ * exact, because handles are drawn dots and a tolerance there would let one steal a
+ * drag meant for its neighbour.
+ */
+const SELECT_HIT_TOLERANCE_PX = 6;
 
 /**
  * How far past its own axis, in screen pixels, a handle has to be dragged before a
@@ -169,6 +179,14 @@ export class TacticalGraphicsManager {
      * just `currentMode`, so their behaviour is untouched.
      */
     private effectiveMode = (): InteractionType => this.activeGesture ?? this.currentMode;
+
+    /**
+     * Whether the drag in progress came from a host's affordance rather than a handle.
+     *
+     * The distinction matters wherever a drag path asks *which handle* it started on:
+     * an affordance started on none, and means the graphic as a whole.
+     */
+    private isAffordanceGesture = (): boolean => this.activeGesture !== undefined;
 
     // openlayer references.
     map: Map;
@@ -334,11 +352,22 @@ export class TacticalGraphicsManager {
      */
     selectAtPixel = (pixel: number[]): TacticalGraphicHandler | undefined => {
         let found: TacticalGraphicHandler | undefined;
-        this.map?.forEachFeatureAtPixel(pixel, feature => {
-            if (found) return;
-            const asFeature = this.asFeature(feature);
-            if (asFeature) found = this.getFeatureController(asFeature);
-        });
+        this.map?.forEachFeatureAtPixel(
+            pixel,
+            feature => {
+                if (found) return;
+                const asFeature = this.asFeature(feature);
+                if (asFeature) found = this.getFeatureController(asFeature);
+            },
+            // **A selection click needs a tolerance; OpenLayers defaults to zero.**
+            // Line work is 2 px wide, so a pixel-exact hit test made a phase line
+            // something you had to aim at rather than click. Worse, several families draw
+            // *nothing* on the line the user drew — a bridge and an air corridor are two
+            // rails offset either side of it — so the miss was the common case, not the
+            // edge one. MapLibre's `hitTest` has always used a radius; this is the same
+            // forgiveness, and it is what makes the two engines answer a click alike.
+            {hitTolerance: SELECT_HIT_TOLERANCE_PX},
+        );
         return found;
     };
 
@@ -359,7 +388,27 @@ export class TacticalGraphicsManager {
         // the global rule.
         const selectedFeatures = this.isEditing() ? (this.selectedController?.getFeatures() ?? []) : undefined;
         this.getRenderedFeaturesByProp('handle').forEach(feature => {
-            const visible = anyVisible && (!selectedFeatures || selectedFeatures.includes(feature));
+            let visible = anyVisible && (!selectedFeatures || selectedFeatures.includes(feature));
+
+            /*
+             * **A rectangular zone shows no shape handle in edit mode.**
+             *
+             * Its corner is not a point with a meaning of its own — it is a consequence
+             * of the box — so *both* engines already refuse to reshape one:
+             * `RectangularAreaGraphicController` clears `base` to keep it out of
+             * OpenLayers' `Modify`, and MapLibre's `applyGesture` returns early on
+             * `isRectangular`. The handle was therefore red, which in this library means
+             * "you can drag this", and nothing read it. The resize affordance is what
+             * sizes these now, and the width read-out reports the number.
+             *
+             * Edit mode only: legacy `resize` mode does claim this handle
+             * (`handleDownEvent` returns true for it there), and that behaviour is
+             * published surface.
+             */
+            if (visible && this.isEditing() && !feature.get('offsetHandler')) {
+                const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+                if (name && isRectangular(name)) visible = false;
+            }
             feature.set('hidden', !visible);
             // The center dot is grabbable for a move and nothing else — see
             // `handleDownEvent`. Publish that so its style can color itself
@@ -679,6 +728,18 @@ export class TacticalGraphicsManager {
         // button. Mobile defense needed it — its controller never opts into
         // `editStretches`, so an edit-mode drag on its mirror handle was not claimed and
         // the flip was reachable only from resize. @see handleRole
+        // **A width handle sets a width, whatever the mode** — the same rule already
+        // stated for the mirror handle just below, and the one MapLibre states in
+        // `applyHandleRole`: a handle with a role means that role, and reading the mode
+        // first makes one dot do different things depending on a button.
+        //
+        // Without this, a corridor's width was unreachable in `edit`: its controller
+        // never opts into `editStretches`, so the grab was not claimed, the drag fell
+        // through to the map, and the only mode that could widen it was `resize` — which
+        // the panel no longer offers.
+        const offsetGrab = !!this.activeController.setOffset && !!feature.get('offsetHandler');
+        if (offsetGrab) return true;
+
         if (this.isModifying()) return this.isMirrorHandleGrab() || !!this.activeController.editStretches;
 
         return this.isRotating() || this.isTranslating() || this.isResizing();
@@ -691,8 +752,14 @@ export class TacticalGraphicsManager {
         // under the cursor. The controller has no coordinate of its own during a resize —
         // only a scale delta — so it has to come from here. `handleUpEvent` disarms it.
         if (this.isResizing()) {
+            // **The anchor follows the cursor only for a handle drag.** It exists to keep
+            // the hashed read-out under the hand that is moving the rim. An affordance
+            // sits outside the graphic entirely, so following it swung the line off to a
+            // box corner and the read-out looked nothing like the one a handle resize
+            // draws — same number, different picture. Passing no anchor leaves the line
+            // on the rim handle, so both routes read identically.
             (this.activeController as {graphic?: {showMeasure?: (a: boolean, c?: Coordinate) => void}})
-                .graphic?.showMeasure?.(true, evt.coordinate);
+                .graphic?.showMeasure?.(true, this.isAffordanceGesture() ? undefined : evt.coordinate);
         }
 
         // handle point vs linestring vs polygon vs circular graphics differently.
@@ -858,6 +925,17 @@ export class TacticalGraphicsManager {
             case InteractionType.edit:
             case InteractionType.modify:
             case InteractionType.resize:
+                // **An affordance gesture grabbed no handle, so it means the whole
+                // graphic.** Every rule below answers "which handle was this?", and that
+                // question has no answer here — the pointer went down on a button
+                // outside the map. Bailing on the missing feature instead, which is what
+                // this did, made the resize icon dead on *every* LineString graphic:
+                // fields of fire, the retrogrades, the bridges, disrupt, block.
+                if (this.isAffordanceGesture()) {
+                    this.handleResize(evt);
+                    this.lastPointerPosition = evt.coordinate;
+                    break;
+                }
                 if (!this.activeFeature) return;
 
                 // A graphic whose shape *is* its vertex positions reshapes in **modify**
