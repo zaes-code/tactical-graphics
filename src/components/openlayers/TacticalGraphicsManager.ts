@@ -295,6 +295,10 @@ export class TacticalGraphicsManager {
         if (this.selectedController === controller) return;
         this.selectedController = controller;
         this.toggleHandleFeatures();
+        // **Rebuild `Modify` as well.** In edit mode its feature collection is the
+        // selection, so a selection change that did not rebuild it left the previous
+        // graphic reshapeable and the new one inert.
+        this.toggleModifyInteraction();
         this.onSelectionChange?.(controller);
     };
 
@@ -364,8 +368,21 @@ export class TacticalGraphicsManager {
         });
     };
 
+    /**
+     * **`edit` installs `Modify` too, and that is not optional.**
+     *
+     * Reshaping a line or a polygon is OpenLayers' `Modify` interaction, not this class:
+     * `handleDownEvent` deliberately declines a reshape drag unless the controller opted
+     * into `editStretches` or a mirror handle was grabbed, and lets `Modify` have
+     * everything else. So a mode that shows handles but installs no `Modify` shows
+     * handles that do nothing — and loses the blue "a drag here adds a vertex" marker,
+     * which is `Modify`'s own default style rather than anything this repo draws.
+     *
+     * That is exactly what `edit` did when it was added, and both halves went together:
+     * the handles stopped dragging and the vertex hint disappeared.
+     */
     toggleModifyInteraction = (): void => {
-        if (this.currentMode === InteractionType.modify) {
+        if (this.currentMode === InteractionType.modify || this.isEditing()) {
             this.addModifyInteraction();
         } else {
             this.removeModifyInteraction();
@@ -1328,6 +1345,20 @@ export class TacticalGraphicsManager {
         // Only allow the base feature (linestring/polygon) for a tactical graphic to be modified
         // once the graphic is modified, the underlying graphic will re-render the tactical graphic from the geometry library.
         let baseFeatures = this.getRenderedFeaturesByProp('base');
+
+        // **In edit mode, only the selected graphic's base.** Handles are already scoped
+        // to the selection there, and a `Modify` over every base would let the user drag
+        // a vertex of a graphic wearing no handles at all — an edit with no visible
+        // affordance behind it. `modify` mode stays global, as it always was.
+        if (this.isEditing()) {
+            const selected = this.selectedController?.getFeatures();
+            baseFeatures = selected ? baseFeatures.filter(feature => selected.includes(feature)) : [];
+        }
+
+        // Nothing to modify — an edit mode with no selection yet. Leave the interaction
+        // off rather than installing one over an empty collection.
+        if (!baseFeatures.length) return;
+
         baseFeatures.forEach(feature => feature.set('hidden', false));
 
         this.modify = new Modify({

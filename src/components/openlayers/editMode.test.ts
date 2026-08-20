@@ -21,6 +21,7 @@
  */
 
 import {Feature} from 'ol';
+import {Modify} from 'ol/interaction';
 import {
     HANDLE_EDIT_MODES,
     TacticalGraphicName,
@@ -42,11 +43,15 @@ const RES = 100;
  * conversions are the identity divided by `RES`, so a projected extent and a screen box
  * are the same numbers scaled — which is enough to assert the box tracks the graphic.
  */
-function stubbedManager(): TacticalGraphicsManager {
+function stubbedManager(): TacticalGraphicsManager & {interactions: unknown[]} {
+    const interactions: unknown[] = [];
     const map = {
-        addInteraction: () => {},
+        addInteraction: (i: unknown) => interactions.push(i),
         addLayer: () => {},
-        removeInteraction: () => {},
+        removeInteraction: (i: unknown) => {
+            const at = interactions.indexOf(i);
+            if (at >= 0) interactions.splice(at, 1);
+        },
         on: () => {},
         un: () => {},
         getView: () => ({getResolution: () => RES, on: () => ({}), un: () => {}}),
@@ -56,7 +61,14 @@ function stubbedManager(): TacticalGraphicsManager {
         forEachFeatureAtPixel: () => undefined,
         getInteractions: () => ({getArray: () => []}),
     };
-    return new TacticalGraphicsManager(map as never);
+    const manager = new TacticalGraphicsManager(map as never) as TacticalGraphicsManager & {interactions: unknown[]};
+    manager.interactions = interactions;
+    return manager;
+}
+
+/** Whether OpenLayers' own `Modify` is installed right now. */
+function hasModify(manager: TacticalGraphicsManager & {interactions: unknown[]}): boolean {
+    return manager.interactions.some(i => i instanceof Modify);
 }
 
 /** Builds a graphic, registers it, and puts its features in the source. */
@@ -164,6 +176,115 @@ describe('the selection', () => {
         manager.setInteractionMode(InteractionType.edit);
 
         expect(manager.selectionBox()).toBeUndefined();
+    });
+});
+
+/**
+ * # Reshaping is OpenLayers' `Modify`, so edit mode has to install it
+ *
+ * `handleDownEvent` deliberately declines a reshape drag unless the controller opted into
+ * `editStretches` or a mirror handle was grabbed, and leaves everything else to `Modify`.
+ * A mode that shows handles without installing one therefore shows handles that do
+ * nothing — and loses the blue "a drag here adds a vertex" marker, which is `Modify`'s
+ * own default style rather than anything this repo draws.
+ *
+ * That is exactly what `edit` shipped as, and both symptoms arrived together.
+ */
+describe('edit mode installs the Modify interaction', () => {
+    it('installs it once a graphic is selected', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+
+        expect(hasModify(manager)).toBe(true);
+    });
+
+    it('leaves it off while nothing is selected', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+
+        expect(hasModify(manager)).toBe(false);
+    });
+
+    /**
+     * Scoped to the selection, because the handles are. A `Modify` over every base would
+     * let the user drag a vertex of a graphic wearing no handles at all.
+     */
+    it('offers only the selected graphic to it', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        const b = build(manager, TacticalGraphicName.PhaseLine, 'b');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+
+        // `addModifyInteraction` un-hides exactly the bases it hands to `Modify`.
+        const unhidden = manager.renderingVectorSource
+            .getFeatures()
+            .filter(feature => feature.get('base') && !feature.get('hidden'));
+        expect(unhidden.length).toBeGreaterThan(0);
+        expect(unhidden.every(feature => a.getFeatures().includes(feature))).toBe(true);
+        expect(unhidden.some(feature => b.getFeatures().includes(feature))).toBe(false);
+    });
+
+    it('rebuilds it when the selection moves to another graphic', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        const b = build(manager, TacticalGraphicName.PhaseLine, 'b');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+        manager.setSelection(b);
+
+        expect(hasModify(manager)).toBe(true);
+        const unhidden = manager.renderingVectorSource
+            .getFeatures()
+            .filter(feature => feature.get('base') && !feature.get('hidden'));
+        expect(unhidden.every(feature => b.getFeatures().includes(feature))).toBe(true);
+    });
+
+    /** Never more than one: two stacked interactions is a documented past defect. */
+    it('never stacks two', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+        manager.setInteractionMode(InteractionType.modify);
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+
+        expect(manager.interactions.filter(i => i instanceof Modify)).toHaveLength(1);
+    });
+
+    it('takes it off again on the way back to view', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+        manager.setInteractionMode(InteractionType.view);
+
+        expect(hasModify(manager)).toBe(false);
+    });
+
+    /** The legacy mode is global and stays that way — every base, selection or not. */
+    it('still hands modify mode every graphic', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        const b = build(manager, TacticalGraphicName.PhaseLine, 'b');
+
+        manager.setInteractionMode(InteractionType.modify);
+
+        const unhidden = manager.renderingVectorSource
+            .getFeatures()
+            .filter(feature => feature.get('base') && !feature.get('hidden'));
+        expect(unhidden.some(feature => a.getFeatures().includes(feature))).toBe(true);
+        expect(unhidden.some(feature => b.getFeatures().includes(feature))).toBe(true);
     });
 });
 

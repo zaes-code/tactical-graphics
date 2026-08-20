@@ -113,6 +113,33 @@ async function run(engine) {
 
     await page.screenshot({path: `${OUT}/edit-${engine}-moved.png`});
 
+    // ---- 6b. The graphic's OWN handles must still reshape it ----
+    //
+    // The regression this section exists for: `edit` showed handles but installed no
+    // `Modify` interaction, so the handles were inert and OpenLayers' blue
+    // "a drag here adds a vertex" marker vanished with them. Both went together.
+    const sel = await page.evaluate(() => window.__tacticalEngine.selectionBox());
+    // The line's own end vertex, which sits at a corner of the box.
+    const vx = mapBox.x + sel.x + sel.width;
+    const vy = mapBox.y + sel.y + sel.height;
+
+    const overVertex = await page.evaluate(({x, y}) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? `${el.tagName}.${String(el.className).slice(0, 30)}` : 'none';
+    }, {x: Math.round(vx), y: Math.round(vy)});
+    check(`${engine}: nothing covers the graphic's corner handle`,
+        !/MuiBox|MuiTooltip/.test(overVertex), `topmost = ${overVertex}`);
+
+    const preDrag = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry.coordinates));
+    await page.mouse.move(vx, vy);
+    await page.mouse.down();
+    await page.mouse.move(vx + 70, vy + 50, {steps: 12});
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    const postDrag = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry.coordinates));
+    check(`${engine}: dragging a handle still reshapes the graphic`, preDrag !== postDrag);
+    await page.screenshot({path: `${OUT}/edit-${engine}-handle-drag.png`});
+
     // ---- 7. A rotate-refusing symbol shows no rotate button ----
     await page.evaluate(() => window.__tacticalEngine.clearAll());
     await page.waitForTimeout(400);
