@@ -496,6 +496,62 @@ export function mapPaintGeometry<T extends ProjectedGeometry>(geometry: T, fn: (
  * separates a generated circle from a drawn route. Treating an open line as a ring would
  * hand `pointInRing` a shape with no inside.
  */
+/**
+ * A geometry's axis-aligned extent, in projected meters — or `undefined` when it has
+ * no positions at all.
+ *
+ * `undefined` rather than a zero-size box at the origin, because every caller is
+ * placing something *at* this box: the zone labels hang their date-time group off a
+ * corner, and a box at [0,0] puts the dates in the Gulf of Guinea. An editor drawing a
+ * selection box has the same problem one screen further on.
+ *
+ * **In Layer 1 because both renderers need the same box.** It lived in
+ * `maplibreAdapter.ts`, so OpenLayers had no generic answer to "how big is this
+ * graphic" and computed a `getExtent()` for area holders only — a *base polygon's*
+ * extent, where MapLibre measured the *rendered* geometry. Those are different boxes,
+ * and edit chrome drawn from them would sit in a different place on each engine.
+ * @see ai/conventions.md — "A symbology fact never lives in a holder"
+ */
+export function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['bounds'] {
+    if (!geometry) return undefined;
+    const positions = paintGeometryMembers(geometry).flatMap(paintGeometryPositions);
+    if (!positions.length) return undefined;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of positions) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    return {minX, minY, maxX, maxY};
+}
+
+/**
+ * The union of several extents — how a renderer measures a graphic that is drawn as
+ * more than one geometry.
+ *
+ * A tactical graphic is line work *plus* labels *plus* whatever a paint function
+ * synthesises, and a box drawn around only the line work clips the amplifiers that
+ * hang outside it. Undefined members are skipped, so a caller can pass the optional
+ * ones straight in.
+ */
+export function unionBounds(...boxes: (PaintFeature['bounds'] | undefined)[]): PaintFeature['bounds'] {
+    let out: PaintFeature['bounds'] | undefined;
+    for (const box of boxes) {
+        if (!box) continue;
+        out = out
+            ? {
+                  minX: Math.min(out.minX, box.minX),
+                  minY: Math.min(out.minY, box.minY),
+                  maxX: Math.max(out.maxX, box.maxX),
+                  maxY: Math.max(out.maxY, box.maxY),
+              }
+            : box;
+    }
+    return out;
+}
+
 export function outerRingOf(geometry: ProjectedInputGeometry | undefined): ProjectedPosition[] | undefined {
     if (!geometry) return undefined;
     if (geometry.type === 'Polygon') return geometry.coordinates[0];

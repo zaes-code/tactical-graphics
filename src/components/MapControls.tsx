@@ -24,9 +24,6 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import RotateLeftIcon from '@mui/icons-material/RotateLeft';
-import OpenWithIcon from '@mui/icons-material/OpenWith';
-import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -270,16 +267,23 @@ const MapControls: React.FC<Props> = ({
 
     const isDrawing = interactionMode === 'drawing';
 
-    // **The button values are the modes.** They used to be strings this panel mapped on
-    // and off a numeric enum through two switch blocks; `EditMode` is a string union, so
-    // the toggle group's own value is already the answer.
-    const EDIT_BUTTONS: EditMode[] = ['rotate', 'resize', 'translate', 'modify'];
-    const activeEditMode = EDIT_BUTTONS.includes(interactionMode) ? interactionMode : null;
+    /**
+     * **One button, because the operator is picking a graphic, not a verb.**
+     *
+     * This panel used to offer four — rotate, resize, move, edit — each a *global* mode.
+     * That made the toolbar the thing being manipulated: you chose a verb, then hunted
+     * for a noun, every graphic on the map wore handles at once, and a symbol that
+     * refuses the verb you picked simply did nothing when you dragged it.
+     *
+     * `edit` inverts it. Click a graphic; it wears its own handles, a dashed box, and a
+     * button for each gesture *it* accepts. The four old modes are still in `EditMode`
+     * and still work — they are published surface — but nothing in this panel selects
+     * them any more. @see EditAffordances
+     */
+    const isEditing = interactionMode === 'edit';
 
-    const handleEditMode = (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
-        // Re-pressing the selected button clears it, which is what a toggle group means
-        // by handing back the mode that is already active.
-        onToggleInteraction(newMode === null || newMode === activeEditMode ? 'view' : (newMode as EditMode));
+    const handleEditMode = () => {
+        onToggleInteraction(isEditing ? 'view' : 'edit');
     };
 
     const pointHint = selected ? getPointHint(selected.value) : null;
@@ -608,35 +612,22 @@ const MapControls: React.FC<Props> = ({
                     }}>
                         Edit Mode
                     </Typography>
-                    <ToggleButtonGroup
-                        exclusive
-                        value={activeEditMode}
-                        onChange={handleEditMode}
-                        size="small"
-                        disabled={!capabilities.edit}
-                        sx={{width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)'}}
-                    >
-                        <Tooltip title={capabilities.edit ? 'Rotate' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="rotate" sx={{py: 0.75}}>
-                                <RotateLeftIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Resize' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="resize" sx={{py: 0.75}}>
-                                <ZoomOutMapIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Drag / Reposition' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="translate" sx={{py: 0.75}}>
-                                <OpenWithIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Edit' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="modify" sx={{py: 0.75}}>
-                                <EditIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                    </ToggleButtonGroup>
+                    <Tooltip title={capabilities.edit ? 'Select a graphic to move, rotate, resize or reshape it' : capabilities.unsupportedReason ?? ''}>
+                        {/* A span, because MUI cannot attach a tooltip to a disabled button. */}
+                        <span>
+                            <Button
+                                fullWidth
+                                variant={isEditing ? 'contained' : 'outlined'}
+                                size="small"
+                                disabled={!capabilities.edit}
+                                onClick={handleEditMode}
+                                startIcon={<EditIcon sx={{fontSize: 16}}/>}
+                                sx={{textTransform: 'none'}}
+                            >
+                                {isEditing ? 'Editing — click a graphic' : 'Edit'}
+                            </Button>
+                        </span>
+                    </Tooltip>
                 </Box>
 
                 <Divider/>
