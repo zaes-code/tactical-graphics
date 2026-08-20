@@ -39,8 +39,8 @@ import {
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
-import {resolutionOf, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {resolutionOf, toLonLat, toMercator} from '../projection';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase, type GestureKind, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -57,8 +57,13 @@ import {
     type GraphicDescription,
 } from './editGeometry';
 
-/** What a drag currently means. Mirrors OpenLayers' `InteractionType`. */
-export type EditMode = 'view' | 'translate' | 'rotate' | 'resize' | 'modify';
+/**
+ * What a drag currently means. Mirrors OpenLayers' `InteractionType`.
+ *
+ * `edit` is the unified mode: click to select, then reshape by the selected graphic's
+ * own handles or drive a gesture from an affordance the host draws around it.
+ */
+export type EditMode = 'view' | 'edit' | 'translate' | 'rotate' | 'resize' | 'modify';
 
 /** How close a click must land on a base vertex to grab it, in screen pixels. */
 const VERTEX_GRAB_PX = 10;
@@ -135,7 +140,7 @@ export interface InteractionCallbacks {
  * `TacticalGraphicsManager.enableHandleModes` — the two must agree, because the same
  * button in the same panel drives both.
  */
-const HANDLE_MODES: readonly EditMode[] = ['translate', 'rotate', 'resize', 'modify'];
+const HANDLE_MODES: readonly EditMode[] = ['edit', 'translate', 'rotate', 'resize', 'modify'];
 
 /** How near the pivot a grab counts as *on* it, in screen pixels. @see startedOnPivot */
 const PIVOT_GRAB_PX = 6;
@@ -186,6 +191,25 @@ export class MapLibreInteractions {
         startPixel: {x: number; y: number};
     } | null = null;
 
+    /**
+     * The gesture a host's affordance started, held for one drag.
+     *
+     * `edit` is not itself a gesture — a drag inside it reshapes, as `modify` does. When
+     * the host presses a rotate or resize affordance the drag has to mean *that*, so it
+     * is latched here and read by {@link effectiveMode}, then dropped on release.
+     */
+    private activeGesture: GestureKind | null = null;
+
+    /**
+     * What a drag means right now: the latched gesture if one is running, else the mode.
+     *
+     * `applyGesture` switches on this rather than on `this.mode`, which is what lets the
+     * one `edit` mode host all three gestures without any of them being reimplemented.
+     */
+    private effectiveMode(): EditMode {
+        return this.activeGesture ?? this.mode;
+    }
+
     constructor(
         private readonly map: MapLibreMap,
         private readonly renderer: NativeLayerRenderer,
@@ -225,14 +249,118 @@ export class MapLibreInteractions {
         // The hint belongs to modify alone, and a stale one left behind would offer an
         // edit the new mode does not perform. @see updateVertexHint
         this.renderer.setVertexHint(null);
+        /*
+         * **Entering edit starts with nothing selected**, on both engines.
+         *
+         * MapLibre keeps a selection from whatever was last clicked or drawn —
+         * `finishDraw` selects what it just made, and the properties dialog reads it —
+         * while OpenLayers had no selection concept at all until edit mode gave it one.
+         * Left alone, the same button produced a graphic already wearing handles and a
+         * box on one engine and a bare map on the other, which is the class of
+         * divergence this repository keeps finding. The panel says "click a graphic";
+         * both engines now mean it.
+         */
+        if (mode === 'edit') this.renderer.select(null);
+
         // Every graphic wears its handles in a handle-bearing mode and none in view,
-        // which is what the OpenLayers manager does on the same button.
+        // which is what the OpenLayers manager does on the same button — except in
+        // `edit`, where the handles belong to the selection alone.
         // @see NativeLayerRenderer.setHandleMode
-        this.renderer.setHandleMode(HANDLE_MODES.includes(mode));
+        this.renderer.setHandleMode(HANDLE_MODES.includes(mode), mode === 'edit');
     }
 
     getMode(): EditMode {
         return this.mode;
+    }
+
+    /**
+     * Runs one gesture from a host's affordance, outside the map's own pointer handlers.
+     *
+     * The affordance is a DOM element over the map, so its `pointerdown` never reaches
+     * MapLibre — and even if it did, the pointer is nowhere near the graphic, so the hit
+     * test would find nothing. The drag is therefore driven from `window`, and the state
+     * `onPointerDown` would have latched is set here from the *selection* instead of
+     * from a hit test.
+     *
+     * Everything after that is the existing machinery: `activeGesture` makes
+     * {@link effectiveMode} answer for the gesture, and each move goes through the same
+     * `applyGesture` a handle drag uses. @see TacticalGraphicsManager.beginGesture, the
+     * OpenLayers twin — the two must stay the same gesture.
+     */
+    beginGesture(kind: GestureKind, event: PointerEvent): boolean {
+        if (this.activeGesture || this.dragging || this.drawing) return false;
+        const id = this.renderer.selection;
+        const graphic = id ? this.renderer.find(id) : undefined;
+        if (!graphic) return false;
+        if (!allowedGestures(graphic.name)[kind]) return false;
+
+        const origin = this.positionFromPointer(event);
+        if (!origin) return false;
+
+        this.activeGesture = kind;
+        this.dragging = {
+            graphic,
+            vertex: -1,
+            insertAt: -1,
+            onCenter: false,
+            // An affordance is never on the anchor, so a resize from one always carries
+            // a ratio. The pivot guard is for a handle dragged from on top of it.
+            onPivot: false,
+            handle: -1,
+            last: origin,
+            // Already past the threshold: the host decided a drag began by pressing the
+            // affordance, and re-measuring it against a pixel distance would swallow the
+            // first few degrees of every rotate.
+            started: true,
+            startPixel: {x: event.clientX, y: event.clientY},
+        };
+
+        const move = (moveEvent: PointerEvent) => {
+            const to = this.positionFromPointer(moveEvent);
+            if (to) this.dragTo(to);
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            this.activeGesture = null;
+            this.endDrag();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        return true;
+    }
+
+    /** A DOM pointer event's position in lon/lat, or undefined if the map is not ready. */
+    private positionFromPointer(event: {clientX: number; clientY: number}): Position | undefined {
+        const canvas = this.map.getCanvasContainer();
+        if (!canvas) return undefined;
+        const rect = canvas.getBoundingClientRect();
+        const lngLat = this.map.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+        return [lngLat.lng, lngLat.lat];
+    }
+
+    /**
+     * The selected graphic's on-screen extent, in map-container pixels.
+     *
+     * From the **rendered** geometry's projected bounds, which is the same box the
+     * OpenLayers side measures from its rendered features — the two engines have to draw
+     * the host's chrome in the same place. @see boundsOf
+     */
+    selectionBox(): SelectionBox | undefined {
+        const id = this.renderer.selection;
+        const graphic = id ? this.renderer.find(id) : undefined;
+        const bounds = graphic?.graphic.bounds;
+        if (!bounds) return undefined;
+
+        // Two opposite corners: the projection counts y upward and the screen counts it
+        // downward, so min and max are re-derived after converting rather than assumed.
+        const topLeft = this.map.project(toLonLat([bounds.minX, bounds.maxY]));
+        const bottomRight = this.map.project(toLonLat([bounds.maxX, bounds.minY]));
+        const x = Math.min(topLeft.x, bottomRight.x);
+        const y = Math.min(topLeft.y, bottomRight.y);
+        return {x, y, width: Math.abs(bottomRight.x - topLeft.x), height: Math.abs(bottomRight.y - topLeft.y)};
     }
 
     /**
@@ -553,10 +681,11 @@ export class MapLibreInteractions {
         const handle = grabbed?.index ?? -1;
         const onHandle = handle >= 0;
         const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
-        const vertex = this.mode === 'modify' ? this.grabVertex(graphic, event.point) : -1;
+        const reshaping = this.mode === 'modify' || this.mode === 'edit';
+        const vertex = reshaping ? this.grabVertex(graphic, event.point) : -1;
         // Noted now, added on the first real move — a click that inserted a vertex would
         // mean every click on a line reshaped it. @see grabSegment
-        const insertAt = this.mode === 'modify' && vertex < 0 ? this.grabSegment(graphic, event.point) : -1;
+        const insertAt = reshaping && vertex < 0 ? this.grabSegment(graphic, event.point) : -1;
         if (!onHandle && !onGraphic && vertex < 0 && insertAt < 0) return;
 
         // Grabbing another graphic's handle makes it the selected one, so everything
@@ -635,7 +764,20 @@ export class MapLibreInteractions {
             drag.started = true;
         }
 
-        const to: Position = [event.lngLat.lng, event.lngLat.lat];
+        this.dragTo([event.lngLat.lng, event.lngLat.lat]);
+    };
+
+    /**
+     * Advances the drag in progress to `to`, in lon/lat.
+     *
+     * Split out of `onPointerMove` so an affordance gesture and a handle drag are the
+     * same code — the map's own pointer stream is one source of positions, and a host's
+     * `pointermove` on an element above the map is another. @see beginGesture
+     */
+    private dragTo(to: Position): void {
+        const drag = this.dragging;
+        if (!drag) return;
+
         let before: GraphicDescription = {geometry: drag.graphic.base.geometry, properties: drag.graphic.properties};
 
         // The drag began on a segment: add the vertex now that it is a drag, then carry
@@ -672,7 +814,23 @@ export class MapLibreInteractions {
         // nobody is changing. The read-out then follows the drag, reporting the radius
         // the user is dragging *to*, which is the whole point of showing it.
         if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
-    };
+    }
+
+    /**
+     * Ends the drag in progress, however it began.
+     *
+     * The body of what `onPointerUp` did, so an affordance gesture releases through the
+     * same door: the read-out comes down, pan goes back on, and a change is announced
+     * only if the drag moved something.
+     */
+    private endDrag(): void {
+        this.renderer.setMeasure(null);
+        if (!this.dragging) return;
+        const changed = this.dragging.started;
+        this.dragging = null;
+        this.map.dragPan.enable();
+        if (changed) this.callbacks.onChange?.();
+    }
 
     /**
      * The gesture the current mode means, applied to the description.
@@ -683,13 +841,17 @@ export class MapLibreInteractions {
      * itself off would look like a broken button. @see allowedGestures
      */
     private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        // Read once, at the top: an affordance gesture outranks the mode for the whole
+        // of this drag. @see effectiveMode
+        const mode = this.effectiveMode();
+
         // The center dot is a **shortcut to move**, and only in translate mode. Under
         // any other mode the drag falls through to what that mode means, which is what
         // OpenLayers does: grabbing a security operation's center rotates it, and a
         // gesture the graphic refuses is refused below rather than quietly becoming a
         // move. Treating the center as "move" in every mode made a security operation —
         // which refuses resize — move when the user asked it to resize.
-        if (drag.onCenter && this.mode === 'translate') return translate(before, drag.last, to);
+        if (drag.onCenter && mode === 'translate') return translate(before, drag.last, to);
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
@@ -699,8 +861,8 @@ export class MapLibreInteractions {
         if (byRole) return byRole;
 
         const allowed = allowedGestures(drag.graphic.name);
-        if (this.mode === 'rotate' && !allowed.rotate) return before;
-        if (this.mode === 'resize' && !allowed.resize) return before;
+        if (mode === 'rotate' && !allowed.rotate) return before;
+        if (mode === 'resize' && !allowed.resize) return before;
         // **Resize only, and decided once at pointer-down.** A grab on the pivot carries
         // no scale — the ratio is a tiny number over a tiny number — and testing per
         // step let the refusal lapse the moment the cursor left, after which every step
@@ -711,15 +873,20 @@ export class MapLibreInteractions {
         // angle at the pivot is `atan2(0, 0)` = 0, so the graphic turns by the direction
         // of the drag, which is a defined and useful gesture. Measured on a fields of
         // fire, grabbing handle 0: OpenLayers rotates, MapLibre did nothing.
-        if (drag.onPivot && this.mode === 'resize') return before;
+        if (drag.onPivot && mode === 'resize') return before;
 
-        switch (this.mode) {
+        switch (mode) {
             case 'translate':
                 return translate(before, drag.last, to);
             case 'rotate':
                 return rotate(before, drag.last, to);
             case 'resize':
                 return resize(before, drag.last, to);
+            // `edit` reshapes, exactly as `modify` does — the difference between the two
+            // is the selection, the box and the affordances, none of which change what a
+            // drag on a handle means. Sharing the case rather than duplicating it is what
+            // keeps them from drifting.
+            case 'edit':
             case 'modify':
                 // **A graphic that stretches on an edit drag resizes**, whether or not it
                 // reshapes — that is what makes a fields-of-fire's two arms feel like an
@@ -814,12 +981,7 @@ export class MapLibreInteractions {
     }
 
     private readonly onPointerUp = (): void => {
-        this.renderer.setMeasure(null);
-        if (!this.dragging) return;
-        const changed = this.dragging.started;
-        this.dragging = null;
-        this.map.dragPan.enable();
-        if (changed) this.callbacks.onChange?.();
+        this.endDrag();
     };
 
     /** The base vertex under a screen point, or -1. */
@@ -889,7 +1051,7 @@ export class MapLibreInteractions {
      * @see grabSegment for which graphics those are
      */
     private updateVertexHint(point: {x: number; y: number}): void {
-        if (this.mode !== 'modify' || this.dragging || this.drawing) {
+        if ((this.mode !== 'modify' && this.mode !== 'edit') || this.dragging || this.drawing) {
             this.renderer.setVertexHint(null);
             return;
         }

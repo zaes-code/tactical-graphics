@@ -15,13 +15,19 @@ import type {Map} from 'ol';
 import type {FeatureCollection} from 'geojson';
 import {
     TacticalGraphicName,
+    allowedGestures,
+    type AllowedGestures,
     type EditMode,
+    type GestureKind,
+    type SelectedGraphic,
+    type SelectionBox,
     type EngineCallbacks,
     type EngineCapabilities,
     type TacticalGraphicsEngine,
 } from '@zaes/tactical-graphics';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
-import {clearAllGraphics, restoreTacticalGraphics, serializeTacticalGraphics} from './persistence';
+import {clearAllGraphics, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
+import type {TacticalGraphicHandler} from './openlayersAdapter';
 
 /** Options for {@link createTacticalGraphics}. */
 export interface OpenLayersEngineOptions extends EngineCallbacks {
@@ -44,6 +50,7 @@ export interface OpenLayersEngineOptions extends EngineCallbacks {
  */
 const TO_INTERACTION: Record<EditMode, InteractionType> = {
     view: InteractionType.view,
+    edit: InteractionType.edit,
     translate: InteractionType.translate,
     rotate: InteractionType.rotate,
     resize: InteractionType.resize,
@@ -72,8 +79,45 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
 
     const setInteractionMode = (mode: EditMode) => manager.setInteractionMode(TO_INTERACTION[mode]);
 
+    /**
+     * The selection as the portable façade describes it.
+     *
+     * Built from the holder's own base feature rather than the source, so the geometry
+     * and the `tacticalGraphic` bag are the ones the graphic is actually being drawn
+     * from — the same object `snapshot()` would write.
+     */
+    const asSelected = (controller: TacticalGraphicHandler | undefined): SelectedGraphic | null => {
+        if (!controller) return null;
+        return {
+            id: controller.getSymbolId(),
+            name: manager.graphicNameOf(controller) as TacticalGraphicName,
+            base: serializeOneGraphic(controller),
+        };
+    };
+
+    manager.onSelectionChange = controller => options.onSelect?.(asSelected(controller));
+
     return {
         capabilities: CAPABILITIES,
+
+        getSelection: () => asSelected(manager.getSelection()),
+
+        select(id: string | null) {
+            manager.setSelection(id === null ? undefined : manager.getFeatureControllerBySymbolId(id));
+        },
+
+        selectionGestures(): AllowedGestures | null {
+            const controller = manager.getSelection();
+            if (!controller) return null;
+            const name = manager.graphicNameOf(controller);
+            // No stamp at all means no graphic to answer for — offering the permissive
+            // default here is how a Screen came to advertise a resize it refuses.
+            return name ? allowedGestures(name) : null;
+        },
+
+        selectionBox: (): SelectionBox | undefined => manager.selectionBox(),
+
+        beginGesture: (kind: GestureKind, event: PointerEvent) => manager.beginGesture(kind, event),
 
         startDrawing(name: TacticalGraphicName) {
             setInteractionMode('drawing');

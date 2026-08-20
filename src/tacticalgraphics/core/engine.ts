@@ -38,6 +38,7 @@
  */
 
 import type {FeatureCollection} from 'geojson';
+import type {AllowedGestures} from './symbology';
 import type {TacticalGraphicName} from './type';
 
 /**
@@ -48,15 +49,65 @@ import type {TacticalGraphicName} from './type';
  * keeps its numeric `InteractionType` internally and translates at this boundary.
  *
  * - `view` — no gesture; clicking selects.
+ * - `edit` — **the one mode a host needs.** Clicking selects; the selected graphic
+ *   wears its handles and its {@link SelectionBox}, and every gesture is reachable
+ *   from there. @see GestureKind
  * - `translate` — drag moves the graphic bodily.
  * - `rotate` / `resize` — drag turns or scales it about its anchor.
  * - `modify` — drag reshapes it: move a vertex, or add one on a segment.
  * - `drawing` — a draw is in progress. Set by `startDrawing`, not by a host.
+ *
+ * ## Why `edit` exists beside the four it subsumes
+ *
+ * The four gesture modes are *global*: a host puts the whole map into "rotate", and
+ * every graphic on it wears handles that only turn. That makes the toolbar, not the
+ * graphic, the thing the operator is manipulating — they pick a verb, then hunt for a
+ * noun, and a symbol that refuses the verb they picked simply does nothing.
+ *
+ * `edit` inverts it. The operator picks the graphic, and the graphic offers the verbs
+ * it accepts. The four stay in the union because they are published surface and
+ * because they are still what a *drag* means once one has begun — `beginGesture`
+ * switches into one for the duration of a drag and returns here after.
  */
-export type EditMode = 'view' | 'translate' | 'rotate' | 'resize' | 'modify' | 'drawing';
+export type EditMode = 'view' | 'edit' | 'translate' | 'rotate' | 'resize' | 'modify' | 'drawing';
 
-/** The modes in which every graphic wears its handles. */
-export const HANDLE_EDIT_MODES: readonly EditMode[] = ['translate', 'rotate', 'resize', 'modify'];
+/** The modes in which a graphic wears its handles. */
+export const HANDLE_EDIT_MODES: readonly EditMode[] = ['edit', 'translate', 'rotate', 'resize', 'modify'];
+
+/**
+ * A gesture an affordance can start, as opposed to a mode a host can sit in.
+ *
+ * Exactly the three that {@link AllowedGestures} answers for and that need an origin
+ * and a moving cursor to mean anything. Reshaping is not here: it has no single
+ * affordance, because *which* vertex you grabbed is the whole input.
+ */
+export type GestureKind = 'translate' | 'rotate' | 'resize';
+
+/**
+ * Where the selected graphic sits on screen, in **map-container** pixels — the box a
+ * host draws its edit chrome around.
+ *
+ * ## Screen pixels, and axis-aligned
+ *
+ * Not a geographic extent, and deliberately so. A host is positioning DOM: it needs
+ * the answer in the space its own elements live in, and converting one itself would
+ * mean knowing which engine projected it. Both engines already own that conversion
+ * for the properties dialog's connector.
+ *
+ * It is the bounding box of the graphic **as currently drawn**, so it re-fits every
+ * frame of a rotate rather than turning with the symbol. That keeps it a true bounding
+ * box for symbols that have no single orientation to turn with — a phase line, a
+ * boundary, a hand-drawn area — which is most of them.
+ *
+ * Origin is the top-left of the map container, y down, matching `getBoundingClientRect`
+ * minus the container's own offset.
+ */
+export interface SelectionBox {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
 
 /**
  * What an engine can do.
@@ -123,6 +174,49 @@ export interface TacticalGraphicsEngine {
     /** What a drag means from now on. */
     setInteractionMode(mode: EditMode): void;
     getInteractionMode(): EditMode;
+
+    /**
+     * The graphic the operator is working on, or `null`.
+     *
+     * In `edit` mode this is what wears the handles and what {@link selectionBox}
+     * measures. Setting it is how a host selects from outside the map — a list, a
+     * search result — and `null` clears.
+     */
+    getSelection(): SelectedGraphic | null;
+    select(id: string | null): void;
+
+    /**
+     * Which gestures the selected graphic accepts, so a host can offer exactly those.
+     *
+     * This is `allowedGestures(name)` for the selection, surfaced through the façade so
+     * a host never has to import the table and match it against a name it is holding.
+     * `null` when nothing is selected.
+     */
+    selectionGestures(): AllowedGestures | null;
+
+    /**
+     * Where the selection sits on screen right now, or `undefined` if nothing is
+     * selected or it is off screen. @see SelectionBox
+     *
+     * Recompute this on every `move`/`postrender` frame — it is a screen measurement
+     * and every pan, zoom and edit invalidates it.
+     */
+    selectionBox(): SelectionBox | undefined;
+
+    /**
+     * Starts `kind` on the selected graphic, driven by an affordance the host is
+     * rendering rather than by a mode the host has switched into.
+     *
+     * The engine takes the pointer for the duration: it captures, interprets every
+     * move as `kind` about the graphic's own anchor, and returns to `edit` on release.
+     * Pass the `pointerdown` event so the engine has the drag origin and can capture
+     * the pointer on the host's element.
+     *
+     * Refused — returning `false`, changing nothing — when nothing is selected or the
+     * symbol does not accept `kind`. A refusal is a fact worth surfacing: a host that
+     * hid the affordance in the first place should never see one.
+     */
+    beginGesture(kind: GestureKind, event: PointerEvent): boolean;
 
     /** Removes every graphic and returns to `view`. */
     clearAll(): void;

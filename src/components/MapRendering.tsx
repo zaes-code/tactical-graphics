@@ -9,6 +9,7 @@ import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import MapControls from './MapControls';
+import EditAffordances from './EditAffordances';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
@@ -153,8 +154,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
      */
     const handoverRef = useRef<FeatureCollection | null>(null);
 
+    /**
+     * The same handle as `engineRef`, as state.
+     *
+     * The ref is what the callbacks and effects read, because they run outside render
+     * and want the current value without re-subscribing. The edit chrome is a *rendered*
+     * child, so it needs the engine to arrive as a prop — a ref never re-renders anyone,
+     * and the affordances stayed invisible until some unrelated state change happened to
+     * flush them.
+     */
+    const [engineHandle, setEngineHandle] = useState<MapEngineHandle | null>(null);
+
     const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
         engineRef.current = handle;
+        setEngineHandle(handle);
         // The live engine, for the driving scripts. Each engine already publishes its
         // own map; this is the one thing above them — the handle the panel talks to.
         // Stripped from production builds; nothing in the app may read it.
@@ -335,6 +348,15 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         onReady={handleEngineReady}
                         onInteractionModeChange={setInteractionMode}
                     />}
+
+                {/*
+                  * The edit chrome, above both maps and outside either engine.
+                  *
+                  * Mounted here rather than inside each view because it is the same
+                  * component for both — it asks the engine for a rectangle in screen
+                  * pixels and knows nothing else about it. @see EditAffordances
+                  */}
+                <EditAffordances engine={engineHandle} active={interactionMode === 'edit'}/>
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
