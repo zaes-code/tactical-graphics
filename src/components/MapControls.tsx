@@ -825,7 +825,16 @@ const MapControls: React.FC<Props> = ({
                 </Box>
                 <FormGroup>
                     {ALL_CATEGORIES.map(cat => {
-                        const count = ALL_OPTIONS.filter(o => o.category === cat).length;
+                        /*
+                         * **Counted against the specification filter directly above it.**
+                         * This read `ALL_OPTIONS`, so switching to "APP-06 only" narrowed
+                         * the list while every category still advertised its full total —
+                         * the dialog contradicted itself, and a category that had become
+                         * empty still showed a number worth clicking.
+                         */
+                        const count = ALL_OPTIONS.filter(
+                            o => o.category === cat && matchesSpecificationFilter(o, specificationFilter),
+                        ).length;
                         return (
                             <FormControlLabel
                                 key={cat}

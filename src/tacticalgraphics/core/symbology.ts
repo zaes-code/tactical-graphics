@@ -372,6 +372,52 @@ export function hasRadiusReadout(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Circle graphics that draw the read-out while being sized but carry **no radius field
+ * in the properties dialog**.
+ *
+ * Seven, not ten: `TargetReferencePoint`, `PointTarget` and `FireSupportStation` also
+ * route through the circular family but are commented out of the controller registry,
+ * so they are not drawable. @see ai/excluded-graphics.md
+ *
+ * ## Why the two lists came apart
+ *
+ * They used to be one. `RADIUS_GRAPHICS` drove both the dialog's read-out and the hashed
+ * line under the cursor, and the coupling was deliberate — a graphic reporting a radius
+ * in one place and not the other reads as a bug.
+ *
+ * But the coupling ran the wrong way for a third of the family. These ten are drawn as
+ * circles and sized by dragging, and the number the user is dragging *to* is the whole
+ * point of showing it — while the dialog deliberately does not offer a radius field,
+ * because the amplifier is not one the symbol carries. So they resized blind: the
+ * neighbouring zone showed a distance and they showed nothing, for a reason no operator
+ * can see. **A read-out is feedback on a gesture; a dialog field is an amplifier.**
+ *
+ * `MovementToContact` stays out of both, and that is doctrine rather than an omission:
+ * FM 1-02.2 table 5-10 draws it with no amplifier of any kind, and it is a badge rather
+ * than an area — a distance is not one of the things the symbol says.
+ */
+const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+    TacticalGraphicName.PsyOpsZoneCircular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
+]);
+
+/**
+ * Whether this graphic draws the hashed read-out while it is being drawn or resized.
+ *
+ * Broader than {@link hasRadiusReadout}, which answers a different question — whether
+ * the properties dialog offers a radius field. Both renderers read this one for the
+ * measure line. @see SIZE_READOUT_ONLY
+ */
+export function showsSizeReadout(name: TacticalGraphicName): boolean {
+    return RADIUS_GRAPHICS.has(name) || SIZE_READOUT_ONLY.has(name);
+}
+
+/**
  * Graphics whose designation gap is cut from the **rendered glyph** at paint time,
  * so the generated geometry must carry none of its own.
  *

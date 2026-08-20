@@ -485,6 +485,68 @@ describe('a rectangular zone wears no dead handle in edit mode', () => {
     });
 });
 
+/**
+ * # A width drag is a delta, and a handle index is a contract index
+ *
+ * Two defects that shipped with the first cut of edit mode, both of the same shape: a
+ * number read as absolute when it was only ever meaningful relative to something else.
+ */
+describe('the width handle', () => {
+    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge, TacticalGraphicName.Retirement])(
+        'reports its current width, so a drag can apply a change (%s)',
+        name => {
+            const manager = stubbedManager();
+            const handler = build(manager, name, 'a');
+            seedLine(handler);
+            // Without this the manager has to infer a starting width from wherever the
+            // cursor happens to be, which is the absolute reading that made the width
+            // snap the instant a handle was grabbed.
+            expect(typeof handler.currentOffset?.()).toBe('number');
+            expect(handler.currentOffset!()).toBeGreaterThan(0);
+        },
+    );
+});
+
+/**
+ * The retrograde family publishes `handleCoords[0]` — the contract's `mirror` handle —
+ * as its own offset feature and `slice(1)` as `handles`. Without the declared shift the
+ * arrow tip arrives at `handleRole` as index 0 and is answered "mirror", so the manager
+ * claims its drag as a flip and the handle does nothing at all.
+ */
+describe('a handle index is a contract index', () => {
+    it.each([
+        TacticalGraphicName.Retirement,
+        TacticalGraphicName.Withdraw,
+        TacticalGraphicName.WithdrawUnderPressure,
+        TacticalGraphicName.ForwardPassageOfLines,
+        TacticalGraphicName.RearwardPassageOfLines,
+        TacticalGraphicName.ReliefInPlace,
+    ])('%s declares the shift its holder applied', name => {
+        const manager = stubbedManager();
+        const handler = build(manager, name, 'a');
+        expect(handler.handleIndexOffset).toBe(1);
+    });
+
+    /** A holder that renders the contract list unchanged must not claim a shift. */
+    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge, TacticalGraphicName.PhaseLine])(
+        '%s declares none',
+        name => {
+            const manager = stubbedManager();
+            expect(build(manager, name, 'a').handleIndexOffset ?? 0).toBe(0);
+        },
+    );
+
+    /**
+     * `ReliefInPlace` came out of `NO_EDIT_STRETCH` when `edit` became the only mode the
+     * panel offers: membership meant "an edit drag does nothing", which was reasonable
+     * beside a separate resize mode and is not beside no mode at all.
+     */
+    it('lets relief in place stretch on an edit drag', () => {
+        const manager = stubbedManager();
+        expect(build(manager, TacticalGraphicName.ReliefInPlace, 'a').editStretches).toBe(true);
+    });
+});
+
 describe('the portable mode list', () => {
     it('counts edit among the modes that wear handles', () => {
         expect(HANDLE_EDIT_MODES).toContain('edit');
