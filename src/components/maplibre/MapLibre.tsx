@@ -257,7 +257,11 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             // dialog subscribed to a dead map while every click went to the live one —
             // the handler ran on nothing and the dialog simply never opened.
             if (native && !disposed) {
-                setPropertiesSource(createMapLibrePropertiesSource(map, native));
+                // Suppressed in edit mode, matching OpenLayers: a click there picks the
+                // graphic to work on rather than asking for its amplifiers.
+                setPropertiesSource(
+                    createMapLibrePropertiesSource(map, native, () => engine?.getInteractionMode() === 'edit'),
+                );
                 // **Through the library's façade**, adopting the renderer rather than
                 // replacing it: the demo still reaches past it for the sample sweep and
                 // the file IO, which are the app's own concerns.
@@ -279,12 +283,32 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         });
 
         const handle: MapEngineHandle = {
-            // Every tactical-graphics verb comes from the library. Only the demo's own
-            // additions — the gallery and the file IO — are spelled out here.
-            ...(engine as TacticalGraphicsEngine),
+            /*
+             * **Every verb delegates; nothing is spread.**
+             *
+             * This used to open with `...(engine as TacticalGraphicsEngine)`, which
+             * contributed nothing at all: `engine` is assigned inside the map's `load`
+             * callback, and this literal is built before that fires, so the spread was
+             * always spreading `undefined`. The cast is what kept it quiet. Only the
+             * verbs written out below ever existed on the handle, and a verb added to
+             * the façade appeared to be inherited here while in fact being absent —
+             * which is exactly what happened to the selection methods.
+             *
+             * Delegating each one through `engine?.` is what the rest of this object
+             * already did, and it works whenever the handle is called rather than
+             * whenever it was built.
+             */
             capabilities: MAPLIBRE_CAPABILITIES,
             startDrawing: name => engine?.startDrawing(name),
+            cancelDrawing: () => engine?.cancelDrawing(),
             setInteractionMode: mode => engine?.setInteractionMode(mode),
+            getInteractionMode: () => engine?.getInteractionMode() ?? 'view',
+            getSelection: () => engine?.getSelection() ?? null,
+            select: id => engine?.select(id),
+            selectionGestures: () => engine?.selectionGestures() ?? null,
+            selectionBox: () => engine?.selectionBox(),
+            beginGesture: (kind, event) => engine?.beginGesture(kind, event) ?? false,
+            destroy: () => engine?.destroy(),
             reset: () => engine?.clearAll(),
             clearAll: () => engine?.clearAll(),
             drawSamples: hostility => {

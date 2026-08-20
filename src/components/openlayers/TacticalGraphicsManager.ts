@@ -12,11 +12,12 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, handleRole, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, allowedGestures, handleRole, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
+import {Extent, extend as extendExtent} from "ol/extent";
 import {unByKey} from "ol/Observable";
 
 export enum InteractionType {
@@ -25,7 +26,16 @@ export enum InteractionType {
     'translate',
     'modify',
     'drawing',
-    'view'
+    'view',
+    /**
+     * Select a graphic, then reshape it by its handles or drive a gesture from an
+     * affordance the host draws. @see EditMode in the map-agnostic half.
+     *
+     * Added last so the existing numbers are unchanged — this enum is published
+     * surface, and a consumer who stored one of these values keeps meaning what they
+     * stored.
+     */
+    'edit'
 }
 
 /*
@@ -122,6 +132,44 @@ export class TacticalGraphicsManager {
     // current interaction mode, toggled by an external caller
     currentMode: InteractionType = InteractionType.view;
 
+    /**
+     * The graphic the operator is working on, or `undefined`.
+     *
+     * **New with `edit` mode, and the thing OpenLayers never had.** The four gesture
+     * modes light up every graphic on the map at once, so "which one am I editing" was
+     * answered afresh at each pointer-down and forgotten at pointer-up — there was no
+     * state to ask. `edit` mode needs a persistent answer, because the chrome a host
+     * draws around the selection has to survive a pan, a zoom and the gaps between
+     * drags.
+     *
+     * Held as the controller rather than a feature or an id: it is what every gesture
+     * is applied to, and the alternatives are both one lookup away from it.
+     */
+    private selectedController: TacticalGraphicHandler | undefined;
+
+    /** Notified whenever the selection changes, including when a graphic is removed. */
+    onSelectionChange?: (controller: TacticalGraphicHandler | undefined) => void;
+
+    /**
+     * The gesture a host's affordance started, held for the duration of that drag.
+     *
+     * `edit` is not itself a gesture — a drag inside it means "reshape", the same as
+     * `modify`. When the host presses a rotate or resize affordance, the drag has to
+     * mean *that* instead, without the mode changing under the operator and without
+     * every other graphic's handles reacting. So the gesture is latched here, consulted
+     * by `effectiveMode`, and dropped on pointer-up.
+     */
+    private activeGesture: InteractionType | undefined;
+
+    /**
+     * What a drag means right now: the latched gesture if one is running, else the mode.
+     *
+     * Every drag path switches on this rather than on `currentMode`, which is what lets
+     * one `edit` mode host all four gestures. In the four legacy gesture modes it is
+     * just `currentMode`, so their behaviour is untouched.
+     */
+    private effectiveMode = (): InteractionType => this.activeGesture ?? this.currentMode;
+
     // openlayer references.
     map: Map;
     draw: Draw | undefined = undefined;
@@ -151,7 +199,27 @@ export class TacticalGraphicsManager {
         this.map.addInteraction(pointerInteraction);
         this.map.addLayer(this.renderingVectorLayer);
         this.map.on('pointermove', this.updateHoverCursor);
+        this.map.on('singleclick', this.handleSelectClick);
     }
+
+    /**
+     * Click-to-select, in `edit` mode only.
+     *
+     * Bound unconditionally and gated inside, rather than added and removed with the
+     * mode: a listener that goes on and off has to come off again on every path out,
+     * and `destroy` is not the only one.
+     *
+     * A click that lands on nothing clears the selection — the operator pointing at
+     * empty map is how they say "none of them", and leaving the last one selected keeps
+     * chrome on screen for a graphic they have stopped working on.
+     */
+    private handleSelectClick = (evt: MapBrowserEvent): void => {
+        if (!this.isEditing()) return;
+        // The click that finished a draw is not a selection. Same guard, and the same
+        // reason, as the properties dialog's. @see lastDrawEndedAt
+        if (Date.now() < this.lastDrawEndedAt) return;
+        this.setSelection(this.selectAtPixel(evt.pixel));
+    };
 
     /**
      * Swap in a pointer cursor while hovering something a click or drag would
@@ -184,7 +252,13 @@ export class TacticalGraphicsManager {
 
     // the interaction modes that display markers on tactical graphics to let the user transform
     enableHandleModes = (): InteractionType[] => {
-        return [InteractionType.rotate, InteractionType.resize, InteractionType.modify, InteractionType.translate];
+        return [
+            InteractionType.rotate,
+            InteractionType.resize,
+            InteractionType.modify,
+            InteractionType.translate,
+            InteractionType.edit,
+        ];
     };
 
     /**
@@ -202,15 +276,86 @@ export class TacticalGraphicsManager {
 
     setInteractionMode = (newMode: InteractionType) => {
         this.currentMode = newMode;
+        // Leaving edit mode drops the selection: the chrome a host draws is keyed to it,
+        // and a selection nothing is showing is a gesture waiting to surprise someone.
+        if (newMode !== InteractionType.edit) this.setSelection(undefined);
         this.toggleHandleFeatures();
         this.toggleModifyInteraction();
         this.onInteractionModeChange?.(newMode);
     };
 
-    // display the markers for letting a user drag/resize/modify/rotate a tactical graphic.
+    /**
+     * Selects a graphic, or clears the selection with `undefined`.
+     *
+     * Re-runs the handle visibility rule, because in `edit` mode the selection *is* that
+     * rule. Fires `onSelectionChange` only on a real change, so a host may point it
+     * straight at a React setter.
+     */
+    setSelection = (controller: TacticalGraphicHandler | undefined): void => {
+        if (this.selectedController === controller) return;
+        this.selectedController = controller;
+        this.toggleHandleFeatures();
+        this.onSelectionChange?.(controller);
+    };
+
+    /** The graphic being worked on, or `undefined`. @see setSelection */
+    getSelection = (): TacticalGraphicHandler | undefined => this.selectedController;
+
+    /**
+     * Which graphic a controller is drawing, by scanning its features for the stamp.
+     *
+     * **Not `controller.graphic.base.get('graphicName')`, which is not reliable.** Some
+     * holders replace their base feature with the one OpenLayers' `Draw` produced —
+     * `SecurityOperationsController.setBaseFeature` does, on both draw start and draw
+     * end — and that feature never carried the stamp `startDrawing` put on the holder's
+     * own features. Reading the base alone therefore returned `undefined` for the
+     * security operations, and `allowedGestures(undefined)` falls through to its
+     * permissive default: a Screen offered a resize it refuses.
+     *
+     * `collectProperties` in `persistence.ts` sweeps every feature for the same reason.
+     */
+    graphicNameOf = (controller: TacticalGraphicHandler): TacticalGraphicName | undefined => {
+        for (const feature of controller.getFeatures()) {
+            const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+            if (name) return name;
+        }
+        return undefined;
+    };
+
+    /**
+     * Which graphic a feature belongs to, for the click that selects.
+     *
+     * Handles and labels are as good an answer as line work here — a user clicking a
+     * graphic's own label means that graphic — so this is just the controller lookup.
+     */
+    selectAtPixel = (pixel: number[]): TacticalGraphicHandler | undefined => {
+        let found: TacticalGraphicHandler | undefined;
+        this.map?.forEachFeatureAtPixel(pixel, feature => {
+            if (found) return;
+            const asFeature = this.asFeature(feature);
+            if (asFeature) found = this.getFeatureController(asFeature);
+        });
+        return found;
+    };
+
+    /**
+     * Display the markers that let a user drag / resize / modify / rotate a graphic.
+     *
+     * **Two visibility rules, because the modes mean two different things.** The four
+     * legacy gesture modes are global — the host has said "everything is rotatable now"
+     * — so every graphic wears handles, which is what both engines have always done.
+     * `edit` mode is per-graphic: the operator picked one, and only that one wears them.
+     * Lighting up every graphic there would put a hundred red dots under the box the
+     * host is drawing around a single symbol.
+     */
     toggleHandleFeatures = (): void => {
-        const visible = this.enableHandleModes().includes(this.currentMode);
+        const anyVisible = this.enableHandleModes().includes(this.currentMode);
+        // In edit mode an empty selection means *no* handles, not all of them — hence
+        // the explicit `[]` rather than letting an undefined selection fall through to
+        // the global rule.
+        const selectedFeatures = this.isEditing() ? (this.selectedController?.getFeatures() ?? []) : undefined;
         this.getRenderedFeaturesByProp('handle').forEach(feature => {
+            const visible = anyVisible && (!selectedFeatures || selectedFeatures.includes(feature));
             feature.set('hidden', !visible);
             // The center dot is grabbable for a move and nothing else — see
             // `handleDownEvent`. Publish that so its style can color itself
@@ -232,20 +377,40 @@ export class TacticalGraphicsManager {
         return this.renderingVectorSource.getFeatures().filter(feature => feature.get(prop));
     };
 
+    /**
+     * The three gesture predicates read {@link effectiveMode}, not `currentMode`.
+     *
+     * That single indirection is what makes `edit` mode work. A rotate affordance
+     * latches `InteractionType.rotate` for the length of one drag, and every path that
+     * already asked "am I rotating?" — `handlePointDrag`, `handleCircleDrag`,
+     * `handleLineStringDrag`, `handlePolygonDrag`, the resize measure read-out — says
+     * yes without knowing an affordance exists. No drag path was rewritten for this.
+     */
     isRotating = (): boolean => {
-        return this.currentMode === InteractionType.rotate;
+        return this.effectiveMode() === InteractionType.rotate;
     };
 
     isResizing = (): boolean => {
-        return this.currentMode === InteractionType.resize;
+        return this.effectiveMode() === InteractionType.resize;
     };
 
     isTranslating = (): boolean => {
-        return this.currentMode === InteractionType.translate;
+        return this.effectiveMode() === InteractionType.translate;
     };
 
+    /**
+     * Reshaping. True in `edit` as well as `modify`, because a drag on a graphic's own
+     * handle means "reshape it" in both — `edit` is `modify` plus a selection, a box and
+     * the affordances. It is false while an affordance's gesture is latched.
+     */
     isModifying = (): boolean => {
-        return this.currentMode === InteractionType.modify;
+        const mode = this.effectiveMode();
+        return mode === InteractionType.modify || mode === InteractionType.edit;
+    };
+
+    /** The unified mode: select a graphic, then use its handles or its affordances. */
+    isEditing = (): boolean => {
+        return this.currentMode === InteractionType.edit;
     };
 
     isDrawing = (): boolean => {
@@ -312,6 +477,121 @@ export class TacticalGraphicsManager {
                 return false;
             },
         });
+    };
+
+    /**
+     * Runs one gesture from a host's affordance, outside the map's own pointer stack.
+     *
+     * ## Why this cannot go through the `Pointer` interaction
+     *
+     * The affordance is a DOM element the host draws *over* the map. A `pointerdown` on
+     * it never reaches OpenLayers — the element swallows it — and even if it did, the
+     * pointer is nowhere near the graphic, so `handleDownEvent`'s hit test would find
+     * nothing and refuse the drag. So the drag is driven from `window` instead, and the
+     * two things `handleDownEvent` would have latched are set here directly: the
+     * controller (from the selection, not from a hit test) and the origin.
+     *
+     * Everything after that is the existing machinery. `activeGesture` makes
+     * `isRotating()` / `isResizing()` / `isTranslating()` answer for the gesture rather
+     * than the mode, and each move is handed to the same `handleDragEvent` a real drag
+     * uses — so an affordance rotate and a mode rotate are the same code, and cannot
+     * drift apart.
+     *
+     * Returns false and changes nothing if there is no selection or the symbol refuses
+     * the gesture. @see allowedGestures
+     */
+    beginGesture = (kind: 'translate' | 'rotate' | 'resize', event: PointerEvent): boolean => {
+        const controller = this.selectedController;
+        if (!controller || this.activeGesture !== undefined) return false;
+
+        const name = this.graphicNameOf(controller);
+        if (name && !allowedGestures(name)[kind]) return false;
+
+        const coordinate = this.coordinateFromPointer(event);
+        if (!coordinate) return false;
+
+        this.activeGesture = {translate: InteractionType.translate, rotate: InteractionType.rotate, resize: InteractionType.resize}[kind];
+        this.activeController = controller;
+        this.activeFeature = undefined;
+        // No handle was grabbed, so nothing indexed can be meant. -1 is what the drag
+        // paths read as "the whole graphic", which is exactly what an affordance means.
+        this.activeHandleIndex = -1;
+        this.activeBaseVertex = -1;
+        // An affordance is never at the centre, so a resize from one always carries a
+        // ratio. The guard exists for a handle dragged from on top of the anchor.
+        this.resizeOriginNearCenter = false;
+        this.lastPointerPosition = coordinate;
+
+        const move = (moveEvent: PointerEvent) => {
+            const next = this.coordinateFromPointer(moveEvent);
+            if (!next) return;
+            // `pixel` is here only because `handleDragEvent`'s signature asks for a
+            // MapBrowserEvent; none of the drag paths read it.
+            this.handleDragEvent({coordinate: next, pixel: this.map.getPixelFromCoordinate(next)} as MapBrowserEvent);
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            this.endAffordanceGesture();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        return true;
+    };
+
+    /** Ends an affordance gesture, mirroring what `handleUpEvent` does for a real drag. */
+    private endAffordanceGesture = (): void => {
+        this.lastPointerPosition = null;
+        (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
+        this.activeController = undefined;
+        this.activeGesture = undefined;
+        // The gesture moved the graphic, so the box a host drew around it is stale.
+        this.onSelectionChange?.(this.selectedController);
+    };
+
+    /** A DOM pointer event's position as a map coordinate, or undefined if off-map. */
+    private coordinateFromPointer = (event: {clientX: number; clientY: number}): Coordinate | undefined => {
+        const target = this.map.getTargetElement();
+        if (!target) return undefined;
+        const rect = target.getBoundingClientRect();
+        return this.map.getCoordinateFromPixel([event.clientX - rect.left, event.clientY - rect.top]);
+    };
+
+    /**
+     * The selected graphic's on-screen extent, in map-container pixels.
+     *
+     * Measured from the **rendered** features, not the base: the box has to contain what
+     * the operator can see, and a mission task's base is a single centre point whose
+     * extent is a box of zero size. Handles are excluded — they are chrome, they stick
+     * out past the symbol, and a box drawn round them grows every time one is shown.
+     */
+    selectionBox = (): {x: number; y: number; width: number; height: number} | undefined => {
+        const controller = this.selectedController;
+        if (!controller) return undefined;
+
+        let extent: Extent | undefined;
+        for (const feature of controller.getFeatures()) {
+            if (feature.get('handle') || feature.get('hidden')) continue;
+            const geometry = feature.getGeometry();
+            if (!geometry) continue;
+            const featureExtent = geometry.getExtent();
+            if (!featureExtent.every(isFinite)) continue;
+            extent = extent ? extendExtent(extent.slice() as Extent, featureExtent) : (featureExtent.slice() as Extent);
+        }
+        if (!extent) return undefined;
+
+        // Two opposite corners, because the projection flips y: a map extent counts
+        // upward and a screen counts downward, so min/max have to be re-derived after
+        // the conversion rather than assumed.
+        const topLeft = this.map.getPixelFromCoordinate([extent[0], extent[3]]);
+        const bottomRight = this.map.getPixelFromCoordinate([extent[2], extent[1]]);
+        if (!topLeft || !bottomRight) return undefined;
+
+        const x = Math.min(topLeft[0], bottomRight[0]);
+        const y = Math.min(topLeft[1], bottomRight[1]);
+        return {x, y, width: Math.abs(bottomRight[0] - topLeft[0]), height: Math.abs(bottomRight[1] - topLeft[1])};
     };
 
     // set the state of the manager based on what feature is clicked
@@ -426,7 +706,10 @@ export class TacticalGraphicsManager {
     handlePointDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
         let center = this.activeController.getBaseGeometry() as number[];
-        switch (this.currentMode) {
+        // **The effective mode, not `currentMode`.** An affordance gesture latches what a
+        // drag means for its duration; reading `currentMode` here would run the drag as
+        // whatever the host's toolbar last selected, which in `edit` is a reshape.
+        switch (this.effectiveMode()) {
             case InteractionType.translate:
                 this.defaultTranslateFunction(evt);
                 break;
@@ -480,7 +763,10 @@ export class TacticalGraphicsManager {
     handleCircleDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
         let center = this.activeController.getBaseGeometry() as number[];
-        switch (this.currentMode) {
+        // **The effective mode, not `currentMode`.** An affordance gesture latches what a
+        // drag means for its duration; reading `currentMode` here would run the drag as
+        // whatever the host's toolbar last selected, which in `edit` is a reshape.
+        switch (this.effectiveMode()) {
             case InteractionType.translate:
                 this.defaultTranslateFunction(evt);
                 break;
@@ -498,6 +784,10 @@ export class TacticalGraphicsManager {
             // Edit borrows resize wholesale — the only meaningful edit on a
             // circle is its radius. `handleDownEvent` only claims an edit drag
             // when the controller opted in, so nothing else reaches this case.
+            // `edit` reshapes exactly as `modify` does — the difference between them is
+            // the selection, the box and the affordances, none of which change what a
+            // drag on a handle means. Sharing the case is what keeps them from drifting.
+            case InteractionType.edit:
             case InteractionType.modify:
             case InteractionType.resize:
                 // A graphic whose handles each drive a different dimension (the
@@ -531,7 +821,10 @@ export class TacticalGraphicsManager {
 
     handleLineStringDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        switch (this.currentMode) {
+        // **The effective mode, not `currentMode`.** An affordance gesture latches what a
+        // drag means for its duration; reading `currentMode` here would run the drag as
+        // whatever the host's toolbar last selected, which in `edit` is a reshape.
+        switch (this.effectiveMode()) {
             case InteractionType.translate:
                 this.handleDragForLineAndPolygon(evt, this.activeController);
                 break;
@@ -542,6 +835,10 @@ export class TacticalGraphicsManager {
             // graphics — width handle included, so the two modes behave
             // identically. `handleDownEvent` only claims an edit-mode drag when
             // the controller opted in, so nothing else can reach this case.
+            // `edit` reshapes exactly as `modify` does — the difference between them is
+            // the selection, the box and the affordances, none of which change what a
+            // drag on a handle means. Sharing the case is what keeps them from drifting.
+            case InteractionType.edit:
             case InteractionType.modify:
             case InteractionType.resize:
                 if (!this.activeFeature) return;
@@ -806,7 +1103,10 @@ export class TacticalGraphicsManager {
 
     handlePolygonDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        switch (this.currentMode) {
+        // **The effective mode, not `currentMode`.** An affordance gesture latches what a
+        // drag means for its duration; reading `currentMode` here would run the drag as
+        // whatever the host's toolbar last selected, which in `edit` is a reshape.
+        switch (this.effectiveMode()) {
             case InteractionType.translate:
                 this.handleDragForLineAndPolygon(evt, this.activeController);
                 break;

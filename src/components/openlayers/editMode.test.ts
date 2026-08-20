@@ -1,0 +1,275 @@
+/**
+ * # Edit mode: one selection, its own handles, and only the gestures it accepts
+ *
+ * `edit` replaces four global gesture modes with one selection-scoped one. Three things
+ * about it are stated in more than one place and so have to be checked:
+ *
+ * 1. **Handle visibility now has two rules.** The four legacy modes light up every
+ *    graphic; `edit` lights up the selected one alone. Both engines implement this
+ *    separately — `TacticalGraphicsManager.toggleHandleFeatures` and
+ *    `NativeLayerRenderer.handleBearers` — and the same button drives both.
+ * 2. **A gesture an affordance starts must be refused exactly where a mode's drag is.**
+ *    `beginGesture` is a second door into the same gestures, and a door that skipped
+ *    `allowedGestures` would let a host rotate a symbol the map refuses to rotate. That
+ *    is the defect `gestureParity.test.ts` was written for, one level up.
+ * 3. **The selection must not outlive what it points at.** Chrome drawn around a graphic
+ *    that has been cleared is chrome around empty space.
+ *
+ * The manager is built against a stub map rather than a real OpenLayers one: everything
+ * under test is bookkeeping over `renderingVectorSource`, and the four map methods the
+ * constructor and these paths touch are stubbed to match.
+ */
+
+import {Feature} from 'ol';
+import {
+    HANDLE_EDIT_MODES,
+    TacticalGraphicName,
+    allowedGestures,
+    listTacticalGraphicNames,
+} from '@zaes/tactical-graphics';
+import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
+import {getController} from './controllerRegistry';
+import type {TacticalGraphicHandler} from './openlayersAdapter';
+
+/** The resolution the controllers are built at, in meters per pixel. */
+const RES = 100;
+
+/**
+ * A manager on a stub map.
+ *
+ * The constructor adds an interaction, a layer and two listeners; none of those matter
+ * here, and a real `ol/Map` in jsdom brings a renderer that never paints. The pixel
+ * conversions are the identity divided by `RES`, so a projected extent and a screen box
+ * are the same numbers scaled — which is enough to assert the box tracks the graphic.
+ */
+function stubbedManager(): TacticalGraphicsManager {
+    const map = {
+        addInteraction: () => {},
+        addLayer: () => {},
+        removeInteraction: () => {},
+        on: () => {},
+        un: () => {},
+        getView: () => ({getResolution: () => RES, on: () => ({}), un: () => {}}),
+        getTargetElement: () => ({style: {}, getBoundingClientRect: () => ({left: 0, top: 0})}),
+        getPixelFromCoordinate: (c: number[]) => [c[0] / RES, -c[1] / RES],
+        getCoordinateFromPixel: (p: number[]) => [p[0] * RES, -p[1] * RES],
+        forEachFeatureAtPixel: () => undefined,
+        getInteractions: () => ({getArray: () => []}),
+    };
+    return new TacticalGraphicsManager(map as never);
+}
+
+/** Builds a graphic, registers it, and puts its features in the source. */
+function build(manager: TacticalGraphicsManager, name: TacticalGraphicName, symbolId: string): TacticalGraphicHandler {
+    const handler = getController(name, RES);
+    handler.setSymbolId(symbolId);
+    handler.getFeatures().forEach(feature => {
+        feature.set('graphicName', name);
+        feature.set('symbolId', symbolId);
+    });
+    manager.renderingVectorSource.addFeatures(handler.getFeatures());
+    manager.graphicControllers.push(handler);
+    return handler;
+}
+
+/** Every handle feature the source is currently showing. */
+function visibleHandles(manager: TacticalGraphicsManager): Feature[] {
+    return manager.renderingVectorSource
+        .getFeatures()
+        .filter(feature => feature.get('handle') && !feature.get('hidden'));
+}
+
+describe('edit mode scopes handles to the selection', () => {
+    it('shows the selected graphic\'s handles and no others', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        build(manager, TacticalGraphicName.PhaseLine, 'b');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+
+        const shown = visibleHandles(manager);
+        expect(shown.length).toBeGreaterThan(0);
+        expect(shown.every(feature => a.getFeatures().includes(feature))).toBe(true);
+        expect(shown.every(feature => feature.get('symbolId') === 'a')).toBe(true);
+    });
+
+    it('shows no handles at all while nothing is selected', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+
+        expect(visibleHandles(manager)).toHaveLength(0);
+    });
+
+    /**
+     * The regression guard for the rule that was already there. Both engines light up
+     * every graphic in the four legacy modes, deliberately, and scoping *those* to a
+     * selection is what made the two engines answer the same button differently once
+     * before. @see NativeLayerRenderer.handleBearers
+     */
+    it('still shows every graphic\'s handles in the legacy gesture modes', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+        build(manager, TacticalGraphicName.PhaseLine, 'b');
+
+        for (const mode of [InteractionType.rotate, InteractionType.resize, InteractionType.translate, InteractionType.modify]) {
+            manager.setInteractionMode(mode);
+            const ids = new Set(visibleHandles(manager).map(feature => feature.get('symbolId')));
+            expect(ids).toEqual(new Set(['a', 'b']));
+        }
+    });
+
+    it('hides every handle in view mode', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.view);
+
+        expect(visibleHandles(manager)).toHaveLength(0);
+    });
+});
+
+describe('the selection', () => {
+    it('is dropped when the mode leaves edit', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+        expect(manager.getSelection()).toBe(a);
+
+        manager.setInteractionMode(InteractionType.view);
+        expect(manager.getSelection()).toBeUndefined();
+    });
+
+    it('announces a change once, and not on a re-select of the same graphic', () => {
+        const manager = stubbedManager();
+        const a = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        const seen: (string | undefined)[] = [];
+        manager.onSelectionChange = controller => seen.push(controller?.getSymbolId());
+
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(a);
+        manager.setSelection(a);
+        manager.setSelection(undefined);
+
+        expect(seen).toEqual(['a', undefined]);
+    });
+
+    it('has no box when nothing is selected', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+        manager.setInteractionMode(InteractionType.edit);
+
+        expect(manager.selectionBox()).toBeUndefined();
+    });
+});
+
+describe('beginGesture', () => {
+    /** A `pointerdown` as far as the manager reads one. */
+    const pointerAt = (clientX: number, clientY: number) => ({clientX, clientY}) as PointerEvent;
+
+    it('refuses when nothing is selected', () => {
+        const manager = stubbedManager();
+        build(manager, TacticalGraphicName.PhaseLine, 'a');
+        manager.setInteractionMode(InteractionType.edit);
+
+        expect(manager.beginGesture('rotate', pointerAt(10, 10))).toBe(false);
+    });
+
+    /**
+     * The parity assertion, and the reason this file exists.
+     *
+     * `beginGesture` is a second way into the same gestures, so it has to refuse exactly
+     * what a drag refuses. Checked against `allowedGestures` itself rather than a list,
+     * because the list is the thing that drifts: a symbol added to `ROTATE_ONLY_SYMBOLS`
+     * tomorrow is covered here without anyone remembering to come back.
+     */
+    it.each([
+        // Rotates but does not resize: a screen marks a force, not an extent of ground.
+        TacticalGraphicName.Screen,
+        // Resizes but does not rotate: one doctrinal orientation.
+        TacticalGraphicName.Destroy,
+        TacticalGraphicName.Airfield,
+        // Accepts everything.
+        TacticalGraphicName.PhaseLine,
+    ])('offers exactly what allowedGestures says, for %s', name => {
+        const manager = stubbedManager();
+        const handler = build(manager, name, 'a');
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(handler);
+
+        const allowed = allowedGestures(name);
+        for (const kind of ['translate', 'rotate', 'resize'] as const) {
+            const started = manager.beginGesture(kind, pointerAt(10, 10));
+            expect(started).toBe(allowed[kind]);
+            // Each accepted gesture latches until release; drop it so the next one is
+            // measured from the same standing start rather than being refused as a
+            // gesture-already-running.
+            if (started) window.dispatchEvent(new Event('pointerup'));
+        }
+    });
+
+    it('refuses a second gesture while one is running', () => {
+        const manager = stubbedManager();
+        const handler = build(manager, TacticalGraphicName.PhaseLine, 'a');
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(handler);
+
+        expect(manager.beginGesture('rotate', pointerAt(10, 10))).toBe(true);
+        expect(manager.beginGesture('resize', pointerAt(20, 20))).toBe(false);
+        window.dispatchEvent(new Event('pointerup'));
+        expect(manager.beginGesture('resize', pointerAt(20, 20))).toBe(true);
+        window.dispatchEvent(new Event('pointerup'));
+    });
+
+    /**
+     * The gesture must reach the controller, not merely be accepted.
+     *
+     * A `beginGesture` that returned true and then dropped every move would look exactly
+     * like a working affordance — which is the "a refusal is invisible" failure mode in
+     * its other form. So the drag is driven and the graphic is asked whether it turned.
+     */
+    it('turns the graphic when the pointer moves', () => {
+        const manager = stubbedManager();
+        const handler = build(manager, TacticalGraphicName.PsyOpsZoneCircular, 'a');
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(handler);
+
+        const rotationBefore = (handler.graphic as {rotation?: number}).rotation ?? 0;
+        expect(manager.beginGesture('rotate', pointerAt(100, 0))).toBe(true);
+
+        const move = new Event('pointermove') as PointerEvent & {clientX: number; clientY: number};
+        Object.assign(move, {clientX: 0, clientY: 100});
+        window.dispatchEvent(move);
+        window.dispatchEvent(new Event('pointerup'));
+
+        expect((handler.graphic as {rotation?: number}).rotation).not.toBe(rotationBefore);
+    });
+});
+
+describe('the portable mode list', () => {
+    it('counts edit among the modes that wear handles', () => {
+        expect(HANDLE_EDIT_MODES).toContain('edit');
+    });
+
+    /**
+     * `allowedGestures` answers for every registered name, which is what lets the
+     * affordances be built from it without a fallback. A name it threw on would put an
+     * unhandled error between the user and their selection.
+     */
+    it('answers for every registered graphic', () => {
+        const names = listTacticalGraphicNames().filter(
+            (name): name is TacticalGraphicName => name in TacticalGraphicName,
+        );
+        expect(names.length).toBeGreaterThan(200);
+        for (const name of names) {
+            const gestures = allowedGestures(name);
+            expect(typeof gestures.translate).toBe('boolean');
+            expect(typeof gestures.rotate).toBe('boolean');
+            expect(typeof gestures.resize).toBe('boolean');
+        }
+    });
+});

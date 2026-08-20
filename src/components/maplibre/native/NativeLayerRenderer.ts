@@ -267,6 +267,12 @@ export class NativeLayerRenderer {
     private symbolRevision = -1;
     /** The resolution the screen-sized graphics were last rebuilt at. */
     private lastRebuildResolution = Number.NaN;
+    /**
+     * Whether handles belong to the selection alone rather than to every graphic.
+     * True in `edit` mode only. @see handleBearers
+     */
+    private selectionScopedHandles = false;
+
     /** Whether a handle-bearing mode is selected. @see setHandleMode */
     private handleModeActive = false;
 
@@ -819,26 +825,36 @@ export class NativeLayerRenderer {
     /**
      * The graphics whose handles are on screen.
      *
-     * **Every graphic while a handle mode is active, and none otherwise** — which is
-     * what OpenLayers does. `TacticalGraphicsManager.toggleHandleFeatures` clears
-     * `hidden` on *all* handle features the moment the user picks rotate, move, resize
-     * or edit, so the whole map becomes editable at once and there is no selection
-     * step. Showing only the selected graphic's handles here meant the two engines
-     * answered the same button differently: OpenLayers lit up four handles across two
-     * graphics, MapLibre lit up none until you clicked one.
+     * **Two rules, matching what the mode means** — and matching
+     * `TacticalGraphicsManager.toggleHandleFeatures` on the other engine, because the
+     * same button drives both.
+     *
+     * In the four legacy gesture modes: *every* graphic. The host has said "everything
+     * is rotatable now", so the whole map becomes editable at once and there is no
+     * selection step. Showing only the selected graphic's handles here used to make the
+     * two engines answer the same button differently — OpenLayers lit up four handles
+     * across two graphics, MapLibre lit up none until you clicked one.
+     *
+     * In `edit`: only the selected graphic. The operator picked one symbol, and the
+     * chrome the host draws around it would otherwise sit on top of every other
+     * graphic's handles.
      */
     private handleBearers(): MapLibreTacticalGraphic[] {
         if (!this.handleModeActive) return [];
-        return this.visibleGraphics();
+        if (!this.selectionScopedHandles) return this.visibleGraphics();
+        const selected = this.selectedId ? this.find(this.selectedId) : undefined;
+        return selected ? [selected] : [];
     }
 
     /**
-     * Whether a handle-bearing mode is selected. Set by the interaction layer, because
-     * the mode is its state; the renderer only needs to know whether to draw chrome.
+     * Whether a handle-bearing mode is selected, and whether that mode scopes handles to
+     * the selection. Set by the interaction layer, because the mode is its state; the
+     * renderer only needs to know whether to draw chrome, and for which graphics.
      */
-    setHandleMode(active: boolean): void {
-        if (this.handleModeActive === active) return;
+    setHandleMode(active: boolean, selectionScoped: boolean = false): void {
+        if (this.handleModeActive === active && this.selectionScopedHandles === selectionScoped) return;
         this.handleModeActive = active;
+        this.selectionScopedHandles = selectionScoped;
         this.realizeEditorMarks();
     }
 

@@ -1,6 +1,7 @@
 import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {
     getPaintFunction,
+    boundsOf,
     paintGeometryMembers,
     paintGeometryPositions,
     renderTacticalGraphic,
@@ -620,28 +621,6 @@ export function buildTacticalGraphic(
         // drew in the right place and could not be grabbed at all.
         handles: handlePositions(placed.handles),
     };
-}
-
-/**
- * A geometry's axis-aligned extent, in projected meters.
- *
- * `undefined` for an empty geometry rather than a zero-size box at the origin: the
- * zone labels hang their date-time group off a corner of this, and a box at [0,0]
- * would put the dates in the Gulf of Guinea.
- */
-function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['bounds'] {
-    if (!geometry) return undefined;
-    const positions = paintGeometryMembers(geometry).flatMap(paintGeometryPositions);
-    if (!positions.length) return undefined;
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const [x, y] of positions) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return {minX, minY, maxX, maxY};
 }
 
 /** The outer ring of a polygon base, for the irregular zones' vertex anchor. */

@@ -207,7 +207,7 @@ export {
  *
  * @see ai/maplibre-renderer.md
  */
-export {HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
+export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
 export type {
     CircleSpec,
     FillSpec,
@@ -375,7 +375,7 @@ export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndAr
 export {usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
-export type {EditMode, EngineCallbacks, EngineCapabilities, SelectedGraphic, TacticalGraphicsEngine} from './core/engine';
+export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,
