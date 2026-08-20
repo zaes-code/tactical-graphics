@@ -8,6 +8,7 @@ import {
     LINE_WIDTH,
     formatDistance,
     getInertHandleColor,
+    isRectangular,
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
@@ -843,7 +844,15 @@ export class NativeLayerRenderer {
         if (!this.handleModeActive) return [];
         if (!this.selectionScopedHandles) return this.visibleGraphics();
         const selected = this.selectedId ? this.find(this.selectedId) : undefined;
-        return selected ? [selected] : [];
+        if (!selected) return [];
+        /*
+         * **A rectangular zone wears no handle in edit mode.** `applyGesture` already
+         * returns early on `isRectangular` — a box's corner is a consequence of the box,
+         * not a point with a meaning of its own — so the dots were drawn in the live
+         * handle color and read by nothing. The resize affordance sizes these now.
+         * OpenLayers states the same rule in `toggleHandleFeatures`.
+         */
+        return isRectangular(selected.name) ? [] : [selected];
     }
 
     /**

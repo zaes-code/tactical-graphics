@@ -33,7 +33,7 @@
  * that lives in a controller is invisible to the other engine"
  */
 
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Tooltip} from '@mui/material';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
@@ -65,6 +65,9 @@ const BUTTON_GAP_PX = 4;
 /** How far outside the frame a button's near edge starts. */
 const BUTTON_OFFSET_PX = BUTTON_PX + BUTTON_GAP_PX;
 
+/** How close to the map's own edge a clamped button may sit, in pixels. */
+const EDGE_MARGIN_PX = 8;
+
 type Corner = 'top-left' | 'top-right' | 'bottom-right';
 
 /**
@@ -90,6 +93,14 @@ interface EditAffordancesProps {
 export default function EditAffordances({engine, active}: EditAffordancesProps) {
     const [box, setBox] = useState<SelectionBox | undefined>();
     const [gestures, setGestures] = useState<AllowedGestures | null>(null);
+    /**
+     * The map area, so the buttons can be kept inside it.
+     *
+     * A full-bleed wrapper rather than a measurement passed down: it is the same element
+     * the buttons are positioned in, so its size is by definition the space they have.
+     */
+    const frameRef = useRef<HTMLDivElement | null>(null);
+    const [frame, setFrame] = useState<{width: number; height: number}>({width: 0, height: 0});
 
     /**
      * Re-measures the box.
@@ -106,6 +117,8 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
         }
         setBox(engine.selectionBox());
         setGestures(engine.selectionGestures());
+        const element = frameRef.current;
+        if (element) setFrame({width: element.clientWidth, height: element.clientHeight});
     }, [engine, active]);
 
     /**
@@ -130,35 +143,84 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
         return () => cancelAnimationFrame(frame);
     }, [active, engine, measure]);
 
-    if (!active || !box || !gestures) return null;
+    /*
+     * The wrapper is always mounted while editing, so it can be measured before there is
+     * a box to draw. Returning null earlier left `frame` at 0x0 on the first frame, and
+     * every button clamped to the top-left corner.
+     */
+    const ready = active && box && gestures;
+    const offered = ready ? AFFORDANCES.filter(affordance => gestures![affordance.kind]) : [];
 
-    const offered = AFFORDANCES.filter(affordance => gestures[affordance.kind]);
+    /**
+     * Where a button sits, in **frame** coordinates, clamped into view.
+     *
+     * ## Why clamping is not cosmetic
+     *
+     * The buttons hang off the corners of the selection box, and that box is the
+     * graphic's extent — which is routinely larger than the window. An air corridor
+     * drawn across the viewport put its resize button 115 px below the bottom of a
+     * 950 px page, where it cannot be pressed at all: the graphic was selected, the
+     * affordance was rendered, and the gesture was simply unreachable. A user who zooms
+     * in on any large graphic hits this.
+     *
+     * So each button is pinned inside the frame with a margin. It stays on the edge
+     * nearest where it belongs, which keeps its meaning readable — the resize button is
+     * still the bottom-right one — while remaining clickable.
+     */
+    const place = (corner: Corner) => {
+        const left = box!.x - BOX_PADDING_PX;
+        const top = box!.y - BOX_PADDING_PX;
+        const right = left + box!.width + BOX_PADDING_PX * 2;
+        const bottom = top + box!.height + BOX_PADDING_PX * 2;
+
+        const rawX = corner.endsWith('left') ? left - BUTTON_OFFSET_PX : right + BUTTON_GAP_PX;
+        const rawY = corner.startsWith('top') ? top - BUTTON_OFFSET_PX : bottom + BUTTON_GAP_PX;
+
+        const maxX = Math.max(EDGE_MARGIN_PX, frame.width - BUTTON_PX - EDGE_MARGIN_PX);
+        const maxY = Math.max(EDGE_MARGIN_PX, frame.height - BUTTON_PX - EDGE_MARGIN_PX);
+        return {
+            left: Math.min(Math.max(rawX, EDGE_MARGIN_PX), maxX),
+            top: Math.min(Math.max(rawY, EDGE_MARGIN_PX), maxY),
+        };
+    };
 
     return (
         <Box
+            ref={frameRef}
             sx={{
                 position: 'absolute',
-                left: box.x - BOX_PADDING_PX,
-                top: box.y - BOX_PADDING_PX,
-                width: box.width + BOX_PADDING_PX * 2,
-                height: box.height + BOX_PADDING_PX * 2,
+                inset: 0,
                 /*
-                 * The frame itself is inert: it is a boundary, not a control. A rectangle
-                 * that swallowed clicks would make every graphic inside it unselectable,
-                 * and would eat the handle drags that are the other half of editing.
-                 * Only the buttons opt back in.
+                 * The frame is inert: it is a boundary, not a control. A rectangle that
+                 * swallowed clicks would make every graphic unselectable and would eat
+                 * the handle drags that are the other half of editing. Only the buttons
+                 * opt back in.
                  */
                 pointerEvents: 'none',
-                border: '1px dashed',
-                /*
-                 * The inert-handle grey, stated the same way the library states it for the
-                 * centre dot and the measure line: this is chrome that marks something
-                 * rather than chrome you can grab.
-                 */
-                borderColor: 'rgba(130,130,130,0.9)',
                 zIndex: 900,
+                overflow: 'hidden',
             }}
         >
+            {ready && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        left: box!.x - BOX_PADDING_PX,
+                        top: box!.y - BOX_PADDING_PX,
+                        width: box!.width + BOX_PADDING_PX * 2,
+                        height: box!.height + BOX_PADDING_PX * 2,
+                        border: '1px dashed',
+                        /*
+                         * The inert-handle grey, stated the same way the library states it
+                         * for the centre dot and the measure line: chrome that marks
+                         * something rather than chrome you can grab.
+                         */
+                        borderColor: 'rgba(130,130,130,0.9)',
+                        pointerEvents: 'none',
+                    }}
+                />
+            )}
+
             {offered.map(({kind, label, Icon, corner}) => (
                 <Tooltip key={kind} title={label} placement="top">
                     <Box
@@ -176,10 +238,7 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
                         }}
                         sx={{
                             position: 'absolute',
-                            top: corner.startsWith('top') ? -BUTTON_OFFSET_PX : undefined,
-                            bottom: corner.startsWith('bottom') ? -BUTTON_OFFSET_PX : undefined,
-                            left: corner.endsWith('left') ? -BUTTON_OFFSET_PX : undefined,
-                            right: corner.endsWith('right') ? -BUTTON_OFFSET_PX : undefined,
+                            ...place(corner),
                             pointerEvents: 'auto',
                             width: BUTTON_PX,
                             height: BUTTON_PX,
