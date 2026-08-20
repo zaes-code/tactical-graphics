@@ -53,6 +53,19 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
     }
 
     /**
+     * The base polygon's extent diagonal, in projected meters.
+     *
+     * Any linear measure will do — a resize scales every vertex about the interior point,
+     * so the diagonal scales with it. @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const extent = this.graphic.base?.getGeometry()?.getExtent?.();
+        if (!extent || !extent.every(Number.isFinite)) return undefined;
+        const diagonal = Math.hypot(extent[2] - extent[0], extent[3] - extent[1]);
+        return diagonal > 0 ? diagonal : undefined;
+    }
+
+    /**
      * Takes the width read-out down when the drag ends.
      *
      * **The manager calls this on every gesture end, and only `MissionTaskController`

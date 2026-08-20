@@ -13,10 +13,10 @@
 
 import type {HatchSpec, Paint, PaintContext, PaintFeature} from '../core/paint';
 import {paintGeometryMembers, paintLineWork} from '../core/paint';
-import {LINE_WIDTH, fontStyle, getColorByHostility, getLabelFillColor, withOpacity} from '../core/symbology';
+import {LINE_WIDTH, fontStyle, getColorByHostility, withOpacity} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicStatus} from '../core/type';
 import {crenellatedPath, encirclementToothSize, fortifiedRing, obstacleRing, ringIsClockwise, textWidth} from './decorations';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** A paint function, in the shape the registry stores. */
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -252,7 +252,7 @@ export function encirclementPaint(): AreaPaint {
                 text: {
                     text: 'ENY',
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     scale: scaleOf(feature, context),
                     placement: 'point',
                 },

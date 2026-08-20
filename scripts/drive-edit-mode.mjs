@@ -258,6 +258,7 @@ async function runResizeSweep(engine) {
         }
 
         const sizeBtn = page.locator('[aria-label="Resize"]');
+        await sizeBtn.first().waitFor({state: 'attached', timeout: 5000}).catch(() => {});
         if (await sizeBtn.count() === 0) {
             check(`${engine}: ${drawn} offers a resize affordance`, false);
             continue;
@@ -529,6 +530,10 @@ async function runChromeChecks() {
         `${shownHandles} visible`);
 
     const rectSize = page.locator('[aria-label="Resize"]');
+    // **Wait for it, don't read it.** The chrome measures on an animation frame, so a
+    // count taken in the same tick as the selection can legitimately be zero — which
+    // reads as "the affordance is missing" when it is merely not painted yet.
+    await rectSize.first().waitFor({state: 'attached', timeout: 5000}).catch(() => {});
     const rectSizeCount = await rectSize.count();
     check(`${engine}: a rectangular zone offers a resize affordance`, rectSizeCount === 1, `${rectSizeCount} found`);
     if (rectSizeCount === 1) {

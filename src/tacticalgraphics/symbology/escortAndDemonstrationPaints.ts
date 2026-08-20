@@ -5,7 +5,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {
     centerSegmentIndex,
     endFrame,
@@ -14,7 +14,7 @@ import {
     textWidth,
     uprightRotation,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -37,7 +37,7 @@ const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedP
 
 /** A text amplifier with the usual halo. */
 function amplifier(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
@@ -49,7 +49,7 @@ function amplifier(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align,
@@ -116,8 +116,8 @@ export function escortPaint(letter: string): TaskPaint {
 
         const rotation = uprightRotation(start, end);
         // One `E` against each side of the reserved space, growing outward from it.
-        paints.push(amplifier(bar[0][1], letter, scale, rotation, 'right', 'middle'));
-        paints.push(amplifier(bar[1][0], letter, scale, rotation, 'left', 'middle'));
+        paints.push(amplifier(feature, bar[0][1], letter, scale, rotation, 'right', 'middle'));
+        paints.push(amplifier(feature, bar[1][0], letter, scale, rotation, 'left', 'middle'));
         return paints;
     };
 }
@@ -174,7 +174,7 @@ export function demonstrationPaint(label: string): TaskPaint {
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const text = [label, (feature.properties.label ?? '').trim()].filter(Boolean).join(' ');
 
-        paints.push(amplifier(
+        paints.push(amplifier(feature, 
             offsetAbove(mid, a, b, context.resolution, DEM_LABEL_OFFSET_PX),
             text,
             scaleOf(feature, context),

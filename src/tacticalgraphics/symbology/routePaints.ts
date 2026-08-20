@@ -13,10 +13,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {RouteDirection, TacticalGraphicName} from '../core/type';
 import {offsetAbove, offsetBelow, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
 const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
@@ -36,7 +36,7 @@ const ROUTE_ARROW_MIN_SPAN_PX = 56;
 
 /** A text amplifier, in the label color with the usual halo. */
 function amplifier(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     extra: {rotation?: number; align?: 'left' | 'center' | 'right'; baseline?: 'top' | 'middle' | 'bottom'} = {},
@@ -46,7 +46,7 @@ function amplifier(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align: extra.align ?? 'center',
             baseline: extra.baseline ?? 'middle',
@@ -66,7 +66,7 @@ function amplifier(
  * one of the two blocks off into open space.
  */
 function routeEndPaints(
-    context: PaintContext,
+    feature: PaintFeature, context: PaintContext,
     text: string,
     direction: RouteDirection,
     atStart: boolean,
@@ -76,7 +76,7 @@ function routeEndPaints(
     scale: number,
 ): Paint[] {
     const paints: Paint[] = [];
-    const color = getLabelFillColor();
+    const color = labelColorOf(feature);
     const rotation = uprightRotation(a, b);
     const resolution = context.resolution;
 
@@ -136,7 +136,7 @@ function routeEndPaints(
             const innerPx = altWidthPx / 2 + ROUTE_ALT_GAP_PX * scale;
             arrow(row(0), innerPx, halfPx);
             arrow(row(0), -innerPx, -halfPx);
-            paints.push(amplifier(at(row(0), 0), 'ALT', scale, {rotation}));
+            paints.push(amplifier(feature, at(row(0), 0), 'ALT', scale, {rotation}));
         }
     }
 
@@ -148,7 +148,7 @@ function routeEndPaints(
     const goesRight = b[0] >= a[0];
     const endAlign: 'left' | 'right' = atStart ? (goesRight ? 'left' : 'right') : (goesRight ? 'right' : 'left');
 
-    paints.push(amplifier(at(labelOffsetPx, 0), text, scale, {
+    paints.push(amplifier(feature, at(labelOffsetPx, 0), text, scale, {
         rotation,
         // Center the identifier over the arrow figure it caps; with no arrows there
         // is nothing to center on, so run it inward off the endpoint.
@@ -180,8 +180,8 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         const beforeEnd = coords[coords.length - 2];
 
         return [
-            ...routeEndPaints(context, text, direction, true, start, start, afterStart, scale),
-            ...routeEndPaints(context, text, direction, false, end, beforeEnd, end, scale),
+            ...routeEndPaints(feature, context, text, direction, true, start, start, afterStart, scale),
+            ...routeEndPaints(feature, context, text, direction, false, end, beforeEnd, end, scale),
             {
                 geometry,
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},

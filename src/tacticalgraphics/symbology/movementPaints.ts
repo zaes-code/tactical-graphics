@@ -23,11 +23,11 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -83,7 +83,7 @@ const DEFAULT_LABEL_FONT_PX = 24;
  * in the Movement and Manoeuvre block, against a 5-pixel control.
  */
 function text(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     value: string,
     scale: number,
     extra: {rotation?: number; align?: 'left' | 'center' | 'right'; halo?: boolean} = {},
@@ -93,7 +93,7 @@ function text(
         text: {
             text: value,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: extra.halo === false ? undefined : {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation: extra.rotation,
             align: extra.align ?? 'center',
@@ -154,7 +154,7 @@ function fixedLetterPaint(
                 : coords.length >= 2
                     ? uprightRotation(coords[0], coords[1])
                     : 0;
-            return [text([x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
+            return [text(feature, [x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
         }
 
         const [x1, y1] = coords[1];
@@ -168,7 +168,7 @@ function fixedLetterPaint(
         // Interpolated **in projected meters**, on the segment the renderer draws, so a
         // letter placed a quarter along lands in the hole cut a quarter along.
         const t = options.atFraction ?? 0.5;
-        return [text([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
+        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
     };
 }
 
@@ -213,7 +213,7 @@ export function counterattackLabelPaint(): MovementPaint {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
         const label = feature.properties.label;
-        return [text(
+        return [text(feature, 
             coords[0],
             label ? `CATK ${label}` : 'CATK',
             scaleOf(feature, context),
@@ -233,7 +233,7 @@ export function aviationAxisLabelPaint(): MovementPaint {
         const value = nameAndDate(feature);
         if (!value) return [];
 
-        return [text(coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+        return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
             align: 'left',
         })];
@@ -271,7 +271,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         const clearance = 10 * context.resolution;
         const at: ProjectedPosition = [c1[0] - (dx / segLenMap) * clearance, c1[1] - (dy / segLenMap) * clearance];
 
-        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
             align: c1[0] >= c0[0] ? 'right' : 'left',
         })];
@@ -304,7 +304,7 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
 
-        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
             align,
         })];
@@ -343,7 +343,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         const tdy = y1 - y0;
         const value = nameAndDate(feature);
         if (value) {
-            paints.push(text([x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+            paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
                 align: 'left',
             }));
@@ -434,7 +434,7 @@ export function advanceToContactLabelPaint(): MovementPaint {
             maxGraphicLabelScale(),
             spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX),
         );
-        return [text(at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
+        return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
     };
 }
 
@@ -457,13 +457,13 @@ export function movementLabelPaint(): MovementPaint {
         const rotation = uprightRotation(c0, c1);
         const midpoint: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
 
-        paints.push(text(midpoint, feature.properties.label ?? '', scale, {rotation, halo: false}));
+        paints.push(text(feature, midpoint, feature.properties.label ?? '', scale, {rotation, halo: false}));
 
         const date = areaDateLabel(feature);
         if (date) {
             const dx = c1[0] - c0[0];
             const dy = c1[1] - c0[1];
-            paints.push(text([midpoint[0] + dx, midpoint[1] + dy], date, scale, {rotation, halo: false}));
+            paints.push(text(feature, [midpoint[0] + dx, midpoint[1] + dy], date, scale, {rotation, halo: false}));
         }
 
         return paints;
@@ -619,7 +619,7 @@ export function bridgeLabelPaint(): MovementPaint {
         const scale = scaleOf(feature, context);
 
         const paints: Paint[] = [
-            text(c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
+            text(feature, c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
         ];
 
         const date = areaDateLabel(feature);
@@ -628,7 +628,7 @@ export function bridgeLabelPaint(): MovementPaint {
             const gap = BRIDGE_DATE_GAP_PX * context.resolution;
             const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
             const align = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'left' : 'right') : 'center';
-            paints.push(text(at, date, scale, {align}));
+            paints.push(text(feature, at, date, scale, {align}));
         }
 
         return paints;
