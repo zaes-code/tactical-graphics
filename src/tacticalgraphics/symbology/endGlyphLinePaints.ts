@@ -11,7 +11,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon} from '../core/type';
 import {echelonMarks} from './echelonPaints';
 import {
@@ -22,7 +22,7 @@ import {
     textWidth,
     uprightRotation,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type EndGlyphPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -113,7 +113,7 @@ export function decisionLinePaint(): EndGlyphPaint {
                 text: {
                     text,
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     align: 'center',
                     baseline: 'middle',
@@ -214,7 +214,7 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(a, b),
                 align: 'center',

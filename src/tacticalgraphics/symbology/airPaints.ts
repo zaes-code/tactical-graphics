@@ -20,10 +20,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
-import {fontStyle, formatAltitude, getLabelFillColor} from '../core/symbology';
+import {fontStyle, formatAltitude} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, halo, scaleOf} from './paintFunctions';
+import {getFullLabel, halo, scaleOf, labelColorOf} from './paintFunctions';
 import {fitLabelScale} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
@@ -84,7 +84,7 @@ function labelBlock(
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: halo(),
             align: 'left',
             justify: 'left',

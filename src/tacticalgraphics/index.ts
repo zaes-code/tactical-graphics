@@ -191,6 +191,7 @@ export {
     RADIUS_GRAPHICS,
     formatDistance,
     formatAltitude,
+    getLabelUsesHostilityColor,
     hasRadiusReadout,
     showsSizeReadout,
     GLYPH_CUT_GAP_GRAPHICS,

@@ -36,6 +36,7 @@ import {
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
+    getLabelUsesHostilityColor,
     getLabelHaloColor,
     labelScale,
     ratioLockedLabelScale,
@@ -101,6 +102,22 @@ export function lineColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
     if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
     return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
+}
+
+/**
+ * The colour a graphic's **text amplifiers** take.
+ *
+ * `getLabelFillColor()` by default, which is doctrine: FM 1-02.2 colours line work by
+ * affiliation and leaves text black. A host may opt the whole library into affiliation-
+ * coloured text with `labelUsesHostilityColor`, and then a label follows exactly the rule
+ * its line work follows — `lineColorOf`, including its exemptions, so a graphic that does
+ * not take a hostility colour does not take one on its text either.
+ *
+ * Takes the feature rather than a hostility so the two can never disagree about which
+ * affiliation a label belongs to. @see lineColorOf
+ */
+export function labelColorOf(feature: PaintFeature): string {
+    return getLabelUsesHostilityColor() ? lineColorOf(feature) : getLabelFillColor();
 }
 
 /** The halo every label carries, so it stays legible over the basemap. */
@@ -193,7 +210,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation,
                 align,
@@ -275,7 +292,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation: uprightRotation(p1, p2),
                 align: 'center',
@@ -412,7 +429,7 @@ export function missionTaskLabelPaint(
             text: {
                 text: label,
                 font: ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
                     ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
@@ -525,7 +542,7 @@ export function defaultLinePaint(
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation,
                 align,

@@ -85,6 +85,17 @@ export interface TacticalGraphicHandler {
     handleIndexOffset?: number;
 
     /**
+     * The graphic's current overall size, in meters — any linear measure of it, as long
+     * as the same one is reported every time and a `handleResize(k)` multiplies it by k.
+     *
+     * A resize is a ratio from where the drag began, and computing it needs the size the
+     * graphic has *now*: without it the manager can only multiply per frame, which is
+     * the same arithmetic until a holder clamps and silently wrong afterwards.
+     * @see TacticalGraphicsManager.handleResize
+     */
+    currentSize?(): number | undefined;
+
+    /**
      * The width this graphic currently has, in meters — whatever `setOffset` last set.
      *
      * Needed because a width drag applies a **change**: without a starting value the

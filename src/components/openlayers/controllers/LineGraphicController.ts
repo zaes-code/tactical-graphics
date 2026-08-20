@@ -226,6 +226,24 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * of them share an interface that names it. @see TacticalGraphicHandler.currentOffset
      */
     /**
+     * The drawn base's total length, in projected meters.
+     *
+     * A resize scales the base about its first vertex, so its length is exactly the
+     * measure that a `handleResize(k)` multiplies by k — which is what makes it the
+     * right answer here even for the families whose *rendered* size is derived from it.
+     * @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const coords = this.graphic.base?.getGeometry()?.getCoordinates?.();
+        if (!Array.isArray(coords) || coords.length < 2) return undefined;
+        let total = 0;
+        for (let i = 1; i < coords.length; i++) {
+            total += Math.hypot(coords[i][0] - coords[i - 1][0], coords[i][1] - coords[i - 1][1]);
+        }
+        return total > 0 ? total : undefined;
+    }
+
+    /**
      * Declared by the holder, for the two families that publish `handleCoords[0]` as
      * their own offset feature and `slice(1)` as `handles`.
      * @see TacticalGraphicHandler.handleIndexOffset

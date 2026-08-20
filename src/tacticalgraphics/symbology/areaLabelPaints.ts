@@ -23,10 +23,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor, labelScale} from '../core/symbology';
+import {HALO_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {getFullLabel} from './paintFunctions';
+import {getFullLabel, labelColorOf} from './paintFunctions';
 import {fitLabelScale} from './labelFit';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -65,7 +65,7 @@ function stack(
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align: 'center',
             baseline: 'middle',
@@ -184,7 +184,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
             text: {
                 text: [dtg1, dtg2].filter(s => s.length > 0).join('-\n'),
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'right',
                 baseline: 'top',
@@ -303,7 +303,7 @@ export function areaDefaultLabelPaint(name: TacticalGraphicName): AreaLabelPaint
             text: {
                 text: label,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 offsetYPx,
                 scale: fitted,
