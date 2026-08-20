@@ -74,7 +74,11 @@ export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate 
  * controller without `maxPoints`, so it never qualifies anyway.
  */
 const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
-    TacticalGraphicName.ReliefInPlace,
+    // `ReliefInPlace` was here and came out on 2026-08-20. The list means "an edit drag
+    // does nothing", which was a reasonable thing to want when `resize` was a separate
+    // mode the user could switch to. It is not: `edit` is now the only mode the panel
+    // offers, so membership meant the graphic could not be resized by its handle at all,
+    // and its arrow-tip handle was one of the six reported as dead.
     TacticalGraphicName.MobileDefense,
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,
@@ -211,6 +215,29 @@ export class LineGraphicController implements TacticalGraphicHandler {
 
     setOffset(offset: number): void {
         this.graphic.setOffset?.(offset);
+    }
+
+    /**
+     * The width the holder is currently drawing with.
+     *
+     * Duck-typed on the holder rather than declared on a shared base, because the
+     * holders that own a width call it different things — `offset` on the movement
+     * family and the corridors, `size` on the block and retrograde families — and none
+     * of them share an interface that names it. @see TacticalGraphicHandler.currentOffset
+     */
+    /**
+     * Declared by the holder, for the two families that publish `handleCoords[0]` as
+     * their own offset feature and `slice(1)` as `handles`.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    get handleIndexOffset(): number | undefined {
+        return (this.graphic as unknown as {handleIndexOffset?: number}).handleIndexOffset;
+    }
+
+    currentOffset(): number | undefined {
+        const holder = this.graphic as unknown as {offset?: number; size?: number};
+        const value = holder.offset ?? holder.size;
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 
     // Surfaced from the graphic so the manager can read it off the controller.

@@ -192,6 +192,7 @@ export {
     formatDistance,
     formatAltitude,
     hasRadiusReadout,
+    showsSizeReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
 } from './core/symbology';

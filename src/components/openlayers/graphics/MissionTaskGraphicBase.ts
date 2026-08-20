@@ -1,7 +1,9 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
+    showsSizeReadout,
+} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -134,7 +136,6 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {airfieldPointLabelStyleFn, airfieldPointStyleFunc, movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
-import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 import {fromOlGeometry} from "../paintToOpenLayers";
 import {outerRingOf} from "@zaes/tactical-graphics";
@@ -426,9 +427,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     private refreshMeasure(): void {
         const edge = this.measureEdge();
-        // Same list the properties dialog reads, so a graphic can never report a radius
-        // in one place and not the other. @see RADIUS_GRAPHICS
-        if (!getGraphicFields(this.name).radius) {
+        // **Not the dialog's field list.** A read-out is feedback on a gesture; a dialog
+        // field is an amplifier the symbol carries, and ten circle graphics legitimately
+        // have the first without the second. Gating on the field list made those ten
+        // resize blind while the zone beside them reported a distance.
+        // @see showsSizeReadout
+        if (!showsSizeReadout(this.name)) {
             this.measure.setGeometry(undefined);
             return;
         }

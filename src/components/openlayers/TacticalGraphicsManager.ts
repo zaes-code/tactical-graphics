@@ -60,6 +60,14 @@ const MIN_RESIZE_ORIGIN_PX = 8;
 const MIRROR_FLIP_MIN_PX = 6;
 
 /**
+ * The smallest width a drag may leave a graphic with, in meters.
+ *
+ * A width is a magnitude, so a drag past zero has to stop somewhere; at exactly zero the
+ * rails collapse onto the centre line and several generators divide by it.
+ */
+const MIN_OFFSET_METERS = 1;
+
+/**
  * How far from a graphic a selection click may land, in screen pixels.
  *
  * Matches the radius MapLibre's `hitTest` uses, so a click selects the same thing on
@@ -203,6 +211,13 @@ export class TacticalGraphicsManager {
     private activeHandleIndex: number = -1;
     /** @see handleVertexDrag — index into the base geometry, latched at pointer-down. */
     private activeBaseVertex: number = -1;
+    /**
+     * The cursor's perpendicular offset when a width drag began, and the width the
+     * graphic had then. Both latched on the first move of the gesture and cleared on
+     * release, so the drag applies a *change*. @see handleOffset
+     */
+    private offsetGrabPerpendicular: number | undefined;
+    private offsetGrabWidth: number | undefined;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -252,13 +267,32 @@ export class TacticalGraphicsManager {
         if (!target) return;
 
         const hits: Feature[] = [];
-        this.map.forEachFeatureAtPixel(evt.pixel, feature => {
-            const asFeature = this.asFeature(feature);
-            if (asFeature) hits.push(asFeature);
-        });
+        // The same tolerance the click uses, or the cursor promises a selection the
+        // click then misses (and vice versa). @see SELECT_HIT_TOLERANCE_PX
+        this.map.forEachFeatureAtPixel(
+            evt.pixel,
+            feature => {
+                const asFeature = this.asFeature(feature);
+                if (asFeature) hits.push(asFeature);
+            },
+            {hitTolerance: SELECT_HIT_TOLERANCE_PX},
+        );
 
         let interactive: boolean;
-        if (this.enableHandleModes().includes(this.currentMode)) {
+        if (this.isEditing()) {
+            /*
+             * **Edit mode has two things worth pointing at, not one.**
+             *
+             * A live handle, as the four gesture modes do — and *any* graphic, because a
+             * click here selects one. Reporting only the handle left the cursor an arrow
+             * over every graphic on the map, so nothing said the click would do anything,
+             * even though selecting is the primary gesture of the mode.
+             */
+            const centerGrabbable = this.isTranslating();
+            interactive =
+                hits.some(f => f.get('handle') && (!f.get('inert') || centerGrabbable)) ||
+                hits.some(f => !!this.getFeatureController(f));
+        } else if (this.enableHandleModes().includes(this.currentMode)) {
             const centerGrabbable = this.isTranslating();
             interactive = hits.some(f => f.get('handle') && (!f.get('inert') || centerGrabbable));
         } else {
@@ -535,6 +569,9 @@ export class TacticalGraphicsManager {
             handleDragEvent: this.handleDragEvent,
             handleUpEvent: (): boolean => {
                 this.lastPointerPosition = null;
+                // The width latch belongs to one gesture. @see handleOffset
+                this.offsetGrabPerpendicular = undefined;
+                this.offsetGrabWidth = undefined;
                 // The drag is over, so any live measurement read-out goes with it. Done
                 // here rather than in the controller because this is the one place every
                 // drag gesture ends, however it started.
@@ -610,6 +647,8 @@ export class TacticalGraphicsManager {
     /** Ends an affordance gesture, mirroring what `handleUpEvent` does for a real drag. */
     private endAffordanceGesture = (): void => {
         this.lastPointerPosition = null;
+        this.offsetGrabPerpendicular = undefined;
+        this.offsetGrabWidth = undefined;
         (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
         this.activeController = undefined;
         this.activeGesture = undefined;
@@ -999,7 +1038,23 @@ export class TacticalGraphicsManager {
         const drawn = this.activeController.getBaseGeometry() as unknown;
         const vertices = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]).length : 1;
 
-        return handleRole(name, this.activeHandleIndex, vertices) === 'mirror';
+        return handleRole(name, this.contractHandleIndex(), vertices) === 'mirror';
+    }
+
+    /**
+     * The grabbed handle's index **in the generator's list**, which is the space
+     * `handleRole` answers in.
+     *
+     * `activeHandleIndex` is an index into whichever rendered feature was grabbed, and
+     * those two spaces are not the same for a holder that splits its handles across
+     * features. @see TacticalGraphicHandler.handleIndexOffset
+     */
+    private contractHandleIndex(): number {
+        if (this.activeHandleIndex < 0) return this.activeHandleIndex;
+        // The offset feature carries the handles that were peeled off, so its own index
+        // is already a contract index — the shift applies to what was left behind.
+        if (this.activeFeature?.get('offsetHandler')) return this.activeHandleIndex;
+        return this.activeHandleIndex + (this.activeController?.handleIndexOffset ?? 0);
     }
 
     /**
@@ -1020,7 +1075,7 @@ export class TacticalGraphicsManager {
         const drawn = controller.getBaseGeometry() as unknown;
         const line = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]) : undefined;
         if (!line || line.length < 2) return false;
-        if (handleRole(name, this.activeHandleIndex, line.length) !== 'mirror') return false;
+        if (handleRole(name, this.contractHandleIndex(), line.length) !== 'mirror') return false;
 
         const from = line[0];
         const to = line[line.length - 1];
@@ -1155,23 +1210,53 @@ export class TacticalGraphicsManager {
         // whose offset spans the full width; a graphic whose offset is measured
         // from the center-line (a radius) overrides it to track the cursor 1:1.
         const scaleFactor = this.activeController.offsetScale ?? .5;
-        const baseWidth = Math.abs(perpendicularDistance) * scaleFactor;
+
+        /*
+         * **A width drag is a delta from where it started, never an absolute reading.**
+         *
+         * This used to set `width = |perpendicular| × offsetScale` outright, which is
+         * only correct if the handle happens to be drawn at exactly `width ÷ offsetScale`
+         * from the nearest segment. For a straight two-point graphic it very nearly is;
+         * for anything else it is not, and the width snapped the instant the handle was
+         * grabbed — measured, one 6-pixel drag took an air corridor from 391 km to 257 km
+         * (−34%) and the next took it to 98 km (−62%), because a corridor's handles sit
+         * on mitred tangent points whose perpendicular distance to the nearest segment is
+         * not the corridor's half-width at all. The retrogrades jumped 18% and relief in
+         * place 33% on a 6-pixel nudge.
+         *
+         * Latching the perpendicular and the width at pointer-down and applying the
+         * *change* makes a small drag a small change for every graphic, whatever its
+         * handle geometry — and removes the standing requirement that `offsetScale` be
+         * the exact reciprocal of how many widths out the handle is drawn. That number
+         * now only sets sensitivity, which is all it ever claimed to be.
+         */
+        if (this.offsetGrabPerpendicular === undefined) {
+            this.offsetGrabPerpendicular = perpendicularDistance;
+            this.offsetGrabWidth = this.activeController.currentOffset?.() ?? Math.abs(perpendicularDistance) * scaleFactor;
+        }
+        const delta = (Math.abs(perpendicularDistance) - Math.abs(this.offsetGrabPerpendicular)) * scaleFactor;
+        // A width is a magnitude; a drag that would take it through zero stops at a floor
+        // rather than turning the graphic inside out.
+        const baseWidth = Math.max(MIN_OFFSET_METERS, (this.offsetGrabWidth ?? 0) + delta);
         this.activeController.setOffset?.(baseWidth);
 
         // One handle, two jobs: the magnitude above set the width, the sign sets the side.
         // Read separately and never from the raw signed value — using the signed number for
         // both would make a flip jump the width at the same moment.
         //
-        // The threshold is Envelopment's reasoning: a deliberate move to one side flips it,
-        // a pixel of jitter across the line does not.
-        if (this.activeController.setMirrored && Math.abs(perpendicularDistance) > MIRROR_FLIP_MIN_PX * this.map.getView().getResolution()!) {
-            // Negative, not positive. `widthAxis` is the line's left normal, and an
-            // unmirrored cane already hangs on that side — so a *positive* perpendicular
-            // is the side it is on, and reading it as "mirrored" flipped the graphic the
-            // moment the user dragged along the side it was already on. Measured: the
-            // handle sat 41px above the line, dragging further up gave a growing positive
-            // perpendicular, and the cane flipped underneath.
-            this.activeController.setMirrored(perpendicularDistance < 0);
+        // **Only on a genuine crossing.** The test used to be "which side is the cursor
+        // on", which flips the moment you grab a handle that is drawn on the negative
+        // side — a bridge's width handle turned the graphic over as soon as it was
+        // touched, before the pointer had moved at all. Comparing against the side the
+        // drag *started* on means a flip takes a deliberate move across the line.
+        const startedNegative = this.offsetGrabPerpendicular < 0;
+        const nowNegative = perpendicularDistance < 0;
+        if (
+            this.activeController.setMirrored &&
+            nowNegative !== startedNegative &&
+            Math.abs(perpendicularDistance) > MIRROR_FLIP_MIN_PX * this.map.getView().getResolution()!
+        ) {
+            this.activeController.setMirrored(nowNegative);
         }
     }
 

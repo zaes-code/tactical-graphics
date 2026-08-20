@@ -68,6 +68,33 @@ export interface TacticalGraphicHandler {
     // setOffset. Omitted means the shared default (see handleOffset).
     offsetScale?: number;
 
+    /**
+     * How many contract handles the holder peeled off before the `handles` feature.
+     *
+     * **`handleRole` is indexed against the generator's list, not against whatever a
+     * holder happened to render.** The retrograde family publishes `handleCoords[0]` —
+     * which the contract calls the `mirror` handle — as its own offset feature, and puts
+     * `slice(1)` in `handles`. So the arrow tip, contract index 1, arrived at
+     * `handleRole` as index 0 and was answered "mirror": the manager claimed the drag as
+     * a flip and the tip handle did nothing at all. Six graphics, all reported as "a red
+     * handle that doesn't resize".
+     *
+     * Declaring the shift lets the manager convert a feature-local index back to a
+     * contract one. A holder that renders the contract list unchanged omits it.
+     */
+    handleIndexOffset?: number;
+
+    /**
+     * The width this graphic currently has, in meters — whatever `setOffset` last set.
+     *
+     * Needed because a width drag applies a **change**: without a starting value the
+     * manager has to infer one from where the cursor happens to be, which is exactly
+     * the absolute reading that made the width snap on grab. A controller that cannot
+     * answer falls back to that inference, so this stays optional.
+     * @see TacticalGraphicsManager.handleOffset
+     */
+    currentOffset?(): number | undefined;
+
     // Whether an edit ("modify vertices") drag should stretch this graphic the
     // way a resize drag does. Set for fixed-vertex graphics, which have no
     // vertices for OpenLayers' Modify to offer. See LineGraphicController.

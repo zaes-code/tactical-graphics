@@ -439,6 +439,18 @@ export const createMap = (target: HTMLElement) => {
                 -20037508.34, -20037508.34,   // left, bottom  (approx. full world in Web Mercator)
                 20037508.34, 20037508.34,    // right, top
             ],
+            /**
+             * **Let the view zoom out until the whole extent is visible.**
+             *
+             * The default is false, which stops the zoom at the point where the extent
+             * *fills* the viewport — a hard floor at `worldWidth / viewportWidth`, which
+             * on a 1500 px window is 26 717 m/px. The sample sweep lays 273 graphics out
+             * across 46 million metres, wider than the Earth, so `view.fit` asked for
+             * 39 842 and was silently clamped: the gallery zoomed, and still ran off both
+             * sides of the window. MapLibre has no such constraint and framed the same
+             * sweep correctly, which is how the clamp was found.
+             */
+            showFullExtent: true,
         }),
     });
 };
