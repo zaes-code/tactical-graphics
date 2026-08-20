@@ -47,10 +47,23 @@ import type {MapEngineHandle} from './mapEngine';
  * Enough that the dashes never run along the symbol's own line work, where the two read
  * as one shape and the box stops looking like a container.
  */
-const BOX_PADDING_PX = 12;
+const BOX_PADDING_PX = 14;
 
-/** Half an affordance button, so a corner sits centred on the frame. */
 const BUTTON_PX = 28;
+
+/**
+ * The gap between the frame and the buttons hung off it, in pixels.
+ *
+ * **The buttons sit wholly outside the frame, never centred on its corners.** Centred,
+ * a 28 px button reaches 14 px inward — past the 12 px padding and onto the graphic's
+ * own corner, which is exactly where a line's endpoint handle is. It covered that
+ * handle, and a covered handle is an uneditable one: the click lands on a button that
+ * starts a whole-graphic gesture instead of the vertex drag the user aimed at.
+ */
+const BUTTON_GAP_PX = 4;
+
+/** How far outside the frame a button's near edge starts. */
+const BUTTON_OFFSET_PX = BUTTON_PX + BUTTON_GAP_PX;
 
 type Corner = 'top-left' | 'top-right' | 'bottom-right';
 
@@ -163,10 +176,10 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
                         }}
                         sx={{
                             position: 'absolute',
-                            top: corner.startsWith('top') ? -BUTTON_PX / 2 : undefined,
-                            bottom: corner.startsWith('bottom') ? -BUTTON_PX / 2 : undefined,
-                            left: corner.endsWith('left') ? -BUTTON_PX / 2 : undefined,
-                            right: corner.endsWith('right') ? -BUTTON_PX / 2 : undefined,
+                            top: corner.startsWith('top') ? -BUTTON_OFFSET_PX : undefined,
+                            bottom: corner.startsWith('bottom') ? -BUTTON_OFFSET_PX : undefined,
+                            left: corner.endsWith('left') ? -BUTTON_OFFSET_PX : undefined,
+                            right: corner.endsWith('right') ? -BUTTON_OFFSET_PX : undefined,
                             pointerEvents: 'auto',
                             width: BUTTON_PX,
                             height: BUTTON_PX,
