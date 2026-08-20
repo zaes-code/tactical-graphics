@@ -35,6 +35,15 @@ interface Props {
     onInteractionModeChange(mode: EditMode): void;
 }
 
+/**
+ * How far the sample sweep keeps its content from the map's edges, in pixels — and how
+ * far from the *left* edge, where the controls panel floats over the map and would
+ * otherwise swallow a whole column of samples. The same two numbers `sampleGallery.ts`
+ * lays its grid out with.
+ */
+const SAMPLE_VIEW_PADDING_PX = 14;
+const SAMPLE_CONTROL_PANEL_PX = 326;
+
 const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
@@ -151,6 +160,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 // identical by construction rather than by imitation.
                 setInteractionMode('view');
                 engine.current?.restore(sampleFeatureCollection(hostility));
+                fitToGraphics();
             },
             exportGeoJson: () => {
                 const snapshot = engine.current?.snapshot();
@@ -258,6 +268,44 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         if (!map) return;
         tacticalGraphicManager.current?.renderingVectorSource.clear();
         setInteractionMode('view');
+    };
+
+    /**
+     * Zooms the view to everything now on the map.
+     *
+     * **The sweep used to do this and stopped.** `drawProvenSamples` ended with a
+     * `view.fit` over the grid it had just laid out; the sweep now goes through the
+     * ordinary `restore` path so both engines draw identical GeoJSON, and the fit went
+     * with the code that was replaced. The result was a gallery drawn correctly and
+     * off screen — 273 graphics at whatever zoom the user happened to be at.
+     *
+     * The padding is asymmetric because the controls panel floats over the map's left
+     * edge and would otherwise swallow a whole column of samples.
+     */
+    const fitToGraphics = (passes = 3) => {
+        const manager = tacticalGraphicManager.current;
+        const view = manager?.map?.getView();
+        const extent = manager?.renderingVectorSource.getExtent();
+        if (!view || !extent || !extent.every(Number.isFinite) || extent[2] <= extent[0]) return;
+        view.fit(extent, {
+            size: manager!.map.getSize(),
+            padding: [SAMPLE_VIEW_PADDING_PX, SAMPLE_VIEW_PADDING_PX, SAMPLE_VIEW_PADDING_PX, SAMPLE_CONTROL_PANEL_PX],
+        });
+
+        /*
+         * **Fit again, because fitting changes what there is to fit.**
+         *
+         * Every screen-sized graphic — the security operations, and anything else whose
+         * geometry is a pixel constant times the resolution — re-derives itself on
+         * `change:resolution`. So the zoom this fit chose makes those graphics grow in
+         * metres, and the extent that was correct a moment ago is now too small: measured
+         * on the full sweep, one pass left 1730 px of content in a 1160 px pane.
+         *
+         * It converges quickly because each pass moves the zoom less than the last, so a
+         * small bounded number of passes is enough and a loop-until-stable is not worth
+         * the risk of never settling.
+         */
+        if (passes > 1) requestAnimationFrame(() => fitToGraphics(passes - 1));
     };
 
     const drawSamples = (hostility?: TacticalGraphicHostility) => {

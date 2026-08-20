@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, hasRadiusReadout, isRectangular, normalizeDrawnBase, type GestureKind, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, showsSizeReadout, type GestureKind, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -553,7 +553,24 @@ export class MapLibreInteractions {
         // of zoom. @see dropSizePx
         const drop = dropSizePx(name);
         if (drop !== undefined) return {radius: drop * resolutionOf(this.map), rotation: 0};
-        if (wants !== 'Point' || vertices.length < 2) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
+        /*
+         * **A drawn graphic gets no placeholder radius.** On a LineString, `radius` is
+         * the graphic's half-width — what `LineGraphicBase.setOffset` replays — and
+         * `sizeDefaults` already derives it as `drawingResolution × 20`, which is the
+         * rule the OpenLayers holders use. Stamping `DEFAULT_RADIUS_METERS` here handed
+         * that derivation a value it could not tell from a genuinely saved one, so it
+         * won: an air corridor drawn on MapLibre came out 80 km wide where the same
+         * corridor drawn on OpenLayers came out 391 km.
+         *
+         * This is the same mistake the `hasBakedDecoration` guard above already
+         * describes — a placeholder is not a default, it is a wrong answer that outranks
+         * the right one — and it applies to every drawn width graphic, not just the
+         * corridors.
+         */
+        if (wants !== 'Point') return {rotation: 0};
+        // A point-anchored graphic with no second vertex has no size to measure, and a
+        // radius of nothing is worse than a fixed one.
+        if (vertices.length < 2) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
 
         const center = toMercator([vertices[0][0], vertices[0][1]]);
         const rim = toMercator([vertices[1][0], vertices[1][1]]);
@@ -742,7 +759,7 @@ export class MapLibreInteractions {
                 // Sizing a point-anchored graphic reads out the radius as it goes, the
                 // way a resize does — the second click is otherwise blind, and the number
                 // it is about to commit is the whole point of the gesture.
-                if (baseGeometryFor(this.drawing) === 'Point' && hasRadiusReadout(this.drawing)) {
+                if (baseGeometryFor(this.drawing) === 'Point' && showsSizeReadout(this.drawing)) {
                     this.renderer.setMeasure([center, cursor]);
                 }
             }
@@ -965,11 +982,14 @@ export class MapLibreInteractions {
      *
      * Shown for the whole gesture, as OpenLayers' `showMeasure` is: from the pivot to
      * the rim, so the user can read the number they are dragging to.
-     * `hasRadiusReadout` is the same list the properties dialog uses, so a graphic
+     * `showsSizeReadout` — **not** the dialog's field list, which is a different
+     * question: a read-out is feedback on a gesture, an amplifier is what the symbol
+     * carries. Seven circle graphics have the first without the second. The OpenLayers
+     * holder reads the same predicate, so a graphic
      * cannot report a radius in one place and not the other.
      */
     private showMeasure(graphic: MapLibreTacticalGraphic): void {
-        if (!hasRadiusReadout(graphic.name)) return;
+        if (!showsSizeReadout(graphic.name)) return;
         const radius = graphic.properties.radius;
         if (!radius || radius <= 0) return;
 

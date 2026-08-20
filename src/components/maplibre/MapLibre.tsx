@@ -11,7 +11,7 @@ import {AttributionControl, Map as MapLibreMap, ScaleControl, setWorkerUrl} from
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
 import {BASEMAP_LAYER_ID, basemapPaint, createBasemapStyle} from './basemapStyle';
-import {resolutionOf, zoomForResolution} from './projection';
+import {resolutionOf, zoomForResolution, toLonLat} from './projection';
 import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {SPIKE_SAMPLES} from '../spikeSamples';
@@ -72,6 +72,14 @@ const MAPLIBRE_CAPABILITIES = {...FULL_CAPABILITIES};
  * which is MapLibre zoom 3, since MapLibre's world is 512 px at zoom 0 and
  * OpenLayers' is 256. @see resolutionOf
  */
+/**
+ * How far the sample sweep keeps its content from the map's edges, in pixels — and how
+ * far from the *left* edge, where the controls panel floats over the map. The same two
+ * numbers the OpenLayers view uses, so both engines frame the sweep alike.
+ */
+const SAMPLE_VIEW_PADDING_PX = 14;
+const SAMPLE_CONTROL_PANEL_PX = 326;
+
 const START_CENTER: [number, number] = [0, 0];
 const START_ZOOM = 3;
 
@@ -317,6 +325,36 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 target.clear();
                 const {graphics} = buildSampleGraphics(hostility, resolutionOf(map));
                 graphics.forEach(g => target.add(g));
+
+                /*
+                 * **Zoom to what was just drawn**, as the OpenLayers sweep does.
+                 *
+                 * The gallery lays itself out around the origin at the resolution it was
+                 * asked for, which has nothing to do with where the user was looking — so
+                 * without this the sweep drew 273 graphics correctly and off screen. The
+                 * left padding clears the controls panel, which floats over the map.
+                 *
+                 * Bounds come from each graphic's own projected extent — the same
+                 * `boundsOf` result the selection box is measured from — so the two
+                 * engines frame the same sweep the same way.
+                 */
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const graphic of graphics) {
+                    const b = graphic.graphic.bounds;
+                    if (!b) continue;
+                    minX = Math.min(minX, b.minX); minY = Math.min(minY, b.minY);
+                    maxX = Math.max(maxX, b.maxX); maxY = Math.max(maxY, b.maxY);
+                }
+                if (!isFinite(minX) || maxX <= minX) return;
+                map.fitBounds([toLonLat([minX, minY]), toLonLat([maxX, maxY])], {
+                    padding: {
+                        top: SAMPLE_VIEW_PADDING_PX,
+                        right: SAMPLE_VIEW_PADDING_PX,
+                        bottom: SAMPLE_VIEW_PADDING_PX,
+                        left: SAMPLE_CONTROL_PANEL_PX,
+                    },
+                    duration: 0,
+                });
             },
             refreshStyles: () => engine?.refreshStyles(),
             snapshot: () => engine?.snapshot() ?? {type: 'FeatureCollection', features: []},
