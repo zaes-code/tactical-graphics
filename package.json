@@ -87,6 +87,7 @@
     "build:demo": "craco build",
     "test": "craco test",
     "drive": "node scripts/drive-app.mjs",
+    "drive:edit": "node scripts/drive-edit-mode.mjs",
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --fix",
