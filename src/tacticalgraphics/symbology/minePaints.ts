@@ -34,9 +34,9 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicMineType} from '../core/type';
-import {PLANNED_DASH_PX, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 
 type MinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -190,7 +190,7 @@ export function mineFillPaint(): MinePaint {
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',

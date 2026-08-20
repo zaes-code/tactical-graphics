@@ -27,6 +27,7 @@ import {
     getHostilityColorOverride,
     getInertHandleColorOverride,
     getLabelFillColorOverride,
+    getLabelUsesHostilityColor,
     getLabelHaloColorOverride,
     ALTITUDE_UNIT_SUFFIX,
     getAltitudeUnit,
@@ -121,6 +122,13 @@ export function getDefaultLineColor(): string {
 export function getLabelFillColor(): string {
     return getLabelFillColorOverride() ?? getDefaultLineColor();
 }
+
+/**
+ * Whether text amplifiers take their graphic's affiliation colour rather than
+ * `labelFillColor`. Re-exported here so a paint function has one place to import colour
+ * rules from. @see TacticalGraphicsConfigOptions.labelUsesHostilityColor
+ */
+export {getLabelUsesHostilityColor};
 
 /** Text label halo (outline) color — contrast against the map background. */
 export function getLabelHaloColor(): string {

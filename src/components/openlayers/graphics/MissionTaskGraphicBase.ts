@@ -86,13 +86,19 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  * a rule. Their label still scales from `graphicSize`, so a small circle gets a small
  * letter rather than one bursting out of it.
  *
- * What stays: the crossed four, which are fixed-size badges placed by a single click and
- * never resized — the floor is what gives them a size at all; and Turn / TacticalTurn /
- * Envelopment, which are curves rather than circles and collapse into an unreadable kink
- * without it.
+ * **The crossed four left on 2026-08-20**, and the reason they were here had already
+ * expired: "fixed-size badges placed by a single click and never resized" stopped being
+ * true when they joined `RESIZE_ONLY_SYMBOLS` on 2026-08-17. The floor is
+ * `RATIO_LOCKED_MIN_RADIUS_PX × drawingResolution` = 50 px, which is *exactly*
+ * `dropSizePx` for them — so a crossed task could never be made smaller than the size it
+ * was dropped at, and every attempt to shrink it did nothing at all.
+ *
+ * What stays: Turn / TacticalTurn / Envelopment, which are curves rather than circles and
+ * collapse into an unreadable kink without it. Those remain shrinkable *to* the floor and
+ * recoverable from it, because a resize is now measured from where the drag began rather
+ * than accumulated frame by frame. @see TacticalGraphicsManager.handleResize
  */
 const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    ...CROSSED_MISSION_TASKS,
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Turn,
     TacticalGraphicName.Envelopment,

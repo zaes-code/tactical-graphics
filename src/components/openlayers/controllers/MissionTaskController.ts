@@ -88,6 +88,14 @@ export class MissionTaskController implements TacticalGraphicHandler {
      */
     handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
 
+    /**
+     * The radius the graphic is drawn at. @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const size = (this.graphic as unknown as {size?: number}).size;
+        return typeof size === 'number' && isFinite(size) && size > 0 ? size : undefined;
+    }
+
     getFeatures(): Feature<Geometry>[] {
         return this.graphic.getFeatures();
     }

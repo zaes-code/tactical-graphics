@@ -218,6 +218,13 @@ export class TacticalGraphicsManager {
      */
     private offsetGrabPerpendicular: number | undefined;
     private offsetGrabWidth: number | undefined;
+    /**
+     * How far the cursor was from the resize origin when the drag began, and what size
+     * the graphic had then. Latched on the first move and cleared on release, so the
+     * size tracks the cursor absolutely rather than accumulating. @see handleResize
+     */
+    private resizeStartDistance: number | undefined;
+    private resizeStartSize: number | undefined;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -572,6 +579,8 @@ export class TacticalGraphicsManager {
                 // The width latch belongs to one gesture. @see handleOffset
                 this.offsetGrabPerpendicular = undefined;
                 this.offsetGrabWidth = undefined;
+                this.resizeStartDistance = undefined;
+                this.resizeStartSize = undefined;
                 // The drag is over, so any live measurement read-out goes with it. Done
                 // here rather than in the controller because this is the one place every
                 // drag gesture ends, however it started.
@@ -649,6 +658,8 @@ export class TacticalGraphicsManager {
         this.lastPointerPosition = null;
         this.offsetGrabPerpendicular = undefined;
         this.offsetGrabWidth = undefined;
+        this.resizeStartDistance = undefined;
+        this.resizeStartSize = undefined;
         (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
         this.activeController = undefined;
         this.activeGesture = undefined;
@@ -1112,6 +1123,39 @@ export class TacticalGraphicsManager {
         // pixels off a circle's center grew `size` by twenty orders of
         // magnitude. The center is not a resize origin; ignore the gesture.
         if (this.resizeOriginNearCenter || lastDistance <= 0) return;
+
+        /*
+         * **The size is an absolute ratio from where the drag began, not a product of
+         * per-frame ratios.**
+         *
+         * The two are the same arithmetic right up until a holder *clamps* — and several
+         * do: the crossed tasks and the curves take a `RATIO_LOCKED_MIN_RADIUS_PX` floor,
+         * `Block` extends its base to `MIN_BASE_PX`, `LineGraphicBase` enforces a minimum
+         * first segment. Once a frame's result is clamped, the holder's next frame
+         * multiplies the *clamped* value, and the shrink the user asked for is gone for
+         * good. Drag in and then back out and the graphic ends up larger than it started:
+         * that is the "resize jumps up, and won't shrink again" defect, on every graphic
+         * with a floor.
+         *
+         * Asking the holder what size it currently has and handing it the factor that
+         * takes it to `startSize × ratio` makes each frame land on the target outright.
+         * A clamp then costs nothing: the next frame recomputes from the real value, and
+         * returning the cursor returns the size exactly.
+         *
+         * A controller that cannot report a size falls through to the old per-frame
+         * ratio, which is correct whenever nothing clamps.
+         */
+        if (this.resizeStartDistance === undefined) {
+            this.resizeStartDistance = lastDistance;
+            this.resizeStartSize = this.activeController.currentSize?.();
+        }
+        const startSize = this.resizeStartSize;
+        const currentSize = this.activeController.currentSize?.();
+        if (startSize !== undefined && startSize > 0 && currentSize !== undefined && currentSize > 0 && this.resizeStartDistance > 0) {
+            const target = startSize * (currentDistance / this.resizeStartDistance);
+            this.activeController.handleResize(target / currentSize);
+            return;
+        }
 
         const scaleFactor = currentDistance / lastDistance;
         this.activeController.handleResize(scaleFactor);

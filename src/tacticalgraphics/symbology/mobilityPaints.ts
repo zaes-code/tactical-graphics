@@ -7,9 +7,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {dateRangeLabel} from './midLabelLinePaints';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -96,7 +96,7 @@ export function passageLanePaint(): LinePaint {
                 text: {
                     text: dateRangeLabel(feature.properties),
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     rotation: labelRotation,
                     align: 'center',
@@ -167,7 +167,7 @@ export function fieldsOfFirePaint(): LinePaint {
                 text: {
                     text: label,
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     align: 'center',
                     baseline: 'top',
                     offsetYPx: FIELD_OF_FIRE_LABEL_OFFSET_PX,

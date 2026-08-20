@@ -20,13 +20,12 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
-    getLabelFillColor,
     getLabelHaloColor,
 } from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {BAR_SYMBOL_DASHES} from '../graphics/ExplosivesReadiness';
 import {textWidth} from './decorations';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -203,7 +202,7 @@ export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): Mission
             text: {
                 text: label,
                 font: RATIO_LOCKED_LABEL_FONT,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
@@ -422,7 +421,7 @@ export function baseDefenseZoneLabelPaint(): MissionTaskPaint {
             text: {
                 text: 'BDZ',
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',

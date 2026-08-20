@@ -54,6 +54,7 @@ import {
     getHandleColor,
     getInertHandleColor,
     getLabelFillColor,
+    getLabelUsesHostilityColor,
     getLabelHaloColor,
     labelZoomMultiplier,
     maxGraphicLabelScale,
@@ -264,6 +265,22 @@ export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
  * one, otherwise the affiliation's color. `getColorByHostility` already resolves
  * `unknown` to the default line color, so this covers the unaffiliated case too.
  */
+/**
+ * The fill a text amplifier takes.
+ *
+ * `getLabelFillColor()` unless the host opted the library into affiliation-coloured text,
+ * in which case the label follows exactly the rule its line work follows — including the
+ * exemptions `readHostilityColor` applies, so a graphic that does not take a hostility
+ * colour does not take one on its text either. The map-agnostic half states the same rule
+ * once, in `labelColorOf`; this is the OpenLayers-only style functions reading it.
+ *
+ * Falls back to the configured fill when no feature is in scope, which is what the
+ * editor's own read-outs want — they are chrome and belong to no affiliation.
+ */
+export function labelFillFor(feature?: FeatureLike): string {
+    return getLabelUsesHostilityColor() && feature ? readHostilityColor(feature) : getLabelFillColor();
+}
+
 export function readHostilityColor(feature: FeatureLike): string {
     return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
 }
@@ -767,7 +784,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
         text: new Text({
             text: label,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation: rotation,
             textAlign: 'center',
             textBaseline: 'middle',
@@ -854,7 +871,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: startOutsideRight ? GAP_PX : -GAP_PX - textWidth,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -871,7 +888,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: endOutsideRight ? GAP_PX + textWidth : -GAP_PX,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -945,7 +962,7 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
  * used to derive scale — so the label stays proportional at every zoom level.
  * Font is declared at 24px; scale = (spanPx * 0.7) / 24.
  */
-function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
+function graphicProportionalLabel(feature: FeatureLike | undefined, c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
     const [x0, y0] = c0;
     const [x1, y1] = c1;
     const dx = x1 - x0, dy = y1 - y0;
@@ -958,7 +975,7 @@ function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: nu
         text: new Text({
             text,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation,
             textAlign,
             textBaseline: 'middle',
@@ -1028,7 +1045,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
     if (!coords || coords.length < 2) return [];
 
     const styles: Style[] = [];
-    styles.push(graphicProportionalLabel(coords[0], coords[1], resolution, primaryLabel));
+    styles.push(graphicProportionalLabel(f, coords[0], coords[1], resolution, primaryLabel));
 
     if (!!dateLabel) {
         // Shift one span-width along line direction for date label offset
@@ -1037,7 +1054,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
         const dx = x1 - x0, dy = y1 - y0;
         const dc0: Coordinate = [x0 + dx, y0 + dy];
         const dc1: Coordinate = [x1 + dx, y1 + dy];
-        styles.push(graphicProportionalLabel(dc0, dc1, resolution, dateLabel));
+        styles.push(graphicProportionalLabel(f, dc0, dc1, resolution, dateLabel));
     }
 
     return styles;
@@ -2006,7 +2023,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: topLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -2021,7 +2038,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: botLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -3060,7 +3077,7 @@ export function createAirCoordinatingAreaLabelStyle(
         text: new Text({
             text: allLines.join('\n'),
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             stroke: getHaloStroke(),
             padding: hasHatchPattern ? [4, 8, 4, 8] : undefined,
             textAlign: 'left',

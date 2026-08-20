@@ -21,13 +21,12 @@ import {
     formatAltitude,
     formatDistance,
     fontStyle,
-    getLabelFillColor,
     getLabelHaloColor,
     graphicLabelScale,
 } from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
 const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
@@ -95,7 +94,7 @@ export function formatWidthAmplifier(value: string): string {
 
 /** A text amplifier with the usual halo. */
 function amplifier(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     extra: {
@@ -110,7 +109,7 @@ function amplifier(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align: extra.align ?? 'center',
             baseline: extra.baseline ?? 'middle',
@@ -169,7 +168,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 if (x < minX) minX = x;
                 if (y > maxY) maxY = y;
             }
-            paints.push(amplifier([minX, maxY], infoLines.join('\n'), baseScale, {
+            paints.push(amplifier(feature, [minX, maxY], infoLines.join('\n'), baseScale, {
                 align: 'left',
                 baseline: 'bottom',
                 offsetYPx: INFO_BLOCK_OFFSET_PX * baseScale,
@@ -184,7 +183,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 text: {
                     text: labelText,
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     align: 'center',
                     baseline: 'middle',
@@ -199,7 +198,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             let rotation = -Math.atan2(y1 - y0, x1 - x0);
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
-            paints.push(amplifier([(x0 + x1) / 2, (y0 + y1) / 2], text, baseScale, {rotation}));
+            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, baseScale, {rotation}));
             paints.push(acpAt(i));
         }
 
