@@ -22,6 +22,7 @@
 
 import {Feature} from 'ol';
 import {Modify} from 'ol/interaction';
+import LineString from 'ol/geom/LineString';
 import {
     HANDLE_EDIT_MODES,
     TacticalGraphicName,
@@ -82,6 +83,19 @@ function build(manager: TacticalGraphicsManager, name: TacticalGraphicName, symb
     manager.renderingVectorSource.addFeatures(handler.getFeatures());
     manager.graphicControllers.push(handler);
     return handler;
+}
+
+/**
+ * Gives a line-based holder a real base to work from.
+ *
+ * `getController` builds the holder but not its geometry, and every resize is a ratio
+ * about a centre — with an empty base there is nothing to scale and the assertions below
+ * would pass or fail for the wrong reason.
+ */
+function seedLine(handler: TacticalGraphicHandler): void {
+    const base = handler.graphic.base as Feature;
+    base.setGeometry(new LineString([[0, 0], [40_000, 0], [70_000, 25_000]]));
+    handler.setBaseFeature(base as never);
 }
 
 /** Every handle feature the source is currently showing. */
@@ -368,6 +382,106 @@ describe('beginGesture', () => {
         window.dispatchEvent(new Event('pointerup'));
 
         expect((handler.graphic as {rotation?: number}).rotation).not.toBe(rotationBefore);
+    });
+});
+
+/**
+ * # The gestures an affordance drives, and the handles it must not disturb
+ *
+ * Each of these pins a defect that shipped in the first cut of edit mode. They are all
+ * the same shape: a rule written for a *handle* drag, applied to a gesture that grabbed
+ * no handle — or a rule written for one mode, not extended to the new one.
+ */
+describe('an affordance gesture means the whole graphic', () => {
+    const pointerAt = (clientX: number, clientY: number) => ({clientX, clientY}) as PointerEvent;
+
+    const dragBy = (dx: number, dy: number) => {
+        const move = new Event('pointermove') as PointerEvent & {clientX: number; clientY: number};
+        Object.assign(move, {clientX: 200 + dx, clientY: 200 + dy});
+        window.dispatchEvent(move);
+        window.dispatchEvent(new Event('pointerup'));
+    };
+
+    /**
+     * **The one that killed icon-resize on every LineString graphic.** The resize branch
+     * of `handleLineStringDrag` opened `if (!this.activeFeature) return;` — a guard for
+     * "which handle was grabbed?" — and an affordance grabs none, so fields of fire, the
+     * retrogrades, the bridges, disrupt and block all had a dead resize button.
+     */
+    it.each([
+        TacticalGraphicName.FieldsOfFire,
+        TacticalGraphicName.Withdraw,
+        TacticalGraphicName.Retirement,
+        TacticalGraphicName.MobileDefense,
+        TacticalGraphicName.ReliefInPlace,
+        TacticalGraphicName.Disrupt,
+        TacticalGraphicName.Block,
+        TacticalGraphicName.Bridge,
+        TacticalGraphicName.AirCorridor,
+    ])('resizes %s from an affordance', name => {
+        const manager = stubbedManager();
+        const handler = build(manager, name, 'a');
+        seedLine(handler);
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(handler);
+
+        const before = JSON.stringify(handler.getBaseGeometry());
+        expect(manager.beginGesture('resize', pointerAt(200, 200))).toBe(true);
+        dragBy(120, 90);
+
+        expect(JSON.stringify(handler.getBaseGeometry())).not.toBe(before);
+    });
+});
+
+/**
+ * A width handle sets a width whatever the mode — the rule already stated for the mirror
+ * handle. Without it a corridor's width was unreachable in `edit`, because its controller
+ * never opts into `editStretches` and the grab was simply not claimed.
+ */
+describe('the width handle is claimed in edit mode', () => {
+    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge])(
+        "claims %s's offset handle",
+        name => {
+            const manager = stubbedManager();
+            const handler = build(manager, name, 'a');
+            seedLine(handler);
+            manager.setInteractionMode(InteractionType.edit);
+            manager.setSelection(handler);
+
+            const offset = handler.getFeatures().find(feature => feature.get('offsetHandler'));
+            expect(offset).toBeDefined();
+            expect(offset!.get('hidden')).toBe(false);
+            expect(handler.setOffset).toBeDefined();
+        },
+    );
+});
+
+describe('a rectangular zone wears no dead handle in edit mode', () => {
+    it.each([TacticalGraphicName.PsyOpsZoneRectangular, TacticalGraphicName.NoFireAreaRectangular])(
+        "hides %s's shape handle",
+        name => {
+            const manager = stubbedManager();
+            const handler = build(manager, name, 'a');
+            manager.setInteractionMode(InteractionType.edit);
+            manager.setSelection(handler);
+
+            const shown = handler
+                .getFeatures()
+                .filter(feature => feature.get('handle') && !feature.get('hidden') && !feature.get('measure'));
+            expect(shown).toHaveLength(0);
+        },
+    );
+
+    /** The legacy mode still claims that handle, and that behaviour is published. */
+    it('still shows it in the legacy resize mode', () => {
+        const manager = stubbedManager();
+        const handler = build(manager, TacticalGraphicName.PsyOpsZoneRectangular, 'a');
+        manager.setInteractionMode(InteractionType.resize);
+
+        const shown = handler
+            .getFeatures()
+            .filter(feature => feature.get('handle') && !feature.get('hidden') && !feature.get('measure'));
+        expect(shown.length).toBeGreaterThan(0);
     });
 });
 

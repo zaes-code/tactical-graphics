@@ -52,6 +52,21 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
         return this.graphic.getFeatures();
     }
 
+    /**
+     * Takes the width read-out down when the drag ends.
+     *
+     * **The manager calls this on every gesture end, and only `MissionTaskController`
+     * implemented it.** `AreaGraphicBase` opts into `showMeasure` — that is how a
+     * rectangular zone reports the width being dragged — but nothing ever disarmed it,
+     * so `measuring` stayed true and the hashed line and its label stayed on the
+     * rectangle for the rest of the session, in view mode and in the sample gallery.
+     * Duck-typed on the holder, like the arming call, because only the area holders have
+     * a read-out to clear.
+     */
+    endGesture(): void {
+        (this.graphic as unknown as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
+    }
+
     handleResize(deltaSize: number): void {
         let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<Polygon>;
         this.graphic.setBaseFeature(resized);
