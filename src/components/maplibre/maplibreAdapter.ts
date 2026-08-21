@@ -23,6 +23,7 @@ import {
     resolveRangeFanBands,
     toGraphicOptions,
     decorationMeters,
+    drawnSizeMeters,
     hasBakedDecoration,
     isMovementGraphic,
     TacticalGraphicName,
@@ -237,11 +238,31 @@ function sizeDefaults(
     // @see ai/context.md, "A saved graphic carries one object"
     const halfWidth = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : meters;
 
+    /*
+     * **A graphic with a baked decoration gets its own size, not the generic 20 px.**
+     *
+     * `meters` is the default *offset* — the half-width of a corridor's rails — and
+     * stamping it as `decorationSize` was harmless only until something rebuilt the
+     * graphic: `bakedDecorationSize` prefers a stamped `decorationSize` over the
+     * per-name table, so the second build silently replaced the symbol's own size with
+     * 20 px worth. A bridge's ticks went 15 px -> 20, Fix's zigzag 14 -> 20, and Abatis's
+     * chevron *shrank* 26 -> 20 — each of them drifting away from OpenLayers, which
+     * derives `decorationMeters` on every render and never stores it.
+     *
+     * A rebuild is not rare: every zoom change re-derives the screen-sized graphics.
+     * @see NativeLayerRenderer.rebuildScreenSized, decorationMeters
+     */
+    // The block family states a size of its own — a bar across the line, three times the
+    // generic offset — and it is a library fact both engines read. @see drawnSizeMeters
+    const decoration = hasBakedDecoration(name)
+        ? decorationMeters(name, drawingResolution ?? 0)
+        : drawnSizeMeters(name, drawingResolution ?? 0) ?? meters;
+
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
         ...(supplied.width === undefined ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
-            ? {decorationSize: meters}
+            ? {decorationSize: decoration}
             : {}),
     };
 }

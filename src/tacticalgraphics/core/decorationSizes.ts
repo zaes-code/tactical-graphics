@@ -137,3 +137,32 @@ export const CROSSED_MISSION_TASK_PX = 50;
 export function crossedMissionTaskMeters(drawingResolution?: number): number | undefined {
     return drawingResolution ? CROSSED_MISSION_TASK_PX * drawingResolution : undefined;
 }
+
+/**
+ * The size the **block family** is drawn at, in screen pixels at the drawing zoom.
+ *
+ * Block and its table 5-19 twin are a line with a bar across it, and that bar is a screen
+ * constant like any other decoration — but a much larger one than the generic 20 px a
+ * line graphic's offset defaults to, because the bar is the symbol rather than an
+ * ornament on it.
+ *
+ * **It lived in `openlayers/graphics/Block.ts` as a private `DEFAULT_SIZE_PX`,** which is
+ * the shape of defect this repository keeps finding: a symbology fact in a holder, in the
+ * half of the codebase the other renderer cannot see. MapLibre fell back to the generic
+ * 20 px, so the same block drawn on the two engines came out 120 px tall against 40 —
+ * three times the difference, from one number written where only one renderer could read
+ * it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+const DRAWN_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TacticalBlock]: 60,
+    [TacticalGraphicName.Block]: 60,
+};
+
+/**
+ * That size in meters at a given resolution, or `undefined` for a graphic that does not
+ * state one — in which case the caller's own default stands. @see DRAWN_SIZE_PX
+ */
+export function drawnSizeMeters(name: TacticalGraphicName, resolution: number): number | undefined {
+    const px = DRAWN_SIZE_PX[name];
+    return px === undefined ? undefined : px * resolution;
+}
