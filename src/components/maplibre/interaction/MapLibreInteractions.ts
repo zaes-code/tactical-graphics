@@ -131,6 +131,14 @@ const DEFAULT_RADIUS_METERS = 40_000;
  */
 const DRAW_PREVIEW_ID = '__tg-draw-preview';
 
+/**
+ * How long after a draw ends a press is still assumed to belong to it.
+ *
+ * The same window OpenLayers uses, and for the same reason.
+ * @see MapLibreInteractions.resumeDoubleClickZoomOnNextPress
+ */
+const DRAW_END_DOUBLE_CLICK_GUARD_MS = 1000;
+
 /** Below this the second draw click landed on the anchor and carries no size. */
 const MIN_DRAWN_RADIUS_M = 1;
 
@@ -257,6 +265,9 @@ export class MapLibreInteractions {
     private activeGesture: GestureKind | null = null;
     /** Whether a draw preview is currently on the map. @see previewDraw */
     private previewing = false;
+    /** When the last draw ended, and how to stop waiting. @see resumeDoubleClickZoomOnNextPress */
+    private drawEndedAt = 0;
+    private unlistenDoubleClickRestore: (() => void) | undefined;
 
     /**
      * What a drag means right now: the latched gesture if one is running, else the mode.
@@ -287,6 +298,8 @@ export class MapLibreInteractions {
     }
 
     destroy(): void {
+        this.unlistenDoubleClickRestore?.();
+        this.unlistenDoubleClickRestore = undefined;
         this.map.off('mousedown', this.onPointerDown);
         this.map.off('mousemove', this.onPointerMove);
         this.map.off('mouseup', this.onPointerUp);
@@ -433,6 +446,14 @@ export class MapLibreInteractions {
         this.drawing = name;
         this.mode = 'view';
         this.map.doubleClickZoom.disable();
+        // **And drop any restore the last draw armed.** It fires on the next press on the
+        // canvas, which — once a second has passed — is the first click of *this* draw:
+        // the zoom came back mid-draw and the double-click that ended the graphic zoomed
+        // the map after all. Only the very first draw of a session was unaffected, which
+        // is what made it look like a per-graphic defect.
+        // @see resumeDoubleClickZoomOnNextPress
+        this.unlistenDoubleClickRestore?.();
+        this.unlistenDoubleClickRestore = undefined;
     }
 
     cancelDraw(): void {
@@ -444,8 +465,42 @@ export class MapLibreInteractions {
         // which is a real graphic and would otherwise become a permanent one — on the map.
         this.clearPreview();
         this.renderer.setMeasure(null);
-        this.map.doubleClickZoom.enable();
+        this.resumeDoubleClickZoomOnNextPress();
         this.callbacks.onDrawEnd?.();
+    }
+
+    /**
+     * Puts double-click zoom back — but not until the browser has finished delivering
+     * the double-click that ended the draw.
+     *
+     * **A fixed-vertex graphic finishes on the second *click* of that double-click**, so
+     * by the time the trailing `dblclick` arrives the draw is over and nothing absorbs
+     * it: finishing a bridge zoomed the map a level, while a free-form line — which ends
+     * on the `dblclick` itself — did not. It made the symbol look twice the size it is,
+     * which is what sent this investigation off after a size defect that was not there.
+     *
+     * Waiting for the next press sidesteps the timing entirely. `detail` is the
+     * consecutive-click count, so `> 1` means this press is the second half of the
+     * double-click still being waited out. The one-second guard covers the other end: a
+     * one-click drop is over before the double-click even starts, so its second press is
+     * a genuine `detail === 1` that would re-arm the zoom in time for its own `dblclick`.
+     *
+     * OpenLayers reached the same two rules from the same symptom, and the comment on
+     * `resumeDoubleClickZoomOnNextClick` there is the longer version of this one.
+     */
+    private resumeDoubleClickZoomOnNextPress(): void {
+        this.drawEndedAt = Date.now();
+        if (this.unlistenDoubleClickRestore) return;
+
+        const container = this.map.getCanvasContainer();
+        const onMouseDown = (event: MouseEvent): void => {
+            if (event.detail > 1 || Date.now() - this.drawEndedAt < DRAW_END_DOUBLE_CLICK_GUARD_MS) return;
+            this.unlistenDoubleClickRestore?.();
+            this.unlistenDoubleClickRestore = undefined;
+            this.map.doubleClickZoom.enable();
+        };
+        container.addEventListener('mousedown', onMouseDown);
+        this.unlistenDoubleClickRestore = () => container.removeEventListener('mousedown', onMouseDown);
     }
 
     get isDrawing(): boolean {
