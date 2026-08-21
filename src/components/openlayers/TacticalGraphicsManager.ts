@@ -857,6 +857,17 @@ export class TacticalGraphicsManager {
         const offsetGrab = !!this.activeController.setOffset && !!feature.get('offsetHandler');
         if (offsetGrab) return true;
 
+        /*
+         * **A handle that has a job is claimed, whatever the mode says about the body.**
+         *
+         * `editStretches` answers a different question — what a drag on the *line* means
+         * — and a graphic can sensibly say "dragging my body does nothing" while its
+         * vertices still move. Fix says exactly that: it is in `NO_EDIT_STRETCH`, so its
+         * arrow-tip handle was never claimed and did nothing at all, which is the silent
+         * refusal this mode exists to remove.
+         */
+        if (this.activeController.handleVertexDrag && this.activeBaseVertex >= 0) return true;
+
         if (this.isModifying()) return this.isMirrorHandleGrab() || !!this.activeController.editStretches;
 
         return this.isRotating() || this.isTranslating() || this.isResizing();
