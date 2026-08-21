@@ -7,6 +7,8 @@ import {
     getHandleColor,
     LINE_WIDTH,
     formatDistance,
+    groundLength,
+    latitudeFromMercatorY,
     getInertHandleColor,
     isRectangular,
     getLabelFillColor,
@@ -214,6 +216,8 @@ function rasterise(image: HTMLImageElement, wantedPx: number, ratio: number): Im
 
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
+    /** The in-progress draw's picture of itself, or null. @see setPreview */
+    private preview: MapLibreTacticalGraphic | null = null;
     /**
      * Every layer this renderer owns, for hit-testing.
      *
@@ -598,7 +602,10 @@ export class NativeLayerRenderer {
         const minY = Math.min(sw[1], ne[1]) - padY;
         const maxY = Math.max(sw[1], ne[1]) + padY;
 
-        return this.graphics.filter(graphic => {
+        // The draw preview rides along: it is under the cursor by construction, and it
+        // is the one graphic the user is actively looking at. @see setPreview
+        const candidates = this.preview ? this.graphics.concat(this.preview) : this.graphics;
+        return candidates.filter(graphic => {
             const box = graphic.graphic.bounds;
             if (!box) return true;
             return box.maxX >= minX && box.minX <= maxX && box.maxY >= minY && box.minY <= maxY;
@@ -873,6 +880,23 @@ export class NativeLayerRenderer {
     }
 
     /**
+     * The graphic being drawn, painted but not owned.
+     *
+     * Held apart from `graphics` on purpose. It is not a graphic the map *has* — it is
+     * a picture of the one the next click would create — so it must not appear in a
+     * `snapshot`, in `count`, or under a hit test, all of which read `graphics`. Passing
+     * it through `add`/`remove` would have put it in all three, and a save taken
+     * mid-gesture would have persisted a symbol the user never committed to.
+     *
+     * @see MapLibreInteractions.previewDraw
+     */
+    setPreview(graphic: MapLibreTacticalGraphic | null): void {
+        if (!graphic && !this.preview) return;
+        this.preview = graphic;
+        this.scheduleRealize();
+    }
+
+    /**
      * Swaps a graphic for a rebuilt version of itself, keeping its place in the
      * draw order.
      *
@@ -1079,7 +1103,15 @@ function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition]): Fe
         {
             type: 'Feature',
             geometry: {type: 'Point', coordinates: toLonLat([from[0] + dx / 2, from[1] + dy / 2])},
-            properties: {...shared, label: formatDistance(Math.hypot(dx, dy)), rotation},
+            // **The ground distance, not the projected one the line is drawn in.** These
+            // are EPSG:3857 metres, inflated by 1/cos(latitude) — a 377 km radius at 50
+            // degrees north measures 587 of them — and the number beside the line is the
+            // one the operator reads and the dialog states. @see mercator.ts
+            properties: {
+                ...shared,
+                label: formatDistance(groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))),
+                rotation,
+            },
         },
     ];
 }

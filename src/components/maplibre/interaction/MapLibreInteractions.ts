@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -122,6 +122,14 @@ const DRAG_THRESHOLD_PX = 3;
 
 /** Default size for a point-anchored graphic, in meters, when one is drawn fresh. */
 const DEFAULT_RADIUS_METERS = 40_000;
+
+/**
+ * The id the in-progress draw's preview is realised under.
+ *
+ * Reserved and constant: there is only ever one draw, and a fixed id means the preview
+ * can be replaced in place on every pointer move rather than added and removed.
+ */
+const DRAW_PREVIEW_ID = '__tg-draw-preview';
 
 /** Below this the second draw click landed on the anchor and carries no size. */
 const MIN_DRAWN_RADIUS_M = 1;
@@ -247,6 +255,8 @@ export class MapLibreInteractions {
      * is latched here and read by {@link effectiveMode}, then dropped on release.
      */
     private activeGesture: GestureKind | null = null;
+    /** Whether a draw preview is currently on the map. @see previewDraw */
+    private previewing = false;
 
     /**
      * What a drag means right now: the latched gesture if one is running, else the mode.
@@ -430,7 +440,9 @@ export class MapLibreInteractions {
         this.drawing = null;
         this.sketch = [];
         this.renderer.setSketch(null);
-        // An abandoned sizing click would otherwise leave its read-out on the map.
+        // An abandoned sizing click would otherwise leave its read-out — or its preview,
+        // which is a real graphic and would otherwise become a permanent one — on the map.
+        this.clearPreview();
         this.renderer.setMeasure(null);
         this.map.doubleClickZoom.enable();
         this.callbacks.onDrawEnd?.();
@@ -629,7 +641,11 @@ export class MapLibreInteractions {
         // A click on the anchor carries no size and no direction; the default is better
         // than a graphic with a radius of nothing.
         if (radius < MIN_DRAWN_RADIUS_M) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
-        return {radius, rotation: (Math.atan2(dy, dx) * 180) / Math.PI};
+        // **On the ground, not on the screen.** `radius` is a real distance the generator
+        // builds from geodesically; these are mercator metres, 1.56x too long at 50
+        // degrees north. Stamping them made the rim outrun the cursor that sized it — the
+        // same defect OpenLayers had, from the same measurement. @see mercator.ts
+        return {radius: groundLength(radius, vertices[0][1]), rotation: (Math.atan2(dy, dx) * 180) / Math.PI};
     }
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
@@ -794,6 +810,46 @@ export class MapLibreInteractions {
         return Math.hypot(projected.x - point.x, projected.y - point.y) <= PIVOT_GRAB_PX;
     }
 
+    /**
+     * The graphic being drawn, shown at its current size before the second click.
+     *
+     * **OpenLayers has always drawn this and MapLibre drew nothing.** Its `Circle`
+     * interaction hands the sketch to the same generator on every pointer move, so an
+     * operator sizing a zone watches the zone. Here they got a rubber-band line to the
+     * cursor and a distance in metres, and the symbol appeared only once the gesture was
+     * over — so the question the gesture asks, "how big is this", could only be answered
+     * after committing to an answer.
+     *
+     * It is a real graphic through the real paint path, so the preview *is* the symbol
+     * rather than an impression of it. The renderer holds it apart from the ones it owns;
+     * `clearPreview` takes it off however the draw ends.
+     */
+    private previewDraw(centre: Position, cursor: Position): void {
+        const name = this.drawing;
+        if (!name || baseGeometryFor(name) !== 'Point') return;
+
+        // The same size rule the second click will apply, not a second one that happens
+        // to agree at most radii — a preview that disagreed with the commit would make
+        // the symbol jump at the moment the user stopped being able to change it.
+        const built = buildTacticalGraphic(
+            name,
+            {type: 'Point', coordinates: centre},
+            this.sizeFromDraw(name, 'Point', [centre, cursor]),
+            resolutionOf(this.map),
+        );
+        // A generator that refuses at this size simply shows nothing yet, rather than
+        // leaving the last size it accepted standing under a cursor that has moved on.
+        this.renderer.setPreview(built ? {...built, id: DRAW_PREVIEW_ID} : null);
+        this.previewing = true;
+    }
+
+    /** Takes the preview off, whichever way the draw ended. @see previewDraw */
+    private clearPreview(): void {
+        if (!this.previewing) return;
+        this.previewing = false;
+        this.renderer.setPreview(null);
+    }
+
     private readonly onPointerMove = (event: MapMouseEvent): void => {
         if (this.drawing) {
             // A rubber band to the cursor, so the user can see the segment they are
@@ -810,6 +866,7 @@ export class MapLibreInteractions {
                 if (baseGeometryFor(this.drawing) === 'Point' && showsSizeReadout(this.drawing)) {
                     this.renderer.setMeasure([center, cursor]);
                 }
+                this.previewDraw(this.sketch[0], [event.lngLat.lng, event.lngLat.lat]);
             }
             return;
         }
