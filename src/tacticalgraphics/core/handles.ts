@@ -485,6 +485,13 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 3,
 
     // Two points: a start and an end, and the symbol is built between them.
+    //
+    // **Abatis joined on 2026-08-21.** Its path is `[start, apex, ...tail]`, so a
+    // two-point base draws exactly the three segments the symbol has — the two sides of
+    // the chevron and the long run behind it. Left free-form, every extra vertex the user
+    // dropped added another segment to the tail and the obstacle stopped being one
+    // chevron on one line.
+    [TacticalGraphicName.Abatis]: 2,
     [TacticalGraphicName.FerryCrossing]: 2,
     [TacticalGraphicName.PassageLane]: 2,
     [TacticalGraphicName.TacticalFix]: 2,

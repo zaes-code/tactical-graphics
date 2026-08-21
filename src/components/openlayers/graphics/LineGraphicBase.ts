@@ -266,7 +266,15 @@ export class LineGraphicBase implements LineGraphic {
      */
     private sizeOverride: number | undefined;
 
-    private graphicSize(): number {
+    /**
+     * The decoration size actually in force, in metres — the stamped override if a drag
+     * or a restore set one, else the per-name default for this zoom.
+     *
+     * Public because a resize has to scale it, and `sizeOverride` alone is `undefined`
+     * on a freshly drawn graphic: reading that would leave the first resize scaling the
+     * line and not its symbol. @see LineGraphicController.handleResize
+     */
+    graphicSize(): number {
         // Per-name, because this holder serves 41 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
         return this.sizeOverride ?? decorationMeters(this.graphicName, this.resolution ?? 0);
