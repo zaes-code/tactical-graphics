@@ -373,6 +373,8 @@ export {baseGeometryFor} from './core/render';
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, hasBakedDecoration} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
+// The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
+export {groundLength, latitudeFromMercatorY, mercatorScale, projectedLength} from './core/mercator';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
 export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
