@@ -166,17 +166,31 @@ function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
 }
 
 /**
- * `anchor` pulled onto the circle of `radius` about `center`, in projected metres.
+ * The rim handle: the one **farthest** from the centre, in projected metres.
  *
- * The read-out has to be exactly one radius long whatever the handle's own distance —
- * a rim handle sits on the rim, but a reach or band handle need not.
+ * Two things this gets right that the first version did not.
+ *
+ * **Farthest, not "the first one that is not exactly at the centre".** The centre handle
+ * is found by position rather than by index and lands a few thousand metres off zero at
+ * these scales — measured, 8 460 m against a rim at 1 180 011 — so a `> 0` test happily
+ * accepted it and drew a read-out that stopped a whisker from the middle.
+ *
+ * **Its own position, not a rescale to `properties.radius`.** That field is in *ground*
+ * metres while the handles and the drawn circle are in projected metres, and the two
+ * differ by 22% at this latitude: rescaling put the end of the line nowhere near the rim
+ * the user was dragging. The handle *is* the rim, so use it.
  */
-function projectToRadius(center: ProjectedPosition, anchor: ProjectedPosition, radius: number): ProjectedPosition {
-    const dx = anchor[0] - center[0];
-    const dy = anchor[1] - center[1];
-    const length = Math.hypot(dx, dy);
-    if (length === 0) return [center[0] + radius, center[1]];
-    return [center[0] + (dx / length) * radius, center[1] + (dy / length) * radius];
+function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition): ProjectedPosition | undefined {
+    let best: ProjectedPosition | undefined;
+    let bestDistance = 0;
+    for (const position of graphic.handles ?? []) {
+        const distance = Math.hypot(position[0] - center[0], position[1] - center[1]);
+        if (distance > bestDistance) {
+            bestDistance = distance;
+            best = position;
+        }
+    }
+    return best;
 }
 
 /**
@@ -1043,9 +1057,7 @@ export class MapLibreInteractions {
          * radius long. The handle is the anchor here, and its own bearing is whatever
          * `rotation` put it at — which is precisely what makes the two engines agree.
          */
-        const rim = graphic.handles?.find(position =>
-            Math.hypot(position[0] - center[0], position[1] - center[1]) > 0);
-        const edge = rim ? projectToRadius(center, rim, radius) : [center[0] + radius, center[1]] as ProjectedPosition;
+        const edge = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
         this.renderer.setMeasure([center, edge]);
     }
 

@@ -180,6 +180,24 @@ export class MissionTaskController implements TacticalGraphicHandler {
         // Armed here rather than on pointer-down: a resize gesture only becomes one once
         // it actually changes the size. The manager disarms it on pointer-up.
         this.graphic.showMeasure?.(true);
+
+        /*
+         * **The arrowhead scales with the graphic it belongs to.**
+         *
+         * `headSize` is filed in metres at construction — `arrowheadMeters(name, res)` —
+         * and nothing moved it afterwards, so shrinking an envelopment to 45% left a
+         * full-size head on a graphic less than half as long. It reads as a different
+         * symbol rather than a smaller one.
+         *
+         * Scaled here, in the gesture, rather than inside `updateGeom`: restore also
+         * calls `updateGeom`, with the *final* size against a freshly constructed head,
+         * and a ratio taken there would rescale a head that was already correct.
+         */
+        const holder = this.graphic as unknown as {headSize?: number};
+        if (typeof holder.headSize === 'number' && holder.headSize > 0) {
+            holder.headSize *= deltaSize;
+        }
+
         const size = this.graphic.size * deltaSize;
         this.graphic.updateGeom({size});
     }
