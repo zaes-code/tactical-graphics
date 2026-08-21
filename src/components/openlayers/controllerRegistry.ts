@@ -425,7 +425,12 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     // Abatis takes a drawn route with as many vertices as the road needs, so it is a
     // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
-    [TacticalGraphicName.Abatis]:                 line(2),
+    // **The end handle moves that vertex; the resize icon scales the whole obstacle.**
+    // Its two points are the run, and lengthening the run is what a user means by
+    // dragging its end — the chevron is a decoration with its own size, not something
+    // the drag should be stretching. Scaling everything together is the affordance's
+    // job. @see vertexLine
+    [TacticalGraphicName.Abatis]:                 vertexLine(2, 2),
     // The demolition family is a drawn centerline with a width, so it takes the
     // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),

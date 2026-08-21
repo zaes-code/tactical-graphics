@@ -240,6 +240,12 @@ export class TacticalGraphicsManager {
     private resizeStartDistance: number | undefined;
     private resizeStartSize: number | undefined;
     /**
+     * Handle position minus cursor position at pointer-down, so a drag carries the
+     * handle from where it was grabbed rather than snapping it to the pointer.
+     * @see handleDownEvent
+     */
+    private handleGrabOffset: Coordinate | undefined;
+    /**
      * The controller whose draw-time floor is currently lifted, so it can be put back
      * even if the selection or the active controller has moved on. @see handleResize
      */
@@ -600,6 +606,7 @@ export class TacticalGraphicsManager {
                 this.offsetGrabWidth = undefined;
                 this.resizeStartDistance = undefined;
                 this.resizeStartSize = undefined;
+                this.handleGrabOffset = undefined;
                 this.restoreSizeFloor();
                 // The drag is over, so any live measurement read-out goes with it. Done
                 // here rather than in the controller because this is the one place every
@@ -680,6 +687,7 @@ export class TacticalGraphicsManager {
         this.offsetGrabWidth = undefined;
         this.resizeStartDistance = undefined;
         this.resizeStartSize = undefined;
+        this.handleGrabOffset = undefined;
         this.restoreSizeFloor();
         (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
         this.activeController = undefined;
@@ -785,6 +793,26 @@ export class TacticalGraphicsManager {
             Math.hypot(evt.coordinate[0] - resizeOrigin[0], evt.coordinate[1] - resizeOrigin[1]) <= MIN_RESIZE_ORIGIN_PX * resolution;
         // Only a handle set carries per-vertex meaning; anything else is -1.
         this.activeHandleIndex = feature.get('handle') ? this.nearestVertexIndex(feature, evt.coordinate) : -1;
+
+        /*
+         * **Where the handle is, minus where the cursor grabbed it.**
+         *
+         * A handle drag positions something *at the cursor* — a band's range, a bend's
+         * depth, a vertex. Read raw, the first move snaps that thing to the pointer, so
+         * grabbing a 5-pixel dot anywhere but its exact centre jumps the graphic by the
+         * miss before it has moved at all: measured on Turn's arrowhead, a press 4 px off
+         * and a 2 px nudge moved the handle 4.5 px sideways and turned the graphic.
+         *
+         * Carrying the offset through the gesture is what a drag normally means — the
+         * thing you grabbed follows your hand from where you grabbed it. Same reasoning
+         * as the width handle's delta, one level up, and it covers every consumer of the
+         * cursor at once rather than each of them latching its own.
+         */
+        this.handleGrabOffset = undefined;
+        if (this.activeHandleIndex >= 0) {
+            const grabbed = this.handleCoordinateAt(feature, this.activeHandleIndex);
+            if (grabbed) this.handleGrabOffset = [grabbed[0] - evt.coordinate[0], grabbed[1] - evt.coordinate[1]];
+        }
         // Latched against the *base*, because handle indices and base vertices do not line
         // up once `visiblePathHandles` has dropped the redundant ones. Held for the whole
         // gesture so the vertex cannot change hands mid-drag.
@@ -967,7 +995,7 @@ export class TacticalGraphicsManager {
                 // range fans, one rim per band) takes the grabbed handle's index
                 // and the raw cursor; everything else scales uniformly.
                 if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
-                    this.activeController.handleBandResize(this.activeHandleIndex, evt.coordinate);
+                    this.activeController.handleBandResize(this.activeHandleIndex, this.grabAdjusted(evt.coordinate));
                 } else if (this.isMirrorHandleGrab()) {
                     // **A mirror handle flips and does nothing else**, which is what the
                     // retrograde tasks' cane already does on the line path. Falling
@@ -1056,7 +1084,7 @@ export class TacticalGraphicsManager {
                 }
 
                 if (reshaping && this.activeBaseVertex >= 0) {
-                    this.activeController.handleVertexDrag!(this.activeBaseVertex, evt.coordinate);
+                    this.activeController.handleVertexDrag!(this.activeBaseVertex, this.grabAdjusted(evt.coordinate));
                     this.lastPointerPosition = evt.coordinate;
                     break;
                 }
@@ -1227,6 +1255,25 @@ export class TacticalGraphicsManager {
             }
         });
         return best;
+    }
+
+    /** The grabbed handle's own coordinate, for the offset latch. @see handleGrabOffset */
+    private handleCoordinateAt(feature: Feature, index: number): Coordinate | undefined {
+        const geometry = feature.getGeometry();
+        if (geometry instanceof MultiPoint) return geometry.getCoordinates()[index];
+        if (geometry instanceof Point) return geometry.getCoordinates();
+        return undefined;
+    }
+
+    /**
+     * The cursor, corrected for where the handle was grabbed.
+     *
+     * Used by the paths that put something *at* the pointer. A gesture that grabbed no
+     * handle has no offset and passes straight through.
+     */
+    private grabAdjusted(coordinate: Coordinate): Coordinate {
+        const offset = this.handleGrabOffset;
+        return offset ? [coordinate[0] + offset[0], coordinate[1] + offset[1]] : coordinate;
     }
 
     private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
