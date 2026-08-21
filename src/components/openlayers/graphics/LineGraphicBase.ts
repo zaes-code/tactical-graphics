@@ -293,7 +293,7 @@ export class LineGraphicBase implements LineGraphic {
      * The first vertex, and zero before one exists — a holder is built when the tool is
      * picked and only learns its place when the user clicks.
      */
-    private latitude(): number {
+    protected latitude(): number {
         const first = (this.base.getGeometry() as LineString | undefined)?.getCoordinates()?.[0];
         return first ? latitudeFromMercatorY(first[1]) : 0;
     }
