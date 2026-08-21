@@ -374,7 +374,7 @@ export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, deco
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
-export {usesDrawnAnchors} from './core/handles';
+export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
 export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
