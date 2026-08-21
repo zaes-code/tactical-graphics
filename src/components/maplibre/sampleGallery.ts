@@ -312,7 +312,11 @@ function sampleSpecs(hostility?: TacticalGraphicHostility, only?: readonly Tacti
     }));
 
     // Appended, so they take the cells after the catalog proper and nothing shifts.
-    EXTRA_SAMPLES.forEach((extra, offset) => {
+    // **The extras honour the filter too.** They are second samples of graphics already
+    // in the sweep, not a fixture: appending them unconditionally put a range fan and a
+    // range circle on the map for every search, however narrow, and they read as the
+    // sweep ignoring the filter.
+    EXTRA_SAMPLES.filter(extra => !wanted || wanted.has(extra.name)).forEach((extra, offset) => {
         specs.push({
             name: extra.name,
             index: byCategory.length + offset,
