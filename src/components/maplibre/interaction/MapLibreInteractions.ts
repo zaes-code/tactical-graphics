@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, showsSizeReadout, type GestureKind, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -163,6 +163,20 @@ function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
     const coordinates = (graphic.base.geometry as {coordinates?: unknown}).coordinates;
     if (!Array.isArray(coordinates)) return 0;
     return typeof coordinates[0] === 'number' ? 1 : coordinates.length;
+}
+
+/**
+ * `anchor` pulled onto the circle of `radius` about `center`, in projected metres.
+ *
+ * The read-out has to be exactly one radius long whatever the handle's own distance —
+ * a rim handle sits on the rim, but a reach or band handle need not.
+ */
+function projectToRadius(center: ProjectedPosition, anchor: ProjectedPosition, radius: number): ProjectedPosition {
+    const dx = anchor[0] - center[0];
+    const dy = anchor[1] - center[1];
+    const length = Math.hypot(dx, dy);
+    if (length === 0) return [center[0] + radius, center[1]];
+    return [center[0] + (dx / length) * radius, center[1] + (dy / length) * radius];
 }
 
 export class MapLibreInteractions {
@@ -994,10 +1008,25 @@ export class MapLibreInteractions {
         if (!radius || radius <= 0) return;
 
         const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0]) as [number, number]);
-        // Due east: the direction does not carry meaning, and a line drawn to the rim
-        // handle would swing to wherever `rotation` put it — which for the arc tasks is
-        // roughly opposite the cursor. @see MissionTaskGraphicBase.measureEdge
-        this.renderer.setMeasure([center, [center[0] + radius, center[1]]]);
+
+        /*
+         * **To the rim handle, which is where OpenLayers points it too.**
+         *
+         * This used to run due east on the grounds that the direction carries no meaning.
+         * It carries one thing that matters: it says *which* dimension the number belongs
+         * to. Pointing it away from the handle the user has hold of leaves a line ending
+         * in open water while the dot they are dragging sits somewhere else entirely —
+         * which is what "the measurement line stops halfway" turned out to be.
+         *
+         * `MissionTaskGraphicBase.measureEdge` states the rule: project `radius` along
+         * centre → anchor, so the line stays under the hand while staying exactly one
+         * radius long. The handle is the anchor here, and its own bearing is whatever
+         * `rotation` put it at — which is precisely what makes the two engines agree.
+         */
+        const rim = graphic.handles?.find(position =>
+            Math.hypot(position[0] - center[0], position[1] - center[1]) > 0);
+        const edge = rim ? projectToRadius(center, rim, radius) : [center[0] + radius, center[1]] as ProjectedPosition;
+        this.renderer.setMeasure([center, edge]);
     }
 
     private readonly onPointerUp = (): void => {

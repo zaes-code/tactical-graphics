@@ -80,12 +80,16 @@ const MIN_RESIZED_SIZE_METERS = 1;
 /**
  * How far from a graphic a selection click may land, in screen pixels.
  *
- * Matches the radius MapLibre's `hitTest` uses, so a click selects the same thing on
- * both engines. Only for *selection* — the handle hit test in `handleDownEvent` stays
+ * Generous, and deliberately more generous than MapLibre's 5 px body test, because the
+ * shapes that are hardest to hit are the ones where a click is the *only* way in: a bowed
+ * turn's centreline is empty map, and a bridge and a corridor draw nothing at all on the
+ * line the user drew. At 6 px those graphics still read as unselectable, which in edit
+ * mode reads as "the handles stopped working" — there is nothing to drag until something
+ * is selected. Only for *selection* — the handle hit test in `handleDownEvent` stays
  * exact, because handles are drawn dots and a tolerance there would let one steal a
  * drag meant for its neighbour.
  */
-const SELECT_HIT_TOLERANCE_PX = 6;
+const SELECT_HIT_TOLERANCE_PX = 10;
 
 /**
  * How far past its own axis, in screen pixels, a handle has to be dragged before a

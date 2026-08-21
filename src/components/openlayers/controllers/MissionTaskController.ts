@@ -89,6 +89,24 @@ export class MissionTaskController implements TacticalGraphicHandler {
     handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
 
     /**
+     * Lifts the minimum-radius floor for the length of a deliberate resize.
+     *
+     * The floor keeps Turn, TacticalTurn and Envelopment from collapsing into an
+     * unreadable kink, which is a real thing to protect — **while the graphic is being
+     * drawn**. It should not also decide how small a finished one may be: it caps the
+     * shrink at 50 px worth of metres at the drawing zoom, so asking a turn for a tenth
+     * of its size got a third of it and no further.
+     *
+     * The user's rule is that everything except the security operations resizes. A floor
+     * that silently refuses is the same "gesture that does nothing" this mode exists to
+     * get rid of. @see TacticalGraphicHandler.suspendSizeFloor
+     */
+    suspendSizeFloor(active: boolean): void {
+        const holder = this.graphic as unknown as {suspendMinimumSize?: boolean};
+        if ('suspendMinimumSize' in holder) holder.suspendMinimumSize = active;
+    }
+
+    /**
      * The radius the graphic is drawn at. @see TacticalGraphicHandler.currentSize
      */
     currentSize(): number | undefined {
