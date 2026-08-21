@@ -226,6 +226,17 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * of them share an interface that names it. @see TacticalGraphicHandler.currentOffset
      */
     /**
+     * Forwards to whichever floor the holder owns. Duck-typed because the flag lives on
+     * the holder — `Block` and `LineGraphicBase` both call it `suspendMinimumLength`,
+     * and a holder without one simply has no floor to lift.
+     * @see TacticalGraphicHandler.suspendSizeFloor
+     */
+    suspendSizeFloor(active: boolean): void {
+        const holder = this.graphic as unknown as {suspendMinimumLength?: boolean};
+        if ('suspendMinimumLength' in holder) holder.suspendMinimumLength = active;
+    }
+
+    /**
      * The drawn base's total length, in projected meters.
      *
      * A resize scales the base about its first vertex, so its length is exactly the

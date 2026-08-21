@@ -547,6 +547,85 @@ describe('a handle index is a contract index', () => {
     });
 });
 
+/**
+ * # A draw-time floor must not decide how small a finished graphic may be
+ *
+ * `Block.MIN_BASE_PX` exists, by its own comment, to keep a *barely-dragged* graphic
+ * legible "from the moment the user starts drawing". Left in place during a resize it
+ * stops the ratio-locked block family shrinking past 100 px at the zoom they were drawn
+ * at — measured, asking for 0.10x got exactly 0.32x on all seven and nothing below.
+ *
+ * Which seven is not a coincidence: the floor is inside `Block.setBaseFeature`'s
+ * `ratioLock !== undefined` branch, so it bites the ratio-locked members and leaves
+ * Penetration, Exploitation and Block itself alone. That is precisely the split the user
+ * reported.
+ */
+describe('a deliberate resize lifts the draw-time floor', () => {
+    const floored = [
+        TacticalGraphicName.Disrupt,
+        TacticalGraphicName.Breach,
+        TacticalGraphicName.Bypass,
+        TacticalGraphicName.AttackByFire,
+        TacticalGraphicName.Clear,
+        TacticalGraphicName.Canalize,
+        TacticalGraphicName.SupportByFire,
+        // Not reported, but floored the same way by `LineGraphicBase`'s minimum first
+        // segment — 145 px for the fixes.
+        TacticalGraphicName.Fix,
+    ];
+
+    it.each(floored)('%s can lift and restore its floor', name => {
+        const manager = stubbedManager();
+        const handler = build(manager, name, 'a');
+        expect(typeof handler.suspendSizeFloor).toBe('function');
+
+        const holder = handler.graphic as unknown as {suspendMinimumLength?: boolean};
+        expect(holder.suspendMinimumLength).toBe(false);
+        handler.suspendSizeFloor!(true);
+        expect(holder.suspendMinimumLength).toBe(true);
+        handler.suspendSizeFloor!(false);
+        expect(holder.suspendMinimumLength).toBe(false);
+    });
+
+    /**
+     * **The floor goes back on when the gesture ends**, or the next draw loses the
+     * protection this whole mechanism is careful to keep.
+     */
+    it('puts the floor back after an affordance resize', () => {
+        const manager = stubbedManager();
+        const handler = build(manager, TacticalGraphicName.Breach, 'a');
+        seedLine(handler);
+        manager.setInteractionMode(InteractionType.edit);
+        manager.setSelection(handler);
+
+        const holder = handler.graphic as unknown as {suspendMinimumLength?: boolean};
+        expect(manager.beginGesture('resize', {clientX: 200, clientY: 200} as PointerEvent)).toBe(true);
+        const move = new Event('pointermove') as PointerEvent & {clientX: number; clientY: number};
+        Object.assign(move, {clientX: 260, clientY: 250});
+        window.dispatchEvent(move);
+        expect(holder.suspendMinimumLength).toBe(true);
+
+        window.dispatchEvent(new Event('pointerup'));
+        expect(holder.suspendMinimumLength).toBe(false);
+    });
+
+    /**
+     * The curves keep theirs. `suspendMinimumSize` is a *readability* floor — a turn
+     * collapses into an unreadable kink without it — not a draw-time convenience, so it
+     * is deliberately not what `suspendSizeFloor` touches.
+     */
+    it.each([TacticalGraphicName.Turn, TacticalGraphicName.Envelopment])(
+        "leaves %s's readability floor alone",
+        name => {
+            const manager = stubbedManager();
+            const handler = build(manager, name, 'a');
+            handler.suspendSizeFloor?.(true);
+            const holder = handler.graphic as unknown as {suspendMinimumSize?: boolean};
+            expect(holder.suspendMinimumSize).toBe(false);
+        },
+    );
+});
+
 describe('the portable mode list', () => {
     it('counts edit among the modes that wear handles', () => {
         expect(HANDLE_EDIT_MODES).toContain('edit');

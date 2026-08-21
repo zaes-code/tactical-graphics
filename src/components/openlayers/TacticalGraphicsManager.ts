@@ -68,6 +68,16 @@ const MIRROR_FLIP_MIN_PX = 6;
 const MIN_OFFSET_METERS = 1;
 
 /**
+ * The smallest a resize may leave a graphic, in meters.
+ *
+ * Not a legibility floor — those are the holders' business and come off for a deliberate
+ * resize. This is the degenerate guard: with the floor lifted, a drag onto the resize
+ * anchor would otherwise collapse the geometry to a point, which several generators
+ * divide by.
+ */
+const MIN_RESIZED_SIZE_METERS = 1;
+
+/**
  * How far from a graphic a selection click may land, in screen pixels.
  *
  * Matches the radius MapLibre's `hitTest` uses, so a click selects the same thing on
@@ -225,6 +235,11 @@ export class TacticalGraphicsManager {
      */
     private resizeStartDistance: number | undefined;
     private resizeStartSize: number | undefined;
+    /**
+     * The controller whose draw-time floor is currently lifted, so it can be put back
+     * even if the selection or the active controller has moved on. @see handleResize
+     */
+    private floorSuspendedOn: TacticalGraphicHandler | undefined;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
     /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
@@ -581,6 +596,7 @@ export class TacticalGraphicsManager {
                 this.offsetGrabWidth = undefined;
                 this.resizeStartDistance = undefined;
                 this.resizeStartSize = undefined;
+                this.restoreSizeFloor();
                 // The drag is over, so any live measurement read-out goes with it. Done
                 // here rather than in the controller because this is the one place every
                 // drag gesture ends, however it started.
@@ -660,11 +676,18 @@ export class TacticalGraphicsManager {
         this.offsetGrabWidth = undefined;
         this.resizeStartDistance = undefined;
         this.resizeStartSize = undefined;
+        this.restoreSizeFloor();
         (this.activeController as {endGesture?: () => void} | undefined)?.endGesture?.();
         this.activeController = undefined;
         this.activeGesture = undefined;
         // The gesture moved the graphic, so the box a host drew around it is stale.
         this.onSelectionChange?.(this.selectedController);
+    };
+
+    /** Puts back the draw-time floor a resize lifted. @see handleResize */
+    private restoreSizeFloor = (): void => {
+        this.floorSuspendedOn?.suspendSizeFloor?.(false);
+        this.floorSuspendedOn = undefined;
     };
 
     /** A DOM pointer event's position as a map coordinate, or undefined if off-map. */
@@ -1148,11 +1171,19 @@ export class TacticalGraphicsManager {
         if (this.resizeStartDistance === undefined) {
             this.resizeStartDistance = lastDistance;
             this.resizeStartSize = this.activeController.currentSize?.();
+            // A resize is a deliberate choice of size, so the *draw-time* floor comes off
+            // for the length of it. Restored in `endGesture`. @see suspendSizeFloor
+            this.activeController.suspendSizeFloor?.(true);
+            this.floorSuspendedOn = this.activeController;
         }
         const startSize = this.resizeStartSize;
         const currentSize = this.activeController.currentSize?.();
         if (startSize !== undefined && startSize > 0 && currentSize !== undefined && currentSize > 0 && this.resizeStartDistance > 0) {
-            const target = startSize * (currentDistance / this.resizeStartDistance);
+            // Lifting the floor means nothing stops a drag onto the anchor collapsing the
+            // geometry to a point, which several generators divide by. This is not that
+            // floor returning — it is the degenerate case, orders of magnitude below
+            // anything a user is aiming at.
+            const target = Math.max(MIN_RESIZED_SIZE_METERS, startSize * (currentDistance / this.resizeStartDistance));
             this.activeController.handleResize(target / currentSize);
             return;
         }

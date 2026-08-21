@@ -85,6 +85,22 @@ export interface TacticalGraphicHandler {
     handleIndexOffset?: number;
 
     /**
+     * Lifts the holder's draw-time minimum-size floor for the duration of a deliberate
+     * resize, and puts it back afterwards.
+     *
+     * **A floor that exists to make a half-drawn graphic legible must not also decide how
+     * small a finished one may be.** `Block.MIN_BASE_PX` says so in its own comment —
+     * "from the moment the user *starts drawing*, even if the cursor hasn't moved far
+     * from the first click" — and `LineGraphicBase`'s guards say the same. Left in place
+     * during a resize they stop seven of the block family shrinking below the size they
+     * happened to be drawn at, which reads as a handle that gives up.
+     *
+     * Not the same as `suspendMinimumSize` on the curves: that one is a *readability*
+     * floor, not a draw-time one, and it stays.
+     */
+    suspendSizeFloor?(active: boolean): void;
+
+    /**
      * The graphic's current overall size, in meters — any linear measure of it, as long
      * as the same one is reported every time and a `handleResize(k)` multiplies it by k.
      *
