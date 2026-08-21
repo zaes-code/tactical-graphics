@@ -56,7 +56,37 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
         return fromLonLat(rotationAnchor({type: 'Polygon', coordinates: geographic}));
     }
 
+    /**
+     * Draws the area *while* it is being drawn, not only once it is finished.
+     *
+     * This was empty, so the 87 graphics in the area family showed OpenLayers' plain
+     * sketch outline until the last click and only then became a symbol: no hatching, no
+     * fill, no designation, no obstacle marks. The line family has rebuilt itself from
+     * the sketch on every pointer move since the beginning — `LineGraphicController` does
+     * exactly this — and there is no reason an area should be the one thing a user has
+     * to commit to before they can see it.
+     *
+     * Guarded, because the generators are asked for shapes that are not yet shapes: a
+     * ring of two points has no interior, and several throw rather than return nothing.
+     * A failure leaves the previous preview standing, which is the right failure — the
+     * next pointer move is a few milliseconds away.
+     */
     onDrawStartFunc = (e: DrawEvent) => {
+        const feature = e.feature as Feature<Polygon>;
+        const geometry = feature.getGeometry();
+        if (!geometry || geometry.getType() !== 'Polygon') return;
+
+        geometry.on('change', () => {
+            const ring = geometry.getCoordinates()?.[0];
+            // Three distinct corners before there is an area to draw. OpenLayers' sketch
+            // repeats the cursor vertex, hence four.
+            if (!ring || ring.length < 4) return;
+            try {
+                this.graphic.setBaseFeature(feature);
+            } catch {
+                // Not a drawable ring yet.
+            }
+        });
     };
 
     onDrawEndFunc = (e: DrawEvent) => {
