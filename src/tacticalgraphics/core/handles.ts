@@ -610,6 +610,79 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
  * editable. Translate, rotate and resize all still apply — it is the *shape* that is
  * fixed, not the placement.
  */
+/**
+ * The rectangular graphics that also file a **length** — the dimension *along* the
+ * rectangle, as opposed to the width across it.
+ *
+ * Only the rectangular target. FM 1-02.2 table 5-25 draws it as `AM1` across the top and
+ * APP-06 240802 names it "the target length (AM1) in metres". Every other rectangle here
+ * takes its length from its two anchor points, so filing one would be a number nothing
+ * set.
+ */
+const RECTANGLE_LENGTH_GRAPHICS: readonly TacticalGraphicName[] = [TacticalGraphicName.TargetAreaRectangular];
+
+/** @see RECTANGLE_LENGTH_GRAPHICS */
+export function carriesRectangleLength(name: TacticalGraphicName): boolean {
+    return RECTANGLE_LENGTH_GRAPHICS.includes(name);
+}
+
+/**
+ * The width — and, for the one graphic that files it, the length — a rectangular zone's
+ * geometry implies, in **ground metres**.
+ *
+ * ## Why this is derived rather than remembered
+ *
+ * APP-06 defines these as "two anchor points **and a width, defined in metres**"; the
+ * user drags a box, which produces the same rectangle, so the amplifier and the shape
+ * have to drive each other. A drag writes the number; a typed number restretches the
+ * shape.
+ *
+ * **Geodesic, not projected.** The amplifier is a figure a user reads and types, and
+ * projected metres carry a 1/cos(lat) inflation that would show a 10 km zone as 16 km at
+ * 51°.
+ *
+ * **In Layer 1 because both engines edit these.** The rule lived in
+ * `AreaGraphicBase.publishRectangleWidth`, so OpenLayers rewrote the amplifier on every
+ * drag and MapLibre never did: resizing a rectangular airspace zone there left `width`
+ * at the value it was drawn with — 360 km against OpenLayers' 867 km for the same
+ * gesture — and a snapshot handed back disagreed with its own geometry.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ *
+ * Takes a ring in **lon/lat**, which is what the portable description holds.
+ */
+export function rectangleAmplifiers(
+    name: TacticalGraphicName,
+    ring: readonly [number, number][] | undefined,
+): {width?: number; length?: number} {
+    if (!isRectangular(name) || !ring?.length) return {};
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of ring) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    if (!isFinite(minX) || maxX <= minX) return {};
+
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const width = Math.round(groundMeters([midX, minY], [midX, maxY]));
+    if (!carriesRectangleLength(name)) return {width};
+    return {width, length: Math.round(groundMeters([minX, midY], [maxX, midY]))};
+}
+
+/** Great-circle metres between two lon/lat positions. */
+function groundMeters(a: [number, number], b: [number, number]): number {
+    const R = 6378137;
+    const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+    const dLat = toRad(b[1] - a[1]);
+    const dLon = toRad(b[0] - a[0]);
+    const h = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 export function isRectangular(name: TacticalGraphicName): boolean {
     return RECTANGULAR_GRAPHICS.includes(name);
 }

@@ -88,6 +88,7 @@
     "test": "craco test",
     "drive": "node scripts/drive-app.mjs",
     "drive:edit": "node scripts/drive-edit-mode.mjs",
+    "compare:engines": "node scripts/compare-engines.mjs",
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --fix",

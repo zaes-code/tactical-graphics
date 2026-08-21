@@ -5,6 +5,8 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {ObjectEvent} from "ol/Object";
 import {Coordinate} from "ol/coordinate";
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
+import {rotationAnchor} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
 
 
 export interface PolygonGraphic extends TacticalGraphic {
@@ -31,9 +33,27 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
         }
     }
 
+    /**
+     * The pivot a rotate turns about and a resize scales from.
+     *
+     * **`rotationAnchor`, not OpenLayers' `getInteriorPoint`.** The two are close — the
+     * library's own doc calls it "a near-match" — but close is not the same, and this is
+     * the number both engines have to agree on or the identical drag produces different
+     * geometry. Measured on an irregular area: the two pivots sat 0.22 degrees apart on a
+     * 20-degree shape, and one rotate moved the centroid 0.347 degrees on OpenLayers
+     * against 0.131 on MapLibre.
+     *
+     * MapLibre has read the portable anchor since it was written; this is OpenLayers
+     * joining it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+     *
+     * Converted through lon/lat because that is the space the anchor rule is defined in —
+     * Mercator's y is not linear in latitude, so an extent midpoint taken in projected
+     * metres is a different point from one taken in degrees.
+     */
     getCenter() {
-        let polygon = new Polygon(this.getBaseGeometry());
-        return polygon.getInteriorPoint().getCoordinates();
+        const ring = this.getBaseGeometry();
+        const geographic = ring.map(part => part.map(position => toLonLat(position)));
+        return fromLonLat(rotationAnchor({type: 'Polygon', coordinates: geographic}));
     }
 
     onDrawStartFunc = (e: DrawEvent) => {

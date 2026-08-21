@@ -1,5 +1,5 @@
 import {Feature as OLFeature} from 'ol';
-import {Feature as GeoJSONFeature, GeoJsonGeometryTypes, Point} from 'geojson';
+import {Feature as GeoJSONFeature, GeoJsonGeometryTypes, Point, Position} from 'geojson';
 import {DrawEvent, GeometryFunction,} from 'ol/interaction/Draw';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from "ol/style/Style";
@@ -9,7 +9,7 @@ import {toLonLat} from "ol/proj";
 import {point as turfPoint} from '@turf/helpers';
 import {distance as turfDistance} from '@turf/distance';
 import {bearing as turfBearing} from '@turf/bearing';
-import {TacticalGraphicsRegistry} from '@zaes/tactical-graphics';
+import {TacticalGraphicsRegistry, rotationAnchor} from '@zaes/tactical-graphics';
 import {GraphicOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from "ol/Feature";
 import {geometryService} from '@zaes/tactical-graphics';
@@ -26,6 +26,24 @@ export interface TacticalGraphic {
     setBaseFeature(base: Feature): void;
 
     setSymbolId(symbolId: string): void;
+}
+
+/**
+ * The point an edit gesture turns and scales a graphic about.
+ *
+ * **`rotationAnchor`, which is the portable rule, rather than
+ * `GeometryService.getCenter`.** The two already agree for a point (itself) and a line
+ * (its first vertex); they disagree for a polygon, where `getCenter` returns turf's
+ * centroid — the mean of the vertices — and `rotationAnchor` returns the extent midpoint.
+ * MapLibre has always pivoted on `rotationAnchor`, so the same drag on the same irregular
+ * area turned it about two different points and produced two different shapes.
+ *
+ * Only the *edit* path is redirected. `GeometryService.getCenter` is also what the
+ * generators measure from, and moving that would change what graphics look like rather
+ * than how they edit. @see rotationAnchor
+ */
+function editPivot(feature: GeoJSONFeature): Position {
+    return rotationAnchor(feature.geometry as unknown as {type: string; coordinates: unknown});
 }
 
 export interface TacticalGraphicHandler {
@@ -227,14 +245,14 @@ class OpenlayersAdapter {
 
     resizeFeature(feat: Feature, deltaSize: number): Feature {
         let turfFeature = this.olFeatureToTurf(feat);
-        let center = geometryService.getCenter(<any>turfFeature);
+        let center = editPivot(turfFeature);
         let scaledBase = geometryService.scale(<any>turfFeature, deltaSize, center);
         return this.turfToOlFeature(scaledBase);
     }
 
     rotateFeature(feat: Feature, deltaAngle: number): Feature {
         let turfFeature = this.olFeatureToTurf(feat);
-        let center = geometryService.getCenter(<any>turfFeature);
+        let center = editPivot(turfFeature);
         let rotatedBase = geometryService.rotate(<any>turfFeature, -deltaAngle * (180 / Math.PI), center);
         return this.turfToOlFeature(rotatedBase);
     }
