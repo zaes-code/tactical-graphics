@@ -2,6 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {groundLength, latitudeFromMercatorY} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -142,6 +143,20 @@ export class MissionTaskController implements TacticalGraphicHandler {
         return undefined;
     };
 
+    /**
+     * The radius the drag actually described, on the ground.
+     *
+     * **`Circle.getRadius()` is in projected metres** and `size` is a real distance — the
+     * generators build from it geodesically and the properties dialog states it in
+     * kilometres. Stamping the projected figure inflated every point-anchored graphic by
+     * `1 / cos(latitude)`: at 50 degrees north a circle dragged out to 120 px rendered at
+     * 185, so the rim outran the cursor sizing it and the read-out claimed 587 km for a
+     * circle 377 km across. @see mercator.ts
+     */
+    private drawnRadius(circle: CircleGeom): number {
+        return groundLength(circle.getRadius(), latitudeFromMercatorY(circle.getCenter()[1]));
+    }
+
     onDrawStartFunc = (e: DrawEvent) => {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
@@ -149,7 +164,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
-            const radius = circleGeom.getRadius();
+            const radius = this.drawnRadius(circleGeom);
 
             const dx = this.currentMouseCoord[0] - this.center[0];
             const dy = this.currentMouseCoord[1] - this.center[1];
@@ -166,7 +181,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
 
     onDrawEndFunc = (e: DrawEvent) => {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
-        const radius = circleGeom.getRadius();
+        const radius = this.drawnRadius(circleGeom);
 
         this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
         this.graphic.showMeasure?.(false);

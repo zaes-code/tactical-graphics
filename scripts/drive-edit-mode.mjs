@@ -558,11 +558,110 @@ async function runChromeChecks() {
     await browser.close();
 }
 
+/**
+ * The sizing half of a draw: what the user sees between the two clicks.
+ *
+ * Two things are checked and they used to fail in opposite ways. **OpenLayers drew the
+ * circle** and MapLibre drew only a rubber band, so the operator sized a symbol they
+ * could not see. And **both measured the drag in projected metres** and stored it as a
+ * real distance, which is a `1 / cos(latitude)` error — invisible on the equator, where
+ * every fixture in this repository sits, and 1.56x at 50 degrees north, where the rim ran
+ * away from the cursor sizing it.
+ *
+ * So the map is moved north first. A version of this check written over the default view
+ * would pass against both defects.
+ */
+async function runDrawPreview(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    const LAT = 50;
+    await page.evaluate(lat => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, lat], zoom: 4});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * 6378137]);
+        view.setZoom(5);
+    }, LAT);
+    await page.waitForTimeout(600);
+
+    // Mid-draw sizes, in screen pixels: how far the cursor is from the center, how wide
+    // the graphic being previewed is, and how long the hashed read-out is.
+    const sizes = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const bounds = mlb.native.preview?.graphic?.bounds;
+            const resolution = mlb.resolutionOf();
+            return {half: bounds ? (bounds.maxX - bounds.minX) / 2 / resolution : null, measure: null};
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        const features = manager.renderingVectorSource.getFeatures();
+        const line = features.find(f => f.get('measure'))?.getGeometry()?.getCoordinates?.();
+        let extent = null;
+        for (const feature of features) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return {
+            half: extent ? (extent[2] - extent[0]) / 2 / resolution : null,
+            measure: line ? Math.hypot(line[1][0] - line[0][0], line[1][1] - line[0][1]) / resolution : null,
+        };
+    });
+
+    await page.getByPlaceholder('Filter graphics').fill('air space coordination area circular');
+    await page.getByText('air space coordination area circular', {exact: true}).first().click();
+    await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
+    const box = await page.locator(engine === 'maplibre' ? 'canvas' : '.map-container').first().boundingBox();
+
+    const DRAG_PX = 120;
+    await page.mouse.click(box.x + 700, box.y + 470);
+    await page.mouse.move(box.x + 700 + DRAG_PX, box.y + 470, {steps: 6});
+    await page.waitForTimeout(400);
+    const mid = await sizes();
+
+    check(`${engine}: the graphic is on the map while it is being sized`, mid.half !== null,
+        mid.half === null ? 'nothing rendered between the clicks' : `${Math.round(mid.half)} px`);
+    check(`${engine}: the rim follows the cursor at 50 degrees north`,
+        mid.half !== null && Math.abs(mid.half - DRAG_PX) / DRAG_PX < 0.08,
+        `cursor ${DRAG_PX} px, rim ${mid.half === null ? 'none' : Math.round(mid.half)} px`);
+    if (mid.measure !== null) {
+        check(`${engine}: the radius read-out reaches that rim`,
+            Math.abs(mid.measure - DRAG_PX) / DRAG_PX < 0.08,
+            `read-out ${Math.round(mid.measure)} px`);
+    }
+
+    // And the number it commits is the one it previewed.
+    await page.mouse.click(box.x + 700 + DRAG_PX, box.y + 470);
+    await page.waitForTimeout(700);
+    const stored = await page.evaluate(() => {
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        return feature ? feature.properties.tacticalGraphic.radius : null;
+    });
+    // 120 px at this zoom is ~587 km of projected meters, which is ~380 km of ground.
+    check(`${engine}: stores the ground radius, not the projected one`,
+        stored !== null && stored > 330_000 && stored < 430_000,
+        stored === null ? 'nothing stored' : `${Math.round(stored / 1000)} km`);
+
+    await browser.close();
+}
+
 for (const engine of ['openlayers', 'maplibre']) {
     try {
         await run(engine);
         await runResizeSweep(engine);
         await runWidthSweep(engine);
+        await runDrawPreview(engine);
     } catch (err) {
         failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
     }

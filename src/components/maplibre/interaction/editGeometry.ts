@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {rotationAnchor} from '@zaes/tactical-graphics';
+import {groundLength, mercatorScale, rotationAnchor} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -490,8 +490,13 @@ export function setBend(
     const center = toMercator(centerOf(description.geometry) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     const theta = ((description.properties.rotation ?? 0) * Math.PI) / 180;
-    const dx = at[0] - center[0];
-    const dy = at[1] - center[1];
+    // **On the ground, because `size` is.** `bend` is a ratio of the two, and mercator
+    // metres are 1.56x too long at 50 degrees north — so the same drag produced a
+    // sharper curve the further from the equator it was made, and a different one from
+    // OpenLayers, which takes its bend geodesically off the anchor points. @see mercator.ts
+    const scale = mercatorScale(centerOf(description.geometry)[1]);
+    const dx = (at[0] - center[0]) / scale;
+    const dy = (at[1] - center[1]) / scale;
 
     const bend = fromFrame
         ? fromFrame(
@@ -524,7 +529,9 @@ export function setReach(description: GraphicDescription, cursor: Position): Gra
         ...description,
         properties: {
             ...description.properties,
-            radius: reach,
+            // A real distance, not the projected one this was measured in: `radius` is
+            // what the generator builds from and what the dialog states. @see mercator.ts
+            radius: groundLength(reach, centerOf(description.geometry)[1]),
             rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
         },
     };

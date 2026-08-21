@@ -3,6 +3,8 @@ import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
+    latitudeFromMercatorY,
+    projectedLength,
 } from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
@@ -448,6 +450,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.measure.setGeometry(undefined);
             return;
         }
+        // The label states the ground distance, not the length of the line drawn to say
+        // it: the line lives in projected metres, which are 1.56x too long at 50 degrees.
+        // @see createMeasureFeature, which reads this
+        this.measure.set('measureMeters', this.size);
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -462,16 +468,22 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * long, which is the number the label reports.
      *
      * Falls back to the first handle before any gesture has supplied an anchor.
+     *
+     * **`size` has to be inflated to reach the rim.** It is a ground distance and these
+     * are projected coordinates, so a line laid out one `size` long stopped short of the
+     * circle it was measuring by `cos(latitude)` — 65% of the way at 50 degrees north,
+     * which is what "the line only reaches halfway" turned out to be. @see mercator.ts
      */
     private measureEdge(): Coordinate | undefined {
         const handles = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
         const anchor = this.measureAnchor;
         if (!anchor || !this.center || !this.size) return handles[0];
+        const reach = projectedLength(this.size, latitudeFromMercatorY(this.center[1]));
         const dx = anchor[0] - this.center[0];
         const dy = anchor[1] - this.center[1];
         const len = Math.hypot(dx, dy);
         if (len === 0) return handles[0];
-        return [this.center[0] + (dx / len) * this.size, this.center[1] + (dy / len) * this.size];
+        return [this.center[0] + (dx / len) * reach, this.center[1] + (dy / len) * reach];
     }
 
     getFeatures(): Feature[] {
