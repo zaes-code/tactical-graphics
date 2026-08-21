@@ -610,17 +610,26 @@ describe('a deliberate resize lifts the draw-time floor', () => {
     });
 
     /**
-     * The curves keep theirs. `suspendMinimumSize` is a *readability* floor — a turn
-     * collapses into an unreadable kink without it — not a draw-time convenience, so it
-     * is deliberately not what `suspendSizeFloor` touches.
+     * **The curves lift theirs too, as of 2026-08-21.**
+     *
+     * `suspendMinimumSize` keeps Turn, TacticalTurn and Envelopment from collapsing into
+     * an unreadable kink, and that is worth protecting *while the graphic is being
+     * drawn*. It was initially left in place during a resize on those grounds — and the
+     * result was that a turn asked for a tenth of its size gave a third of it and no
+     * further, which is the same silent refusal the whole mode exists to remove. The
+     * user's rule is that everything except the security operations resizes.
      */
-    it.each([TacticalGraphicName.Turn, TacticalGraphicName.Envelopment])(
-        "leaves %s's readability floor alone",
+    it.each([TacticalGraphicName.Turn, TacticalGraphicName.TacticalTurn, TacticalGraphicName.Envelopment])(
+        "lifts and restores %s's minimum radius",
         name => {
             const manager = stubbedManager();
             const handler = build(manager, name, 'a');
-            handler.suspendSizeFloor?.(true);
             const holder = handler.graphic as unknown as {suspendMinimumSize?: boolean};
+
+            expect(holder.suspendMinimumSize).toBe(false);
+            handler.suspendSizeFloor?.(true);
+            expect(holder.suspendMinimumSize).toBe(true);
+            handler.suspendSizeFloor?.(false);
             expect(holder.suspendMinimumSize).toBe(false);
         },
     );

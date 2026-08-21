@@ -10,6 +10,8 @@ import {
     supportsHostility,
     AltitudeDatum,
     isRectangular,
+    anchorsFromFrame,
+    usesDrawnAnchors,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
@@ -61,7 +63,46 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     // exist to be an alternative to — and a catalog whose whole job is showing what a
     // symbol looks like should not hide the one difference between two of them.
     const ring: Geometry = isRectangular(name) ? box(lon, lat) : pentagon(lon, lat);
+
+    /*
+     * **Six graphics store *anchor points*, not a drawn path, and a plain two-point line
+     * is not one.** Ambush, Contain, Envelopment, Pursuit, Turn and TacticalTurn recover
+     * their whole shape from three anchors — the run's two ends plus a perpendicular
+     * reference that carries the width. Handed only the two ends they still *produce* a
+     * graphic, so the "first candidate that builds wins" rule accepted it, and every one
+     * of them was drawn flat: Ambush and Pursuit came out 13 px wide and 0 px high, Turn
+     * 13x5, against 22x22 for a healthy circle beside them. They were in the sweep and
+     * invisible, which is the worst of both.
+     *
+     * `anchorsFromFrame` is the same function the holders write their base with, so this
+     * is the base a user's drawing would have produced rather than an imitation of one.
+     * @see usesDrawnAnchors
+     */
+    if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
+
     return [line, ring, point];
+}
+
+/**
+ * A three-anchor base spanning the same cell the two-point line does.
+ *
+ * The offset is a little over half the run, which is what gives these their height; a
+ * frame with no offset is exactly the flat two-point case this exists to avoid.
+ */
+function anchorLine(lon: number, lat: number): Geometry {
+    const half = metersBetween([lon - HALF, lat], [lon + HALF, lat]) / 2;
+    return {type: 'LineString', coordinates: anchorsFromFrame([lon, lat], half, 0, half * 0.6, 1)};
+}
+
+/** Great-circle metres between two lon/lat positions — no turf in this file. */
+function metersBetween(a: Position, b: Position): number {
+    const R = 6378137;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(b[1] - a[1]);
+    const dLon = toRad(b[0] - a[0]);
+    const s = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
 /** Four corners, axis-aligned — what `createBox` and MapLibre's `buildBox` produce. */
