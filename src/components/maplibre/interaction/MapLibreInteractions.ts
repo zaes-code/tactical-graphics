@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -177,6 +177,26 @@ function projectToRadius(center: ProjectedPosition, anchor: ProjectedPosition, r
     const length = Math.hypot(dx, dy);
     if (length === 0) return [center[0] + radius, center[1]];
     return [center[0] + (dx / length) * radius, center[1] + (dy / length) * radius];
+}
+
+/**
+ * Rewrites the amplifiers a graphic's own geometry defines, after a gesture has moved it.
+ *
+ * A rectangular zone's width is doctrinal *input* — APP-06 calls these "two anchor points
+ * and a width, defined in metres" — so the shape and the number drive each other, and a
+ * drag that changes one has to write the other. OpenLayers does this in
+ * `AreaGraphicBase.publishRectangleWidth`; without it here, resizing a rectangular
+ * airspace zone on MapLibre left `width` at whatever it was drawn with, and the snapshot
+ * disagreed with its own geometry. @see rectangleAmplifiers
+ */
+function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+    const ring = (description.geometry as {type: string; coordinates?: unknown}).type === 'Polygon'
+        ? ((description.geometry as unknown as {coordinates: [number, number][][]}).coordinates?.[0])
+        : undefined;
+    const derived = rectangleAmplifiers(name, ring);
+    if (derived.width === undefined) return description;
+    if (description.properties.width === derived.width && description.properties.length === derived.length) return description;
+    return {...description, properties: {...description.properties, ...derived}};
 }
 
 export class MapLibreInteractions {
@@ -820,7 +840,7 @@ export class MapLibreInteractions {
             drag.insertAt = -1;
         }
 
-        const after = this.applyGesture(before, drag, to);
+        const after = withDerivedAmplifiers(drag.graphic.name, this.applyGesture(before, drag, to));
         drag.last = to;
         if (after === before) return;
 

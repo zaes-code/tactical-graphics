@@ -122,6 +122,11 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         // real browser and asserts on feature properties. Stripped from production
         // builds. Nothing in the app may read this.
         if (process.env.NODE_ENV !== 'production') {
+            // The projection the map is in, so a driving script can put the view on a
+            // lon/lat without importing `ol`. MapLibre's own `jumpTo` takes lon/lat
+            // directly, which is the asymmetry this closes.
+            (window as unknown as Record<string, unknown>).__olFromLonLat = fromLonLat;
+            (window as unknown as Record<string, unknown>).__olToLonLat = toLonLat;
             (window as unknown as Record<string, unknown>).__tacticalGraphics = {
                 map: olMap,
                 manager: tacticalGraphicManager.current,

@@ -100,7 +100,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
      * graphic is `placeCoordinates` rotating its anchor about the center.
      */
     getLabelStyle = (position: 'left' | 'right'): StyleFunction => {
-        return getSecurityOperationLabelStyle(this.primaryLabel, this.rotation, position);
+        return getSecurityOperationLabelStyle(this.primaryLabel, this.rotationRadians(), position);
     };
 
     getFeatures(): Feature[] {
@@ -122,7 +122,7 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         return coordinates.map(coord => this.placeCoordinate(coord));
     }
     placeCoordinate = (coord: Coordinate) => {
-        return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), 1, this.rotation);
+        return _scaleAndRotateCoordinates(coord, this.base.getGeometry()!.getCoordinates(), 1, this.rotationRadians());
     }
     updateFeatures = () => {
         // Resize lengthens the arrows outward and moves nothing else, so `scale`
@@ -189,6 +189,13 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         this.centerPadding = CENTER_PADDING_PX * resolution;
         this.updateFeatures();
     }
+
+    /**
+     * `rotation` in **degrees**, as the portable description holds it — the trig below
+     * and the label paint both want radians, and this is the single place that converts.
+     * @see SecurityOperationsController.handleRotate
+     */
+    private rotationRadians = (): number => (this.rotation * Math.PI) / 180;
 
     getRotation = (): number => {
         return this.rotation;
