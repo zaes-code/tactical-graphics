@@ -16,6 +16,7 @@ import {
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMeters,
+    groundLength,
     RANGE_FANS,
     outerRingOf,
     ratioLockOf,
@@ -27,7 +28,7 @@ import {
     TacticalGraphicName,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
-import {toMercator} from './projection';
+import {toLonLat, toMercator} from './projection';
 
 /**
  * # Generator output → paint features
@@ -326,13 +327,27 @@ function placeOriginCentered(
     const asIs = {graphic: rendered.graphic.geometry, labels: rendered.labels.geometry, handles: rendered.handles.geometry};
     if (!ORIGIN_CENTERED.has(name) || baseGeometry.type !== 'Point') return asIs;
 
-    const center = baseGeometry.coordinates as [number, number];
+    const center = toMercator(baseGeometry.coordinates as [number, number]);
     const rotation = ((rotationDegrees ?? 0) * Math.PI) / 180;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
+    /*
+     * **Placed in projected metres, not in degrees.**
+     *
+     * The generator builds these three around `[0, 0]`, so their offsets are degrees at
+     * the equator — where a degree of longitude and a degree of latitude are the same
+     * distance and a projected metre is a real one. Adding those degrees to the target
+     * point pasted an equator-shaped symbol onto a stretched parallel: at 60 degrees
+     * north the arms held their width and the symbol grew to **1.93x** its height, so a
+     * screen it drew as a 410 x 29 px bracket on the equator came out 410 x 56. Converting
+     * the offset to metres and adding it in the projected frame is what OpenLayers'
+     * holder does, and it is what keeps the symbol the same shape and size anywhere.
+     */
     const place = (offset: Position): Position => {
-        const [x, y] = offset;
-        return [center[0] + x * cos - y * sin, center[1] + x * sin + y * cos];
+        const [xDegrees, yDegrees] = offset;
+        const x = xDegrees * EQUATOR_METERS_PER_DEGREE;
+        const y = yDegrees * EQUATOR_METERS_PER_DEGREE;
+        return toLonLat([center[0] + x * cos - y * sin, center[1] + x * sin + y * cos]);
     };
 
     return {
@@ -341,6 +356,12 @@ function placeOriginCentered(
         handles: mapGeometryPositions(asIs.handles, place),
     };
 }
+
+/**
+ * Metres per degree on the equator, where these symbols are generated and where a
+ * projected metre is a ground metre. @see placeOriginCentered
+ */
+const EQUATOR_METERS_PER_DEGREE = (6378137 * Math.PI) / 180;
 
 /** @see placeOriginCentered */
 const ORIGIN_CENTERED = new Set<TacticalGraphicName>([
@@ -500,6 +521,24 @@ function withNormalizedBase(name: TacticalGraphicName, geometry: GeoJSONFeature[
     return coordinates === geometry.coordinates ? geometry : {...geometry, coordinates};
 }
 
+/**
+ * The latitude a base sits at, for sizing anything specified in screen pixels.
+ *
+ * The first coordinate rather than a centroid: it is defined for every geometry this
+ * takes — point, line, ring — and a graphic is never long enough for the difference to
+ * show against a factor that changes by 1% per degree.
+ */
+function latitudeOf(geometry: GeoJSONFeature['geometry']): number {
+    let found: number | undefined;
+    const walk = (node: unknown): void => {
+        if (found !== undefined || !Array.isArray(node) || !node.length) return;
+        if (typeof node[0] === 'number') found = (node as number[])[1];
+        else node.forEach(walk);
+    };
+    walk((geometry as {coordinates?: unknown}).coordinates);
+    return found ?? 0;
+}
+
 export function buildTacticalGraphic(
     name: TacticalGraphicName,
     baseGeometry: GeoJSONFeature['geometry'],
@@ -521,14 +560,24 @@ export function buildTacticalGraphic(
     // renderer would have called — it just gains the handle it was missing.
     baseGeometry = withNormalizedBase(name, baseGeometry);
 
+    // **The resolution these screen sizes are spent at, corrected for where the graphic
+    // is.** A pixel constant times the raw resolution is a *projected* length, and every
+    // decoration, badge and default width derived that way came out 1/cos(latitude) too
+    // big — twice the size at 60 degrees north. The raw value still travels as
+    // `drawingResolution`, because the label scale is anchored to the zoom itself and is
+    // not a distance at all. @see screenMeters
+    const sizingResolution = drawingResolution === undefined
+        ? undefined
+        : groundLength(drawingResolution, latitudeOf(baseGeometry));
+
     const props: TacticalGraphicProperties = {
         name,
         // The arc mission tasks are asked for **no** gap: their two arcs run right up
         // to the label axis and `arcMissionTaskPaint` takes back exactly what the
         // rendered glyph needs. A fixed angular gap cannot track a capped label scale.
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
-        ...sizeDefaults(name, baseGeometry, properties, drawingResolution),
-        ...arrowheadDefault(name, properties, drawingResolution),
+        ...sizeDefaults(name, baseGeometry, properties, sizingResolution),
+        ...arrowheadDefault(name, properties, sizingResolution),
         // The paint layer measures the letter and cuts its own hole, so the geometry
         // must arrive unbroken. @see GLYPH_CUT_GAP_GRAPHICS
         ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) && properties.labelGap === undefined ? {labelGap: 0} : {}),
@@ -539,8 +588,12 @@ export function buildTacticalGraphic(
         // reason. A `radius` arriving from a saved snapshot or a sweep is a number in
         // meters from some other zoom, and honoring it draws the symbol at the wrong
         // size. @see allowedGestures
+        // **The raw resolution, unlike everything else here.** These three are placed in
+        // projected metres rather than walked out geodesically — @see placeOriginCentered
+        // — so their pixel size is already latitude-invariant and correcting it would
+        // shrink them by cos(latitude) instead.
         ...securityOperationSize(name, drawingResolution),
-        ...bakedDecorationSize(name, properties, drawingResolution),
+        ...bakedDecorationSize(name, properties, sizingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
         ...ratioLockedSize(name, baseGeometry),

@@ -2,7 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {groundLength, latitudeFromMercatorY} from '@zaes/tactical-graphics';
+import {groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -287,7 +287,16 @@ export class PointDropController extends MissionTaskController {
      * symbols and leave it off; the explosives readiness states are dropped the same way
      * but the user scales them afterwards, which is the only difference between them.
      */
-    constructor(graphic: MissionTaskGraphic, fixedSize: number, private readonly resizable: boolean = false) {
+    constructor(
+        graphic: MissionTaskGraphic,
+        fixedSize: number,
+        private readonly resizable: boolean = false,
+        /**
+         * The size as it was actually specified — a pixel count and the zoom to spend it
+         * at — so the drop can convert it where it lands. @see drop
+         */
+        private readonly screenSize?: {px: number; resolution: number},
+    ) {
         super(graphic);
         this.fixedSize = fixedSize;
     }
@@ -296,7 +305,16 @@ export class PointDropController extends MissionTaskController {
         const point = e.feature.getGeometry() as Point | undefined;
         const coordinate = point?.getCoordinates();
         if (!coordinate || coordinate.length < 2) return;
-        this.graphic.updateGeom({size: this.fixedSize, center: coordinate as Coordinate, rotation: 0});
+        // **Sized where it lands, not where the map was centred.** These are screen
+        // constants — 50 px across for the crossed tasks — and a pixel count times the
+        // bare resolution is a projected length, so a Destroy dropped at 60 degrees north
+        // came out 204 px wide against the same drop's 100 px on the equator. The click
+        // is the first moment the place is known, and it is the only input this symbol
+        // takes. @see screenMeters
+        const size = this.screenSize
+            ? screenMeters(this.screenSize.px, this.screenSize.resolution, latitudeFromMercatorY(coordinate[1]))
+            : this.fixedSize;
+        this.graphic.updateGeom({size, center: coordinate as Coordinate, rotation: 0});
     }
 
     // A Point draw fires both in the same click. Placing on `drawstart` means the
