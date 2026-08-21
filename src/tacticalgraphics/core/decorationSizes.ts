@@ -30,6 +30,11 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.DirectionOfMainAttackFeint]: 20,
     [TacticalGraphicName.AviationDirectionOfAttack]: 20,
     [TacticalGraphicName.FieldsOfFire]: 20,
+    // The zigzag's half-wavelength: the distance from one apex to the next. Driving the
+    // symbol off a screen size rather than off the drawn length is what lets a long
+    // obstacle carry *more* teeth instead of bigger ones. @see Fix
+    [TacticalGraphicName.Fix]: 14,
+    [TacticalGraphicName.TacticalFix]: 14,
     [TacticalGraphicName.PassageLane]: 20,
     [TacticalGraphicName.FerryCrossing]: 15,
     [TacticalGraphicName.Bridge]: 15,
