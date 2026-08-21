@@ -75,13 +75,26 @@ describe('per-handle vertex dragging', () => {
         expect((handles as unknown as {getCoordinates(): number[][]}).getCoordinates().length).toBeGreaterThanOrEqual(3);
     });
 
-    it('leaves the rest of the line family alone', () => {
+    it('leaves the free-form line family alone', () => {
+        // **`PassageLane` left this list on 2026-08-21, and `Abatis` joined the other
+        // one.** Both are two-point graphics whose end handle now moves that vertex:
+        // lengthening the lane, or the run behind an abatis's chevron, is what dragging
+        // its end means, and scaling the whole symbol is the resize affordance's job.
         for (const name of [TacticalGraphicName.PhaseLine, TacticalGraphicName.ObstacleLine,
-                            TacticalGraphicName.PassageLane, TacticalGraphicName.Route]) {
+                            TacticalGraphicName.Route]) {
             const c = getController(name, RES) as LineGraphicController;
             expect(c.dragsVertices).toBe(false);
             // The manager routes on the method's presence, so absence is the contract.
             expect(c.handleVertexDrag).toBeUndefined();
         }
     });
+
+    it.each([TacticalGraphicName.PassageLane, TacticalGraphicName.Abatis])(
+        '%s drags its own vertices',
+        name => {
+            const c = getController(name, RES) as LineGraphicController;
+            expect(c.dragsVertices).toBe(true);
+            expect(c.handleVertexDrag).toBeDefined();
+        },
+    );
 });

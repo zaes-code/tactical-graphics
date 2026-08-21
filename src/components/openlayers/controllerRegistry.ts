@@ -394,7 +394,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.DirectionOfMainAttackFeint]:       line(),
     [TacticalGraphicName.AviationDirectionOfAttack]:           line(),
     [TacticalGraphicName.FerryCrossing]:                    line(2),
-    [TacticalGraphicName.PassageLane]:                      line(2),
+    // The end handle moves that vertex — lengthening the lane is what dragging its
+    // end means — while the resize icon still scales the whole symbol. @see Abatis
+    [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
     [TacticalGraphicName.TacticalFix]:                              line(2),
     [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
 
