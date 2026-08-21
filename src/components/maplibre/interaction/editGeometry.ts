@@ -368,7 +368,13 @@ export function setOffset(
     const axisY = Math.sin(angle + Math.PI / 2);
     const perpendicular = (at[0] - segment[0][0]) * axisX + (at[1] - segment[0][1]) * axisY;
 
-    const width = Math.abs(perpendicular) * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
+    // **A real width, not a projected one.** `width` is an amplifier in metres — the
+    // dialog states it and the generator builds from it — while this measurement is in
+    // mercator metres. Left unconverted, dragging the handle 120 px off the line at 50
+    // degrees north set a corridor 1.56x that wide, so its edge outran the cursor
+    // dragging it. @see mercator.ts
+    const ground = groundLength(Math.abs(perpendicular), positionsOf(description.geometry)[0][1]);
+    const width = ground * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
     const properties = {...description.properties, width};
 
     // **Negative, not positive.** The axis above is the left normal and an

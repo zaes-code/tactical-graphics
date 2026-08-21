@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, allowedGestures, handleRole, isRectangular, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, allowedGestures, groundLength, handleRole, isRectangular, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -1383,7 +1383,15 @@ export class TacticalGraphicsManager {
             this.offsetGrabPerpendicular = perpendicularDistance;
             this.offsetGrabWidth = this.activeController.currentOffset?.() ?? Math.abs(perpendicularDistance) * scaleFactor;
         }
-        const delta = (Math.abs(perpendicularDistance) - Math.abs(this.offsetGrabPerpendicular)) * scaleFactor;
+        // **Converted to a real distance before it is added to one.** The measurement above
+        // is in projected metres and the width it changes is in ground metres; adding one
+        // to the other made the edge outrun the cursor by 1/cos(latitude) — a handle
+        // dragged to 120 px off the centre-line at 60 degrees north set a corridor 230 px
+        // wide. @see mercator.ts
+        const delta = groundLength(
+            (Math.abs(perpendicularDistance) - Math.abs(this.offsetGrabPerpendicular)) * scaleFactor,
+            latitudeFromMercatorY(segment[0][1]),
+        );
         // A width is a magnitude; a drag that would take it through zero stops at a floor
         // rather than turning the graphic inside out.
         const baseWidth = Math.max(MIN_OFFSET_METERS, (this.offsetGrabWidth ?? 0) + delta);
@@ -1544,7 +1552,20 @@ export class TacticalGraphicsManager {
 
         // Fetch a tactical graphic & handler based on the tactical graphic name, use the resolution to scale the graphic
         let resolution = this.map.getView().getResolution() || 1;
-        let tacticalGraphicHandler: TacticalGraphicHandler = openlayersAdapter.getTacticalGraphicController(name, resolution);
+        /*
+         * **Sized for where the operator is looking**, because a screen size is only a
+         * distance at a place: `20 px` of corridor width is 1.56x as many metres at 50
+         * degrees north as on the equator, and deriving it without that drew the corridor
+         * at 1.56x the width the drag described.
+         *
+         * The view center, not the first click, because this holder is built when the
+         * tool is picked and the click has not happened yet. The two agree to within half
+         * a viewport — a few percent at any working zoom, against the 56% the projection
+         * was contributing. The exact rule is applied where the location *is* known: the
+         * drawn radius, the width drag, and every line graphic's decoration.
+         */
+        const latitude = latitudeFromMercatorY(this.map.getView().getCenter()?.[1] ?? 0);
+        let tacticalGraphicHandler: TacticalGraphicHandler = openlayersAdapter.getTacticalGraphicController(name, resolution, latitude);
 
         this.renderingVectorSource.addFeatures(tacticalGraphicHandler.getFeatures());
         this.watchResolution(tacticalGraphicHandler);

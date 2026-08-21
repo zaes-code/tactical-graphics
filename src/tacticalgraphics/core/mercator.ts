@@ -58,6 +58,23 @@ export function projectedLength(ground: number, latitude: number): number {
 }
 
 /**
+ * What a screen size is worth on the ground, where it is being drawn.
+ *
+ * The other half of the same defect. A decoration, a one-click badge and a corridor's
+ * default width are all specified in **screen pixels** — "the tooth does not change size
+ * as the line lengthens" — and every one of them was turned into metres by multiplying by
+ * the map resolution alone. That is a projected length, so the symbol came out
+ * `1 / cos(latitude)` too big: a Destroy dropped at 60 degrees north measured 204 px
+ * across where the same drop on the equator measured 100, and an air corridor drawn with
+ * the identical drag was 79 px wide instead of 40.
+ *
+ * A pixel size only means anything at a place, which is why this takes one.
+ */
+export function screenMeters(px: number, resolution: number, latitude: number): number {
+    return groundLength(px * resolution, latitude);
+}
+
+/**
  * The latitude an EPSG:3857 northing sits at, in degrees.
  *
  * Both engines hold their working coordinates projected — an OpenLayers geometry, a

@@ -34,7 +34,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -277,7 +277,25 @@ export class LineGraphicBase implements LineGraphic {
     graphicSize(): number {
         // Per-name, because this holder serves 41 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
-        return this.sizeOverride ?? decorationMeters(this.graphicName, this.resolution ?? 0);
+        //
+        // **At this graphic's own latitude**, which is why the derivation is here rather
+        // than in the factory that built the holder: by the time anything asks, the line
+        // has been drawn, so the exact place is known. A pixel size times the bare
+        // resolution is a projected length, and every tooth, tick and chevron derived
+        // that way came out 1/cos(latitude) too large — twice the size at 60 degrees
+        // north. @see screenMeters
+        return this.sizeOverride ?? decorationMeters(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
+    }
+
+    /**
+     * Where this graphic sits, in degrees, for anything sized in screen pixels.
+     *
+     * The first vertex, and zero before one exists — a holder is built when the tool is
+     * picked and only learns its place when the user clicks.
+     */
+    private latitude(): number {
+        const first = (this.base.getGeometry() as LineString | undefined)?.getCoordinates()?.[0];
+        return first ? latitudeFromMercatorY(first[1]) : 0;
     }
 
     /**

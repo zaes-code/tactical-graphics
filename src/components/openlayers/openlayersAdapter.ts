@@ -189,8 +189,8 @@ export interface TacticalGraphicHandler {
 class OpenlayersAdapter {
 
     // Delegates to the declarative controllerRegistry — no switch needed here.
-    getTacticalGraphicController = (graphicName: TacticalGraphicName, resolution: number): TacticalGraphicHandler =>
-        getController(graphicName, resolution);
+    getTacticalGraphicController = (graphicName: TacticalGraphicName, resolution: number, latitude: number = 0): TacticalGraphicHandler =>
+        getController(graphicName, resolution, latitude);
 
 
     // generate the tactical graphics from the tactical graphics library

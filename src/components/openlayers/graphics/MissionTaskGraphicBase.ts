@@ -3,6 +3,7 @@ import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
+    groundLength,
     latitudeFromMercatorY,
     projectedLength,
 } from '@zaes/tactical-graphics';
@@ -509,6 +510,19 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         });
     }
 
+    /** Whether {@link placeScreenSizes} has run. It converts once, at the first center. */
+    private screenSizesPlaced = false;
+
+    /**
+     * Converts this graphic's screen-derived sizes now that its place is known.
+     *
+     * A no-op for most of the family: their one size is the radius, which the draw drag
+     * already measures on the ground. Turn and Envelopment override it — their arrowhead
+     * is a flat 26 px baked into metres at construction, before the first click.
+     */
+    protected placeScreenSizes(_latitude: number): void {
+    }
+
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
         this.rotation = rotation || this.rotation;
         // The crossed four are drawn in one fixed orientation — an X turned 45°
@@ -527,7 +541,18 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             }
         }
         this.size = newSize;
+        const placing = center !== undefined && !this.screenSizesPlaced;
         this.center = center || this.center;
+        // The first time a center arrives, anything specified in screen pixels can finally
+        // be converted where it is: a pixel count times the drawing resolution is a
+        // projected length, and 26 px of arrowhead is 1.56x that many metres at 50 degrees
+        // north. **Skipped on restore**, which arrives with the head it was drawn with —
+        // already a real distance — for the same reason the size floor is.
+        // @see suspendMinimumSize, screenMeters
+        if (placing && this.center && !this.suspendMinimumSize) {
+            this.screenSizesPlaced = true;
+            this.placeScreenSizes(latitudeFromMercatorY(this.center[1]));
+        }
         this.writeBase();
         this.updateGeometry();
         this.refreshMeasure();
@@ -822,6 +847,11 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
     }
 
+    /** The head is a screen length; it becomes a real one where the graphic lands. */
+    protected placeScreenSizes(latitude: number): void {
+        this.headSize = groundLength(this.headSize, latitude);
+    }
+
     protected generatorOptions(): Record<string, unknown> {
         return {bend: this.bend, headSize: this.headSize, labelGap: TURN_LABEL_GAP_METERS};
     }
@@ -992,6 +1022,11 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         if (r > Math.PI) r -= 2 * Math.PI;
         this.projectedRotation = r;
     };
+
+    /** As Turn's: a screen length, converted where the graphic lands. @see placeScreenSizes */
+    protected placeScreenSizes(latitude: number): void {
+        this.headSize = groundLength(this.headSize, latitude);
+    }
 
     protected generatorOptions(): Record<string, unknown> {
         return {bend: this.bend, headSize: this.headSize};

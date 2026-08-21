@@ -656,12 +656,109 @@ async function runDrawPreview(engine) {
     await browser.close();
 }
 
+/**
+ * A screen size is only a distance at a place.
+ *
+ * A decoration, a one-click badge and a default corridor width are all specified in
+ * **pixels**, and each was turned into metres by multiplying by the map resolution — a
+ * projected length, inflated by `1 / cos(latitude)`. So the same gesture drew a Destroy
+ * twice the size at 60 degrees north as on the equator, and a corridor twice as wide.
+ *
+ * The check is a ratio between two latitudes rather than an absolute pixel size, because
+ * the number that must not change is the *screen* size: whatever the symbol measures on
+ * the equator, it has to measure there too. Run on both engines, and the tolerance is
+ * wide enough for a pixel of rounding on a small extent but nowhere near the 2x it is
+ * guarding against.
+ */
+const LATITUDE_CASES = [
+    {filter: 'destroy', pts: [[700, 500], [820, 500]]},
+    {filter: 'airfield', pts: [[700, 500], [820, 500]]},
+    {filter: 'air corridor', pts: [[600, 500], [900, 500]]},
+    {filter: 'bridge', pts: [[600, 500], [900, 500]]},
+    {filter: 'screen', pts: [[600, 500], [900, 500]]},
+];
+
+async function runLatitudeSweep(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    // The same resolution on both engines: MapLibre's zoom is one behind OpenLayers'
+    // because its tiles are 512 px, and these have been checked to land on the identical
+    // metres-per-pixel.
+    const jump = lat => page.evaluate(l => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, l], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, Math.log(Math.tan(Math.PI / 4 + (l * Math.PI) / 360)) * 6378137]);
+        view.setZoom(6);
+    }, lat);
+
+    const sizePx = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const resolution = mlb.resolutionOf();
+            const bounds = mlb.native.graphics[mlb.native.graphics.length - 1]?.graphic?.bounds;
+            return bounds
+                ? {w: (bounds.maxX - bounds.minX) / resolution, h: (bounds.maxY - bounds.minY) / resolution}
+                : null;
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        let extent = null;
+        for (const feature of manager.renderingVectorSource.getFeatures()) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return extent ? {w: (extent[2] - extent[0]) / resolution, h: (extent[3] - extent[1]) / resolution} : null;
+    });
+
+    for (const {filter, pts} of LATITUDE_CASES) {
+        const measured = {};
+        for (const lat of [0, 60]) {
+            await page.evaluate(() => window.__tacticalEngine.clearAll());
+            await page.waitForTimeout(250);
+            await jump(lat);
+            await page.waitForTimeout(300);
+            try {
+                await drawGraphic(page, filter, pts);
+            } catch {
+                measured[lat] = null;
+                continue;
+            }
+            measured[lat] = await sizePx();
+        }
+        const [south, north] = [measured[0], measured[60]];
+        if (!south || !north || !south.w || !south.h) {
+            check(`${engine}: "${filter}" could be measured at both latitudes`, false);
+            continue;
+        }
+        const ratios = [north.w / south.w, north.h / south.h];
+        const worst = ratios.reduce((a, b) => (Math.abs(b - 1) > Math.abs(a - 1) ? b : a));
+        check(`${engine}: "${filter}" is the same size on screen at 60 degrees north`,
+            Math.abs(worst - 1) < 0.12,
+            `${Math.round(south.w)}x${Math.round(south.h)} px -> ${Math.round(north.w)}x${Math.round(north.h)} px`);
+    }
+
+    await browser.close();
+}
+
 for (const engine of ['openlayers', 'maplibre']) {
     try {
         await run(engine);
         await runResizeSweep(engine);
         await runWidthSweep(engine);
         await runDrawPreview(engine);
+        await runLatitudeSweep(engine);
     } catch (err) {
         failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
     }
