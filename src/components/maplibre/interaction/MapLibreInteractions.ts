@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, screenMeters, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -612,7 +612,12 @@ export class MapLibreInteractions {
         // `DEFAULT_RADIUS_METERS` is what made these land at a fixed metre size regardless
         // of zoom. @see dropSizePx
         const drop = dropSizePx(name);
-        if (drop !== undefined) return {radius: drop * resolutionOf(this.map), rotation: 0};
+        // Converted where it lands: a pixel count times the bare resolution is a projected
+        // length, so the same badge dropped at 60 degrees north came out twice the size it
+        // does on the equator. @see screenMeters
+        if (drop !== undefined) {
+            return {radius: screenMeters(drop, resolutionOf(this.map), vertices[0]?.[1] ?? 0), rotation: 0};
+        }
         /*
          * **A drawn graphic gets no placeholder radius.** On a LineString, `radius` is
          * the graphic's half-width — what `LineGraphicBase.setOffset` replays — and
