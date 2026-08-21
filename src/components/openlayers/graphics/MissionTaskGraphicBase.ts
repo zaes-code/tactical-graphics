@@ -409,7 +409,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     setMirrored(mirrored: boolean): void {
         if (mirrored === this.mirrored) return;
         this.mirrored = mirrored;
-        this.updateGeometry();
+        // Through the base: which flank the symbol bows to is *in the anchor points* for
+        // the drawn-anchor family, so a mirror that only redraws flips nothing.
+        this.republishFromState();
         this.publishGeometryState();
     }
 
@@ -573,7 +575,26 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * one-name-at-a-time change: the drag logic above works entirely in
      * center / size / rotation and never learns that the base grew vertices.
      */
-    private writeBase(): void {
+    /**
+     * Rewrites the base from the holder's own state, then redraws.
+     *
+     * **A field change is invisible to a drawn-anchor graphic until the base is
+     * rewritten.** Turn, Envelopment, Ambush, Pursuit, Contain and TacticalTurn store
+     * *anchor points*, and the generator reads its whole frame — including `bend` and
+     * which side it bows to — back out of them. Setting `this.bend` and calling
+     * `updateGeometry()` therefore redrew the graphic from the **old** anchors: the
+     * number in the snapshot moved, the picture did not, and a second identical drag did
+     * nothing at all because the handle had never left its first position.
+     *
+     * `updateGeom` has always done both, in this order. This is the same door for the
+     * paths that change a field without changing size, centre or rotation.
+     */
+    protected republishFromState(): void {
+        this.writeBase();
+        this.updateGeometry();
+    }
+
+    protected writeBase(): void {
         if (!usesDrawnAnchors(this.name)) {
             const geometry = this.base.getGeometry();
             if (geometry instanceof LineString) this.base.setGeometry(new Point(this.center));
@@ -757,6 +778,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     setBend(value: number): void {
         this.bend = clampTurnBend(value);
+        this.republishFromState();
     }
 
     /**
@@ -841,7 +863,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
         this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
-        this.updateGeometry();
+        this.republishFromState();
     }
 }
 
@@ -860,6 +882,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see TurnGraphicBase.setBend — the same hook, this family's clamp. */
     setBend(value: number): void {
         this.bend = clampEnvelopmentBend(value);
+        this.republishFromState();
     }
 
     /**
@@ -1003,7 +1026,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // The rule itself is the library's, so both renderers bend this graphic by the
         // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
         this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
-        this.updateGeometry();
+        this.republishFromState();
     }
 }
 
