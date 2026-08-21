@@ -319,11 +319,11 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             destroy: () => engine?.destroy(),
             reset: () => engine?.clearAll(),
             clearAll: () => engine?.clearAll(),
-            drawSamples: hostility => {
+            drawSamples: (hostility, names) => {
                 const target = renderer();
                 if (!target) return;
                 target.clear();
-                const {graphics} = buildSampleGraphics(hostility, resolutionOf(map));
+                const {graphics} = buildSampleGraphics(hostility, resolutionOf(map), names);
                 graphics.forEach(g => target.add(g));
 
                 /*

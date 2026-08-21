@@ -379,7 +379,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         }}
                         onShapeChange={setSelectedShape}
                         onReset={() => engineRef.current?.reset()}
-                        onDrawSamples={hostility => engineRef.current?.drawSamples(hostility)}
+                        onDrawSamples={(hostility, names) => engineRef.current?.drawSamples(hostility, names)}
                         onClearAll={() => engineRef.current?.clearAll()}
                         onExportGeoJson={() => engineRef.current?.exportGeoJson()}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}

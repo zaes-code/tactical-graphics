@@ -45,7 +45,15 @@ interface Props {
     onShapeChange(name: TacticalGraphicName): void;
     onReset(): void;
     /** Hostility applied to every sample that accepts one; undefined = leave default. */
-    onDrawSamples(hostility?: TacticalGraphicHostility): void;
+    /**
+     * Draws a sample of each graphic currently listed.
+     *
+     * `names` is what the panel is showing — the specification filter and the category
+     * checkboxes, narrowed by the search box. The sweep is a way of *looking* at the
+     * library, so it should show what the operator has asked to look at; drawing all 273
+     * every time made it useless for checking one category.
+     */
+    onDrawSamples(hostility: TacticalGraphicHostility | undefined, names: TacticalGraphicName[]): void;
     onClearAll(): void;
     /** Downloads every graphic on the map as a .geojson file. */
     onExportGeoJson(): void;
@@ -663,7 +671,7 @@ const MapControls: React.FC<Props> = ({
                     <Box sx={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 0.75}}>
                         <Box
                             component="button"
-                            onClick={() => onDrawSamples(sampleHostility || undefined)}
+                            onClick={() => onDrawSamples(sampleHostility || undefined, filtered.map(o => o.value))}
                             sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
                                 py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
@@ -673,7 +681,7 @@ const MapControls: React.FC<Props> = ({
                             }}
                         >
                             <GridViewIcon sx={{fontSize: 15}}/>
-                            Draw all samples
+                            Draw samples
                         </Box>
                         <Box
                             component="button"
