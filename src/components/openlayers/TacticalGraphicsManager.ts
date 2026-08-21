@@ -795,6 +795,18 @@ export class TacticalGraphicsManager {
 
         this.lastPointerPosition = evt.coordinate;
 
+        /*
+         * **A handle drag is a deliberate gesture too, so it lifts the draw-time floor.**
+         *
+         * The affordance path already did this. A handle drag did not, and the floor is a
+         * wall the *handle* runs into: dragging Turn's arrowhead inward, the handle
+         * tracked the cursor exactly until `size` hit `RATIO_LOCKED_MIN_RADIUS_PX` and
+         * then stopped dead while the pointer carried on. Restored in `handleUpEvent`,
+         * the one place every drag ends. @see suspendSizeFloor
+         */
+        this.activeController.suspendSizeFloor?.(true);
+        this.floorSuspendedOn = this.activeController;
+
         // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
         // feature has `base` cleared), so an edit-mode drag would fall through
         // to the map and pan it. Claim the drag and stretch the graphic instead.
