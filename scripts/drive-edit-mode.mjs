@@ -788,6 +788,122 @@ async function runLatitudeSweep(engine) {
     await browser.close();
 }
 
+/**
+ * The same gesture on both engines has to produce the same picture, at the same size.
+ *
+ * Three separate defects hid behind "MapLibre draws it bigger", and none of the existing
+ * checks could see any of them — the unit tests assert one engine at a time, and the
+ * gallery comparison reports ink ratios, which a uniform doubling barely moves.
+ *
+ * 1. Finishing a fixed-vertex draw with a double-click **zoomed the MapLibre map**, so
+ *    every symbol measured twice its size. That one was not a size defect at all.
+ * 2. A stamped `decorationSize` outranked the per-name table on rebuild, so a bridge's
+ *    ticks drifted 15 px -> 20 while OpenLayers stayed at 15.
+ * 3. The block family's 60 px lived in an OpenLayers holder, so MapLibre used 20.
+ *
+ * So this measures the rendered extent, in screen pixels, at the same resolution on both
+ * engines — the thing the user actually looks at — and compares the two afterwards.
+ */
+const DRAW_SIZE_CASES = [
+    {filter: 'phase line', pts: [[600, 500], [900, 500]]},
+    {filter: 'bridge', pts: [[600, 500], [900, 500]]},
+    {filter: 'gap', pts: [[600, 500], [900, 500]]},
+    {filter: 'ferry crossing', pts: [[600, 500], [900, 500]]},
+    {filter: 'fix', pts: [[600, 500], [900, 500]]},
+    {filter: 'abatis', pts: [[600, 500], [900, 500]]},
+    {filter: 'passage lane', pts: [[600, 500], [900, 500]]},
+    {filter: 'air corridor', pts: [[600, 500], [900, 500]]},
+    {filter: 'block', pts: [[600, 500], [900, 500]]},
+    {filter: 'withdraw', pts: [[600, 500], [900, 500]]},
+    {filter: 'destroy', pts: [[700, 500], [820, 500]]},
+    {filter: 'assembly area', pts: [[600, 430], [820, 430], [820, 600]]},
+];
+
+/** Filled by `runDrawSizes` for each engine, compared once both have run. */
+const drawnSizes = {};
+
+async function runDrawSizes(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    drawnSizes[engine] = {};
+
+    // Same centre, same metres-per-pixel. MapLibre's zoom runs one behind OpenLayers'
+    // because its tiles are 512 px; both land on 2445.98 m/px here.
+    const home = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, 0], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, 0]);
+        view.setZoom(6);
+    });
+
+    const extentPx = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const resolution = mlb.resolutionOf();
+            const bounds = mlb.native.graphics[0]?.graphic?.bounds;
+            return bounds
+                ? [Math.round((bounds.maxX - bounds.minX) / resolution), Math.round((bounds.maxY - bounds.minY) / resolution)]
+                : null;
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        let extent = null;
+        for (const feature of manager.renderingVectorSource.getFeatures()) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return extent
+            ? [Math.round((extent[2] - extent[0]) / resolution), Math.round((extent[3] - extent[1]) / resolution)]
+            : null;
+    });
+
+    for (const {filter, pts} of DRAW_SIZE_CASES) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(200);
+        await home();
+        await page.waitForTimeout(300);
+        try {
+            await drawGraphic(page, filter, pts);
+        } catch {
+            drawnSizes[engine][filter] = null;
+            continue;
+        }
+        drawnSizes[engine][filter] = await extentPx();
+    }
+
+    await browser.close();
+}
+
+/** @see runDrawSizes — run once both engines have measured. */
+function compareDrawSizes() {
+    for (const {filter} of DRAW_SIZE_CASES) {
+        const ol = drawnSizes.openlayers?.[filter];
+        const mlb = drawnSizes.maplibre?.[filter];
+        if (!ol || !mlb) {
+            check(`both engines drew "${filter}"`, false, `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
+            continue;
+        }
+        // Generous, because the two measure through their own machinery — OpenLayers
+        // unions its rendered features' extents, MapLibre reads the paint bounds — and a
+        // pixel of rounding on a thin graphic is not a disagreement. The defects this
+        // guards against were 2x and 3x.
+        const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
+        check(`"${filter}" is the same size on both engines`, worst < 0.1,
+            `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+    }
+}
+
 for (const engine of ['openlayers', 'maplibre']) {
     try {
         await run(engine);
@@ -795,10 +911,13 @@ for (const engine of ['openlayers', 'maplibre']) {
         await runWidthSweep(engine);
         await runDrawPreview(engine);
         await runLatitudeSweep(engine);
+        await runDrawSizes(engine);
     } catch (err) {
         failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
     }
 }
+
+compareDrawSizes();
 
 try {
     await runChromeChecks();
