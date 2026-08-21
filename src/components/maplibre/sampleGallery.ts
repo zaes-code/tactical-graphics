@@ -276,8 +276,20 @@ const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphi
  * Sorted by category so related symbols sit together, which is what makes the sweep
  * readable as a catalog rather than a heap.
  */
-function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
-    const byCategory = [...PAINTABLE_GRAPHICS].sort((a, b) => {
+function sampleSpecs(hostility?: TacticalGraphicHostility, only?: readonly TacticalGraphicName[]): SampleSpec[] {
+    /*
+     * **`only` narrows the sweep to what the host is showing.** The gallery is a way of
+     * *looking* at the library, so drawing all 273 whatever the panel had been filtered
+     * to made it useless for checking one category or one search. Cells are numbered
+     * after the filter, so a narrowed sweep packs into a small grid instead of leaving
+     * the holes its neighbours would have filled.
+     *
+     * An empty or absent list means everything, which is what a host with no filter of
+     * its own wants.
+     */
+    const wanted = only?.length ? new Set(only) : undefined;
+    const source = wanted ? PAINTABLE_GRAPHICS.filter(name => wanted.has(name)) : [...PAINTABLE_GRAPHICS];
+    const byCategory = source.sort((a, b) => {
         const ca = GRAPHIC_CATEGORIES[a] ?? TacticalGraphicCategory.Areas;
         const cb = GRAPHIC_CATEGORIES[b] ?? TacticalGraphicCategory.Areas;
         return ca === cb ? getDisplayName(a).localeCompare(getDisplayName(b)) : String(ca).localeCompare(String(cb));
@@ -328,6 +340,7 @@ function cellOrigin(index: number): {lon: number; lat: number} {
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
+    only?: readonly TacticalGraphicName[],
 ): {
     graphics: MapLibreTacticalGraphic[];
     report: MapLibreSampleReport;
@@ -335,7 +348,7 @@ export function buildSampleGraphics(
     const graphics: MapLibreTacticalGraphic[] = [];
     const failed: string[] = [];
 
-    sampleSpecs(hostility).forEach(({name, index, properties}) => {
+    sampleSpecs(hostility, only).forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index);
         const built = candidateGeometries(name, lon, lat)
             .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
@@ -355,10 +368,13 @@ export function buildSampleGraphics(
  * Exported so the two engines can be handed *identical* input when comparing them,
  * which is the whole basis of the parity checks. @see components/spikeSamples.ts
  */
-export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): FeatureCollection {
+export function sampleFeatureCollection(
+    hostility?: TacticalGraphicHostility,
+    only?: readonly TacticalGraphicName[],
+): FeatureCollection {
     const features: Feature[] = [];
 
-    sampleSpecs(hostility).forEach(({name, index, properties}) => {
+    sampleSpecs(hostility, only).forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index);
         const geometry = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),

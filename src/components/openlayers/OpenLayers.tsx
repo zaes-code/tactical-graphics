@@ -156,7 +156,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             reset: () => {
                 engine.current?.clearAll();
             },
-            drawSamples: hostility => {
+            drawSamples: (hostility, names) => {
                 // **The same grid MapLibre draws, restored through the ordinary path.**
                 // The two sweeps used to be different programs — this one packed measured
                 // cells under category banners, that one tiled a plain grid — so the
@@ -164,7 +164,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 // the sweep is for. Handing both the identical GeoJSON makes them
                 // identical by construction rather than by imitation.
                 setInteractionMode('view');
-                engine.current?.restore(sampleFeatureCollection(hostility));
+                engine.current?.restore(sampleFeatureCollection(hostility, names));
                 fitToGraphics();
             },
             exportGeoJson: () => {

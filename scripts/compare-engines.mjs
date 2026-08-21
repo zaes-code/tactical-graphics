@@ -49,7 +49,7 @@ async function runEngine(engine) {
     }
 
     // The gallery's own bases: one per graphic, identical on both engines by construction.
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(9000);
     const all = await page.evaluate(() => window.__tacticalEngine.snapshot());
     await page.evaluate(() => window.__tacticalEngine.clearAll());
