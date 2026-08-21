@@ -289,23 +289,61 @@ export class LineGraphicBase implements LineGraphic {
         this.updateGraphic();
     }
 
+    /**
+     * Which side the graphic's decoration hangs on. Abatis's chevron is the one in this
+     * family that flips; a symmetric graphic ignores it. @see setMirrored
+     */
+    mirrored: boolean = false;
+
+    /**
+     * @see TacticalGraphicHandler.setMirrored
+     *
+     * **This family had no mirror at all.** `LineGraphicController.setMirrored` forwarded
+     * to `graphic.setMirrored?.()` and every holder here was missing it, so the call
+     * landed on `undefined` and did nothing — silently, because the optional call is
+     * exactly the shape a symmetric graphic legitimately has. Abatis's apex handle is
+     * declared a `mirror` in the contract precisely so the flip has something to grab,
+     * and grabbing it flipped nothing.
+     */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGraphic();
+    }
+
+    /**
+     * How many handles `visiblePathHandles` dropped off the front.
+     *
+     * `handleRole` is indexed against the *generator's* list, and this holder renders a
+     * filtered one — a two-point graphic hides the handle sitting on its own start. So
+     * the apex the contract calls index 2 arrives as index 1, is answered `shape`, and
+     * the mirror never fires. Recomputed on every publish rather than assumed, because
+     * whether the start handle is dropped depends on where it landed.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    handleIndexOffset = 0;
+
     updateGraphic = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.graphicSize()}
+            {size: this.graphicSize(), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphics.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        const generated = (handles as MultiPoint).getCoordinates();
+        const visible = visiblePathHandles(generated, this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle);
+        this.handleIndexOffset = generated.length - visible.length;
+        this.handles.setGeometry(new MultiPoint(visible));
 
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
             decorationSize: this.graphicSize(),
+            mirrored: this.mirrored,
         });
     };
 

@@ -55,7 +55,7 @@ await page.goto(URL, {waitUntil: 'load', timeout: 120_000});
 await page.waitForFunction(() => !!window.__tacticalGraphics?.manager, null, {timeout: 120_000});
 await page.waitForTimeout(2500);
 
-await page.getByText('Draw all samples', {exact: true}).click();
+await page.getByText('Draw samples', {exact: true}).click();
 
 // See note 2 above. Identified by source rather than layer index so adding a
 // layer to the demo doesn't silently dim the wrong one.

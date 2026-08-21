@@ -480,7 +480,15 @@ const main = async () => {
         await page.waitForTimeout(7000);
     };
 
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    /*
+     * **Clear the filter first.** The sweep draws what the panel is listing, so the
+     * search term an earlier step typed would narrow it — which is the feature working,
+     * and a driver that did not know it drew three graphics and called the sweep broken.
+     */
+    await page.getByPlaceholder('Filter graphics').fill('');
+    await page.waitForTimeout(500);
+
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(5000);
     const drawnOnOl = await engineCount();
     check('the sweep draws on OpenLayers', drawnOnOl > 100, `${drawnOnOl} graphics`);
@@ -496,7 +504,7 @@ const main = async () => {
     // A removal has to cross too, or switching back would resurrect the map.
     check('a removal crosses back', afterClear === 0, `${afterClear} left`);
 
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(5000);
     const redrawn = await engineCount();
     await switchTo('MapLibre');
@@ -510,7 +518,7 @@ const main = async () => {
     // storing the raw number would halve or double the scale on every switch. Assert
     // the resolution rather than the zoom for exactly that reason.
     const viewOf = () => page.evaluate(() => JSON.parse(localStorage.getItem('tg_viewport') ?? 'null'));
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(4000);
     await page.evaluate(() => {
         const view = window.__tacticalGraphics.map.getView();
