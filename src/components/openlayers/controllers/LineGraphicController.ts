@@ -132,12 +132,14 @@ export class LineGraphicController implements TacticalGraphicHandler {
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
             this.graphic.base.set('base', false);
-            // **The library's rule, not a second copy of it.** This used to be
-            // `!NO_EDIT_STRETCH.has(name)`, and `editStretches` in Layer 1 answered from a
-            // hand-kept list that had drifted 42 ways — every fixed-vertex graphic added
-            // since stretched here and refused on MapLibre. @see editStretches
-            this.editStretches = !!name && editStretches(name);
         }
+
+        // **The library's rule, not a second copy of it.** This used to be
+        // `!NO_EDIT_STRETCH.has(name)` *and* only when a vertex limit was set, so a
+        // free-form graphic whose factory forced the flag on afterwards disagreed with
+        // the library the moment the factory stopped forcing it. Asking once, for every
+        // controller, is the whole point. @see editStretches
+        this.editStretches = !!name && editStretches(name);
 
         // Two vertices is one segment: show only the handle on the far end.
         if (this.maxPoints === 2) {

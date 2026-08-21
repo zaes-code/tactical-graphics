@@ -72,7 +72,9 @@ const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
  */
 const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) => (name: TacticalGraphicName, res: number) => {
     const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
-    controller.editStretches = true;
+    // **`editStretches` is left to the constructor**, which reads the library's rule.
+    // Forcing it true here contradicted that for the one graphic that wants vertex
+    // handles *and* an inert body — `Fix` — and put the two engines back out of step.
     return controller.enableVertexDragging(minVertices, anchorVertex);
 };
 
@@ -397,7 +399,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // The end handle moves that vertex — lengthening the lane is what dragging its
     // end means — while the resize icon still scales the whole symbol. @see Abatis
     [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
-    [TacticalGraphicName.TacticalFix]:                              line(2),
+    [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
     [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
 
     // ── Boundary (special line) ────────────────────────────────────────────
@@ -483,7 +485,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // the other three are drawn as a two-point line.
     [TacticalGraphicName.Block]:    block,
     [TacticalGraphicName.Disrupt]:  block,
-    [TacticalGraphicName.Fix]:      line(2),
+    [TacticalGraphicName.Fix]:      vertexLine(2, 2),
     [TacticalGraphicName.Turn]:     turn,
 
     // ── Circular area graphics ─────────────────────────────────────────────
