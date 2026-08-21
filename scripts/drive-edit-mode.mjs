@@ -653,6 +653,42 @@ async function runDrawPreview(engine) {
         stored !== null && stored > 330_000 && stored < 430_000,
         stored === null ? 'nothing stored' : `${Math.round(stored / 1000)} km`);
 
+    /*
+     * The other three families, which have the same right to be seen before they are
+     * committed. A line rebuilt itself from the sketch on OpenLayers from the beginning
+     * and on MapLibre never did; an **area** did neither — all 87 of them showed the
+     * plain sketch outline until the last click and only then became a symbol.
+     *
+     * Each case clicks every vertex but the last and then moves to where the last would
+     * go, which is exactly the moment the user is deciding. Asserting only "something is
+     * rendered" on purpose: what it should look like is the sweep's business, and a
+     * pixel count here would pin the wrong thing.
+     */
+    const FAMILIES = [
+        {filter: 'air corridor', clicks: [[520, 300]], then: [820, 300]},
+        {filter: 'assembly area', clicks: [[520, 620], [760, 620]], then: [700, 760]},
+        {filter: 'target area rectangular', clicks: [[1000, 300]], then: [1180, 430]},
+    ];
+    for (const {filter, clicks, then} of FAMILIES) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(250);
+        await page.getByPlaceholder('Filter graphics').fill(filter);
+        await page.waitForTimeout(250);
+        await page.getByText(filter, {exact: true}).first().click();
+        await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
+        for (const [x, y] of clicks) {
+            await page.mouse.click(box.x + x, box.y + y);
+            await page.waitForTimeout(120);
+        }
+        await page.mouse.move(box.x + then[0], box.y + then[1], {steps: 6});
+        await page.waitForTimeout(350);
+        const shown = await sizes();
+        check(`${engine}: "${filter}" is drawn while it is being drawn`, shown.half !== null,
+            shown.half === null ? 'nothing between the clicks' : `${Math.round(shown.half)} px`);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(200);
+    }
+
     await browser.close();
 }
 

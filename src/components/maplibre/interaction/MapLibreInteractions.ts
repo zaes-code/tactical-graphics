@@ -700,6 +700,39 @@ export class MapLibreInteractions {
     };
 
     /**
+     * The graphic a set of clicked vertices describes.
+     *
+     * Shared by the commit and the live preview, which is the point: a preview built by
+     * a second, similar-looking rule would be a picture of a different symbol, and it
+     * would diverge the moment either rule changed. Everything specific to a family —
+     * the box a rectangle is drawn as, the vertex a fields-of-fire has implied, the size
+     * read off a centre-to-edge drag — is decided once, here.
+     *
+     * Returns undefined while the vertices do not yet describe anything: two points of a
+     * polygon, one point of a line. The caller shows nothing rather than a half symbol.
+     */
+    private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
+        const wants = baseGeometryFor(name);
+        // What the user clicked becomes what is stored — repeated clicks dropped, and an
+        // implied vertex made real so it gets a handle. @see normalizeDrawnBase
+        const geometry =
+            isRectangular(name) && vertices.length >= 2
+                ? buildBox(vertices)
+                : buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
+        if (!geometry) return undefined;
+
+        const properties: TacticalGraphicProperties = {
+            name,
+            // The generators need both, and neither has a safe absent value: `rotation`
+            // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
+            // no radius has no size at all. @see maplibreAdapter
+            ...this.sizeFromDraw(name, wants, vertices),
+        };
+
+        return buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
+    }
+
+    /**
      * Turns the collected vertices into a graphic.
      *
      * A ring is closed here rather than by the user: a polygon whose last vertex is
@@ -711,24 +744,7 @@ export class MapLibreInteractions {
         if (!name) return;
         this.renderer.setMeasure(null);
 
-        const wants = baseGeometryFor(name);
-        // What the user clicked becomes what is stored — repeated clicks dropped, and an
-        // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        const geometry =
-            isRectangular(name) && vertices.length >= 2
-                ? buildBox(vertices)
-                : buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
-        if (!geometry) return;
-
-        const properties: TacticalGraphicProperties = {
-            name,
-            // The generators need both, and neither has a safe absent value: `rotation`
-            // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
-            // no radius has no size at all. @see maplibreAdapter
-            ...this.sizeFromDraw(name, wants, vertices),
-        };
-
-        const graphic = buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
+        const graphic = this.graphicFrom(name, vertices);
         this.cancelDraw();
         if (!graphic) return;
 
@@ -818,32 +834,32 @@ export class MapLibreInteractions {
     /**
      * The graphic being drawn, shown at its current size before the second click.
      *
-     * **OpenLayers has always drawn this and MapLibre drew nothing.** Its `Circle`
-     * interaction hands the sketch to the same generator on every pointer move, so an
-     * operator sizing a zone watches the zone. Here they got a rubber-band line to the
-     * cursor and a distance in metres, and the symbol appeared only once the gesture was
-     * over — so the question the gesture asks, "how big is this", could only be answered
-     * after committing to an answer.
+     * **OpenLayers has always drawn this and MapLibre drew nothing.** Every OpenLayers
+     * holder rebuilds itself from the sketch on each pointer move — a circle from its
+     * radius, a corridor from its vertices — so an operator watches the symbol they are
+     * making. Here they got a rubber-band line between the clicks and, for a circle, a
+     * distance in metres; the symbol itself appeared only once the gesture was over. So
+     * the questions the gesture asks — how big, which way round, how far does this bend
+     * — could only be answered after committing to an answer.
      *
      * It is a real graphic through the real paint path, so the preview *is* the symbol
      * rather than an impression of it. The renderer holds it apart from the ones it owns;
      * `clearPreview` takes it off however the draw ends.
+     *
+     * Every family, not only the point-anchored ones: a line, a polygon and a rectangle
+     * all describe a symbol before their last click, and the ones that do not yet — two
+     * points of a polygon — simply preview nothing until they do.
      */
-    private previewDraw(centre: Position, cursor: Position): void {
+    private previewDraw(vertices: Position[]): void {
         const name = this.drawing;
-        if (!name || baseGeometryFor(name) !== 'Point') return;
+        if (!name) return;
 
-        // The same size rule the second click will apply, not a second one that happens
-        // to agree at most radii — a preview that disagreed with the commit would make
-        // the symbol jump at the moment the user stopped being able to change it.
-        const built = buildTacticalGraphic(
-            name,
-            {type: 'Point', coordinates: centre},
-            this.sizeFromDraw(name, 'Point', [centre, cursor]),
-            resolutionOf(this.map),
-        );
-        // A generator that refuses at this size simply shows nothing yet, rather than
-        // leaving the last size it accepted standing under a cursor that has moved on.
+        // The same construction the next click will commit, not a second one that happens
+        // to agree — a preview that disagreed with the commit would make the symbol jump
+        // at the moment the user stopped being able to change it. @see graphicFrom
+        const built = this.graphicFrom(name, vertices);
+        // A generator that cannot draw this yet simply shows nothing, rather than leaving
+        // the last shape it accepted standing under a cursor that has moved on.
         this.renderer.setPreview(built ? {...built, id: DRAW_PREVIEW_ID} : null);
         this.previewing = true;
     }
@@ -871,7 +887,7 @@ export class MapLibreInteractions {
                 if (baseGeometryFor(this.drawing) === 'Point' && showsSizeReadout(this.drawing)) {
                     this.renderer.setMeasure([center, cursor]);
                 }
-                this.previewDraw(this.sketch[0], [event.lngLat.lng, event.lngLat.lat]);
+                this.previewDraw([...this.sketch, [event.lngLat.lng, event.lngLat.lat]]);
             }
             return;
         }

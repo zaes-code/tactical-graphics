@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -151,11 +151,29 @@ export class MovementGraphicBase implements LineGraphic {
         writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
     };
 
+    /**
+     * Where this graphic sits, in degrees, for anything sized in screen pixels.
+     *
+     * The first vertex, and zero before one exists — the holder is built when the tool is
+     * picked and only learns its place when the user clicks. @see LineGraphicBase.latitude
+     */
+    private get latitude(): number {
+        const first = this.base.getGeometry()?.getCoordinates()?.[0];
+        return first ? latitudeFromMercatorY(first[1]) : 0;
+    }
+
     updateGeometry = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: decorationMeters(this.graphicName, this.resolution), mirrored: this.mirrored}
+            // At this graphic's own latitude, like the rest of the family: the decoration
+            // is a pixel size and the bare resolution would make it a projected one.
+            // @see LineGraphicBase.graphicSize
+            {
+                radius: this.offset,
+                size: decorationMeters(this.graphicName, groundLength(this.resolution, this.latitude)),
+                mirrored: this.mirrored,
+            }
         );
         if (!tacticalGraphic) return;
 
