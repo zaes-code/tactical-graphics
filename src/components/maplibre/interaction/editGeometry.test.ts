@@ -279,6 +279,46 @@ describe('setBend and setReach — the curve handles', () => {
         const north = setReach(curve(), [0, 1]);
         expect(north.properties.rotation).toBeCloseTo(90, 4);
     });
+
+    /**
+     * **The same drag has to mean the same size wherever on Earth it is made.**
+     *
+     * Both verbs measure the cursor in mercator metres, which are stretched by
+     * `1 / cos(latitude)`, and both write a figure the generators read as a real
+     * distance. Left unconverted, a graphic dragged out at 50 degrees north came out
+     * 1.56x the one dragged identically on the equator — and disagreed with OpenLayers,
+     * which takes both off geodesic anchor points. @see mercator.ts
+     *
+     * A degree of *longitude* is the control here: it shortens with latitude on the
+     * ground by exactly the factor mercator inflates by, so a one-degree reach east is
+     * the same projected length everywhere and a different ground length at each
+     * parallel. The assertion is that the stored radius follows the ground.
+     */
+    it('stores a ground distance, so latitude does not change what a drag means', () => {
+        const reachAt = (latitude: number) =>
+            setReach({geometry: {type: 'Point', coordinates: [0, latitude]}, properties: props({radius: 100_000, rotation: 0})}, [1, latitude])
+                .properties.radius!;
+
+        // A degree of longitude: ~111 km at the equator, ~72 km at 50 degrees north.
+        expect(reachAt(0) / 1000).toBeCloseTo(111.3, 0);
+        expect(reachAt(50) / 1000).toBeCloseTo(71.6, 0);
+        // Unconverted, both read 111 km — the number the projection reports, not the one
+        // the ground does.
+        expect(reachAt(50)).toBeLessThan(reachAt(0));
+    });
+
+    it('reads the same bend from the same gesture at any latitude', () => {
+        const bendAt = (latitude: number) =>
+            setBend(
+                {geometry: {type: 'Point', coordinates: [0, latitude]}, properties: props({radius: 55_660, rotation: 0})},
+                [0.5, latitude - 0.25],
+                b => b,
+            ).properties.bend!;
+
+        // Half a degree along and a quarter down, at both parallels: the same shape of
+        // drag relative to the graphic, so the same bend.
+        expect(bendAt(50)).toBeCloseTo(bendAt(0), 1);
+    });
 });
 
 describe('setBandRange — the range-fan handles', () => {
