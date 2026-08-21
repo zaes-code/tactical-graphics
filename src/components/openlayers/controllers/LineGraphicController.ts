@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, editStretches} from '@zaes/tactical-graphics';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -66,32 +66,6 @@ export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate 
     return kept.length > 0 ? kept : coords;
 }
 
-/**
- * Fixed-vertex graphics that deliberately keep doing nothing on an edit-mode
- * drag, and so are excluded from `editStretches` below. User's list.
- *
- * `MobileDefense` is listed for the record only — its factory builds the
- * controller without `maxPoints`, so it never qualifies anyway.
- */
-const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
-    // `ReliefInPlace` was here and came out on 2026-08-20. The list means "an edit drag
-    // does nothing", which was a reasonable thing to want when `resize` was a separate
-    // mode the user could switch to. It is not: `edit` is now the only mode the panel
-    // offers, so membership meant the graphic could not be resized by its handle at all,
-    // and its arrow-tip handle was one of the six reported as dead.
-    TacticalGraphicName.MobileDefense,
-    TacticalGraphicName.Clear,
-    TacticalGraphicName.TacticalDisrupt,
-    TacticalGraphicName.TacticalFix,
-    // The table 5-19 twins of the two above, same behavior.
-    TacticalGraphicName.Disrupt,
-    TacticalGraphicName.Fix,
-    TacticalGraphicName.Breach,
-    TacticalGraphicName.Bypass,
-    TacticalGraphicName.Canalize,
-    TacticalGraphicName.AttackByFire,
-    TacticalGraphicName.SupportByFire,
-]);
 
 /*
 * Controller class for managing linestring-like graphics.
@@ -158,7 +132,11 @@ export class LineGraphicController implements TacticalGraphicHandler {
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
             this.graphic.base.set('base', false);
-            this.editStretches = !!name && !NO_EDIT_STRETCH.has(name);
+            // **The library's rule, not a second copy of it.** This used to be
+            // `!NO_EDIT_STRETCH.has(name)`, and `editStretches` in Layer 1 answered from a
+            // hand-kept list that had drifted 42 ways — every fixed-vertex graphic added
+            // since stretched here and refused on MapLibre. @see editStretches
+            this.editStretches = !!name && editStretches(name);
         }
 
         // Two vertices is one segment: show only the handle on the far end.

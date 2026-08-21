@@ -728,7 +728,12 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Control,
     TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
     TacticalGraphicName.Locate,
+    // A free-form line whose controller is built with a vertex limit of its own, so no
+    // count reaches it; it stretches like the rest of its family.
+    TacticalGraphicName.MinimumSafeDistanceMultipleStrike,
+    TacticalGraphicName.PsyOpsZoneCircular,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.DeadSpaceAreaCircular,
     TacticalGraphicName.Envelopment,
@@ -753,9 +758,48 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.WeaponSensorRangeFanSector,
 ];
 
-/** Whether an edit drag that grabs no vertex resizes rather than moves. @see EDIT_STRETCHES */
+/**
+ * Fixed-vertex graphics that deliberately keep doing nothing on an edit-mode drag.
+ *
+ * The user's list, moved here from `LineGraphicController` so both engines read one
+ * statement of it. `ReliefInPlace` left it on 2026-08-20: the list means "an edit drag
+ * does nothing", which was reasonable beside a separate resize mode and is not beside
+ * none.
+ */
+const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.MobileDefense,
+    TacticalGraphicName.Clear,
+    TacticalGraphicName.TacticalDisrupt,
+    TacticalGraphicName.TacticalFix,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.Fix,
+    TacticalGraphicName.Breach,
+    TacticalGraphicName.Bypass,
+    TacticalGraphicName.Canalize,
+    TacticalGraphicName.AttackByFire,
+    TacticalGraphicName.SupportByFire,
+];
+
+/**
+ * Whether an edit drag that grabs no vertex resizes rather than moves.
+ *
+ * **Derived, because the hand-written list had drifted 42 ways.** OpenLayers computes
+ * this — `editStretches = !NO_EDIT_STRETCH.has(name)` wherever a controller is built with
+ * a vertex limit, plus an explicit `true` from the mission-task factories — while this
+ * answered from a list somebody had to remember to extend. Every fixed-vertex graphic
+ * added since drifted: Bridge, Gap, the fords, the crossings, the block family, the
+ * retrogrades, the linear targets and `Deny` all stretched in OpenLayers and refused in
+ * MapLibre, where the same drag simply did nothing. `Deny` is the one a user happened to
+ * notice; there were 41 others.
+ *
+ * A fixed vertex count *is* the condition — that is exactly the `maxPoints` the
+ * OpenLayers factories pass — so it is read rather than restated. {@link EDIT_STRETCHES}
+ * carries what a vertex count cannot: the point-anchored circles, whose base is a single
+ * point and which stretch anyway.
+ */
 export function editStretches(name: TacticalGraphicName): boolean {
-    return EDIT_STRETCHES.includes(name);
+    if (NO_EDIT_STRETCH.includes(name)) return false;
+    return EDIT_STRETCHES.includes(name) || baseVertexCount(name) !== undefined;
 }
 
 /** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
