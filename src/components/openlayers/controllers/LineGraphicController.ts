@@ -200,8 +200,34 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     handleResize(deltaSize: number): void {
+        /*
+         * **The decoration scales with the line it decorates.**
+         *
+         * A line graphic's chevron, tooth or arrowhead is filed as its own distance in
+         * metres, independent of the drawn line, so scaling only the base made the
+         * graphic longer while its symbol stayed the size it was — an abatis grew a long
+         * tail behind an unchanged chevron, which reads as a different obstacle rather
+         * than a bigger one. "Resize the whole graphic as is" is the user's rule.
+         *
+         * Only the *gesture* scales it. `setOffset` is also how a restore replays a
+         * stamped size, and scaling there would compound on every load.
+         */
+        const holder = this.graphic as unknown as {sizeOverride?: number; setOffset?: (value: number) => void};
+        const current = this.currentDecorationSize();
+        if (holder.setOffset && current !== undefined && current > 0) holder.setOffset(current * deltaSize);
+
         let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<LineString>;
         this.graphic.setBaseFeature(resized);
+    }
+
+    /**
+     * The decoration size the holder is currently drawing with, in metres — whatever
+     * `setOffset` last set, or the per-name default it started from.
+     */
+    private currentDecorationSize(): number | undefined {
+        const holder = this.graphic as unknown as {graphicSize?: () => number; size?: number; offset?: number};
+        const value = holder.graphicSize ? holder.graphicSize() : (holder.offset ?? holder.size);
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 
     /**

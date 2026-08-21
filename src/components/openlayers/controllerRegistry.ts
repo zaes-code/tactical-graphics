@@ -425,7 +425,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     // Abatis takes a drawn route with as many vertices as the road needs, so it is a
     // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
-    [TacticalGraphicName.Abatis]:                 line(),
+    [TacticalGraphicName.Abatis]:                 line(2),
     // The demolition family is a drawn centerline with a width, so it takes the
     // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
