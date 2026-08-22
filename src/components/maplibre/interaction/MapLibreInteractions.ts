@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, rectangleAmplifiers, screenMeters, showsSizeReadout, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -220,6 +220,8 @@ function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition
  * disagreed with its own geometry. @see rectangleAmplifiers
  */
 function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+    if (usesDrawnAnchors(name)) return withAnchorFrame(name, description);
+
     const ring = (description.geometry as {type: string; coordinates?: unknown}).type === 'Polygon'
         ? ((description.geometry as unknown as {coordinates: [number, number][][]}).coordinates?.[0])
         : undefined;
@@ -227,6 +229,66 @@ function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDe
     if (derived.width === undefined) return description;
     if (description.properties.width === derived.width && description.properties.length === derived.length) return description;
     return {...description, properties: {...description.properties, ...derived}};
+}
+
+/**
+ * The same idea for the six graphics drawn from anchor points: **the points are the
+ * truth, so the numbers follow them.**
+ *
+ * Their `radius` and `rotation` are a description of where the anchors are, not a second
+ * input beside them — which is why moving one has to rewrite them. Left alone, a Turn
+ * dragged twice as long went on reporting the radius it was drawn with, the size read-out
+ * quoted a distance nobody could measure on the map, and a snapshot rebuilt the *old*
+ * symbol wherever the amplifier outranks the geometry. OpenLayers has always done this,
+ * in each holder's `adoptAnchors`; the readers are shared, only the dispatch was not.
+ *
+ * @see drawnAnchorFrame, which is that dispatch
+ */
+function withAnchorFrame(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString') return description;
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates);
+    if (!frame) return description;
+
+    const properties = {
+        ...description.properties,
+        radius: frame.size,
+        rotation: frame.rotation ?? 0,
+        ...(frame.bend === undefined ? {} : {bend: frame.bend}),
+        ...(frame.mirrored === undefined ? {} : {mirrored: frame.mirrored}),
+    };
+    return {...description, properties};
+}
+
+/**
+ * The other direction: a gesture that set a **number** rewrites the points from it.
+ *
+ * `setBend`, `setReach` and `setMirror` change a property, and for these six the picture
+ * comes from the anchors — so without this the number moved and the symbol did not.
+ * OpenLayers hit the same defect from the same cause and fixed it the same way, by
+ * republishing the base from holder state. @see drawnAnchors
+ *
+ * The current frame is read back first so the drag changes only what it grabbed: a bend
+ * drag must not reset Pursuit's line ratio to the family default on its way past.
+ */
+function withAnchorGeometry(description: GraphicDescription): GraphicDescription {
+    const name = description.properties.name;
+    if (!usesDrawnAnchors(name)) return description;
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString') return description;
+
+    const current = drawnAnchorFrame(name, geometry.coordinates);
+    const anchors = drawnAnchors(name, {
+        ...current,
+        center: current?.center ?? geometry.coordinates![0],
+        size: description.properties.radius ?? current?.size ?? 0,
+        rotation: description.properties.rotation ?? current?.rotation ?? 0,
+        bend: description.properties.bend ?? current?.bend,
+        mirrored: description.properties.mirrored ?? current?.mirrored,
+    });
+    if (!anchors) return description;
+    return {...description, geometry: {type: 'LineString', coordinates: anchors}};
 }
 
 export class MapLibreInteractions {
@@ -767,6 +829,9 @@ export class MapLibreInteractions {
      * polygon, one point of a line. The caller shows nothing rather than a half symbol.
      */
     private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
+        const drawn = this.anchorDraw(name, vertices);
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, drawn.properties, resolutionOf(this.map));
+
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
@@ -785,6 +850,45 @@ export class MapLibreInteractions {
         };
 
         return buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
+    }
+
+    /**
+     * The six graphics APP-06 describes by **anchor points**, drawn centre to edge.
+     *
+     * Their base is a `LineString`, so the generic path stored the two raw clicks and let
+     * each generator's own reader make of them what it would — for Turn, the ends of the
+     * chord. OpenLayers reads the same two clicks as a centre and an edge, writes the
+     * symbol's own point layout, and files `radius` and `rotation`. The panel promises
+     * "2 points (center → edge)" on both engines, so this one was breaking its own hint:
+     * measured, the identical gesture gave 240 x 31 px there and 120 x 24 px here.
+     *
+     * The layout comes from `drawnAnchors`, which is the library's statement of it and
+     * which the OpenLayers holders now use too — so the two engines cannot describe the
+     * same symbol differently. Returns undefined for everything else, and for a first
+     * click with nothing to measure yet.
+     */
+    private anchorDraw(
+        name: TacticalGraphicName,
+        vertices: Position[],
+    ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        if (!usesDrawnAnchors(name) || vertices.length < 2) return undefined;
+
+        const center = toMercator([vertices[0][0], vertices[0][1]]);
+        const edge = toMercator([vertices[1][0], vertices[1][1]]);
+        const dx = edge[0] - center[0];
+        const dy = edge[1] - center[1];
+        // A real distance, like every other drawn size. @see mercator.ts
+        const radius = groundLength(Math.hypot(dx, dy), vertices[0][1]);
+        if (!(radius > 0)) return undefined;
+
+        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        const anchors = drawnAnchors(name, {center: vertices[0], size: radius, rotation});
+        if (!anchors) return undefined;
+
+        return {
+            geometry: {type: 'LineString', coordinates: anchors},
+            properties: {name, radius, rotation},
+        };
     }
 
     /**
@@ -1130,6 +1234,13 @@ export class MapLibreInteractions {
         if (drag.handle < 0) return null;
 
         const name = drag.graphic.name;
+        // A handle role sets a **number** — a bend, a reach, a side — and for the six
+        // graphics drawn from anchor points the picture comes from the points. So each
+        // answer is turned back into points before it is applied, or the number would
+        // move and the symbol would not. @see withAnchorGeometry
+        const byRole = (next: GraphicDescription | null): GraphicDescription | null =>
+            next && withAnchorGeometry(next);
+
         switch (roleOfHandle(drag.graphic, drag.handle)) {
             case 'offset':
                 return setOffset(before, to, {
@@ -1141,14 +1252,14 @@ export class MapLibreInteractions {
                 // Envelopment's hook bows much harder than a turn. It also *reads* the
                 // bend differently: its tip lies along the axis rather than off it, so it
                 // brings its own rule. @see envelopmentBendFrom
-                return name === TacticalGraphicName.Envelopment
+                return byRole(name === TacticalGraphicName.Envelopment
                     ? setBend(before, to, clampEnvelopmentBend, envelopmentBendFrom)
-                    : setBend(before, to, clampTurnBend);
+                    : setBend(before, to, clampTurnBend));
             case 'mirror':
                 // Side only — no width, no vertex. @see setMirror
-                return setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis);
+                return byRole(setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis));
             case 'reach':
-                return setReach(before, to);
+                return byRole(setReach(before, to));
             case 'band':
                 // The fans put their center first, so the handle index is one ahead of
                 // the band it drives. @see RANGE_FAN_BAND_OFFSET
