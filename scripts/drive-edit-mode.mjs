@@ -817,6 +817,15 @@ const DRAW_SIZE_CASES = [
     {filter: 'withdraw', pts: [[600, 500], [900, 500]]},
     {filter: 'destroy', pts: [[700, 500], [820, 500]]},
     {filter: 'assembly area', pts: [[600, 430], [820, 430], [820, 600]]},
+    // The six drawn from anchor points. Their two clicks are a **centre and an edge** on
+    // both engines — the panel promises exactly that — and MapLibre used to store the raw
+    // pair instead, so each generator's own reader made of them what it would: Turn came
+    // out half size. @see drawnAnchors
+    {filter: 'turn', pts: [[700, 500], [820, 500]]},
+    {filter: 'envelopment', pts: [[700, 500], [820, 500]]},
+    {filter: 'pursuit', pts: [[700, 500], [820, 500]]},
+    {filter: 'ambush', pts: [[700, 500], [820, 500]]},
+    {filter: 'contain', pts: [[700, 500], [820, 500]]},
 ];
 
 /** Filled by `runDrawSizes` for each engine, compared once both have run. */

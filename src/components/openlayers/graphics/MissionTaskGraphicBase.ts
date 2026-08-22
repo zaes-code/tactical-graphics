@@ -1,8 +1,9 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
+import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
+    drawnAnchors,
     groundLength,
     latitudeFromMercatorY,
     projectedLength,
@@ -651,6 +652,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * looking at, which is the switch this replaces. The default is the generic
      * run-with-an-offset form; a holder whose symbol is built differently overrides
      * this and `adoptAnchors` together, and they must stay exact inverses.
+     *
+     * **The overrides now delegate to `drawnAnchors`**, the library's own statement of
+     * each layout, so MapLibre can write the same base from the same gesture. They kept
+     * their overriding shape because each still supplies its own state — a bend, a hook
+     * ratio, an arrow reach — that only the holder has.
      */
     protected anchorPoints(): Position[] {
         const {offset, side} = this.anchorReach();
@@ -699,11 +705,8 @@ export class ContainGraphicBase extends MissionTaskGraphicBase {
     private static readonly OPENING_QUARTER_TURN = 90;
 
     protected anchorPoints(): Position[] {
-        return anchorsFromFrame(
-            toLonLat(this.center) as Position,
-            this.size,
-            this.rotation - ContainGraphicBase.OPENING_QUARTER_TURN,
-        );
+        return drawnAnchors(this.name, {center: toLonLat(this.center) as Position, size: this.size, rotation: this.rotation})
+            ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -728,7 +731,12 @@ export class AmbushGraphicBase extends MissionTaskGraphicBase {
     private arrowReach = ARC_ARROW_DEFAULT_REACH;
 
     protected anchorPoints(): Position[] {
-        return anchorsForArcAndArrow(toLonLat(this.center) as Position, this.size, this.rotation, this.arrowReach);
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            arrowReach: this.arrowReach,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -823,7 +831,12 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * bow. Tip first, which is the standard's numbering. @see anchorsForBow
      */
     protected anchorPoints(): Position[] {
-        return anchorsForBow(toLonLat(this.center) as Position, this.size, this.rotation, clampTurnBend(this.bend));
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -937,14 +950,12 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
      * inferred from an amplifier a foreign reader would have to know about.
      */
     protected anchorPoints(): Position[] {
-        const bend = clampEnvelopmentBend(this.bend);
-        return anchorsForRunAndArc(
-            toLonLat(this.center) as Position,
-            this.size,
-            Math.abs(bend) * this.size,
-            this.rotation,
-            Math.sign(bend) || 1,
-        );
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
     }
 
     /**
@@ -1093,13 +1104,13 @@ export class PursuitGraphicBase extends MissionTaskGraphicBase {
     private lineRatio = HOOK_DEFAULT_LINE_RATIO;
 
     protected anchorPoints(): Position[] {
-        return anchorsForHook(
-            toLonLat(this.center) as Position,
-            this.size,
-            this.rotation,
-            this.mirrored ? -1 : 1,
-            this.lineRatio,
-        );
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            mirrored: this.mirrored,
+            lineRatio: this.lineRatio,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
