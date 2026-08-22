@@ -826,10 +826,17 @@ const DRAW_SIZE_CASES = [
     {filter: 'pursuit', pts: [[700, 500], [820, 500]]},
     {filter: 'ambush', pts: [[700, 500], [820, 500]]},
     {filter: 'contain', pts: [[700, 500], [820, 500]]},
+    // A rectangular zone, for the **amplifier** rather than the extent: its width is
+    // doctrinal input that the drawn box states, and MapLibre used to derive it only
+    // during a drag — so a freshly drawn zone reported the generic default, 98 km where
+    // OpenLayers reported 391. @see rectangleAmplifiers
+    {filter: 'critical friendly zone rectangular', pts: [[600, 430], [860, 590]], amplifiers: true},
 ];
 
 /** Filled by `runDrawSizes` for each engine, compared once both have run. */
 const drawnSizes = {};
+/** The stored amplifiers for the same draws. @see compareDrawSizes */
+const drawnAmplifiers = {};
 
 async function runDrawSizes(engine) {
     const browser = await chromium.launch();
@@ -841,6 +848,7 @@ async function runDrawSizes(engine) {
         await page.waitForTimeout(2500);
     }
     drawnSizes[engine] = {};
+    drawnAmplifiers[engine] = {};
 
     // Same centre, same metres-per-pixel. MapLibre's zoom runs one behind OpenLayers'
     // because its tiles are 512 px; both land on 2445.98 m/px here.
@@ -889,6 +897,10 @@ async function runDrawSizes(engine) {
             continue;
         }
         drawnSizes[engine][filter] = await extentPx();
+        drawnAmplifiers[engine][filter] = await page.evaluate(() => {
+            const t = window.__tacticalEngine.snapshot().features[0]?.properties?.tacticalGraphic ?? {};
+            return {width: t.width ?? null, length: t.length ?? null};
+        });
     }
 
     await browser.close();
@@ -910,6 +922,22 @@ function compareDrawSizes() {
         const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
         check(`"${filter}" is the same size on both engines`, worst < 0.1,
             `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+    }
+
+    // And where a graphic files a figure about itself, the two have to file the same one:
+    // it is what the operator reads and what a consumer reads back.
+    for (const {filter, amplifiers} of DRAW_SIZE_CASES.filter(c => c.amplifiers)) {
+        const ol = drawnAmplifiers.openlayers?.[filter];
+        const mlb = drawnAmplifiers.maplibre?.[filter];
+        void amplifiers;
+        if (!ol?.width || !mlb?.width) {
+            check(`both engines filed a width for "${filter}"`, false,
+                `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
+            continue;
+        }
+        check(`"${filter}" files the same width on both engines`,
+            Math.abs(mlb.width - ol.width) / ol.width < 0.01,
+            `OL ${Math.round(ol.width)} m vs MapLibre ${Math.round(mlb.width)} m`);
     }
 }
 

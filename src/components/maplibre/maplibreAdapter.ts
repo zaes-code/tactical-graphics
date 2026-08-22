@@ -19,6 +19,7 @@ import {
     groundLength,
     RANGE_FANS,
     outerRingOf,
+    rectangleAmplifiers,
     ratioLockOf,
     resolveRangeFanBands,
     toGraphicOptions,
@@ -549,6 +550,11 @@ function withNormalizedBase(name: TacticalGraphicName, geometry: GeoJSONFeature[
  * takes — point, line, ring — and a graphic is never long enough for the difference to
  * show against a factor that changes by 1% per degree.
  */
+/** A polygon base's outer ring in lon/lat, or undefined for anything else. */
+function ringOf(geometry: GeoJSONFeature['geometry']): [number, number][] | undefined {
+    return geometry.type === 'Polygon' ? (geometry.coordinates[0] as [number, number][]) : undefined;
+}
+
 function latitudeOf(geometry: GeoJSONFeature['geometry']): number {
     let found: number | undefined;
     const walk = (node: unknown): void => {
@@ -618,6 +624,18 @@ export function buildTacticalGraphic(
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
         ...ratioLockedSize(name, baseGeometry),
+        /*
+         * **A rectangle's width is what its own ring measures.**
+         *
+         * APP-06 defines these as "two anchor points and a width, defined in metres", and
+         * the user draws the box — so the shape is the input and the amplifier describes
+         * it. It was derived only *during a drag*, so a freshly drawn zone carried the
+         * generic 20 px default instead: a box drawn 160 px tall at zoom 6 reported 98 km
+         * where OpenLayers reported 391. Doing it here rather than in the draw handler
+         * covers every door — drawn, restored, imported, swept — the same argument
+         * `withNormalizedBase` makes at the top of this function.
+         */
+        ...rectangleAmplifiers(name, ringOf(baseGeometry)),
     };
 
     const base: GeoJSONFeature = {
