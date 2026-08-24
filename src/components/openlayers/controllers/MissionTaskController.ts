@@ -34,6 +34,16 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
 
+    /**
+     * Whether the draw interaction is the thing setting the size right now.
+     *
+     * The legibility floor reads it, and nothing else does: it is an affordance for the
+     * gesture that creates the graphic, and applying it to a later one resized a symbol
+     * the user had already drawn. Optional, so a host's own holder need not carry it.
+     * @see minimumDrawnRadiusPx
+     */
+    sizingFromDraw?: boolean;
+
     /** @see TacticalGraphicHandler.setMirrored */
     setMirrored?(mirrored: boolean): void;
 
@@ -161,6 +171,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
         this.graphic.showMeasure?.(true);
+        // The legibility floor is for *this* gesture and no other. @see minimumDrawnRadiusPx
+        this.graphic.sizingFromDraw = true;
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
@@ -183,7 +195,10 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
         const radius = this.drawnRadius(circleGeom);
 
+        // Still the draw: the floor has to reach the size that is *committed*, or a short
+        // drag would be held legible right up until the click that ends it.
         this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };
 

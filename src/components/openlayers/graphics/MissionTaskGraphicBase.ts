@@ -5,6 +5,8 @@ import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowF
     showsSizeReadout,
     drawnAnchors,
     groundLength,
+    minimumDrawnRadiusPx,
+    screenMeters,
     latitudeFromMercatorY,
     projectedLength,
 } from '@zaes/tactical-graphics';
@@ -78,36 +80,7 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  */
 /** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
 
-/**
- * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
- * move.
- *
- * **The arc mission-task circles are deliberately absent.** Contain, Control, Isolate,
- * Occupy, Retain and Secure used to take this floor, which stopped them being resized
- * below a 100px diameter — while Cordon and Search and Area Defense, built from the same
- * arcs, were never in the list and so had always been free to go small. Users hit the
- * inconsistency directly: a circle that refuses to shrink reads as a broken handle, not
- * a rule. Their label still scales from `graphicSize`, so a small circle gets a small
- * letter rather than one bursting out of it.
- *
- * **The crossed four left on 2026-08-20**, and the reason they were here had already
- * expired: "fixed-size badges placed by a single click and never resized" stopped being
- * true when they joined `RESIZE_ONLY_SYMBOLS` on 2026-08-17. The floor is
- * `RATIO_LOCKED_MIN_RADIUS_PX × drawingResolution` = 50 px, which is *exactly*
- * `dropSizePx` for them — so a crossed task could never be made smaller than the size it
- * was dropped at, and every attempt to shrink it did nothing at all.
- *
- * What stays: Turn / TacticalTurn / Envelopment, which are curves rather than circles and
- * collapse into an unreadable kink without it. Those remain shrinkable *to* the floor and
- * recoverable from it, because a resize is now measured from where the drag began rather
- * than accumulated frame by frame. @see TacticalGraphicsManager.handleResize
- */
-const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.TacticalTurn,
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.Envelopment,
-];
-const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+/** The legibility floor — its list, its size and its history — is `minimumDrawnRadiusPx`. */
 
 /**
  * The mission tasks drawn as two arcs of one circle with a one-letter label in
@@ -515,6 +488,15 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     private screenSizesPlaced = false;
 
     /**
+     * Whether the draw interaction is the thing setting this holder's size right now.
+     *
+     * Set by `MissionTaskController` for the length of the draw, and read by exactly one
+     * rule: the legibility floor, which is a draw-time affordance and was firing on every
+     * later gesture too. @see updateGeom
+     */
+    sizingFromDraw = false;
+
+    /**
      * Converts this graphic's screen-derived sizes now that its place is known.
      *
      * A no-op for most of the family: their one size is the radius, which the draw drag
@@ -534,10 +516,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (MIN_SIZED_MISSION_TASKS.includes(this.name) && !this.suspendMinimumSize) {
+        /*
+         * **The legibility floor belongs to the draw, and nothing else.**
+         *
+         * It is here so a barely-dragged curve is committed at a readable size rather than
+         * as a kink — but `updateGeom` is the door *every* gesture comes through, so it
+         * also fired on graphics drawn long ago: panning a small turn at a low zoom grew
+         * it, and a restored one was inflated by the first gesture that touched it, 129 km
+         * to 300 km at 6000 m/px. `sizingFromDraw` is only true while the draw interaction
+         * is feeding this holder, which is the moment the affordance is for.
+         *
+         * The list and the constant are the library's now, so MapLibre floors the same
+         * three at the same size instead of having no floor at all. @see minimumDrawnRadiusPx
+         */
+        const floorPx = this.sizingFromDraw ? minimumDrawnRadiusPx(this.name) : undefined;
+        if (floorPx !== undefined && !this.suspendMinimumSize) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
-                const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
+                const anchor = center ?? this.center;
+                const minSize = screenMeters(floorPx, drawingRes, anchor ? latitudeFromMercatorY(anchor[1]) : 0);
                 if (newSize < minSize) newSize = minSize;
             }
         }
