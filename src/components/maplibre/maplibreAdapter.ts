@@ -21,6 +21,9 @@ import {
     outerRingOf,
     rectangleAmplifiers,
     ratioLockOf,
+    drawnAnchorFrame,
+    drawnAnchors,
+    usesDrawnAnchors,
     resolveRangeFanBands,
     toGraphicOptions,
     decorationMeters,
@@ -569,6 +572,57 @@ function withNormalizedBase(name: TacticalGraphicName, geometry: GeoJSONFeature[
  * takes — point, line, ring — and a graphic is never long enough for the difference to
  * show against a factor that changes by 1% per degree.
  */
+/**
+ * A drawn-anchor graphic's base, rewritten as the point layout its symbol is defined by.
+ *
+ * **The points are the truth for these six, so they have to be the *right* points.** A
+ * base can arrive with a set that describes the symbol without being the one APP-06 names:
+ * the sample sweep hands Contain three points where its layout is two and Envelopment
+ * three where its layout is four, and OpenLayers silently rewrote them — its holder
+ * republishes the base from state on every gesture — while this engine kept whatever it
+ * was given. The two engines then held different anchor counts for the same picture, and
+ * offered a different number of handles to drag.
+ *
+ * Read the frame, write it back: idempotent for a base that is already canonical, which is
+ * every base this engine draws itself. @see drawnAnchorFrame, drawnAnchors
+ */
+function withCanonicalAnchors(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+): GeoJSONFeature['geometry'] {
+    if (!usesDrawnAnchors(name) || geometry.type !== 'LineString') return geometry;
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates as Position[]);
+    const anchors = frame && drawnAnchors(name, frame);
+    if (!anchors) return geometry;
+    return {type: 'LineString', coordinates: anchors};
+}
+
+/**
+ * What a drawn-anchor graphic's own points say about it, as properties.
+ *
+ * `radius` and `rotation` describe where the anchors are; they are not a second input
+ * beside them. A base whose points disagreed with its stamped figures — the sweep's do —
+ * left this engine reporting the stamped ones while OpenLayers reported what it had
+ * adopted from the geometry: 180,000 m against 125,392 for the same restored turn.
+ * Spread after the caller's properties for that reason. @see drawnAnchorFrame
+ */
+function anchorFrameProperties(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+): Partial<TacticalGraphicProperties> {
+    if (!usesDrawnAnchors(name) || geometry.type !== 'LineString') return {};
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates as Position[]);
+    if (!frame) return {};
+    return {
+        radius: frame.size,
+        rotation: frame.rotation ?? 0,
+        ...(frame.bend === undefined ? {} : {bend: frame.bend}),
+        ...(frame.mirrored === undefined ? {} : {mirrored: frame.mirrored}),
+    };
+}
+
 /** A polygon base's outer ring in lon/lat, or undefined for anything else. */
 function ringOf(geometry: GeoJSONFeature['geometry']): [number, number][] | undefined {
     return geometry.type === 'Polygon' ? (geometry.coordinates[0] as [number, number][]) : undefined;
@@ -605,6 +659,7 @@ export function buildTacticalGraphic(
     // this: the shape does not move — `normalizeDrawnBase` calls the very function the
     // renderer would have called — it just gains the handle it was missing.
     baseGeometry = withNormalizedBase(name, baseGeometry);
+    baseGeometry = withCanonicalAnchors(name, baseGeometry);
 
     // **The resolution these screen sizes are spent at, corrected for where the graphic
     // is.** A pixel constant times the raw resolution is a *projected* length, and every
@@ -655,6 +710,9 @@ export function buildTacticalGraphic(
          * `withNormalizedBase` makes at the top of this function.
          */
         ...rectangleAmplifiers(name, ringOf(baseGeometry)),
+        // The same argument one family over: for the six drawn from anchor points, the
+        // points are the description and these figures follow them. @see anchorFrameProperties
+        ...anchorFrameProperties(name, baseGeometry),
     };
 
     const base: GeoJSONFeature = {
