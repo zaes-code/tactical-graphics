@@ -75,7 +75,6 @@ export type {MapLibreTacticalGraphic} from './maplibreAdapter';
 // The projection seam: MapLibre's camera as an OpenLayers `resolution`, and back.
 export {
     MERCATOR_HALF_WORLD,
-    MERCATOR_MAX_LATITUDE,
     MERCATOR_WORLD_SIZE,
     resolutionOf,
     toLonLat,

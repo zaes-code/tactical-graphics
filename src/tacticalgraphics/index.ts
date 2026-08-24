@@ -191,7 +191,9 @@ export {
     RADIUS_GRAPHICS,
     formatDistance,
     formatAltitude,
+    getLabelUsesHostilityColor,
     hasRadiusReadout,
+    showsSizeReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
 } from './core/symbology';
@@ -207,7 +209,7 @@ export {
  *
  * @see ai/maplibre-renderer.md
  */
-export {HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
+export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
 export type {
     CircleSpec,
     FillSpec,
@@ -358,6 +360,9 @@ export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+// The size a security operation is built at and files, so both engines say one thing
+// rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
@@ -368,14 +373,20 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, hasBakedDecoration} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
+// The point layout each drawn-anchor symbol is described by — the direction both
+// renderers were missing. @see core/drawnAnchors
+export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
+export type {DrawnAnchorFrame} from './core/drawnAnchors';
+// The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
+export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
-export {usesDrawnAnchors} from './core/handles';
+export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
-export type {EditMode, EngineCallbacks, EngineCapabilities, SelectedGraphic, TacticalGraphicsEngine} from './core/engine';
+export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,

@@ -20,10 +20,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
-import {fontStyle, formatAltitude, getLabelFillColor} from '../core/symbology';
+import {fontStyle, formatAltitude} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, halo, scaleOf} from './paintFunctions';
+import {getFullLabel, halo, scaleOf, labelColorOf} from './paintFunctions';
 import {fitLabelScale} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
@@ -84,7 +84,7 @@ function labelBlock(
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: halo(),
             align: 'left',
             justify: 'left',
@@ -136,7 +136,17 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.startDate) values.push(column('TIME FROM:', props.startDate));
         if (props.endDate) values.push(column('TIME TO:', props.endDate));
 
-        return labelBlock(names, values, feature, context, false);
+        /*
+         * **Fitted, as of 2026-08-21.** These eleven are drawn as circles, rectangles and
+         * irregular areas like any other zone, and their block is the longest in the
+         * library — a two-line name over four `MIN ALT: / MAX ALT: / TIME FROM: / TIME TO:`
+         * columns. Unfitted it ran 4.6x the width of the zone it belongs to at gallery
+         * scale: 57 px of text across a 12 px shape.
+         *
+         * `fitLabelScale` returns the desired scale untouched when there is no ring to
+         * measure against, so this costs a point-anchored member nothing.
+         */
+        return labelBlock(names, values, feature, context, true);
     };
 }
 

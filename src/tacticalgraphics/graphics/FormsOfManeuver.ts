@@ -517,13 +517,16 @@ export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
  * The bend an arrow-tip drag asks for, from the cursor's position about the graphic's
  * own frame.
  *
- * **Not the perpendicular offset a turn's bend handle uses**, and that difference is
- * the whole reason this exists. Envelopment's tip sits at `size + 2 × radius` *along*
- * the approach and nothing off it, so the perpendicular carries no radius at all —
- * measuring it read ≈0 and collapsed the hook onto the line, which is exactly what
- * MapLibre did while OpenLayers, whose holder has always used the rule below, bent it
- * properly. The two components split the job: distance along the axis past the line's
- * end is the circle's diameter, and the side the cursor strays to picks the flank.
+ * **The perpendicular offset, as a turn's bend handle uses.** This used to read the
+ * distance *along* the approach instead, and it had to: the handle sat on the arrow tip,
+ * on the axis, where the perpendicular carries no radius at all. Moving the handle to the
+ * arc's apex — one radius off the axis — makes its own offset the radius and its own sign
+ * the flank, so dragging it across the run flips the hook, which is what the handle
+ * looks like it should do and previously did not.
+ *
+ * `along` is no longer read. It stays in the signature because both engines call this
+ * through `applyHandleRole` and a shrinking argument list is a worse change than an
+ * unused one; the parameter documents what the frame offers.
  *
  * All planar, in projected meters — the frame both renderers edit in.
  */
@@ -533,11 +536,14 @@ export function envelopmentBendFrom(
     size: number,
     currentBend: number,
 ): number {
+    void along;
     if (!(size > 0)) return clampEnvelopmentBend(currentBend);
 
-    const radius = Math.max(0, (along - size) / 2);
+    const radius = Math.abs(perpendicular);
     const current = Math.sign(currentBend) || 1;
-    const side = Math.abs(perpendicular) > radius * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perpendicular) : current;
+    // A handle resting on the axis must not flip on jitter alone; below the threshold it
+    // keeps the flank it had. @see ENVELOPMENT_FLIP_THRESHOLD
+    const side = radius > size * ENVELOPMENT_FLIP_THRESHOLD * 0.1 ? Math.sign(perpendicular) : current;
     return clampEnvelopmentBend((side || 1) * (radius / size));
 }
 
@@ -665,18 +671,25 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * relies on, matching Turn's `[bend, tip, center]` contract. The center is
      * split onto the inert feature by `publishHandles`, which preserves order.
      *
-     * The circle handle sits on the **arrow tip**, at `size + 2 * radius` along
-     * the axis: the arc's far end, which is where the arrowhead's point already
-     * is. Being on the axis it cannot encode the radius by its offset, so the
-     * drag reads its distance *along* the approach instead — see
-     * `EnvelopmentGraphicBase.setBandRange`. The line end sets length and aim
-     * together. There is deliberately no handle on the start of the run: it is
-     * where the "E" stacks, and a dot under the label reads as clutter.
+     * The circle handle sits on the **outer midpoint of the arc** — the apex, one
+     * radius off the axis at `size + radius` along it, which is where sweeping the
+     * arc's own parameter to a quarter turn lands.
+     *
+     * **It used to sit on the arrow tip, on the axis**, and being on the axis it could
+     * not encode the radius by its offset: the drag had to read distance *along* the
+     * approach instead, and dragging the handle across the run did not flip the hook
+     * because there was no perpendicular to change sign. On the apex both readings are
+     * the handle's own position — how far off the axis is the radius, and which side it
+     * is on is the flank — which is the same rule Turn's bend handle already uses.
+     *
+     * The line end sets length and aim together. There is deliberately no handle on the
+     * start of the run: it is where the "E" stacks, and a dot under the label reads as
+     * clutter.
      */
     generateHandles(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
-        const {center, angle, size, radius} = this.frame(base, opts);
+        const {center, angle, size, radius, side} = this.frame(base, opts);
         return this.asMultiPointFeature([
-            this.at(center, angle, size + 2 * radius, 0),
+            this.at(center, angle, size + radius, side * radius),
             this.at(center, angle, size, 0),
             center,
         ]);

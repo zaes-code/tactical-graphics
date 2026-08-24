@@ -27,6 +27,7 @@ import {
     getHostilityColorOverride,
     getInertHandleColorOverride,
     getLabelFillColorOverride,
+    getLabelUsesHostilityColor,
     getLabelHaloColorOverride,
     ALTITUDE_UNIT_SUFFIX,
     getAltitudeUnit,
@@ -121,6 +122,13 @@ export function getDefaultLineColor(): string {
 export function getLabelFillColor(): string {
     return getLabelFillColorOverride() ?? getDefaultLineColor();
 }
+
+/**
+ * Whether text amplifiers take their graphic's affiliation colour rather than
+ * `labelFillColor`. Re-exported here so a paint function has one place to import colour
+ * rules from. @see TacticalGraphicsConfigOptions.labelUsesHostilityColor
+ */
+export {getLabelUsesHostilityColor};
 
 /** Text label halo (outline) color — contrast against the map background. */
 export function getLabelHaloColor(): string {
@@ -372,6 +380,52 @@ export function hasRadiusReadout(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Circle graphics that draw the read-out while being sized but carry **no radius field
+ * in the properties dialog**.
+ *
+ * Seven, not ten: `TargetReferencePoint`, `PointTarget` and `FireSupportStation` also
+ * route through the circular family but are commented out of the controller registry,
+ * so they are not drawable. @see ai/excluded-graphics.md
+ *
+ * ## Why the two lists came apart
+ *
+ * They used to be one. `RADIUS_GRAPHICS` drove both the dialog's read-out and the hashed
+ * line under the cursor, and the coupling was deliberate — a graphic reporting a radius
+ * in one place and not the other reads as a bug.
+ *
+ * But the coupling ran the wrong way for a third of the family. These ten are drawn as
+ * circles and sized by dragging, and the number the user is dragging *to* is the whole
+ * point of showing it — while the dialog deliberately does not offer a radius field,
+ * because the amplifier is not one the symbol carries. So they resized blind: the
+ * neighbouring zone showed a distance and they showed nothing, for a reason no operator
+ * can see. **A read-out is feedback on a gesture; a dialog field is an amplifier.**
+ *
+ * `MovementToContact` stays out of both, and that is doctrine rather than an omission:
+ * FM 1-02.2 table 5-10 draws it with no amplifier of any kind, and it is a badge rather
+ * than an area — a distance is not one of the things the symbol says.
+ */
+const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+    TacticalGraphicName.PsyOpsZoneCircular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
+]);
+
+/**
+ * Whether this graphic draws the hashed read-out while it is being drawn or resized.
+ *
+ * Broader than {@link hasRadiusReadout}, which answers a different question — whether
+ * the properties dialog offers a radius field. Both renderers read this one for the
+ * measure line. @see SIZE_READOUT_ONLY
+ */
+export function showsSizeReadout(name: TacticalGraphicName): boolean {
+    return RADIUS_GRAPHICS.has(name) || SIZE_READOUT_ONLY.has(name);
+}
+
+/**
  * Graphics whose designation gap is cut from the **rendered glyph** at paint time,
  * so the generated geometry must carry none of its own.
  *
@@ -602,6 +656,34 @@ const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
 /** How far a security operation's arm reaches from the centre, in screen pixels. */
 const SECURITY_OPERATION_REACH_PX =
     SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
+
+/**
+ * Half of a security operation's own width, in screen pixels — the figure it files as its
+ * `radius`, and the size its generator lays every arm out from.
+ *
+ * **It is not an amplifier.** These three refuse a resize because their size is not a user
+ * input: it is this constant times the live resolution, so the symbol holds 410 x 29 px at
+ * every zoom. What the number does is tell the generator how big to build, and tell a
+ * saved file what the graphic's size was when it was last realised.
+ *
+ * It is here because the two engines were saying different things about it. MapLibre
+ * computed this expression inline and re-derived it on every build; OpenLayers filed
+ * nothing at all and let whatever a snapshot happened to carry pass straight through — so
+ * `compare:engines` read the same three graphics as `radius 180000 vs 1320000`, a stale
+ * figure from the file's own zoom beside a current one.
+ *
+ * **A save and a restore at a different zoom will not agree on it, by design.** The figure
+ * is pixels times a resolution and a snapshot carries no viewport state
+ * (`ai/context.md`), so restoring two zooms out files four times the metres for the same
+ * 410 px symbol. That is the pinning working, and `fullRoundTrip` exempts it for that
+ * reason.
+ *
+ * Multiplied by the **raw** resolution rather than converted to ground metres, because
+ * these symbols are placed in projected space and hold their pixel size at any latitude.
+ * @see placeOriginCentered
+ */
+export const SECURITY_OPERATION_HALF_EXTENT_PX =
+    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + 2 * SECURITY_OPERATION_PX.arrowLength;
 
 /**
  * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by

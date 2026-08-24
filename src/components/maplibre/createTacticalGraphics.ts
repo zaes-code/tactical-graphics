@@ -16,7 +16,12 @@ import type {FeatureCollection} from 'geojson';
 import {
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicName,
+    allowedGestures,
+    type AllowedGestures,
     type EditMode,
+    type GestureKind,
+    type SelectedGraphic,
+    type SelectionBox,
     type EngineCallbacks,
     type EngineCapabilities,
     type TacticalGraphicProperties,
@@ -70,8 +75,31 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
         options.onModeChange?.(next);
     }
 
+    /** The selection as the portable façade describes it. */
+    const asSelected = (): SelectedGraphic | null => {
+        const id = renderer.selection;
+        const graphic = id ? renderer.find(id) : undefined;
+        return graphic ? {id: graphic.id, name: graphic.name, base: graphic.base} : null;
+    };
+
     return {
         capabilities: CAPABILITIES,
+
+        getSelection: asSelected,
+
+        select(id: string | null) {
+            renderer.select(id);
+            options.onSelect?.(asSelected());
+        },
+
+        selectionGestures(): AllowedGestures | null {
+            const selected = asSelected();
+            return selected ? allowedGestures(selected.name) : null;
+        },
+
+        selectionBox: (): SelectionBox | undefined => interactions.selectionBox(),
+
+        beginGesture: (kind: GestureKind, event: PointerEvent) => interactions.beginGesture(kind, event),
 
         startDrawing(name: TacticalGraphicName) {
             mode = 'drawing';

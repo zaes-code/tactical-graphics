@@ -32,8 +32,20 @@ const HIT_RADIUS_PX = 6;
 export function createMapLibrePropertiesSource(
     map: MapLibreMap,
     renderer: NativeLayerRenderer,
+    /**
+     * Whether a click should be ignored right now.
+     *
+     * Supplied by the caller rather than read off an interaction layer this module does
+     * not hold. The demo passes "am I in edit mode", which is the same rule the
+     * OpenLayers source states through `manager.isEditing()`: a click in edit mode picks
+     * the graphic to work on, and answering it with a modal over the map answers a
+     * different question. @see FeaturePropertiesSource.suppressed
+     */
+    isSuppressed: () => boolean = () => false,
 ): FeaturePropertiesSource {
     return {
+        suppressed: () => isSuppressed(),
+
         onSelect(callback) {
             const handleClick = (event: {point: {x: number; y: number}}) => {
                 const graphic = renderer.hitTest(event.point, HIT_RADIUS_PX);

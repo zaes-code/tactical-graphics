@@ -1,5 +1,6 @@
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import type {ProjectedPosition} from '@zaes/tactical-graphics';
+import {clampToMercator} from '@zaes/tactical-graphics';
 
 /**
  * # EPSG:3857 ↔ lon/lat, and MapLibre's camera expressed as a `resolution`
@@ -24,17 +25,15 @@ export const MERCATOR_HALF_WORLD = Math.PI * R;
 /** Full width of the projected world, in meters. */
 export const MERCATOR_WORLD_SIZE = 2 * MERCATOR_HALF_WORLD;
 
-/**
- * Web Mercator's latitude limit, ±85.051129°, where the projection reaches the
- * square world's edge. MapLibre clamps to this itself; stated here so anything
- * building an extent uses the same number.
- */
-export const MERCATOR_MAX_LATITUDE = 85.0511287798066;
+// Web Mercator's latitude limit is the **library's** now — `MERCATOR_MAX_LATITUDE` —
+// because OpenLayers clamps to the same number, and two copies of it would be two answers
+// to what a graphic near a pole looks like. Import it from the root, not from here: a name
+// re-exported by one subpath and not the other is exactly what `engineFacade` forbids.
 
 /** lon/lat degrees → EPSG:3857 meters. */
 export function toMercator(lonLat: [number, number]): ProjectedPosition {
     const [lon, lat] = lonLat;
-    const clamped = Math.max(-MERCATOR_MAX_LATITUDE, Math.min(MERCATOR_MAX_LATITUDE, lat));
+    const clamped = clampToMercator(lat);
     return [
         (lon * Math.PI / 180) * R,
         Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI / 180) / 2)) * R,

@@ -14,7 +14,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {
     ANTI_TANK_DITCH_STYLES,
@@ -35,7 +35,7 @@ import {
     uprightRotation,
     walkPath,
 } from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -282,7 +282,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(a, b),
                 align: 'center',

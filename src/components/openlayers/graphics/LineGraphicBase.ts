@@ -34,7 +34,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -266,10 +266,36 @@ export class LineGraphicBase implements LineGraphic {
      */
     private sizeOverride: number | undefined;
 
-    private graphicSize(): number {
+    /**
+     * The decoration size actually in force, in metres — the stamped override if a drag
+     * or a restore set one, else the per-name default for this zoom.
+     *
+     * Public because a resize has to scale it, and `sizeOverride` alone is `undefined`
+     * on a freshly drawn graphic: reading that would leave the first resize scaling the
+     * line and not its symbol. @see LineGraphicController.handleResize
+     */
+    graphicSize(): number {
         // Per-name, because this holder serves 41 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
-        return this.sizeOverride ?? decorationMeters(this.graphicName, this.resolution ?? 0);
+        //
+        // **At this graphic's own latitude**, which is why the derivation is here rather
+        // than in the factory that built the holder: by the time anything asks, the line
+        // has been drawn, so the exact place is known. A pixel size times the bare
+        // resolution is a projected length, and every tooth, tick and chevron derived
+        // that way came out 1/cos(latitude) too large — twice the size at 60 degrees
+        // north. @see screenMeters
+        return this.sizeOverride ?? decorationMeters(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
+    }
+
+    /**
+     * Where this graphic sits, in degrees, for anything sized in screen pixels.
+     *
+     * The first vertex, and zero before one exists — a holder is built when the tool is
+     * picked and only learns its place when the user clicks.
+     */
+    protected latitude(): number {
+        const first = (this.base.getGeometry() as LineString | undefined)?.getCoordinates()?.[0];
+        return first ? latitudeFromMercatorY(first[1]) : 0;
     }
 
     /**
@@ -281,23 +307,61 @@ export class LineGraphicBase implements LineGraphic {
         this.updateGraphic();
     }
 
+    /**
+     * Which side the graphic's decoration hangs on. Abatis's chevron is the one in this
+     * family that flips; a symmetric graphic ignores it. @see setMirrored
+     */
+    mirrored: boolean = false;
+
+    /**
+     * @see TacticalGraphicHandler.setMirrored
+     *
+     * **This family had no mirror at all.** `LineGraphicController.setMirrored` forwarded
+     * to `graphic.setMirrored?.()` and every holder here was missing it, so the call
+     * landed on `undefined` and did nothing — silently, because the optional call is
+     * exactly the shape a symmetric graphic legitimately has. Abatis's apex handle is
+     * declared a `mirror` in the contract precisely so the flip has something to grab,
+     * and grabbing it flipped nothing.
+     */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGraphic();
+    }
+
+    /**
+     * How many handles `visiblePathHandles` dropped off the front.
+     *
+     * `handleRole` is indexed against the *generator's* list, and this holder renders a
+     * filtered one — a two-point graphic hides the handle sitting on its own start. So
+     * the apex the contract calls index 2 arrives as index 1, is answered `shape`, and
+     * the mirror never fires. Recomputed on every publish rather than assumed, because
+     * whether the start handle is dropped depends on where it landed.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    handleIndexOffset = 0;
+
     updateGraphic = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.graphicSize()}
+            {size: this.graphicSize(), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphics.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        const generated = (handles as MultiPoint).getCoordinates();
+        const visible = visiblePathHandles(generated, this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle);
+        this.handleIndexOffset = generated.length - visible.length;
+        this.handles.setGeometry(new MultiPoint(visible));
 
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
             decorationSize: this.graphicSize(),
+            mirrored: this.mirrored,
         });
     };
 
