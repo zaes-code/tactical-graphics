@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -767,7 +767,10 @@ export class MapLibreInteractions {
         // builds from geodesically; these are mercator metres, 1.56x too long at 50
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
-        return {radius: groundLength(radius, vertices[0][1]), rotation: (Math.atan2(dy, dx) * 180) / Math.PI};
+        return {
+            radius: this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]),
+            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+        };
     }
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
@@ -882,12 +885,13 @@ export class MapLibreInteractions {
         if (!(radius > 0)) return undefined;
 
         const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const anchors = drawnAnchors(name, {center: vertices[0], size: radius, rotation});
+        const size = this.legibleRadius(name, radius, vertices[0][1]);
+        const anchors = drawnAnchors(name, {center: vertices[0], size, rotation});
         if (!anchors) return undefined;
 
         return {
             geometry: {type: 'LineString', coordinates: anchors},
-            properties: {name, radius, rotation},
+            properties: {name, radius: size, rotation},
         };
     }
 
@@ -1021,6 +1025,21 @@ export class MapLibreInteractions {
         // the last shape it accepted standing under a cursor that has moved on.
         this.renderer.setPreview(built ? {...built, id: DRAW_PREVIEW_ID} : null);
         this.previewing = true;
+    }
+
+    /**
+     * A drawn radius, held to the size below which this symbol stops being readable.
+     *
+     * **Only a draw.** The three curves that carry a floor collapse into a kink when they
+     * are barely dragged, so the gesture that creates one holds it legible — and nothing
+     * afterwards does, or a later pan would resize a symbol the user had already drawn.
+     * OpenLayers has applied this from the start and MapLibre had no equivalent, so the
+     * same short drag drew 100 px there and 60 px here. @see minimumDrawnRadiusPx
+     */
+    private legibleRadius(name: TacticalGraphicName, radius: number, latitude: number): number {
+        const px = minimumDrawnRadiusPx(name);
+        if (px === undefined) return radius;
+        return Math.max(radius, screenMeters(px, resolutionOf(this.map), latitude));
     }
 
     /** Takes the preview off, whichever way the draw ended. @see previewDraw */
