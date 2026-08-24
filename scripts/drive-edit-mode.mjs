@@ -951,6 +951,69 @@ async function runDrawSizes(engine) {
     await browser.close();
 }
 
+/**
+ * A resize scales; it does not turn the graphic over.
+ *
+ * Dragging a *shape handle* across the axis is how Pursuit's hook and Envelopment's arc
+ * change flanks, and that stays. But the affordance says one thing — make it bigger — and
+ * a drag from the box corner passes the axis on its way out, so a pursuit resized through
+ * the button came back mirrored on OpenLayers while the same gesture on MapLibre did not.
+ */
+async function runMirrorCheck(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    try {
+        await drawGraphic(page, 'pursuit', [[700, 500], [820, 500]]);
+    } catch {
+        check(`${engine}: "pursuit" could be drawn`, false);
+        await browser.close();
+        return;
+    }
+    await editBtn.click();
+    await page.waitForTimeout(300);
+
+    const flipped = await page.evaluate(async () => {
+        const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const api = window.__tacticalEngine;
+        const mirroredNow = () => api.snapshot().features[0]?.properties?.tacticalGraphic?.mirrored ?? null;
+        api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+        await pause(200);
+        const before = mirroredNow();
+        const box = api.selectionBox();
+        if (!box) return null;
+        const host = document.querySelector('.map-container').getBoundingClientRect();
+        const startX = box.x + box.width, startY = box.y + box.height;
+        const pivotX = box.x + box.width / 2, pivotY = box.y + box.height / 2;
+        if (!api.beginGesture('resize', new PointerEvent('pointerdown', {
+            clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+        }))) return null;
+        for (const step of [1, 1.6]) {
+            window.dispatchEvent(new PointerEvent('pointermove', {
+                clientX: host.left + pivotX + (startX - pivotX) * step,
+                clientY: host.top + pivotY + (startY - pivotY) * step,
+                bubbles: true,
+            }));
+        }
+        window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+        await pause(250);
+        return {before, after: mirroredNow()};
+    });
+
+    check(`${engine}: an affordance resize does not flip pursuit's hook`,
+        flipped !== null && flipped.before === flipped.after,
+        flipped ? `mirrored ${flipped.before} -> ${flipped.after}` : 'gesture refused');
+
+    await browser.close();
+}
+
 /** @see runDrawSizes — run once both engines have measured. */
 function compareDrawSizes() {
     for (const {filter, as} of DRAW_SIZE_CASES) {
@@ -1007,6 +1070,7 @@ for (const engine of ['openlayers', 'maplibre']) {
         await runDrawPreview(engine);
         await runLatitudeSweep(engine);
         await runDrawSizes(engine);
+        await runMirrorCheck(engine);
     } catch (err) {
         failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
     }

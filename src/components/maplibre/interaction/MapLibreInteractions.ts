@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, boundsOf, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -484,7 +484,20 @@ export class MapLibreInteractions {
     selectionBox(): SelectionBox | undefined {
         const id = this.renderer.selection;
         const graphic = id ? this.renderer.find(id) : undefined;
-        const bounds = graphic?.graphic.bounds;
+        /*
+         * **Line work *and* where the labels sit**, which is what OpenLayers measures: it
+         * unions every non-handle feature the controller owns, and a designation anchored
+         * clear of the shape is one of them. An ambush's sits 9 px past its arrowhead, so
+         * measuring the line work alone drew a box 63 px wide here against 72 there — and
+         * since the affordances are placed on that box, the same drag started from a
+         * different corner and meant a different gesture: 16 degrees of rotation and 14%
+         * of scale apart on the identical fixture.
+         *
+         * From the label geometry rather than `labels.bounds`: that field deliberately
+         * carries the *graphic's* extent, because an area label needs the shape's box to
+         * fit itself inside. @see boundsOf, unionBounds
+         */
+        const bounds = unionBounds(graphic?.graphic.bounds, boundsOf(graphic?.labels?.geometry));
         if (!bounds) return undefined;
 
         // Two opposite corners: the projection counts y upward and the screen counts it
