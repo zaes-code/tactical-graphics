@@ -58,3 +58,6 @@ __pycache__/
 # Scratch output from analysis runs — never part of the repo. The APP-06 extracts
 # under here are standard-derived material and must not reach the public mirror.
 output/
+
+# Scratch build/inspection output, like `output/` above.
+tmp/

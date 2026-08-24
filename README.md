@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**218 graphics** are implemented and verified today, covering **231 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**275 graphics** are implemented and verified today, covering **288 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -976,8 +976,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Weapon Engagement Zone | Airspace Coordinating Measures |
 | Weapons Free Zone | Airspace Coordinating Measures |
 | Airfield | Areas |
+| Airfield Zone | Areas |
 | Airhead Line | Areas |
+| Area | Areas |
 | Area Of Operations | Areas |
+| Area, Generic | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
 | Attack Position | Areas |
@@ -985,25 +988,39 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Biological Contaminated Area | Areas |
+| Bridgehead | Areas |
 | Brigade Support Area | Areas |
+| Chemical Contaminated Area | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
 | Drop Zone | Areas |
 | Encirclement | Areas |
+| Enemy Prisoner Of War Holding Area | Areas |
 | Engagement Area | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
+| Human Terrain | Areas |
+| Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Minimum Safe Distance Zone | Areas |
 | Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
+| Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
+| Penetration Box | Areas |
 | Pickup Zone | Areas |
+| PsyOps Zone, Circular | Areas |
+| PsyOps Zone, Irregular | Areas |
+| PsyOps Zone, Rectangular | Areas |
 | Radiation Dose Rate Contour Line | Areas |
+| Radiological Contaminated Area | Areas |
 | Refugee Holding Area | Areas |
+| Restricted Terrain | Areas |
+| Severely Restricted Terrain | Areas |
 | Strong Point | Areas |
 | Target Area Of Interest | Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Areas |
@@ -1024,6 +1041,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Relief In Place | Enabling Operations Planning |
 | Screen | Enabling Operations Planning |
 | Fighting Position | Field Fortification Symbols |
+| Fortified Position | Field Fortification Symbols |
 | Fortified/Trench Line | Field Fortification Symbols |
 | Fields Of Fire/Sector Of Fire | Fire Support Coordination Control Measures |
 | Free-Fire Area, Circular | Fire Support Coordination Control Measures |
@@ -1043,17 +1061,22 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Bridgehead Line | Lines |
 | Common Sensor Boundary | Lines |
 | Coordinated Fire Line | Lines |
+| Decision Line | Lines |
 | Delay Line | Lines |
 | Engineer Work Line | Lines |
 | Final Coordination Line | Lines |
 | Fire Support Coordination Line | Lines |
 | Forward Edge Of The Battle Area | Lines |
 | Forward Line Of Own Troops | Lines |
+| Handover Line | Lines |
 | Intelligence Coordination Line | Lines |
 | Limit Of Advance | Lines |
 | Line Of Contact | Lines |
 | Line Of Departure | Lines |
 | Line Of Departure Or Line Of Contact | Lines |
+| Line, Generic | Lines |
+| Mobility Corridor | Lines |
+| Named Area Of Interest Line | Lines |
 | Phase Line | Lines |
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
@@ -1082,18 +1105,27 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Mine Cluster | Mobility and Countermobility Control Measures |
+| Mined Area, Fenced | Mobility and Countermobility Control Measures |
+| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
+| Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
 | Obstacle Group | Mobility and Countermobility Control Measures |
 | Obstacle Line | Mobility and Countermobility Control Measures |
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Raft Site | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Trip Wire | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
 | Wire, Double Fence | Mobility and Countermobility Control Measures |
@@ -1106,6 +1138,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
+| Avenue Of Approach | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
 | Direction Of Main Attack | Movement and Maneuver |
 | Direction Of Main Attack Feint | Movement and Maneuver |
@@ -1119,9 +1152,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Penetration | Movement and Maneuver |
 | Supporting Axis Of Advance | Movement and Maneuver |
 | Turning Movement | Movement and Maneuver |
+| Advance To Contact | Offense Operations Planning |
 | Ambush | Offense Operations Planning |
+| Cordon And Knock | Offense Operations Planning |
 | Cordon And Search | Offense Operations Planning |
 | Counterattack | Offense Operations Planning |
+| Counterattack By Fire | Offense Operations Planning |
 | Exploitation | Offense Operations Planning |
 | Movement To Contact | Offense Operations Planning |
 | Pursuit | Offense Operations Planning |
@@ -1130,29 +1166,39 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Breach | Tactical Mission Tasks |
 | Bypass | Tactical Mission Tasks |
 | Canalize | Tactical Mission Tasks |
+| Capture | Tactical Mission Tasks |
 | Clear | Tactical Mission Tasks |
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
+| Demonstration | Tactical Mission Tasks |
+| Deny | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
 | Disengage | Tactical Mission Tasks |
 | Disrupt | Tactical Mission Tasks |
+| Escort | Tactical Mission Tasks |
+| Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
+| Locate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
+| Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
+| Artillery Maneuver Area | Target Acquisition Control Measures |
+| Artillery Reserved Area | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Circular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Irregular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Rectangular | Target Acquisition Control Measures |
 | Blue Kill Box, Circular | Target Acquisition Control Measures |
 | Blue Kill Box, Irregular | Target Acquisition Control Measures |
 | Blue Kill Box, Rectangular | Target Acquisition Control Measures |
+| Bomb Area | Target Acquisition Control Measures |
 | Call For Fire Zone, Circular | Target Acquisition Control Measures |
 | Call For Fire Zone, Irregular | Target Acquisition Control Measures |
 | Call For Fire Zone, Rectangular | Target Acquisition Control Measures |
@@ -1168,8 +1214,19 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Purple Kill Box, Circular | Target Acquisition Control Measures |
 | Purple Kill Box, Irregular | Target Acquisition Control Measures |
 | Purple Kill Box, Rectangular | Target Acquisition Control Measures |
+| Target Build-Up Area, Circular | Target Acquisition Control Measures |
+| Target Build-Up Area, Irregular | Target Acquisition Control Measures |
+| Target Build-Up Area, Rectangular | Target Acquisition Control Measures |
+| Target Value Area, Circular | Target Acquisition Control Measures |
+| Target Value Area, Irregular | Target Acquisition Control Measures |
+| Target Value Area, Rectangular | Target Acquisition Control Measures |
+| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan, Circular | Target Acquisition Control Measures |
+| Zone Of Fire | Target Acquisition Control Measures |
+| Zone Of Responsibility, Circular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |
 | Final Protective Fire | Target Control Measures |
 | Fire Support Area, Circular | Target Control Measures |
 | Fire Support Area, Irregular | Target Control Measures |
@@ -1190,77 +1247,12 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Category |
 |---|---|
-| Fighter Engagement Zone | Airspace Coordinating Measures |
-| Airfield Zone | Areas |
-| Area | Areas |
-| Area, Generic | Areas |
-| Biological Contaminated Area | Areas |
-| Bridgehead | Areas |
-| Chemical Contaminated Area | Areas |
-| Enemy Prisoner Of War Holding Area | Areas |
-| Extraction Zone | Areas |
-| Human Terrain | Areas |
-| Joint Tactical Action Area | Areas |
 | Limited Access Area | Areas |
-| Nuclear Contaminated Area | Areas |
-| Penetration Box | Areas |
-| PsyOps Zone, Circular | Areas |
-| PsyOps Zone, Irregular | Areas |
-| PsyOps Zone, Rectangular | Areas |
-| Radiological Contaminated Area | Areas |
-| Regimental Support Area | Areas |
-| Restricted Terrain | Areas |
-| Severely Restricted Terrain | Areas |
-| Fortified Position | Field Fortification Symbols |
-| Battlefield Coordination Line | Lines |
-| Decision Line | Lines |
-| Handover Line | Lines |
-| Holding Line | Lines |
-| Light Line | Lines |
-| Line, Generic | Lines |
-| Mobility Corridor | Lines |
-| Named Area Of Interest Line | Lines |
-| No Fire Line | Lines |
 | Halted Convoy | Mobility and Countermobility Control Measures |
-| Mine Cluster | Mobility and Countermobility Control Measures |
-| Mined Area, Fenced | Mobility and Countermobility Control Measures |
-| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
-| Mineline | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
-| Raft Site | Mobility and Countermobility Control Measures |
-| Trip Wire | Mobility and Countermobility Control Measures |
-| Avenue Of Approach | Movement and Maneuver |
-| Axis Of Attack | Movement and Maneuver |
-| Advance To Contact | Offense Operations Planning |
-| Cordon And Knock | Offense Operations Planning |
-| Counterattack By Fire | Offense Operations Planning |
-| Capture | Tactical Mission Tasks |
-| Demonstration | Tactical Mission Tasks |
-| Deny | Tactical Mission Tasks |
-| Escort | Tactical Mission Tasks |
-| Evacuate | Tactical Mission Tasks |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
-| Locate | Tactical Mission Tasks |
-| Recover | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |
-| Artillery Maneuver Area | Target Acquisition Control Measures |
-| Artillery Reserved Area | Target Acquisition Control Measures |
-| Bomb Area | Target Acquisition Control Measures |
-| Target Build-Up Area, Circular | Target Acquisition Control Measures |
-| Target Build-Up Area, Irregular | Target Acquisition Control Measures |
-| Target Build-Up Area, Rectangular | Target Acquisition Control Measures |
-| Target Value Area, Circular | Target Acquisition Control Measures |
-| Target Value Area, Irregular | Target Acquisition Control Measures |
-| Target Value Area, Rectangular | Target Acquisition Control Measures |
-| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
-| Zone Of Fire | Target Acquisition Control Measures |
-| Zone Of Responsibility, Circular | Target Acquisition Control Measures |
-| Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
-| Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |
 
 ---
 
