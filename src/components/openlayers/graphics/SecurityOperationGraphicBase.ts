@@ -6,7 +6,7 @@ import {_scaleAndRotateCoordinates} from '../../../utils/scaleAndRotateCoordinat
 import {StyleFunction} from 'ol/style/Style';
 import {SecurityOperationGraphic} from "../controllers/SecurityOperationsController";
 import openlayersAdapter from "../openlayersAdapter";
-import {SECURITY_OPERATION_PX, getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {SECURITY_OPERATION_HALF_EXTENT_PX, SECURITY_OPERATION_PX, getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 
@@ -170,6 +170,13 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
         // files it under the snapshot's `renderer` object instead.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
             rotation: this.rotation,
+            // **And the size it is drawn at, re-derived on every rebuild.** Every arm is
+            // a pixel constant times the live resolution, so this says what the symbol
+            // measures *now*; filing nothing let whatever a snapshot carried pass through
+            // untouched, which is how the same graphic came out of `compare:engines` as
+            // 180000 here against MapLibre's 1320000.
+            // @see SECURITY_OPERATION_HALF_EXTENT_PX
+            radius: SECURITY_OPERATION_HALF_EXTENT_PX * this.resolution,
         });
     };
 

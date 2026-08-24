@@ -12,7 +12,7 @@ import {
     type ProjectedGeometry,
     type ProjectedInputGeometry,
     type ProjectedPosition,
-    SECURITY_OPERATION_PX,
+    SECURITY_OPERATION_HALF_EXTENT_PX,
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
     arrowheadMeters,
@@ -491,10 +491,9 @@ function securityOperationSize(
 ): Partial<TacticalGraphicProperties> {
     if (!drawingResolution || !SECURITY_OPERATIONS.has(name)) return {};
 
-    const halfExtentPx = SECURITY_OPERATION_PX.labelPadding
-        + SECURITY_OPERATION_PX.labelGap
-        + 2 * SECURITY_OPERATION_PX.arrowLength;
-    return {radius: halfExtentPx * drawingResolution};
+    // The library's figure, not this file's arithmetic — OpenLayers files the same one,
+    // and the generator builds the arms from it. @see SECURITY_OPERATION_HALF_EXTENT_PX
+    return {radius: SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution};
 }
 
 /**

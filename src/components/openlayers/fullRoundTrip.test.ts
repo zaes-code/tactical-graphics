@@ -98,19 +98,38 @@ describe(`every registered graphic round-trips (${NAMES.length} names)`, () => {
         // floating-point precision and no further: an envelopment came back with a
         // rotation of 3.3e-13 instead of 0 and a bend differing in the 14th decimal.
         // Insisting on exact equality there asserts the arithmetic, not the round trip.
-        expectStateClose(after.geometryState, before.geometryState);
+        expectStateClose(after.geometryState, before.geometryState, name);
         // The amplifier bag carries the geometry inputs too, so it drifts the same way.
-        expectStateClose(after.labels as unknown as Record<string, unknown>, before.labels as unknown as Record<string, unknown>);
+        expectStateClose(after.labels as unknown as Record<string, unknown>, before.labels as unknown as Record<string, unknown>, name);
     });
 });
 
+/**
+ * Keys that a restore is **entitled** to answer differently, per graphic.
+ *
+ * The security operations' `radius` is `SECURITY_OPERATION_HALF_EXTENT_PX` times the live
+ * resolution: the symbol is pinned to 410 x 29 px, so its size in metres is a statement
+ * about the zoom it was last realised at, and a snapshot deliberately carries no zoom.
+ * This test restores at four times the drawing resolution — "the normal case" — so the
+ * figure comes back four times larger for the very same picture. Asserting it would be
+ * asserting that the pinning does not work.
+ * @see SECURITY_OPERATION_HALF_EXTENT_PX
+ */
+const REDERIVED_PER_ZOOM: Partial<Record<string, readonly string[]>> = {
+    Cover: ['radius'],
+    Guard: ['radius'],
+    Screen: ['radius'],
+};
+
 /** Compares two geometry-state bags, allowing floating-point drift on the numbers. */
-function expectStateClose(after: Record<string, unknown>, before: Record<string, unknown>): void {
+function expectStateClose(after: Record<string, unknown>, before: Record<string, unknown>, name?: TacticalGraphicName): void {
+    const exempt = REDERIVED_PER_ZOOM[String(name)] ?? [];
     // The union, and an absent key treated as undefined: the amplifier bag carries
     // optional fields, and one side writing `undefined` where the other omits the key
     // entirely is not a round-trip failure.
     const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
     for (const key of keys) {
+        if (exempt.includes(key)) continue;
         const a = after[key];
         const b = before[key];
         if (typeof a === 'number' && typeof b === 'number') {
