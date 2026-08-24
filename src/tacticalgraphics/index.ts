@@ -360,6 +360,9 @@ export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+// The size a security operation is built at and files, so both engines say one thing
+// rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
