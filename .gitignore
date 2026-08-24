@@ -59,5 +59,8 @@ __pycache__/
 # under here are standard-derived material and must not reach the public mirror.
 output/
 
-# Scratch build/inspection output, like `output/` above.
-tmp/
+# Scratch build/inspection output, like `output/` above. Narrow on purpose: `tmp/pdfs`
+# is tracked — the APP-06 crop references live there — and ignoring the whole tree once
+# cost the repo 163 tracked files.
+tmp/spreadsheet-build/
+tmp/spreadsheet-inspect/
