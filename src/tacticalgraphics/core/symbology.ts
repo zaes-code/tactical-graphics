@@ -658,6 +658,34 @@ const SECURITY_OPERATION_REACH_PX =
     SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
 
 /**
+ * Half of a security operation's own width, in screen pixels — the figure it files as its
+ * `radius`, and the size its generator lays every arm out from.
+ *
+ * **It is not an amplifier.** These three refuse a resize because their size is not a user
+ * input: it is this constant times the live resolution, so the symbol holds 410 x 29 px at
+ * every zoom. What the number does is tell the generator how big to build, and tell a
+ * saved file what the graphic's size was when it was last realised.
+ *
+ * It is here because the two engines were saying different things about it. MapLibre
+ * computed this expression inline and re-derived it on every build; OpenLayers filed
+ * nothing at all and let whatever a snapshot happened to carry pass straight through — so
+ * `compare:engines` read the same three graphics as `radius 180000 vs 1320000`, a stale
+ * figure from the file's own zoom beside a current one.
+ *
+ * **A save and a restore at a different zoom will not agree on it, by design.** The figure
+ * is pixels times a resolution and a snapshot carries no viewport state
+ * (`ai/context.md`), so restoring two zooms out files four times the metres for the same
+ * 410 px symbol. That is the pinning working, and `fullRoundTrip` exempts it for that
+ * reason.
+ *
+ * Multiplied by the **raw** resolution rather than converted to ground metres, because
+ * these symbols are placed in projected space and hold their pixel size at any latitude.
+ * @see placeOriginCentered
+ */
+export const SECURITY_OPERATION_HALF_EXTENT_PX =
+    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + 2 * SECURITY_OPERATION_PX.arrowLength;
+
+/**
  * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by
  * being defined at all, the statement that the graphic *is* a one-click drop.
  *
