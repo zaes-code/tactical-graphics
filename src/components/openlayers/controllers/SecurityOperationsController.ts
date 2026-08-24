@@ -125,9 +125,17 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
         this.setBaseFeature(baseFeature);
     }
 
+    /**
+     * **The manager hands out radians; this graphic stores degrees.**
+     *
+     * `rotation` is part of the portable description, and every other graphic in the
+     * library files it in degrees — the generators call `toRadians` on it themselves.
+     * These three filed the manager's raw radian delta instead, so the same drag left
+     * OpenLayers holding 0.0509 where MapLibre held 2.9174: the same angle, off by
+     * exactly 180/pi, in a field a consumer or the other engine reads as degrees.
+     */
     handleRotate(deltaAngle: number): void {
-        let newRotation = this.graphic.getRotation() + deltaAngle;
-        this.graphic.setRotation(newRotation);
+        this.graphic.setRotation(this.graphic.getRotation() + (deltaAngle * 180) / Math.PI);
     }
 
     /**

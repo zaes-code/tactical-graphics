@@ -17,10 +17,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {centerSegmentIndex, endFrame, endMarkScale, offsetAbove, uprightRotation} from './decorations';
-import {PLANNED_DASH_PX, amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -37,7 +37,7 @@ function drawnPath(feature: PaintFeature): ProjectedPosition[] {
 
 /** A text amplifier with the usual halo. */
 function amplifier(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
@@ -48,7 +48,7 @@ function amplifier(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align,
@@ -83,12 +83,12 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
         }];
 
-        paints.push(amplifier(
+        paints.push(amplifier(feature, 
             offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
             endLabel, scale, uprightRotation(start, afterStart),
             afterStart[0] >= start[0] ? 'left' : 'right',
         ));
-        paints.push(amplifier(
+        paints.push(amplifier(feature, 
             offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
             endLabel, scale, uprightRotation(beforeEnd, end),
             end[0] >= beforeEnd[0] ? 'right' : 'left',
@@ -101,7 +101,7 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         const a = path[segIdx];
         const b = path[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        paints.push(amplifier(
+        paints.push(amplifier(feature, 
             offsetAbove(mid, a, b, context.resolution, LABEL_OFFSET_PX),
             modifier, scale, uprightRotation(a, b), 'center',
         ));

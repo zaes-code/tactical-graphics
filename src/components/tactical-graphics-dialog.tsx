@@ -309,7 +309,22 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                 <polygon ref={lineRef as any} fill="url(#coneGradient)"/>
             </svg>
 
+            {/*
+              * **The container must not eat the map.**
+              *
+              * `hideBackdrop` hides the scrim but not the full-viewport
+              * `.MuiDialog-container` behind it, which keeps `pointer-events: auto` and
+              * sits at z-index 1300 — over everything. So while this dialog was open the
+              * map underneath took no clicks at all: no drawing, no selecting, and none
+              * of the edit affordances, which is how this surfaced. A non-modal dialog
+              * that deliberately leaves its host usable has to say so; the paper opts
+              * back in so the form itself still works.
+              */}
             <Dialog open hideBackdrop keepMounted PaperComponent={DraggablePaper} disableEnforceFocus
+                    sx={{
+                        '& .MuiDialog-container': {pointerEvents: 'none'},
+                        '& .MuiDialog-paper': {pointerEvents: 'auto'},
+                    }}
                     onClose={cancelChanges}>
                 <DialogTitle id="draggable-dialog-title" sx={{cursor: 'move'}}>
                     Feature Properties

@@ -958,10 +958,15 @@ describe('fortified and wave graphics in screen space', () => {
             }
         });
 
-        it('draws the enemy side red and the friendly side in the default line color', () => {
+        it('draws the enemy side red and the friendly side in the friendly color', () => {
             const [enemy, friendly] = styles(10);
             expect(enemy.getStroke()!.getColor()).toBe(getColorByHostility(TacticalGraphicHostility.hostileFaker));
-            expect(friendly.getStroke()!.getColor()).toBe(getDefaultLineColor());
+            // **The friendly identity's colour, not the unaffiliated default.** This wave
+            // *is* the friendly half of a symbol that draws both identities at once, so
+            // painting it in the fallback line colour said "unaffiliated" beside a wave
+            // that said "hostile" — and a host re-colouring its affiliations re-coloured
+            // only half the graphic. Changed 2026-08-20 at the user's request.
+            expect(friendly.getStroke()!.getColor()).toBe(getColorByHostility(TacticalGraphicHostility.friend));
         });
 
         it('still labels both ends LC', () => {

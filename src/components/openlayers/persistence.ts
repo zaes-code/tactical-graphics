@@ -189,6 +189,17 @@ function toGeoJSON(feature: Feature, properties: Record<string, unknown>): GeoJS
 }
 
 /**
+ * One graphic as the portable base feature — what `snapshot()` would write for it.
+ *
+ * Exported because the selection needs exactly this: a host reading `getSelection()`
+ * gets the same `properties.tacticalGraphic` bag it would get from a save, rather than
+ * a second, subtly different description of the same symbol. @see SelectedGraphic
+ */
+export function serializeOneGraphic(handler: TacticalGraphicHandler): GeoJSONFeature {
+    return toGeoJSON(handler.graphic.base, collectProperties(handler) ?? {});
+}
+
+/**
  * Snapshots every graphic the manager is holding.
  *
  * Walks `graphicControllers` rather than the vector source: the source is a flat bag of
@@ -529,6 +540,10 @@ export function restoreTacticalGraphics(
  * save/restore story rather than part of the gallery's.
  */
 export function clearAllGraphics(manager: TacticalGraphicsManager): void {
+    // Before the controllers go: the selection holds one of them, and a selection
+    // pointing at a graphic that is no longer on the map keeps a host drawing edit
+    // chrome around empty space.
+    manager.setSelection(undefined);
     manager.renderingVectorSource.clear();
     manager.graphicControllers.length = 0;
     manager.releaseAllGraphics();

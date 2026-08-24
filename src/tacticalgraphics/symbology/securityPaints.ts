@@ -1,3 +1,4 @@
+import {labelColorOf} from './paintFunctions';
 /**
  * # The security operations
  *
@@ -11,7 +12,7 @@
 
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
-import {HALO_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 
 type SecurityPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -58,7 +59,7 @@ export function securityOperationLabelPaint(
             text: {
                 text: label,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 baseline: 'middle',
                 offsetXPx: Math.cos(rotation) * distance,

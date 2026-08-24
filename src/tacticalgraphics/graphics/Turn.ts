@@ -12,11 +12,22 @@ import * as turf from '../core/turf';
  */
 export const TURN_DEFAULT_BEND = 0.5;
 /**
- * How sharp the turn may get. Past this the curve doubles back on itself and
- * the arrowhead points into the graphic; the floor keeps a bow that is still
- * recognisably a turn rather than a straight line.
+ * How sharp the turn may get. Past the ceiling the curve doubles back on itself and the
+ * arrowhead points into the graphic.
+ *
+ * **The floor was 0.15 and is now 0.02.** It was there to keep a bow that still reads as
+ * a turn rather than a straight line, which is a fair thing to want — but the bend handle
+ * sits at `|bend| x size` from the centre, so the floor is also a wall the *handle* stops
+ * at: measured on a 300 px chord, it tracked the cursor exactly for 100 px and then froze
+ * dead while the pointer kept going, and picked up again from where it had stopped on the
+ * way back. A handle that stops following is the same silent refusal a floor on a resize
+ * was, and it reads as the drag accelerating away from the graphic.
+ *
+ * 0.02 still guards the degenerate case — a bend of exactly zero has no curve for the
+ * label's gap to sit in — while leaving the handle free for the whole range a user can
+ * actually aim at. Flattening a turn until it is nearly a line is now their call.
  */
-export const TURN_MIN_BEND = 0.15;
+export const TURN_MIN_BEND = 0.02;
 export const TURN_MAX_BEND = 1.6;
 
 /** Arrowhead length as a fraction of `size`, when `headSize` is not supplied. */
