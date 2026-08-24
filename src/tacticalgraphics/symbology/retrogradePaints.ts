@@ -14,11 +14,10 @@ import {
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
-    getLabelFillColor,
     getLabelHaloColor,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Clearance either side of the letter within its gap, in screen pixels. */
 const GAP_PADDING_PX = 4;
@@ -81,7 +80,7 @@ export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintCo
                 text: {
                     text: label,
                     font: RATIO_LOCKED_LABEL_FONT,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     rotation: uprightRotation(p1, p2),
                     align: 'center',

@@ -10,6 +10,8 @@ import {
     supportsHostility,
     AltitudeDatum,
     isRectangular,
+    anchorsFromFrame,
+    usesDrawnAnchors,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from './maplibreAdapter';
@@ -38,8 +40,23 @@ const ROW_STEP = 7;
 const HALF = 2.6;
 const COLUMNS = 14;
 
-/** Where the grid starts, so it sits over open water rather than under basemap labels. */
-const ORIGIN: [number, number] = [-64, 44];
+/** Where the grid starts horizontally, so it sits over open water rather than land labels. */
+const ORIGIN_LON = -64;
+
+/**
+ * How far from the equator a sample may be placed.
+ *
+ * **The sheet used to run off the bottom of the world.** It started at 44 degrees north
+ * and stepped south a row at a time, so with 285 samples in 14 columns the last row sat at
+ * **-96** — past the pole. Long before that it passed Mercator's limit, where a symbol has
+ * no honest projection: the sweep's range fan at 89 south measured 39,204 x 0 km instead of
+ * 360 x 360, and the two engines disagreed about how to draw the nonsense until they were
+ * taught to clamp the same way.
+ *
+ * Inside 80 degrees a sample is drawn as the symbol it is, which is the entire point of a
+ * sheet whose job is comparing symbols. @see MERCATOR_MAX_LATITUDE
+ */
+const MAX_SHEET_LATITUDE = 80;
 
 /**
  * Base geometries to try, in order.
@@ -61,7 +78,46 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     // exist to be an alternative to — and a catalog whose whole job is showing what a
     // symbol looks like should not hide the one difference between two of them.
     const ring: Geometry = isRectangular(name) ? box(lon, lat) : pentagon(lon, lat);
+
+    /*
+     * **Six graphics store *anchor points*, not a drawn path, and a plain two-point line
+     * is not one.** Ambush, Contain, Envelopment, Pursuit, Turn and TacticalTurn recover
+     * their whole shape from three anchors — the run's two ends plus a perpendicular
+     * reference that carries the width. Handed only the two ends they still *produce* a
+     * graphic, so the "first candidate that builds wins" rule accepted it, and every one
+     * of them was drawn flat: Ambush and Pursuit came out 13 px wide and 0 px high, Turn
+     * 13x5, against 22x22 for a healthy circle beside them. They were in the sweep and
+     * invisible, which is the worst of both.
+     *
+     * `anchorsFromFrame` is the same function the holders write their base with, so this
+     * is the base a user's drawing would have produced rather than an imitation of one.
+     * @see usesDrawnAnchors
+     */
+    if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
+
     return [line, ring, point];
+}
+
+/**
+ * A three-anchor base spanning the same cell the two-point line does.
+ *
+ * The offset is a little over half the run, which is what gives these their height; a
+ * frame with no offset is exactly the flat two-point case this exists to avoid.
+ */
+function anchorLine(lon: number, lat: number): Geometry {
+    const half = metersBetween([lon - HALF, lat], [lon + HALF, lat]) / 2;
+    return {type: 'LineString', coordinates: anchorsFromFrame([lon, lat], half, 0, half * 0.6, 1)};
+}
+
+/** Great-circle metres between two lon/lat positions — no turf in this file. */
+function metersBetween(a: Position, b: Position): number {
+    const R = 6378137;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(b[1] - a[1]);
+    const dLon = toRad(b[0] - a[0]);
+    const s = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
 /** Four corners, axis-aligned — what `createBox` and MapLibre's `buildBox` produce. */
@@ -235,8 +291,20 @@ const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphi
  * Sorted by category so related symbols sit together, which is what makes the sweep
  * readable as a catalog rather than a heap.
  */
-function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
-    const byCategory = [...PAINTABLE_GRAPHICS].sort((a, b) => {
+function sampleSpecs(hostility?: TacticalGraphicHostility, only?: readonly TacticalGraphicName[]): SampleSpec[] {
+    /*
+     * **`only` narrows the sweep to what the host is showing.** The gallery is a way of
+     * *looking* at the library, so drawing all 273 whatever the panel had been filtered
+     * to made it useless for checking one category or one search. Cells are numbered
+     * after the filter, so a narrowed sweep packs into a small grid instead of leaving
+     * the holes its neighbours would have filled.
+     *
+     * An empty or absent list means everything, which is what a host with no filter of
+     * its own wants.
+     */
+    const wanted = only?.length ? new Set(only) : undefined;
+    const source = wanted ? PAINTABLE_GRAPHICS.filter(name => wanted.has(name)) : [...PAINTABLE_GRAPHICS];
+    const byCategory = source.sort((a, b) => {
         const ca = GRAPHIC_CATEGORIES[a] ?? TacticalGraphicCategory.Areas;
         const cb = GRAPHIC_CATEGORIES[b] ?? TacticalGraphicCategory.Areas;
         return ca === cb ? getDisplayName(a).localeCompare(getDisplayName(b)) : String(ca).localeCompare(String(cb));
@@ -259,7 +327,11 @@ function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
     }));
 
     // Appended, so they take the cells after the catalog proper and nothing shifts.
-    EXTRA_SAMPLES.forEach((extra, offset) => {
+    // **The extras honour the filter too.** They are second samples of graphics already
+    // in the sweep, not a fixture: appending them unconditionally put a range fan and a
+    // range circle on the map for every search, however narrow, and they read as the
+    // sweep ignoring the filter.
+    EXTRA_SAMPLES.filter(extra => !wanted || wanted.has(extra.name)).forEach((extra, offset) => {
         specs.push({
             name: extra.name,
             index: byCategory.length + offset,
@@ -276,17 +348,31 @@ function sampleSpecs(hostility?: TacticalGraphicHostility): SampleSpec[] {
     return specs;
 }
 
-/** Where a sample's cell sits, from its place in the list. */
-function cellOrigin(index: number): {lon: number; lat: number} {
+/**
+ * Where a sample's cell sits, from its place in the list and how many there are.
+ *
+ * **Centred on the equator rather than started at a fixed latitude**, so the sheet grows
+ * symmetrically into the band it is allowed instead of marching south out of the world.
+ * The column count widens if a sweep is ever large enough that the rows would not fit,
+ * which keeps the guarantee — every sample drawable — rather than the shape.
+ * @see MAX_SHEET_LATITUDE
+ */
+function cellOrigin(index: number, total: number): {lon: number; lat: number} {
+    const rowsThatFit = Math.floor((2 * MAX_SHEET_LATITUDE) / ROW_STEP) + 1;
+    const columns = Math.max(COLUMNS, Math.ceil(total / rowsThatFit));
+    const rows = Math.max(1, Math.ceil(total / columns));
+    const top = Math.min(MAX_SHEET_LATITUDE, ((rows - 1) * ROW_STEP) / 2);
+
     return {
-        lon: ORIGIN[0] + (index % COLUMNS) * COLUMN_STEP,
-        lat: ORIGIN[1] - Math.floor(index / COLUMNS) * ROW_STEP,
+        lon: ORIGIN_LON + (index % columns) * COLUMN_STEP,
+        lat: top - Math.floor(index / columns) * ROW_STEP,
     };
 }
 
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
+    only?: readonly TacticalGraphicName[],
 ): {
     graphics: MapLibreTacticalGraphic[];
     report: MapLibreSampleReport;
@@ -294,8 +380,9 @@ export function buildSampleGraphics(
     const graphics: MapLibreTacticalGraphic[] = [];
     const failed: string[] = [];
 
-    sampleSpecs(hostility).forEach(({name, index, properties}) => {
-        const {lon, lat} = cellOrigin(index);
+    const specs = sampleSpecs(hostility, only);
+    specs.forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index, specs.length);
         const built = candidateGeometries(name, lon, lat)
             .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
             .find(Boolean);
@@ -314,11 +401,15 @@ export function buildSampleGraphics(
  * Exported so the two engines can be handed *identical* input when comparing them,
  * which is the whole basis of the parity checks. @see components/spikeSamples.ts
  */
-export function sampleFeatureCollection(hostility?: TacticalGraphicHostility): FeatureCollection {
+export function sampleFeatureCollection(
+    hostility?: TacticalGraphicHostility,
+    only?: readonly TacticalGraphicName[],
+): FeatureCollection {
     const features: Feature[] = [];
 
-    sampleSpecs(hostility).forEach(({name, index, properties}) => {
-        const {lon, lat} = cellOrigin(index);
+    const specs = sampleSpecs(hostility, only);
+    specs.forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index, specs.length);
         const geometry = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );

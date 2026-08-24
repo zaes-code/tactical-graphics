@@ -174,6 +174,25 @@ function toSwatchHex(color: string): string {
     return '#000000';
 }
 
+/**
+ * A boolean setting, laid out on the same row grid as the colour pickers so the two read
+ * as one list rather than two.
+ */
+const ToggleSetting: React.FC<{
+    label: string;
+    hint: string;
+    checked: boolean;
+    onChange: (next: boolean) => void;
+}> = ({label, hint, checked, onChange}) => (
+    <Box sx={rowSx}>
+        <Box sx={{minWidth: 0}}>
+            <Typography sx={labelSx}>{label}</Typography>
+            <Typography sx={hintSx}>{hint}</Typography>
+        </Box>
+        <Switch size="small" checked={checked} onChange={(_, next) => onChange(next)}/>
+    </Box>
+);
+
 interface ColorSettingProps {
     label: string;
     hint: string;
@@ -182,17 +201,27 @@ interface ColorSettingProps {
     /** What the library currently resolves this to — shown when there is no override. */
     effective: string;
     onChange: (color: string | undefined) => void;
+    /**
+     * Greyed out, with the reason on a tooltip.
+     *
+     * For a setting another setting has taken over — the label colour when the labels
+     * follow their affiliation instead. Disabled rather than hidden: a control that
+     * vanishes reads as a different dialog, while a greyed one with a reason says which
+     * switch is in charge. @see mapEngine.ts, the same rule for engine capabilities.
+     */
+    disabledReason?: string;
 }
 
-const ColorSetting: React.FC<ColorSettingProps> = ({label, hint, value, effective, onChange}) => {
+const ColorSetting: React.FC<ColorSettingProps> = ({label, hint, value, effective, onChange, disabledReason}) => {
     const shown = value ?? effective;
     const overridden = value !== undefined;
+    const off = disabledReason !== undefined;
 
     return (
-        <Box sx={rowSx}>
+        <Box sx={{...rowSx, opacity: off ? 0.45 : 1, pointerEvents: off ? 'none' : 'auto'}} title={disabledReason}>
             <Box sx={{minWidth: 0}}>
                 <Typography sx={labelSx}>{label}</Typography>
-                <Typography sx={hintSx}>{hint}</Typography>
+                <Typography sx={hintSx}>{off ? disabledReason : hint}</Typography>
             </Box>
             <Box sx={{display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0}}>
                 <Box
@@ -342,12 +371,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 effective={basePalette.defaultLineColor ?? getDefaultLineColor()}
                 onChange={defaultLineColor => onChange({defaultLineColor})}
             />
+            <ToggleSetting
+                label="Label Text Uses Hostility"
+                hint="Color text amplifiers by affiliation instead of a fixed color"
+                checked={settings.labelUsesHostilityColor === true}
+                onChange={labelUsesHostilityColor => onChange({labelUsesHostilityColor})}
+            />
             <ColorSetting
                 label="Label Text"
                 hint="Follows the line color unless set"
                 value={settings.labelFillColor}
                 effective={basePalette.labelFillColor ?? getLabelFillColor()}
                 onChange={labelFillColor => onChange({labelFillColor})}
+                disabledReason={settings.labelUsesHostilityColor === true
+                    ? 'Superseded — labels follow their affiliation'
+                    : undefined}
             />
             <ColorSetting
                 label="Label Halo"

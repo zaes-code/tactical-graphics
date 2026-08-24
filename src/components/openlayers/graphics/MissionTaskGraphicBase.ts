@@ -1,7 +1,15 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
+    showsSizeReadout,
+    drawnAnchors,
+    groundLength,
+    minimumDrawnRadiusPx,
+    screenMeters,
+    latitudeFromMercatorY,
+    projectedLength,
+} from '@zaes/tactical-graphics';
 import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
@@ -72,30 +80,7 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  */
 /** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
 
-/**
- * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
- * move.
- *
- * **The arc mission-task circles are deliberately absent.** Contain, Control, Isolate,
- * Occupy, Retain and Secure used to take this floor, which stopped them being resized
- * below a 100px diameter — while Cordon and Search and Area Defense, built from the same
- * arcs, were never in the list and so had always been free to go small. Users hit the
- * inconsistency directly: a circle that refuses to shrink reads as a broken handle, not
- * a rule. Their label still scales from `graphicSize`, so a small circle gets a small
- * letter rather than one bursting out of it.
- *
- * What stays: the crossed four, which are fixed-size badges placed by a single click and
- * never resized — the floor is what gives them a size at all; and Turn / TacticalTurn /
- * Envelopment, which are curves rather than circles and collapse into an unreadable kink
- * without it.
- */
-const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    ...CROSSED_MISSION_TASKS,
-    TacticalGraphicName.TacticalTurn,
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.Envelopment,
-];
-const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+/** The legibility floor — its list, its size and its history — is `minimumDrawnRadiusPx`. */
 
 /**
  * The mission tasks drawn as two arcs of one circle with a one-letter label in
@@ -134,7 +119,6 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {airfieldPointLabelStyleFn, airfieldPointStyleFunc, movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
-import {getGraphicFields} from '../graphicFieldRegistry';
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 import {fromOlGeometry} from "../paintToOpenLayers";
 import {outerRingOf} from "@zaes/tactical-graphics";
@@ -402,7 +386,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     setMirrored(mirrored: boolean): void {
         if (mirrored === this.mirrored) return;
         this.mirrored = mirrored;
-        this.updateGeometry();
+        // Through the base: which flank the symbol bows to is *in the anchor points* for
+        // the drawn-anchor family, so a mirror that only redraws flips nothing.
+        this.republishFromState();
         this.publishGeometryState();
     }
 
@@ -426,9 +412,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     private refreshMeasure(): void {
         const edge = this.measureEdge();
-        // Same list the properties dialog reads, so a graphic can never report a radius
-        // in one place and not the other. @see RADIUS_GRAPHICS
-        if (!getGraphicFields(this.name).radius) {
+        // **Not the dialog's field list.** A read-out is feedback on a gesture; a dialog
+        // field is an amplifier the symbol carries, and ten circle graphics legitimately
+        // have the first without the second. Gating on the field list made those ten
+        // resize blind while the zone beside them reported a distance.
+        // @see showsSizeReadout
+        if (!showsSizeReadout(this.name)) {
             this.measure.setGeometry(undefined);
             return;
         }
@@ -436,6 +425,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.measure.setGeometry(undefined);
             return;
         }
+        // The label states the ground distance, not the length of the line drawn to say
+        // it: the line lives in projected metres, which are 1.56x too long at 50 degrees.
+        // @see createMeasureFeature, which reads this
+        this.measure.set('measureMeters', this.size);
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -450,16 +443,22 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * long, which is the number the label reports.
      *
      * Falls back to the first handle before any gesture has supplied an anchor.
+     *
+     * **`size` has to be inflated to reach the rim.** It is a ground distance and these
+     * are projected coordinates, so a line laid out one `size` long stopped short of the
+     * circle it was measuring by `cos(latitude)` — 65% of the way at 50 degrees north,
+     * which is what "the line only reaches halfway" turned out to be. @see mercator.ts
      */
     private measureEdge(): Coordinate | undefined {
         const handles = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
         const anchor = this.measureAnchor;
         if (!anchor || !this.center || !this.size) return handles[0];
+        const reach = projectedLength(this.size, latitudeFromMercatorY(this.center[1]));
         const dx = anchor[0] - this.center[0];
         const dy = anchor[1] - this.center[1];
         const len = Math.hypot(dx, dy);
         if (len === 0) return handles[0];
-        return [this.center[0] + (dx / len) * this.size, this.center[1] + (dy / len) * this.size];
+        return [this.center[0] + (dx / len) * reach, this.center[1] + (dy / len) * reach];
     }
 
     getFeatures(): Feature[] {
@@ -485,6 +484,32 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         });
     }
 
+    /** Whether {@link placeScreenSizes} has run. It converts once, at the first center. */
+    private screenSizesPlaced = false;
+
+    /**
+     * Whether the draw interaction is the thing setting this holder's size right now.
+     *
+     * Set by `MissionTaskController` for the length of the draw, and read by exactly one
+     * rule: the legibility floor, which is a draw-time affordance and was firing on every
+     * later gesture too. @see updateGeom
+     */
+    sizingFromDraw = false;
+
+    /**
+     * Converts this graphic's screen-derived sizes now that its place is known.
+     *
+     * A no-op for most of the family: their one size is the radius, which the draw drag
+     * already measures on the ground. Turn and Envelopment override it — their arrowhead
+     * is a flat 26 px baked into metres at construction, before the first click.
+     *
+     * **An override must convert only what it derived.** A restore replays a stamped head
+     * before this runs, and converting *that* would shrink a figure which is already a
+     * ground distance; the overrides compare against the value they were built with.
+     */
+    protected placeScreenSizes(_latitude: number): void {
+    }
+
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
         this.rotation = rotation || this.rotation;
         // The crossed four are drawn in one fixed orientation — an X turned 45°
@@ -495,15 +520,51 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (MIN_SIZED_MISSION_TASKS.includes(this.name) && !this.suspendMinimumSize) {
+        /*
+         * **The legibility floor belongs to the draw, and nothing else.**
+         *
+         * It is here so a barely-dragged curve is committed at a readable size rather than
+         * as a kink — but `updateGeom` is the door *every* gesture comes through, so it
+         * also fired on graphics drawn long ago: panning a small turn at a low zoom grew
+         * it, and a restored one was inflated by the first gesture that touched it, 129 km
+         * to 300 km at 6000 m/px. `sizingFromDraw` is only true while the draw interaction
+         * is feeding this holder, which is the moment the affordance is for.
+         *
+         * The list and the constant are the library's now, so MapLibre floors the same
+         * three at the same size instead of having no floor at all. @see minimumDrawnRadiusPx
+         */
+        const floorPx = this.sizingFromDraw ? minimumDrawnRadiusPx(this.name) : undefined;
+        if (floorPx !== undefined && !this.suspendMinimumSize) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
-                const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
+                const anchor = center ?? this.center;
+                const minSize = screenMeters(floorPx, drawingRes, anchor ? latitudeFromMercatorY(anchor[1]) : 0);
                 if (newSize < minSize) newSize = minSize;
             }
         }
         this.size = newSize;
         this.center = center || this.center;
+        // The first time a center arrives, anything specified in screen pixels can finally
+        // be converted where it is: a pixel count times the drawing resolution is a
+        // projected length, and 26 px of arrowhead is 1.56x that many metres at 50 degrees
+        // north.
+        //
+        // **On restore too, unless the restore brought its own figure.** This used to be
+        // skipped for every restore, on the grounds that a restored head is already a real
+        // distance — true when the snapshot carries one, and false when it does not, which
+        // is when the constructor's projected value stands and nothing ever corrects it. A
+        // restored turn then kept a head 1/cos(latitude) too large while MapLibre, which
+        // corrects at its own door, drew the same graphic's head 26% smaller.
+        // The holder can tell the two apart: a replayed head is not the one it derived.
+        // @see screenMeters, placeScreenSizes
+        // **Whether the centre came in this call or was set before it.** The drawn-anchor
+        // family restores through `adoptAnchors`, which sets the centre from the points and
+        // then calls this with a size alone — so a condition that waited for a `center`
+        // argument never fired for the six graphics whose arrowhead most needed it.
+        if (!this.screenSizesPlaced && this.center) {
+            this.screenSizesPlaced = true;
+            this.placeScreenSizes(latitudeFromMercatorY(this.center[1]));
+        }
         this.writeBase();
         this.updateGeometry();
         this.refreshMeasure();
@@ -563,7 +624,26 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * one-name-at-a-time change: the drag logic above works entirely in
      * center / size / rotation and never learns that the base grew vertices.
      */
-    private writeBase(): void {
+    /**
+     * Rewrites the base from the holder's own state, then redraws.
+     *
+     * **A field change is invisible to a drawn-anchor graphic until the base is
+     * rewritten.** Turn, Envelopment, Ambush, Pursuit, Contain and TacticalTurn store
+     * *anchor points*, and the generator reads its whole frame — including `bend` and
+     * which side it bows to — back out of them. Setting `this.bend` and calling
+     * `updateGeometry()` therefore redrew the graphic from the **old** anchors: the
+     * number in the snapshot moved, the picture did not, and a second identical drag did
+     * nothing at all because the handle had never left its first position.
+     *
+     * `updateGeom` has always done both, in this order. This is the same door for the
+     * paths that change a field without changing size, centre or rotation.
+     */
+    protected republishFromState(): void {
+        this.writeBase();
+        this.updateGeometry();
+    }
+
+    protected writeBase(): void {
         if (!usesDrawnAnchors(this.name)) {
             const geometry = this.base.getGeometry();
             if (geometry instanceof LineString) this.base.setGeometry(new Point(this.center));
@@ -583,6 +663,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * looking at, which is the switch this replaces. The default is the generic
      * run-with-an-offset form; a holder whose symbol is built differently overrides
      * this and `adoptAnchors` together, and they must stay exact inverses.
+     *
+     * **The overrides now delegate to `drawnAnchors`**, the library's own statement of
+     * each layout, so MapLibre can write the same base from the same gesture. They kept
+     * their overriding shape because each still supplies its own state — a bend, a hook
+     * ratio, an arrow reach — that only the holder has.
      */
     protected anchorPoints(): Position[] {
         const {offset, side} = this.anchorReach();
@@ -631,11 +716,8 @@ export class ContainGraphicBase extends MissionTaskGraphicBase {
     private static readonly OPENING_QUARTER_TURN = 90;
 
     protected anchorPoints(): Position[] {
-        return anchorsFromFrame(
-            toLonLat(this.center) as Position,
-            this.size,
-            this.rotation - ContainGraphicBase.OPENING_QUARTER_TURN,
-        );
+        return drawnAnchors(this.name, {center: toLonLat(this.center) as Position, size: this.size, rotation: this.rotation})
+            ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -660,7 +742,12 @@ export class AmbushGraphicBase extends MissionTaskGraphicBase {
     private arrowReach = ARC_ARROW_DEFAULT_REACH;
 
     protected anchorPoints(): Position[] {
-        return anchorsForArcAndArrow(toLonLat(this.center) as Position, this.size, this.rotation, this.arrowReach);
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            arrowReach: this.arrowReach,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -747,6 +834,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     setBend(value: number): void {
         this.bend = clampTurnBend(value);
+        this.republishFromState();
     }
 
     /**
@@ -754,7 +842,12 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * bow. Tip first, which is the standard's numbering. @see anchorsForBow
      */
     protected anchorPoints(): Position[] {
-        return anchorsForBow(toLonLat(this.center) as Position, this.size, this.rotation, clampTurnBend(this.bend));
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {
@@ -773,9 +866,20 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     headSize: number;
 
+    /** The head this holder derived for itself, so a replayed one can be told apart. */
+    private derivedHeadSize: number;
+
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
+    }
+
+    /** The head is a screen length; it becomes a real one where the graphic lands. */
+    protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
+        this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -831,7 +935,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
         this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
-        this.updateGeometry();
+        this.republishFromState();
     }
 }
 
@@ -850,6 +954,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see TurnGraphicBase.setBend — the same hook, this family's clamp. */
     setBend(value: number): void {
         this.bend = clampEnvelopmentBend(value);
+        this.republishFromState();
     }
 
     /**
@@ -862,14 +967,12 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
      * inferred from an amplifier a foreign reader would have to know about.
      */
     protected anchorPoints(): Position[] {
-        const bend = clampEnvelopmentBend(this.bend);
-        return anchorsForRunAndArc(
-            toLonLat(this.center) as Position,
-            this.size,
-            Math.abs(bend) * this.size,
-            this.rotation,
-            Math.sign(bend) || 1,
-        );
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
     }
 
     /**
@@ -891,9 +994,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;
 
+    /** The head this holder derived for itself. @see TurnGraphicBase.derivedHeadSize */
+    private derivedHeadSize: number;
+
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and
@@ -948,6 +1055,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         this.projectedRotation = r;
     };
 
+    /** As Turn's: a screen length, converted where the graphic lands. @see placeScreenSizes */
+    protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
+        this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
+    }
+
     protected generatorOptions(): Record<string, unknown> {
         return {bend: this.bend, headSize: this.headSize};
     }
@@ -993,7 +1107,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // The rule itself is the library's, so both renderers bend this graphic by the
         // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
         this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
-        this.updateGeometry();
+        this.republishFromState();
     }
 }
 
@@ -1013,13 +1127,13 @@ export class PursuitGraphicBase extends MissionTaskGraphicBase {
     private lineRatio = HOOK_DEFAULT_LINE_RATIO;
 
     protected anchorPoints(): Position[] {
-        return anchorsForHook(
-            toLonLat(this.center) as Position,
-            this.size,
-            this.rotation,
-            this.mirrored ? -1 : 1,
-            this.lineRatio,
-        );
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            mirrored: this.mirrored,
+            lineRatio: this.lineRatio,
+        }) ?? [];
     }
 
     protected adoptAnchors(coords: Position[]): boolean {

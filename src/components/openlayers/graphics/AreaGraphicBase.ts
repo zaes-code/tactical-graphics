@@ -4,9 +4,8 @@ import {LineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {createBaseFeature, createHandleFeature, createMeasureFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesRectangleLength, isRectangular, rectangleAmplifiers} from '@zaes/tactical-graphics';
 import {toLonLat} from 'ol/proj';
-import {getDistance} from 'ol/sphere';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
 import {decorationMeters} from './decorationPx';
@@ -20,8 +19,6 @@ import {decorationMeters} from './decorationPx';
  * where a fire-support or target-acquisition zone gets its length from the two anchor
  * points APP-06 gives it.
  */
-const CARRIES_LENGTH: TacticalGraphicName[] = [TacticalGraphicName.TargetAreaRectangular];
-
 export class AreaGraphicBase implements PolygonGraphic {
     // open layers related
     base: Feature<Polygon> = <Feature<Polygon>>createBaseFeature();
@@ -226,11 +223,21 @@ export class AreaGraphicBase implements PolygonGraphic {
      * which at 51° would show a 10 km zone as 16 km.
      */
     private rectangleWidthMeters(): number {
-        const geom = this.base.getGeometry();
-        if (!geom) return 0;
-        const [minX, minY, maxX, maxY] = geom.getExtent();
-        const midX = (minX + maxX) / 2;
-        return getDistance(toLonLat([midX, minY]), toLonLat([midX, maxY]));
+        return this.rectangleAmplifiers().width ?? 0;
+    }
+
+    /**
+     * The dimensions the drawn box states, **from the library's rule rather than this
+     * holder's own**.
+     *
+     * It had its own copy — geodesic, extent-based, the same answer to within a tenth of
+     * a percent — which is one implementation too many for a number the two engines both
+     * publish. MapLibre reads `rectangleAmplifiers`; so does this now. @see ai/conventions.md
+     */
+    private rectangleAmplifiers(): {width?: number; length?: number} {
+        const ring = this.base.getGeometry()?.getCoordinates()?.[0];
+        if (!ring) return {};
+        return rectangleAmplifiers(this.graphicName, ring.map(c => toLonLat(c)) as [number, number][]);
     }
 
     /** The amplifier value a drag writes: whole ground meters, as the bag holds it. */
@@ -247,17 +254,14 @@ export class AreaGraphicBase implements PolygonGraphic {
      * from the two anchor points instead, so filing one would be a number nothing set.
      */
     private rectangleLengthMeters(): number {
-        const geom = this.base.getGeometry();
-        if (!geom) return 0;
-        const [minX, minY, maxX, maxY] = geom.getExtent();
-        const midY = (minY + maxY) / 2;
-        return getDistance(toLonLat([minX, midY]), toLonLat([maxX, midY]));
+        return this.rectangleAmplifiers().length ?? 0;
     }
 
     /** Mirror the drawn dimensions into the bag, without disturbing the other amplifiers. */
     private publishRectangleWidth(): void {
         const width = this.widthAmplifier();
-        const length = CARRIES_LENGTH.includes(this.graphicName) ? Math.round(this.rectangleLengthMeters()) : undefined;
+        // Which rectangles carry a length is the library's list too. @see carriesRectangleLength
+        const length = carriesRectangleLength(this.graphicName) ? Math.round(this.rectangleLengthMeters()) : undefined;
         if (this.graphicLabels.width === width && this.graphicLabels.length === length) return;
         this.graphicLabels = {...this.graphicLabels, width, ...(length !== undefined ? {length} : {})};
         writeGraphicProperties(this.getFeatures(), this.graphicName, this.graphicLabels, this.stampedGeometry());

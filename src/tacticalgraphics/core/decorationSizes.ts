@@ -30,6 +30,11 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.DirectionOfMainAttackFeint]: 20,
     [TacticalGraphicName.AviationDirectionOfAttack]: 20,
     [TacticalGraphicName.FieldsOfFire]: 20,
+    // The zigzag's half-wavelength: the distance from one apex to the next. Driving the
+    // symbol off a screen size rather than off the drawn length is what lets a long
+    // obstacle carry *more* teeth instead of bigger ones. @see Fix
+    [TacticalGraphicName.Fix]: 14,
+    [TacticalGraphicName.TacticalFix]: 14,
     [TacticalGraphicName.PassageLane]: 20,
     [TacticalGraphicName.FerryCrossing]: 15,
     [TacticalGraphicName.Bridge]: 15,
@@ -131,4 +136,77 @@ export const CROSSED_MISSION_TASK_PX = 50;
  */
 export function crossedMissionTaskMeters(drawingResolution?: number): number | undefined {
     return drawingResolution ? CROSSED_MISSION_TASK_PX * drawingResolution : undefined;
+}
+
+/**
+ * The size the **block family** is drawn at, in screen pixels at the drawing zoom.
+ *
+ * Block and its table 5-19 twin are a line with a bar across it, and that bar is a screen
+ * constant like any other decoration — but a much larger one than the generic 20 px a
+ * line graphic's offset defaults to, because the bar is the symbol rather than an
+ * ornament on it.
+ *
+ * **It lived in `openlayers/graphics/Block.ts` as a private `DEFAULT_SIZE_PX`,** which is
+ * the shape of defect this repository keeps finding: a symbology fact in a holder, in the
+ * half of the codebase the other renderer cannot see. MapLibre fell back to the generic
+ * 20 px, so the same block drawn on the two engines came out 120 px tall against 40 —
+ * three times the difference, from one number written where only one renderer could read
+ * it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+const DRAWN_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TacticalBlock]: 60,
+    [TacticalGraphicName.Block]: 60,
+};
+
+/**
+ * That size in meters at a given resolution, or `undefined` for a graphic that does not
+ * state one — in which case the caller's own default stands. @see DRAWN_SIZE_PX
+ */
+export function drawnSizeMeters(name: TacticalGraphicName, resolution: number): number | undefined {
+    const px = DRAWN_SIZE_PX[name];
+    return px === undefined ? undefined : px * resolution;
+}
+
+/**
+ * The smallest a curve may be **drawn**, in screen pixels at the drawing zoom.
+ *
+ * Turn, its table 5-19 twin and Envelopment are curves rather than circles, and below a
+ * certain size they collapse into an unreadable kink — so a barely-dragged one is held to
+ * a legible size rather than committed as a squiggle. They stay shrinkable *to* the floor
+ * and recoverable from it, because a resize is measured from where the drag began rather
+ * than accumulated frame by frame.
+ *
+ * **Two families left this list, and both for the same shape of reason.** The arc
+ * mission-task circles — Contain, Control, Isolate, Occupy, Retain, Secure — could not be
+ * resized below a 100 px diameter while Cordon and Search and Area Defense, built from the
+ * same arcs, had always been free to go small; a circle that refuses to shrink reads as a
+ * broken handle rather than a rule. Then the crossed four, whose floor was *exactly* their
+ * `dropSizePx`: they could never be made smaller than the size they were dropped at, and
+ * every attempt to shrink one did nothing at all.
+ *
+ * **A draw-time affordance, and only that.** It lived in `MissionTaskGraphicBase.updateGeom`,
+ * which every gesture goes through, so it also fired on graphics that had been drawn long
+ * ago: panning a small turn at a low zoom grew it, and a restored one was inflated by the
+ * first gesture that touched it — 129 km to 300 km at 6000 m/px, which is this constant
+ * times that resolution. MapLibre had no equivalent at all, so the two engines drew
+ * different symbols from the same short drag: 100 px against 60.
+ *
+ * Here so that both renderers apply it at the same moment and to the same list.
+ */
+const MIN_DRAWN_RADIUS_PX = 50;
+
+/** @see MIN_DRAWN_RADIUS_PX */
+const MIN_DRAWN_RADIUS_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.Envelopment,
+];
+
+/**
+ * The floor this graphic's *drawn* radius is held to, in pixels, or `undefined` when it
+ * has none. Convert with `screenMeters`, so the number is a real distance where the
+ * symbol lands. @see MIN_DRAWN_RADIUS_PX
+ */
+export function minimumDrawnRadiusPx(name: TacticalGraphicName): number | undefined {
+    return MIN_DRAWN_RADIUS_GRAPHICS.includes(name) ? MIN_DRAWN_RADIUS_PX : undefined;
 }

@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, editStretches} from '@zaes/tactical-graphics';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -66,28 +66,6 @@ export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate 
     return kept.length > 0 ? kept : coords;
 }
 
-/**
- * Fixed-vertex graphics that deliberately keep doing nothing on an edit-mode
- * drag, and so are excluded from `editStretches` below. User's list.
- *
- * `MobileDefense` is listed for the record only — its factory builds the
- * controller without `maxPoints`, so it never qualifies anyway.
- */
-const NO_EDIT_STRETCH: ReadonlySet<TacticalGraphicName> = new Set([
-    TacticalGraphicName.ReliefInPlace,
-    TacticalGraphicName.MobileDefense,
-    TacticalGraphicName.Clear,
-    TacticalGraphicName.TacticalDisrupt,
-    TacticalGraphicName.TacticalFix,
-    // The table 5-19 twins of the two above, same behavior.
-    TacticalGraphicName.Disrupt,
-    TacticalGraphicName.Fix,
-    TacticalGraphicName.Breach,
-    TacticalGraphicName.Bypass,
-    TacticalGraphicName.Canalize,
-    TacticalGraphicName.AttackByFire,
-    TacticalGraphicName.SupportByFire,
-]);
 
 /*
 * Controller class for managing linestring-like graphics.
@@ -154,8 +132,14 @@ export class LineGraphicController implements TacticalGraphicHandler {
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
             this.graphic.base.set('base', false);
-            this.editStretches = !!name && !NO_EDIT_STRETCH.has(name);
         }
+
+        // **The library's rule, not a second copy of it.** This used to be
+        // `!NO_EDIT_STRETCH.has(name)` *and* only when a vertex limit was set, so a
+        // free-form graphic whose factory forced the flag on afterwards disagreed with
+        // the library the moment the factory stopped forcing it. Asking once, for every
+        // controller, is the whole point. @see editStretches
+        this.editStretches = !!name && editStretches(name);
 
         // Two vertices is one segment: show only the handle on the far end.
         if (this.maxPoints === 2) {
@@ -196,8 +180,34 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     handleResize(deltaSize: number): void {
+        /*
+         * **The decoration scales with the line it decorates.**
+         *
+         * A line graphic's chevron, tooth or arrowhead is filed as its own distance in
+         * metres, independent of the drawn line, so scaling only the base made the
+         * graphic longer while its symbol stayed the size it was — an abatis grew a long
+         * tail behind an unchanged chevron, which reads as a different obstacle rather
+         * than a bigger one. "Resize the whole graphic as is" is the user's rule.
+         *
+         * Only the *gesture* scales it. `setOffset` is also how a restore replays a
+         * stamped size, and scaling there would compound on every load.
+         */
+        const holder = this.graphic as unknown as {sizeOverride?: number; setOffset?: (value: number) => void};
+        const current = this.currentDecorationSize();
+        if (holder.setOffset && current !== undefined && current > 0) holder.setOffset(current * deltaSize);
+
         let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<LineString>;
         this.graphic.setBaseFeature(resized);
+    }
+
+    /**
+     * The decoration size the holder is currently drawing with, in metres — whatever
+     * `setOffset` last set, or the per-name default it started from.
+     */
+    private currentDecorationSize(): number | undefined {
+        const holder = this.graphic as unknown as {graphicSize?: () => number; size?: number; offset?: number};
+        const value = holder.graphicSize ? holder.graphicSize() : (holder.offset ?? holder.size);
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 
     /**
@@ -211,6 +221,58 @@ export class LineGraphicController implements TacticalGraphicHandler {
 
     setOffset(offset: number): void {
         this.graphic.setOffset?.(offset);
+    }
+
+    /**
+     * The width the holder is currently drawing with.
+     *
+     * Duck-typed on the holder rather than declared on a shared base, because the
+     * holders that own a width call it different things — `offset` on the movement
+     * family and the corridors, `size` on the block and retrograde families — and none
+     * of them share an interface that names it. @see TacticalGraphicHandler.currentOffset
+     */
+    /**
+     * Forwards to whichever floor the holder owns. Duck-typed because the flag lives on
+     * the holder — `Block` and `LineGraphicBase` both call it `suspendMinimumLength`,
+     * and a holder without one simply has no floor to lift.
+     * @see TacticalGraphicHandler.suspendSizeFloor
+     */
+    suspendSizeFloor(active: boolean): void {
+        const holder = this.graphic as unknown as {suspendMinimumLength?: boolean};
+        if ('suspendMinimumLength' in holder) holder.suspendMinimumLength = active;
+    }
+
+    /**
+     * The drawn base's total length, in projected meters.
+     *
+     * A resize scales the base about its first vertex, so its length is exactly the
+     * measure that a `handleResize(k)` multiplies by k — which is what makes it the
+     * right answer here even for the families whose *rendered* size is derived from it.
+     * @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const coords = this.graphic.base?.getGeometry()?.getCoordinates?.();
+        if (!Array.isArray(coords) || coords.length < 2) return undefined;
+        let total = 0;
+        for (let i = 1; i < coords.length; i++) {
+            total += Math.hypot(coords[i][0] - coords[i - 1][0], coords[i][1] - coords[i - 1][1]);
+        }
+        return total > 0 ? total : undefined;
+    }
+
+    /**
+     * Declared by the holder, for the two families that publish `handleCoords[0]` as
+     * their own offset feature and `slice(1)` as `handles`.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    get handleIndexOffset(): number | undefined {
+        return (this.graphic as unknown as {handleIndexOffset?: number}).handleIndexOffset;
+    }
+
+    currentOffset(): number | undefined {
+        const holder = this.graphic as unknown as {offset?: number; size?: number};
+        const value = holder.offset ?? holder.size;
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 
     // Surfaced from the graphic so the manager can read it off the controller.

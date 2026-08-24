@@ -6,7 +6,7 @@
  * 300-line switch statement.
  */
 
-import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx} from '@zaes/tactical-graphics';
+import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx, groundLength} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {
@@ -35,18 +35,29 @@ import {PolygonGraphicController, RectangularAreaGraphicController} from './cont
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
-type ControllerFactory = (name: TacticalGraphicName, resolution: number) => TacticalGraphicHandler;
+/**
+ * `resolution` is the zoom the graphic is being created at; `sizing` is that same
+ * resolution corrected for **where** it is being created.
+ *
+ * They differ because a pixel constant times the raw resolution is a *projected* length,
+ * and Web Mercator inflates those by 1/cos(latitude) — so a decoration, a badge or a
+ * default width derived that way came out twice its intended size at 60 degrees north.
+ * Anything measured in screen pixels multiplies `sizing`; `resolution` is what the
+ * holder files as its drawing zoom, because the label scale is anchored to the zoom
+ * itself and is not a distance at all. @see screenMeters
+ */
+type ControllerFactory = (name: TacticalGraphicName, resolution: number, sizing: number) => TacticalGraphicHandler;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const polygon = (name: TacticalGraphicName, res: number) =>
-    new PolygonGraphicController(new AreaGraphicBase(name, res, res));
+const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new PolygonGraphicController(new AreaGraphicBase(name, sizing, res));
 
-const polygonRect = (name: TacticalGraphicName, res: number) =>
-    new RectangularAreaGraphicController(new AreaGraphicBase(name, res, res));
+const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new RectangularAreaGraphicController(new AreaGraphicBase(name, sizing, res));
 
-const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new MovementGraphicBase(name, 20 * res, res), maxPts || undefined, name);
+const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);
 
 // MobileDefense has no vertices worth editing: its ellipse is fully defined by
 // its two endpoints, and rotate / resize / move already reshape it from them.
@@ -54,8 +65,8 @@ const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
 // feature set (getRenderedFeaturesByProp('base')), so the "Modify vertices" mode
 // has nothing to show — no dashed axis line across the ellipse — while every
 // other edit mode still works. Draw and the sample gallery are unchanged.
-const mobileDefense = (name: TacticalGraphicName, res: number) => {
-    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * res, res));
+const mobileDefense = (name: TacticalGraphicName, res: number, sizing: number) => {
+    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res));
     controller.graphic.base.set('base', false);
     return controller;
 };
@@ -72,26 +83,28 @@ const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
  */
 const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) => (name: TacticalGraphicName, res: number) => {
     const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
-    controller.editStretches = true;
+    // **`editStretches` is left to the constructor**, which reads the library's rule.
+    // Forcing it true here contradicted that for the one graphic that wants vertex
+    // handles *and* an inert body — `Fix` — and put the two engines back out of step.
     return controller.enableVertexDragging(minVertices, anchorVertex);
 };
 
-const block = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new Block(name, res * 20, res), 2, name);
+const block = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 2, name);
 
-const retrograde = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new RetrogradeTask(name, res * 20, res), 2, name);
+const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new RetrogradeTask(name, sizing * 20, res), 2, name);
 
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
-const exfiltrate = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new Exfiltrate(name, res * 20, res), undefined, name);
+const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), undefined, name);
 
-const reliefInPlace = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new ReliefInPlace(name, res * 20, res), 2, name);
+const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 2, name);
 
-const corridor = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new AirCorridor(name, res * 20, res));
+const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new AirCorridor(name, sizing * 20, res));
 
 // Circle graphics resize on an edit-mode drag, identically to resize mode — see
 // MissionTaskController.editStretches. The range fans join them now that each
@@ -170,12 +183,17 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
  * symbol at every zoom, and at a low one it lands a few pixels across with its handles
  * piled on top of each other.
  */
-const pointDrop = (name: TacticalGraphicName, res: number) => {
-    const size = res * (dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX);
+const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) => {
+    const px = dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX;
+    const size = sizing * px;
     return new PointDropController(
         new MissionTaskGraphicBase(name, size, res),
         size,
         allowedGestures(name).resize,
+        // The controller re-derives this where the click lands, which is exact; `size`
+        // above is the same number sized for the view centre, and is what the holder
+        // starts life with. @see PointDropController.drop
+        {px, resolution: res},
     );
 };
 
@@ -394,8 +412,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.DirectionOfMainAttackFeint]:       line(),
     [TacticalGraphicName.AviationDirectionOfAttack]:           line(),
     [TacticalGraphicName.FerryCrossing]:                    line(2),
-    [TacticalGraphicName.PassageLane]:                      line(2),
-    [TacticalGraphicName.TacticalFix]:                              line(2),
+    // The end handle moves that vertex — lengthening the lane is what dragging its
+    // end means — while the resize icon still scales the whole symbol. @see Abatis
+    [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
+    [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
     [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
 
     // ── Boundary (special line) ────────────────────────────────────────────
@@ -425,7 +445,12 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     // Abatis takes a drawn route with as many vertices as the road needs, so it is a
     // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
-    [TacticalGraphicName.Abatis]:                 line(),
+    // **The end handle moves that vertex; the resize icon scales the whole obstacle.**
+    // Its two points are the run, and lengthening the run is what a user means by
+    // dragging its end — the chevron is a decoration with its own size, not something
+    // the drag should be stretching. Scaling everything together is the affordance's
+    // job. @see vertexLine
+    [TacticalGraphicName.Abatis]:                 vertexLine(2, 2),
     // The demolition family is a drawn centerline with a width, so it takes the
     // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
@@ -476,7 +501,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // the other three are drawn as a two-point line.
     [TacticalGraphicName.Block]:    block,
     [TacticalGraphicName.Disrupt]:  block,
-    [TacticalGraphicName.Fix]:      line(2),
+    [TacticalGraphicName.Fix]:      vertexLine(2, 2),
     [TacticalGraphicName.Turn]:     turn,
 
     // ── Circular area graphics ─────────────────────────────────────────────
@@ -575,7 +600,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
  */
 export function getController(
     graphicName: TacticalGraphicName,
-    resolution: number
+    resolution: number,
+    /**
+     * Where the graphic is going, in degrees — the latitude its screen-pixel sizes are
+     * spent at. Defaults to the equator, where a projected metre and a real one agree,
+     * which is what every caller assumed before this existed. @see ControllerFactory
+     */
+    latitude: number = 0,
 ): TacticalGraphicHandler {
     const factory = CONTROLLER_REGISTRY[graphicName];
     if (!factory) {
@@ -584,5 +615,5 @@ export function getController(
             `Add an entry to controllerRegistry.ts to support this graphic.`
         );
     }
-    return factory(graphicName, resolution);
+    return factory(graphicName, resolution, groundLength(resolution, latitude));
 }

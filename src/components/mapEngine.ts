@@ -1,4 +1,4 @@
-import type {EditMode, EngineCapabilities, TacticalGraphicHostility, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
+import type {EditMode, EngineCapabilities, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 
 /**
@@ -52,7 +52,13 @@ export interface MapEngineHandle extends TacticalGraphicsEngine {
     reset(): void;
 
     /** Draw the sample sweep, optionally forcing one hostility. */
-    drawSamples(hostility?: TacticalGraphicHostility): void;
+    /**
+     * Draw the sample sweep, optionally forcing one hostility.
+     *
+     * `names` narrows it to the graphics the panel is listing. Omitted or empty means
+     * everything, which is what a host with no filter of its own wants.
+     */
+    drawSamples(hostility?: TacticalGraphicHostility, names?: TacticalGraphicName[]): void;
 
     /** Downloads the map as a `.geojson` file. The on-disk twin of `snapshot`. */
     exportGeoJson(): void;

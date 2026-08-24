@@ -9,11 +9,11 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {projectedMidSegment, textWidth} from './decorations';
 import {echelonMarks} from './echelonPaints';
-import {amplifierDash, formatFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, formatFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -36,13 +36,13 @@ function echelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
 }
 
 /** A text amplifier with the usual halo. */
-function amplifier(at: ProjectedPosition, text: string, scale: number, rotation: number): Paint {
+function amplifier(feature: PaintFeature, at: ProjectedPosition, text: string, scale: number, rotation: number): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
@@ -122,8 +122,8 @@ export function boundaryPaint(): LinePaint {
         const ny = perpSign * (dx / segLen);
 
         return [
-            amplifier([midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
-            amplifier([midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
+            amplifier(feature, [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
+            amplifier(feature, [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
             ...echelonMarks(
                 midGap,
                 dx,
@@ -251,7 +251,7 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
                 ...offsets,
                 text: value,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
