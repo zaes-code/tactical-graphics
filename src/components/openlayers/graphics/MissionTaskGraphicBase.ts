@@ -502,6 +502,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * A no-op for most of the family: their one size is the radius, which the draw drag
      * already measures on the ground. Turn and Envelopment override it — their arrowhead
      * is a flat 26 px baked into metres at construction, before the first click.
+     *
+     * **An override must convert only what it derived.** A restore replays a stamped head
+     * before this runs, and converting *that* would shrink a figure which is already a
+     * ground distance; the overrides compare against the value they were built with.
      */
     protected placeScreenSizes(_latitude: number): void {
     }
@@ -539,15 +543,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             }
         }
         this.size = newSize;
-        const placing = center !== undefined && !this.screenSizesPlaced;
         this.center = center || this.center;
         // The first time a center arrives, anything specified in screen pixels can finally
         // be converted where it is: a pixel count times the drawing resolution is a
         // projected length, and 26 px of arrowhead is 1.56x that many metres at 50 degrees
-        // north. **Skipped on restore**, which arrives with the head it was drawn with —
-        // already a real distance — for the same reason the size floor is.
-        // @see suspendMinimumSize, screenMeters
-        if (placing && this.center && !this.suspendMinimumSize) {
+        // north.
+        //
+        // **On restore too, unless the restore brought its own figure.** This used to be
+        // skipped for every restore, on the grounds that a restored head is already a real
+        // distance — true when the snapshot carries one, and false when it does not, which
+        // is when the constructor's projected value stands and nothing ever corrects it. A
+        // restored turn then kept a head 1/cos(latitude) too large while MapLibre, which
+        // corrects at its own door, drew the same graphic's head 26% smaller.
+        // The holder can tell the two apart: a replayed head is not the one it derived.
+        // @see screenMeters, placeScreenSizes
+        // **Whether the centre came in this call or was set before it.** The drawn-anchor
+        // family restores through `adoptAnchors`, which sets the centre from the points and
+        // then calls this with a size alone — so a condition that waited for a `center`
+        // argument never fired for the six graphics whose arrowhead most needed it.
+        if (!this.screenSizesPlaced && this.center) {
             this.screenSizesPlaced = true;
             this.placeScreenSizes(latitudeFromMercatorY(this.center[1]));
         }
@@ -852,14 +866,20 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     headSize: number;
 
+    /** The head this holder derived for itself, so a replayed one can be told apart. */
+    private derivedHeadSize: number;
+
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
     }
 
     /** The head is a screen length; it becomes a real one where the graphic lands. */
     protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
         this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -974,9 +994,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;
 
+    /** The head this holder derived for itself. @see TurnGraphicBase.derivedHeadSize */
+    private derivedHeadSize: number;
+
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and
@@ -1033,7 +1057,9 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
 
     /** As Turn's: a screen length, converted where the graphic lands. @see placeScreenSizes */
     protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
         this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
     }
 
     protected generatorOptions(): Record<string, unknown> {
