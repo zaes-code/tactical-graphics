@@ -87,7 +87,6 @@ export {
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
-export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes} from './core/entityCodes';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
