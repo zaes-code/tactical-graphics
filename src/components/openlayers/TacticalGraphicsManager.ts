@@ -1015,7 +1015,14 @@ export class TacticalGraphicsManager {
                     // a disengage read `FLIP`. @see handleRole
                     this.mirrorIfDraggedPastAxis(evt, center);
                 } else {
-                    this.mirrorIfDraggedPastAxis(evt, center);
+                    // **A drag on a handle may flip the graphic; an affordance may not.**
+                    // Dragging a shape handle across the axis is how the hook and the
+                    // envelopment change flanks, and that stays. But the resize button
+                    // says one thing — make it bigger — and a drag from the box corner
+                    // passes the axis on the way out, so a pursuit resized through the
+                    // affordance came back mirrored while the same gesture on MapLibre,
+                    // which has no such rule, did not. @see isAffordanceGesture
+                    if (!this.isAffordanceGesture()) this.mirrorIfDraggedPastAxis(evt, center);
                     // Calculate distance to center for scaling
                     this.handleResize(evt);
                 }
