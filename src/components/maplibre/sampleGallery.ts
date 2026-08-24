@@ -40,8 +40,23 @@ const ROW_STEP = 7;
 const HALF = 2.6;
 const COLUMNS = 14;
 
-/** Where the grid starts, so it sits over open water rather than under basemap labels. */
-const ORIGIN: [number, number] = [-64, 44];
+/** Where the grid starts horizontally, so it sits over open water rather than land labels. */
+const ORIGIN_LON = -64;
+
+/**
+ * How far from the equator a sample may be placed.
+ *
+ * **The sheet used to run off the bottom of the world.** It started at 44 degrees north
+ * and stepped south a row at a time, so with 285 samples in 14 columns the last row sat at
+ * **-96** — past the pole. Long before that it passed Mercator's limit, where a symbol has
+ * no honest projection: the sweep's range fan at 89 south measured 39,204 x 0 km instead of
+ * 360 x 360, and the two engines disagreed about how to draw the nonsense until they were
+ * taught to clamp the same way.
+ *
+ * Inside 80 degrees a sample is drawn as the symbol it is, which is the entire point of a
+ * sheet whose job is comparing symbols. @see MERCATOR_MAX_LATITUDE
+ */
+const MAX_SHEET_LATITUDE = 80;
 
 /**
  * Base geometries to try, in order.
@@ -333,11 +348,24 @@ function sampleSpecs(hostility?: TacticalGraphicHostility, only?: readonly Tacti
     return specs;
 }
 
-/** Where a sample's cell sits, from its place in the list. */
-function cellOrigin(index: number): {lon: number; lat: number} {
+/**
+ * Where a sample's cell sits, from its place in the list and how many there are.
+ *
+ * **Centred on the equator rather than started at a fixed latitude**, so the sheet grows
+ * symmetrically into the band it is allowed instead of marching south out of the world.
+ * The column count widens if a sweep is ever large enough that the rows would not fit,
+ * which keeps the guarantee — every sample drawable — rather than the shape.
+ * @see MAX_SHEET_LATITUDE
+ */
+function cellOrigin(index: number, total: number): {lon: number; lat: number} {
+    const rowsThatFit = Math.floor((2 * MAX_SHEET_LATITUDE) / ROW_STEP) + 1;
+    const columns = Math.max(COLUMNS, Math.ceil(total / rowsThatFit));
+    const rows = Math.max(1, Math.ceil(total / columns));
+    const top = Math.min(MAX_SHEET_LATITUDE, ((rows - 1) * ROW_STEP) / 2);
+
     return {
-        lon: ORIGIN[0] + (index % COLUMNS) * COLUMN_STEP,
-        lat: ORIGIN[1] - Math.floor(index / COLUMNS) * ROW_STEP,
+        lon: ORIGIN_LON + (index % columns) * COLUMN_STEP,
+        lat: top - Math.floor(index / columns) * ROW_STEP,
     };
 }
 
@@ -352,8 +380,9 @@ export function buildSampleGraphics(
     const graphics: MapLibreTacticalGraphic[] = [];
     const failed: string[] = [];
 
-    sampleSpecs(hostility, only).forEach(({name, index, properties}) => {
-        const {lon, lat} = cellOrigin(index);
+    const specs = sampleSpecs(hostility, only);
+    specs.forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index, specs.length);
         const built = candidateGeometries(name, lon, lat)
             .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
             .find(Boolean);
@@ -378,8 +407,9 @@ export function sampleFeatureCollection(
 ): FeatureCollection {
     const features: Feature[] = [];
 
-    sampleSpecs(hostility, only).forEach(({name, index, properties}) => {
-        const {lon, lat} = cellOrigin(index);
+    const specs = sampleSpecs(hostility, only);
+    specs.forEach(({name, index, properties}) => {
+        const {lon, lat} = cellOrigin(index, specs.length);
         const geometry = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );

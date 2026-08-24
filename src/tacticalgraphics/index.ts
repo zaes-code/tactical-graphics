@@ -381,7 +381,7 @@ export {normalizeDrawnBase} from './core/drawnBase';
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
-export {groundLength, latitudeFromMercatorY, mercatorScale, projectedLength, screenMeters} from './core/mercator';
+export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
 export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';

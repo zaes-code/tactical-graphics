@@ -8,6 +8,7 @@ import {
     LINE_WIDTH,
     formatDistance,
     groundLength,
+    MERCATOR_MAX_LATITUDE,
     latitudeFromMercatorY,
     getInertHandleColor,
     isRectangular,
@@ -21,7 +22,7 @@ import {
     subscribeSecuritySymbolChange,
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
-import {MERCATOR_MAX_LATITUDE, resolutionOf, toLonLat, toMercator} from '../projection';
+import {resolutionOf, toLonLat, toMercator} from '../projection';
 import {buildTacticalGraphic, paintTacticalGraphic, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
