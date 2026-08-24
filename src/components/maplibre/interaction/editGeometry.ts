@@ -26,7 +26,7 @@
  */
 
 import type {Geometry, Position} from 'geojson';
-import type {ProjectedPosition, TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import {groundLength, mercatorScale, rotationAnchor} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
@@ -78,8 +78,19 @@ export function positionsOf(geometry: Geometry): Position[] {
  * a point inside itself — and choosing here rather than asking is what made the two
  * engines edit differently from the same drag. @see rotationAnchor
  */
-export function centerOf(geometry: Geometry): Position {
-    return rotationAnchor(geometry as {type: string; coordinates: unknown});
+export function centerOf(geometry: Geometry, name?: TacticalGraphicName): Position {
+    return rotationAnchor(geometry as {type: string; coordinates: unknown}, name);
+}
+
+/**
+ * The pivot for a whole description — the same point, with the graphic's name supplied.
+ *
+ * Every gesture here has the name to hand, and one family needs it: a symbol described by
+ * anchor points turns about its own centre rather than about its first vertex, which for
+ * a Turn is the tip of the arrow. @see rotationAnchor
+ */
+function pivotOf(description: GraphicDescription): Position {
+    return centerOf(description.geometry, description.properties.name);
 }
 
 /** Moves a graphic by the metric offset between two lon/lat points. */
@@ -113,7 +124,7 @@ export function translate(description: GraphicDescription, from: Position, to: P
  * catalog, which reads as a broken gesture rather than a wrong branch.
  */
 export function rotate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
-    const center = toMercator(centerOf(description.geometry) as [number, number]);
+    const center = toMercator(pivotOf(description) as [number, number]);
     // **A grab on the pivot rotates by the direction of the drag**, which is what
     // OpenLayers does: its start angle there is `atan2(0, 0)` = 0, so the graphic turns
     // to face wherever the cursor went. Reproduced explicitly rather than left to
@@ -188,7 +199,7 @@ const MIN_RADIUS_METERS = 100;
  * vertices about the center, which is the same operation one level down.
  */
 export function resize(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
-    const center = toMercator(centerOf(description.geometry) as [number, number]);
+    const center = toMercator(pivotOf(description) as [number, number]);
     const distance = (position: Position) => {
         const [x, y] = toMercator([position[0], position[1]]);
         return Math.hypot(x - center[0], y - center[1]);
@@ -216,10 +227,40 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
 
     return {
         ...description,
+        // **The sizes the drawn geometry does not carry scale with it.**
+        //
+        // A corridor's width and a line graphic's decoration are filed as their own
+        // distances in metres, beside the vertices rather than in them, so scaling only
+        // the vertices made the graphic longer while its rails and its chevrons stayed
+        // where they were: an air corridor resized 1.5x came out 420 x 40 px here against
+        // OpenLayers' 431 x 51. "Resize the whole graphic as is" is the user's rule, and
+        // the OpenLayers controller states it in the same words.
+        // @see LineGraphicController.handleResize
+        properties: scaleDrawnSizes(description.properties, ratio),
         geometry: mapPositions(description.geometry, position => {
             const [x, y] = toMercator([position[0], position[1]]);
             return toLonLat([center[0] + (x - center[0]) * ratio, center[1] + (y - center[1]) * ratio]);
         }),
+    };
+}
+
+/**
+ * The size properties a drawn graphic carries beside its vertices, scaled by `ratio`.
+ *
+ * `width` is the rails' separation and `decorationSize` the chevron, tooth or arrowhead —
+ * both real distances, and both meaningless to a graphic that does not carry them, which
+ * is why each is scaled only where it is already present. `radius` is deliberately absent:
+ * on this family it is the *same* number as the half-width, replayed by `setOffset` on
+ * restore, and scaling both would compound. @see toGraphicOptions
+ */
+function scaleDrawnSizes(properties: TacticalGraphicProperties, ratio: number): TacticalGraphicProperties {
+    const scaled = (value: number | undefined): number | undefined =>
+        value !== undefined && value > 0 ? value * ratio : value;
+
+    return {
+        ...properties,
+        ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
+        ...(properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
     };
 }
 
@@ -493,14 +534,14 @@ export function setBend(
     const size = description.properties.radius;
     if (!size || size <= 0) return description;
 
-    const center = toMercator(centerOf(description.geometry) as [number, number]);
+    const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     const theta = ((description.properties.rotation ?? 0) * Math.PI) / 180;
     // **On the ground, because `size` is.** `bend` is a ratio of the two, and mercator
     // metres are 1.56x too long at 50 degrees north — so the same drag produced a
     // sharper curve the further from the equator it was made, and a different one from
     // OpenLayers, which takes its bend geodesically off the anchor points. @see mercator.ts
-    const scale = mercatorScale(centerOf(description.geometry)[1]);
+    const scale = mercatorScale(pivotOf(description)[1]);
     const dx = (at[0] - center[0]) / scale;
     const dy = (at[1] - center[1]) / scale;
 
@@ -524,7 +565,7 @@ export function setBend(
  * proportion through a resize.
  */
 export function setReach(description: GraphicDescription, cursor: Position): GraphicDescription {
-    const center = toMercator(centerOf(description.geometry) as [number, number]);
+    const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     const dx = at[0] - center[0];
     const dy = at[1] - center[1];
@@ -537,7 +578,7 @@ export function setReach(description: GraphicDescription, cursor: Position): Gra
             ...description.properties,
             // A real distance, not the projected one this was measured in: `radius` is
             // what the generator builds from and what the dialog states. @see mercator.ts
-            radius: groundLength(reach, centerOf(description.geometry)[1]),
+            radius: groundLength(reach, pivotOf(description)[1]),
             rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
         },
     };
@@ -566,7 +607,7 @@ const BAND_SEPARATION_FRACTION = 0.05;
  * rather than inventing a band the user never typed.
  */
 export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
-    const center = toMercator(centerOf(description.geometry) as [number, number]);
+    const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     const km = Math.hypot(at[0] - center[0], at[1] - center[1]) / KM;
     if (!isFinite(km) || km <= 0) return description;

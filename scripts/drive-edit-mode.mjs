@@ -837,6 +837,8 @@ const DRAW_SIZE_CASES = [
 const drawnSizes = {};
 /** The stored amplifiers for the same draws. @see compareDrawSizes */
 const drawnAmplifiers = {};
+/** The same graphics after an affordance resize. @see compareDrawSizes */
+const resizedSizes = {};
 
 async function runDrawSizes(engine) {
     const browser = await chromium.launch();
@@ -849,6 +851,8 @@ async function runDrawSizes(engine) {
     }
     drawnSizes[engine] = {};
     drawnAmplifiers[engine] = {};
+    resizedSizes[engine] = {};
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
 
     // Same centre, same metres-per-pixel. MapLibre's zoom runs one behind OpenLayers'
     // because its tiles are 512 px; both land on 2445.98 m/px here.
@@ -901,6 +905,42 @@ async function runDrawSizes(engine) {
             const t = window.__tacticalEngine.snapshot().features[0]?.properties?.tacticalGraphic ?? {};
             return {width: t.width ?? null, length: t.length ?? null};
         });
+
+        // …and the same graphic after a resize. **A resize is where the two engines drift
+        // apart even when the draw agrees**: a corridor's width and a line's decoration
+        // are filed beside the geometry, so scaling only the vertices leaves the rails
+        // where they were. Measured through the affordance, which is the same gesture on
+        // both engines. @see scaleDrawnSizes
+        await editBtn.click();
+        await page.waitForTimeout(250);
+        resizedSizes[engine][filter] = await page.evaluate(async () => {
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const engineApi = window.__tacticalEngine;
+            engineApi.select(engineApi.snapshot().features[0]?.properties?.symbolId ?? null);
+            await pause(200);
+            const selection = engineApi.selectionBox();
+            if (!selection) return null;
+            const host = document.querySelector('.map-container').getBoundingClientRect();
+            const startX = selection.x + selection.width, startY = selection.y + selection.height;
+            const pivotX = selection.x + selection.width / 2, pivotY = selection.y + selection.height / 2;
+            const armX = startX - pivotX, armY = startY - pivotY;
+            const began = engineApi.beginGesture('resize', new PointerEvent('pointerdown', {
+                clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+            }));
+            if (!began) return null;
+            for (const step of [1, 1.5]) {
+                window.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: host.left + pivotX + armX * step,
+                    clientY: host.top + pivotY + armY * step,
+                    bubbles: true,
+                }));
+            }
+            window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+            await pause(250);
+            return true;
+        }) ? await extentPx() : null;
+        await editBtn.click();
+        await page.waitForTimeout(200);
     }
 
     await browser.close();
@@ -921,6 +961,17 @@ function compareDrawSizes() {
         // guards against were 2x and 3x.
         const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
         check(`"${filter}" is the same size on both engines`, worst < 0.1,
+            `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+    }
+
+    // A resize has to leave them the same size too — the draw agreeing proves nothing
+    // about the gesture. @see resizedSizes
+    for (const {filter} of DRAW_SIZE_CASES) {
+        const ol = resizedSizes.openlayers?.[filter];
+        const mlb = resizedSizes.maplibre?.[filter];
+        if (!ol || !mlb) continue;   // a graphic that refuses resize has nothing to compare
+        const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
+        check(`"${filter}" is the same size on both engines after a resize`, worst < 0.1,
             `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
     }
 
