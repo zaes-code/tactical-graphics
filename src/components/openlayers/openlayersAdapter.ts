@@ -9,7 +9,7 @@ import {toLonLat} from "ol/proj";
 import {point as turfPoint} from '@turf/helpers';
 import {distance as turfDistance} from '@turf/distance';
 import {bearing as turfBearing} from '@turf/bearing';
-import {TacticalGraphicsRegistry, rotationAnchor} from '@zaes/tactical-graphics';
+import {TacticalGraphicsRegistry, clampGeometryToMercator, rotationAnchor} from '@zaes/tactical-graphics';
 import {GraphicOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from "ol/Feature";
 import {geometryService} from '@zaes/tactical-graphics';
@@ -208,13 +208,22 @@ class OpenlayersAdapter {
         }
     }
 
-    // translate TurfJs feature into openlayers feature
+    /**
+     * Translate a turf feature into an OpenLayers one, in projected metres.
+     *
+     * **Held inside the projectable world on the way through.** A graphic that reaches
+     * past Mercator's limit — a circle drawn near a pole spans every longitude, and the
+     * sample sweep puts one at 89 degrees south — has no honest projection, and the two
+     * engines were inventing different answers: MapLibre's `toMercator` clamps and this
+     * did not, so the same fan measured 39,204 x 9,203 km here and 39,204 x 0 there.
+     * Clamping is the standard answer and now both give it. @see clampGeometryToMercator
+     */
     turfToOlFeature(turfFeature: GeoJSONFeature): OLFeature {
         const geojsonFormat = new GeoJSON();
-        return <OLFeature>geojsonFormat.readFeature(turfFeature, {
-            dataProjection: 'EPSG:4326',
-            featureProjection: 'EPSG:3857',
-        });
+        return <OLFeature>geojsonFormat.readFeature(
+            {...turfFeature, geometry: clampGeometryToMercator(turfFeature.geometry)},
+            {dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'},
+        );
     }
 
     // transform openlayers feature into TurfJs feature
