@@ -259,9 +259,15 @@ function sizeDefaults(
         ? decorationMeters(name, drawingResolution ?? 0)
         : drawnSizeMeters(name, drawingResolution ?? 0) ?? meters;
 
+    // **A graphic whose size is stated as a bar has no width to default.** The block
+    // family files `decorationSize` and nothing else on OpenLayers; handing it the generic
+    // offset put a `width` in the file that the other engine's restore then replayed as
+    // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
+    const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
+
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),
@@ -449,7 +455,21 @@ function ratioLockedSize(
     if (!(length > 0)) return {};
 
     const size = length * ratio;
-    return {radius: size, decorationSize: size};
+    /*
+     * **Filed as the decoration it is, and nothing else.**
+     *
+     * For this family `size` is the bar across the line, not a reach — the OpenLayers
+     * holder stamps `decorationSize` alone — so writing `radius` as well put a number in
+     * the file under a key that means something different, and `toGraphicOptions` prefers
+     * `radius` over `decorationSize` when both are present. `width` goes the same way: a
+     * block has no rails, and the generic 20 px offset `sizeDefaults` hands every drawn
+     * graphic is not one of its amplifiers.
+     *
+     * Cleared rather than omitted, because this is spread *after* the caller's properties:
+     * a stale `radius` from a snapshot would otherwise outrank the size derived here,
+     * which is the whole reason this runs last.
+     */
+    return {decorationSize: size, radius: undefined, width: undefined};
 }
 
 /**
