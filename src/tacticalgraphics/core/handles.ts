@@ -15,6 +15,7 @@
  */
 
 import {TacticalGraphicName} from './type';
+import {drawnAnchorFrame} from './drawnAnchors';
 
 /**
  * What dragging a handle does.
@@ -409,11 +410,34 @@ export function isMovementGraphic(name: TacticalGraphicName): boolean {
  * near-match for OpenLayers' `Polygon.getInteriorPoint`, not a reimplementation of
  * it; the two agree to well under a pixel on the shapes this library draws.
  */
-export function rotationAnchor(geometry: {type: string; coordinates: unknown}): [number, number] {
+export function rotationAnchor(
+    geometry: {type: string; coordinates: unknown},
+    /**
+     * The graphic, when the caller knows it. Only the drawn-anchor six need it, and only
+     * because their base is a `LineString` that is **not** a drawn line: its vertices are
+     * APP-06 anchor points, so the first one is a tip or a foot rather than "where the
+     * user started". @see usesDrawnAnchors
+     */
+    name?: TacticalGraphicName,
+): [number, number] {
     const positions = flattenPositions(geometry.coordinates);
     if (!positions.length) return [0, 0];
 
     if (geometry.type === 'Point') return positions[0];
+    /*
+     * **A symbol described by anchor points turns about its own centre.**
+     *
+     * The rule below — first vertex — is right for a drawn line and wrong for these:
+     * Turn's first anchor is the tip of its arrow, so a resize measured from there had
+     * almost no distance to start from and multiplied what little it had. Measured, the
+     * same 1.5x drag: OpenLayers 240 -> 357 px, MapLibre 240 -> 567. OpenLayers has always
+     * pivoted them about the centre — `MissionTaskController.getCenter` says so in as many
+     * words — and this is that rule, in the half both engines read.
+     */
+    if (name !== undefined && usesDrawnAnchors(name)) {
+        const centre = drawnAnchorFrame(name, positions)?.center;
+        if (centre) return [centre[0], centre[1]];
+    }
     if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
 
     // Measured in **projected** meters, not degrees. OpenLayers' `getInteriorPoint`

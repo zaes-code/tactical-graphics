@@ -985,7 +985,7 @@ export class MapLibreInteractions {
      * one zoom and a miss at another.
      */
     private startedOnPivot(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): boolean {
-        const pivot = centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0]);
+        const pivot = centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name);
         const projected = this.map.project([pivot[0], pivot[1]] as [number, number]);
         return Math.hypot(projected.x - point.x, projected.y - point.y) <= PIVOT_GRAB_PX;
     }
@@ -1285,7 +1285,7 @@ export class MapLibreInteractions {
         const radius = graphic.properties.radius;
         if (!radius || radius <= 0) return;
 
-        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0]) as [number, number]);
+        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);
 
         /*
          * **To the rim handle, which is where OpenLayers points it too.**

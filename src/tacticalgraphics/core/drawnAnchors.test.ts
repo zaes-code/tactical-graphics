@@ -13,7 +13,7 @@
  * would drift the symbol every time it was touched.
  */
 
-import {TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, usesDrawnAnchors} from '../index';
+import {TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, rotationAnchor, usesDrawnAnchors} from '../index';
 
 const CENTER: [number, number] = [12, 34];
 const SIZE = 40_000;
@@ -80,5 +80,42 @@ describe('the round trip', () => {
     it.each([true, false])('carries Pursuit\'s mirrored=%s', mirrored => {
         const anchors = drawnAnchors(TacticalGraphicName.Pursuit, {center: CENTER, size: SIZE, rotation: 0, mirrored});
         expect(drawnAnchorFrame(TacticalGraphicName.Pursuit, anchors)!.mirrored).toBe(mirrored);
+    });
+});
+
+/**
+ * # What a resize measures from
+ *
+ * `rotationAnchor` pivots a drawn line about its **first vertex**, which is right for a
+ * line — that is where the user started it — and wrong for these, whose base is not a
+ * drawn line at all: Turn's first anchor is the tip of its arrow. A resize measured from
+ * there starts with almost no distance and multiplies what little it has, so the same
+ * 1.5x drag took the symbol from 240 px to 567 where OpenLayers took it to 357.
+ *
+ * OpenLayers has always pivoted them about the centre — `MissionTaskController.getCenter`
+ * says so — so this is the rule moving to where both engines can read it.
+ */
+describe('the point these turn about', () => {
+    const family = listTacticalGraphicNames()
+        .filter((name): name is TacticalGraphicName => name in TacticalGraphicName)
+        .filter(usesDrawnAnchors);
+
+    it.each(family)('is the centre of %s, not its first anchor', name => {
+        const centre: [number, number] = [7, 45];
+        const anchors = drawnAnchors(name, {center: centre, size: 60_000, rotation: 15})!;
+        const geometry = {type: 'LineString', coordinates: anchors};
+
+        const pivot = rotationAnchor(geometry, name);
+        expect(pivot[0]).toBeCloseTo(centre[0], 2);
+        expect(pivot[1]).toBeCloseTo(centre[1], 2);
+
+        // And without the name it is the old rule, which is what every ordinary drawn
+        // line still gets.
+        expect(rotationAnchor(geometry)).toEqual(anchors[0]);
+    });
+
+    it('leaves an ordinary drawn line on its first vertex', () => {
+        const line = {type: 'LineString', coordinates: [[0, 0], [4, 0]]};
+        expect(rotationAnchor(line, TacticalGraphicName.PhaseLine)).toEqual([0, 0]);
     });
 });

@@ -234,6 +234,49 @@ describe('setOffset — the width handle', () => {
     });
 });
 
+describe('resize carries the sizes the vertices do not', () => {
+    /**
+     * A corridor's width and a line graphic's decoration are filed beside the geometry,
+     * not in it. Scaling only the vertices made the graphic longer with its rails and its
+     * chevrons unchanged — an air corridor resized 1.5x came out 420 x 40 px against
+     * OpenLayers' 431 x 51, so the same gesture drew a different symbol on each engine.
+     * OpenLayers has scaled them together since `LineGraphicController.handleResize`,
+     * which states the rule in the user's own words: resize the whole graphic as is.
+     */
+    const corridor = () => ({
+        geometry: LINE,
+        properties: props({name: TacticalGraphicName.AirCorridor, width: 40_000, decorationSize: 15_000}),
+    });
+
+    it('scales the width and the decoration with the line', () => {
+        const before = corridor();
+        // From one end of the base to twice its distance from the centre: a 2x resize.
+        const bigger = resize(before, [2, 0], [3, 0]);
+
+        const grew = positionsOf(bigger.geometry)[1][0] / positionsOf(before.geometry)[1][0];
+        expect(grew).toBeGreaterThan(1);
+        expect(bigger.properties.width! / before.properties.width!).toBeCloseTo(grew, 2);
+        expect(bigger.properties.decorationSize! / before.properties.decorationSize!).toBeCloseTo(grew, 2);
+    });
+
+    it('leaves a graphic that carries neither alone', () => {
+        const plain = {geometry: LINE, properties: props()};
+        const bigger = resize(plain, [2, 0], [3, 0]);
+
+        expect(bigger.properties.width).toBeUndefined();
+        expect(bigger.properties.decorationSize).toBeUndefined();
+    });
+
+    /**
+     * `radius` is the *same* number as the half-width on this family — it is what
+     * `setOffset` replays on restore — so scaling it here as well would compound.
+     */
+    it('does not scale the radius of a drawn graphic', () => {
+        const before = {geometry: LINE, properties: props({radius: 20_000, width: 40_000})};
+        expect(resize(before, [2, 0], [3, 0]).properties.radius).toBe(20_000);
+    });
+});
+
 describe('setBend and setReach — the curve handles', () => {
     const curve = () => ({
         geometry: POINT,
