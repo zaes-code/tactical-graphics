@@ -826,6 +826,10 @@ const DRAW_SIZE_CASES = [
     {filter: 'pursuit', pts: [[700, 500], [820, 500]]},
     {filter: 'ambush', pts: [[700, 500], [820, 500]]},
     {filter: 'contain', pts: [[700, 500], [820, 500]]},
+    // The same turn again, barely dragged: a curve this short is held to a legible size by
+    // a floor that used to exist on one engine only, so the identical flick drew 100 px on
+    // OpenLayers and 60 on MapLibre. @see minimumDrawnRadiusPx
+    {filter: 'turn', pts: [[700, 700], [730, 700]], as: 'turn (short drag)'},
     // A rectangular zone, for the **amplifier** rather than the extent: its width is
     // doctrinal input that the drawn box states, and MapLibre used to derive it only
     // during a drag — so a freshly drawn zone reported the generic default, 98 km where
@@ -889,7 +893,8 @@ async function runDrawSizes(engine) {
             : null;
     });
 
-    for (const {filter, pts} of DRAW_SIZE_CASES) {
+    for (const {filter, pts, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
         await page.evaluate(() => window.__tacticalEngine.clearAll());
         await page.waitForTimeout(200);
         await home();
@@ -897,11 +902,11 @@ async function runDrawSizes(engine) {
         try {
             await drawGraphic(page, filter, pts);
         } catch {
-            drawnSizes[engine][filter] = null;
+            drawnSizes[engine][key] = null;
             continue;
         }
-        drawnSizes[engine][filter] = await extentPx();
-        drawnAmplifiers[engine][filter] = await page.evaluate(() => {
+        drawnSizes[engine][key] = await extentPx();
+        drawnAmplifiers[engine][key] = await page.evaluate(() => {
             const t = window.__tacticalEngine.snapshot().features[0]?.properties?.tacticalGraphic ?? {};
             return {width: t.width ?? null, length: t.length ?? null};
         });
@@ -913,7 +918,7 @@ async function runDrawSizes(engine) {
         // both engines. @see scaleDrawnSizes
         await editBtn.click();
         await page.waitForTimeout(250);
-        resizedSizes[engine][filter] = await page.evaluate(async () => {
+        resizedSizes[engine][key] = await page.evaluate(async () => {
             const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
             const engineApi = window.__tacticalEngine;
             engineApi.select(engineApi.snapshot().features[0]?.properties?.symbolId ?? null);
@@ -948,11 +953,12 @@ async function runDrawSizes(engine) {
 
 /** @see runDrawSizes — run once both engines have measured. */
 function compareDrawSizes() {
-    for (const {filter} of DRAW_SIZE_CASES) {
-        const ol = drawnSizes.openlayers?.[filter];
-        const mlb = drawnSizes.maplibre?.[filter];
+    for (const {filter, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
+        const ol = drawnSizes.openlayers?.[key];
+        const mlb = drawnSizes.maplibre?.[key];
         if (!ol || !mlb) {
-            check(`both engines drew "${filter}"`, false, `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
+            check(`both engines drew "${key}"`, false, `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
             continue;
         }
         // Generous, because the two measure through their own machinery — OpenLayers
@@ -960,18 +966,19 @@ function compareDrawSizes() {
         // pixel of rounding on a thin graphic is not a disagreement. The defects this
         // guards against were 2x and 3x.
         const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
-        check(`"${filter}" is the same size on both engines`, worst < 0.1,
+        check(`"${key}" is the same size on both engines`, worst < 0.1,
             `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
     }
 
     // A resize has to leave them the same size too — the draw agreeing proves nothing
     // about the gesture. @see resizedSizes
-    for (const {filter} of DRAW_SIZE_CASES) {
-        const ol = resizedSizes.openlayers?.[filter];
-        const mlb = resizedSizes.maplibre?.[filter];
+    for (const {filter, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
+        const ol = resizedSizes.openlayers?.[key];
+        const mlb = resizedSizes.maplibre?.[key];
         if (!ol || !mlb) continue;   // a graphic that refuses resize has nothing to compare
         const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
-        check(`"${filter}" is the same size on both engines after a resize`, worst < 0.1,
+        check(`"${key}" is the same size on both engines after a resize`, worst < 0.1,
             `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
     }
 
