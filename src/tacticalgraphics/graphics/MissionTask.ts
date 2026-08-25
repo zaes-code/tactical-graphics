@@ -1,8 +1,17 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
+import {ARC_TIC_FRACTION, arcTicCount} from '../core/symbology';
 import {Feature, MultiLineString, MultiPoint, Point, GeometryCollection, Position} from "geojson";
 import {Coordinate, PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
 import {toRadians} from "../core/math";
+import {frameFromAnchors} from "../core/anchors";
+
+/**
+ * The quarter turn between the aim of a contain and the line joining its arc's two
+ * ends. The arc spans 90 to 270 degrees about the center, so the opening is square to
+ * the direction the symbol faces.
+ */
+const OPENING_QUARTER_TURN = 90;
 
 /**
  * Half the gap the arc-and-arrowhead circles leave for their one-letter label,
@@ -93,6 +102,41 @@ export class CordonAndSearch extends MissionTask {
     }
 }
 
+/**
+ * Deny (APP-06 343400) — the family's arc and arrowhead with **outward** spikes, and a
+ * letter in the opening.
+ *
+ * > The radius will be long enough for the graphic to encompass the area being denied.
+ * > The opening will be a 30 degree arc of the circle. […] The opening will be on the
+ * > friendly side of the graphic.
+ *
+ * Thirty degrees is exactly what `DEFAULT_LABEL_GAP_DEGREES` already produces, so a
+ * static GeoJSON consumer gets the opening the rule names; a live renderer passes 0 and
+ * cuts the gap from the rendered glyph instead, which is how the whole family works.
+ *
+ * The spikes point **out**, unlike cordon and search's, which is the only thing in the
+ * construction that differs — `computeIsoscelesApexPoint` reads the sign of the height as
+ * "toward the centroid" or away from it.
+ */
+export class Deny extends MissionTask {
+    name: string = TacticalGraphicName.Deny;
+
+    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
+        const center = base.geometry.coordinates;
+        const {rotation, size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
+        const arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
+
+        const upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 20, 170, -size / 3, 5, 8);
+        const lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 215, 340, -size / 3, 4, 8);
+        return this.asGeometryCollectionFeature([
+            this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
+            this.asMultiLineStringFeature(upperTriangles).geometry,
+            this.asMultiLineStringFeature(lowerTriangles).geometry,
+        ]);
+    }
+}
+
 export class Isolate extends MissionTask {
     name: string = TacticalGraphicName.Isolate;
 
@@ -120,8 +164,8 @@ export class Retain extends MissionTask {
         let {rotation, size} = opts;
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
-        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size / 2.5, 6);
-        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size / 2.5, 5);
+        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size * ARC_TIC_FRACTION, arcTicCount(130));
+        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size * ARC_TIC_FRACTION, arcTicCount(100));
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperRadialLineStrings).geometry,
@@ -144,17 +188,52 @@ export class Secure extends MissionTask {
 
 export class Contain extends MissionTask {
     name: string = TacticalGraphicName.Contain;
+    /**
+     * **Drawn, not dropped.** APP-06 151204: "This symbol requires two anchor points.
+     * Points 1 and 2 define the endpoints of the semicircle's opening... Points 1 and 2
+     * determine the diameter of the semicircle."
+     *
+     * The odd one out among the arc mission tasks. The other six — retain, secure,
+     * isolate, occupy, control, area defense — are "point 1 defines the centre point of
+     * the graphic and point 2 defines the graphic's start point and radius", which is
+     * the centre-and-edge pair this library already draws. Contain names the arc's two
+     * *ends* instead, so it is the only one of the seven that had to move.
+     * @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
 
-    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        let center = base.geometry.coordinates;
-        let {rotation, size} = opts;
+    /**
+     * Where the semicircle's opening sits, in the terms the shape math below wants.
+     *
+     * The arc runs from 90 degrees to 270 degrees about the center, so its two ends are
+     * a quarter turn either side of the aim — which is why the generic reader is asked
+     * for a frame rotated by that quarter turn rather than being given a new one of its
+     * own. A base that is still a bare point resolves from the options, so a save
+     * written before the conversion keeps loading.
+     */
+    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; size: number} {
+        const coords = base.geometry?.coordinates;
+        const anchored = Array.isArray(coords?.[0]);
+        const drawn = anchored ? frameFromAnchors(coords as Position[]) : undefined;
+        if (drawn) {
+            return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI + OPENING_QUARTER_TURN, size: drawn.size};
+        }
+        return {
+            center: (anchored ? coords[0] : coords) as Position,
+            rotation: opts.rotation ?? 0,
+            size: opts.size ?? 1,
+        };
+    }
+
+    generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        const {center, rotation, size} = this.frame(base, opts);
         // Contain is a half-circle, and its label sits due west at 180° rather
         // than at the rotation axis — so the gap opens either side of 180, not
         // either side of 0. Same knob, different center.
         const gap = labelGapDegrees(opts);
         const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 180 - gap, 100);
         const lowerArch = geometryService.createCircularArc(center, rotation, size, 180 + gap, 270, 100);
-        let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size / 2.5, 7);
+        let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size * ARC_TIC_FRACTION, arcTicCount(210));
 
         // The center radial sits at ~180° (due-west of center) — exactly where
         // the C label is anchored. Pull its outer endpoint inward so the line
@@ -172,11 +251,18 @@ export class Contain extends MissionTask {
         return this.asMultiLineStringFeature([upperArch, lowerArch, ...radialLineStrings]);
     }
 
-    generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {
-        let center = base.geometry.coordinates;
-        let labelPoint = geometryService.translateCoordinates(center, -opts.size, toRadians(opts.rotation));
+    /** `[edge, center]` — the family's order, now read off the drawn opening. */
+    generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        const {center, rotation, size} = this.frame(base, opts);
+        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
+        return this.asMultiPointFeature([lowerArch[0], center]);
+    }
+
+    generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<Point> {
+        const {center, rotation, size} = this.frame(base, opts);
+        const labelPoint = geometryService.translateCoordinates(center, -size, toRadians(rotation));
         return this.asPointFeature(labelPoint);
-    };
+    }
 }
 
 export class Occupy extends MissionTask {
@@ -233,4 +319,21 @@ export class CircularArea extends MissionTask {
         return this.asPointFeature(center);
     };
 
+}
+
+/**
+ * Cordon and knock (APP-06 342600) -- the same construction as cordon and search, which
+ * is what the plate draws: a circle with outward triangles and an arrowhead. Only the
+ * letter differs, `C/K` against `C/S`.
+ */
+export class CordonAndKnock extends CordonAndSearch {
+    name: string = TacticalGraphicName.CordonAndKnock;
+}
+
+/**
+ * Locate (APP-06 343900) -- the plain arc-and-arrowhead circle the mission-task family
+ * is built on, carrying `LOC`. Same body as secure; the letter is the symbol.
+ */
+export class Locate extends Secure {
+    name: string = TacticalGraphicName.Locate;
 }

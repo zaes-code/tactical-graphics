@@ -1,4 +1,16 @@
 import {Coordinate} from "ol/coordinate";
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
+import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
+    showsSizeReadout,
+    drawnAnchors,
+    groundLength,
+    minimumDrawnRadiusPx,
+    screenMeters,
+    latitudeFromMercatorY,
+    projectedLength,
+} from '@zaes/tactical-graphics';
+import type {DrawnFrame} from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../controllers/MissionTaskController";
 import {SAME_POINT_EPSILON_M} from "../controllers/LineGraphicController";
 import {Feature} from "ol";
@@ -28,6 +40,7 @@ import {
     envelopmentBendFrom,
     clampTurnBend,
     ENVELOPMENT_DEFAULT_BEND,
+    clampEnvelopmentBend,
     TacticalGraphicName,
     TURN_DEFAULT_BEND,
     CROSSED_MISSION_TASKS,
@@ -67,30 +80,7 @@ const ENVELOPMENT_LINE_HANDLE = 1;
  */
 /** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
 
-/**
- * Graphics whose `size` is floored so the symbol is recognisable from the first cursor
- * move.
- *
- * **The arc mission-task circles are deliberately absent.** Contain, Control, Isolate,
- * Occupy, Retain and Secure used to take this floor, which stopped them being resized
- * below a 100px diameter — while Cordon and Search and Area Defense, built from the same
- * arcs, were never in the list and so had always been free to go small. Users hit the
- * inconsistency directly: a circle that refuses to shrink reads as a broken handle, not
- * a rule. Their label still scales from `graphicSize`, so a small circle gets a small
- * letter rather than one bursting out of it.
- *
- * What stays: the crossed four, which are fixed-size badges placed by a single click and
- * never resized — the floor is what gives them a size at all; and Turn / TacticalTurn /
- * Envelopment, which are curves rather than circles and collapse into an unreadable kink
- * without it.
- */
-const MIN_SIZED_MISSION_TASKS: readonly TacticalGraphicName[] = [
-    ...CROSSED_MISSION_TASKS,
-    TacticalGraphicName.TacticalTurn,
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.Envelopment,
-];
-const RATIO_LOCKED_MIN_RADIUS_PX = 50;
+/** The legibility floor — its list, its size and its history — is `minimumDrawnRadiusPx`. */
 
 /**
  * The mission tasks drawn as two arcs of one circle with a one-letter label in
@@ -102,6 +92,13 @@ const RATIO_LOCKED_MIN_RADIUS_PX = 50;
  * the graphic, while the label inside it is capped. A 30° hole that fits a
  * letter on a small circle is four times too big on a large one.
  *
+ * **`CordonAndKnock` and `Locate` were missing from this list until 2026-08-14.** Both
+ * were added to the family in `symbology/registry.ts` without being added here, so
+ * OpenLayers gave them the generator's fixed 30° hole while their siblings measured
+ * theirs — visible as a gap two or three times wider than "C/K" and "LOC" need, and
+ * invisible to every test, because nothing asserts on the size of a hole. It is the
+ * two-lists problem this file's header warns about, in its mildest form.
+ *
  * `AreaDefense` is in the set too, and is the only member whose teeth are solid
  * polygons rather than open outlines — `arcMissionTaskStyleFunc` fills those
  * separately, which is why it replaces the fill-and-stroke style this class used
@@ -111,23 +108,20 @@ const ARC_GAP_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AreaDefense,
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
     TacticalGraphicName.Isolate,
+    TacticalGraphicName.Locate,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
 ];
-/**
- * How far MovementToContact's zigzag "contact" arrows sit off the big arrow's
- * arrowhead edge, as a fraction of that arrow's half-length `r`. Expressed against
- * the graphic rather than the screen so the two stay locked together at every zoom
- * — see the note in the constructor.
- */
-const SIDE_ARROW_GAP_RATIO = 0.12;
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
-import { movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
-import {getGraphicFields} from '../graphicFieldRegistry';
+import {airfieldPointLabelStyleFn, airfieldPointStyleFunc, movementToContactStyleFunc, pursuitStyleFunc} from "../openlayerStyles";
 import {assignRole, GraphicGeometryState, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
+import {fromOlGeometry} from "../paintToOpenLayers";
+import {outerRingOf} from "@zaes/tactical-graphics";
 
 export class MissionTaskGraphicBase implements MissionTaskGraphic {
     center: Coordinate = [0, 0];
@@ -142,7 +136,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * Same trick as `mobileDefense` in `controllerRegistry.ts`. The `role` tag, not
      * this flag, is what identifies the feature when serializing.
      */
-    base: Feature<Point> = createCenterBaseFeature();
+    base: Feature<Point | LineString> = createCenterBaseFeature() as Feature<Point | LineString>;
     rotation: number = 0;
     size: number;
     symbolId: string = '';
@@ -174,6 +168,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         if (name === TacticalGraphicName.FightingPosition) {
             this.graphic.setStyle(fightingPositionStyleFunc(name));
+        }
+        // The airfield is a one-point static symbol: two crossed arms pinned to a screen
+        // size, and its designation set *beside* them rather than through the crossing,
+        // which is where the ordinary mission-task label would put it.
+        if (name === TacticalGraphicName.Airfield) {
+            this.graphic.setStyle(airfieldPointStyleFunc());
         }
         // The crossed-line tasks draw their own arms so the gap for the center
         // label can be measured off the glyph, and so one arm can be hashed.
@@ -222,6 +222,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // updateGeometry as `graphicSize`.
         if (name === TacticalGraphicName.BaseDefenseZone) {
             this.label.setStyle(baseDefenseZoneLabelStyleFn());
+        }
+        if (name === TacticalGraphicName.Airfield) {
+            this.label.setStyle(airfieldPointLabelStyleFn(name));
         }
         // …but the crossed four cap their symbol at 100 px across, and the
         // letter has to stop growing with it. Must come after the block above.
@@ -273,7 +276,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // The projected center, for styles that scale the symbol about it. It
         // cannot be recovered from the geometry: the generator walks out
         // geodesically and Mercator does not preserve the midpoint.
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (center) this.graphic.set('graphicCenter', center);
         // …and where the label sits, for the styles that have to open a hole for
         // it. Which direction that is differs per graphic — Contain's is due
@@ -292,6 +295,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.label.set('polygonMinY', minY);
             this.label.set('polygonMaxX', maxX);
             this.label.set('polygonMaxY', maxY);
+            // …and the outline itself, which is what caps a label to the shape it sits in.
+            // A circular area's *base* is a single point, so unlike `AreaGraphicBase` there
+            // is no traced ring to read — the ring is the circle this holder just drew.
+            // Without it `fitLabelScale` has nothing to measure against and every circular
+            // variant's designation grows straight through its own outline. @see outerRingOf
+            this.label.set('polygonRing', outerRingOf(fromOlGeometry(graphicGeom)));
         }
 
         // `size` and `rotation` are the whole of a mission task's editable state; keep
@@ -320,7 +329,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     protected publishHandles(handles: MultiPoint): void {
         const coords = handles.getCoordinates();
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center) {
             this.handles.setGeometry(handles);
             this.centerHandle.setGeometry(new MultiPoint([]));
@@ -377,7 +386,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     setMirrored(mirrored: boolean): void {
         if (mirrored === this.mirrored) return;
         this.mirrored = mirrored;
-        this.updateGeometry();
+        // Through the base: which flank the symbol bows to is *in the anchor points* for
+        // the drawn-anchor family, so a mirror that only redraws flips nothing.
+        this.republishFromState();
         this.publishGeometryState();
     }
 
@@ -401,9 +412,12 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     private refreshMeasure(): void {
         const edge = this.measureEdge();
-        // Same list the properties dialog reads, so a graphic can never report a radius
-        // in one place and not the other. @see RADIUS_GRAPHICS
-        if (!getGraphicFields(this.name).radius) {
+        // **Not the dialog's field list.** A read-out is feedback on a gesture; a dialog
+        // field is an amplifier the symbol carries, and ten circle graphics legitimately
+        // have the first without the second. Gating on the field list made those ten
+        // resize blind while the zone beside them reported a distance.
+        // @see showsSizeReadout
+        if (!showsSizeReadout(this.name)) {
             this.measure.setGeometry(undefined);
             return;
         }
@@ -411,6 +425,10 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             this.measure.setGeometry(undefined);
             return;
         }
+        // The label states the ground distance, not the length of the line drawn to say
+        // it: the line lives in projected metres, which are 1.56x too long at 50 degrees.
+        // @see createMeasureFeature, which reads this
+        this.measure.set('measureMeters', this.size);
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -425,16 +443,22 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * long, which is the number the label reports.
      *
      * Falls back to the first handle before any gesture has supplied an anchor.
+     *
+     * **`size` has to be inflated to reach the rim.** It is a ground distance and these
+     * are projected coordinates, so a line laid out one `size` long stopped short of the
+     * circle it was measuring by `cos(latitude)` — 65% of the way at 50 degrees north,
+     * which is what "the line only reaches halfway" turned out to be. @see mercator.ts
      */
     private measureEdge(): Coordinate | undefined {
         const handles = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
         const anchor = this.measureAnchor;
         if (!anchor || !this.center || !this.size) return handles[0];
+        const reach = projectedLength(this.size, latitudeFromMercatorY(this.center[1]));
         const dx = anchor[0] - this.center[0];
         const dy = anchor[1] - this.center[1];
         const len = Math.hypot(dx, dy);
         if (len === 0) return handles[0];
-        return [this.center[0] + (dx / len) * this.size, this.center[1] + (dy / len) * this.size];
+        return [this.center[0] + (dx / len) * reach, this.center[1] + (dy / len) * reach];
     }
 
     getFeatures(): Feature[] {
@@ -460,6 +484,32 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         });
     }
 
+    /** Whether {@link placeScreenSizes} has run. It converts once, at the first center. */
+    private screenSizesPlaced = false;
+
+    /**
+     * Whether the draw interaction is the thing setting this holder's size right now.
+     *
+     * Set by `MissionTaskController` for the length of the draw, and read by exactly one
+     * rule: the legibility floor, which is a draw-time affordance and was firing on every
+     * later gesture too. @see updateGeom
+     */
+    sizingFromDraw = false;
+
+    /**
+     * Converts this graphic's screen-derived sizes now that its place is known.
+     *
+     * A no-op for most of the family: their one size is the radius, which the draw drag
+     * already measures on the ground. Turn and Envelopment override it — their arrowhead
+     * is a flat 26 px baked into metres at construction, before the first click.
+     *
+     * **An override must convert only what it derived.** A restore replays a stamped head
+     * before this runs, and converting *that* would shrink a figure which is already a
+     * ground distance; the overrides compare against the value they were built with.
+     */
+    protected placeScreenSizes(_latitude: number): void {
+    }
+
     updateGeom({size, center, rotation}: { size?: number, center?: Coordinate, rotation?: number }): void {
         this.rotation = rotation || this.rotation;
         // The crossed four are drawn in one fixed orientation — an X turned 45°
@@ -470,16 +520,52 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
         let newSize = size || this.size;
-        if (MIN_SIZED_MISSION_TASKS.includes(this.name) && !this.suspendMinimumSize) {
+        /*
+         * **The legibility floor belongs to the draw, and nothing else.**
+         *
+         * It is here so a barely-dragged curve is committed at a readable size rather than
+         * as a kink — but `updateGeom` is the door *every* gesture comes through, so it
+         * also fired on graphics drawn long ago: panning a small turn at a low zoom grew
+         * it, and a restored one was inflated by the first gesture that touched it, 129 km
+         * to 300 km at 6000 m/px. `sizingFromDraw` is only true while the draw interaction
+         * is feeding this holder, which is the moment the affordance is for.
+         *
+         * The list and the constant are the library's now, so MapLibre floors the same
+         * three at the same size instead of having no floor at all. @see minimumDrawnRadiusPx
+         */
+        const floorPx = this.sizingFromDraw ? minimumDrawnRadiusPx(this.name) : undefined;
+        if (floorPx !== undefined && !this.suspendMinimumSize) {
             const drawingRes = this.label.get('drawingResolution') as number | undefined;
             if (drawingRes && drawingRes > 0) {
-                const minSize = RATIO_LOCKED_MIN_RADIUS_PX * drawingRes;
+                const anchor = center ?? this.center;
+                const minSize = screenMeters(floorPx, drawingRes, anchor ? latitudeFromMercatorY(anchor[1]) : 0);
                 if (newSize < minSize) newSize = minSize;
             }
         }
         this.size = newSize;
         this.center = center || this.center;
-        this.base.getGeometry()!.setCoordinates(this.center);
+        // The first time a center arrives, anything specified in screen pixels can finally
+        // be converted where it is: a pixel count times the drawing resolution is a
+        // projected length, and 26 px of arrowhead is 1.56x that many metres at 50 degrees
+        // north.
+        //
+        // **On restore too, unless the restore brought its own figure.** This used to be
+        // skipped for every restore, on the grounds that a restored head is already a real
+        // distance — true when the snapshot carries one, and false when it does not, which
+        // is when the constructor's projected value stands and nothing ever corrects it. A
+        // restored turn then kept a head 1/cos(latitude) too large while MapLibre, which
+        // corrects at its own door, drew the same graphic's head 26% smaller.
+        // The holder can tell the two apart: a replayed head is not the one it derived.
+        // @see screenMeters, placeScreenSizes
+        // **Whether the centre came in this call or was set before it.** The drawn-anchor
+        // family restores through `adoptAnchors`, which sets the centre from the points and
+        // then calls this with a size alone — so a condition that waited for a `center`
+        // argument never fired for the six graphics whose arrowhead most needed it.
+        if (!this.screenSizesPlaced && this.center) {
+            this.screenSizesPlaced = true;
+            this.placeScreenSizes(latitudeFromMercatorY(this.center[1]));
+        }
+        this.writeBase();
         this.updateGeometry();
         this.refreshMeasure();
     }
@@ -502,11 +588,176 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * in practice, but it is on the public `TacticalGraphicHandler` interface and the
      * manager calls it by symbolId.
      */
-    setBaseFeature(base: Feature<Point>) {
+    setBaseFeature(base: Feature<Point | LineString>) {
         this.base = base;
-        const coords = base.getGeometry()?.getCoordinates();
+        const geometry = base.getGeometry();
+        if (!geometry) return;
+
+        // A converted graphic's base carries APP-06's anchor points, so the frame is
+        // read back out of them rather than taken as a bare center. @see writeBase
+        if (geometry instanceof LineString) {
+            this.adoptAnchors(geometry.getCoordinates().map(c => toLonLat(c)) as Position[]);
+            return;
+        }
+
+        const coords = (geometry as Point).getCoordinates();
         if (!coords || coords.length < 2) return;
         this.updateGeom({center: coords as Coordinate});
+    }
+
+    /**
+     * The center, which is holder state rather than something to read back off the base.
+     *
+     * It used to come from `this.base.getGeometry().getCoordinates()`, which is a
+     * coordinate for a point base and an array of them for an anchored one — so every
+     * style that consumed it silently got a nested array the moment a graphic converted.
+     */
+    centerCoordinate(): Coordinate {
+        return this.center;
+    }
+
+    /**
+     * Writes the base geometry: APP-06's anchor points for a converted graphic, the
+     * bare center for everything else.
+     *
+     * Doing it here rather than in each holder is what lets the conversion be a
+     * one-name-at-a-time change: the drag logic above works entirely in
+     * center / size / rotation and never learns that the base grew vertices.
+     */
+    /**
+     * Rewrites the base from the holder's own state, then redraws.
+     *
+     * **A field change is invisible to a drawn-anchor graphic until the base is
+     * rewritten.** Turn, Envelopment, Ambush, Pursuit, Contain and TacticalTurn store
+     * *anchor points*, and the generator reads its whole frame — including `bend` and
+     * which side it bows to — back out of them. Setting `this.bend` and calling
+     * `updateGeometry()` therefore redrew the graphic from the **old** anchors: the
+     * number in the snapshot moved, the picture did not, and a second identical drag did
+     * nothing at all because the handle had never left its first position.
+     *
+     * `updateGeom` has always done both, in this order. This is the same door for the
+     * paths that change a field without changing size, centre or rotation.
+     */
+    protected republishFromState(): void {
+        this.writeBase();
+        this.updateGeometry();
+    }
+
+    protected writeBase(): void {
+        if (!usesDrawnAnchors(this.name)) {
+            const geometry = this.base.getGeometry();
+            if (geometry instanceof LineString) this.base.setGeometry(new Point(this.center));
+            else (geometry as Point | undefined)?.setCoordinates(this.center);
+            return;
+        }
+        this.base.setGeometry(new LineString(this.anchorPoints().map(c => fromLonLat(c as Coordinate))));
+    }
+
+    /**
+     * The anchor points APP-06 describes this symbol by, in lon/lat.
+     *
+     * **Virtual, because the eight symbols being converted do not share a point
+     * layout.** Envelop spends four points on a run and a half circle, Pursue three on
+     * the same shape, Contain two on a semicircle's opening, Movement to Contact
+     * anywhere from three to fifty. A single reader would have to be told which it was
+     * looking at, which is the switch this replaces. The default is the generic
+     * run-with-an-offset form; a holder whose symbol is built differently overrides
+     * this and `adoptAnchors` together, and they must stay exact inverses.
+     *
+     * **The overrides now delegate to `drawnAnchors`**, the library's own statement of
+     * each layout, so MapLibre can write the same base from the same gesture. They kept
+     * their overriding shape because each still supplies its own state — a bend, a hook
+     * ratio, an arrow reach — that only the holder has.
+     */
+    protected anchorPoints(): Position[] {
+        const {offset, side} = this.anchorReach();
+        return anchorsFromFrame(toLonLat(this.center) as Position, this.size, this.rotation, offset, side);
+    }
+
+    /**
+     * Read holder state back out of drawn anchor points. `false` means the points do
+     * not describe a usable frame — a click rather than a drag — and the caller should
+     * leave the holder alone rather than snap it to a degenerate shape.
+     */
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = frameFromAnchors(coords);
+        if (!frame) return false;
+        this.adoptFrame(frame);
+        return true;
+    }
+
+    /**
+     * How far off its own axis this graphic's third anchor point sits, and on which
+     * side. Overridden by the holders whose symbol has a reach.
+     */
+    protected anchorReach(): {offset?: number; side: number} {
+        return {side: this.mirrored ? -1 : 1};
+    }
+
+    /** Takes center, length and bearing from anchor points the user drew. */
+    protected adoptFrame(frame: DrawnFrame): void {
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
+    }
+}
+
+/**
+ * Contain — the one arc mission task APP-06 builds from the arc's two ends.
+ *
+ * Its six siblings are "point 1 defines the centre point... point 2 defines the start
+ * point and radius", which is the centre-and-edge pair this library already drew. This
+ * one names the ends of the semicircle's opening, and those sit a quarter turn either
+ * side of the aim — so the generic anchor pair is used, rotated by that quarter turn.
+ * @see Contain in the core library, and OPENING_QUARTER_TURN there.
+ */
+export class ContainGraphicBase extends MissionTaskGraphicBase {
+    /** @see Contain — the arc spans 90 to 270 degrees about the center. */
+    private static readonly OPENING_QUARTER_TURN = 90;
+
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {center: toLonLat(this.center) as Position, size: this.size, rotation: this.rotation})
+            ?? [];
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = frameFromAnchors(coords);
+        if (!frame) return false;
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI + ContainGraphicBase.OPENING_QUARTER_TURN;
+        this.updateGeom({size: frame.size});
+        return true;
+    }
+}
+
+/**
+ * Ambush — a 120 degree arc with an arrow off its back.
+ *
+ * Carries `arrowReach` for the same reason Pursuit carries `lineRatio`: APP-06 141700
+ * makes point 1 the arrowhead's actual tip, so how far the arrow reaches is a
+ * proportion the user set by drawing, and a holder that knew only centre / size /
+ * rotation would snap it back to the family default on the next regeneration.
+ */
+export class AmbushGraphicBase extends MissionTaskGraphicBase {
+    private arrowReach = ARC_ARROW_DEFAULT_REACH;
+
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            arrowReach: this.arrowReach,
+        }) ?? [];
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = arcAndArrowFromAnchors(coords);
+        if (!frame) return false;
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.arrowReach = frame.arrowReach;
+        this.updateGeom({size: frame.radius});
+        return true;
     }
 }
 
@@ -571,6 +822,43 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
 export class TurnGraphicBase extends MissionTaskGraphicBase {
     /** @see TURN_DEFAULT_BEND */
     bend: number = TURN_DEFAULT_BEND;
+
+    /**
+     * Restore's way in to the curve's sharpness, clamped by *this* family's rule.
+     *
+     * Persistence used to reach for `bend` behind an `instanceof TurnGraphicBase`
+     * check, which quietly skipped `EnvelopmentGraphicBase` — it is a sibling, not a
+     * subclass — so a saved envelopment came back at the default sharpness however it
+     * was drawn. The clamps genuinely differ between the two, so the setter is virtual
+     * rather than the field being read directly.
+     */
+    setBend(value: number): void {
+        this.bend = clampTurnBend(value);
+        this.republishFromState();
+    }
+
+    /**
+     * APP-06 270504's three points: the arrowhead's tip, the rear, and a marker on the
+     * bow. Tip first, which is the standard's numbering. @see anchorsForBow
+     */
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = bowFromAnchors(coords);
+        if (!frame) return false;
+        if (frame.bend !== undefined) this.bend = clampTurnBend(frame.bend);
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
+        return true;
+    }
     /**
      * Arrowhead size in meters. Seeded from the drawing resolution and then **stamped**,
      * because a restore no longer has that resolution to rebuild it from — the snapshot
@@ -578,9 +866,20 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      */
     headSize: number;
 
+    /** The head this holder derived for itself, so a replayed one can be told apart. */
+    private derivedHeadSize: number;
+
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
+    }
+
+    /** The head is a screen length; it becomes a real one where the graphic lands. */
+    protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
+        this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -611,7 +910,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * `publishHandles`, which preserves order.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
@@ -636,7 +935,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
         this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
-        this.updateGeometry();
+        this.republishFromState();
     }
 }
 
@@ -651,12 +950,57 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
     bend: number = ENVELOPMENT_DEFAULT_BEND;
+
+    /** @see TurnGraphicBase.setBend — the same hook, this family's clamp. */
+    setBend(value: number): void {
+        this.bend = clampEnvelopmentBend(value);
+        this.republishFromState();
+    }
+
+    /**
+     * APP-06 343500's four points: the run, then the semicircle's two feet, then the
+     * flank it bulges to.
+     *
+     * `bend` is a signed multiple of the half-length, so the arc's radius is
+     * `|bend| x size` and its sign is the side. Writing the points out here is what
+     * makes the saved base self-describing — the diameter is on the geometry, not
+     * inferred from an amplifier a foreign reader would have to know about.
+     */
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            bend: this.bend,
+        }) ?? [];
+    }
+
+    /**
+     * The exact inverse. Sets the bend as well as the run, so a graphic restored or
+     * imported from anchor points comes back with the arc it was saved with rather than
+     * the family default.
+     */
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = runAndArcFromAnchors(coords);
+        if (!frame) return false;
+        if (frame.radius !== undefined && frame.size > 0) {
+            this.bend = clampEnvelopmentBend((frame.radius / frame.size) * frame.side);
+        }
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = (frame.angle * 180) / Math.PI;
+        this.updateGeom({size: frame.size});
+        return true;
+    }
     /** Arrowhead size in meters — stamped, not re-derived. @see TurnGraphicBase.headSize */
     headSize: number;
+
+    /** The head this holder derived for itself. @see TurnGraphicBase.derivedHeadSize */
+    private derivedHeadSize: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
         this.headSize = arrowheadMeters(name, drawingResolution ?? 1) ?? 0;
+        this.derivedHeadSize = this.headSize;
         // The "E" lies along the approach rather than standing upright on the
         // screen. The rotation has to be read per render, not baked in here:
         // `this.rotation` changes every time the line-end handle is dragged, and
@@ -711,6 +1055,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         this.projectedRotation = r;
     };
 
+    /** As Turn's: a screen length, converted where the graphic lands. @see placeScreenSizes */
+    protected placeScreenSizes(latitude: number): void {
+        if (this.headSize !== this.derivedHeadSize) return;   // a restore replayed one
+        this.headSize = groundLength(this.headSize, latitude);
+        this.derivedHeadSize = this.headSize;
+    }
+
     protected generatorOptions(): Record<string, unknown> {
         return {bend: this.bend, headSize: this.headSize};
     }
@@ -728,7 +1079,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
      * having been split onto the inert feature by `publishHandles`.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
-        const center = this.base.getGeometry()?.getCoordinates();
+        const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
@@ -756,6 +1107,47 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // The rule itself is the library's, so both renderers bend this graphic by the
         // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
         this.bend = envelopmentBendFrom(along, perp, this.size, this.bend);
-        this.updateGeometry();
+        this.republishFromState();
+    }
+}
+
+/**
+ * Pursuit — a straight line with a half-circle hook on its end.
+ *
+ * APP-06 344000 draws it from three points, and the third of them is the arrowhead's
+ * tip. The one thing this holder carries that the others do not is `lineRatio`: the
+ * drawn form lets the straight line be any length relative to the hook, where the
+ * dropped form fixed it at 2.4 radii, and without somewhere to keep it the next
+ * regeneration would quietly snap a hand-drawn line back to that constant.
+ *
+ * @see Pursuit in the core library for the shape, and core/anchors.ts for the points.
+ */
+export class PursuitGraphicBase extends MissionTaskGraphicBase {
+    /** The straight line's length as a multiple of the hook's radius. */
+    private lineRatio = HOOK_DEFAULT_LINE_RATIO;
+
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+            mirrored: this.mirrored,
+            lineRatio: this.lineRatio,
+        }) ?? [];
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = hookFromAnchors(coords);
+        if (!frame) return false;
+
+        // Every one of these is the library's answer, not this holder's: which drawn
+        // point carries the aim, and which way round "mirrored" runs. @see hookPose
+        const pose = hookPose(frame);
+        this.center = fromLonLat(pose.center as Coordinate);
+        this.rotation = pose.rotationDegrees;
+        this.mirrored = pose.side < 0;
+        this.lineRatio = pose.lineRatio;
+        this.updateGeom({size: pose.radius});
+        return true;
     }
 }

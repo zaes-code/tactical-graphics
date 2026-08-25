@@ -28,6 +28,7 @@ import {
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
+    TacticalGraphicMineType,
     TacticalGraphicName,
     TacticalGraphicStatus
 } from '@zaes/tactical-graphics';
@@ -308,7 +309,22 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                 <polygon ref={lineRef as any} fill="url(#coneGradient)"/>
             </svg>
 
+            {/*
+              * **The container must not eat the map.**
+              *
+              * `hideBackdrop` hides the scrim but not the full-viewport
+              * `.MuiDialog-container` behind it, which keeps `pointer-events: auto` and
+              * sits at z-index 1300 — over everything. So while this dialog was open the
+              * map underneath took no clicks at all: no drawing, no selecting, and none
+              * of the edit affordances, which is how this surfaced. A non-modal dialog
+              * that deliberately leaves its host usable has to say so; the paper opts
+              * back in so the form itself still works.
+              */}
             <Dialog open hideBackdrop keepMounted PaperComponent={DraggablePaper} disableEnforceFocus
+                    sx={{
+                        '& .MuiDialog-container': {pointerEvents: 'none'},
+                        '& .MuiDialog-paper': {pointerEvents: 'auto'},
+                    }}
                     onClose={cancelChanges}>
                 <DialogTitle id="draggable-dialog-title" sx={{cursor: 'move'}}>
                     Feature Properties
@@ -528,6 +544,29 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {fields.mineType && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Mine type</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.mineType ?? ''}
+                                                label="Mine type"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicMineType>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, mineType: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicMineType) as TacticalGraphicMineType[]).map(h => (
+                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
                                 {fields.dtg1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
@@ -584,6 +623,13 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <Typography variant="caption" color="text.secondary">Width</Typography>
                                         <Typography id="width-readout" variant="body2">{formatDistance(measured.width)}</Typography>
+                                    </Box>
+                                )}
+
+                                {fields.length && measured.length !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">Length</Typography>
+                                        <Typography id="length-readout" variant="body2">{formatDistance(measured.length)}</Typography>
                                     </Box>
                                 )}
 

@@ -65,7 +65,7 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {clampTurnBend, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {normalizeDrawnBase, TacticalGraphicName, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
@@ -76,7 +76,6 @@ import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
-import {TurnGraphicBase} from './graphics/MissionTaskGraphicBase';
 import {
     GraphicGeometryState,
     readGraphicGeometryState,
@@ -190,6 +189,17 @@ function toGeoJSON(feature: Feature, properties: Record<string, unknown>): GeoJS
 }
 
 /**
+ * One graphic as the portable base feature — what `snapshot()` would write for it.
+ *
+ * Exported because the selection needs exactly this: a host reading `getSelection()`
+ * gets the same `properties.tacticalGraphic` bag it would get from a save, rather than
+ * a second, subtly different description of the same symbol. @see SelectedGraphic
+ */
+export function serializeOneGraphic(handler: TacticalGraphicHandler): GeoJSONFeature {
+    return toGeoJSON(handler.graphic.base, collectProperties(handler) ?? {});
+}
+
+/**
  * Snapshots every graphic the manager is holding.
  *
  * Walks `graphicControllers` rather than the vector source: the source is a flat bag of
@@ -237,14 +247,50 @@ export function applyRestoredGeometry(
     state: GraphicGeometryState,
 ): void {
     if (handler instanceof MissionTaskController) {
-        const coords = (base.getGeometry() as Point | undefined)?.getCoordinates();
+        // **The shim.** A graphic converted to APP-06's drawn anchor points saves a
+        // LineString base, and one saved before the conversion saves a Point. Both have
+        // to restore: the anchored form is handed straight to `setBaseFeature`, which
+        // reads the frame back out of the points; the old form keeps going through
+        // `updateGeom` with the center, radius and rotation it was saved with, and the
+        // holder writes the anchor points out on the next update. Nothing a user saved
+        // stops loading, and it upgrades in place. @see core/anchors.ts
+        const geometry = base.getGeometry();
+        if (geometry instanceof LineString && usesDrawnAnchors(handler.graphic.name)) {
+            if (state.decorationSize !== undefined) {
+                const withHead = handler.graphic as {headSize?: number};
+                if (typeof withHead.headSize === 'number') withHead.headSize = state.decorationSize;
+            }
+            // The minimum-size floor is suspended here for the same reason the branch
+            // below suspends it: `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution` is a
+            // draw-time affordance measured against *this* session's zoom, and the
+            // restored size is already final. Without it an envelopment saved zoomed in
+            // came back exactly 4x too large in a 4x-resolution session — the anchor
+            // points were right and `updateGeom` grew them anyway.
+            const anchored = handler.graphic as {suspendMinimumSize?: boolean};
+            const floorGuarded = typeof anchored.suspendMinimumSize === 'boolean';
+            if (floorGuarded) anchored.suspendMinimumSize = true;
+            try {
+                handler.setBaseFeature(base as Feature<LineString>);
+            } finally {
+                if (floorGuarded) anchored.suspendMinimumSize = false;
+            }
+            if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
+            return;
+        }
+
+        const coords = (geometry as Point | undefined)?.getCoordinates();
         if (!coords || coords.length < 2) throw new Error('point-based graphic has no center coordinate');
         // `bend` before `updateGeom`: the holder reads it back out when it
-        // regenerates, so setting it afterwards would leave the restored
-        // graphic drawn at the default sharpness until the next edit.
-        if (state.bend !== undefined && handler.graphic instanceof TurnGraphicBase) {
-            handler.graphic.bend = clampTurnBend(state.bend);
-        }
+        // regenerates, so setting it afterwards would leave the restored graphic drawn
+        // at the default sharpness until the next edit. It also has to be before the
+        // holder writes its anchor points out, since the reach is derived from it.
+        //
+        // Routed through the holder's own `setBend` rather than an `instanceof
+        // TurnGraphicBase` test: envelopment is a sibling of that class, not a subclass,
+        // so the old check skipped it and every saved envelopment restored at the
+        // default bend. @see TurnGraphicBase.setBend
+        const bendable = handler.graphic as {setBend?: (value: number) => void};
+        if (state.bend !== undefined) bendable.setBend?.(state.bend);
         // Arrowhead size, for the holders that carry one. Seeded from the drawing
         // resolution when the graphic was made and stamped since, because a restore has
         // no drawing resolution to re-derive it from. Before `updateGeom`, which reads it.
@@ -494,6 +540,10 @@ export function restoreTacticalGraphics(
  * save/restore story rather than part of the gallery's.
  */
 export function clearAllGraphics(manager: TacticalGraphicsManager): void {
+    // Before the controllers go: the selection holds one of them, and a selection
+    // pointing at a graphic that is no longer on the map keeps a host drawing edit
+    // chrome around empty space.
+    manager.setSelection(undefined);
     manager.renderingVectorSource.clear();
     manager.graphicControllers.length = 0;
     manager.releaseAllGraphics();

@@ -1,7 +1,7 @@
 /**
- * # Movement and manoeuvre labels
+ * # Movement and maneuver labels
  *
- * The amplifiers on the axis-of-advance arrows and the forms of manoeuvre. The
+ * The amplifiers on the axis-of-advance arrows and the forms of maneuver. The
  * arrows themselves are line work drawn by the graphic feature; everything here
  * paints the **labels** feature, whose geometry is a MultiPoint of anchor spans
  * the generator publishes.
@@ -13,7 +13,7 @@
  * arrow rather than with the zoom. That is what keeps a designation inside the
  * channel of the arrow that carries it.
  *
- * The one-letter forms of manoeuvre (IN, E, MD, T, A, CATK) use the ordinary
+ * The one-letter forms of maneuver (IN, E, MD, T, A, CATK) use the ordinary
  * zoom-anchored scale instead: they are a fixed mark on the symbol rather than
  * text that has to fit a space. Mixing the two makes a letter either vanish on a
  * short arrow or swamp a long one. @see ai/conventions.md, "Pick the right
@@ -22,11 +22,12 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {maxGraphicLabelScale} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -82,7 +83,7 @@ const DEFAULT_LABEL_FONT_PX = 24;
  * in the Movement and Manoeuvre block, against a 5-pixel control.
  */
 function text(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     value: string,
     scale: number,
     extra: {rotation?: number; align?: 'left' | 'center' | 'right'; halo?: boolean} = {},
@@ -92,7 +93,7 @@ function text(
         text: {
             text: value,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: extra.halo === false ? undefined : {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation: extra.rotation,
             align: extra.align ?? 'center',
@@ -121,7 +122,7 @@ function nameAndDate(feature: PaintFeature): string {
  * A fixed one- or two-letter amplifier at the first anchor, laid along the first
  * span.
  *
- * Used by the forms of manoeuvre whose plate carries a specific letter — the
+ * Used by the forms of maneuver whose plate carries a specific letter — the
  * user's own label is deliberately ignored, because the letter *is* the symbol.
  *
  * `atMidpoint` puts it between the two anchors rather than on the first, and
@@ -153,7 +154,7 @@ function fixedLetterPaint(
                 : coords.length >= 2
                     ? uprightRotation(coords[0], coords[1])
                     : 0;
-            return [text([x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
+            return [text(feature, [x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
         }
 
         const [x1, y1] = coords[1];
@@ -167,7 +168,7 @@ function fixedLetterPaint(
         // Interpolated **in projected meters**, on the segment the renderer draws, so a
         // letter placed a quarter along lands in the hole cut a quarter along.
         const t = options.atFraction ?? 0.5;
-        return [text([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
+        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
     };
 }
 
@@ -212,7 +213,7 @@ export function counterattackLabelPaint(): MovementPaint {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
         const label = feature.properties.label;
-        return [text(
+        return [text(feature, 
             coords[0],
             label ? `CATK ${label}` : 'CATK',
             scaleOf(feature, context),
@@ -232,7 +233,7 @@ export function aviationAxisLabelPaint(): MovementPaint {
         const value = nameAndDate(feature);
         if (!value) return [];
 
-        return [text(coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+        return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
             align: 'left',
         })];
@@ -247,6 +248,36 @@ export function aviationAxisLabelPaint(): MovementPaint {
  * the channel; the infiltration lane centers it on the span instead, because it
  * has no arrowhead to sit behind.
  */
+/**
+ * The avenue of approach's amplifier: `AA` and whatever the operator called it, set just
+ * behind the arrowhead.
+ *
+ * Placed like an axis of advance's — same clearance, same proportional scale — but it
+ * carries a **fixed prefix** where that family carries none, so it cannot simply be
+ * another entry in `AXIS_OF_ADVANCE_LABELS`. The plate reads `AA` followed by field T.
+ */
+export function avenueOfApproachLabelPaint(): MovementPaint {
+    return (feature, context) => {
+        const coords = anchors(feature);
+        if (coords.length < 2) return [];
+
+        const [c0, c1] = coords;
+        const dx = c1[0] - c0[0];
+        const dy = c1[1] - c0[1];
+        const segLenMap = Math.hypot(dx, dy);
+        if (segLenMap === 0) return [];
+
+        const value = ['AA', nameAndDate(feature)].filter(Boolean).join(' ');
+        const clearance = 10 * context.resolution;
+        const at: ProjectedPosition = [c1[0] - (dx / segLenMap) * clearance, c1[1] - (dy / segLenMap) * clearance];
+
+        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+            rotation: uprightRotation(c0, c1),
+            align: c1[0] >= c0[0] ? 'right' : 'left',
+        })];
+    };
+}
+
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
     const centered = name === TacticalGraphicName.InfiltrationLane;
 
@@ -273,7 +304,7 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
 
-        return [text(at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
             align,
         })];
@@ -312,7 +343,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         const tdy = y1 - y0;
         const value = nameAndDate(feature);
         if (value) {
-            paints.push(text([x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+            paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
                 align: 'left',
             }));
@@ -374,6 +405,40 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 }
 
 /**
+ * Advance to contact's amplifiers: APP-06 342900's `T` and `W . W1`, on one line
+ * centered along the body.
+ *
+ * **One line, not two, and that is the point.** `movementLabelPaint` puts the date on a
+ * second span offset by `c1 - c0`, which works for the crossing graphics because their
+ * label anchors are a whole segment apart. This arrow's anchors come from
+ * `labelCoordsAtFraction`, so they sit its own half-width apart — a few pixels — and the
+ * date lands on top of the designation. Joining them through `nameAndDate` cannot
+ * collide however wide the arrow is drawn.
+ */
+export function advanceToContactLabelPaint(): MovementPaint {
+    return (feature, context) => {
+        const coords = anchors(feature);
+        if (coords.length < 2) return [];
+
+        const [c0, c1] = coords;
+        const value = nameAndDate(feature);
+        if (!value) return [];
+
+        const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
+        // **Capped, like every other size-proportional label in the library.**
+        // `spanProportionalScale` is unbounded on its own, and this label is the longest
+        // in the family — a designation and two date-time groups — so on a wide arrow it
+        // outgrew the symbol it names. `maxGraphicLabelScale()` is the same ceiling the
+        // block family, the scallops and the base defense zone already apply.
+        const scale = Math.min(
+            maxGraphicLabelScale(),
+            spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX),
+        );
+        return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
+    };
+}
+
+/**
  * The default movement label: the designation on the first span, with the
  * date-time group on a second span shifted one span-length further along.
  *
@@ -392,13 +457,13 @@ export function movementLabelPaint(): MovementPaint {
         const rotation = uprightRotation(c0, c1);
         const midpoint: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
 
-        paints.push(text(midpoint, feature.properties.label ?? '', scale, {rotation, halo: false}));
+        paints.push(text(feature, midpoint, feature.properties.label ?? '', scale, {rotation, halo: false}));
 
         const date = areaDateLabel(feature);
         if (date) {
             const dx = c1[0] - c0[0];
             const dy = c1[1] - c0[1];
-            paints.push(text([midpoint[0] + dx, midpoint[1] + dy], date, scale, {rotation, halo: false}));
+            paints.push(text(feature, [midpoint[0] + dx, midpoint[1] + dy], date, scale, {rotation, halo: false}));
         }
 
         return paints;
@@ -554,7 +619,7 @@ export function bridgeLabelPaint(): MovementPaint {
         const scale = scaleOf(feature, context);
 
         const paints: Paint[] = [
-            text(c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
+            text(feature, c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
         ];
 
         const date = areaDateLabel(feature);
@@ -563,7 +628,7 @@ export function bridgeLabelPaint(): MovementPaint {
             const gap = BRIDGE_DATE_GAP_PX * context.resolution;
             const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
             const align = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'left' : 'right') : 'center';
-            paints.push(text(at, date, scale, {align}));
+            paints.push(text(feature, at, date, scale, {align}));
         }
 
         return paints;

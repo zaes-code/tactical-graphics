@@ -3,6 +3,7 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import {toDegrees, toRadians} from "../core/math";
+import {allowedGestures} from "../core/symbology";
 
 /**
  * Half-height ÷ half-width of the symbol box the two "wide" crossed tasks are
@@ -103,8 +104,21 @@ export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions
      * the user may drag independently — an edge handle would suggest one that
      * does not exist. Resize and rotate work off the symbol itself.
      */
+    /**
+     * `[edge, center]` for the three that resize, and the centre alone for Destroy.
+     *
+     * Edge first, which is the order every point-anchored graphic emits and which the
+     * controllers depend on. Destroy gets no edge handle on purpose: it is pinned to a
+     * screen size, so a handle there would offer a dimension that cannot change — the
+     * drag would store a number the paint divides straight back out.
+     */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature([base.geometry.coordinates]);
+        const center = base.geometry.coordinates;
+        if (!allowedGestures(this.name as TacticalGraphicName).resize) {
+            return this.asMultiPointFeature([center]);
+        }
+        const edge = geometryService.translateCoordinates(center, opts.size, toRadians(opts.rotation));
+        return this.asMultiPointFeature([edge, center]);
     }
 
     generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {

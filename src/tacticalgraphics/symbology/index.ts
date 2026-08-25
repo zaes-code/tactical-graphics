@@ -69,7 +69,22 @@ export {
     zoneLabelPaint,
 } from './areaLabelPaints';
 
+export {fitLabelScale, liftedAnchor} from './labelFit';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './protectionLinePaints';
+export {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
+export {sweptArcTaskPaint} from './sweptArcTaskPaints';
+export {obstacleBypassPaint} from './obstacleBypassPaints';
+export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
+export {avenueOfApproachLabelPaint} from './movementPaints';
+export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
+export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -92,7 +107,7 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
-export {airfieldPaint} from './airfieldPaints';
+export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 export type {ResolvedRangeFanBand} from './boundaryPaints';

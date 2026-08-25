@@ -28,6 +28,7 @@ import {
     RouteDirection,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
+    TacticalGraphicMineType,
     TacticalGraphicHostility,
     TacticalGraphicName,
     AltitudeDatum,
@@ -93,6 +94,12 @@ export interface TacticalGraphicProperties {
     confidence?: TacticalGraphicConfidence;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /**
+     * Which mine the two mine areas draw inside themselves — APP-06 Table 8-24's
+     * Sector 1 Modifier, restricted to its seven primitive types.
+     * @see TacticalGraphicMineType
+     */
+    mineType?: TacticalGraphicMineType;
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
@@ -132,6 +139,16 @@ export interface TacticalGraphicProperties {
      * would measure on the map.
      */
     width?: number;
+    /**
+     * Full length in meters, the dimension **along** the graphic rather than across it.
+     *
+     * Only the rectangular target carries both. FM 1-02.2 table 5-25 draws it with
+     * `AM1` across the top and `AM` down the side; APP-06 240802 names them
+     * outright — "the target length (AM1) in metres and target width (AM) in metres".
+     * Every other rectangle takes its length from the anchor points instead, which is
+     * why this is not beside `width` on all of them.
+     */
+    length?: number;
     /**
      * Hangs an asymmetric graphic's hook on the other side of its drawn line.
      *
@@ -211,12 +228,16 @@ export interface GraphicLabels {
      * width rather than a string mirror of it that has to be kept in step.
      */
     width?: number;
+    /** Full length in meters. @see TacticalGraphicProperties.length */
+    length?: number;
     eff?: string;
     grid?: string;
     weapon?: string;
     hostility?: TacticalGraphicHostility;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /** @see TacticalGraphicProperties.mineType */
+    mineType?: TacticalGraphicMineType;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;

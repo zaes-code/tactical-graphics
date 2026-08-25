@@ -29,6 +29,8 @@ export type GraphicFieldSet = {
     status: boolean;
     /** Echelon selector (BattlePosition, StrongPoint, Boundary). */
     echelon: boolean;
+    /** Mine-type selector (the two mine areas). @see TacticalGraphicMineType */
+    mineType: boolean;
     /** Route direction selector (Route / MSR / ASR). */
     direction: boolean;
     /** Min altitude inputs (airspace graphics). */
@@ -37,6 +39,8 @@ export type GraphicFieldSet = {
     altitude2: boolean;
     /** Width field (Airspace Area). */
     width: boolean;
+    /** Rectangle length in meters — only the rectangular target carries one. */
+    length: boolean;
     /** Circle radius in meters — the graphics a user resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
@@ -60,7 +64,7 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'mineType' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
@@ -72,10 +76,12 @@ function f(
         hostility: false,
         status,
         echelon: false,
+        mineType: false,
         direction: false,
         altitude1: false,
         altitude2: false,
         width: false,
+        length: false,
         radius: false,
         grids: false,
         weapon: false,
@@ -100,6 +106,12 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * map, which is the same trap "Label Plate" was.
  */
 const OBSTACLE_LINE = f(true, false, false, false, false);
+/** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
+const MINE_AREA = f(true, false, true, true, false, {mineType: true});
+/** Decision line: the two end-of-line fields APP-06 writes as `T/AS`. */
+const DECISION_LINE = f(true, true, false, false, false);
+/** Mobility corridor: free text plus the echelon its own note makes mandatory. */
+const MOBILITY_CORRIDOR = f(true, false, false, false, false, {echelon: true});
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
@@ -156,6 +168,18 @@ const TARGET_ACQUISITION_AREA = f(true, false, true, true, false);
 /** Area with echelon modifier (BattlePosition, StrongPoint). */
 const ECH = f(true, false, false, false, true, {echelon: true});
 
+/**
+ * The 13 rectangular zones carry a **width in meters** on top of their family's
+ * amplifiers. FM 1-02.2 table 5-24 draws it as an `AM` arrow down the edge labelled
+ * "Width (M)", and APP-06 states it in words. It is an input rather than a printed
+ * label: FM's own construct examples show only the designation and the DTGs.
+ *
+ * Spread onto each entry rather than added to `FIRE_SUPPORT_AREA` /
+ * `TARGET_ACQUISITION_AREA`, because those constants are shared with the circular and
+ * irregular variants — a circle takes a radius and an irregular area takes neither.
+ * @see AreaGraphicBase, ai/app-6.md "F2"
+ */
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
@@ -180,6 +204,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.IdentificationFriendOrFoeOn]: SHAPE_ONLY,
     [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE,
     [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, true),
+    [TacticalGraphicName.LightLine]: GENERIC_LINE,
+    [TacticalGraphicName.LineGeneric]: GENERIC_LINE,
+    [TacticalGraphicName.HandoverLine]: GENERIC_LINE,
+    [TacticalGraphicName.NamedAreaOfInterestLine]: GENERIC_LINE,
+    [TacticalGraphicName.HoldingLine]: GENERIC_LINE,
+    [TacticalGraphicName.NoFireLine]: FIRE_SUPPORT_LINE,
+    [TacticalGraphicName.BattlefieldCoordinationLine]: FIRE_SUPPORT_LINE,
     [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE,
     [TacticalGraphicName.IntelligenceCoordinationLine]: f(true, false, true, true, true),
     [TacticalGraphicName.CoordinatedFireLine]: f(true, false, true, true, true),
@@ -209,6 +240,38 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
+    // Only the mineline takes a modifier; the other four carry no amplifier at all.
+    // The decision line's two fields are drawn as `T/AS`, joined by a slash.
+    // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
+    [TacticalGraphicName.Capture]: SHAPE_ONLY,
+    // Escort's own amplifier is field A, a host-injected unit symbol, not text.
+    [TacticalGraphicName.Escort]: SHAPE_ONLY,
+    [TacticalGraphicName.Demonstration]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.Evacuate]: SHAPE_ONLY,
+    [TacticalGraphicName.Recover]: SHAPE_ONLY,
+    [TacticalGraphicName.DecisionLine]: DECISION_LINE,
+    // Field B (echelon) is mandatory on a mobility corridor; field H is the free text.
+    [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
+    // The numbers 1 and 2 are the symbol, not an amplifier the operator sets.
+    [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
+    // The dose the operator typed goes in the break: "30 CGH".
+    [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
+    // Free text plus the mine type the area is filled with.
+    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA,
+    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
+    [TacticalGraphicName.PsyOpsZoneIrregular]: AREA_SIMPLE,
+    // Every rectangular variant offers the across-dimension as a typed field.
+    [TacticalGraphicName.PsyOpsZoneRectangular]: {...AREA_SIMPLE, width: true},
+    [TacticalGraphicName.PsyOpsZoneCircular]: AREA_SIMPLE,
+    [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
+    [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
+    [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
+    [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
+    [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
+    [TacticalGraphicName.TripWire]: SHAPE_ONLY,
+    [TacticalGraphicName.RaftSite]: SHAPE_ONLY,
+    [TacticalGraphicName.FortifiedPosition]: SHAPE_ONLY,
     // Table 5-9 (direction of attack): T + W/W1 per FM construct examples.
     [TacticalGraphicName.DirectionOfMainAttack]: MOVEMENT_ARROW,
     [TacticalGraphicName.DirectionOfSupportingAttack]: f(true, false, true, true, true),
@@ -234,6 +297,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
+    [TacticalGraphicName.AvenueOfApproach]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvance]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.SupportingAxisOfAdvance]: MOVEMENT_ARROW,
@@ -241,6 +305,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: MOVEMENT_ARROW,
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: MOV,
+    [TacticalGraphicName.CounterattackByFire]: MOV,
     // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
     // the crossing-site symbols carry no name.
     [TacticalGraphicName.Bridge]: SHAPE_ONLY,
@@ -334,6 +399,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Secure]: MISSION_TASK,
     [TacticalGraphicName.Isolate]: MISSION_TASK,
     [TacticalGraphicName.Retain]: MISSION_TASK,
+    [TacticalGraphicName.CordonAndKnock]: MISSION_TASK,
+    [TacticalGraphicName.Deny]: MISSION_TASK,
+    [TacticalGraphicName.Locate]: MISSION_TASK,
     [TacticalGraphicName.CordonAndSearch]: MISSION_TASK,
     [TacticalGraphicName.Control]: MISSION_TASK,
     [TacticalGraphicName.Contain]: MISSION_TASK,
@@ -343,6 +411,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Forms of maneuver (no user label) ────────────────────────────────────
     [TacticalGraphicName.MovementToContact]: SHAPE_ONLY,
+    // APP-06 342900's template carries three amplifier boxes -- T over the body and
+    // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
+    // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
+    [TacticalGraphicName.AdvanceToContact]: MOVEMENT_ARROW,
     [TacticalGraphicName.FrontalAttack]: SHAPE_ONLY,
     [TacticalGraphicName.TurningMovement]: SHAPE_ONLY,
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,
@@ -370,61 +442,93 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BaseCamp]: AREA_SIMPLE,
     [TacticalGraphicName.GuerrillaBase]: AREA_SIMPLE,
     [TacticalGraphicName.DetaineeHoldingArea]: AREA_SIMPLE,
+    [TacticalGraphicName.BombArea]: AREA_SIMPLE,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_SIMPLE,
+    [TacticalGraphicName.Bridgehead]: AREA_SIMPLE,
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: AREA_SIMPLE,
+    [TacticalGraphicName.HumanTerrain]: AREA_SIMPLE,
+    [TacticalGraphicName.PenetrationBox]: AREA_SIMPLE,
+    [TacticalGraphicName.Area]: AREA_SIMPLE,
+    [TacticalGraphicName.JointTacticalActionArea]: AREA_SIMPLE,
+    [TacticalGraphicName.AreaGeneric]: AREA_SIMPLE,
+    [TacticalGraphicName.ZoneOfFire]: AREA_SIMPLE,
+    [TacticalGraphicName.RestrictedTerrain]: AREA_SIMPLE,
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: AREA_SIMPLE,
+    [TacticalGraphicName.BiologicalContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.ChemicalContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.NuclearContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.RadiologicalContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.ArtilleryManeuverArea]: {...(TARGET_ACQUISITION_AREA)},
+    [TacticalGraphicName.ArtilleryReservedArea]: {...(TARGET_ACQUISITION_AREA)},
     [TacticalGraphicName.AssemblyArea]: AREA_SIMPLE,
     [TacticalGraphicName.EngagementArea]: AREA_SIMPLE,
     [TacticalGraphicName.RefugeeHoldingArea]: AREA_SIMPLE,
     [TacticalGraphicName.BrigadeSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DivisionSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.CorpsSupportArea]: AREA_SIMPLE,
+    [TacticalGraphicName.FighterEngagementZone]: AIRSPACE_COORDINATION_AREA,
+    [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
+    [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
-    [TacticalGraphicName.Airfield]: AREA_SIMPLE,
+    [TacticalGraphicName.AirfieldZone]: AREA_SIMPLE,
+    [TacticalGraphicName.Airfield]: NAME_FIELD_ONLY,
     [TacticalGraphicName.BattlePosition]: ECH,
+    [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
     [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
     [TacticalGraphicName.FreeFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.FreeFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.FreeFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.FreeFireAreaCircular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.NoFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.NoFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.NoFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.NoFireAreaCircular]: FIRE_SUPPORT_AREA,
     [TacticalGraphicName.RestrictiveFireAreaIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.RestrictiveFireAreaRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.RestrictiveFireAreaCircular]: FIRE_SUPPORT_AREA,
     // Table 5-24 (fire support coordination): para 5-42 requires T and W/W1.
     [TacticalGraphicName.PositionAreaArtilleryIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.PositionAreaArtilleryRectangular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...(FIRE_SUPPORT_AREA), width: true},
     [TacticalGraphicName.PositionAreaArtilleryCircular]: FIRE_SUPPORT_AREA,
     // Table 5-26 template: T, AM (width), W, W1.
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CallForFireZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CallForFireZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CallForFireZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CallForFireZoneCircular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.TargetBuildUpAreaIrregular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.TargetBuildUpAreaRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
+    [TacticalGraphicName.TargetBuildUpAreaCircular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.TargetValueAreaIrregular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.TargetValueAreaRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
+    [TacticalGraphicName.TargetValueAreaCircular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.ZoneOfResponsibilityIrregular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.ZoneOfResponsibilityRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
+    [TacticalGraphicName.ZoneOfResponsibilityCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CensorZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CensorZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CensorZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CensorZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.CriticalFriendlyZoneIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.CriticalFriendlyZoneRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.CriticalFriendlyZoneRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.CriticalFriendlyZoneCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.DeadSpaceAreaIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.DeadSpaceAreaRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.DeadSpaceAreaRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.DeadSpaceAreaCircular]: TARGET_ACQUISITION_AREA,
     // Table 5-26 kill boxes: same template as target acquisition areas.
     [TacticalGraphicName.BlueKillBoxIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.BlueKillBoxRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.BlueKillBoxRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.BlueKillBoxCircular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.PurpleKillBoxIrregular]: TARGET_ACQUISITION_AREA,
-    [TacticalGraphicName.PurpleKillBoxRectangular]: TARGET_ACQUISITION_AREA,
+    [TacticalGraphicName.PurpleKillBoxRectangular]: {...(TARGET_ACQUISITION_AREA), width: true},
     [TacticalGraphicName.PurpleKillBoxCircular]: TARGET_ACQUISITION_AREA,
     // Table 5-25 (fire support / target areas): all variants should match.
     [TacticalGraphicName.FireSupportAreaIrregular]: f(true, false, true, true, false),
-    [TacticalGraphicName.FireSupportAreaRectangular]: f(true, false, true, true, false),
+    [TacticalGraphicName.FireSupportAreaRectangular]: {...(f(true, false, true, true, false)), width: true},
     [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.TargetAreaRectangular]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.TargetAreaRectangular]: {...(NAME_FIELD_ONLY), width: true, length: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.HighDensityAirspaceControlZone]: AIRSPACE_COORDINATION_AREA,
     [TacticalGraphicName.RestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
@@ -440,7 +544,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, true,
-        {width: false, altitude1: true, altitude2: true, grids: true}),
+        {width: true, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, true,
         {width: false, altitude1: true, altitude2: true, grids: true}),
     [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),

@@ -2,6 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, GeometryCollection, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
+import {BowFrame, bowFromAnchors} from "../core/anchors";
 import {toRadians} from "../core/math";
 import * as turf from '../core/turf';
 
@@ -11,11 +12,22 @@ import * as turf from '../core/turf';
  */
 export const TURN_DEFAULT_BEND = 0.5;
 /**
- * How sharp the turn may get. Past this the curve doubles back on itself and
- * the arrowhead points into the graphic; the floor keeps a bow that is still
- * recognisably a turn rather than a straight line.
+ * How sharp the turn may get. Past the ceiling the curve doubles back on itself and the
+ * arrowhead points into the graphic.
+ *
+ * **The floor was 0.15 and is now 0.02.** It was there to keep a bow that still reads as
+ * a turn rather than a straight line, which is a fair thing to want — but the bend handle
+ * sits at `|bend| x size` from the centre, so the floor is also a wall the *handle* stops
+ * at: measured on a 300 px chord, it tracked the cursor exactly for 100 px and then froze
+ * dead while the pointer kept going, and picked up again from where it had stopped on the
+ * way back. A handle that stops following is the same silent refusal a floor on a resize
+ * was, and it reads as the drag accelerating away from the graphic.
+ *
+ * 0.02 still guards the degenerate case — a bend of exactly zero has no curve for the
+ * label's gap to sit in — while leaving the handle free for the whole range a user can
+ * actually aim at. Flattening a turn until it is nearly a line is now their call.
  */
-export const TURN_MIN_BEND = 0.15;
+export const TURN_MIN_BEND = 0.02;
 export const TURN_MAX_BEND = 1.6;
 
 /** Arrowhead length as a fraction of `size`, when `headSize` is not supplied. */
@@ -55,7 +67,18 @@ export function clampTurnBend(bend: number): number {
  */
 export class Turn extends TacticalGraphicsBase<TurnOptions> {
     name: string;
-    type: string = 'Point';
+    /**
+     * **Drawn, not dropped.** APP-06 270504: "Point 1 defines the tip of the arrowhead
+     * and point 2 defines the rear of the symbol. Point 3 defines the 90 degree arc...
+     * Point 3 indicates on which side of the line the arc is placed."
+     *
+     * Tip first, which is the standard's numbering and looks backwards next to the way
+     * the symbol is drawn. The third point is kept as a full bow depth rather than only
+     * a side, because the rule's own point count contradicts the points it then names,
+     * and reading it as "side only" would delete a control the user has today.
+     * @see core/anchors.ts, ai/app-6.md "F3"
+     */
+    type: string = 'LineString';
 
     /** Mission task or table 5-19 obstacle effect — same bowed arrow, "T" aside. @see Block */
     constructor(name: TacticalGraphicName = TacticalGraphicName.TacticalTurn) {
@@ -63,12 +86,31 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         this.name = name;
     }
 
-    /** The bowed curve, start → arrow end, in EPSG:4326. */
-    private curve(base: Feature<Point>, opts?: TurnOptions): Position[] {
-        const center = base.geometry.coordinates;
-        const size = opts?.size ?? 1;
-        const angle = toRadians(opts?.rotation ?? 0);
-        const bend = clampTurnBend(opts?.bend ?? TURN_DEFAULT_BEND);
+    /**
+     * The chord and its bow, read off the drawn points when there are any.
+     *
+     * A base that is a bare point — a save written before the conversion — or a sketch
+     * that has only reached its second click still resolves, from whatever the options
+     * carry. `bend` is always set on the way out, so nothing downstream has to decide
+     * what an unbowed turn means.
+     */
+    private frame(base: Feature<any>, opts?: TurnOptions): Required<BowFrame> {
+        const coords = base.geometry?.coordinates;
+        const anchored = Array.isArray(coords?.[0]);
+        const drawn = anchored ? bowFromAnchors(coords as Position[]) : undefined;
+        const bend = clampTurnBend(drawn?.bend ?? opts?.bend ?? TURN_DEFAULT_BEND);
+        if (drawn) return {...drawn, bend};
+        return {
+            center: (anchored ? coords[0] : coords) as Position,
+            angle: toRadians(opts?.rotation ?? 0),
+            size: opts?.size ?? 1,
+            bend,
+        };
+    }
+
+    /** The bowed curve, rear → arrow end, in EPSG:4326. */
+    private curve(base: Feature<any>, opts?: TurnOptions): Position[] {
+        const {center, angle, size, bend} = this.frame(base, opts);
         const chordStart = geometryService.translateCoordinates(center, size, angle + Math.PI);
         const chordEnd = geometryService.translateCoordinates(center, size, angle);
         return geometryService.bendLine([chordStart, chordEnd], size, bend, CURVE_STEPS);
@@ -106,14 +148,14 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      * reaches the default, but a consumer taking the raw GeoJSON would
      * otherwise get a break in an unbroken curve.
      */
-    private halfGap(opts?: TurnOptions): number {
+    private halfGap(size: number, opts?: TurnOptions): number {
         if (opts?.labelGap !== undefined) return opts.labelGap;
         if (this.name === TacticalGraphicName.Turn) return 0;
-        return (opts?.size ?? 1) * LABEL_GAP_RATIO;
+        return size * LABEL_GAP_RATIO;
     }
 
-    generateGraphics(base: Feature<Point>, opts?: TurnOptions): Feature<GeometryCollection> {
-        const size = opts?.size ?? 1;
+    generateGraphics(base: Feature<any>, opts?: TurnOptions): Feature<GeometryCollection> {
+        const size = this.frame(base, opts).size;
         const curve = this.curve(base, opts);
         const dir = geometryService.getCurveTangentAtEnd(curve, 3);
         const headSize = opts?.headSize ?? size * ARROWHEAD_RATIO;
@@ -125,7 +167,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         // a Bézier.
         const lengths = this.arcLengths(curve);
         const mid = lengths[lengths.length - 1] / 2;
-        const halfGap = Math.min(this.halfGap(opts), mid * 0.9);
+        const halfGap = Math.min(this.halfGap(size, opts), mid * 0.9);
         const cutBefore = mid - halfGap;
         const cutAfter = mid + halfGap;
 
@@ -157,11 +199,8 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      *   both `size` and `rotation` — it is where the turn ends, so it is the
      *   one handle that means something at the arrowhead.
      */
-    generateHandles(base: Feature<Point>, opts?: TurnOptions): Feature<MultiPoint> {
-        const center = base.geometry.coordinates;
-        const size = opts?.size ?? 1;
-        const angle = toRadians(opts?.rotation ?? 0);
-        const bend = clampTurnBend(opts?.bend ?? TURN_DEFAULT_BEND);
+    generateHandles(base: Feature<any>, opts?: TurnOptions): Feature<MultiPoint> {
+        const {center, angle, size, bend} = this.frame(base, opts);
         // `bendLine` bows toward `bearing + 90`, i.e. clockwise of the chord's
         // direction, which is a planar angle of `rotation − 90`.
         const control = geometryService.translateCoordinates(center, Math.abs(bend) * size, angle - Math.sign(bend) * Math.PI / 2);
@@ -169,7 +208,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         return this.asMultiPointFeature([control, tip, center]);
     }
 
-    generateLabels(base: Feature<Point>, opts?: TurnOptions): Feature<Point> {
+    generateLabels(base: Feature<any>, opts?: TurnOptions): Feature<Point> {
         const curve = this.curve(base, opts);
         const lengths = this.arcLengths(curve);
         // The arc-length midpoint — the center of the gap the graphic leaves.
