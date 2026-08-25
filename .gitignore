@@ -53,3 +53,14 @@ __pycache__/
 # not vendored source. See that script for why MapLibre needs it served.
 /public/maplibre-gl-worker.mjs
 /public/maplibre-gl-shared.mjs
+.devserver.log
+
+# Scratch output from analysis runs — never part of the repo. The APP-06 extracts
+# under here are standard-derived material and must not reach the public mirror.
+output/
+
+# Scratch build/inspection output, like `output/` above. Narrow on purpose: `tmp/pdfs`
+# is tracked — the APP-06 crop references live there — and ignoring the whole tree once
+# cost the repo 163 tracked files.
+tmp/spreadsheet-build/
+tmp/spreadsheet-inspect/

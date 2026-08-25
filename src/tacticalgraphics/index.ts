@@ -40,6 +40,7 @@ export {
     TacticalGraphicStatus,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
+    TacticalGraphicMineType,
     RouteDirection,
     getLabel,
     getDisplayName,
@@ -85,6 +86,7 @@ export {
 } from './graphics/FormsOfManeuver';
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
+export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
@@ -183,12 +185,15 @@ export {
     ratioLockedLabelScale,
     withOpacity,
     allowedGestures,
+    dropSizePx,
     supportsHostility,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
     formatDistance,
     formatAltitude,
+    getLabelUsesHostilityColor,
     hasRadiusReadout,
+    showsSizeReadout,
     GLYPH_CUT_GAP_GRAPHICS,
     RATIO_LOCKED_MISSION_TASKS,
 } from './core/symbology';
@@ -204,7 +209,7 @@ export {
  *
  * @see ai/maplibre-renderer.md
  */
-export {HANDLE_Z_INDEX, mapPaintGeometry, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork} from './core/paint';
+export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
 export type {
     CircleSpec,
     FillSpec,
@@ -279,7 +284,18 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {CARDINAL_LABEL_AREAS, CBRN_AREAS} from './symbology/registry';
 export {
+    breakRingAt,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './symbology/boundaryBreakPaints';
+export {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './symbology/cbrnPaints';
+export {
+    dashedOutlinePaint,
     encirclementPaint,
     fortifiedAreaPaint,
     freeFireAreaCircularPaint,
@@ -287,6 +303,7 @@ export {
     limitedAccessAreaPaint,
     obstacleAreaPaint,
     plainOutlinePaint,
+    restrictedTerrainPaint,
 } from './symbology/areaPaints';
 export {
     areaDateLabel,
@@ -297,13 +314,30 @@ export {
     smokeObscurantLabelPaint,
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
+export {fitLabelScale, liftedAnchor} from './symbology/labelFit';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './symbology/protectionLinePaints';
+export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
+export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
+export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
+export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
+export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
+export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
+export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
+export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
 export {directionArrowPaint} from './symbology/linePaints';
 export {routeControlMeasurePaint} from './symbology/routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';
 export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './symbology/corridorPaints';
 export {retrogradeTaskPaint} from './symbology/retrogradePaints';
-export {attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
+export {advanceToContactLabelPaint, attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
 export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
 export {
     CROSSED_HALF_WIDTH_PX,
@@ -320,12 +354,15 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
-export {airfieldPaint} from './symbology/airfieldPaints';
+export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
 export {securityOperationLabelPaint} from './symbology/securityPaints';
 export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+// The size a security operation is built at and files, so both engines say one thing
+// rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
@@ -336,11 +373,20 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, hasBakedDecoration} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
+// The point layout each drawn-anchor symbol is described by — the direction both
+// renderers were missing. @see core/drawnAnchors
+export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
+export type {DrawnAnchorFrame} from './core/drawnAnchors';
+// The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
+export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
+export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
+export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
+export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
-export type {EditMode, EngineCallbacks, EngineCapabilities, SelectedGraphic, TacticalGraphicsEngine} from './core/engine';
+export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,

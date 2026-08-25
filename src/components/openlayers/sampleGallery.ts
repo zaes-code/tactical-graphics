@@ -40,6 +40,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     getDisplayName,
+    latitudeFromMercatorY,
 } from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
@@ -330,7 +331,12 @@ export function drawProvenSamples(
     // gallery image readable, and it is not what a banner was doing.
 
     layout.placements.forEach(({name, cx, cy, titleY}) => {
-        const handler = getController(name, layout.resolution);
+        // Sized for the row it lands in. The sheet spans most of the globe, so its top
+        // rows sit where a projected metre is worth half a real one — every decoration
+        // and badge up there drew at twice the size of the identical symbol on the
+        // equator, which is exactly the comparison this sweep exists to make.
+        // @see screenMeters
+        const handler = getController(name, layout.resolution, latitudeFromMercatorY(cy));
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
         if (handler instanceof SecurityOperationsController) {

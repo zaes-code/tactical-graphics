@@ -115,9 +115,36 @@ export interface StrokeSpec {
  *
  * Sizes are screen pixels, and `color` already carries its final alpha.
  */
+/**
+ * The strokes that make up one hatch tile, in tile pixels.
+ *
+ * **The tile's geometry is symbology, not rendering.** Three renderers rasterise a hatch
+ * — the OpenLayers paint bridge, MapLibre's canvas path and MapLibre's native path — and
+ * every one of them drew a single hard-coded diagonal. Adding `cross` to {@link HatchSpec}
+ * therefore compiled, type-checked, and rendered *identically to diagonal* in all three:
+ * a new symbol distinguished only by texture would have shipped looking like the old one.
+ *
+ * So the segments are described here and the renderers only stroke them. A fourth kind
+ * is then one case in one place rather than three parallel edits nobody links together.
+ */
+export function hatchTileSegments(spec: HatchSpec): Array<[number, number, number, number]> {
+    const n = spec.sizePx;
+    // Bottom-left to top-right, which is the diagonal every existing hatch already drew.
+    const rising: [number, number, number, number] = [0, n, n, 0];
+    if (spec.kind === 'diagonal') return [rising];
+    // Crossed: the same stroke mirrored, so the two kinds share a density and differ
+    // only in whether the second set is present.
+    return [rising, [0, 0, n, n]];
+}
+
 export interface HatchSpec {
-    /** Only diagonal hatching exists today; named so a second pattern can be added. */
-    kind: 'diagonal';
+    /**
+     * `diagonal` is a single set of parallel strokes; `cross` is two sets at opposing
+     * angles. APP-06 tells restricted terrain and *severely* restricted terrain apart by
+     * exactly that difference, so it is a symbology fact both renderers must honor
+     * rather than a texture one of them happens to draw.
+     */
+    kind: 'diagonal' | 'cross';
     color: PaintColor;
     /** Side of the repeating tile. */
     sizePx: number;
@@ -455,4 +482,88 @@ export function mapPaintGeometry<T extends ProjectedGeometry>(geometry: T, fn: (
         case 'MultiPolygon':
             return {type: 'MultiPolygon', coordinates: geometry.coordinates.map(poly => poly.map(ring => ring.map(fn)))} as T;
     }
+}
+
+/**
+ * The closed outline of a projected geometry, or nothing if it has none.
+ *
+ * Every area label and every glyph-inside-a-shape needs this, and both renderers were
+ * working it out for themselves — which is how the *circular* variants ended up with no
+ * outline at all. A circular area's **base** is a point, so a rule that reads only the base
+ * finds nothing, and the label cap and the glyph fit both silently did nothing for them.
+ *
+ * A `MultiLineString` counts only when its first part is **closed**, which is what
+ * separates a generated circle from a drawn route. Treating an open line as a ring would
+ * hand `pointInRing` a shape with no inside.
+ */
+/**
+ * A geometry's axis-aligned extent, in projected meters — or `undefined` when it has
+ * no positions at all.
+ *
+ * `undefined` rather than a zero-size box at the origin, because every caller is
+ * placing something *at* this box: the zone labels hang their date-time group off a
+ * corner, and a box at [0,0] puts the dates in the Gulf of Guinea. An editor drawing a
+ * selection box has the same problem one screen further on.
+ *
+ * **In Layer 1 because both renderers need the same box.** It lived in
+ * `maplibreAdapter.ts`, so OpenLayers had no generic answer to "how big is this
+ * graphic" and computed a `getExtent()` for area holders only — a *base polygon's*
+ * extent, where MapLibre measured the *rendered* geometry. Those are different boxes,
+ * and edit chrome drawn from them would sit in a different place on each engine.
+ * @see ai/conventions.md — "A symbology fact never lives in a holder"
+ */
+export function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['bounds'] {
+    if (!geometry) return undefined;
+    const positions = paintGeometryMembers(geometry).flatMap(paintGeometryPositions);
+    if (!positions.length) return undefined;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of positions) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    return {minX, minY, maxX, maxY};
+}
+
+/**
+ * The union of several extents — how a renderer measures a graphic that is drawn as
+ * more than one geometry.
+ *
+ * A tactical graphic is line work *plus* labels *plus* whatever a paint function
+ * synthesises, and a box drawn around only the line work clips the amplifiers that
+ * hang outside it. Undefined members are skipped, so a caller can pass the optional
+ * ones straight in.
+ */
+export function unionBounds(...boxes: (PaintFeature['bounds'] | undefined)[]): PaintFeature['bounds'] {
+    let out: PaintFeature['bounds'] | undefined;
+    for (const box of boxes) {
+        if (!box) continue;
+        out = out
+            ? {
+                  minX: Math.min(out.minX, box.minX),
+                  minY: Math.min(out.minY, box.minY),
+                  maxX: Math.max(out.maxX, box.maxX),
+                  maxY: Math.max(out.maxY, box.maxY),
+              }
+            : box;
+    }
+    return out;
+}
+
+export function outerRingOf(geometry: ProjectedInputGeometry | undefined): ProjectedPosition[] | undefined {
+    if (!geometry) return undefined;
+    if (geometry.type === 'Polygon') return geometry.coordinates[0];
+    if (geometry.type === 'MultiPolygon') return geometry.coordinates[0]?.[0];
+
+    const parts = geometry.type === 'MultiLineString' ? geometry.coordinates
+        : geometry.type === 'LineString' ? [geometry.coordinates]
+        : [];
+    const first = parts[0];
+    if (!first || first.length < 4) return undefined;
+    const a = first[0];
+    const b = first[first.length - 1];
+    const closed = Math.abs(a[0] - b[0]) < 1 && Math.abs(a[1] - b[1]) < 1;
+    return closed ? first : undefined;
 }

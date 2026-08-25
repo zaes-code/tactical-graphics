@@ -1,6 +1,8 @@
 import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
-import {Circle as CircleGeom, Geometry, Point} from 'ol/geom';
+import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
+import type {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -10,7 +12,10 @@ import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 import {drawMarkerStyle} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
-    base: Feature<Point>;
+    name: TacticalGraphicName;
+    base: Feature<Point | LineString>;
+    /** The center, which is holder state — the base may carry anchor points instead. */
+    centerCoordinate(): Coordinate;
     size: number;
     rotation: number;
     /**
@@ -28,6 +33,16 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      * skip it; the controller no-ops when it is absent.
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
+
+    /**
+     * Whether the draw interaction is the thing setting the size right now.
+     *
+     * The legibility floor reads it, and nothing else does: it is an affordance for the
+     * gesture that creates the graphic, and applying it to a later one resized a symbol
+     * the user had already drawn. Optional, so a host's own holder need not carry it.
+     * @see minimumDrawnRadiusPx
+     */
+    sizingFromDraw?: boolean;
 
     /** @see TacticalGraphicHandler.setMirrored */
     setMirrored?(mirrored: boolean): void;
@@ -71,7 +86,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     getCenter() {
-        return this.graphic.base.getGeometry()!.getCoordinates();
+        // Not off the base: a graphic converted to APP-06's drawn anchor points keeps
+        // a LineString there, whose coordinates are an array of them.
+        return this.graphic.centerCoordinate();
     }
 
     /**
@@ -82,12 +99,38 @@ export class MissionTaskController implements TacticalGraphicHandler {
      */
     handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
 
+    /**
+     * Lifts the minimum-radius floor for the length of a deliberate resize.
+     *
+     * The floor keeps Turn, TacticalTurn and Envelopment from collapsing into an
+     * unreadable kink, which is a real thing to protect — **while the graphic is being
+     * drawn**. It should not also decide how small a finished one may be: it caps the
+     * shrink at 50 px worth of metres at the drawing zoom, so asking a turn for a tenth
+     * of its size got a third of it and no further.
+     *
+     * The user's rule is that everything except the security operations resizes. A floor
+     * that silently refuses is the same "gesture that does nothing" this mode exists to
+     * get rid of. @see TacticalGraphicHandler.suspendSizeFloor
+     */
+    suspendSizeFloor(active: boolean): void {
+        const holder = this.graphic as unknown as {suspendMinimumSize?: boolean};
+        if ('suspendMinimumSize' in holder) holder.suspendMinimumSize = active;
+    }
+
+    /**
+     * The radius the graphic is drawn at. @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const size = (this.graphic as unknown as {size?: number}).size;
+        return typeof size === 'number' && isFinite(size) && size > 0 ? size : undefined;
+    }
+
     getFeatures(): Feature<Geometry>[] {
         return this.graphic.getFeatures();
     }
 
     getBaseGeometry() {
-        return this.graphic.base.getGeometry()!.getCoordinates();
+        return this.graphic.centerCoordinate();
     }
 
     onResolutionChangeFunc(e: ObjectEvent): void {
@@ -110,14 +153,30 @@ export class MissionTaskController implements TacticalGraphicHandler {
         return undefined;
     };
 
+    /**
+     * The radius the drag actually described, on the ground.
+     *
+     * **`Circle.getRadius()` is in projected metres** and `size` is a real distance — the
+     * generators build from it geodesically and the properties dialog states it in
+     * kilometres. Stamping the projected figure inflated every point-anchored graphic by
+     * `1 / cos(latitude)`: at 50 degrees north a circle dragged out to 120 px rendered at
+     * 185, so the rim outran the cursor sizing it and the read-out claimed 587 km for a
+     * circle 377 km across. @see mercator.ts
+     */
+    private drawnRadius(circle: CircleGeom): number {
+        return groundLength(circle.getRadius(), latitudeFromMercatorY(circle.getCenter()[1]));
+    }
+
     onDrawStartFunc = (e: DrawEvent) => {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
         this.graphic.showMeasure?.(true);
+        // The legibility floor is for *this* gesture and no other. @see minimumDrawnRadiusPx
+        this.graphic.sizingFromDraw = true;
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
-            const radius = circleGeom.getRadius();
+            const radius = this.drawnRadius(circleGeom);
 
             const dx = this.currentMouseCoord[0] - this.center[0];
             const dy = this.currentMouseCoord[1] - this.center[1];
@@ -134,9 +193,12 @@ export class MissionTaskController implements TacticalGraphicHandler {
 
     onDrawEndFunc = (e: DrawEvent) => {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
-        const radius = circleGeom.getRadius();
+        const radius = this.drawnRadius(circleGeom);
 
+        // Still the draw: the floor has to reach the size that is *committed*, or a short
+        // drag would be held legible right up until the click that ends it.
         this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };
 
@@ -148,6 +210,24 @@ export class MissionTaskController implements TacticalGraphicHandler {
         // Armed here rather than on pointer-down: a resize gesture only becomes one once
         // it actually changes the size. The manager disarms it on pointer-up.
         this.graphic.showMeasure?.(true);
+
+        /*
+         * **The arrowhead scales with the graphic it belongs to.**
+         *
+         * `headSize` is filed in metres at construction — `arrowheadMeters(name, res)` —
+         * and nothing moved it afterwards, so shrinking an envelopment to 45% left a
+         * full-size head on a graphic less than half as long. It reads as a different
+         * symbol rather than a smaller one.
+         *
+         * Scaled here, in the gesture, rather than inside `updateGeom`: restore also
+         * calls `updateGeom`, with the *final* size against a freshly constructed head,
+         * and a ratio taken there would rescale a head that was already correct.
+         */
+        const holder = this.graphic as unknown as {headSize?: number};
+        if (typeof holder.headSize === 'number' && holder.headSize > 0) {
+            holder.headSize *= deltaSize;
+        }
+
         const size = this.graphic.size * deltaSize;
         this.graphic.updateGeom({size});
     }
@@ -168,8 +248,8 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     handleTranslate(deltaX: number, deltaY: number): void {
-        let baseCoord = this.graphic.base.getGeometry()!.getCoordinates();
-        let center = [baseCoord[0] + deltaX, baseCoord[1] + deltaY];
+        const baseCoord = this.graphic.centerCoordinate();
+        const center = [baseCoord[0] + deltaX, baseCoord[1] + deltaY];
         this.graphic.updateGeom({center});
     }
 
@@ -184,7 +264,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
     }
 
-    setBaseFeature(base: Feature<Point>): void {
+    setBaseFeature(base: Feature<Point | LineString>): void {
         this.graphic.setBaseFeature(base);
     }
 }
@@ -222,7 +302,16 @@ export class PointDropController extends MissionTaskController {
      * symbols and leave it off; the explosives readiness states are dropped the same way
      * but the user scales them afterwards, which is the only difference between them.
      */
-    constructor(graphic: MissionTaskGraphic, fixedSize: number, private readonly resizable: boolean = false) {
+    constructor(
+        graphic: MissionTaskGraphic,
+        fixedSize: number,
+        private readonly resizable: boolean = false,
+        /**
+         * The size as it was actually specified — a pixel count and the zoom to spend it
+         * at — so the drop can convert it where it lands. @see drop
+         */
+        private readonly screenSize?: {px: number; resolution: number},
+    ) {
         super(graphic);
         this.fixedSize = fixedSize;
     }
@@ -231,7 +320,16 @@ export class PointDropController extends MissionTaskController {
         const point = e.feature.getGeometry() as Point | undefined;
         const coordinate = point?.getCoordinates();
         if (!coordinate || coordinate.length < 2) return;
-        this.graphic.updateGeom({size: this.fixedSize, center: coordinate as Coordinate, rotation: 0});
+        // **Sized where it lands, not where the map was centred.** These are screen
+        // constants — 50 px across for the crossed tasks — and a pixel count times the
+        // bare resolution is a projected length, so a Destroy dropped at 60 degrees north
+        // came out 204 px wide against the same drop's 100 px on the equator. The click
+        // is the first moment the place is known, and it is the only input this symbol
+        // takes. @see screenMeters
+        const size = this.screenSize
+            ? screenMeters(this.screenSize.px, this.screenSize.resolution, latitudeFromMercatorY(coordinate[1]))
+            : this.fixedSize;
+        this.graphic.updateGeom({size, center: coordinate as Coordinate, rotation: 0});
     }
 
     // A Point draw fires both in the same click. Placing on `drawstart` means the

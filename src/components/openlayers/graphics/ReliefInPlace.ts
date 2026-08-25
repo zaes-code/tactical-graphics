@@ -58,6 +58,16 @@ export class ReliefInPlace implements LineGraphic {
         });
     };
 
+    /**
+     * `handles` is `handleCoords.slice(1)`: `handleCoords[0]` goes to `offsetHandle`.
+     *
+     * The generator's contract calls index 0 the `mirror` handle, so without this the
+     * manager read the arrow tip — contract index 1 — as the mirror and claimed its drag
+     * as a flip, which is why that handle appeared to do nothing.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    handleIndexOffset = 1;
+
     getBaseGraphicFeature = (): Feature<LineString> => this.base;
 
     setSymbolId = (symbolId: string) => {

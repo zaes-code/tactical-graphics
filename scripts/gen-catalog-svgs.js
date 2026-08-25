@@ -88,7 +88,13 @@ const toMetres = ([lon, lat]) => [(lon * Math.PI) / 180 * R, Math.log(Math.tan(M
 const project = geom => {
     if (!geom) return null;
     if (geom.type === 'GeometryCollection') return {type: 'GeometryCollection', geometries: geom.geometries.map(project)};
-    const walk = c => (Array.isArray(c[0]) ? c.map(walk) : toMetres(c));
+    // **An empty array stays empty.** `Array.isArray(c[0])` is false for `[]`, so without
+    // this an empty MultiPoint — which is what a graphic with no label anchor emits —
+    // became `toMetres([])`, i.e. one position of `[NaN, NaN]`. A paint reading it saw two
+    // finite-looking anchors, passed its own "fewer than two" guard, and wrote a label at
+    // `x="NaN"`. Both fords shipped that way. The library was never wrong; this is a
+    // harness bug, and the harness is the thing nobody checks.
+    const walk = c => (c.length === 0 ? [] : Array.isArray(c[0]) ? c.map(walk) : toMetres(c));
     return {type: geom.type, coordinates: walk(geom.coordinates)};
 };
 
@@ -133,7 +139,49 @@ function makeBase(name) {
     return {type: 'LineString', coordinates: pts};
 }
 
-const AMPLIFIERS = {radius: 900, rotation: 0, width: 500, rangeFan: undefined, decorationSize: undefined};
+/**
+ * **Every amplifier the schema carries, filled in.**
+ *
+ * The catalog used to send a bare `radius` and nothing else, so its thumbnails showed line
+ * work and no text — and a plate dense with `T`, `W` and `B` boxes had nothing to be
+ * compared against. Filling the whole bag makes each thumbnail show what an operator
+ * actually ends up with: the designation, the dates, the echelon, the altitudes, the mine
+ * type, all in the layout the symbol puts them in.
+ *
+ * Two fields are deliberately left out. `hostility` would tint all 283 symbols, and these
+ * are being compared against black-and-white plates; `status` would dash them, which is a
+ * *different symbol* on the several graphics whose broken line is doctrinal rather than a
+ * status. Both would be showing something other than the thing under review.
+ */
+const AMPLIFIERS = {
+    // Geometry inputs.
+    radius: 900,
+    rotation: 0,
+    width: 500,
+    decorationSize: undefined,
+
+    // Text amplifiers.
+    label: 'ALPHA',
+    secondId: 'BRAVO',
+    countryCode: 'USA',
+    secondCountryCode: 'CAN',
+    startDate: '021200ZJUN26',
+    endDate: '021800ZJUN26',
+    eff: '021200Z-021800Z',
+    weapon: 'M252 81mm',
+    grid: '18SUJ2345',
+    minAltitude: 500,
+    maxAltitude: 2000,
+    altitudeDatum: 'AGL',
+
+    // Selectors.
+    echelon: 'Battalion/Squadron',
+    direction: 'ONE_WAY',
+    mineType: 'Antitank Mine',
+
+    // The range fans draw one ring per band and nothing without them.
+    rangeFan: {bands: [{range: 12, label: 'MIN'}, {range: 28, altitude: '3000FT AGL'}]},
+};
 
 // ── Paint collection ────────────────────────────────────────────────────────
 function paintsFor(name, resolution) {
@@ -147,10 +195,41 @@ function paintsFor(name, resolution) {
     const projectedBase = project(baseGeom);
     const out = [];
 
+    // The area painters that set a glyph *inside* a shape need to know the shape: the
+    // CBRN triangle, the airfield's runways, the PsyOps loudspeaker and the mine row all
+    // ask `fitSymbolScale` how much room there is, and the artillery areas and the
+    // radiation contour cut their boundary at a bearing from its centre. Both read
+    // `ring` / `bounds`, which live on the feature rather than in its geometry because
+    // the mark rides the *label* point while the shape is the polygon.
+    //
+    // Without them `fitSymbolScale` returns 1 and the break painters return nothing, so
+    // those thumbnails came out as a bare outline or a glyph the size of the world.
+    // The ring is the *drawn shape*, which is the base for an area the user traced and the
+    // rendered graphic for one built from a centre and a radius — the circular variants
+    // take a Point base, so reading only the base leaves them with no shape at all and a
+    // glyph fitted to nothing.
+    const projectedGraphic = project(render.graphic && render.graphic.geometry);
+    const ringOf = geom => {
+        if (!geom) return undefined;
+        if (geom.type === 'Polygon') return geom.coordinates[0];
+        if (geom.type === 'MultiLineString') return geom.coordinates[0];
+        if (geom.type === 'LineString' && geom.coordinates.length > 3) return geom.coordinates;
+        return undefined;
+    };
+    const ring = ringOf(projectedBase) || ringOf(projectedGraphic);
+    const bounds = ring && ring.length
+        ? {
+            minX: Math.min(...ring.map(p => p[0])),
+            minY: Math.min(...ring.map(p => p[1])),
+            maxX: Math.max(...ring.map(p => p[0])),
+            maxY: Math.max(...ring.map(p => p[1])),
+        }
+        : undefined;
+
     const run = (fn, geom) => {
         if (!fn || !geom) return null;
         try {
-            const r = fn({geometry: geom, properties: props, graphicSize: AMPLIFIERS.radius}, ctx);
+            const r = fn({geometry: geom, properties: props, graphicSize: AMPLIFIERS.radius, ring, bounds}, ctx);
             return Array.isArray(r) ? r : [];
         } catch (e) {
             return null;

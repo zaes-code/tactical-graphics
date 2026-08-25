@@ -234,6 +234,49 @@ describe('setOffset — the width handle', () => {
     });
 });
 
+describe('resize carries the sizes the vertices do not', () => {
+    /**
+     * A corridor's width and a line graphic's decoration are filed beside the geometry,
+     * not in it. Scaling only the vertices made the graphic longer with its rails and its
+     * chevrons unchanged — an air corridor resized 1.5x came out 420 x 40 px against
+     * OpenLayers' 431 x 51, so the same gesture drew a different symbol on each engine.
+     * OpenLayers has scaled them together since `LineGraphicController.handleResize`,
+     * which states the rule in the user's own words: resize the whole graphic as is.
+     */
+    const corridor = () => ({
+        geometry: LINE,
+        properties: props({name: TacticalGraphicName.AirCorridor, width: 40_000, decorationSize: 15_000}),
+    });
+
+    it('scales the width and the decoration with the line', () => {
+        const before = corridor();
+        // From one end of the base to twice its distance from the centre: a 2x resize.
+        const bigger = resize(before, [2, 0], [3, 0]);
+
+        const grew = positionsOf(bigger.geometry)[1][0] / positionsOf(before.geometry)[1][0];
+        expect(grew).toBeGreaterThan(1);
+        expect(bigger.properties.width! / before.properties.width!).toBeCloseTo(grew, 2);
+        expect(bigger.properties.decorationSize! / before.properties.decorationSize!).toBeCloseTo(grew, 2);
+    });
+
+    it('leaves a graphic that carries neither alone', () => {
+        const plain = {geometry: LINE, properties: props()};
+        const bigger = resize(plain, [2, 0], [3, 0]);
+
+        expect(bigger.properties.width).toBeUndefined();
+        expect(bigger.properties.decorationSize).toBeUndefined();
+    });
+
+    /**
+     * `radius` is the *same* number as the half-width on this family — it is what
+     * `setOffset` replays on restore — so scaling it here as well would compound.
+     */
+    it('does not scale the radius of a drawn graphic', () => {
+        const before = {geometry: LINE, properties: props({radius: 20_000, width: 40_000})};
+        expect(resize(before, [2, 0], [3, 0]).properties.radius).toBe(20_000);
+    });
+});
+
 describe('setBend and setReach — the curve handles', () => {
     const curve = () => ({
         geometry: POINT,
@@ -278,6 +321,46 @@ describe('setBend and setReach — the curve handles', () => {
 
         const north = setReach(curve(), [0, 1]);
         expect(north.properties.rotation).toBeCloseTo(90, 4);
+    });
+
+    /**
+     * **The same drag has to mean the same size wherever on Earth it is made.**
+     *
+     * Both verbs measure the cursor in mercator metres, which are stretched by
+     * `1 / cos(latitude)`, and both write a figure the generators read as a real
+     * distance. Left unconverted, a graphic dragged out at 50 degrees north came out
+     * 1.56x the one dragged identically on the equator — and disagreed with OpenLayers,
+     * which takes both off geodesic anchor points. @see mercator.ts
+     *
+     * A degree of *longitude* is the control here: it shortens with latitude on the
+     * ground by exactly the factor mercator inflates by, so a one-degree reach east is
+     * the same projected length everywhere and a different ground length at each
+     * parallel. The assertion is that the stored radius follows the ground.
+     */
+    it('stores a ground distance, so latitude does not change what a drag means', () => {
+        const reachAt = (latitude: number) =>
+            setReach({geometry: {type: 'Point', coordinates: [0, latitude]}, properties: props({radius: 100_000, rotation: 0})}, [1, latitude])
+                .properties.radius!;
+
+        // A degree of longitude: ~111 km at the equator, ~72 km at 50 degrees north.
+        expect(reachAt(0) / 1000).toBeCloseTo(111.3, 0);
+        expect(reachAt(50) / 1000).toBeCloseTo(71.6, 0);
+        // Unconverted, both read 111 km — the number the projection reports, not the one
+        // the ground does.
+        expect(reachAt(50)).toBeLessThan(reachAt(0));
+    });
+
+    it('reads the same bend from the same gesture at any latitude', () => {
+        const bendAt = (latitude: number) =>
+            setBend(
+                {geometry: {type: 'Point', coordinates: [0, latitude]}, properties: props({radius: 55_660, rotation: 0})},
+                [0.5, latitude - 0.25],
+                b => b,
+            ).properties.bend!;
+
+        // Half a degree along and a quarter down, at both parallels: the same shape of
+        // drag relative to the graphic, so the same bend.
+        expect(bendAt(50)).toBeCloseTo(bendAt(0), 1);
     });
 });
 

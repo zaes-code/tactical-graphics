@@ -23,12 +23,16 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor, labelScale} from '../core/symbology';
+import {HALO_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {getFullLabel} from './paintFunctions';
+import {getFullLabel, labelColorOf} from './paintFunctions';
+import {fitLabelScale} from './labelFit';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
+
+/** How far below the designation the date-time group hangs, in screen pixels. */
+const DEFAULT_DATE_OFFSET_PX = 18;
 
 /** Where an area's label anchor is — the label feature is a bare point. */
 function anchorOf(feature: PaintFeature): ProjectedPosition | undefined {
@@ -39,19 +43,34 @@ function scaleOf(feature: PaintFeature, context: PaintContext): number {
     return labelScale(feature.drawingResolution, context.resolution);
 }
 
-/** One centered, multi-line text mark at `at`. */
-function stack(at: ProjectedPosition, lines: string[], scale: number, rotation = 0): Paint {
+/**
+ * One centered, multi-line text mark at `at`, **capped so it stays inside the shape**.
+ *
+ * The cap is not a caller's choice, which is why it lives here rather than at the call
+ * sites: a label's scale is zoom-anchored and a shape's size is not, so every centred block
+ * overruns its own outline at some zoom unless something stops it. Doing it in the one
+ * funnel every centred stack passes through means a new area family inherits the behaviour
+ * instead of having to remember it. @see fitLabelScale
+ */
+function stack(
+    feature: PaintFeature,
+    context: PaintContext,
+    at: ProjectedPosition,
+    lines: string[],
+    scale: number,
+    rotation = 0,
+): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align: 'center',
             baseline: 'middle',
             rotation,
-            scale,
+            scale: fitLabelScale(feature, context, at, lines, fontStyle, scale),
         },
     };
 }
@@ -97,7 +116,7 @@ export function areaLabelStackPaint(
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
 
-        return lines.length ? [stack(at, lines, scaleOf(feature, context))] : [];
+        return lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
     };
 }
 
@@ -124,7 +143,7 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
         if (dtg1) lines.push(dtg2 ? `${dtg1}-` : dtg1);
         if (dtg2) lines.push(dtg2);
 
-        return [stack(at, lines, scaleOf(feature, context))];
+        return [stack(feature, context, at, lines, scaleOf(feature, context))];
     };
 }
 
@@ -151,7 +170,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const paints: Paint[] = [];
 
         const nameLines = [getLabel(name), (feature.properties.label ?? '').trim()].filter(s => s.length > 0);
-        if (at && nameLines.length) paints.push(stack(at, nameLines, scale));
+        if (at && nameLines.length) paints.push(stack(feature, context, at, nameLines, scale));
 
         const dtg1 = (feature.properties.startDate ?? '').trim();
         const dtg2 = (feature.properties.endDate ?? '').trim();
@@ -165,7 +184,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
             text: {
                 text: [dtg1, dtg2].filter(s => s.length > 0).join('-\n'),
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'right',
                 baseline: 'top',
@@ -216,14 +235,14 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(at, ['PAA'], scale));
+        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], scale));
 
         const at = anchorOf(feature);
         const lines = [
             getFullLabel(name, feature.properties.label ?? '').trim(),
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
-        if (at && lines.length) paints.push(stack(at, lines, scale));
+        if (at && lines.length) paints.push(stack(feature, context, at, lines, scale));
 
         return paints;
     };
@@ -245,7 +264,7 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
         const text = getFullLabel(name, feature.properties.label ?? '').trim();
         if (!at || !segment || !text) return [];
 
-        return [stack(at, [text], scaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
+        return [stack(feature, context, at, [text], scaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
     };
 }
 
@@ -272,21 +291,28 @@ export function areaDefaultLabelPaint(name: TacticalGraphicName): AreaLabelPaint
         const text = getFullLabel(name, feature.properties.label ?? '');
         const date = areaDateLabel(feature);
 
+        // The two marks are separately anchored, so they are capped as **one block**: the
+        // date hangs `DEFAULT_DATE_OFFSET_PX` below the designation, and fitting each alone
+        // would let the pair together leave a shape that neither leaves by itself.
+        const fitted = fitLabelScale(
+            feature, context, at, [text, date], fontStyle, scale, DEFAULT_DATE_OFFSET_PX / 2,
+        );
+
         const mark = (label: string, offsetYPx: number): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: label,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 offsetYPx,
-                scale,
+                scale: fitted,
             },
         });
 
         // Both marks are emitted even when empty, matching the original: an empty
         // `text` renders nothing, and keeping the shape identical keeps the mark
         // count comparable between the two renderers.
-        return [mark(text, 0), mark(date, 18)];
+        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX)];
     };
 }

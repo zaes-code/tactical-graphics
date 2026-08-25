@@ -8,13 +8,14 @@ import {
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
     infiltrationGraphicStyleFunc,
+    barSymbolStyleFunc,
     mobileDefenseGraphicStyleFunc,
     movementGraphicPathStyleFunc,
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -32,6 +33,16 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle sits on the rail itself, one radius off the center line.
     [TacticalGraphicName.InfiltrationLane]: 1,
 };
+
+/**
+ * The demolition obstacles, whose line work is a pair of rails stroked differently
+ * per readiness state rather than the movement family's arrow.
+ */
+const BAR_SYMBOL_GRAPHIC_NAMES: TacticalGraphicName[] = [
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+];
 
 export class MovementGraphicBase implements LineGraphic {
     offset: number;
@@ -93,6 +104,13 @@ export class MovementGraphicBase implements LineGraphic {
         if (name === TacticalGraphicName.MobileDefense) {
             this.graphic.setStyle(mobileDefenseGraphicStyleFunc());
         }
+        // The demolition obstacles moved here from the mission-task holder when they
+        // became centerline-plus-width graphics, and their dashing came with them:
+        // which of the two rails is hashed is what separates planned from safe from
+        // armed. @see BAR_SYMBOL_DASHES, ai/app-6.md "F2"
+        if (BAR_SYMBOL_GRAPHIC_NAMES.includes(name)) {
+            this.graphic.setStyle(barSymbolStyleFunc(name));
+        }
 
         writeGraphicProperties([this.graphic, this.labels, this.handles, this.base], name, this.graphicLabels);
     }
@@ -119,6 +137,7 @@ export class MovementGraphicBase implements LineGraphic {
                 case TacticalGraphicName.MainAxisOfAdvance:
                 case TacticalGraphicName.AviationAxisOfAdvance:
                 case TacticalGraphicName.SupportingAxisOfAdvance:
+                case TacticalGraphicName.AvenueOfApproach:
                 case TacticalGraphicName.Counterattack:
                 default:
                     return movementGraphicPathStyleFunc(name)(feature, resolution);
@@ -132,11 +151,29 @@ export class MovementGraphicBase implements LineGraphic {
         writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
     };
 
+    /**
+     * Where this graphic sits, in degrees, for anything sized in screen pixels.
+     *
+     * The first vertex, and zero before one exists — the holder is built when the tool is
+     * picked and only learns its place when the user clicks. @see LineGraphicBase.latitude
+     */
+    private get latitude(): number {
+        const first = this.base.getGeometry()?.getCoordinates()?.[0];
+        return first ? latitudeFromMercatorY(first[1]) : 0;
+    }
+
     updateGeometry = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {radius: this.offset, size: decorationMeters(this.graphicName, this.resolution), mirrored: this.mirrored}
+            // At this graphic's own latitude, like the rest of the family: the decoration
+            // is a pixel size and the bare resolution would make it a projected one.
+            // @see LineGraphicBase.graphicSize
+            {
+                radius: this.offset,
+                size: decorationMeters(this.graphicName, groundLength(this.resolution, this.latitude)),
+                mirrored: this.mirrored,
+            }
         );
         if (!tacticalGraphic) return;
 

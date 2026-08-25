@@ -28,16 +28,37 @@
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
+import {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './cbrnPaints';
+import {
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './boundaryBreakPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+import {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './protectionLinePaints';
+import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
+import {sweptArcTaskPaint} from './sweptArcTaskPaints';
+import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
+import {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
+import {obstacleBypassPaint} from './obstacleBypassPaints';
+import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
-import {airfieldPaint} from './airfieldPaints';
+import {airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 import {securityOperationLabelPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
@@ -50,6 +71,7 @@ import {
     baseDefenseZoneLabelPaint,
     crossedMissionTaskLabelPaint,
     crossedMissionTaskPaint,
+    advanceToContactPaint,
     movementToContactPaint,
     pursuitPaint,
 } from './missionTaskPaints';
@@ -58,6 +80,7 @@ import {
     attackHelicopterAxisLabelPaint,
     aviationAxisLabelPaint,
     axisOfAdvanceLabelPaint,
+    avenueOfApproachLabelPaint,
     counterattackLabelPaint,
     envelopmentLabelPaint,
     frontalAttackLabelPaint,
@@ -68,6 +91,7 @@ import {
     infiltrationGraphicPaint,
     mobileDefenseGraphicPaint,
     movementGraphicPaint,
+    advanceToContactLabelPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
 } from './movementPaints';
@@ -84,7 +108,9 @@ import {
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
+    dashedOutlinePaint,
     obstacleAreaPaint,
+    restrictedTerrainPaint,
     freeFireAreaCircularPaint,
     plainOutlinePaint,
 } from './areaPaints';
@@ -118,7 +144,10 @@ export interface GraphicPainters {
 const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Contain,
     TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndKnock,
     TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
     TacticalGraphicName.Isolate,
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
@@ -153,6 +182,13 @@ const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.LineOfDeparture,
     TacticalGraphicName.LineOfDepartureOrLineOfContact,
     TacticalGraphicName.ReleaseLine,
+    TacticalGraphicName.LightLine,
+    TacticalGraphicName.LineGeneric,
+    TacticalGraphicName.HandoverLine,
+    TacticalGraphicName.NamedAreaOfInterestLine,
+    TacticalGraphicName.HoldingLine,
+    TacticalGraphicName.NoFireLine,
+    TacticalGraphicName.BattlefieldCoordinationLine,
     TacticalGraphicName.RestrictiveFireLine,
 ];
 
@@ -167,12 +203,21 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
-    TacticalGraphicName.Airfield,
+    TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.AirheadLine,
     TacticalGraphicName.AreaOfOperations,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
     TacticalGraphicName.AssaultPosition,
+    TacticalGraphicName.BombArea,
+    TacticalGraphicName.TerminallyGuidedMunitionFootprint,
+    TacticalGraphicName.Bridgehead,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    TacticalGraphicName.HumanTerrain,
+    TacticalGraphicName.PenetrationBox,
+    TacticalGraphicName.Area,
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.AssemblyArea,
     TacticalGraphicName.AttackPosition,
     TacticalGraphicName.BaseCamp,
@@ -181,6 +226,12 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BrigadeSupportArea,
     TacticalGraphicName.CallForFireZoneIrregular,
     TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.TargetBuildUpAreaIrregular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetValueAreaIrregular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityIrregular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
     TacticalGraphicName.CensorZoneIrregular,
     TacticalGraphicName.CensorZoneRectangular,
     TacticalGraphicName.CorpsSupportArea,
@@ -190,6 +241,9 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaRectangular,
     TacticalGraphicName.DetaineeHoldingArea,
     TacticalGraphicName.DivisionSupportArea,
+    TacticalGraphicName.FighterEngagementZone,
+    TacticalGraphicName.ExtractionZone,
+    TacticalGraphicName.RegimentalSupportArea,
     TacticalGraphicName.DropZone,
     TacticalGraphicName.EngagementArea,
     TacticalGraphicName.FireSupportAreaIrregular,
@@ -241,6 +295,12 @@ const ZONE_GRAPHICS_BOXED: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
     TacticalGraphicName.CriticalFriendlyZoneRectangular,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
     TacticalGraphicName.CensorZoneRectangular,
     TacticalGraphicName.CensorZoneCircular,
     TacticalGraphicName.CallForFireZoneRectangular,
@@ -253,7 +313,24 @@ const ZONE_GRAPHICS_BOXED: readonly TacticalGraphicName[] = [
     TacticalGraphicName.PurpleKillBoxCircular,
 ];
 
+/** The four CBRN contaminated areas, and the hazard letter each carries. */
+/** The two artillery areas that write their abbreviation into their own boundary. */
+export const CARDINAL_LABEL_AREAS: ReadonlyArray<readonly [TacticalGraphicName, string]> = [
+    [TacticalGraphicName.ArtilleryManeuverArea, 'AMA'],
+    [TacticalGraphicName.ArtilleryReservedArea, 'ARA'],
+];
+
+export const CBRN_AREAS: ReadonlyArray<readonly [TacticalGraphicName, string]> = [
+    [TacticalGraphicName.BiologicalContaminatedArea, 'B'],
+    [TacticalGraphicName.ChemicalContaminatedArea, 'C'],
+    [TacticalGraphicName.NuclearContaminatedArea, 'N'],
+    [TacticalGraphicName.RadiologicalContaminatedArea, 'R'],
+];
+
 const ZONE_GRAPHICS_IRREGULAR: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ZoneOfResponsibilityIrregular,
+    TacticalGraphicName.TargetValueAreaIrregular,
+    TacticalGraphicName.TargetBuildUpAreaIrregular,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular,
     TacticalGraphicName.CriticalFriendlyZoneIrregular,
     TacticalGraphicName.CensorZoneIrregular,
@@ -312,6 +389,7 @@ const AIR_COORDINATING_ZONES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
     TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone,
     TacticalGraphicName.WeaponEngagementZone,
+    TacticalGraphicName.FighterEngagementZone,
     TacticalGraphicName.JointEngagementZone,
     TacticalGraphicName.MissileEngagementZone,
     TacticalGraphicName.LowAltitudeMissileEngagementZone,
@@ -337,7 +415,14 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (AIRSPACE_COORDINATION_AREAS.includes(name)) return airspaceCoordinationAreaLabelPaint(name);
     // The airfield's label block is the ordinary one; what is bespoke is the runway
     // symbol drawn over it, which the paint wraps around the label. @see airfieldPaint
-    if (name === TacticalGraphicName.Airfield) return airfieldPaint(areaDefaultLabelPaint(name));
+    // Airfield zone is the runway glyph fitted inside a drawn area; APP-06 120400 carries
+    // an H amplifier rather than a text label, and the glyph is the symbol either way.
+    //
+    // The **airfield** itself is not here: 131900 is a one-point static symbol and gets its
+    // own pair below, which is the whole difference between the two graphics.
+    if (name === TacticalGraphicName.AirfieldZone) {
+        return airfieldPaint(areaDefaultLabelPaint(name));
+    }
     if (
         name === TacticalGraphicName.PositionAreaArtilleryCircular ||
         name === TacticalGraphicName.PositionAreaArtilleryIrregular ||
@@ -423,6 +508,9 @@ const CIRCULAR_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
     TacticalGraphicName.BlueKillBoxCircular,
     TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
     TacticalGraphicName.CensorZoneCircular,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.DeadSpaceAreaCircular,
@@ -457,17 +545,19 @@ const RETROGRADE_GRAPHICS: readonly TacticalGraphicName[] = [
 ];
 
 /**
- * The movement and manoeuvre family. Each draws plain line work and an amplifier
+ * The movement and maneuver family. Each draws plain line work and an amplifier
  * chosen per graphic — the table mirrors what `LineGraphicBase`'s movement switch
  * used to do inline.
  */
 const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.AvenueOfApproach,
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvanceFeint,
     TacticalGraphicName.AviationAxisOfAdvance,
     TacticalGraphicName.SupportingAxisOfAdvance,
     TacticalGraphicName.Counterattack,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,
@@ -496,7 +586,9 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => ReturnTyp
     [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.AvenueOfApproach]: avenueOfApproachLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
 };
@@ -510,6 +602,25 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
+
+        // ── APP-06's protection lines ────────────────────────────────────────
+        [TacticalGraphicName.Capture]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Capture))},
+        [TacticalGraphicName.Escort]: {graphic: escortPaint(getLabel(TacticalGraphicName.Escort))},
+        [TacticalGraphicName.Demonstration]: {graphic: demonstrationPaint(getLabel(TacticalGraphicName.Demonstration))},
+        [TacticalGraphicName.Evacuate]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Evacuate))},
+        [TacticalGraphicName.Recover]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Recover))},
+        [TacticalGraphicName.DecisionLine]: {graphic: decisionLinePaint()},
+        [TacticalGraphicName.MobilityCorridor]: {graphic: mobilityCorridorPaint()},
+        [TacticalGraphicName.MinimumSafeDistanceZone]: {graphic: nestedZonePaint()},
+        [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: {graphic: nestedZonePaint()},
+        [TacticalGraphicName.ObstacleBypassEasy]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassEasy)},
+        [TacticalGraphicName.ObstacleBypassDifficult]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassDifficult)},
+        [TacticalGraphicName.ObstacleBypassImpossible]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassImpossible)},
+        [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},
+        [TacticalGraphicName.MineCluster]: {graphic: mineClusterPaint()},
+        [TacticalGraphicName.TripWire]: {graphic: tripWirePaint()},
+        [TacticalGraphicName.RaftSite]: {graphic: raftSitePaint()},
+        [TacticalGraphicName.FortifiedPosition]: {graphic: fortifiedPositionPaint()},
         [TacticalGraphicName.ProbableLineOfDeployment]: {
             graphic: defaultLinePaint(TacticalGraphicName.ProbableLineOfDeployment, {
                 alwaysDashed: true,
@@ -531,6 +642,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleZone]: {graphic: obstacleAreaPaint({outward: true})},
         [TacticalGraphicName.ObstacleFreeArea]: {graphic: obstacleAreaPaint({outward: false})},
         [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
+        // APP-06 242600 note 1: the boundary is a broken line in *all* status
+        // depictions, so the dash is the symbol rather than a status.
+        [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
+        // Told apart from each other by texture alone. @see hatchTileSegments
+        [TacticalGraphicName.RestrictedTerrain]: {graphic: restrictedTerrainPaint()},
+        [TacticalGraphicName.SeverelyRestrictedTerrain]: {graphic: restrictedTerrainPaint({dense: true})},
 
         [TacticalGraphicName.FortifiedArea]: {graphic: fortifiedAreaPaint()},
         [TacticalGraphicName.GroupOrSeriesOfTargets]: {graphic: groupOrSeriesOfTargetsPaint()},
@@ -589,6 +706,18 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
     registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
 
+    for (const [name, label] of CARDINAL_LABEL_AREAS) {
+        registry[name] = {
+            graphic: cardinalBoundaryPaint(label),
+            label: cardinalLabelPaint(label, areaDefaultLabelPaint(name)),
+        };
+    }
+    for (const [name, letter] of CBRN_AREAS) {
+        registry[name] = {
+            graphic: cbrnContaminatedAreaPaint(),
+            label: cbrnMarkPaint(letter, areaDefaultLabelPaint(name)),
+        };
+    }
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
     }
@@ -672,6 +801,15 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         graphic: movementToContactPaint(),
         label: missionTaskLabelPaint(TacticalGraphicName.MovementToContact),
     };
+    // APP-06's advance to contact: a different symbol, so a different paint. Its bolt
+    // needs no screen-space offset because it leaves the wing already clear of the
+    // outline, where FM's badge starts its two on the flank. @see AdvanceToContact
+    registry[TacticalGraphicName.AdvanceToContact] = {
+        graphic: advanceToContactPaint(),
+        // APP-06 342900's T and W . W1 boxes -- the amplifier set FM's badge does not
+        // carry at all. @see advanceToContactLabelPaint for why it is one line.
+        label: advanceToContactLabelPaint(),
+    };
     // Its label is the one hardcoded string in the family, and it tracks the circle
     // rather than the zoom.
     registry[TacticalGraphicName.BaseDefenseZone] = {
@@ -689,12 +827,16 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // The point-anchored tasks with no bespoke line work: a plain ring and the
     // family's centered designation.
     for (const name of [
-        TacticalGraphicName.Abatis,
         TacticalGraphicName.Ambush,
         TacticalGraphicName.FightingPosition,
     ]) {
         registry[name] = {graphic: plainOutlinePaint(), label: missionTaskLabelPaint(name)};
     }
+    // Abatis is a drawn route carrying one fixed-size chevron, so the whole symbol is
+    // in the geometry and a plain stroke draws it. It has no doctrinal designation —
+    // it sat in the group above and took `missionTaskLabelPaint`, which rendered
+    // nothing for it. @see Abatis, ai/app-6.md "F1"
+    registry[TacticalGraphicName.Abatis] = {graphic: plainOutlinePaint()};
 
     // Turn's "T" comes off its own label feature, so the graphic painter takes the
     // letter only to size the gap it cuts for it.
@@ -704,7 +846,34 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.ReliefInPlace] = {graphic: reliefInPlacePaint('RIP')};
     registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
 
+    // The contour line's dose sits in a single break at the top of the outline.
+    registry[TacticalGraphicName.RadiationDoseRateContourLine] = {
+        graphic: contourLineBoundaryPaint(),
+        // Nothing under it: the dose belongs in the break, and a centre block would be
+        // the same text twice.
+        label: contourLineLabelPaint(() => []),
+    };
+    // Three shapes, one construction: an outline and a loudspeaker inside it.
+    for (const name of PSYOPS_ZONES) {
+        registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(() => [])};
+    }
+    // The two mine areas: different outlines, the same row of mines inside.
+    registry[TacticalGraphicName.MinefieldDynamicDepiction] = {
+        graphic: minefieldAreaPaint(),
+        label: mineFillPaint(),
+    };
+    registry[TacticalGraphicName.MinedAreaFenced] = {
+        graphic: minedAreaFencedPaint(),
+        label: mineFillPaint(),
+    };
+    // The point airfield: arms pinned to a screen size, designation beside them.
+    registry[TacticalGraphicName.Airfield] = {
+        graphic: airfieldPointPaint(),
+        label: airfieldPointLabelPaint(TacticalGraphicName.Airfield),
+    };
     registry[TacticalGraphicName.BattlePosition] = {graphic: battlePositionPaint()};
+    // APP-06 151202: the same construction, broken in every status. @see battlePositionPaint
+    registry[TacticalGraphicName.BattlePositionPreparedButNotOccupied] = {graphic: battlePositionPaint({alwaysDashed: true})};
     registry[TacticalGraphicName.StrongPoint] = {graphic: strongPointPaint()};
     registry[TacticalGraphicName.UnexplodedExplosiveOrdnanceArea] = {graphic: unexplodedOrdnanceAreaPaint()};
 
@@ -756,6 +925,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         ...CIRCULAR_AREA_GRAPHICS,
         ...CIRCULAR_HATCHED_WHEN_PLANNED,
         TacticalGraphicName.BattlePosition,
+        TacticalGraphicName.BattlePositionPreparedButNotOccupied,
         TacticalGraphicName.StrongPoint,
         TacticalGraphicName.UnexplodedExplosiveOrdnanceArea,
     ]) {

@@ -5,6 +5,8 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {ObjectEvent} from "ol/Object";
 import {Coordinate} from "ol/coordinate";
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
+import {rotationAnchor} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
 
 
 export interface PolygonGraphic extends TacticalGraphic {
@@ -31,12 +33,60 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
         }
     }
 
+    /**
+     * The pivot a rotate turns about and a resize scales from.
+     *
+     * **`rotationAnchor`, not OpenLayers' `getInteriorPoint`.** The two are close — the
+     * library's own doc calls it "a near-match" — but close is not the same, and this is
+     * the number both engines have to agree on or the identical drag produces different
+     * geometry. Measured on an irregular area: the two pivots sat 0.22 degrees apart on a
+     * 20-degree shape, and one rotate moved the centroid 0.347 degrees on OpenLayers
+     * against 0.131 on MapLibre.
+     *
+     * MapLibre has read the portable anchor since it was written; this is OpenLayers
+     * joining it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+     *
+     * Converted through lon/lat because that is the space the anchor rule is defined in —
+     * Mercator's y is not linear in latitude, so an extent midpoint taken in projected
+     * metres is a different point from one taken in degrees.
+     */
     getCenter() {
-        let polygon = new Polygon(this.getBaseGeometry());
-        return polygon.getInteriorPoint().getCoordinates();
+        const ring = this.getBaseGeometry();
+        const geographic = ring.map(part => part.map(position => toLonLat(position)));
+        return fromLonLat(rotationAnchor({type: 'Polygon', coordinates: geographic}));
     }
 
+    /**
+     * Draws the area *while* it is being drawn, not only once it is finished.
+     *
+     * This was empty, so the 87 graphics in the area family showed OpenLayers' plain
+     * sketch outline until the last click and only then became a symbol: no hatching, no
+     * fill, no designation, no obstacle marks. The line family has rebuilt itself from
+     * the sketch on every pointer move since the beginning — `LineGraphicController` does
+     * exactly this — and there is no reason an area should be the one thing a user has
+     * to commit to before they can see it.
+     *
+     * Guarded, because the generators are asked for shapes that are not yet shapes: a
+     * ring of two points has no interior, and several throw rather than return nothing.
+     * A failure leaves the previous preview standing, which is the right failure — the
+     * next pointer move is a few milliseconds away.
+     */
     onDrawStartFunc = (e: DrawEvent) => {
+        const feature = e.feature as Feature<Polygon>;
+        const geometry = feature.getGeometry();
+        if (!geometry || geometry.getType() !== 'Polygon') return;
+
+        geometry.on('change', () => {
+            const ring = geometry.getCoordinates()?.[0];
+            // Three distinct corners before there is an area to draw. OpenLayers' sketch
+            // repeats the cursor vertex, hence four.
+            if (!ring || ring.length < 4) return;
+            try {
+                this.graphic.setBaseFeature(feature);
+            } catch {
+                // Not a drawable ring yet.
+            }
+        });
     };
 
     onDrawEndFunc = (e: DrawEvent) => {
@@ -50,6 +100,34 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
 
     getFeatures(): Feature[] {
         return this.graphic.getFeatures();
+    }
+
+    /**
+     * The base polygon's extent diagonal, in projected meters.
+     *
+     * Any linear measure will do — a resize scales every vertex about the interior point,
+     * so the diagonal scales with it. @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const extent = this.graphic.base?.getGeometry()?.getExtent?.();
+        if (!extent || !extent.every(Number.isFinite)) return undefined;
+        const diagonal = Math.hypot(extent[2] - extent[0], extent[3] - extent[1]);
+        return diagonal > 0 ? diagonal : undefined;
+    }
+
+    /**
+     * Takes the width read-out down when the drag ends.
+     *
+     * **The manager calls this on every gesture end, and only `MissionTaskController`
+     * implemented it.** `AreaGraphicBase` opts into `showMeasure` — that is how a
+     * rectangular zone reports the width being dragged — but nothing ever disarmed it,
+     * so `measuring` stayed true and the hashed line and its label stayed on the
+     * rectangle for the rest of the session, in view mode and in the sample gallery.
+     * Duck-typed on the holder, like the arming call, because only the area holders have
+     * a read-out to clear.
+     */
+    endGesture(): void {
+        (this.graphic as unknown as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
     }
 
     handleResize(deltaSize: number): void {
