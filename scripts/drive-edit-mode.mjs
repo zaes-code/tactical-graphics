@@ -1120,6 +1120,27 @@ function compareDrawSizes() {
         const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
         check(`"${key}" is the same size on both engines after a resize`, worst < 0.1,
             `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+
+        /*
+         * **And each engine grew by the same factor**, which is the sharper question.
+         *
+         * The absolute comparison above has to allow ~10%, because the two engines measure
+         * through their own machinery — one unions its rendered features, the other reads
+         * the paint bounds — and an arrowhead's extent rounds differently in each. That
+         * slack is wide enough to hide a real scale error: a 3% one, injected deliberately,
+         * passed it. Comparing each engine against *itself* first cancels the measurement
+         * difference, so this can be tight.
+         */
+        const drawnOl = drawnSizes.openlayers?.[key];
+        const drawnMlb = drawnSizes.maplibre?.[key];
+        if (drawnOl?.[0] && drawnMlb?.[0]) {
+            const grew = [0, 1]
+                .filter(i => drawnOl[i] > 0 && drawnMlb[i] > 0)
+                .map(i => [ol[i] / drawnOl[i], mlb[i] / drawnMlb[i]]);
+            const apart = Math.max(...grew.map(([a, b]) => Math.abs(a - b) / Math.max(a, b)));
+            check(`"${key}" grew by the same factor on both engines`, apart < 0.02,
+                grew.map(([a, b]) => `${a.toFixed(3)} vs ${b.toFixed(3)}`).join(', '));
+        }
     }
 
     // And where a graphic files a figure about itself, the two have to file the same one:
