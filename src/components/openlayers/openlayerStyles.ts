@@ -54,6 +54,7 @@ import {
     getHandleColor,
     getInertHandleColor,
     getLabelFillColor,
+    getLabelUsesHostilityColor,
     getLabelHaloColor,
     labelZoomMultiplier,
     maxGraphicLabelScale,
@@ -96,6 +97,8 @@ import {
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
     airfieldPaint,
+    airfieldPointLabelPaint,
+    airfieldPointPaint,
     plainOutlinePaint,
     areaDefaultLabelPaint,
     airCorridorLabelPaint,
@@ -137,12 +140,14 @@ import {
     clearPaint,
     aviationAxisLabelPaint,
     axisOfAdvanceLabelPaint,
+    avenueOfApproachLabelPaint,
     counterattackLabelPaint,
     directionArrowPaint,
     envelopmentLabelPaint,
     frontalAttackLabelPaint,
     infiltrationLabelPaint,
     mobileDefenseLabelPaint,
+    advanceToContactLabelPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
     retrogradeTaskPaint,
@@ -154,13 +159,41 @@ import {
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     fortifiedLinePaint,
+    decisionLinePaint,
+    fortifiedPositionPaint,
+    mobilityCorridorPaint,
+    obstacleBypassPaint,
+    demonstrationPaint,
+    escortPaint,
+    sweptArcTaskPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
     smokeObscurantLabelPaint,
     wireObstaclePaint,
     zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
     encirclementPaint,
+    CARDINAL_LABEL_AREAS,
+    CBRN_AREAS,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+    PSYOPS_ZONES,
+    psyOpsMarkPaint,
+    psyOpsZonePaint,
+    mineFillPaint,
+    minedAreaFencedPaint,
+    minefieldAreaPaint,
+    cbrnContaminatedAreaPaint,
+    cbrnMarkPaint,
+    dashedOutlinePaint,
     fortifiedAreaPaint,
+    restrictedTerrainPaint,
     freeFireAreaCircularPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
@@ -232,6 +265,22 @@ export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
  * one, otherwise the affiliation's color. `getColorByHostility` already resolves
  * `unknown` to the default line color, so this covers the unaffiliated case too.
  */
+/**
+ * The fill a text amplifier takes.
+ *
+ * `getLabelFillColor()` unless the host opted the library into affiliation-coloured text,
+ * in which case the label follows exactly the rule its line work follows — including the
+ * exemptions `readHostilityColor` applies, so a graphic that does not take a hostility
+ * colour does not take one on its text either. The map-agnostic half states the same rule
+ * once, in `labelColorOf`; this is the OpenLayers-only style functions reading it.
+ *
+ * Falls back to the configured fill when no feature is in scope, which is what the
+ * editor's own read-outs want — they are chrome and belong to no affiliation.
+ */
+export function labelFillFor(feature?: FeatureLike): string {
+    return getLabelUsesHostilityColor() && feature ? readHostilityColor(feature) : getLabelFillColor();
+}
+
 export function readHostilityColor(feature: FeatureLike): string {
     return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
 }
@@ -407,6 +456,18 @@ export const createMap = (target: HTMLElement) => {
                 -20037508.34, -20037508.34,   // left, bottom  (approx. full world in Web Mercator)
                 20037508.34, 20037508.34,    // right, top
             ],
+            /**
+             * **Let the view zoom out until the whole extent is visible.**
+             *
+             * The default is false, which stops the zoom at the point where the extent
+             * *fills* the viewport — a hard floor at `worldWidth / viewportWidth`, which
+             * on a 1500 px window is 26 717 m/px. The sample sweep lays 273 graphics out
+             * across 46 million metres, wider than the Earth, so `view.fit` asked for
+             * 39 842 and was silently clamped: the gallery zoomed, and still ran off both
+             * sides of the window. MapLibre has no such constraint and framed the same
+             * sweep correctly, which is how the clamp was found.
+             */
+            showFullExtent: true,
         }),
     });
 };
@@ -506,7 +567,14 @@ export const HANDLE_Z_INDEX = 1000;
  * in the sample gallery or a restored map.
  *
  * Dashes are in screen pixels via `resolution`, so the hatching stays the same density at
- * every zoom. The distance is measured in EPSG:3857 meters — Euclidean, no turf.
+ * every zoom.
+ *
+ * The distance is measured in EPSG:3857 meters by default — Euclidean, no turf — which is
+ * what the radius read-out has always shown. **A holder that knows the real ground
+ * distance can say so** by setting `measureMeters` on the feature, and the rectangular
+ * zones do: their width amplifier is filed geodesically, and a hashed line reporting the
+ * projected figure beside it would show two different numbers for one edge (at 51° the
+ * projected one is 1.6x larger).
  */
 export const createMeasureFeature = () => {
     const feature = new Feature();
@@ -519,7 +587,10 @@ export const createMeasureFeature = () => {
         if (!coords || coords.length < 2) return new Style({});
 
         const [a, b] = coords;
-        const text = formatDistance(Math.hypot(b[0] - a[0], b[1] - a[1]));
+        const stated = f.get('measureMeters') as number | undefined;
+        const text = formatDistance(
+            typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
+        );
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the
@@ -713,7 +784,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
         text: new Text({
             text: label,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation: rotation,
             textAlign: 'center',
             textBaseline: 'middle',
@@ -800,7 +871,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: startOutsideRight ? GAP_PX : -GAP_PX - textWidth,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -817,7 +888,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: endOutsideRight ? GAP_PX + textWidth : -GAP_PX,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -891,7 +962,7 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
  * used to derive scale — so the label stays proportional at every zoom level.
  * Font is declared at 24px; scale = (spanPx * 0.7) / 24.
  */
-function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
+function graphicProportionalLabel(feature: FeatureLike | undefined, c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
     const [x0, y0] = c0;
     const [x1, y1] = c1;
     const dx = x1 - x0, dy = y1 - y0;
@@ -904,7 +975,7 @@ function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: nu
         text: new Text({
             text,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation,
             textAlign,
             textBaseline: 'middle',
@@ -943,9 +1014,13 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: Paint
     [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.AvenueOfApproach]: avenueOfApproachLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    // The by-fire variant carries the same `CATK` amplifier; only the line work differs.
+    [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+    [TacticalGraphicName.AdvanceToContact]: advanceToContactLabelPaint,
 };
 
 /** The four that share the axis-of-advance layout, which needs its own name. */
@@ -970,7 +1045,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
     if (!coords || coords.length < 2) return [];
 
     const styles: Style[] = [];
-    styles.push(graphicProportionalLabel(coords[0], coords[1], resolution, primaryLabel));
+    styles.push(graphicProportionalLabel(f, coords[0], coords[1], resolution, primaryLabel));
 
     if (!!dateLabel) {
         // Shift one span-width along line direction for date label offset
@@ -979,7 +1054,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
         const dx = x1 - x0, dy = y1 - y0;
         const dc0: Coordinate = [x0 + dx, y0 + dy];
         const dc1: Coordinate = [x1 + dx, y1 + dy];
-        styles.push(graphicProportionalLabel(dc0, dc1, resolution, dateLabel));
+        styles.push(graphicProportionalLabel(f, dc0, dc1, resolution, dateLabel));
     }
 
     return styles;
@@ -1647,6 +1722,18 @@ export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunct
 }
 
 /**
+ * Abatis: a drawn route carrying one fixed-size chevron. The whole symbol is in the
+ * geometry, so a plain stroke draws it.
+ *
+ * It cannot fall through to `defaultLineStyle`, which returns nothing at all for a
+ * MultiLineString — that is what left the obstacle invisible when it stopped being
+ * point-anchored. **Ported.** @see paintFunctions.ts, `plainOutlinePaint`.
+ */
+export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
+}
+
+/**
  * FortifiedLine: a continuous baseline plus rectangular teeth (merlons)
  * bumping up from it. Geometry is a MultiLineString — sub-line [0] is the
  * baseline, sub-lines [1..N] are each tooth as 4 points (leftBase, leftTop,
@@ -1654,6 +1741,69 @@ export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunct
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** The two minimum safe distance zones. @see boundaryBreakPaints.ts, `nestedZonePaint` */
+export function nestedZoneStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(nestedZonePaint(), name);
+}
+
+/** The point airfield's crossed arms. @see airfieldPaints.ts, `airfieldPointPaint` */
+export function airfieldPointStyleFunc(): StyleFunction {
+    return asStyleFunction(airfieldPointPaint(), TacticalGraphicName.Airfield);
+}
+
+/** Its designation, beside the runway rather than through it. */
+export function airfieldPointLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airfieldPointLabelPaint(name), name);
+}
+
+/** The three obstacle bypasses. @see obstacleBypassPaints.ts */
+export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(obstacleBypassPaint(name), name);
+}
+
+/** Escort and demonstration. @see escortAndDemonstrationPaints.ts */
+export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const paint = name === TacticalGraphicName.Escort
+        ? escortPaint(getLabel(name))
+        : demonstrationPaint(getLabel(name));
+    return asStyleFunction(paint, name);
+}
+
+/** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
+export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
+}
+
+/** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
+export function endGlyphLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(
+        name === TacticalGraphicName.DecisionLine ? decisionLinePaint() : mobilityCorridorPaint(),
+        name,
+    );
+}
+
+/**
+ * APP-06's five protection lines. @see protectionLinePaints.ts
+ *
+ * One entry point rather than five: the holder switch names the graphic, and every one
+ * of these is `asStyleFunction` over a paint of the same name, so a per-graphic wrapper
+ * would be five identical lines.
+ */
+export function protectionLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    switch (name) {
+        case TacticalGraphicName.MineCluster:
+            return asStyleFunction(mineClusterPaint(), name);
+        case TacticalGraphicName.TripWire:
+            return asStyleFunction(tripWirePaint(), name);
+        case TacticalGraphicName.RaftSite:
+            return asStyleFunction(raftSitePaint(), name);
+        case TacticalGraphicName.FortifiedPosition:
+            return asStyleFunction(fortifiedPositionPaint(), name);
+        default:
+            return asStyleFunction(minelinePaint(name), name);
+    }
+}
+
 /** **Ported.** @see obstaclePaints.ts, `fortifiedLinePaint`. */
 export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(fortifiedLinePaint(name), name);
@@ -1873,7 +2023,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: topLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1888,7 +2038,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: botLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1969,8 +2119,41 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirSpaceCoordinationAreaIrregular:
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
             return airspaceCoordinationAreaStyle(name);
-        case TacticalGraphicName.Airfield:
+        case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // The row of mines rides the label feature, like the loudspeaker below it.
+        case TacticalGraphicName.MinefieldDynamicDepiction:
+        case TacticalGraphicName.MinedAreaFenced:
+            return asStyleFunction(mineFillPaint(), name);
+        // The loudspeaker rides the label feature; the outline belongs to the polygon.
+        case TacticalGraphicName.PsyOpsZoneIrregular:
+        case TacticalGraphicName.PsyOpsZoneRectangular:
+        case TacticalGraphicName.PsyOpsZoneCircular:
+            return asStyleFunction(psyOpsMarkPaint(() => []), name);
+        // The dose goes in the break and nowhere else, so there is no centre block under
+        // it — the base painter draws nothing rather than repeating the text.
+        case TacticalGraphicName.RadiationDoseRateContourLine:
+            return asStyleFunction(contourLineLabelPaint(() => []), name);
+        case TacticalGraphicName.ArtilleryManeuverArea:
+        case TacticalGraphicName.ArtilleryReservedArea:
+            return asStyleFunction(
+                cardinalLabelPaint(
+                    CARDINAL_LABEL_AREAS.find(([area]) => area === name)![1],
+                    areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
+        case TacticalGraphicName.BiologicalContaminatedArea:
+        case TacticalGraphicName.ChemicalContaminatedArea:
+        case TacticalGraphicName.NuclearContaminatedArea:
+        case TacticalGraphicName.RadiologicalContaminatedArea:
+            return asStyleFunction(
+                cbrnMarkPaint(
+                    CBRN_AREAS.find(([cbrn]) => cbrn === name)![1],
+                    areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
         case TacticalGraphicName.NoFireAreaIrregular:
@@ -2033,8 +2216,13 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
         case TacticalGraphicName.LimitedAccessArea:
             return asStyleFunction(areaLabelStackPaint(name), name);
+        // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
+        // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been
+        // reading `areaDefaultLabelPaint` all along, so the two engines were drawing the same
+        // label through two implementations — and only one of them could be given the cap
+        // that keeps a designation inside its own outline. @see fitLabelScale
         default:
-            return getAreaLabelFn(fullLabel, dateLabel);
+            return asStyleFunction(areaDefaultLabelPaint(name), name);
     }
 }
 
@@ -2081,44 +2269,6 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
 /** **Ported.** @see airfieldPaints.ts, `airfieldPaint`. */
 export function getAirfieldStyle(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(airfieldPaint(areaDefaultLabelPaint(name)), name);
-}
-
-export function getAreaLabelStyles(feature: FeatureLike, resolution: number, textLabel: string, dateLabel: string, rotation: number, offsetY: number = 0) {
-    const geom = feature.getGeometry() as Point;
-    let styles = [];
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: textLabel,
-            font: fontStyle,
-            offsetY: offsetY,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            stroke: getHaloStroke(),
-        }),
-    }));
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: dateLabel,
-            font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            offsetY: 18 + offsetY,
-            stroke: getHaloStroke(),
-        }),
-    }));
-    return styles;
-}
-
-export function getAreaLabelFn(textLabel: string, dateLabel: string, rotation: number = 0): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        return getAreaLabelStyles(feature, resolution, textLabel, dateLabel, rotation);
-    };
 }
 
 /**
@@ -2788,6 +2938,10 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
+    // APP-06 151202 — the same outline and echelon, broken whatever the status says.
+    if (name === TacticalGraphicName.BattlePositionPreparedButNotOccupied) {
+        return asStyleFunction(battlePositionPaint({alwaysDashed: true}), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
     // ── Ported to the paint layer ────────────────────────────────────────────
     // Every branch below is `asStyleFunction(...)` over a paint function, so the
@@ -2800,6 +2954,40 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     }
     if (name === TacticalGraphicName.FortifiedArea) {
         return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
+    }
+    // APP-06 242600 note 1: broken line in *all* status depictions, so the dash belongs
+    // to the symbol rather than to `plannedDash`.
+    if (name === TacticalGraphicName.ZoneOfFire) {
+        return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
+    }
+    // The yellow hatch; the triangle and its letter ride the label feature below.
+    if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
+        return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
+        return asStyleFunction(minefieldAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinedAreaFenced) {
+        return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);
+    }
+    if (PSYOPS_ZONES.includes(name)) {
+        return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);
+    }
+    // One break at the top, holding the dose the operator typed.
+    if (name === TacticalGraphicName.RadiationDoseRateContourLine) {
+        return asStyleFunction(contourLineBoundaryPaint(), name)(feature, resolution);
+    }
+    // The outline broken at four cardinal points; the abbreviation fills each break.
+    const cardinal = CARDINAL_LABEL_AREAS.find(([area]) => area === name);
+    if (cardinal) {
+        return asStyleFunction(cardinalBoundaryPaint(cardinal[1]), name)(feature, resolution);
+    }
+    // The pair APP-06 tells apart by hatch texture alone. @see hatchTileSegments
+    if (name === TacticalGraphicName.RestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.SeverelyRestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint({dense: true}), name)(feature, resolution);
     }
     if (
         name === TacticalGraphicName.ObstacleBelt ||
@@ -2889,7 +3077,7 @@ export function createAirCoordinatingAreaLabelStyle(
         text: new Text({
             text: allLines.join('\n'),
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             stroke: getHaloStroke(),
             padding: hasHatchPattern ? [4, 8, 4, 8] : undefined,
             textAlign: 'left',

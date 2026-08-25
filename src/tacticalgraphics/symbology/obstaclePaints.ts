@@ -14,7 +14,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {
     ANTI_TANK_DITCH_STYLES,
@@ -35,7 +35,7 @@ import {
     uprightRotation,
     walkPath,
 } from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -130,8 +130,22 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
     };
 }
 
-/** How far inside its bounding notch a mine disc is drawn. */
-const MINE_CLEARANCE = 0.5;
+/**
+ * How far inside its bounding notch a mine disc is drawn, and how deep into the notch it
+ * sits as a share of the tooth's height.
+ *
+ * The clearance used to be 0.5 at a depth of 0.72, which is a disc of about a *sixth* of
+ * the tooth's width — fine on the page and invisible on a map, because `decorationScale`
+ * has usually already shrunk the whole pattern by half before this is applied to it. The
+ * reinforced ditch then rendered pixel-for-pixel like the completed one, which is the
+ * worst kind of wrong: a symbol that means "there are mines in here" quietly saying
+ * "there are not".
+ *
+ * Sitting the disc a little higher in the notch buys the room to draw it larger, since the
+ * notch narrows toward its apex.
+ */
+const MINE_CLEARANCE = 0.85;
+const MINE_DEPTH_FRACTION = 0.62;
 
 /**
  * The three anti-tank ditches: under construction, completed, and reinforced with
@@ -152,9 +166,9 @@ const MINE_CLEARANCE = 0.5;
  *
  * The mine's size is **bounded, not chosen**: the notch is an upward triangle, and
  * a disc centered `mineDepth` down touches both its edges at
- * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it well inside that, because
- * a disc drawn to the limit meets the filled teeth either side and the three merge
- * into one black mass.
+ * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it inside that, because a disc
+ * drawn to the limit meets the filled teeth either side and the three merge into one
+ * black mass. @see MINE_CLEARANCE for why it is no longer held *well* inside.
  */
 export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
     return (feature, context) => {
@@ -202,7 +216,7 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         if (!mines) return paints;
 
         const halfAngleSin = (width / 2) / Math.hypot(width / 2, depth);
-        const mineDepth = depth * 0.72;
+        const mineDepth = depth * MINE_DEPTH_FRACTION;
         const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
 
         for (let i = 1; i < teeth; i++) {
@@ -268,7 +282,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(a, b),
                 align: 'center',

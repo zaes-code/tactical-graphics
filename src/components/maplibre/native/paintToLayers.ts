@@ -1,7 +1,7 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
+import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -138,8 +138,10 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
 
     return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
@@ -329,6 +331,12 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
  *
  * Filtering on the property instead gives each case its own layer and neither can
  * silently swallow the other.
+ *
+ * **The price is that paint order no longer holds between the two.** Within one layer the
+ * source's feature order decides, so a paint list's order survives; across the two it is the
+ * order the layers were added, which applies to every graphic at once. `NativeLayerRenderer`
+ * therefore adds the pattern layer **first**, so hatches sit under solid fills — see the note
+ * there for why that is the right way round and what asserts it stays true.
  */
 export function fillLayer(id: string, source: string): LayerSpecification {
     return {

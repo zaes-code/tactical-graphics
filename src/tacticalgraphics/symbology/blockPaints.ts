@@ -24,12 +24,11 @@ import {
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
-    getLabelFillColor,
     getLabelHaloColor,
     graphicLabelScale,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf} from './paintFunctions';
+import {lineColorOf, labelColorOf} from './paintFunctions';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -61,7 +60,7 @@ function subLines(feature: PaintFeature): ProjectedPosition[][] {
 
 /** The label mark set in a gap, with the optical-center correction applied. */
 function gapLabel(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
@@ -72,7 +71,7 @@ function gapLabel(
         text: {
             text,
             font: RATIO_LOCKED_LABEL_FONT,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
@@ -123,7 +122,7 @@ export function breachPaint(label: string): BlockPaint {
         const {before, after, middle} = cutGap(opening[0], opening[1], 0.5, FLAT_GAP_PX * context.resolution);
         outline.push(before, after);
 
-        if (label) paints.push(gapLabel(middle, label, scale, 0, false));
+        if (label) paints.push(gapLabel(feature, middle, label, scale, 0, false));
 
         paints.push({
             geometry: {type: 'MultiLineString', coordinates: outline},
@@ -156,7 +155,7 @@ export function clearPaint(label: string, t = 0.6): BlockPaint {
             const scale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
             const {before, after, middle} = cutGap(mid[0], mid[1], t, FLAT_GAP_PX * context.resolution);
             outline.push(before, after);
-            paints.push(gapLabel(middle, label, scale, uprightRotation(mid[0], mid[1]), true));
+            paints.push(gapLabel(feature, middle, label, scale, uprightRotation(mid[0], mid[1]), true));
         }
 
         paints.push({
@@ -228,7 +227,7 @@ export function blockPaint(label: string): BlockPaint {
                 * context.resolution;
             const {before, after, middle} = cutGap(p1, p2, t, halfGapMap);
             outline.push(before, after);
-            paints.push(gapLabel(middle, label, scale, uprightRotation(p1, p2), false));
+            paints.push(gapLabel(feature, middle, label, scale, uprightRotation(p1, p2), false));
         }
 
         paints.push({

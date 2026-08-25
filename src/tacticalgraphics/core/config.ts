@@ -125,6 +125,22 @@ export interface TacticalGraphicsConfigOptions {
     defaultLineColor?: string;
     /** Label text fill. Defaults to whatever `defaultLineColor` resolves to, so overriding one moves both. */
     labelFillColor?: string;
+    /**
+     * Colour a graphic's text amplifiers by its affiliation instead of by
+     * `labelFillColor`. Default `false`.
+     *
+     * **Off by default because doctrine says off.** FM 1-02.2 colours *line work* by
+     * affiliation and leaves text amplifiers black — a hostile phase line is red, and its
+     * "PL BLUE" is not. That is the rule this library follows and the one
+     * `hostilityExemptions.test.ts` pins.
+     *
+     * It is offered as a choice because a host with a dark or busy basemap often wants the
+     * amplifier to read as part of the symbol rather than as a separate black annotation,
+     * and because a picture filtered down to one affiliation loses nothing by tinting its
+     * text. Turning it on supersedes `labelFillColor` entirely, so a host should present
+     * the two as one either/or rather than as two independent settings.
+     */
+    labelUsesHostilityColor?: boolean;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
     /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.Feet}. @see AltitudeUnit */
@@ -163,6 +179,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly hostilityColors?: Readonly<Partial<Record<TacticalGraphicHostility, string>>>;
     readonly defaultLineColor?: string;
     readonly labelFillColor?: string;
+    readonly labelUsesHostilityColor?: boolean;
     readonly labelHaloColor?: string;
     readonly altitudeUnit?: AltitudeUnit;
     readonly handleColor?: string;
@@ -178,6 +195,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.hostilityColors !== undefined) this.hostilityColors = Object.freeze({...options.hostilityColors});
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
+        if (options.labelUsesHostilityColor !== undefined) this.labelUsesHostilityColor = options.labelUsesHostilityColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
@@ -203,6 +221,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             hostilityColors: {...this.hostilityColors, ...overrides.hostilityColors},
             defaultLineColor: overrides.defaultLineColor ?? this.defaultLineColor,
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
+            labelUsesHostilityColor: overrides.labelUsesHostilityColor ?? this.labelUsesHostilityColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             handleColor: overrides.handleColor ?? this.handleColor,
@@ -308,6 +327,11 @@ export function getDefaultLineColorOverride(): string | undefined {
 
 export function getLabelFillColorOverride(): string | undefined {
     return _config.labelFillColor;
+}
+
+/** Whether text amplifiers take their graphic's affiliation colour. @see labelUsesHostilityColor */
+export function getLabelUsesHostilityColor(): boolean {
+    return _config.labelUsesHostilityColor === true;
 }
 
 export function getLabelHaloColorOverride(): string | undefined {

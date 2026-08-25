@@ -140,11 +140,13 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * gesture.
      */
     setBandRange = (bandIndex: number, coordinate: Coordinate): void => {
-        const center = this.base.getGeometry();
+        // The holder's own center, not the base's coordinates: a base can carry APP-06
+        // anchor points now, and a range fan must not read those as a position.
+        const center = this.centerCoordinate();
         if (!center) return;
 
         const km = openlayersAdapter.getTurfDistance(
-            openlayersAdapter.coordinateToTurfPoint(center.getCoordinates()),
+            openlayersAdapter.coordinateToTurfPoint(center),
             openlayersAdapter.coordinateToTurfPoint(coordinate),
         );
         if (!Number.isFinite(km) || km <= 0) return;

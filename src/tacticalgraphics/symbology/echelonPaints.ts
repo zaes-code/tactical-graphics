@@ -11,10 +11,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
 import {decorationScale} from './decorations';
-import {PLANNED_DASH_PX, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -245,8 +245,13 @@ function outerRing(feature: PaintFeature): ProjectedPosition[] | null {
 /**
  * Battle position: the outline broken open on the facing side with the echelon
  * glyph in the gap, dashed when planned.
+ *
+ * `alwaysDashed` is APP-06 151202, "battle position prepared (P) but not occupied" —
+ * a *different symbol*, not a status. Its template is drawn broken and its Example
+ * reads "(P) MARS", so the break is the symbol saying nobody is there yet, and it
+ * has to survive a graphic whose status is present. @see 242600, same reasoning.
  */
-export function battlePositionPaint(): AreaPaint {
+export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPaint {
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
@@ -261,7 +266,9 @@ export function battlePositionPaint(): AreaPaint {
                 stroke: {
                     color,
                     widthPx: LINE_WIDTH(),
-                    dashPx: feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined,
+                    dashPx: opts.alwaysDashed || feature.properties.status === TacticalGraphicStatus.planned
+                        ? PLANNED_DASH_PX
+                        : undefined,
                 },
             },
             ...echelonMarks(
@@ -375,7 +382,7 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
                 text: {
                     text: 'UXO',
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     scale,
                 },

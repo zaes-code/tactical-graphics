@@ -164,8 +164,11 @@ describe('every graphic that renders an altitude', () => {
         }
     });
 
-    it('is the eleven zones and the three coordination areas', () => {
-        expect(withAltitude.length).toBe(14);
+    it('is the twelve zones and the three coordination areas', () => {
+        // Twelve since FighterEngagementZone joined them: APP-06 171400 carries the same
+        // MIN ALT / MAX ALT / TIME FROM / TIME TO block as the engagement zones it sits
+        // beside, which is why it could reuse their field set unchanged.
+        expect(withAltitude.length).toBe(15);
     });
 
     it('includes the corridors, which label a MultiPoint', () => {

@@ -10,17 +10,17 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {offsetBelow, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, hostilityOf, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /** A text mark, with the halo every label carries. */
 function label(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     extra: {rotation?: number; align?: 'left' | 'right' | 'center'; baseline?: 'top' | 'middle' | 'bottom'} = {},
@@ -30,7 +30,7 @@ function label(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align: extra.align ?? 'center',
             baseline: extra.baseline ?? 'middle',
@@ -125,17 +125,17 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             name === TacticalGraphicName.DirectionOfSupportingAttack
             && hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
 
-        if (nameText) paints.push(label(anchor, nameText, scale, {rotation, align}));
+        if (nameText) paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
 
         if (showEny) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
-            paints.push(label([anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
+            paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
         }
 
         if (dateText) {
             const at = offsetBelow(anchor, p1, p2, context.resolution, ARROW_DTG_OFFSET_PX * scale);
-            paints.push(label(at, dateText, scale, {rotation, align, baseline: 'top'}));
+            paints.push(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'}));
         }
 
         return paints;

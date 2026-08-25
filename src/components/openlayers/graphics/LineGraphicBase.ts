@@ -12,7 +12,14 @@ import {
     fieldOfFireStyleFunc,
     defaultLineStyle,
     finalProtectiveFireStyleFunc,
+    abatisStyleFunc,
     fortifiedLineStyleFunc,
+    endGlyphLineStyleFunc,
+    nestedZoneStyleFunc,
+    obstacleBypassStyleFunc,
+    escortOrDemonstrationStyleFunc,
+    sweptArcTaskStyleFunc,
+    protectionLineStyleFunc,
     wireObstacleStyleFunc,
     antiTankDitchStyleFunc,
     forwardLineOfOwnTroopsStyleFunc,
@@ -27,7 +34,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -91,6 +98,33 @@ export class LineGraphicBase implements LineGraphic {
                     return antiTankDitchStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.MinimumSafeDistanceZone:
+                case TacticalGraphicName.MinimumSafeDistanceMultipleStrike:
+                    return nestedZoneStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.ObstacleBypassEasy:
+                case TacticalGraphicName.ObstacleBypassDifficult:
+                case TacticalGraphicName.ObstacleBypassImpossible:
+                    return obstacleBypassStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Escort:
+                case TacticalGraphicName.Demonstration:
+                    return escortOrDemonstrationStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Capture:
+                case TacticalGraphicName.Evacuate:
+                case TacticalGraphicName.Recover:
+                    return sweptArcTaskStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.DecisionLine:
+                case TacticalGraphicName.MobilityCorridor:
+                    return endGlyphLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Mineline:
+                case TacticalGraphicName.MineCluster:
+                case TacticalGraphicName.TripWire:
+                case TacticalGraphicName.RaftSite:
+                case TacticalGraphicName.FortifiedPosition:
+                    return protectionLineStyleFunc(name)(feature, resolution);
+                // The chevron is in the geometry, so a plain stroke draws it. Not the
+                // default: `defaultLinePaint` returns nothing for a MultiLineString.
+                case TacticalGraphicName.Abatis:
+                    return abatisStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.WireUnspecified:
                 case TacticalGraphicName.WireSingleFence:
                 case TacticalGraphicName.WireDoubleFence:
@@ -146,6 +180,21 @@ export class LineGraphicBase implements LineGraphic {
      */
     suspendMinimumLength = false;
 
+    /**
+     * Whether the gesture in progress is **authoring the line's shape** — a draw, or a
+     * vertex being dragged — as opposed to moving, turning or scaling the whole graphic.
+     *
+     * The floors below only make sense for the first kind. `setBaseFeature` is the door
+     * every gesture comes through, so gating them on "not a restore" alone let a *move*
+     * stretch the graphic: at a zoom where a restored Fix was 96 px long against a 145 px
+     * floor, one drag took its base from 5.2 degrees to 35.8 — the near end followed the
+     * cursor and the far end shot off. The user moved it and it changed shape.
+     *
+     * Set by `LineGraphicController` around the two gestures that author geometry.
+     * @see MissionTaskGraphicBase.sizingFromDraw, the same rule for the curves' size
+     */
+    shapingFromGesture = false;
+
     setBaseFeature(base: Feature<LineString>): void {
         // AviationDirectionOfAttack carries a bow-tie baked into geometry near
         // the start of the line. Enforce a minimum first-segment length so the
@@ -158,6 +207,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             this.graphicName === TacticalGraphicName.AviationDirectionOfAttack &&
             this.resolution &&
+            this.shapingFromGesture &&
             !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
@@ -176,6 +226,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             (this.graphicName === TacticalGraphicName.TacticalFix || this.graphicName === TacticalGraphicName.Fix) &&
             this.resolution &&
+            this.shapingFromGesture &&
             !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
@@ -232,10 +283,36 @@ export class LineGraphicBase implements LineGraphic {
      */
     private sizeOverride: number | undefined;
 
-    private graphicSize(): number {
+    /**
+     * The decoration size actually in force, in metres — the stamped override if a drag
+     * or a restore set one, else the per-name default for this zoom.
+     *
+     * Public because a resize has to scale it, and `sizeOverride` alone is `undefined`
+     * on a freshly drawn graphic: reading that would leave the first resize scaling the
+     * line and not its symbol. @see LineGraphicController.handleResize
+     */
+    graphicSize(): number {
         // Per-name, because this holder serves 41 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
-        return this.sizeOverride ?? decorationMeters(this.graphicName, this.resolution ?? 0);
+        //
+        // **At this graphic's own latitude**, which is why the derivation is here rather
+        // than in the factory that built the holder: by the time anything asks, the line
+        // has been drawn, so the exact place is known. A pixel size times the bare
+        // resolution is a projected length, and every tooth, tick and chevron derived
+        // that way came out 1/cos(latitude) too large — twice the size at 60 degrees
+        // north. @see screenMeters
+        return this.sizeOverride ?? decorationMeters(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
+    }
+
+    /**
+     * Where this graphic sits, in degrees, for anything sized in screen pixels.
+     *
+     * The first vertex, and zero before one exists — a holder is built when the tool is
+     * picked and only learns its place when the user clicks.
+     */
+    protected latitude(): number {
+        const first = (this.base.getGeometry() as LineString | undefined)?.getCoordinates()?.[0];
+        return first ? latitudeFromMercatorY(first[1]) : 0;
     }
 
     /**
@@ -247,23 +324,61 @@ export class LineGraphicBase implements LineGraphic {
         this.updateGraphic();
     }
 
+    /**
+     * Which side the graphic's decoration hangs on. Abatis's chevron is the one in this
+     * family that flips; a symmetric graphic ignores it. @see setMirrored
+     */
+    mirrored: boolean = false;
+
+    /**
+     * @see TacticalGraphicHandler.setMirrored
+     *
+     * **This family had no mirror at all.** `LineGraphicController.setMirrored` forwarded
+     * to `graphic.setMirrored?.()` and every holder here was missing it, so the call
+     * landed on `undefined` and did nothing — silently, because the optional call is
+     * exactly the shape a symmetric graphic legitimately has. Abatis's apex handle is
+     * declared a `mirror` in the contract precisely so the flip has something to grab,
+     * and grabbing it flipped nothing.
+     */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGraphic();
+    }
+
+    /**
+     * How many handles `visiblePathHandles` dropped off the front.
+     *
+     * `handleRole` is indexed against the *generator's* list, and this holder renders a
+     * filtered one — a two-point graphic hides the handle sitting on its own start. So
+     * the apex the contract calls index 2 arrives as index 1, is answered `shape`, and
+     * the mirror never fires. Recomputed on every publish rather than assumed, because
+     * whether the start handle is dropped depends on where it landed.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    handleIndexOffset = 0;
+
     updateGraphic = () => {
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.graphicSize()}
+            {size: this.graphicSize(), mirrored: this.mirrored}
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
 
         this.graphics.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles((handles as MultiPoint).getCoordinates(), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        const generated = (handles as MultiPoint).getCoordinates();
+        const visible = visiblePathHandles(generated, this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle);
+        this.handleIndexOffset = generated.length - visible.length;
+        this.handles.setGeometry(new MultiPoint(visible));
 
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
             decorationSize: this.graphicSize(),
+            mirrored: this.mirrored,
         });
     };
 

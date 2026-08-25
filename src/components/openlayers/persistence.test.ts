@@ -389,15 +389,33 @@ describe('the drawing resolution is no longer load-bearing', () => {
         expectMetersClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
     });
 
-    it('still enforces the minimum length on a fresh draw', () => {
-        // The guard must survive the restore exemption — it is what stops a click-click
-        // producing a line too short for the symbol to fit in.
+    /**
+     * The floor belongs to the gestures that **author the shape** — a draw, a vertex drag
+     * — and to nothing else. It used to be gated on "not a restore" alone, and
+     * `setBaseFeature` is the door every gesture comes through: at a zoom where a restored
+     * Fix was shorter than the 145 px floor, one *move* took its base from 5.2 degrees to
+     * 35.8, the near end following the cursor and the far end shooting off.
+     * @see LineGraphicBase.shapingFromGesture
+     */
+    it('still enforces the minimum length while the shape is being drawn', () => {
+        const handler = getController(TacticalGraphicName.Fix, RES);
+        const tiny = () => new Feature(new LineString([[CX, CY], [CX + 10, CY]]));
+
+        // What the draw path does: the controller marks the holder as authoring geometry
+        // for the length of the gesture.
+        (handler.graphic as unknown as {shapingFromGesture: boolean}).shapingFromGesture = true;
+        handler.setBaseFeature(tiny() as never);
+        expect((handler.graphic.base.getGeometry() as LineString).getLength()).toBeGreaterThan(10);
+    });
+
+    it('leaves the geometry alone when the gesture is not authoring it', () => {
         const handler = getController(TacticalGraphicName.Fix, RES);
         const tiny = new Feature(new LineString([[CX, CY], [CX + 10, CY]]));
+
         handler.setBaseFeature(tiny as never);
 
-        const drawn = (handler.graphic.base.getGeometry() as LineString).getLength();
-        expect(drawn).toBeGreaterThan(10);
+        // A move, a restore, or a host setting geometry directly: 10 metres in, 10 out.
+        expect((handler.graphic.base.getGeometry() as LineString).getLength()).toBeCloseTo(10, 6);
     });
 
     it('restores a record carrying nothing but the portable bag', () => {
@@ -509,5 +527,121 @@ describe('an empty map', () => {
         const to = fakeManager();
         const report = restoreTacticalGraphics(to, snapshot);
         expect(report).toEqual({restored: 0, failed: []});
+    });
+});
+
+/**
+ * A graphic converted to APP-06's drawn anchor points has to load two shapes of save:
+ * the LineString it writes now, and the Point every version before the conversion
+ * wrote. The second is the one with no second chance — those files already exist.
+ */
+describe('a graphic saved before the anchor-point conversion', () => {
+    /** The base feature a 2.0.0 snapshot held: a Point, with the shape in the bag. */
+    function legacyPointSnapshot(name: TacticalGraphicName, bag: Record<string, unknown>) {
+        return {
+            type: 'FeatureCollection' as const,
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [
+                {
+                    type: 'Feature' as const,
+                    properties: {role: 'base', graphicName: name, symbolId: 'legacy-1', tacticalGraphic: {name, ...bag}},
+                    geometry: {type: 'Point' as const, coordinates: [-0.1, 51.56]},
+                },
+            ],
+        };
+    }
+
+    it('upgrades a Point base to drawn anchor points', () => {
+        const to = fakeManager();
+        const report = restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+
+        expect(report.failed).toEqual([]);
+        expect(report.restored).toBe(1);
+        const base = to.graphicControllers[0].graphic.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        // APP-06 343500's four: the run's two ends, the semicircle's far foot, and the
+        // point that says which flank it bulges to.
+        expect((base as LineString).getCoordinates()).toHaveLength(4);
+    });
+
+    it('keeps the bend it was saved with', () => {
+        // The regression this pins: persistence reached for `bend` behind an
+        // `instanceof TurnGraphicBase` test, and envelopment is a *sibling* of that
+        // class. Every saved envelopment silently came back at the default bend —
+        // a shape change no other assertion in this suite could see.
+        const to = fakeManager();
+        restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+
+        const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
+        expect(holder.bend).toBeCloseTo(0.6, 10);
+    });
+
+    it('keeps a negative bend, which is the far side rather than a smaller curve', () => {
+        const to = fakeManager();
+        restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 6000, rotation: 45, bend: -0.5}),
+        );
+
+        const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
+        expect(holder.bend).toBeCloseTo(-0.5, 10);
+    });
+
+    it('upgrades a pursuit too, to its own three-point layout', () => {
+        // Pursue is 344000, three points, with the diameter across the line rather than
+        // along it. Same shim, different shape — which is the case a family-wide
+        // assertion would have missed.
+        const to = fakeManager();
+        const report = restoreTacticalGraphics(
+            to,
+            legacyPointSnapshot(TacticalGraphicName.Pursuit, {radius: 9000, rotation: 0}),
+        );
+
+        expect(report.failed).toEqual([]);
+        const base = to.graphicControllers[0].graphic.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        expect((base as LineString).getCoordinates()).toHaveLength(3);
+    });
+
+    it('keeps a pursuit line-to-hook proportion that is not the dropped default', () => {
+        // The dropped form fixed the line at 2.4 radii. A drawn one can be anything, and
+        // the holder has to carry that or the next regeneration snaps it back.
+        const from = fakeManager();
+        restoreTacticalGraphics(
+            from,
+            legacyPointSnapshot(TacticalGraphicName.Pursuit, {radius: 9000, rotation: 0}),
+        );
+        const handler = from.graphicControllers[0];
+        const coords = (handler.graphic.base.getGeometry() as LineString).getCoordinates();
+        // Stretch the straight line to twice its drawn length, leaving the hook alone.
+        const stretched = coords.slice();
+        stretched[0] = [coords[1][0] - (coords[1][0] - coords[0][0]) * 2, coords[1][1]];
+        handler.graphic.base.setGeometry(new LineString(stretched));
+        handler.setBaseFeature(handler.graphic.base);
+
+        const {to} = roundTrip(from);
+        const after = (to.graphicControllers[0].graphic.base.getGeometry() as LineString).getCoordinates();
+        const run = Math.hypot(after[1][0] - after[0][0], after[1][1] - after[0][1]);
+        const diameter = Math.hypot(after[2][0] - after[1][0], after[2][1] - after[1][1]);
+        expect(run / (diameter / 2)).toBeCloseTo(4.8, 1);
+    });
+
+    it('is stable once upgraded: saving the anchored form and reloading changes nothing', () => {
+        const first = fakeManager();
+        restoreTacticalGraphics(
+            first,
+            legacyPointSnapshot(TacticalGraphicName.Envelopment, {radius: 9000, rotation: 0, bend: 0.6}),
+        );
+        const before = baseCoords(first.graphicControllers[0]);
+
+        const {to} = roundTrip(first);
+        expectMetersClose(baseCoords(to.graphicControllers[0]), before);
+        expect((to.graphicControllers[0].graphic as unknown as {bend: number}).bend).toBeCloseTo(0.6, 10);
     });
 });

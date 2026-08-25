@@ -1,5 +1,5 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {drawnSizeMeters, getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,
@@ -46,10 +46,6 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
  * `getBlockArrow` is deliberate: that helper is shared, and was left alone so
  * the excluded FollowAndAssume / FollowAndSupport come back unchanged.
  */
-const DEFAULT_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.TacticalBlock]: 60,
-    [TacticalGraphicName.Block]: 60,
-};
 
 
 export class Block implements LineGraphic {
@@ -87,10 +83,10 @@ export class Block implements LineGraphic {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         this.name = name;
-        // `size` arrives as 20 × drawingResolution; an override is expressed in the
-        // same screen pixels, so rescale rather than replace.
-        const sizePx = DEFAULT_SIZE_PX[name];
-        this.size = sizePx !== undefined && drawingResolution ? sizePx * drawingResolution : size;
+        // `size` arrives as 20 × drawingResolution; the block family states its own,
+        // larger screen size, which **both** renderers read from the library rather than
+        // from a table in here. @see drawnSizeMeters
+        this.size = (drawingResolution ? drawnSizeMeters(name, drawingResolution) : undefined) ?? size;
         this.ratioLock = ratioLockOf(name);
         this.offsetScale = OFFSET_SCALE[name];
         if (drawingResolution !== undefined) {

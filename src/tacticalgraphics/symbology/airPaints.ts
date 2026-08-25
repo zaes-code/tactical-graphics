@@ -20,10 +20,11 @@
  */
 
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
-import {fontStyle, formatAltitude, getLabelFillColor} from '../core/symbology';
+import {fontStyle, formatAltitude} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, halo, scaleOf} from './paintFunctions';
+import {getFullLabel, halo, scaleOf, labelColorOf} from './paintFunctions';
+import {fitLabelScale} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
 type AirPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -66,14 +67,24 @@ function labelBlock(
     if (lines.length === 0 || feature.geometry.type !== 'Point') return [];
 
     const widest = Math.max(...lines.map(line => (line ? textWidth(context, line, fontStyle, 1) : 0)));
-    const scale = fitToPolygon ? Math.min(scaleOf(feature, context), fitScale(feature, context, widest)) : scaleOf(feature, context);
+    // Two caps, and the block has to clear both. `fitScale` measures against the bounding
+    // box's shorter side and knows nothing about how many lines there are; `fitLabelScale`
+    // measures the whole block against the drawn ring, which is what an operator sees.
+    // The box cap stays because it is the only one available before a ring is stamped.
+    const scale = fitToPolygon
+        ? Math.min(
+            scaleOf(feature, context),
+            fitScale(feature, context, widest),
+            fitLabelScale(feature, context, feature.geometry.coordinates, lines, fontStyle, scaleOf(feature, context)),
+        )
+        : scaleOf(feature, context);
 
     return [{
         geometry: feature.geometry,
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: halo(),
             align: 'left',
             justify: 'left',
@@ -125,7 +136,17 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.startDate) values.push(column('TIME FROM:', props.startDate));
         if (props.endDate) values.push(column('TIME TO:', props.endDate));
 
-        return labelBlock(names, values, feature, context, false);
+        /*
+         * **Fitted, as of 2026-08-21.** These eleven are drawn as circles, rectangles and
+         * irregular areas like any other zone, and their block is the longest in the
+         * library — a two-line name over four `MIN ALT: / MAX ALT: / TIME FROM: / TIME TO:`
+         * columns. Unfitted it ran 4.6x the width of the zone it belongs to at gallery
+         * scale: 57 px of text across a 12 px shape.
+         *
+         * `fitLabelScale` returns the desired scale untouched when there is no ring to
+         * measure against, so this costs a point-anchored member nothing.
+         */
+        return labelBlock(names, values, feature, context, true);
     };
 }
 

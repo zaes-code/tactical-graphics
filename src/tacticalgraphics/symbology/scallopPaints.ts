@@ -20,8 +20,6 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     fontStyle,
     getColorByHostility,
-    getDefaultLineColor,
-    getLabelFillColor,
     getLabelHaloColor,
     maxGraphicLabelScale,
 } from '../core/symbology';
@@ -39,7 +37,7 @@ import {
     uprightRotation,
     wavePath,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -122,7 +120,7 @@ export function lineOfContactPaint(): LinePaint {
             text: {
                 text: 'LC',
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation,
                 align,
@@ -139,7 +137,12 @@ export function lineOfContactPaint(): LinePaint {
             },
             {
                 geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)},
-                stroke: {color: getDefaultLineColor(), widthPx: LINE_WIDTH()},
+                // **The friendly identity's colour, not the unaffiliated default.** This
+                // wave *is* the friendly side of the symbol — the graphic draws both
+                // identities at once — so painting it in the fallback line colour said
+                // "unaffiliated" beside a wave that said "hostile", and a host that
+                // re-coloured its affiliations re-coloured only half the symbol.
+                stroke: {color: getColorByHostility(TacticalGraphicHostility.friend), widthPx: LINE_WIDTH()},
             },
             lc(start, uprightRotation(start, end), reversed ? 'left' : 'right', reversed ? 1 : -1),
             lc(end, uprightRotation(end, start), reversed ? 'right' : 'left', reversed ? -1 : 1),
@@ -214,7 +217,7 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
             text: {
                 text: label,
                 font: RATIO_LOCKED_LABEL_FONT,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(start, end),
                 align: 'center',
