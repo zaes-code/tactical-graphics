@@ -1424,12 +1424,26 @@ export class TacticalGraphicsManager {
         }
     }
 
+    /**
+     * Moves a line or an area with the pointer.
+     *
+     * **The projected delta, like every other translate in this file.** This one measured
+     * the cursor's travel as a *ground distance and a bearing* and handed those to
+     * `handleTranslate(deltaX, deltaY)`, whose every other implementation adds them to a
+     * coordinate — so the line and area holders walked each vertex along a great circle
+     * instead. A great circle bows poleward, so a purely horizontal drag at 63 degrees
+     * north moved the graphic 5.306 degrees of longitude where the cursor asked for 4.851
+     * and slid it 0.087 degrees north as well; at 70 south it fell short instead. The
+     * shape came out from under the pointer, and differently at every latitude.
+     *
+     * A drag is a screen gesture: the graphic follows the cursor, and the projection is
+     * the map's business. MapLibre has always done it this way — measured, 4.851 degrees
+     * at every latitude — and so has this engine's own point-anchored path.
+     */
     handleDragForLineAndPolygon(evt: MapBrowserEvent, controller: TacticalGraphicHandler) {
-        let turfCurrent = openlayersAdapter.coordinateToTurfPoint(evt.coordinate);
-        let turfLast = openlayersAdapter.coordinateToTurfPoint(this.lastPointerPosition);
-        let distance = openlayersAdapter.getTurfDistance(turfLast, turfCurrent);
-        let bearing = openlayersAdapter.getTurfBearing(turfLast, turfCurrent);
-        controller.handleTranslate(distance, bearing);
+        const deltaX = evt.coordinate[0] - this.lastPointerPosition[0];
+        const deltaY = evt.coordinate[1] - this.lastPointerPosition[1];
+        controller.handleTranslate(deltaX, deltaY);
         this.lastPointerPosition = evt.coordinate;
     }
 
