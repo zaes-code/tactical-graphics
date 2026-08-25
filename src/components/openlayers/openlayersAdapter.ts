@@ -5,14 +5,13 @@ import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from "ol/style/Style";
 import GeoJSON from "ol/format/GeoJSON";
 import {Coordinate} from 'ol/coordinate';
-import {toLonLat} from "ol/proj";
+import {fromLonLat, toLonLat} from "ol/proj";
 import {point as turfPoint} from '@turf/helpers';
 import {distance as turfDistance} from '@turf/distance';
 import {bearing as turfBearing} from '@turf/bearing';
 import {TacticalGraphicsRegistry, clampGeometryToMercator, rotationAnchor} from '@zaes/tactical-graphics';
 import {GraphicOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from "ol/Feature";
-import {geometryService} from '@zaes/tactical-graphics';
 import {getController} from "./controllerRegistry";
 
 export type TacticalGraphicShape = GeoJsonGeometryTypes | 'Circle';
@@ -252,18 +251,45 @@ class OpenlayersAdapter {
         return turfBearing(start, stop);
     }
 
+    /**
+     * The same feature scaled about its edit pivot, **in projected metres**.
+     *
+     * `turf.transformScale` moves every vertex a geodesic distance from the pivot, which
+     * is not what a resize gesture asks for: the user drags a corner on screen. At 60
+     * degrees north a drag asking for exactly 2x grew a zone's longitude span by 2.029
+     * while MapLibre, which scales in projected space, grew it by 2.000.
+     * @see translateFeature, which had the same fault an order of magnitude larger
+     */
     resizeFeature(feat: Feature, deltaSize: number): Feature {
-        let turfFeature = this.olFeatureToTurf(feat);
-        let center = editPivot(turfFeature);
-        let scaledBase = geometryService.scale(<any>turfFeature, deltaSize, center);
-        return this.turfToOlFeature(scaledBase);
+        const scaled = feat.clone();
+        scaled.getGeometry()?.scale(deltaSize, deltaSize, this.projectedPivot(feat));
+        return scaled;
     }
 
+    /**
+     * The same feature turned about its edit pivot, **in projected metres**.
+     *
+     * Counter-clockwise for a positive angle in radians, which is what the drag paths
+     * compute with `Math.atan2` and what `turf.transformRotate(-degrees)` produced before.
+     * A geodesic rotation turns each vertex along its own great circle, so a line at 60
+     * degrees north came out 3.5% narrower than the same gesture on MapLibre.
+     */
     rotateFeature(feat: Feature, deltaAngle: number): Feature {
-        let turfFeature = this.olFeatureToTurf(feat);
-        let center = editPivot(turfFeature);
-        let rotatedBase = geometryService.rotate(<any>turfFeature, -deltaAngle * (180 / Math.PI), center);
-        return this.turfToOlFeature(rotatedBase);
+        const rotated = feat.clone();
+        rotated.getGeometry()?.rotate(deltaAngle, this.projectedPivot(feat));
+        return rotated;
+    }
+
+    /**
+     * The point an edit turns or scales about, in projected metres.
+     *
+     * `rotationAnchor` is stated in lon/lat because it is the library's rule — first
+     * vertex for a drawn line, an interior point for a ring, the frame's centre for a
+     * symbol described by anchor points — so it is read there and brought back.
+     * @see editPivot
+     */
+    private projectedPivot(feat: Feature): number[] {
+        return fromLonLat(editPivot(this.olFeatureToTurf(feat)) as Coordinate);
     }
 
     /**
