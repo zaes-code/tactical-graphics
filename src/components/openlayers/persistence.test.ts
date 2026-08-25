@@ -389,15 +389,33 @@ describe('the drawing resolution is no longer load-bearing', () => {
         expectMetersClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
     });
 
-    it('still enforces the minimum length on a fresh draw', () => {
-        // The guard must survive the restore exemption — it is what stops a click-click
-        // producing a line too short for the symbol to fit in.
+    /**
+     * The floor belongs to the gestures that **author the shape** — a draw, a vertex drag
+     * — and to nothing else. It used to be gated on "not a restore" alone, and
+     * `setBaseFeature` is the door every gesture comes through: at a zoom where a restored
+     * Fix was shorter than the 145 px floor, one *move* took its base from 5.2 degrees to
+     * 35.8, the near end following the cursor and the far end shooting off.
+     * @see LineGraphicBase.shapingFromGesture
+     */
+    it('still enforces the minimum length while the shape is being drawn', () => {
+        const handler = getController(TacticalGraphicName.Fix, RES);
+        const tiny = () => new Feature(new LineString([[CX, CY], [CX + 10, CY]]));
+
+        // What the draw path does: the controller marks the holder as authoring geometry
+        // for the length of the gesture.
+        (handler.graphic as unknown as {shapingFromGesture: boolean}).shapingFromGesture = true;
+        handler.setBaseFeature(tiny() as never);
+        expect((handler.graphic.base.getGeometry() as LineString).getLength()).toBeGreaterThan(10);
+    });
+
+    it('leaves the geometry alone when the gesture is not authoring it', () => {
         const handler = getController(TacticalGraphicName.Fix, RES);
         const tiny = new Feature(new LineString([[CX, CY], [CX + 10, CY]]));
+
         handler.setBaseFeature(tiny as never);
 
-        const drawn = (handler.graphic.base.getGeometry() as LineString).getLength();
-        expect(drawn).toBeGreaterThan(10);
+        // A move, a restore, or a host setting geometry directly: 10 metres in, 10 out.
+        expect((handler.graphic.base.getGeometry() as LineString).getLength()).toBeCloseTo(10, 6);
     });
 
     it('restores a record carrying nothing but the portable bag', () => {

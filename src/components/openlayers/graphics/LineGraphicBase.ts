@@ -180,6 +180,21 @@ export class LineGraphicBase implements LineGraphic {
      */
     suspendMinimumLength = false;
 
+    /**
+     * Whether the gesture in progress is **authoring the line's shape** — a draw, or a
+     * vertex being dragged — as opposed to moving, turning or scaling the whole graphic.
+     *
+     * The floors below only make sense for the first kind. `setBaseFeature` is the door
+     * every gesture comes through, so gating them on "not a restore" alone let a *move*
+     * stretch the graphic: at a zoom where a restored Fix was 96 px long against a 145 px
+     * floor, one drag took its base from 5.2 degrees to 35.8 — the near end followed the
+     * cursor and the far end shot off. The user moved it and it changed shape.
+     *
+     * Set by `LineGraphicController` around the two gestures that author geometry.
+     * @see MissionTaskGraphicBase.sizingFromDraw, the same rule for the curves' size
+     */
+    shapingFromGesture = false;
+
     setBaseFeature(base: Feature<LineString>): void {
         // AviationDirectionOfAttack carries a bow-tie baked into geometry near
         // the start of the line. Enforce a minimum first-segment length so the
@@ -192,6 +207,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             this.graphicName === TacticalGraphicName.AviationDirectionOfAttack &&
             this.resolution &&
+            this.shapingFromGesture &&
             !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
@@ -210,6 +226,7 @@ export class LineGraphicBase implements LineGraphic {
         if (
             (this.graphicName === TacticalGraphicName.TacticalFix || this.graphicName === TacticalGraphicName.Fix) &&
             this.resolution &&
+            this.shapingFromGesture &&
             !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {

@@ -290,6 +290,10 @@ export class LineGraphicController implements TacticalGraphicHandler {
         let geometry = originalFeature.getGeometry();
         if (geometry === undefined || geometry.getType() !== 'LineString') return;
 
+        // The minimum-length floors belong to the gesture that authors the shape.
+        // @see LineGraphicBase.shapingFromGesture
+        this.shapeFromGesture(true);
+
         geometry.on('change', () => {
             if (geometry === undefined || geometry.getType() !== 'LineString') return;
             let coords = (geometry as LineString).getCoordinates();
@@ -306,7 +310,15 @@ export class LineGraphicController implements TacticalGraphicHandler {
     };
 
     onDrawEndFunc = (_e: DrawEvent) => {
+        // **After the last vertex has been through `setBaseFeature`**, so a barely-drawn
+        // line is still held to a length the symbol fits in.
+        this.shapeFromGesture(false);
     };
+
+    /** Marks the holder as authoring geometry. @see LineGraphicBase.shapingFromGesture */
+    private shapeFromGesture(active: boolean): void {
+        (this.graphic as unknown as {shapingFromGesture?: boolean}).shapingFromGesture = active;
+    }
 
     setBaseFeature(base: Feature<LineString>) {
         this.graphic.setBaseFeature(base);
@@ -337,7 +349,13 @@ export class LineGraphicController implements TacticalGraphicHandler {
                 isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
             );
             const next = new Feature(new LineString(moved));
-            this.graphic.setBaseFeature(next as Feature<LineString>);
+            // Dragging a vertex *is* authoring the shape, so the floors apply here.
+            this.shapeFromGesture(true);
+            try {
+                this.graphic.setBaseFeature(next as Feature<LineString>);
+            } finally {
+                this.shapeFromGesture(false);
+            }
         };
         return this;
     }
