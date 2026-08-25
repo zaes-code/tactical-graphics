@@ -266,10 +266,23 @@ class OpenlayersAdapter {
         return this.turfToOlFeature(rotatedBase);
     }
 
+    /**
+     * The same feature moved by a **projected** offset, in EPSG:3857 metres.
+     *
+     * It used to convert to lon/lat and hand the two arguments to
+     * `GeometryService.translate`, which is `turf.transformTranslate(feature, distance,
+     * bearing)` — so `deltaX` was spent as a distance and `deltaY` as a compass bearing,
+     * and every vertex walked its own great circle. The names said one thing and the
+     * arithmetic did another; the graphic left the pointer behind by a latitude-dependent
+     * margin. @see TacticalGraphicsManager.handleDragForLineAndPolygon
+     *
+     * Translating the OpenLayers geometry directly also drops a round trip through
+     * GeoJSON and two reprojections per pointer move.
+     */
     translateFeature(feat: Feature, deltaX: number, deltaY: number): Feature {
-        let turfFeature = this.olFeatureToTurf(feat);
-        let rotatedBase = geometryService.translate(<any>turfFeature, deltaX, deltaY);
-        return this.turfToOlFeature(rotatedBase);
+        const moved = feat.clone();
+        moved.getGeometry()?.translate(deltaX, deltaY);
+        return moved;
     }
 }
 

@@ -758,6 +758,83 @@ async function runLatitudeSweep(engine) {
         return extent ? {w: (extent[2] - extent[0]) / resolution, h: (extent[3] - extent[1]) / resolution} : null;
     });
 
+    /*
+     * **A drag moves the graphic as far as the cursor asked, wherever it is.**
+     *
+     * The line and area path measured the cursor's travel as a ground distance and a
+     * bearing and walked every vertex along a great circle, which bows poleward — so one
+     * horizontal 90 px drag moved a zone 5.306 degrees of longitude at 63 north where it
+     * asked for 4.851, and slid it north as well. Checked at a latitude where that shows;
+     * on the equator the two are the same number.
+     */
+    const DRAG_PX = 120;
+    const editButton = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    for (const filter of ['assembly area', 'air corridor']) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(250);
+        await jump(60);
+        await page.waitForTimeout(300);
+        try {
+            await drawGraphic(page, filter, filter === 'assembly area'
+                ? [[600, 430], [820, 430], [820, 600]]
+                : [[600, 500], [900, 500]]);
+        } catch {
+            check(`${engine}: "${filter}" could be drawn for the drag check`, false);
+            continue;
+        }
+        await editButton.click();
+        await page.waitForTimeout(250);
+        const dragged = await page.evaluate(async pixels => {
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const api = window.__tacticalEngine;
+            const walk = (node, into) => {
+                if (!Array.isArray(node)) return into;
+                if (typeof node[0] === 'number') { into.push(node); return into; }
+                for (const child of node) walk(child, into);
+                return into;
+            };
+            const centroid = () => {
+                const points = walk(api.snapshot().features[0].geometry.coordinates, []);
+                return points.reduce((acc, [x, y]) => [acc[0] + x / points.length, acc[1] + y / points.length], [0, 0]);
+            };
+            api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+            await pause(200);
+            const box = api.selectionBox();
+            if (!box) return null;
+            const host = document.querySelector('.map-container').getBoundingClientRect();
+            const before = centroid();
+            const startX = box.x + box.width, startY = box.y + box.height;
+            if (!api.beginGesture('translate', new PointerEvent('pointerdown', {
+                clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+            }))) return null;
+            window.dispatchEvent(new PointerEvent('pointermove', {
+                clientX: host.left + startX + pixels, clientY: host.top + startY, bubbles: true,
+            }));
+            window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+            await pause(250);
+            const after = centroid();
+            const resolution = window.__tacticalGraphicsMapLibre
+                ? window.__tacticalGraphicsMapLibre.resolutionOf()
+                : window.__tacticalGraphics.manager.map.getView().getResolution();
+            // Longitude degrees the drag asked for, and what it got.
+            return {
+                asked: (pixels * resolution) / (Math.PI * 6378137 / 180),
+                got: after[0] - before[0],
+                drift: after[1] - before[1],
+            };
+        }, DRAG_PX);
+        await editButton.click();
+        await page.waitForTimeout(200);
+
+        if (!dragged) {
+            check(`${engine}: "${filter}" could be dragged at 60 degrees north`, false);
+            continue;
+        }
+        check(`${engine}: "${filter}" follows the cursor at 60 degrees north`,
+            Math.abs(dragged.got - dragged.asked) / dragged.asked < 0.01 && Math.abs(dragged.drift) < 0.01,
+            `asked ${dragged.asked.toFixed(3)} deg, moved ${dragged.got.toFixed(3)}, drifted ${dragged.drift.toFixed(3)}`);
+    }
+
     for (const {filter, pts} of LATITUDE_CASES) {
         const measured = {};
         for (const lat of [0, 60]) {
