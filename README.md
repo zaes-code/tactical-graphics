@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**218 graphics** are implemented and verified today, covering **231 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**228 graphics** are implemented and verified today, covering **241 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -1039,21 +1039,30 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Restrictive Fire Area, Circular | Fire Support Coordination Control Measures |
 | Restrictive Fire Area, Irregular | Fire Support Coordination Control Measures |
 | Restrictive Fire Area, Rectangular | Fire Support Coordination Control Measures |
+| Battlefield Coordination Line | Lines |
 | Battlefield Handover Line | Lines |
 | Bridgehead Line | Lines |
 | Common Sensor Boundary | Lines |
 | Coordinated Fire Line | Lines |
+| Decision Line | Lines |
 | Delay Line | Lines |
 | Engineer Work Line | Lines |
 | Final Coordination Line | Lines |
 | Fire Support Coordination Line | Lines |
 | Forward Edge Of The Battle Area | Lines |
 | Forward Line Of Own Troops | Lines |
+| Handover Line | Lines |
+| Holding Line | Lines |
 | Intelligence Coordination Line | Lines |
+| Light Line | Lines |
 | Limit Of Advance | Lines |
 | Line Of Contact | Lines |
 | Line Of Departure | Lines |
 | Line Of Departure Or Line Of Contact | Lines |
+| Line, Generic | Lines |
+| Mobility Corridor | Lines |
+| Named Area Of Interest Line | Lines |
+| No Fire Line | Lines |
 | Phase Line | Lines |
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
@@ -1119,6 +1128,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Penetration | Movement and Maneuver |
 | Supporting Axis Of Advance | Movement and Maneuver |
 | Turning Movement | Movement and Maneuver |
+| Advance To Contact | Offense Operations Planning |
 | Ambush | Offense Operations Planning |
 | Cordon And Search | Offense Operations Planning |
 | Counterattack | Offense Operations Planning |
@@ -1212,15 +1222,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Restricted Terrain | Areas |
 | Severely Restricted Terrain | Areas |
 | Fortified Position | Field Fortification Symbols |
-| Battlefield Coordination Line | Lines |
-| Decision Line | Lines |
-| Handover Line | Lines |
-| Holding Line | Lines |
-| Light Line | Lines |
-| Line, Generic | Lines |
-| Mobility Corridor | Lines |
-| Named Area Of Interest Line | Lines |
-| No Fire Line | Lines |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
 | Mined Area, Fenced | Mobility and Countermobility Control Measures |
@@ -1234,7 +1235,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Trip Wire | Mobility and Countermobility Control Measures |
 | Avenue Of Approach | Movement and Maneuver |
 | Axis Of Attack | Movement and Maneuver |
-| Advance To Contact | Offense Operations Planning |
 | Cordon And Knock | Offense Operations Planning |
 | Counterattack By Fire | Offense Operations Planning |
 | Capture | Tactical Mission Tasks |
