@@ -1092,6 +1092,154 @@ async function runMirrorCheck(engine) {
 }
 
 /** @see runDrawSizes — run once both engines have measured. */
+/**
+ * Where the arrowhead lands, on both engines.
+ *
+ * APP-06 numbers thirty-two of these graphics from the tip -- "Point 1 defines the tip of the
+ * arrowhead" -- and they were drawn rear-first, so the head sat on the user's *last*
+ * click. Nothing about that is visible in a size comparison: the symbol is the same
+ * picture either way round, which is why both engines agreed on it for months.
+ *
+ * So this measures the **overhang**. A movement arrow's head overshoots its tip vertex by
+ * one and a half radii, and a cane's 180-degree arc overshoots its rear the same way, so
+ * which end of the drawn line the ink sticks out past says which end the symbol treats as
+ * its head -- and it says it in one number that flips sign if the order is wrong.
+ */
+async function runTipOrder(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    const home = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, 0], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, 0]);
+        view.setZoom(6);
+    });
+
+    // The drawn points and the rendered ink, in one projected frame: base coordinates
+    // come back as lon/lat and the geometry is already mercator metres.
+    const measured = () => page.evaluate(() => {
+        const merc = lon => (lon * 20037508.342789244) / 180;
+        const mlb = window.__tacticalGraphicsMapLibre;
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        const coords = feature?.geometry?.coordinates ?? [];
+
+        // Every vertex of the rendered line work, in projected metres. Both engines are
+        // asked for the same thing: MapLibre keeps one realized geometry per graphic,
+        // OpenLayers keeps a feature per role and only `graphic` is the symbol itself.
+        const ink = [];
+        const walk = node => {
+            if (!Array.isArray(node)) return;
+            if (typeof node[0] === 'number') return void ink.push([node[0], node[1]]);
+            for (const child of node) walk(child);
+        };
+        if (mlb) {
+            const geometry = mlb.native.graphics[0]?.graphic?.geometry;
+            const parts = geometry?.type === 'GeometryCollection' ? geometry.geometries : geometry ? [geometry] : [];
+            for (const part of parts) walk(part.coordinates);
+        } else {
+            for (const f of window.__tacticalGraphics.manager.renderingVectorSource.getFeatures()) {
+                if (f.get('role') !== 'graphic') continue;
+                walk(f.getGeometry()?.getCoordinates?.());
+            }
+        }
+
+        return {
+            x: coords.map(c => merc(c[0])),
+            points: coords.length,
+            legs: coords.length >= 3
+                ? [0, 1].map(i => Math.hypot(coords[i + 1][0] - coords[0][0], coords[i + 1][1] - coords[0][1]))
+                : null,
+            ink,
+        };
+    });
+
+    /**
+     * How wide the ink is in the first and last fifth of the symbol's own span.
+     *
+     * An arrowhead is the widest part of an arrow and it sits at the tip, so the end
+     * carrying the wide ink is the end carrying the head. Measured off the shape rather
+     * than off an overhang because the movement family *trims* its centreline so the
+     * point lands exactly on the user's vertex -- there is no overhang to read.
+     */
+    const flare = (ink, axisY) => {
+        if (ink.length < 3) return null;
+        const xs = ink.map(([x]) => x);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const span = maxX - minX;
+        if (!(span > 0)) return null;
+        const widest = (from, to) => {
+            const inside = ink.filter(([x]) => x >= minX + span * from && x <= minX + span * to);
+            return inside.length ? Math.max(...inside.map(([, y]) => Math.abs(y - axisY))) : 0;
+        };
+        return {head: widest(0, 0.2), tail: widest(0.8, 1)};
+    };
+
+    const draw = async (filter, points) => {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(200);
+        await home();
+        await page.waitForTimeout(300);
+        await drawGraphic(page, filter, points);
+        return measured();
+    };
+
+    const LEFT = [600, 470];
+    const RIGHT = [900, 470];
+
+    // An axis of advance: the head is point 1, so the ink runs past the *first* click.
+    const avenue = await draw('avenue of approach', [LEFT, RIGHT]);
+    const avenueFlare = avenue.ink ? flare(avenue.ink, 0) : null;
+    if (!avenueFlare || avenue.points < 2) {
+        check(`${engine}: avenue of approach draws`, false, `${avenue.ink?.length ?? 0} vertices rendered`);
+    } else {
+        // Drawn west to east, so the first click is the western end -- and the barbs
+        // there are twice the half-width of the shaft at the other.
+        // 1.5x measured, 1.25 asserted: the reversed order reads 0.67, so the margin is
+        // between the two answers rather than shaved against the one that passes.
+        check(`${engine}: the avenue of approach points at the first click`,
+            avenueFlare.head > avenueFlare.tail * 1.25,
+            `${Math.round(avenueFlare.head)} m of flare at point 1 vs ${Math.round(avenueFlare.tail)} m at point N`);
+    }
+
+    // A cane: point 1 is the head as well, so the overshoot is the *arc*, at the far end.
+    const withdraw = await draw('withdraw', [LEFT, RIGHT]);
+    if (!withdraw.ink?.length || withdraw.points < 2) {
+        check(`${engine}: withdraw draws`, false, 'nothing rendered');
+    } else {
+        const xs = withdraw.ink.map(([x]) => x);
+        const past = {
+            first: withdraw.x[0] - Math.min(...xs),
+            last: Math.max(...xs) - withdraw.x[withdraw.x.length - 1],
+        };
+        check(`${engine}: the withdraw arc hangs off the last click, not the first`,
+            past.last > past.first,
+            `${Math.round(past.last / 1000)} km past the rear vs ${Math.round(past.first / 1000)} km past the tip`);
+    }
+
+    // The V: 140500 numbers it from the vertex, so the first click is the corner and the
+    // two legs -- the drawn one and the one the generator swings -- are equal from it.
+    const vee = await draw('fields of fire / sector of fire', [LEFT, RIGHT]);
+    if (!vee.legs) {
+        check(`${engine}: fields of fire completes its V`, false, `${vee.points} point(s)`);
+    } else {
+        const [a, b] = vee.legs;
+        check(`${engine}: the fields-of-fire vertex is the first click`,
+            Math.abs(a - b) / Math.max(a, b) < 0.05,
+            `legs ${a.toFixed(2)} and ${b.toFixed(2)} degrees from point 1`);
+    }
+
+    await browser.close();
+}
+
 function compareDrawSizes() {
     for (const {filter, as} of DRAW_SIZE_CASES) {
         const key = as ?? filter;
@@ -1160,24 +1308,44 @@ function compareDrawSizes() {
     }
 }
 
+/**
+ * The sections, by name, so one can be run alone while it is being worked on.
+ *
+ * `SECTIONS=tip npm run drive:edit` runs just that one; unset runs all of them, which
+ * is what CI and a release check want. A whole pass is fifteen minutes, and iterating on
+ * one measurement at that price is how measurements stop being iterated on.
+ */
+const SECTIONS = {
+    edit: run,
+    resize: runResizeSweep,
+    width: runWidthSweep,
+    preview: runDrawPreview,
+    latitude: runLatitudeSweep,
+    sizes: runDrawSizes,
+    mirror: runMirrorCheck,
+    tip: runTipOrder,
+};
+
+const wanted = (process.env.SECTIONS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+const running = wanted.length ? wanted : Object.keys(SECTIONS);
+for (const name of running) {
+    if (!SECTIONS[name]) {
+        failures.push(`  FAIL  unknown section "${name}" — one of ${Object.keys(SECTIONS).join(', ')}`);
+    }
+}
+
 for (const engine of ['openlayers', 'maplibre']) {
     try {
-        await run(engine);
-        await runResizeSweep(engine);
-        await runWidthSweep(engine);
-        await runDrawPreview(engine);
-        await runLatitudeSweep(engine);
-        await runDrawSizes(engine);
-        await runMirrorCheck(engine);
+        for (const name of running) await SECTIONS[name]?.(engine);
     } catch (err) {
         failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
     }
 }
 
-compareDrawSizes();
+if (running.includes('sizes')) compareDrawSizes();
 
 try {
-    await runChromeChecks();
+    if (!wanted.length) await runChromeChecks();
 } catch (err) {
     failures.push(`  FAIL  chrome checks threw — ${err.message}`);
 }

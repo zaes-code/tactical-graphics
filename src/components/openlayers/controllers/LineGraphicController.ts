@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, editStretches} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, drawsTipFirst, editStretches} from '@zaes/tactical-graphics';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -53,12 +53,33 @@ export const SAME_POINT_EPSILON_M = 1e-3;
  * Safe because nothing indexes into a line graphic's handle set:
  * `toggleHandleFeatures` only flips `hidden` on the whole feature, and
  * `handleRotate` / `handleResize` / `handleTranslate` transform `graphic.base`
- * wholesale — `handleResize` anchored on `getCenter()`, which is base
- * `coords[0]` = p0 and stays the anchor whether or not it is drawn.
+ * wholesale — `handleResize` anchored on `getCenter()`, which is the base's pivot end
+ * and stays the anchor whether or not it is drawn. @see pivotCoordinate
  *
  * Never returns an empty set: a generator whose handles all sit on p0 keeps
  * them, so the graphic cannot end up with nothing to grab.
  */
+/**
+ * The end of a drawn line an edit turns, scales and stacks its label about.
+ *
+ * `coords[0]` for an ordinary line -- where the user started drawing -- and the **last**
+ * coordinate for the thirty-two graphics that store their points tip-first, whose first
+ * point is the arrowhead. It is the same physical end in both cases; only the index it
+ * lives at moved when the bases were renumbered into APP-06's order.
+ *
+ * Both jobs `hidesStartHandle` does want this end rather than index zero: the redundant
+ * handle is the one on the pivot, and the label sits there too. Anchoring a resize on the
+ * tip instead would grow an axis of advance backwards out of its own arrowhead.
+ *
+ * The library's `rotationAnchor` states the same rule for MapLibre and for the adapter's
+ * transforms; this is it in OpenLayers' projected coordinates, where re-projecting to ask
+ * would be an absurd amount of work for "which end". @see drawOrder.ts
+ */
+export function pivotCoordinate(name: TacticalGraphicName | undefined, coords: Coordinate[] | undefined): Coordinate | undefined {
+    if (!coords?.length) return undefined;
+    return drawsTipFirst(name) ? coords[coords.length - 1] : coords[0];
+}
+
 export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate | undefined, hidesStartHandle?: boolean): Coordinate[] {
     if (!hidesStartHandle || !startCoord) return coords;
 
@@ -125,9 +146,30 @@ export class LineGraphicController implements TacticalGraphicHandler {
      */
     anchorVertex: number | undefined;
 
+    /**
+     * Which graphic this is, kept because two of the rules the library states are
+     * answered per graphic rather than per shape -- `editStretches`, and which end of a
+     * drawn line is its pivot. @see pivotCoordinate
+     */
+    name: TacticalGraphicName | undefined;
+
+    /**
+     * The graphic's name, from the holder when the factory did not pass one.
+     *
+     * **Two factories do not pass it** -- `mobileDefense` and `corridor` in the registry
+     * -- and an optional constructor argument gives no warning when it is left out. The
+     * holder always knows, because it was built with the name to look its own style
+     * function up, so asking it is the answer that cannot be forgotten.
+     */
+    private resolvedName(): TacticalGraphicName | undefined {
+        const holder = this.graphic as unknown as {name?: TacticalGraphicName; graphicName?: TacticalGraphicName};
+        return this.name ?? holder.graphicName ?? holder.name;
+    }
+
     constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
         this.graphic = graphic;
         this.maxPoints = maxPoints;
+        this.name = name;
 
         // turn off modification because there should only be a fixed number of vertices.
         if (this.maxPoints) {
@@ -155,7 +197,10 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     getCenter() {
-        return this.graphic.base.getGeometry()!.getCoordinates()[0];
+        // The pivot end, which is p0 for a plain line and the last vertex for a graphic
+        // whose points are stored tip-first. @see pivotCoordinate
+        const coords = this.graphic.base.getGeometry()!.getCoordinates();
+        return pivotCoordinate(this.resolvedName(), coords) ?? coords[0];
     }
 
     getBaseGeometry(): number[] | number[][] | number[][][] {

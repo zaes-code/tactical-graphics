@@ -10,6 +10,7 @@ import {
     supportsHostility,
     AltitudeDatum,
     isRectangular,
+    storedOrder,
     anchorsFromFrame,
     usesDrawnAnchors,
     type TacticalGraphicProperties,
@@ -70,7 +71,13 @@ const MAX_SHEET_LATITUDE = 80;
  * directly. It also means a newly-ported graphic joins the sweep with no edit here.
  */
 function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number): Geometry[] {
-    const line: Geometry = {type: 'LineString', coordinates: [[lon - HALF, lat], [lon + HALF, lat]]};
+    // **West to east as the *graphic* files it.** Thirty-two graphics store the arrowhead as
+    // point 1, so handing one a west-to-east path aims it west and the sheet fills with
+    // arrows pointing back into the previous cell. @see storedOrder
+    const line: Geometry = {
+        type: 'LineString',
+        coordinates: storedOrder(name, [[lon - HALF, lat], [lon + HALF, lat]]),
+    };
     const point: Geometry = {type: 'Point', coordinates: [lon, lat]};
     // **A rectangle gets four corners and an irregular area gets five**, so the sweep
     // tells them apart on sight. Every polygon-based graphic used to get the same square,
