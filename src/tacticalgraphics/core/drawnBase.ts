@@ -26,6 +26,7 @@
 import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
+import {generatorOrder, storedOrder} from './drawOrder';
 
 /**
  * Two positions that are the same position.
@@ -59,7 +60,13 @@ export function normalizeDrawnBase(name: TacticalGraphicName, coordinates: Posit
     // leg makes it editable: `asVee` is the same function the renderer would have
     // called, so the symbol does not change shape — it just gains the handle it was
     // always missing.
-    if (name === TacticalGraphicName.FieldsOfFire) return asVee(deduped);
+    // **Through the generator's own order and back.** `asVee` reads `[end, apex]`, which
+    // is the order the generator sees; what is stored is APP-06's `[apex, end]`. Handing
+    // it the stored order swung the second leg about a leg *end*, so a two-click V came
+    // out hinged on the wrong point. @see drawOrder.ts
+    if (name === TacticalGraphicName.FieldsOfFire) {
+        return storedOrder(name, asVee(generatorOrder(name, deduped)));
+    }
 
     return deduped;
 }

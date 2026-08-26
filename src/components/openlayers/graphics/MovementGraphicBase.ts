@@ -14,7 +14,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
@@ -181,7 +181,7 @@ export class MovementGraphicBase implements LineGraphic {
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
         this.graphic.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, 2), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, 2), pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
 
         // A generator that emits fewer than three handle points is declaring that
         // the graphic has no width to drag — its shape follows entirely from its
