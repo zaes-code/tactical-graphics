@@ -82,9 +82,13 @@ describe('the retrograde cane hook follows its line', () => {
         expect(spread).toBeLessThan(2);
     });
 
-    it('starts the arc at the line start, so its far end is the offset handle', () => {
-        const {arc} = cane(37);
-        expect(turf.distance(START, arc[0], {units: 'meters'})).toBeLessThan(1);
+    it('starts the arc at the rear of the symbol, which is the line\'s last point', () => {
+        // APP-06 340800 numbers the cane from its head -- "Point 1 defines the tip of the
+        // arrowhead. Point 2 defines the end of the straight line portion" -- so the arc
+        // hangs off the *end* of the drawn line. It used to hang off the start, back when
+        // these graphics stored their points rear-first. @see core/drawOrder
+        const {end, arc} = cane(37);
+        expect(turf.distance(end, arc[0], {units: 'meters'})).toBeLessThan(1);
     });
 });
 

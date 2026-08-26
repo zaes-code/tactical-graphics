@@ -16,6 +16,7 @@
 
 import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
+import {drawsTipFirst} from './drawOrder';
 
 /**
  * What dragging a handle does.
@@ -438,6 +439,20 @@ export function rotationAnchor(
         const centre = drawnAnchorFrame(name, positions)?.center;
         if (centre) return [centre[0], centre[1]];
     }
+    /*
+     * **A tip-first graphic turns about its rear, which is its *last* vertex.**
+     *
+     * The rule below reads "first vertex" as a shorthand for "where the user started and
+     * where the symbol grows from", and for thirty-two graphics those parted company when
+     * their points were renumbered into APP-06's order: point 1 is the arrowhead now, so
+     * pivoting on it would resize an axis of advance backwards out of its own tip and
+     * rotate every one of them about the end that is supposed to swing. The rear is the
+     * same coordinate these pivoted on before the renumbering, so the gesture is
+     * unchanged — only the index it lives at moved. @see drawOrder.ts
+     */
+    if (drawsTipFirst(name) && (geometry.type === 'LineString' || geometry.type === 'MultiLineString')) {
+        return positions[positions.length - 1];
+    }
     if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
 
     // Measured in **projected** meters, not degrees. OpenLayers' `getInteriorPoint`
@@ -590,9 +605,15 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  * It was the third argument to `vertexLine` in the OpenLayers registry, so MapLibre
  * did not know: measured on a fields of fire in modify mode, dragging the apex was
  * inert in OpenLayers and reshaped the graphic in MapLibre.
+ *
+ * **Index 0, since the apex is drawn first.** APP-06 140500 numbers this symbol from
+ * its vertex -- "Point 1 defines the vertex of the symbol. Points 2 and 3 define the
+ * tips of the arrowheads" -- and the base was renumbered to match, so the apex moved
+ * from index 1 to index 0. Left at 1 it would have made a *leg end* inert and the apex
+ * draggable, which is the bug this table exists to prevent, upside down. @see drawOrder.ts
  */
 const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.FieldsOfFire]: 1,
+    [TacticalGraphicName.FieldsOfFire]: 0,
 };
 
 /**

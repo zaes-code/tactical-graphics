@@ -35,8 +35,8 @@ describe('per-handle vertex dragging', () => {
         const c = build(TacticalGraphicName.FieldsOfFire);
         c.handleVertexDrag!(2, [260_000, 40_000]);
         const after = coordsOf(c);
-        expect(after[0]).toEqual([0, 0]);              // other leg untouched
-        expect(after[1]).toEqual([100_000, -60_000]);  // apex untouched
+        expect(after[0]).toEqual([0, 0]);              // apex untouched
+        expect(after[1]).toEqual([100_000, -60_000]);  // other leg untouched
         expect(after[2]).toEqual([260_000, 40_000]);   // dragged end moved
     });
 
@@ -55,12 +55,15 @@ describe('per-handle vertex dragging', () => {
     });
 
     it('the apex moves the whole graphic, keeping the V rigid', () => {
+        // **Vertex 0.** APP-06 140500 numbers this symbol from its vertex, and the base
+        // was renumbered to match, so the apex is the first point rather than the middle
+        // one it used to be drawn as. @see drawOrder.ts
         const c = build(TacticalGraphicName.FieldsOfFire);
         const before = coordsOf(c);
-        c.handleVertexDrag!(1, [130_000, -20_000]);   // drag the apex
+        c.handleVertexDrag!(0, [130_000, -20_000]);   // drag the apex
         const after = coordsOf(c);
-        const dx = 130_000 - before[1][0];
-        const dy = -20_000 - before[1][1];
+        const dx = 130_000 - before[0][0];
+        const dy = -20_000 - before[0][1];
         // Every vertex shifted by the same delta — the shape is unchanged, only placed.
         after.forEach((p, i) => {
             expect(p[0]).toBe(before[i][0] + dx);
@@ -70,7 +73,7 @@ describe('per-handle vertex dragging', () => {
 
     it('publishes three handles: two ends and an apex', () => {
         const c = build(TacticalGraphicName.FieldsOfFire);
-        expect(c.anchorVertex).toBe(1);
+        expect(c.anchorVertex).toBe(0);
         const handles = c.graphic.getFeatures().find(f => f.get('role') === 'handle')?.getGeometry();
         expect((handles as unknown as {getCoordinates(): number[][]}).getCoordinates().length).toBeGreaterThanOrEqual(3);
     });
