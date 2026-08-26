@@ -87,6 +87,7 @@ export {
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
+export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes} from './core/entityCodes';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
@@ -380,6 +381,9 @@ export {normalizeDrawnBase} from './core/drawnBase';
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
+// Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
+// panel hint needs the answer, and only one table may hold it. @see core/drawOrder
+export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';

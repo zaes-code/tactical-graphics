@@ -14,7 +14,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 /**
@@ -136,7 +136,7 @@ export class Block implements LineGraphic {
 
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
 
         // Persist the *effective* meter value rather than the viewport factor behind it.

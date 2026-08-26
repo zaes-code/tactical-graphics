@@ -10,7 +10,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from 'ol/geom';
 import LineString from 'ol/geom/LineString';
-import {LineGraphic, visiblePathHandles} from '../controllers/LineGraphicController';
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 export class ReliefInPlace implements LineGraphic {
@@ -46,7 +46,7 @@ export class ReliefInPlace implements LineGraphic {
         this.graphic.setGeometry(graphic);
         const handleCoords = (handles as MultiPoint).getCoordinates();
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
         // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a

@@ -4,7 +4,7 @@ import Feature from 'ol/Feature';
 import {createBaseFeature, createFeature, createHandleFeature, exfiltrateStyleFunc} from '../openlayerStyles';
 import {MultiPoint} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 /**
@@ -51,7 +51,7 @@ export class Exfiltrate implements LineGraphic {
         this.graphic.setGeometry(graphic);
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(
             (handles as MultiPoint).getCoordinates(),
-            this.base.getGeometry()?.getCoordinates()[0],
+            pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()),
             this.hidesStartHandle,
         )));
 

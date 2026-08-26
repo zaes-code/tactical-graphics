@@ -78,6 +78,7 @@ const {
     isPaintable,
     baseGeometryFor,
     baseVertexCount,
+    storedOrder,
     getDisplayName,
     GRAPHIC_CATEGORIES,
 } = lib;
@@ -136,7 +137,10 @@ function makeBase(name) {
         const t = n === 1 ? 0 : i / (n - 1);
         pts.push([LON - D * 1.4 + 2.8 * D * t, LAT - D * 0.55 + Math.sin(t * Math.PI) * D * 0.75]);
     }
-    return {type: 'LineString', coordinates: pts};
+    // **In the order the graphic files its points.** Thirty of them store the arrowhead
+    // as point 1, so a left-to-right path aims them back the way they came and the
+    // catalog fills with arrows pointing at the previous thumbnail. @see storedOrder
+    return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, pts) : pts};
 }
 
 /**

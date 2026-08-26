@@ -1,7 +1,7 @@
 import {Feature} from "ol";
 import {LineString, MultiPoint} from "ol/geom";
 import {Coordinate} from "ol/coordinate";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {
     coordinatedFireLineStyle,
     createBaseFeature,
@@ -369,7 +369,7 @@ export class LineGraphicBase implements LineGraphic {
 
         this.graphics.setGeometry(graphic);
         const generated = (handles as MultiPoint).getCoordinates();
-        const visible = visiblePathHandles(generated, this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle);
+        const visible = visiblePathHandles(generated, pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle);
         this.handleIndexOffset = generated.length - visible.length;
         this.handles.setGeometry(new MultiPoint(visible));
 
