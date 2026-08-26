@@ -11,7 +11,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale, sampleSegments} from './symbolFit';
@@ -72,9 +72,44 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
             geometry: {type: 'MultiLineString', coordinates: ARMS.map(arm => arm.map(place))},
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         });
+
+        /*
+         * **Field H sits outside the area, to its right.** 120400 is the one graphic whose
+         * only amplifier is H — "The Field 'H' for this symbol includes type of airfield,
+         * length of runway and other pertinent information" — and its Template puts the box
+         * clear of the outline on the right, level with the middle, rather than inside with
+         * the runways.
+         *
+         * Anchored on the ring's own eastern edge when there is one. The bounds are the
+         * fallback: a circular variant arrives as line work with no ring, and the extent's
+         * right edge is the same place for a shape that wide.
+         */
+        const info = (feature.properties.additionalInfo ?? '').trim();
+        if (!info) return paints;
+
+        const east = feature.ring
+            ? Math.max(...feature.ring.map(([x]) => x))
+            : feature.bounds?.maxX;
+        if (east === undefined) return paints;
+
+        paints.push({
+            geometry: {type: 'Point', coordinates: [east + INFO_GAP_PX * context.resolution, center[1]]},
+            text: {
+                text: info,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'left',
+                baseline: 'middle',
+                scale: labelScale(feature.drawingResolution, context.resolution),
+            },
+        });
         return paints;
     };
 }
+
+/** Clear space between the area's eastern edge and field H, in screen pixels. */
+const INFO_GAP_PX = 10;
 
 /**
  * Half-width the point airfield is **dropped** at, in screen pixels at the placing zoom.

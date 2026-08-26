@@ -52,6 +52,21 @@ export interface TacticalGraphicProperties {
     label?: string;
     /** Secondary designation, rendered beneath the primary on some graphics. */
     secondId?: string;
+    /**
+     * **Field H — additional information.** Free text a symbol carries *beside* its
+     * designation, not instead of it.
+     *
+     * Both standards name it that way, and several plates set the two at once: the area
+     * generic (APP-06 120700) reads `H  T` on one line, the PsyOps zone stacks H over T
+     * beside its loudspeaker, and human terrain sets H alone under its `HT`. The airfield
+     * zone (120400) carries only this one — "The Field 'H' for this symbol includes type
+     * of airfield, length of runway and other pertinent information" — which is why a
+     * graphic needing H cannot simply borrow `label`.
+     *
+     * Where it is drawn is each symbol's own business; several rows add that H "should be
+     * movable to avoid obscuring key geographic information", so a host is free to move it.
+     */
+    additionalInfo?: string;
     countryCode?: string;
     secondCountryCode?: string;
     /** Date-time group, formatted by the caller. */
@@ -214,6 +229,8 @@ export interface GraphicLabels {
     label: string;
     countryCode?: string;
     secondId?: string;
+    /** Field H — additional information. @see TacticalGraphicProperties.additionalInfo */
+    additionalInfo?: string;
     secondCountryCode?: string;
     startDate?: string;
     endDate?: string;

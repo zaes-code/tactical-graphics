@@ -19,7 +19,7 @@ import {TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **275 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
+ * **280 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -65,6 +65,11 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.HumanTerrain]:                                '370100',  // Human Terrain
     [TacticalGraphicName.PenetrationBox]:                              '151900',  // Penetration Box
     [TacticalGraphicName.Area]:                                        '150100',  // Area
+    [TacticalGraphicName.SubmarineActionArea]:                          '150502',  // Submarine Action Area (SAA)
+    [TacticalGraphicName.SubmarineGeneratedActionArea]:                 '150503',  // Submarine-Generated Action Area (SGAA)
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]:   '271701',  // Toxic Industrial Material
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]:     '271801',  // Toxic Industrial Material
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: '272001',  // Toxic Industrial Material
     [TacticalGraphicName.JointTacticalActionArea]:                     '150501',  // Joint Tactical Action Area (JTAA)
     [TacticalGraphicName.AreaGeneric]:                                 '120700',  // Area, Generic
     [TacticalGraphicName.ZoneOfFire]:                                  '242600',  // Zone of Fire

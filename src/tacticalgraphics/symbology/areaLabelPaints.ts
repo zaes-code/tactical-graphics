@@ -24,9 +24,10 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
-import {TacticalGraphicName, getLabel} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {getFullLabel, labelColorOf} from './paintFunctions';
+import {getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
+import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {fitLabelScale} from './labelFit';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -103,16 +104,124 @@ export function areaDateLabel(feature: PaintFeature): string {
  */
 export function areaLabelStackPaint(
     name: TacticalGraphicName,
-    options: {before?: string[]; after?: string[]} = {},
+    options: {before?: string[]; after?: string[]; literalLines?: string[]} = {},
 ): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
 
+        /*
+         * **`literalLines` sets the graphic's own literal on lines of its own**, and the
+         * designation goes *under* it rather than beside it.
+         *
+         * `getFullLabel` writes "EPW HOLDING AREA T-1" on one line, because for most
+         * graphics the literal is a prefix — "OBJ SWORD", "NAI 12". 310200's Template
+         * stacks them: "EPW" over "HOLDING AREA" over the designation, which is a
+         * different arrangement and not one a prefix can express.
+         */
+        const designation = options.literalLines
+            ? (feature.properties.label ?? '').trim()
+            : getFullLabel(name, feature.properties.label ?? '').trim();
+
         const lines = [
             ...(options.before ?? []),
-            getFullLabel(name, feature.properties.label ?? '').trim(),
+            ...(options.literalLines ?? []),
+            designation,
             ...(options.after ?? []),
+            areaDateLabel(feature),
+        ].filter(line => line.length > 0);
+
+        return lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
+    };
+}
+
+/**
+ * The action areas -- JTAA, SAA and SGAA (APP-06 150501-150503) -- and the generic area
+ * (120700), which is the same block with field H beside the designation.
+ *
+ * One Template serves all four:
+ *
+ * ```
+ *          JTAA - T                        H  T
+ *    N     W - W1     N              N    W - W1    N
+ * ```
+ *
+ * Three things in it are worth naming. The literal joins the designation with a **hyphen**
+ * rather than the space `getFullLabel` writes, because the Example reads `JTAA - 02`.
+ * Field **H sits to the left of T** on the generic area, which is the one place in this
+ * library where H shares a line with the designation. And the **N** is field N, the
+ * hostile marker -- so it is the affiliation speaking, not an input.
+ */
+export function actionAreaLabelPaint(
+    name: TacticalGraphicName,
+    options: {withAdditionalInfo?: boolean} = {},
+): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const designation = (feature.properties.label ?? '').trim();
+        const literal = getLabel(name);
+        const titled = literal && designation ? `${literal} - ${designation}` : literal || designation;
+        const info = options.withAdditionalInfo ? (feature.properties.additionalInfo ?? '').trim() : '';
+        const first = [info, titled].filter(Boolean).join('  ');
+
+        const lines = [first, areaDateLabel(feature)].filter(line => line.length > 0);
+        const paints = lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
+        return paints.concat(hostileFlankMarks(feature, context));
+    };
+}
+
+/**
+ * `ENY` where the outline crosses due **west and due east** of the middle, and only when
+ * the graphic is hostile.
+ *
+ * The Template boxes an `N` at exactly those two points. Field N is the hostile marker, so
+ * it appears for a hostile graphic and for no other -- the same reading the encirclement
+ * already takes. The text stays in the label colour: hostile *line work* goes red, hostile
+ * text amplifiers do not. @see ai/decisions.md, the hostility colour rule
+ */
+function hostileFlankMarks(feature: PaintFeature, context: PaintContext): Paint[] {
+    if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return [];
+    const ring = feature.ring;
+    if (!ring || ring.length < 4) return [];
+
+    const center = ringCenter(ring);
+    const marks: Paint[] = [];
+    for (const angle of [0, Math.PI]) {
+        const spot = ringCrossingPoint(ring, center, angle);
+        if (!spot) continue;
+        marks.push({
+            geometry: {type: 'Point', coordinates: spot},
+            text: {
+                text: 'ENY',
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'middle',
+                scale: scaleOf(feature, context),
+            },
+        });
+    }
+    return marks;
+}
+
+/**
+ * Human terrain (APP-06 370100): the literal `HT` with field **H** under it.
+ *
+ * The only area whose second line is the free text rather than a designation — its
+ * Template shows `HT` over an `H` box and nothing else, so a name would have nowhere to
+ * go. The dialog offers additional information alone for the same reason.
+ */
+export function humanTerrainLabelPaint(): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const lines = [
+            getLabel(TacticalGraphicName.HumanTerrain),
+            (feature.properties.additionalInfo ?? '').trim(),
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
 
@@ -193,6 +302,39 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
             },
         });
         return paints;
+    };
+}
+
+/**
+ * The date-time group alone, hanging outside the shape's **upper left**.
+ *
+ * The second half of {@link zoneLabelPaint}, on its own, because the PsyOps zones want
+ * exactly that block and nothing else from it: their Template sets `W - W1` outside the
+ * upper-left corner and everything else beside the loudspeaker. Written once so the two
+ * families cannot drift about where "outside the corner" is.
+ */
+export function outsideCornerDatePaint(): AreaLabelPaint {
+    return (feature, context) => {
+        const dtg1 = (feature.properties.startDate ?? '').trim();
+        const dtg2 = (feature.properties.endDate ?? '').trim();
+        if (!dtg1 && !dtg2) return [];
+
+        const at = feature.ring ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
+        if (!at) return [];
+
+        return [{
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text: [dtg1, dtg2].filter(line => line.length > 0).join(' - '),
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'right',
+                baseline: 'bottom',
+                offsetXPx: -6,
+                scale: scaleOf(feature, context),
+            },
+        }];
     };
 }
 

@@ -285,7 +285,7 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
-export {CARDINAL_LABEL_AREAS, CBRN_AREAS} from './symbology/registry';
+export {CARDINAL_LABEL_AREAS, CBRN_AREAS, CBRN_TOXIC_AREAS} from './symbology/registry';
 export {
     breakRingAt,
     cardinalBoundaryPaint,

@@ -9,7 +9,7 @@ import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
 // The wire and anti-tank tables moved with their paint functions — they describe
 // what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService, getPaintFunction} from '@zaes/tactical-graphics';
 import {
     getLabel,
     TacticalGraphicConfidence,
@@ -178,6 +178,7 @@ import {
     encirclementPaint,
     CARDINAL_LABEL_AREAS,
     CBRN_AREAS,
+    CBRN_TOXIC_AREAS,
     cardinalBoundaryPaint,
     cardinalLabelPaint,
     contourLineBoundaryPaint,
@@ -2094,7 +2095,31 @@ export function getDateLabel(graphicLabels: GraphicLabels): string {
     return '';
 }
 
+/**
+ * The area families whose label layout lives **only** in the shared paint layer.
+ *
+ * `getAreaLabelStylesFromLabels` below is this engine's own switch, and it is still the
+ * route for most areas — the port is not finished. But a layout written for the paint
+ * registry and not also written here renders on MapLibre and not on OpenLayers, which is
+ * exactly the asymmetry the shared layer exists to prevent: measured on a hostile joint
+ * tactical action area, MapLibre drew `JTAA - 02` with `ENY` on both flanks and this
+ * engine drew `JTAA 02` with neither.
+ *
+ * So these names are read from the registry instead. The list is the porting front, and it
+ * shrinks to nothing when the switch does. @see areaLabelPainterFor
+ */
+const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
+    TacticalGraphicName.AreaGeneric,
+    TacticalGraphicName.HumanTerrain,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+];
+
 export function getAreaLabelStylesFn(name: TacticalGraphicName): StyleFunction {
+    const painted = PAINT_LAYER_AREA_LABELS.includes(name) ? getPaintFunction(name)?.label : undefined;
+    if (painted) return asStyleFunction(painted, name);
     return (f, resolution) => getAreaLabelStylesFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
 
@@ -2151,6 +2176,19 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                 cbrnMarkPaint(
                     CBRN_AREAS.find(([cbrn]) => cbrn === name)![1],
                     areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
+        // The three toxic-industrial-material subtypes: the same triangle with a T in the
+        // bottom of it. @see CBRN_TOXIC_AREAS
+        case TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial:
+            return asStyleFunction(
+                cbrnMarkPaint(
+                    CBRN_TOXIC_AREAS.find(([cbrn]) => cbrn === name)![1],
+                    areaDefaultLabelPaint(name),
+                    {toxic: true},
                 ),
                 name,
             );
@@ -2960,8 +2998,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.ZoneOfFire) {
         return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
     }
-    // The yellow hatch; the triangle and its letter ride the label feature below.
-    if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
+    // The yellow hatch; the triangle and its letter ride the label feature below. The
+    // toxic-industrial-material subtypes hatch identically — the T is on the label.
+    if (CBRN_AREAS.some(([cbrn]) => cbrn === name) || CBRN_TOXIC_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
     }
     if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
