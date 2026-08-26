@@ -142,6 +142,11 @@ tacticalGraphic: {
     echelon: 'battalion',
     direction: 'ONE_WAY',     // route graphics
     mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
+    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
+                              // area or restricted terrain carries to say what kind of
+                              // movement the ground admits
+    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
+                              // and the color the area is hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:

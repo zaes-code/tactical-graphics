@@ -605,9 +605,30 @@ const HAZARD_AREAS = new Set<TacticalGraphicName>([
     TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
 ]);
 
+/**
+ * Restricted terrain and severely restricted terrain, for the same reason as the hazard
+ * areas: they describe **ground rather than a force**.
+ *
+ * APP-06 152400 and 152500 say what a piece of country does to movement -- a gradient, a
+ * marsh, dense woodland -- and the answer is the same whoever is trying to cross it. Their
+ * Templates carry a Sector 1 modifier, a Sector 2 modifier and field H, and nothing else:
+ * no `T`, no `N`, no status form. So the identity had nowhere to go but the outline, where
+ * it turned a statement about the ground into a claim about a side. (User's call,
+ * 2026-08-26.) @see sectorModifierPaints
+ *
+ * **The limited access area is deliberately not here.** Its FM 1-02.2 Template offers a
+ * date-time group, so it is a restriction someone imposes for a while rather than a
+ * standing property of the ground, and the affiliation still reads.
+ */
+const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
+    if (TERRAIN_DESCRIPTIONS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
 

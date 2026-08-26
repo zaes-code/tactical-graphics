@@ -3,6 +3,7 @@ import {LineString, MultiPoint, Point} from 'ol/geom';
 import Style from 'ol/style/Style';
 import {readGraphicLabels, TACTICAL_GRAPHIC_KEY, writeGraphicProperties} from './graphicProperties';
 import {
+    listTacticalGraphicNames,
     RouteDirection,
     TacticalGraphicName,
     TacticalGraphicStatus,
@@ -296,5 +297,68 @@ describe('obstacle line fields', () => {
             .map(s => JSON.stringify(s.getStroke()?.getLineDash() ?? null));
 
         expect(dashes(withStatus)).toEqual(dashes(without));
+    });
+});
+
+describe('the sector-modifier fields, and where the Remarks column allows them', () => {
+    const TERRAIN_PAIR = [
+        TacticalGraphicName.RestrictedTerrain,
+        TacticalGraphicName.SeverelyRestrictedTerrain,
+    ];
+
+    it.each(TERRAIN_PAIR.map(n => [String(n), n] as const))(
+        '%s offers both sectors and field H, and nothing else',
+        (_label, name) => {
+            const fields = getGraphicFields(name);
+            expect(fields.mobility).toBe(true);
+            expect(fields.terrain).toBe(true);
+            expect(fields.additionalInfo).toBe(true);
+            // The Template has no box for any of these — and the pair describe ground,
+            // so there is no side to be identified with.
+            expect(fields.identifier1).toBe(false);
+            expect(fields.hostility).toBe(false);
+            expect(fields.status).toBe(false);
+            expect(fields.dtg1).toBe(false);
+            expect(fields.dtg2).toBe(false);
+        },
+    );
+
+    it('gives the limited access area Sector 1, field H and the FM date-time group', () => {
+        const fields = getGraphicFields(TacticalGraphicName.LimitedAccessArea);
+        expect(fields.mobility).toBe(true);
+        expect(fields.additionalInfo).toBe(true);
+        // FM 1-02.2 table 5-5 sets W - W1 where APP-06 sets H; the graphic carries both.
+        expect(fields.dtg1).toBe(true);
+        expect(fields.dtg2).toBe(true);
+        // No Sector 2 box on this Template, and the `LAA` above the icon is the symbol's
+        // own literal rather than a designation the user types.
+        expect(fields.terrain).toBe(false);
+        expect(fields.identifier1).toBe(false);
+    });
+
+    it('keeps each category of Table 8-24 off the graphics the other one owns', () => {
+        // MOBILITY is remarked "for use with Limited Access Area, Restricted Terrain and
+        // Severely Restricted Terrain only"; MINE TYPE "used with minefields & mined
+        // areas only". Neither graphic may offer the other's selector.
+        for (const name of [...TERRAIN_PAIR, TacticalGraphicName.LimitedAccessArea]) {
+            expect(getGraphicFields(name).mineType).toBe(false);
+        }
+        for (const name of [TacticalGraphicName.MinefieldDynamicDepiction, TacticalGraphicName.MinedAreaFenced]) {
+            const fields = getGraphicFields(name);
+            expect(fields.mineType).toBe(true);
+            expect(fields.mobility).toBe(false);
+            expect(fields.terrain).toBe(false);
+        }
+    });
+
+    it('offers Sector 1 on exactly the three graphics the Remarks column names', () => {
+        const offered = (listTacticalGraphicNames() as TacticalGraphicName[])
+            .filter(n => String(n) !== 'AxisOfAttack')
+            .filter(n => getGraphicFields(n).mobility);
+        expect(offered.sort()).toEqual([
+            TacticalGraphicName.LimitedAccessArea,
+            TacticalGraphicName.RestrictedTerrain,
+            TacticalGraphicName.SeverelyRestrictedTerrain,
+        ].sort());
     });
 });
