@@ -20,6 +20,18 @@ renames of a public member *and* its value, plus five exported identifiers respe
 
 ### Changed — BREAKING
 
+- **Thirty-two graphics store their drawn points in APP-06's order: the arrowhead is point 1.** The standard numbers an arrow symbol's anchor points from its tip — *"Point 1 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol"* (152300 Avenue of Approach, and the same sentence across the offensive-manoeuvre family) — and this library filed them rear-first, so the head landed on the user's *last* click.
+
+  The affected graphics are the axis-of-advance family, avenue of approach, both counterattacks, advance to contact, frontal attack, turning movement, mobile defence, the seven retrograde canes, exploit, both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and fields of fire. `TIP_FIRST_GRAPHICS` is the list.
+
+  **Nothing about a rendered symbol changes** — the shape, its decorations, its handles and its labels are what they were. What changes is the order of `geometry.coordinates` on the base a consumer draws, saves and restores, and therefore which end of a drag the arrow points at.
+
+  **Graphics saved by an earlier version are not migrated** and will render with their arrow at the opposite end. There is no version marker in `properties.tacticalGraphic` to detect them by; if you hold saved data for any of the thirty-two, reverse those coordinate arrays on load.
+
+  Twenty-two graphics whose point order the standard already agreed with are untouched — the six drawn from anchor points, demonstration, the obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate (numbered *to* the tip), the ferry and raft site, and the four direction-of-attack graphics, which APP-06 leaves free.
+
+  APP-06 also spends its **last** anchor point on an arrow's width; this library still carries width as a `width` / `radius` amplifier in metres. That divergence is unchanged.
+
 - **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change.
 - **`AltitudeUnit.Metres` is now `AltitudeUnit.Meters`**, and its value changed from `'metres'` to `'meters'`. Both the member and the string it resolves to change, so anything persisting or comparing the value needs updating.
 
@@ -59,6 +71,8 @@ renames of a public member *and* its value, plus five exported identifiers respe
 
 ### Fixed
 
+- **A retrograde task's mirror handle flips it on OpenLayers again**, as it always has on MapLibre. The handle is a one-point feature, and the manager's hit test answered "no handle" for anything that was not a multi-point one, so the drag fell through to the width path: dragging a withdraw's mirror handle left `mirrored` untouched and *resized* the symbol instead — 195 km to 1,522 km of decoration in three drags. Both engines now flip the same graphic by the same amount either way.
+- **A width drag flips a graphic to the side the cursor is on, on both engines.** The side handed to the generator is absolute, and OpenLayers measured it against the stored point order while MapLibre measured it against the generator's; for the graphics whose points were renumbered, those are opposite.
 - US English throughout the README prose and the whole source tree, and a broader word list in the spelling test that guards it. The previous list had eleven terms and did not include `synthesise` or `realise`, which is how both reached the published README.
 
 ---
