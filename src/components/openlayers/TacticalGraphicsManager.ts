@@ -1302,6 +1302,14 @@ export class TacticalGraphicsManager {
 
     private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
         const geometry = feature.getGeometry();
+        // **A one-point handle feature is handle 0, not "no handle".** The offset and
+        // mirror handles are drawn as their own `Point` feature, so this answered -1 for
+        // every grab of one — which left `activeHandleIndex` negative and made
+        // `mirrorIfMirrorHandle` bail out before it could claim the gesture. The
+        // retrograde canes' handle is declared a `mirror` in the library and MapLibre
+        // flips on it; here the drag fell through to `handleOffset` and *resized* the
+        // symbol instead, tripling a withdraw's decoration in three drags. @see handleRole
+        if (geometry instanceof Point) return 0;
         if (!(geometry instanceof MultiPoint)) return -1;
 
         let best = -1;
