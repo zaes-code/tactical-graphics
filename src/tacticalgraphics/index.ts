@@ -41,6 +41,8 @@ export {
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
     RouteDirection,
     getLabel,
     getDisplayName,
@@ -331,6 +333,16 @@ export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstratio
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
 export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export type {MobilityGlyph} from './symbology/sectorModifierPaints';
+export {
+    GLYPH_HALF_WIDTH,
+    MOBILITY_GLYPHS,
+    TERRAIN_HATCH_COLORS,
+    mobilityMarks,
+    sectorModifierLabelPaint,
+    terrainHatchColor,
+    terrainWord,
+} from './symbology/sectorModifierPaints';
 export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
 export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
 export {directionArrowPaint} from './symbology/linePaints';

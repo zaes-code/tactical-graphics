@@ -36,6 +36,18 @@ export type GraphicFieldSet = {
     echelon: boolean;
     /** Mine-type selector (the two mine areas). @see TacticalGraphicMineType */
     mineType: boolean;
+    /**
+     * Sector 1 mobility selector -- APP-06 Table 8-24's `MOBILITY` category.
+     *
+     * Three graphics, because the table's Remarks column names three: limited access
+     * area, restricted terrain, severely restricted terrain. @see TacticalGraphicMobility
+     */
+    mobility: boolean;
+    /**
+     * Sector 2 terrain selector -- APP-06 Table 8-25. The restricted-terrain pair only;
+     * the limited access area's Template has no box for one. @see TacticalGraphicTerrain
+     */
+    terrain: boolean;
     /** Route direction selector (Route / MSR / ASR). */
     direction: boolean;
     /** Min altitude inputs (airspace graphics). */
@@ -69,7 +81,7 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'additionalInfo' | 'echelon' | 'mineType' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'additionalInfo' | 'echelon' | 'mineType' | 'mobility' | 'terrain' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
@@ -83,6 +95,8 @@ function f(
         status,
         echelon: false,
         mineType: false,
+        mobility: false,
+        terrain: false,
         direction: false,
         altitude1: false,
         altitude2: false,
@@ -124,6 +138,34 @@ const LINE_GENERIC = f(true, false, true, true, false);
 const OBSTACLE_LINE = f(true, false, false, false, false);
 /** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
 const MINE_AREA = f(true, false, true, true, false, {mineType: true});
+
+/**
+ * Restricted terrain and severely restricted terrain (APP-06 152400, 152500).
+ *
+ * Sector 1, Sector 2 and field H -- and **nothing else**, which is the whole Template.
+ * There is no `T` box, no status form, and no identity: the pair describe ground, so they
+ * are exempt in `supportsHostility` and `getGraphicFields` clears the flag anyway. The
+ * plate's note is explicit about H: *"Field H must be displayed and contain the cause of
+ * the restriction."*
+ */
+const SECTOR_MODIFIER_TERRAIN = f(false, false, false, false, false, {
+    mobility: true,
+    terrain: true,
+    additionalInfo: true,
+});
+
+/**
+ * Limited access area (APP-06 151100, FM 1-02.2 table 5-5).
+ *
+ * The two standards draw the same symbol with different amplifiers under the Sector 1
+ * box: APP-06 sets field H there and FM sets `W - W1`. The graphic is tagged against
+ * both, so it offers both. Neither offers a designation -- the `LAA` above the modifier
+ * is the symbol's own literal, printed by both plates.
+ */
+const LIMITED_ACCESS_AREA = f(false, false, true, true, false, {
+    mobility: true,
+    additionalInfo: true,
+});
 /**
  * Decision line: the designation, and nothing else.
  *
@@ -505,8 +547,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.SubmarineGeneratedActionArea]: ACTION_AREA,
     [TacticalGraphicName.AreaGeneric]: AREA_GENERIC,
     [TacticalGraphicName.ZoneOfFire]: AREA_SIMPLE,
-    [TacticalGraphicName.RestrictedTerrain]: AREA_SIMPLE,
-    [TacticalGraphicName.SeverelyRestrictedTerrain]: AREA_SIMPLE,
+    [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and
     // 272000 are the hatched area, the inverted triangle and the letter that names the
     // hazard. Everything a reader needs is in the glyph.
@@ -615,7 +657,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleFreeArea]: OBSTACLE_AREA,
     [TacticalGraphicName.ObstacleRestrictedArea]: OBSTACLE_AREA,
-    [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false),
+    [TacticalGraphicName.LimitedAccessArea]: LIMITED_ACCESS_AREA,
     [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, true),
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
 

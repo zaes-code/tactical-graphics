@@ -85,6 +85,16 @@ export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './movementPaints';
 export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
+export type {MobilityGlyph} from './sectorModifierPaints';
+export {
+    GLYPH_HALF_WIDTH,
+    MOBILITY_GLYPHS,
+    TERRAIN_HATCH_COLORS,
+    mobilityMarks,
+    sectorModifierLabelPaint,
+    terrainHatchColor,
+    terrainWord,
+} from './sectorModifierPaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';

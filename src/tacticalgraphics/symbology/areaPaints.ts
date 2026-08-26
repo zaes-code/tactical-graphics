@@ -17,6 +17,7 @@ import {LINE_WIDTH, fontStyle, getColorByHostility, withOpacity} from '../core/s
 import {TacticalGraphicHostility, TacticalGraphicStatus} from '../core/type';
 import {crenellatedPath, encirclementToothSize, fortifiedRing, obstacleRing, ringIsClockwise, textWidth} from './decorations';
 import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {terrainHatchColor} from './sectorModifierPaints';
 
 /** A paint function, in the shape the registry stores. */
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -326,17 +327,24 @@ export function dashedOutlinePaint(): AreaPaint {
  * `dense` is the severely-restricted variant. APP-06 draws it cross-hatched against the
  * single diagonal of plain restricted terrain, so the two are told apart by texture
  * alone and the difference has to survive into both renderers. @see HatchSpec
+ *
+ * **The Sector 2 modifier repaints the hatch, and only the hatch.** Table 8-25 remarks an
+ * optional hatching color against each terrain -- black for urban, blue for water, brown
+ * for ground, green for vegetation and obstacles -- and the plate's second example shows
+ * exactly that: the same symbol, the same outline, a brown hatch. So the outline keeps
+ * the line color and the texture takes the terrain's. @see TERRAIN_HATCH_COLORS
  */
 export function restrictedTerrainPaint(options: {dense?: boolean} = {}): AreaPaint {
     return feature => {
         const color = lineColorOf(feature);
+        const hatchColor = terrainHatchColor(feature) ?? color;
         return [{
             geometry: fillableGeometry(feature),
             fill: {
-                color: withOpacity(color, 0.2),
+                color: withOpacity(hatchColor, 0.2),
                 pattern: {
                     kind: options.dense ? 'cross' : 'diagonal',
-                    color: withOpacity(color, 0.35),
+                    color: withOpacity(hatchColor, 0.35),
                     sizePx: 10,
                     lineWidthPx: 1,
                 },
