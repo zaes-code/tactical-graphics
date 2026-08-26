@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {groundLength, mercatorScale, rotationAnchor} from '@zaes/tactical-graphics';
+import {generatorOrder, groundLength, mercatorScale, rotationAnchor} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -389,7 +389,14 @@ export function setOffset(
     cursor: Position,
     options: {offsetScale?: number; resolution: number},
 ): GraphicDescription {
-    const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
+    // **Measured along the line the *generator* saw, not the line as stored.** Which
+    // side is "the mirrored one" is decided by a segment's left normal, and thirty-two
+    // graphics store their points tip-first now, so their stored line runs the opposite
+    // way from the one their symbol was built along. Reading the stored order would
+    // invert the sign for exactly those graphics: a corridor would flip the instant it
+    // was dragged along the side it already hung on. @see drawOrder.ts
+    const drawn = generatorOrder(description.properties.name, positionsOf(description.geometry));
+    const coords = drawn.map(p => toMercator([p[0], p[1]]));
     if (coords.length < 2) return description;
 
     const at = toMercator([cursor[0], cursor[1]]);
@@ -414,7 +421,7 @@ export function setOffset(
     // mercator metres. Left unconverted, dragging the handle 120 px off the line at 50
     // degrees north set a corridor 1.56x that wide, so its edge outran the cursor
     // dragging it. @see mercator.ts
-    const ground = groundLength(Math.abs(perpendicular), positionsOf(description.geometry)[0][1]);
+    const ground = groundLength(Math.abs(perpendicular), drawn[0][1]);
     const width = ground * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
     const properties = {...description.properties, width};
 
@@ -451,7 +458,9 @@ export function setMirror(
     resolution: number,
     mirrorAxis: 'across' | 'along' = 'across',
 ): GraphicDescription {
-    const coords = positionsOf(description.geometry).map(p => toMercator([p[0], p[1]]));
+    // The generator's orientation, for the reason `setOffset` gives. @see drawOrder.ts
+    const coords = generatorOrder(description.properties.name, positionsOf(description.geometry))
+        .map(p => toMercator([p[0], p[1]]));
     const at = toMercator([cursor[0], cursor[1]]);
 
     // **A point-anchored graphic has no drawn axis to measure against.** Its orientation

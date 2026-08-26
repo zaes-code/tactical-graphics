@@ -34,14 +34,7 @@ import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {
-    GRAPHIC_CATEGORIES,
-    TacticalGraphicCategory,
-    TacticalGraphicHostility,
-    TacticalGraphicName,
-    getDisplayName,
-    latitudeFromMercatorY,
-} from '@zaes/tactical-graphics';
+import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicHostility, TacticalGraphicName, getDisplayName, latitudeFromMercatorY, storedOrder} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {TacticalGraphicHandler} from './openlayersAdapter';
@@ -706,7 +699,12 @@ export function applyBaseGeometry(
         handler.setBaseFeature(polygonFeature(ring, symbolId, name));
     } else if (handler instanceof LineGraphicController) {
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts, LINE_HALF * grow), symbolId, name));
+        // **Drawn in the order the graphic files its points, so every sample still reads
+        // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
+        // line handed to one of those puts its head on the *west* end — a sheet of arrows
+        // pointing back the way the standard's own plates draw them coming. @see storedOrder
+        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow)) as Coordinate[];
+        handler.setBaseFeature(lineFeature(path, symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }

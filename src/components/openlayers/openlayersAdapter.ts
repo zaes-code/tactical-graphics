@@ -41,8 +41,8 @@ export interface TacticalGraphic {
  * generators measure from, and moving that would change what graphics look like rather
  * than how they edit. @see rotationAnchor
  */
-function editPivot(feature: GeoJSONFeature): Position {
-    return rotationAnchor(feature.geometry as unknown as {type: string; coordinates: unknown});
+function editPivot(feature: GeoJSONFeature, name?: TacticalGraphicName): Position {
+    return rotationAnchor(feature.geometry as unknown as {type: string; coordinates: unknown}, name);
 }
 
 export interface TacticalGraphicHandler {
@@ -289,7 +289,13 @@ class OpenlayersAdapter {
      * @see editPivot
      */
     private projectedPivot(feat: Feature): number[] {
-        return fromLonLat(editPivot(this.olFeatureToTurf(feat)) as Coordinate);
+        // **The name is part of the rule, not a nicety.** Two of `rotationAnchor`'s
+        // three answers depend on which graphic is asking: a symbol described by anchor
+        // points turns about its frame's centre, and one whose points are stored
+        // tip-first turns about its rear rather than about its arrowhead. Passing
+        // nothing got the plain drawn-line answer for both. @see rotationAnchor
+        const name = feat.get('graphicName') as TacticalGraphicName | undefined;
+        return fromLonLat(editPivot(this.olFeatureToTurf(feat), name) as Coordinate);
     }
 
     /**
