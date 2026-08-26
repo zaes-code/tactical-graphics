@@ -95,8 +95,18 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
-/** Generic line: identifier + start/end date at both ends. */
+/** The plain lines that carry a designation and a status, and no dates. */
 const GENERIC_LINE = f(true, false, false, false, true);
+
+/**
+ * Line, generic (APP-06 110400): the designation and the date-time group, both ends.
+ *
+ * Its Template sets **T** above each end of the line and **W - W1** below each, which is
+ * exactly what `defaultLinePaint` already draws — the fields were simply not offered, so a
+ * user could see the shape and never fill in the only two amplifiers it has. The status is
+ * not among them.
+ */
+const LINE_GENERIC = f(true, false, true, true, false);
 
 /**
  * Obstacle line: identifier only.
@@ -108,8 +118,16 @@ const GENERIC_LINE = f(true, false, false, false, true);
 const OBSTACLE_LINE = f(true, false, false, false, false);
 /** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
 const MINE_AREA = f(true, false, true, true, false, {mineType: true});
-/** Decision line: the two end-of-line fields APP-06 writes as `T/AS`. */
-const DECISION_LINE = f(true, true, false, false, false);
+/**
+ * Decision line: the designation, and nothing else.
+ *
+ * APP-06 110500 writes the end-of-line information as `T/AS` and the Example renders it
+ * `1X/007`, so the paint still joins two fields with a slash when both are set. The dialog
+ * offers only the first: the second half is not something this program's operators fill in,
+ * and a control nobody uses is a control that gets filled in by accident. Setting
+ * `secondId` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
+ */
+const DECISION_LINE = f(true, false, false, false, false);
 /** Mobility corridor: free text plus the echelon its own note makes mandatory. */
 const MOBILITY_CORRIDOR = f(true, false, false, false, false, {echelon: true});
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
@@ -205,7 +223,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE,
     [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, true),
     [TacticalGraphicName.LightLine]: GENERIC_LINE,
-    [TacticalGraphicName.LineGeneric]: GENERIC_LINE,
+    [TacticalGraphicName.LineGeneric]: LINE_GENERIC,
     [TacticalGraphicName.HandoverLine]: GENERIC_LINE,
     [TacticalGraphicName.NamedAreaOfInterestLine]: GENERIC_LINE,
     [TacticalGraphicName.HoldingLine]: GENERIC_LINE,
