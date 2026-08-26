@@ -9,11 +9,12 @@
  * stated once here and the registry names four graphics against it. Four near-identical
  * paints would be four places for the triangle's proportions to drift apart.
  *
- * **The yellow is not an affiliation colour and must not follow hostility.** It is the
- * hazard convention, on the same reasoning that makes the no-fire family's hatch a
- * neutral: a contaminated area warns about the ground, and it reads the same whoever
- * drew it. The outline still carries the affiliation, so a hostile contaminated area is
- * red line work over the same yellow.
+ * **Nothing here follows hostility.** The yellow is the hazard convention, on the same
+ * reasoning that makes the no-fire family's hatch a neutral: a contaminated area warns
+ * about the ground, and it reads the same whoever drew it. As of 2026-08-26 the outline
+ * does not carry an affiliation either — these are exempt in `supportsHostility`, so
+ * `lineColorOf` answers the unaffiliated colour whatever the property bag says, and the
+ * dialog offers no identity to choose. @see HAZARD_AREAS
  *
  * The split between the two paints below mirrors the airfield's, and for the same
  * reason: the glyph is placed on the **label** feature, which is the bare interior point
