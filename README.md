@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**230 graphics** are implemented and verified today, covering **243 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**250 graphics** are implemented and verified today, covering **263 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -984,8 +984,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Weapon Engagement Zone | Airspace Coordinating Measures |
 | Weapons Free Zone | Airspace Coordinating Measures |
 | Airfield | Areas |
+| Airfield Zone | Areas |
 | Airhead Line | Areas |
+| Area | Areas |
 | Area Of Operations | Areas |
+| Area, Generic | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
 | Attack Position | Areas |
@@ -993,28 +996,45 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Biological Contaminated Area | Areas |
+| Biological Contaminated Area, Toxic Industrial Material | Areas |
 | Bridgehead | Areas |
 | Brigade Support Area | Areas |
+| Chemical Contaminated Area | Areas |
+| Chemical Contaminated Area, Toxic Industrial Material | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
 | Drop Zone | Areas |
 | Encirclement | Areas |
+| Enemy Prisoner Of War Holding Area | Areas |
 | Engagement Area | Areas |
 | Extraction Zone | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
+| Human Terrain | Areas |
+| Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Minimum Safe Distance Zone | Areas |
 | Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
+| Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
+| Penetration Box | Areas |
 | Pickup Zone | Areas |
+| PsyOps Zone, Circular | Areas |
+| PsyOps Zone, Irregular | Areas |
+| PsyOps Zone, Rectangular | Areas |
 | Radiation Dose Rate Contour Line | Areas |
+| Radiological Contaminated Area | Areas |
+| Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
+| Regimental Support Area | Areas |
 | Strong Point | Areas |
+| Submarine Action Area | Areas |
+| Submarine-Generated Action Area | Areas |
 | Target Area Of Interest | Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Areas |
 | Enemy Known Boundary | Boundaries |
@@ -1211,29 +1231,9 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Fighter Engagement Zone | Airspace Coordinating Measures |
-| Airfield Zone | Areas |
-| Area | Areas |
-| Area, Generic | Areas |
-| Biological Contaminated Area | Areas |
-| Biological Contaminated Area, Toxic Industrial Material | Areas |
-| Chemical Contaminated Area | Areas |
-| Chemical Contaminated Area, Toxic Industrial Material | Areas |
-| Enemy Prisoner Of War Holding Area | Areas |
-| Human Terrain | Areas |
-| Joint Tactical Action Area | Areas |
 | Limited Access Area | Areas |
-| Nuclear Contaminated Area | Areas |
-| Penetration Box | Areas |
-| PsyOps Zone, Circular | Areas |
-| PsyOps Zone, Irregular | Areas |
-| PsyOps Zone, Rectangular | Areas |
-| Radiological Contaminated Area | Areas |
-| Radiological Contaminated Area, Toxic Industrial Material | Areas |
-| Regimental Support Area | Areas |
 | Restricted Terrain | Areas |
 | Severely Restricted Terrain | Areas |
-| Submarine Action Area | Areas |
-| Submarine-Generated Action Area | Areas |
 | Fortified Position | Field Fortification Symbols |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
