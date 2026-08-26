@@ -185,7 +185,6 @@ import {
     contourLineLabelPaint,
     nestedZonePaint,
     PSYOPS_ZONES,
-    psyOpsMarkPaint,
     psyOpsZonePaint,
     mineFillPaint,
     minedAreaFencedPaint,
@@ -2109,6 +2108,13 @@ export function getDateLabel(graphicLabels: GraphicLabels): string {
  * shrinks to nothing when the switch does. @see areaLabelPainterFor
  */
 const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
+    // The three PsyOps zones were the first graphic this list was written for and the
+    // first one it missed: the case here passed `psyOpsMarkPaint(() => [])`, an empty
+    // base, so the speaker and its amplifiers drew and the date-time group outside the
+    // upper-left corner — which the registry's base draws — never appeared on this engine.
+    TacticalGraphicName.PsyOpsZoneIrregular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+    TacticalGraphicName.PsyOpsZoneCircular,
     TacticalGraphicName.JointTacticalActionArea,
     TacticalGraphicName.SubmarineActionArea,
     TacticalGraphicName.SubmarineGeneratedActionArea,
@@ -2151,10 +2157,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.MinedAreaFenced:
             return asStyleFunction(mineFillPaint(), name);
         // The loudspeaker rides the label feature; the outline belongs to the polygon.
-        case TacticalGraphicName.PsyOpsZoneIrregular:
-        case TacticalGraphicName.PsyOpsZoneRectangular:
-        case TacticalGraphicName.PsyOpsZoneCircular:
-            return asStyleFunction(psyOpsMarkPaint(() => []), name);
         // The dose goes in the break and nowhere else, so there is no centre block under
         // it — the base painter draws nothing rather than repeating the text.
         case TacticalGraphicName.RadiationDoseRateContourLine:
