@@ -312,14 +312,25 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
  * exactly that block and nothing else from it: their Template sets `W - W1` outside the
  * upper-left corner and everything else beside the loudspeaker. Written once so the two
  * families cannot drift about where "outside the corner" is.
+ *
+ * @param irregular whether this graphic is the free-drawn variant, whose ring vertex is a
+ *        better corner than its bounding box. @see zoneLabelPaint, which splits the same way
  */
-export function outsideCornerDatePaint(): AreaLabelPaint {
+export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
     return (feature, context) => {
         const dtg1 = (feature.properties.startDate ?? '').trim();
         const dtg2 = (feature.properties.endDate ?? '').trim();
         if (!dtg1 && !dtg2) return [];
 
-        const at = feature.ring ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
+        /*
+         * **The ring's own vertex for an irregular shape, the bounding box for the rest.**
+         * The same split `zoneLabelPaint` makes, and it is not a nicety: a circle's
+         * leftmost *vertex* is level with its centre, so a round zone put its dates at the
+         * middle-left instead of above the shape. A rectangle's corner and its bounding
+         * box agree, so only the irregular variant needs the vertex — which is the one
+         * whose bounding-box corner can sit a long way outside the polygon.
+         */
+        const at = irregular && feature.ring ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
         if (!at) return [];
 
         return [{
