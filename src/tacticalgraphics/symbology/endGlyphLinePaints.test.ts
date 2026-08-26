@@ -38,6 +38,33 @@ const texts = (paints: Paint[]) => paints.filter(p => p.text?.text).map(p => p.t
 const halfWidth = (ring: ProjectedPosition[], center: ProjectedPosition) =>
     Math.max(...ring.map(([x]) => Math.abs(x - center[0])));
 
+/** Whether `point` is strictly inside `ring`, by the crossing rule. */
+const insideRing = (point: ProjectedPosition, ring: ProjectedPosition[]): boolean => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 2; i < ring.length - 1; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if ((yi > point[1]) !== (yj > point[1])
+            && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+};
+
+/** Distance from `point` to the nearest edge of `ring`, in projected metres. */
+const distanceToRing = (point: ProjectedPosition, ring: ProjectedPosition[]): number => {
+    let best = Infinity;
+    for (let i = 0; i + 1 < ring.length; i++) {
+        const [ax, ay] = ring[i];
+        const [bx, by] = ring[i + 1];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const lenSq = dx * dx + dy * dy;
+        const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((point[0] - ax) * dx + (point[1] - ay) * dy) / lenSq));
+        best = Math.min(best, Math.hypot(point[0] - (ax + dx * t), point[1] - (ay + dy * t)));
+    }
+    return best;
+};
+
 beforeEach(() => resetTacticalGraphicsConfig());
 
 describe('APP-06 110500 — decision line', () => {
@@ -80,6 +107,61 @@ describe('APP-06 110500 — decision line', () => {
         const short = paint(feature(TacticalGraphicName.DecisionLine, {label: 'A'}), context());
         const long = paint(feature(TacticalGraphicName.DecisionLine, {label: 'A VERY LONG NAME'}), context());
         expect(halfWidth(starOf(long), EAST[0])).toBeGreaterThan(halfWidth(starOf(short), EAST[0]));
+    });
+
+    // The Template draws the connecting line meeting each star's edge and stopping there.
+    it('stops the line at the star outline rather than crossing into it', () => {
+        const paints = paint(feature(TacticalGraphicName.DecisionLine, props), context());
+        const stars = lines(paints).filter(path => path.length === 11);
+        const run = lines(paints).find(path => path.length === 2)!;
+        expect(stars).toHaveLength(2);
+        expect(run).toBeDefined();
+
+        // Both ends pulled back off the anchor points the stars stand on.
+        expect(run[0][0]).toBeGreaterThan(EAST[0][0]);
+        expect(run[1][0]).toBeLessThan(EAST[1][0]);
+
+        // **On the outline: not inside it, and not short of it.** The line used to run all
+        // the way to the anchor point, which put it through the middle of the star.
+        stars.forEach((star, i) => {
+            const anchor = EAST[i];
+            const inward: ProjectedPosition = [run[i][0] + (anchor[0] - run[i][0]) * 0.02, run[i][1]];
+            const outward: ProjectedPosition = [run[i][0] - (anchor[0] - run[i][0]) * 0.02, run[i][1]];
+
+            expect(distanceToRing(run[i], star)).toBeLessThan(1);
+            expect(insideRing(inward, star)).toBe(true);
+            expect(insideRing(outward, star)).toBe(false);
+        });
+    });
+
+    it('measures the pull-back along the line, so a valley cuts less than a point', () => {
+        // The star is upright whichever way the line runs, so a line leaving through a
+        // valley meets the outline nearer the centre than one leaving through a point. A
+        // single constant pull-back would leave a gap on one bearing and cross on another.
+        const at = (coords: ProjectedPosition[]) => {
+            const paints = paint({
+                geometry: {type: 'LineString', coordinates: coords},
+                properties: {name: TacticalGraphicName.DecisionLine, ...props},
+            }, context());
+            const run = lines(paints).find(path => path.length === 2)!;
+            return Math.hypot(run[0][0] - coords[0][0], run[0][1] - coords[0][1]);
+        };
+        // Straight up leaves through the leading point; east leaves through a flank.
+        expect(at([[0, 0], [0, 40_000]])).toBeGreaterThan(at(EAST));
+    });
+
+    it('draws the whole line when the stars are too small to draw at all', () => {
+        // `endMarkScale` gives up below the visibility floor, and a line with no star on
+        // it has nothing to stop at — trimming it then would cut into nothing.
+        // 5 px of line at this resolution: a star may span 30% of it, which is below the
+        // 3 px floor `DECORATION_MIN_PX` sets.
+        const tiny: PaintFeature = {
+            geometry: {type: 'LineString', coordinates: [[0, 0], [200, 0]]},
+            properties: {name: TacticalGraphicName.DecisionLine, ...props},
+        };
+        const paints = paint(tiny, context());
+        expect(lines(paints).filter(path => path.length === 11)).toHaveLength(0);
+        expect(lines(paints)).toEqual([[[0, 0], [200, 0]]]);
     });
 
     it('keeps the stars upright however the line runs', () => {
@@ -131,11 +213,37 @@ describe('APP-06 142100 — mobility corridor', () => {
         expect(runs[1][0][0]).toBeGreaterThan(20_000);
     });
 
-    it('puts the free-text amplifier above the middle', () => {
+    // The Template stands field B in the break at the middle and sets field H above the
+    // line *beside* it, and the row's note asks only that H "be movable to avoid obscuring
+    // key geographic information".
+    it('puts the free-text amplifier above the line and clear of the echelon', () => {
         const paints = paint(feature(TacticalGraphicName.MobilityCorridor, {label: 'SMALL DITCHES'}), context());
         expect(texts(paints)).toEqual(['SMALL DITCHES']);
         const at = (paints.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
-        expect(at[0]).toBeCloseTo(20_000, 0);
+
+        // Above the line, and well away from the midpoint the glyph occupies — it used to
+        // sit exactly on top of it.
         expect(at[1]).toBeGreaterThan(0);
+        expect(Math.abs(at[0] - 20_000)).toBeGreaterThan(5_000);
+    });
+
+    it('takes the side that holds the text, and the leading one when both do', () => {
+        // The echelon cuts the *middle segment*, so an uneven path leaves uneven runs: the
+        // gap here lands 3 km along an 8 km line, and the run behind it is half the one
+        // ahead of it.
+        const uneven: ProjectedPosition[] = [[0, 0], [6_000, 0], [8_000, 0]];
+        const paints = paint({
+            geometry: {type: 'LineString', coordinates: uneven},
+            properties: {name: TacticalGraphicName.MobilityCorridor, label: 'A CORRIDOR NAME THAT IS LONG'},
+        }, context());
+        const at = (paints.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
+        // Past the echelon, on the longer side — the leading run cannot hold that text.
+        expect(at[0]).toBeGreaterThan(3_000);
+
+        // With room on both sides it goes on the leading run, which is where the plate
+        // draws it.
+        const even = paint(feature(TacticalGraphicName.MobilityCorridor, {label: 'MC1'}), context());
+        const evenAt = (even.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
+        expect(evenAt[0]).toBeLessThan(20_000);
     });
 });
