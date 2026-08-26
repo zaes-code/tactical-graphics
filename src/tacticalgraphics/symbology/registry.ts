@@ -901,7 +901,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     };
     // Three shapes, one construction: an outline and a loudspeaker inside it.
     for (const name of PSYOPS_ZONES) {
-        registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(outsideCornerDatePaint())};
+        registry[name] = {
+            graphic: psyOpsZonePaint(),
+            label: psyOpsMarkPaint(outsideCornerDatePaint(name === TacticalGraphicName.PsyOpsZoneIrregular)),
+        };
     }
     // The two mine areas: different outlines, the same row of mines inside.
     registry[TacticalGraphicName.MinefieldDynamicDepiction] = {

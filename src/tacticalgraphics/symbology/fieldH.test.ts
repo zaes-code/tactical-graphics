@@ -120,6 +120,25 @@ describe('APP-06 242701-242703 — the PsyOps zones', () => {
         expect(block.split('\n')).toEqual(['LOUDSPEAKER', 'PSY-1']);
     });
 
+    it('puts a round zone above its middle, not level with it', () => {
+        // A circle's leftmost *vertex* sits at its centre height, so anchoring on the ring
+        // put the block at the middle-left. Only the irregular variant takes the vertex.
+        const paint = getPaintFunction(TacticalGraphicName.PsyOpsZoneCircular)!.label!;
+        const circle: ProjectedPosition[] = Array.from({length: 33}, (_p, i) => {
+            const angle = (i / 32) * Math.PI * 2;
+            return [Math.cos(angle) * 100_000, Math.sin(angle) * 100_000] as ProjectedPosition;
+        });
+        const paints = paint({
+            geometry: {type: 'Point', coordinates: [0, 0]},
+            properties: {name: TacticalGraphicName.PsyOpsZoneCircular, startDate: '021200ZJUN26'},
+            ring: circle,
+            bounds: {minX: -100_000, minY: -100_000, maxX: 100_000, maxY: 100_000},
+        } as unknown as PaintFeature, context);
+        const at = spotOf(paints, '021200ZJUN26');
+        expect(at).toBeDefined();
+        expect(at![1]).toBeCloseTo(100_000, 0);
+    });
+
     it('hangs the dates outside the upper-left corner', () => {
         const paints = psyOps({label: 'PSY-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26'});
         const at = spotOf(paints, '021200ZJUN26');
