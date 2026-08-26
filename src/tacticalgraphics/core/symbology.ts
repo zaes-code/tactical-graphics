@@ -583,9 +583,31 @@ const MOBILITY_FUNCTION_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.ObstacleBypassImpossible,
 ]);
 
+/**
+ * The CBRN contaminated areas, which describe **ground rather than a force**.
+ *
+ * Table 8-19 draws all seven one way: the hazard yellow, the inverted triangle, the
+ * letter. A contaminated area warns about a place — it belongs to nobody, and asking who
+ * it is affiliated with has no answer the symbol could show.
+ *
+ * The yellow was already fixed for that reason, on the reading that "the outline still
+ * carries the affiliation". That half is gone: a hostile contaminated area drew red line
+ * work around a hazard whose whole point is that it does not care who is standing in it,
+ * and the field offered an identity the plate has no form for. (User's call, 2026-08-26.)
+ */
+const HAZARD_AREAS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ChemicalContaminatedArea,
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.NuclearContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
-    if (MOBILITY_FUNCTION_SYMBOLS.has(name)) return false;
+    if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
 
