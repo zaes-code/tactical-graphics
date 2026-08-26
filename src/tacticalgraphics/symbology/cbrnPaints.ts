@@ -182,8 +182,12 @@ export function cbrnContaminatedAreaPaint(): CbrnPaint {
  * label paint already drew.
  *
  * @param letter the hazard's letter — `B`, `C`, `N` or `R`, straight off the plate.
+ * @param options `toxic` adds the **T** the three toxic-industrial-material variants carry
+ *        in the bottom of the triangle (APP-06 271701, 271801, 272001). It is the only
+ *        difference between a contaminated area and its TIM subtype, which is why it is a
+ *        flag here rather than three more paints.
  */
-export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
+export function cbrnMarkPaint(letter: string, label: CbrnPaint, options: {toxic?: boolean} = {}): CbrnPaint {
     return (feature, context) => {
         const center = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
         if (!center) return label(feature, context);
@@ -259,6 +263,37 @@ export function cbrnMarkPaint(letter: string, label: CbrnPaint): CbrnPaint {
             });
         }
 
+        /*
+         * **The toxic-industrial-material variants add a `T` in the bottom of the
+         * triangle**, under the contamination mark — the only difference between 271700
+         * and 271701, and the same difference again for the chemical and radiological
+         * pairs. It is set smaller than the hazard letter above because the triangle is
+         * narrowing toward its point and a full-size glyph would touch both edges.
+         */
+        if (options.toxic) {
+            paints.push({
+                geometry: {type: 'Point', coordinates: at(0, TOXIC_LETTER_Y)},
+                text: {
+                    text: 'T',
+                    font: fontStyle,
+                    fill: color,
+                    halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                    align: 'center',
+                    baseline: 'middle',
+                    scale: (HALF_HEIGHT * scale) / (context.resolution * 60),
+                },
+            });
+        }
+
         return paints;
     };
 }
+
+/**
+ * Where the toxic-industrial `T` sits, in the triangle's own metres.
+ *
+ * Below the contamination mark and clear of the point: the triangle runs from
+ * `HALF_HEIGHT` at the top edge down to `-HALF_HEIGHT` at the tip, and the mark is
+ * centred on {@link CROSS_Y}.
+ */
+const TOXIC_LETTER_Y = -95_000;

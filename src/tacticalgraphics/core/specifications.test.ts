@@ -67,6 +67,8 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.PenetrationBox,
     TacticalGraphicName.Area,
     TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
     TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.ZoneOfFire,
     // Distinguished from each other by hatch texture alone, which is why the tile
@@ -105,6 +107,9 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.NamedAreaOfInterestLine,
     // One construction, four letters: APP-06 Table 8-19 draws all four the same way.
     TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
     TacticalGraphicName.ChemicalContaminatedArea,
     TacticalGraphicName.NuclearContaminatedArea,
     TacticalGraphicName.RadiologicalContaminatedArea,
