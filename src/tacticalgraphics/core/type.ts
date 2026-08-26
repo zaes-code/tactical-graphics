@@ -269,6 +269,10 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ZF';
         case TacticalGraphicName.JointTacticalActionArea:
             return 'JTAA';
+        case TacticalGraphicName.SubmarineActionArea:
+            return 'SAA';
+        case TacticalGraphicName.SubmarineGeneratedActionArea:
+            return 'SGAA';
         case TacticalGraphicName.HumanTerrain:
             return 'HT';
         case TacticalGraphicName.EnemyPrisonerOfWarHoldingArea:
@@ -719,12 +723,19 @@ export enum TacticalGraphicName {
     PenetrationBox = 'PenetrationBox',
     Area = 'Area',
     JointTacticalActionArea = 'JointTacticalActionArea',
+    SubmarineActionArea = 'SubmarineActionArea',                    // APP-06 150502 Submarine Action Area (SAA)
+    SubmarineGeneratedActionArea = 'SubmarineGeneratedActionArea',  // APP-06 150503 Submarine-Generated Action Area (SGAA)
     AreaGeneric = 'AreaGeneric',
     ZoneOfFire = 'ZoneOfFire',
     RestrictedTerrain = 'RestrictedTerrain',
     SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
     AirfieldZone = 'AirfieldZone',
     BiologicalContaminatedArea = 'BiologicalContaminatedArea',
+    // The three toxic-industrial-material variants. There is no nuclear one: APP-06 gives
+    // 271900 no subtype, which is why this list has three members and not four.
+    BiologicalContaminatedAreaToxicIndustrialMaterial = 'BiologicalContaminatedAreaToxicIndustrialMaterial',
+    ChemicalContaminatedAreaToxicIndustrialMaterial = 'ChemicalContaminatedAreaToxicIndustrialMaterial',
+    RadiologicalContaminatedAreaToxicIndustrialMaterial = 'RadiologicalContaminatedAreaToxicIndustrialMaterial',
     ChemicalContaminatedArea = 'ChemicalContaminatedArea',
     NuclearContaminatedArea = 'NuclearContaminatedArea',
     RadiologicalContaminatedArea = 'RadiologicalContaminatedArea',
@@ -1029,6 +1040,9 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.NuclearContaminatedArea]: 'nuclear contaminated area',
     [TacticalGraphicName.ChemicalContaminatedArea]: 'chemical contaminated area',
     [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: 'biological contaminated area, toxic industrial material',
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: 'chemical contaminated area, toxic industrial material',
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: 'radiological contaminated area, toxic industrial material',
     [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
     [TacticalGraphicName.HandoverLine]: 'handover line',
     [TacticalGraphicName.DecisionLine]: 'decision line',
@@ -1053,6 +1067,8 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.ZoneOfFire]: 'zone of fire',
     [TacticalGraphicName.AreaGeneric]: 'area, generic',
     [TacticalGraphicName.JointTacticalActionArea]: 'joint tactical action area',
+    [TacticalGraphicName.SubmarineActionArea]: 'submarine action area',
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: 'submarine-generated action area',
     [TacticalGraphicName.Area]: 'area',
     [TacticalGraphicName.PenetrationBox]: 'penetration box',
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: 'enemy prisoner of war holding area',

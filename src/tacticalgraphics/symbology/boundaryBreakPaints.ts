@@ -290,6 +290,23 @@ export function cardinalBoundaryPaint(label: string): CardinalPaint {
 }
 
 /**
+ * Where a ray from the ring's centre at `angle` meets the outline, as a point.
+ *
+ * The two halves — the distance along the ring, then the point at that distance — are
+ * what `cardinalLabelPaint` walks below. Exported whole because the action areas want the
+ * same crossing for a mark of their own, and duplicating the ray/segment solve is how two
+ * marks end up in slightly different places. @see actionAreaLabelPaint
+ */
+export function ringCrossingPoint(
+    ring: readonly ProjectedPosition[],
+    center: ProjectedPosition,
+    angle: number,
+): ProjectedPosition | undefined {
+    const at = crossingAt(ring, center, angle);
+    return at === undefined ? undefined : alongRing(ring, at)?.point;
+}
+
+/**
  * The abbreviation in each of the four breaks, over whatever the area's ordinary label
  * paint already drew in the middle.
  *

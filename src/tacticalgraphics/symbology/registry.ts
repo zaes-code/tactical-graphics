@@ -96,7 +96,10 @@ import {
     turningMovementLabelPaint,
 } from './movementPaints';
 import {
+    actionAreaLabelPaint,
     areaDefaultLabelPaint,
+    humanTerrainLabelPaint,
+    outsideCornerDatePaint,
     areaLabelStackPaint,
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
@@ -217,6 +220,8 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.PenetrationBox,
     TacticalGraphicName.Area,
     TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
     TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.AssemblyArea,
     TacticalGraphicName.AttackPosition,
@@ -327,6 +332,19 @@ export const CBRN_AREAS: ReadonlyArray<readonly [TacticalGraphicName, string]> =
     [TacticalGraphicName.RadiologicalContaminatedArea, 'R'],
 ];
 
+/**
+ * The toxic-industrial-material variants: the same symbol with a **T** in the bottom of
+ * the triangle (APP-06 271701, 271801, 272001).
+ *
+ * Three, not four. The standard gives nuclear contamination no such subtype, and the gap
+ * in the numbering — there is no 271901 — is the standard's, not an omission here.
+ */
+export const CBRN_TOXIC_AREAS: ReadonlyArray<readonly [TacticalGraphicName, string]> = [
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial, 'B'],
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial, 'C'],
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial, 'R'],
+];
+
 const ZONE_GRAPHICS_IRREGULAR: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ZoneOfResponsibilityIrregular,
     TacticalGraphicName.TargetValueAreaIrregular,
@@ -398,6 +416,17 @@ const AIR_COORDINATING_ZONES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.WeaponsFreeZone,
 ];
 
+/**
+ * The action areas, which share one Template: the literal and the designation on the first
+ * line, the date-time group under it, and `ENY` at the west and east edges when hostile.
+ * @see actionAreaLabelPaint
+ */
+const ACTION_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
+];
+
 const AIRSPACE_COORDINATION_AREAS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
@@ -409,6 +438,17 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (ZONE_GRAPHICS_IRREGULAR.includes(name)) return zoneLabelPaint(name, true);
     if (STACK_LABEL_GRAPHICS.includes(name)) return areaLabelStackPaint(name);
     if (name === TacticalGraphicName.ObstacleFreeArea) return areaLabelStackPaint(name, {before: ['FREE']});
+    // 310200's Template stacks its literal on two lines with the designation **under** it,
+    // where every other prefixed area sets the two side by side. @see areaLabelStackPaint
+    if (name === TacticalGraphicName.EnemyPrisonerOfWarHoldingArea) {
+        return areaLabelStackPaint(name, {literalLines: ['EPW', 'HOLDING AREA']});
+    }
+    // 370100 sets its literal over field **H**, not over a designation — the one area whose
+    // second line is the free text. @see actionAreaLabelPaint for the family that does both
+    if (name === TacticalGraphicName.HumanTerrain) return humanTerrainLabelPaint();
+    // 150501-150503 and 120700: literal - T over W - W1, with ENY on the flanks when hostile.
+    if (ACTION_AREAS.includes(name)) return actionAreaLabelPaint(name);
+    if (name === TacticalGraphicName.AreaGeneric) return actionAreaLabelPaint(name, {withAdditionalInfo: true});
     if (name === TacticalGraphicName.GroupOrSeriesOfTargets) return groupOrSeriesOfTargetsLabelPaint(name);
     if (name === TacticalGraphicName.SmokeObscurant) return smokeObscurantLabelPaint();
     if (AIR_COORDINATING_ZONES.includes(name)) return airCoordinatingAreaLabelPaint(name);
@@ -718,6 +758,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
             label: cbrnMarkPaint(letter, areaDefaultLabelPaint(name)),
         };
     }
+    for (const [name, letter] of CBRN_TOXIC_AREAS) {
+        registry[name] = {
+            graphic: cbrnContaminatedAreaPaint(),
+            label: cbrnMarkPaint(letter, areaDefaultLabelPaint(name), {toxic: true}),
+        };
+    }
     for (const name of MOVEMENT_GRAPHICS) {
         registry[name] = {graphic: movementGraphicPaint(), label: movementLabelFor(name)};
     }
@@ -855,7 +901,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     };
     // Three shapes, one construction: an outline and a loudspeaker inside it.
     for (const name of PSYOPS_ZONES) {
-        registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(() => [])};
+        registry[name] = {graphic: psyOpsZonePaint(), label: psyOpsMarkPaint(outsideCornerDatePaint())};
     }
     // The two mine areas: different outlines, the same row of mines inside.
     registry[TacticalGraphicName.MinefieldDynamicDepiction] = {

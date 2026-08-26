@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**228 graphics** are implemented and verified today, covering **241 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**230 graphics** are implemented and verified today, covering **243 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -121,6 +121,9 @@ tacticalGraphic: {
     // Amplifiers — text rendered on the graphic.
     label: '1-508 IN',        // primary designation
     secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    additionalInfo: 'CONCRETE 3000M', // field H — free text a symbol carries beside its
+                              // designation: the airfield zone's runway note, the PsyOps
+                              // zone's line above its name, human terrain's only text
     countryCode: 'USA',       // country beside the primary designation
     secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
@@ -922,7 +925,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 284 supported names.
+the 289 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -985,6 +988,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Bridgehead | Areas |
 | Brigade Support Area | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
@@ -992,6 +996,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Drop Zone | Areas |
 | Encirclement | Areas |
 | Engagement Area | Areas |
+| Extraction Zone | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
@@ -1205,10 +1210,10 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Area | Areas |
 | Area, Generic | Areas |
 | Biological Contaminated Area | Areas |
-| Bridgehead | Areas |
+| Biological Contaminated Area, Toxic Industrial Material | Areas |
 | Chemical Contaminated Area | Areas |
+| Chemical Contaminated Area, Toxic Industrial Material | Areas |
 | Enemy Prisoner Of War Holding Area | Areas |
-| Extraction Zone | Areas |
 | Human Terrain | Areas |
 | Joint Tactical Action Area | Areas |
 | Limited Access Area | Areas |
@@ -1218,9 +1223,12 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | PsyOps Zone, Irregular | Areas |
 | PsyOps Zone, Rectangular | Areas |
 | Radiological Contaminated Area | Areas |
+| Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Regimental Support Area | Areas |
 | Restricted Terrain | Areas |
 | Severely Restricted Terrain | Areas |
+| Submarine Action Area | Areas |
+| Submarine-Generated Action Area | Areas |
 | Fortified Position | Field Fortification Symbols |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
