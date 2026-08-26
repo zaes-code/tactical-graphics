@@ -1240,6 +1240,142 @@ async function runTipOrder(engine) {
     await browser.close();
 }
 
+/**
+ * Which side of its own line a cane hangs on, after the handle that flips it.
+ *
+ * The retrograde tasks' first handle only mirrors: the drag carries no width and moves no
+ * vertex. Which side "mirrored" means is decided by the **sign of a perpendicular against
+ * the segment's left normal**, and that is absolute rather than relative — so reversing
+ * the stored points, as APP-06's numbering requires, names the opposite side unless the
+ * measurement is taken against the line the generator built along.
+ *
+ * Nothing else in the sweep would catch it. The symbol is the same size either way, both
+ * engines share the rule, and `mirrored` still toggles — it toggles *away* from the cursor.
+ * So this measures the ink: drag the handle north, the arc must end up north.
+ */
+async function runMirrorSide(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    // How far the symbol's ink sits above (+) or below (-) its own drawn line, in metres.
+    const inkSide = () => page.evaluate(() => {
+        const R = 6378137;
+        const mercY = lat => R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+        const mlb = window.__tacticalGraphicsMapLibre;
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        const base = feature?.geometry?.coordinates ?? [];
+        if (base.length < 2) return null;
+        const axis = (mercY(base[0][1]) + mercY(base[base.length - 1][1])) / 2;
+
+        const ink = [];
+        const walk = node => {
+            if (!Array.isArray(node)) return;
+            if (typeof node[0] === 'number') return void ink.push(node[1]);
+            for (const child of node) walk(child);
+        };
+        if (mlb) {
+            const geometry = mlb.native.graphics[0]?.graphic?.geometry;
+            const parts = geometry?.type === 'GeometryCollection' ? geometry.geometries : geometry ? [geometry] : [];
+            for (const part of parts) walk(part.coordinates);
+        } else {
+            for (const f of window.__tacticalGraphics.manager.renderingVectorSource.getFeatures()) {
+                if (f.get('role') !== 'graphic') continue;
+                walk(f.getGeometry()?.getCoordinates?.());
+            }
+        }
+        if (!ink.length) return null;
+        // The extreme, not the mean: the arc is a minority of the vertices and the
+        // straight run sits on the axis, so an average barely moves.
+        const above = Math.max(...ink) - axis;
+        const below = axis - Math.min(...ink);
+        return above - below;
+    });
+
+    // Where the flipping handle is, in page pixels. It is the contract's handle 0 for
+    // this family, which OpenLayers publishes as its own `offsetHandler` feature.
+    const mirrorHandle = () => page.evaluate(() => {
+        const manager = window.__tacticalGraphics?.manager;
+        if (manager) {
+            const feature = manager.renderingVectorSource.getFeatures().find(f => f.get('offsetHandler'));
+            const coords = feature?.getGeometry()?.getCoordinates?.();
+            if (!coords) return null;
+            const point = Array.isArray(coords[0]) ? coords[0] : coords;
+            return manager.map.getPixelFromCoordinate(point);
+        }
+        const native = window.__tacticalGraphicsMapLibre?.native;
+        const map = window.__tacticalGraphicsMapLibre?.map;
+        if (!native || !map || !native.selection) return null;
+        const graphic = native.find(native.selection);
+        if (!graphic?.handles?.length) return null;
+        const R = 6378137;
+        const [x, y] = graphic.handles[0];
+        const lonLat = [(x / R) * (180 / Math.PI), (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI)];
+        const projected = map.project(lonLat);
+        const canvas = map.getCanvasContainer().getBoundingClientRect();
+        const host = document.querySelector('.map-container').getBoundingClientRect();
+        return [projected.x + canvas.left - host.left, projected.y + canvas.top - host.top];
+    });
+
+    let mapBox;
+    try {
+        mapBox = await drawGraphic(page, 'withdraw', [[620, 470], [900, 470]]);
+    } catch {
+        check(`${engine}: withdraw could be drawn for its mirror handle`, false);
+        await browser.close();
+        return;
+    }
+
+    if ((await page.evaluate(() => window.__tacticalEngine.getInteractionMode())) !== 'edit') await editBtn.click();
+    await page.waitForTimeout(250);
+    await page.evaluate(() => {
+        const api = window.__tacticalEngine;
+        api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+    });
+    await page.waitForTimeout(300);
+
+    const drag = async (dy) => {
+        const handle = await mirrorHandle();
+        if (!handle) return false;
+        const [hx, hy] = handle;
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy);
+        await page.mouse.down();
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy + dy, {steps: 14});
+        await page.mouse.up();
+        await page.waitForTimeout(450);
+        return true;
+    };
+
+    // Screen y grows downward and projected y grows upward, so a drag of -120 px is north.
+    if (!(await drag(-120))) {
+        check(`${engine}: withdraw publishes a mirror handle`, false, 'no handle found');
+        await browser.close();
+        return;
+    }
+    const north = await inkSide();
+    check(`${engine}: dragging the cane's handle north puts the arc north`,
+        north !== null && north > 0,
+        north === null ? 'no ink measured' : `${Math.round(north / 1000)} km above the line`);
+
+    if (!(await drag(240))) {
+        check(`${engine}: the mirror handle survives the first flip`, false, 'no handle found');
+        await browser.close();
+        return;
+    }
+    const south = await inkSide();
+    check(`${engine}: and dragging it south puts the arc south`,
+        south !== null && south < 0,
+        south === null ? 'no ink measured' : `${Math.round(south / 1000)} km above the line`);
+
+    await browser.close();
+}
+
 function compareDrawSizes() {
     for (const {filter, as} of DRAW_SIZE_CASES) {
         const key = as ?? filter;
@@ -1324,6 +1460,7 @@ const SECTIONS = {
     sizes: runDrawSizes,
     mirror: runMirrorCheck,
     tip: runTipOrder,
+    side: runMirrorSide,
 };
 
 const wanted = (process.env.SECTIONS ?? '').split(',').map(s => s.trim()).filter(Boolean);
