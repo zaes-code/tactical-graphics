@@ -239,6 +239,43 @@ describe('obstacle area amplifiers', () => {
     });
 });
 
+describe('decision line fields', () => {
+    // The paint still joins `T/AS` with a slash when both are set — 110500's Example
+    // renders `1X/007` — but the dialog offers only the designation. The second half is
+    // not a field this program's operators fill in. (User's call, 2026-08-25.)
+    it('offers the designation alone', () => {
+        const fields = getGraphicFields(TacticalGraphicName.DecisionLine);
+        expect(fields.identifier1).toBe(true);
+        expect(fields.identifier2).toBe(false);
+        expect(fields.dtg1).toBe(false);
+        expect(fields.dtg2).toBe(false);
+        expect(fields.status).toBe(false);
+    });
+});
+
+describe('line, generic fields', () => {
+    // APP-06 110400's Template sets **T** above each end of the line and **W - W1** below
+    // each. `defaultLinePaint` has always drawn both; the dialog offered only the name, so
+    // the dates could be rendered but never entered.
+    it('offers the designation and both DTGs, and no status', () => {
+        const fields = getGraphicFields(TacticalGraphicName.LineGeneric);
+        expect(fields.identifier1).toBe(true);
+        expect(fields.dtg1).toBe(true);
+        expect(fields.dtg2).toBe(true);
+        expect(fields.status).toBe(false);
+    });
+
+    it('leaves the other plain lines as they were', () => {
+        // The profile it used to share is still in use — this was one graphic's fields,
+        // not the family's.
+        for (const name of [TacticalGraphicName.ForwardEdgeOfBattleArea, TacticalGraphicName.ReleaseLine]) {
+            const fields = getGraphicFields(name);
+            expect(fields.dtg1).toBe(false);
+            expect(fields.status).toBe(true);
+        }
+    });
+});
+
 describe('obstacle line fields', () => {
     it('offers the identifier but not status', () => {
         // The style function never reads status — there is no planned form of this
