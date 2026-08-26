@@ -7,7 +7,15 @@
  * is invisible until a user loses a label they typed.
  */
 import VectorSource from 'ol/source/Vector';
-import {listTacticalGraphicNames, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {
+    listTacticalGraphicNames,
+    RouteDirection,
+    TacticalGraphicHostility,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicName,
+    TacticalGraphicTerrain,
+} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {getGraphicFields} from './graphicFieldRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -47,6 +55,13 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     if (f.altitude2) labels.maxAltitude = '2000';
     if (f.grids) labels.grid = '18SUJ2345';
     if (f.weapon) labels.weapon = 'M252 81mm';
+    // The selectors and the free-text field H. Missing here until 2026-08-26, which is
+    // why this suite passed while `shownLabels` was dropping `mineType` on reopen.
+    if (f.additionalInfo) labels.additionalInfo = 'CAUSE OF RESTRICTION';
+    if (f.mineType) labels.mineType = TacticalGraphicMineType.antitank;
+    if (f.mobility) labels.mobility = TacticalGraphicMobility.tracked;
+    if (f.terrain) labels.terrain = TacticalGraphicTerrain.ground;
+    if (f.direction) labels.direction = RouteDirection.ONE_WAY;
     return labels as unknown as GraphicLabels;
 }
 

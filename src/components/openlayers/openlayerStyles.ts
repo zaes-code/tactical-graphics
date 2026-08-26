@@ -2121,6 +2121,10 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AreaGeneric,
     TacticalGraphicName.HumanTerrain,
     TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    // The Sector 1 / Sector 2 / field H stack. @see sectorModifierPaints
+    TacticalGraphicName.LimitedAccessArea,
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
 ];
 
 export function getAreaLabelStylesFn(name: TacticalGraphicName): StyleFunction {
@@ -2254,7 +2258,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaCircular:
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
-        case TacticalGraphicName.LimitedAccessArea:
             return asStyleFunction(areaLabelStackPaint(name), name);
         // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
         // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been

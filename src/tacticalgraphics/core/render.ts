@@ -29,6 +29,8 @@ import {
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
     TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
     TacticalGraphicHostility,
     TacticalGraphicName,
     AltitudeDatum,
@@ -115,6 +117,19 @@ export interface TacticalGraphicProperties {
      * @see TacticalGraphicMineType
      */
     mineType?: TacticalGraphicMineType;
+    /**
+     * Which mobility icon the three terrain areas draw as their **Sector 1** modifier --
+     * APP-06 Table 8-24's `MOBILITY` category. Limited access area, restricted terrain and
+     * severely restricted terrain, and nothing else: the table's Remarks column says so.
+     * @see TacticalGraphicMobility
+     */
+    mobility?: TacticalGraphicMobility;
+    /**
+     * The **Sector 2** modifier of restricted and severely restricted terrain -- APP-06
+     * Table 8-25. It sets a word under the mobility icon and, optionally, the color the
+     * area is hatched in. @see TacticalGraphicTerrain
+     */
+    terrain?: TacticalGraphicTerrain;
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
@@ -255,6 +270,10 @@ export interface GraphicLabels {
     direction?: RouteDirection;
     /** @see TacticalGraphicProperties.mineType */
     mineType?: TacticalGraphicMineType;
+    /** @see TacticalGraphicProperties.mobility */
+    mobility?: TacticalGraphicMobility;
+    /** @see TacticalGraphicProperties.terrain */
+    terrain?: TacticalGraphicTerrain;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;

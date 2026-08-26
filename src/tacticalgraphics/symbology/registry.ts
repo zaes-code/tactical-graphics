@@ -50,6 +50,7 @@ import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 import {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
+import {sectorModifierLabelPaint} from './sectorModifierPaints';
 import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 import {directionArrowPaint} from './linePaints';
@@ -370,7 +371,6 @@ const STACK_LABEL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RestrictiveFireAreaCircular,
     TacticalGraphicName.RestrictiveFireAreaIrregular,
     TacticalGraphicName.RestrictiveFireAreaRectangular,
-    TacticalGraphicName.LimitedAccessArea,
     TacticalGraphicName.ObstacleRestrictedArea,
 ];
 
@@ -384,7 +384,6 @@ const SPECIAL_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FortifiedArea,
     TacticalGraphicName.GroupOrSeriesOfTargets,
     TacticalGraphicName.Encirclement,
-    TacticalGraphicName.LimitedAccessArea,
     TacticalGraphicName.NoFireAreaCircular,
     TacticalGraphicName.NoFireAreaIrregular,
     TacticalGraphicName.NoFireAreaRectangular,
@@ -686,15 +685,27 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         // depictions, so the dash is the symbol rather than a status.
         [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
         // Told apart from each other by texture alone. @see hatchTileSegments
-        [TacticalGraphicName.RestrictedTerrain]: {graphic: restrictedTerrainPaint()},
-        [TacticalGraphicName.SeverelyRestrictedTerrain]: {graphic: restrictedTerrainPaint({dense: true})},
+        // Sector 1 over Sector 2 over field H, which is the whole of what these two say.
+        // @see sectorModifierPaints
+        [TacticalGraphicName.RestrictedTerrain]: {
+            graphic: restrictedTerrainPaint(),
+            label: sectorModifierLabelPaint({sectorTwo: true}),
+        },
+        [TacticalGraphicName.SeverelyRestrictedTerrain]: {
+            graphic: restrictedTerrainPaint({dense: true}),
+            label: sectorModifierLabelPaint({sectorTwo: true}),
+        },
 
         [TacticalGraphicName.FortifiedArea]: {graphic: fortifiedAreaPaint()},
         [TacticalGraphicName.GroupOrSeriesOfTargets]: {graphic: groupOrSeriesOfTargetsPaint()},
         [TacticalGraphicName.Encirclement]: {graphic: encirclementPaint()},
 
-        // One hatched fill under an affiliation-colored outline.
-        [TacticalGraphicName.LimitedAccessArea]: {graphic: limitedAccessAreaPaint()},
+        // One hatched fill under an affiliation-colored outline. The literal is the
+        // symbol's own, not a designation: both plates print it and neither offers a T.
+        [TacticalGraphicName.LimitedAccessArea]: {
+            graphic: limitedAccessAreaPaint(),
+            label: sectorModifierLabelPaint({literal: 'LAA', dates: true}),
+        },
         [TacticalGraphicName.NoFireAreaCircular]: {graphic: limitedAccessAreaPaint()},
         [TacticalGraphicName.NoFireAreaIrregular]: {graphic: limitedAccessAreaPaint()},
         [TacticalGraphicName.NoFireAreaRectangular]: {graphic: limitedAccessAreaPaint()},
