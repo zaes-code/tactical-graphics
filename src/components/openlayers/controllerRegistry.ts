@@ -416,7 +416,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // end means — while the resize icon still scales the whole symbol. @see Abatis
     [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
     [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
-    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
+    // The apex is vertex 0: APP-06 140500 numbers this symbol from its vertex, and the
+    // base follows the standard now. It was 1 while the legs were drawn first. @see anchorVertex
+    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 0),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>

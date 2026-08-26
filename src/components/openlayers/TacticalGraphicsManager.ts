@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, allowedGestures, groundLength, handleRole, isRectangular, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, allowedGestures, generatorOrder, groundLength, handleRole, isRectangular, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -1169,10 +1169,16 @@ export class TacticalGraphicsManager {
         if (!controller?.setMirrored || !name || this.activeHandleIndex < 0) return false;
 
         const drawn = controller.getBaseGeometry() as unknown;
-        const line = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]) : undefined;
-        if (!line || line.length < 2) return false;
-        if (handleRole(name, this.contractHandleIndex(), line.length) !== 'mirror') return false;
+        const raw = Array.isArray(drawn) && Array.isArray(drawn[0]) ? (drawn as number[][]) : undefined;
+        if (!raw || raw.length < 2) return false;
+        if (handleRole(name, this.contractHandleIndex(), raw.length) !== 'mirror') return false;
 
+        // **The line the generator drew along, which for the retrogrades is the reverse
+        // of the line as stored.** Their points are filed tip-first now, per APP-06, and
+        // the sign below is absolute -- "negative is the mirrored side". Read off the
+        // stored order it would name the opposite side, so every cane would hang the
+        // wrong way the first time its handle was dragged. @see drawOrder.ts
+        const line = generatorOrder(name, raw) as number[][];
         const from = line[0];
         const to = line[line.length - 1];
         const axis = Math.atan2(to[1] - from[1], to[0] - from[0]);
@@ -1296,6 +1302,14 @@ export class TacticalGraphicsManager {
 
     private nearestVertexIndex(feature: Feature, coordinate: Coordinate): number {
         const geometry = feature.getGeometry();
+        // **A one-point handle feature is handle 0, not "no handle".** The offset and
+        // mirror handles are drawn as their own `Point` feature, so this answered -1 for
+        // every grab of one — which left `activeHandleIndex` negative and made
+        // `mirrorIfMirrorHandle` bail out before it could claim the gesture. The
+        // retrograde canes' handle is declared a `mirror` in the library and MapLibre
+        // flips on it; here the drag fell through to `handleOffset` and *resized* the
+        // symbol instead, tripling a withdraw's decoration in three drags. @see handleRole
+        if (geometry instanceof Point) return 0;
         if (!(geometry instanceof MultiPoint)) return -1;
 
         let best = -1;
@@ -1328,8 +1342,18 @@ export class TacticalGraphicsManager {
     // update the width of a graphic
     handleOffset(evt: MapBrowserEvent): void {
         if (!this.activeController) return;
-        let coords = <number[][]>this.activeController.getBaseGeometry();
-        if (!coords || coords.length < 2) return;
+        const stored = <number[][]>this.activeController.getBaseGeometry();
+        if (!stored || stored.length < 2) return;
+
+        // **Oriented the generator's way, because the sign below leaves this function.**
+        // The width is a magnitude and the flip is a *crossing*, so both survive a
+        // reversal — but `setMirrored(nowNegative)` hands a side to the generator, and a
+        // tip-first graphic's stored line runs opposite to the one its symbol was built
+        // along. Left alone, a mobile defence's width drag flipped it to the side the
+        // cursor had just left, and MapLibre's `setOffset` — which does orient — would
+        // have disagreed with this engine on the same gesture. @see drawOrder.ts
+        const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
+        const coords = generatorOrder(name, stored) as number[][];
 
         // Measure against the segment the cursor is nearest to, not always the
         // last one. For a two-point base (block, relief in place, retrograde)
