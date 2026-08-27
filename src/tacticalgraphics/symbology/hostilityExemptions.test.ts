@@ -39,12 +39,19 @@ const HOSTILE_RED = getColorByHostility(TacticalGraphicHostility.hostileFaker);
 const UNAFFILIATED = getColorByHostility(TacticalGraphicHostility.unknown);
 
 describe('supportsHostility', () => {
-    it('is false for every Chapter 6 tactical mission task', () => {
+    it('is false for every Chapter 6 tactical mission task but the exfiltration', () => {
         const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
             .filter(name => GRAPHIC_CATEGORIES[name] === TacticalGraphicCategory.TacticalMissionTasks);
 
         expect(missionTasks.length).toBeGreaterThan(20);
-        expect(missionTasks.filter(supportsHostility)).toEqual([]);
+        // The exfiltration and the infiltration are one symbol with two letters, told apart
+        // by *whose* forces the arrow points toward, so an identity is the one amplifier
+        // that means something on them. (User's call, 2026-08-27.) The infiltration is not
+        // in this list only because it is filed under Movement and Manoeuvre — the pair is
+        // categorised inconsistently, which is how one of them offered hostility all along
+        // and the other did not.
+        expect(missionTasks.filter(supportsHostility)).toEqual([TacticalGraphicName.Exfiltrate]);
+        expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
     });
 
     it('is false for every CBRN contaminated area, subtypes included', () => {

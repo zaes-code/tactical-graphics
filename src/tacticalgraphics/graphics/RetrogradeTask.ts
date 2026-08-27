@@ -70,8 +70,12 @@ export class Exfiltrate extends TacticalGraphicsBase<PointGraphicOptions> {
         // and is far larger than this symbol's head: unclamped it drew a V spanning most of
         // the graphic, which reads as the path folding back on itself rather than as an
         // arrowhead. A sixth of the run is what the plate draws.
+        // A sixth of the run, and **never larger** — `opts.size` is the holder's decoration
+        // size in metres and dwarfs this symbol's head. A caller with no size at all is the
+        // ordinary case for a consumer reading raw GeoJSON, and `Math.min(undefined, x)` is
+        // NaN, which loses the arrowhead entirely.
         const run = turf.distance(turf.point(coords[0]), turf.point(coords[2]), {units: 'meters'});
-        const head = Math.min(opts.size, run / 6);
+        const head = Math.min(opts?.size ?? Number.POSITIVE_INFINITY, run / 6);
         const arrowhead = geometryService.computeArrowheadPoints(
             path[path.length - 2],
             path[path.length - 1],
@@ -100,4 +104,22 @@ export class Exfiltrate extends TacticalGraphicsBase<PointGraphicOptions> {
         const path = geometryService.createSCurve(c[0], c[2], c[1]);
         return this.asMultiPointFeature([path[0], path[1]]);
     }
+}
+
+/**
+ * Infiltrate (APP-06 343800) — **the exfiltration, with a different letter.**
+ *
+ * The two Draw Rules are the same text: three anchor points meaning the same three things,
+ * one construction, one arrowhead. They differ by a typo — *"the length of the of the
+ * symbol"* — and by one word of Orientation, *friendly* forces against *enemy* forces, which
+ * tells the operator which way to aim it and changes no geometry.
+ *
+ * So this is a subclass carrying only the name, and it stays that way. Sharing the geometry
+ * alone was tried and was not enough: the two still had different holders, different
+ * controllers, different label paints and differently-sized arrowheads, and every one of
+ * those was visible. A symbol whose only difference from another is its letter should be
+ * one class.
+ */
+export class Infiltration extends Exfiltrate {
+    name: TacticalGraphicName = TacticalGraphicName.Infiltration;
 }
