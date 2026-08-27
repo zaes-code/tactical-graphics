@@ -65,8 +65,38 @@ export class Demonstration extends TacticalGraphicsBase {
     name: string = TacticalGraphicName.Demonstration;
     type: string = 'LineString';
 
+    /**
+     * The four points with the **second leg held parallel to the first**.
+     *
+     * 343300's Template draws a U: two straights of the same bearing joined by a turn. Left
+     * free, the two legs splay — the symbol reads as a V with a curved corner rather than a
+     * demonstration, and every drawn one was slightly off.
+     *
+     * **Points 1 and 2 are the master** (user's call, 2026-08-27): the first leg keeps
+     * exactly what the operator drew, and point 4 is re-placed along that bearing from point
+     * 3, keeping its own length. So dragging point 4 changes how long the second leg is and
+     * never which way it points, and re-aiming the graphic is done on the first leg.
+     *
+     * Applied here rather than in `normalizeDrawnBase` because it has to hold while
+     * *editing* too, and a vertex drag does not pass through the draw normalizer. Handles
+     * read the same function, so the handle snaps to the constraint as the user drags it
+     * rather than floating off the line it is supposed to be on.
+     */
+    private parallelPoints(c: Position[]): Position[] {
+        if (c.length < 4) return c;
+        const [tip1, bend1, bend2, tip2] = c;
+        const leg2 = turf.distance(turf.point(bend2), turf.point(tip2), {units: 'meters'});
+        if (leg2 === 0) return c;
+        // The legs are the two sides of a U, so the second runs *back* along the first's
+        // bearing rather than along it.
+        const bearing = turf.bearing(turf.point(tip1), turf.point(bend1));
+        const held = turf.destination(turf.point(bend2), leg2 / 1000, bearing + 180, {units: 'kilometers'})
+            .geometry.coordinates;
+        return [tip1, bend1, bend2, held, ...c.slice(4)];
+    }
+
     generateGraphics(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiLineString> {
-        const c = base.geometry.coordinates;
+        const c = this.parallelPoints(base.geometry.coordinates);
         if (c.length < 4) return this.asMultiLineStringFeature([c]);
 
         const [tip1, bend1, bend2, tip2] = c;
@@ -90,7 +120,7 @@ export class Demonstration extends TacticalGraphicsBase {
     }
 
     generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
+        return this.asMultiPointFeature(this.parallelPoints(base.geometry.coordinates).slice(0, 4));
     }
 
     generateLabels(base: Feature<LineString>): Feature<MultiPoint> {

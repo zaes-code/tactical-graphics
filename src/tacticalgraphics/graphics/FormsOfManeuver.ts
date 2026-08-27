@@ -964,8 +964,12 @@ export class Infiltration extends MovementGraphicBase {
         if (c.length < 3) return this.asMultiLineStringFeature([c]);
 
         const path = geometryService.createSCurve(c[0], c[2], c[1]);
+        // The same cap the exfiltration takes: the two are one construction and a head
+        // sized differently between them would be the only thing telling them apart other
+        // than the letter, which is the one thing that should. @see Exfiltrate
+        const run = turf.distance(turf.point(c[0]), turf.point(c[2]), {units: 'meters'});
         const arrowHead: Position[] = geometryService.computeArrowheadPoints(
-            path[path.length - 2], path[path.length - 1], radius, 45,
+            path[path.length - 2], path[path.length - 1], Math.min(radius, run / 6), 45,
         );
         return this.asMultiLineStringFeature([path, arrowHead]);
     }
