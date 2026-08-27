@@ -131,6 +131,13 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Ambush,
     TacticalGraphicName.Contain,
+    // **The four points are the base; they are just not the user's to place.** The
+    // demonstration is dropped on one click and points 2, 3 and 4 are derived from point
+    // 1 — but the standard describes the symbol by four anchor points, and that is what
+    // the base carries and what a snapshot holds. Membership here is about the *shape of
+    // the description*; whether a vertex can be dragged is a separate question, and the
+    // answer for this one is no. @see DERIVED_ANCHOR_GRAPHICS
+    TacticalGraphicName.Demonstration,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,
@@ -591,12 +598,14 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Exfiltrate]: 3,
     [TacticalGraphicName.Infiltration]: 3,
 
-    // Four, each meaning something different. @see SweptArcTask
-    // (The demonstration also has four, but they are derived from one click rather
-    // than drawn, so it is not a multi-vertex base at all. @see Demonstration)
+    // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Evacuate]: 4,
     [TacticalGraphicName.Recover]: 4,
+    // **Not the demonstration**, though its base carries four points too. This table is a
+    // rule about *clicks* — "the draw has to end on the third one" — and the demonstration
+    // ends on the first, with points 2, 3 and 4 derived from it. What says so is
+    // `dropSizePx`. @see anchorsForParallelLegs
 };
 
 /**

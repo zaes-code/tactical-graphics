@@ -599,11 +599,12 @@ describe('a graphic saved before the anchor-point conversion', () => {
     });
 
     /**
-     * And the other direction: the demonstration was drawn as four points until
-     * 2026-08-27 and is dropped from one click now. Those files exist, and the shape is
-     * fully described by point 1 and point 2 — the rest were always the same ratios.
+     * The demonstration is in the family for a different reason: its four points are
+     * derived from the first rather than placed. A file written while they were drawn
+     * freehand still loads, and comes back as the canonical shape — which is what
+     * "auto-calculated" means once the ratios stop being an input.
      */
-    it('downgrades a drawn demonstration to the anchor it is dropped from now', () => {
+    it('snaps a freehand demonstration onto the ratios it is now fixed at', () => {
         const to = fakeManager();
         // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
         const drawn = {
@@ -618,9 +619,10 @@ describe('a graphic saved before the anchor-point conversion', () => {
                         symbolId: 'legacy-dem',
                         tacticalGraphic: {name: TacticalGraphicName.Demonstration, label: 'ALPHA'},
                     },
+                    // Splayed: the second leg is neither parallel nor the same length.
                     geometry: {
                         type: 'LineString' as const,
-                        coordinates: [[-0.6, 51.5], [0.2, 51.5], [0.2, 51.7], [-0.6, 51.7]],
+                        coordinates: [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]],
                     },
                 },
             ],
@@ -631,20 +633,24 @@ describe('a graphic saved before the anchor-point conversion', () => {
         expect(report.restored).toBe(1);
 
         const holder = to.graphicControllers[0].graphic;
-        expect(holder.base.getGeometry()).toBeInstanceOf(Point);
-        // Point 1 is the anchor, and it has not moved.
-        const anchor = (holder.base.getGeometry() as Point).getCoordinates();
-        expect(toLonLat(anchor)[0]).toBeCloseTo(-0.6, 6);
-        expect(toLonLat(anchor)[1]).toBeCloseTo(51.5, 6);
-        // …and it came back aimed the way it was drawn: the rebuilt first leg ends on the
-        // point 2 the file held. Asserted through the geometry rather than against a round
-        // `rotation`, because the aim is a *geodesic* bearing — along this parallel the
-        // initial bearing is 89.7 degrees, not 90, and the generator turns it back into
-        // the same point. Pinning 0 would be pinning the projection, not the restore.
+        // Still four points, and still a LineString: the count is what the standard
+        // describes the symbol by, and it survives the trip.
+        const base = holder.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        const anchors = (base as LineString).getCoordinates().map(c => toLonLat(c));
+        expect(anchors).toHaveLength(4);
+        // Points 1 and 2 are the two that are read, and they have not moved.
+        expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
+        expect(anchors[0][1]).toBeCloseTo(51.5, 6);
+        expect(anchors[1][0]).toBeCloseTo(0.2, 4);
+        // Points 3 and 4 were rewritten from them, so the legs come back equal. Within a
+        // percent, and as a ratio: these are *projected* metres, and the second leg sits a
+        // quarter of a degree further north, where Mercator's scale factor is 0.8% larger.
+        // Asserting equality here would be asserting the projection.
         const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
-        const bend = toLonLat((rebuilt as MultiLineString).getCoordinates()[0][1]);
-        expect(bend[0]).toBeCloseTo(0.2, 4);
-        expect(bend[1]).toBeCloseTo(51.5, 4);
+        const parts = (rebuilt as MultiLineString).getCoordinates();
+        const legLength = (part: number[][]) => Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]);
+        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 1);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {

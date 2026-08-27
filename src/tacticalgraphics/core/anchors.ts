@@ -567,3 +567,67 @@ export function anchorsForArcAndArrow(
         }).geometry.coordinates as Position;
     return [polar(arrowReach * radius, 0), polar(radius, ARC_HALF_SPAN_DEG), polar(radius, -ARC_HALF_SPAN_DEG)];
 }
+
+/**
+ * # Two parallel legs joined by a half turn — the demonstration's four points
+ *
+ * APP-06 343300: *"Point 1 defines the tip of the arrowhead. Point 2 defines the end of
+ * the straight line portion of the first arrow. [...] Points 2 and 3 shall be connected
+ * by a smooth, curved line."*
+ *
+ * Unlike every other layout here the frame's origin is **point 1 itself**, not a centre:
+ * the standard numbers the tip first and the symbol grows away from it.
+ *
+ * **The four points are one shape at one set of proportions**, and this is the only place
+ * that says so. Two straights of equal length, parallel, joined by a turn whose diameter
+ * is the gap between them — nothing in the rule invites an operator to vary those ratios,
+ * and left free they drifted: the legs splayed, the turn went oval, and the symbol stopped
+ * reading as a demonstration. So points 2, 3 and 4 are derived from point 1, the leg
+ * length and the aim, and dragging one of them individually is not a gesture this symbol
+ * offers. @see DERIVED_ANCHOR_GRAPHICS
+ *
+ * `openingShare` is the half-opening as a fraction of a leg. Measured off 343300's
+ * Template, the legs run about 265 units against an opening of about 185.
+ */
+export function anchorsForParallelLegs(
+    tip: Position,
+    size: number,
+    rotationDegrees = 0,
+    openingShare = PARALLEL_LEGS_HALF_OPENING,
+): Position[] {
+    const angle = toRadians(rotationDegrees);
+    // One origin for every point, like `anchorsForRunAndArc`: chaining translations
+    // accumulates the latitude-dependent scaling each hop applies, and the second leg
+    // lands short of the first. @see anchorsForRunAndArc
+    const at = (u: number, v: number): Position => {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return tip;
+        const bearing = 90 - toDegrees(angle + Math.atan2(v, u));
+        return turf.destination(turf.point(tip), distance, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+    };
+    const opening = 2 * size * openingShare;
+    return [tip, at(size, 0), at(size, opening), at(0, opening)];
+}
+
+/** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
+export const PARALLEL_LEGS_HALF_OPENING = 0.35;
+
+/**
+ * The inverse: point 1 is the origin and points 1 → 2 give the leg and the aim.
+ *
+ * Points 3 and 4 are **not read**. They are derived, so a set that disagrees with them —
+ * a file written while the four were drawn freehand — resolves to the canonical shape
+ * rather than to whatever the legs had drifted into.
+ */
+export function parallelLegsFromAnchors(
+    coords: Position[] | undefined,
+): {tip: Position; size: number; angle: number} | undefined {
+    if (!coords || coords.length < 2) return undefined;
+    const [tip, bend] = coords;
+    const size = turf.distance(turf.point(tip), turf.point(bend), {units: 'meters'});
+    if (!(size > 0)) return undefined;
+    // Geodesic bearing back to the planar angle the layouts take: 0 is east, growing
+    // counter-clockwise. @see anchorsForParallelLegs
+    return {tip, size, angle: toRadians(90 - turf.bearing(turf.point(tip), turf.point(bend)))};
+}
