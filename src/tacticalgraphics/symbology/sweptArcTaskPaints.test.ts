@@ -100,12 +100,32 @@ describe('APP-06 343000 / 344500 / 344600 — the swept-arc tasks', () => {
         expect(meters(arc[arc.length - 1], POINTS[3])).toBeLessThan(1);
     });
 
-    it('draws bare vertices until all four points are placed', () => {
-        // Half a symbol is worse than none: the arc cannot be solved without its
-        // through-point, and a guessed one lurches when the fourth click lands.
-        const partial = built(TacticalGraphicName.Capture, POINTS.slice(0, 3));
-        expect(partial.coordinates).toHaveLength(1);
-        expect(partial.coordinates[0]).toHaveLength(3);
+    it('previews what each click has settled, rather than a scribble', () => {
+        // Four clicks is a long way to go on faith, and the radius is the one measurement
+        // the rule asks the operator to judge — "adjusted as needed to contain the unit
+        // assigned the task". Each state draws what it knows and nothing it does not.
+        const one = built(TacticalGraphicName.Capture, POINTS.slice(0, 1));
+        expect(one.coordinates).toHaveLength(1);
+        expect(one.coordinates[0]).toHaveLength(1);
+
+        // Two: the circle alone, centre and radius both settled.
+        const two = built(TacticalGraphicName.Capture, POINTS.slice(0, 2));
+        expect(two.coordinates).toHaveLength(1);
+        const ring = two.coordinates[0];
+        expect(ring.length).toBeGreaterThan(16);
+        const radius = meters(POINTS[0], POINTS[1]);
+        for (const p of ring) expect(Math.abs(meters(POINTS[0], p) - radius)).toBeLessThan(radius * 0.02);
+
+        // Three: the circle, plus a **straight** run from its rim to point 3. Straight
+        // because a curve through point 3 needs point 4, and a guessed one would swing
+        // when the last click lands where a straight run merely bends.
+        const three = built(TacticalGraphicName.Capture, POINTS.slice(0, 3));
+        expect(three.coordinates).toHaveLength(2);
+        expect(three.coordinates[0]).toEqual(two.coordinates[0]);
+        const run = three.coordinates[1];
+        expect(run).toHaveLength(2);
+        expect(meters(run[0], POINTS[0])).toBeCloseTo(radius, -1);
+        expect(meters(run[1], POINTS[2])).toBeLessThan(1);
     });
 
     it('ends the sweep in a pair of open barbs, not a filled triangle', () => {

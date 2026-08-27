@@ -15,6 +15,7 @@ import {
     textWidth,
     uprightRotation,
 } from './decorations';
+import {escortSymbolSizePx} from '../core/securitySymbol';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -23,8 +24,16 @@ type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 const ESCORT_LEG_PX = 34;
 /** Clear space either side of the `E A E` block inside its break, in screen pixels. */
 const ESCORT_GAP_PADDING_PX = 6;
-/** How wide the host's unit symbol is allowed to be, between the two `E`s. */
-const ESCORT_SYMBOL_PX = 34;
+/**
+ * How wide the host's unit symbol is, between the two `E`s.
+ *
+ * Taken from the bar's own on-screen span rather than being a constant, so the symbol and
+ * the graphic scale together — and taken from the **same** function the renderers draw it
+ * at, or the hole and the symbol disagree. @see escortSymbolSizePx
+ */
+function escortSymbolPx(spanPx: number): number {
+    return escortSymbolSizePx(spanPx);
+}
 
 /** Length of a demonstration arrowhead's barbs, and half the angle between them. */
 const DEM_ARROW_PX = 30;
@@ -89,7 +98,9 @@ export function escortPaint(letter: string): TaskPaint {
         if (span === 0) return [{geometry, stroke}];
 
         const halfGapPx =
-            textWidth(context, letter, fontStyle, scale) + ESCORT_SYMBOL_PX / 2 + ESCORT_GAP_PADDING_PX;
+            textWidth(context, letter, fontStyle, scale)
+            + escortSymbolPx(span / context.resolution) / 2
+            + ESCORT_GAP_PADDING_PX;
         const gap = Math.min((halfGapPx * context.resolution) / span, 0.45);
 
         const bar: ProjectedPosition[][] = [

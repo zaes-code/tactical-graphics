@@ -20,6 +20,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
+import {escortSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
@@ -1761,12 +1762,26 @@ export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunctio
     return asStyleFunction(obstacleBypassPaint(name), name);
 }
 
-/** Escort and demonstration. @see escortAndDemonstrationPaints.ts */
+/**
+ * Escort and demonstration. @see escortAndDemonstrationPaints.ts
+ *
+ * The escort carries a host-injected unit symbol in the break in its bar, like the security
+ * operations carry one between their arms — but sized from the bar rather than from the
+ * global setting, so the graphic and the symbol scale together. @see escortSymbolStyle
+ */
 export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): StyleFunction {
     const paint = name === TacticalGraphicName.Escort
         ? escortPaint(getLabel(name))
         : demonstrationPaint(getLabel(name));
-    return asStyleFunction(paint, name);
+    const styled = asStyleFunction(paint, name);
+    if (name !== TacticalGraphicName.Escort) return styled;
+
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = escortSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
 }
 
 /** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
