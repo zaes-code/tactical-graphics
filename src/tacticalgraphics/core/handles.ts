@@ -586,6 +586,10 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
     [TacticalGraphicName.Escort]: 3,
     [TacticalGraphicName.MinimumSafeDistanceZone]: 3,
+    // The S pair: the straight's end, the arcs' centre, the arrowhead's tip.
+    // @see GeometryService.createSCurve
+    [TacticalGraphicName.Exfiltrate]: 3,
+    [TacticalGraphicName.Infiltration]: 3,
 
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
