@@ -35,8 +35,8 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicMineType} from '../core/type';
-import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
+import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 
 type MinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -155,8 +155,83 @@ export function mineRowMarks(
 
 /** Share of the fit the row is drawn at, so it does not touch the outline. @see cbrnPaints */
 const INSET = 0.55;
-/** How far above the row the free text sits, in row half-heights. */
+/** How far above the row the free text sits, in row half-heights, with no outline to use. */
 const TEXT_OFFSET = 1.9;
+
+/**
+ * Clear space between the area's own edge and the block of text above or below it, in
+ * screen pixels **at label scale 1**.
+ *
+ * **Off the outline, not off the mine row.** Both plates set field H clear above the
+ * boundary and the DTG clear below it; hanging them off the row instead put them inside a
+ * tall area and outside a short one, because the row is sized to fit the shape and the
+ * shape is not. (User's call, 2026-08-27.)
+ *
+ * **Scaled by the label, not fixed on screen.** The amplifiers around these areas use the
+ * zoom-anchored scale, so they *grow* as the operator zooms in — and a constant 30 px gap
+ * that cleared the fenced area's top `M` at one zoom stopped clearing it at the next. The
+ * clash is invisible on MapLibre and on OpenLayers it is worse than invisible: the
+ * declutter drops one of the two labels, so field H simply disappears as you zoom in.
+ * A gap in the same units as the thing it is clearing holds at every zoom.
+ */
+const AREA_TEXT_GAP_PX = 30;
+
+/**
+ * The hostile marker's height, as a share of its base, and where its `ENY`s sit along that
+ * base as a share of the half-width.
+ *
+ * Both measured off 270801's second Example: a base of 458 units carrying a 271-unit peak,
+ * with the two letters at 0.67 of the half-width rather than at the corners — where they
+ * would sit under the sloping sides.
+ */
+const HOSTILE_PEAK_HEIGHT = 0.6;
+const HOSTILE_PEAK_LETTER_SHARE = 0.67;
+
+/** Both areas' hostile marker, and the letters that go with it, are the same size rule. */
+function isHostile(feature: PaintFeature): boolean {
+    return hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+}
+
+/**
+ * How far the fenced area's hostile peak reaches above the boundary, or zero.
+ *
+ * Read by the amplifier block as well as by the marker itself, because field H sits above
+ * the graphic and the peak *is* above the graphic: without this the two land on top of
+ * each other, and `+S` reads as a label on the marker rather than on the minefield.
+ * @see hostilePeak
+ */
+function hostilePeakLift(feature: PaintFeature, width: number): number {
+    const fenced = feature.properties.name === TacticalGraphicName.MinedAreaFenced;
+    return fenced && isHostile(feature) ? width * HOSTILE_PEAK_HEIGHT : 0;
+}
+
+/**
+ * A text amplifier centred on `at`, in the label colour.
+ *
+ * The affiliation rule is `labelColorOf`'s and not this file's: text follows the host's
+ * `labelUsesHostilityColor` setting, and defaults to black beside red line work.
+ */
+function areaText(
+    feature: PaintFeature,
+    at: ProjectedPosition,
+    text: string,
+    scale: number,
+    baseline: 'top' | 'middle' | 'bottom',
+    align: 'left' | 'center' | 'right' = 'center',
+): Paint {
+    return {
+        geometry: {type: 'Point', coordinates: at},
+        text: {
+            text,
+            font: fontStyle,
+            fill: labelColorOf(feature),
+            halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+            align,
+            baseline,
+            scale,
+        },
+    };
+}
 
 /** The mine type a feature carries, defaulting to the unspecified disc. */
 function mineTypeOf(feature: PaintFeature): TacticalGraphicMineType {
@@ -179,24 +254,26 @@ export function mineFillPaint(): MinePaint {
         const scale = fitSymbolScale(feature, center, ROW_HALF_WIDTH, ROW_HALF_HEIGHT, []) * INSET;
         const paints = mineRowMarks(center, scale, mineTypeOf(feature), color);
 
-        const text = (feature.properties.label ?? '').trim();
-        if (!text) return paints;
+        const textScale = scaleOf(feature, context);
+        const gap = AREA_TEXT_GAP_PX * textScale * context.resolution;
+        const bounds = feature.bounds;
+        const midX = bounds ? (bounds.minX + bounds.maxX) / 2 : center[0];
 
-        paints.push({
-            geometry: {
-                type: 'Point',
-                coordinates: [center[0], center[1] + ROW_HALF_HEIGHT * scale * TEXT_OFFSET],
-            },
-            text: {
-                text,
-                font: fontStyle,
-                fill: labelColorOf(feature),
-                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
-                align: 'center',
-                baseline: 'middle',
-                scale: scaleOf(feature, context),
-            },
-        });
+        // **Field H above, field W below** — the two amplifiers both plates name, and the
+        // only two. There is no designation: `T` appears on neither Template, and the box
+        // in the middle is Sector 1, which is the mine type drawn rather than typed.
+        // (User's call, 2026-08-27.)
+        const above = (feature.properties.additionalInfo ?? '').trim();
+        if (above) {
+            const lift = bounds ? hostilePeakLift(feature, bounds.maxX - bounds.minX) : 0;
+            const top = bounds ? bounds.maxY + lift + gap : center[1] + ROW_HALF_HEIGHT * scale * TEXT_OFFSET;
+            paints.push(areaText(feature, [midX, top], above, textScale, 'bottom'));
+        }
+
+        const below = (feature.properties.startDate ?? '').trim();
+        if (below && bounds) {
+            paints.push(areaText(feature, [midX, bounds.minY - gap], below, textScale, 'top'));
+        }
         return paints;
     };
 }
@@ -207,16 +284,94 @@ const FENCE_PITCH_PX = 26;
 /** How many `M` markers ring a fenced area. */
 const FENCE_LETTERS = 4;
 
+/** Clear space between a boundary and an `ENY` set outside it, in screen pixels. */
+const ENY_GAP_PX = 8;
+
 /**
- * APP-06 270707 minefield, dynamic depiction — a plain area outline. Everything that makes
- * it a minefield is the mine row inside it. @see mineFillPaint
+ * The midpoints of a ring's westmost and eastmost segments.
+ *
+ * The Template puts an `N` box against each flank, and *"flank"* on an irregular boundary
+ * is the segment that reaches furthest that way — not the bounding box's corner, which for
+ * a shape with a point on it can sit well off the line. Compared by midpoint rather than by
+ * vertex so a long sloping side wins over a short vertical one that merely touches the
+ * extreme.
+ */
+function flankMidpoints(ring: ProjectedPosition[]): {west: ProjectedPosition; east: ProjectedPosition} | undefined {
+    let west: ProjectedPosition | undefined;
+    let east: ProjectedPosition | undefined;
+    for (let i = 0; i + 1 < ring.length; i++) {
+        const mid: ProjectedPosition = [(ring[i][0] + ring[i + 1][0]) / 2, (ring[i][1] + ring[i + 1][1]) / 2];
+        if (!west || mid[0] < west[0]) west = mid;
+        if (!east || mid[0] > east[0]) east = mid;
+    }
+    return west && east ? {west, east} : undefined;
+}
+
+/**
+ * APP-06 270707 minefield, dynamic depiction — a plain area outline, with an `ENY` against
+ * each flank when the minefield is the enemy's.
+ *
+ * Everything else that makes it a minefield is the mine row inside it. @see mineFillPaint
+ *
+ * The `N` boxes of the Template are the two the Example fills with `ENY`, one at the west
+ * and one at the east, set *outside* the boundary so neither lands on the line work.
  */
 export function minefieldAreaPaint(): MinePaint {
-    return feature => {
+    return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'Polygon') return [];
-        return [{geometry, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}}];
+        const paints: Paint[] = [{geometry, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}}];
+
+        const ring = geometry.coordinates[0];
+        if (!isHostile(feature) || !ring || ring.length < 4) return paints;
+        const flanks = flankMidpoints(ring);
+        if (!flanks) return paints;
+
+        const scale = scaleOf(feature, context);
+        const gap = ENY_GAP_PX * context.resolution;
+        paints.push(areaText(feature, [flanks.west[0] - gap, flanks.west[1]], 'ENY', scale, 'middle', 'right'));
+        paints.push(areaText(feature, [flanks.east[0] + gap, flanks.east[1]], 'ENY', scale, 'middle', 'left'));
+        return paints;
     };
+}
+
+/**
+ * The dashed peak a hostile mined area wears, and the `ENY` at each end of its base.
+ *
+ * **Its base is the graphic's own width.** The Example draws it that way, and it is the
+ * only rule that survives an irregular boundary: the peak is a marker standing on the
+ * area, not a shape with a size of its own. The base line itself is never drawn — the two
+ * sloping sides meet above the area and that is the whole mark.
+ */
+function hostilePeak(
+    feature: PaintFeature,
+    ring: ProjectedPosition[],
+    context: PaintContext,
+    stroke: {color: string; widthPx: number},
+): Paint[] {
+    const xs = ring.map(p => p[0]);
+    const ys = ring.map(p => p[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const top = Math.max(...ys);
+    const halfWidth = (maxX - minX) / 2;
+    if (!(halfWidth > 0)) return [];
+
+    const midX = (minX + maxX) / 2;
+    const apex: ProjectedPosition = [midX, top + halfWidth * 2 * HOSTILE_PEAK_HEIGHT];
+    const left: ProjectedPosition = [minX, top];
+    const right: ProjectedPosition = [maxX, top];
+
+    const scale = scaleOf(feature, context);
+    const letterX = halfWidth * HOSTILE_PEAK_LETTER_SHARE;
+    return [
+        {
+            geometry: {type: 'MultiLineString', coordinates: [[left, apex], [apex, right]]},
+            stroke: {...stroke, dashPx: PLANNED_DASH_PX},
+        },
+        areaText(feature, [midX - letterX, top], 'ENY', scale, 'middle'),
+        areaText(feature, [midX + letterX, top], 'ENY', scale, 'middle'),
+    ];
 }
 
 /**
@@ -238,6 +393,7 @@ export function minedAreaFencedPaint(): MinePaint {
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
         const paints: Paint[] = [{geometry, stroke}];
+        if (isHostile(feature)) paints.push(...hostilePeak(feature, ring, context, stroke));
 
         // Walk the ring at a constant screen pitch, dropping a cross at each step and an
         // `M` at four of them.
@@ -251,6 +407,9 @@ export function minedAreaFencedPaint(): MinePaint {
         if (!(total > pitch * 4)) return paints;
 
         const steps = Math.floor(total / pitch);
+        // A cross arm's reach along each of its own two diagonals. `size` is the arm's
+        // length, so the diagonal offsets are that over root two.
+        const arm = size / Math.SQRT2;
         // The four steps that carry an `M`, named outright rather than by modulo: a
         // `s % every === 0` test fires at both ends of a closed ring and draws five.
         const letterSteps = new Set(
@@ -269,24 +428,32 @@ export function minedAreaFencedPaint(): MinePaint {
                 ring[seg - 1][0] + (ring[seg][0] - ring[seg - 1][0]) * t,
                 ring[seg - 1][1] + (ring[seg][1] - ring[seg - 1][1]) * t,
             ];
+            // The segment's own frame: `u` along it, `v` to its left.
+            const ux = span > 0 ? (ring[seg][0] - ring[seg - 1][0]) / span : 1;
+            const uy = span > 0 ? (ring[seg][1] - ring[seg - 1][1]) / span : 0;
 
             if (letterSteps.has(s)) {
-                paints.push({
-                    geometry: {type: 'Point', coordinates: at},
-                    text: {
-                        text: 'M',
-                        font: fontStyle,
-                        fill: color,
-                        halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
-                        align: 'center',
-                        baseline: 'middle',
-                        scale,
-                    },
-                });
+                // **The label colour, not the line colour.** `M` is a text amplifier, and
+                // text follows the host's `labelUsesHostilityColor` setting rather than
+                // going red with the fence. Taking `color` here made these four the one
+                // place in the library where an amplifier disagreed with the rule.
+                // (User's call, 2026-08-27.) @see labelColorOf
+                paints.push(areaText(feature, at, 'M', scale, 'middle'));
                 continue;
             }
-            crosses.push([[at[0] - size, at[1] - size], [at[0] + size, at[1] + size]]);
-            crosses.push([[at[0] - size, at[1] + size], [at[0] + size, at[1] - size]]);
+            // **Turned with the wire, not with the map.** The crosses were built on the
+            // screen axes, so a fence running north-south wore upright `x`s while the one
+            // running east-west wore the same `x`s — the mark stopped belonging to the
+            // line it sits on, and on a sloping side it read as a stray glyph rather than
+            // as barbed wire. Each arm is now 45 degrees off the segment.
+            // (User's call, 2026-08-27.)
+            const diag = (sign: number): ProjectedPosition[] => {
+                const dx = (ux - sign * uy) * arm;
+                const dy = (uy + sign * ux) * arm;
+                return [[at[0] - dx, at[1] - dy], [at[0] + dx, at[1] + dy]];
+            };
+            crosses.push(diag(1));
+            crosses.push(diag(-1));
         }
 
         if (crosses.length) paints.push({geometry: {type: 'MultiLineString', coordinates: crosses}, stroke});
