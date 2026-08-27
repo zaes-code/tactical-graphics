@@ -136,8 +136,26 @@ const LINE_GENERIC = f(true, false, true, true, false);
  * map, which is the same trap "Label Plate" was.
  */
 const OBSTACLE_LINE = f(true, false, false, false, false);
-/** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
-const MINE_AREA = f(true, false, true, true, false, {mineType: true});
+/**
+ * Minefield, dynamic depiction (APP-06 270707): field H, one date-time group, and the
+ * Table 8-24 mine type.
+ *
+ * The Template carries no `T`, so there is no designation to type — the box in the middle
+ * is Sector 1, which is the mine type drawn rather than typed. `W` is a single
+ * self-destruct DTG and there is no `W1` beside it. (User's call, 2026-08-27.)
+ * @see mineFillPaint
+ */
+const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, additionalInfo: true});
+
+/**
+ * Mined area, fenced (APP-06 270801): field H and the mine type, and nothing else.
+ *
+ * The same Template as its sibling minus the date — this one is a marked minefield rather
+ * than a scatterable one, so there is no self-destruct time to post. (User's call,
+ * 2026-08-27.) A `startDate` arriving on a restored or imported graphic still draws;
+ * what is gone is the control that invites one.
+ */
+const MINE_AREA_FENCED = f(false, false, false, false, false, {mineType: true, additionalInfo: true});
 
 /**
  * Restricted terrain and severely restricted terrain (APP-06 152400, 152500).
@@ -368,8 +386,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
     // Free text plus the mine type the area is filled with.
-    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA,
-    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
+    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
+    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA_FENCED,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
     [TacticalGraphicName.PsyOpsZoneRectangular]: {...PSYOPS_ZONE, width: true},
@@ -378,7 +396,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
     [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
-    [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
+    // Status, and nothing else. 290400 is a *"CM Status Type: Circled"* row: its own
+    // dashes are spent — the note says they show in present status too — so planned is
+    // said with a ring instead, and the operator needs the control that sets it.
+    // (User's call, 2026-08-27.) @see plannedStatusRing
+    [TacticalGraphicName.MineCluster]: f(false, false, false, false, true),
     [TacticalGraphicName.TripWire]: SHAPE_ONLY,
     [TacticalGraphicName.RaftSite]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedPosition]: SHAPE_ONLY,

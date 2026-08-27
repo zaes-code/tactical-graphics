@@ -19,8 +19,17 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {centerSegmentIndex, endFrame, endMarkScale, offsetAbove, uprightRotation} from './decorations';
-import {PLANNED_DASH_PX, amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {
+    DECORATION_MIN_PX,
+    centerSegmentIndex,
+    endFrame,
+    endMarkScale,
+    offsetAbove,
+    pathLength,
+    uprightRotation,
+    walkPath,
+} from './decorations';
+import {PLANNED_DASH_PX, amplifierDash, lineColorOf, plannedStatusRing, scaleOf, labelColorOf} from './paintFunctions';
 
 type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -59,8 +68,72 @@ function amplifier(
 }
 
 /**
- * APP-06 290101 mineline: the drawn line, `N` above each end, and the free-text modifier
- * above its middle.
+ * Diameter of one mineline pearl, in screen pixels, and the share of the line's own
+ * on-screen length one bead may span before it shrinks.
+ *
+ * The pixel figure is a **ceiling**, reached on a line long enough to carry it; the share
+ * is what decides the size on everything shorter, which is the shape-relative rule every
+ * repeating decoration here follows.
+ *
+ * **Its own share, not `decorationScale`'s.** That function allows 5%, which suits an
+ * obstacle's teeth — twenty small marks whose job is texture. A bead is the symbol rather
+ * than texture on it, and 290101's Example draws about a dozen of them at 7% each. At 5%
+ * a mineline in the sample sheet came out as a dotted line, which is a different symbol.
+ * Same reasoning as `endMarkScale`, one family over. @see decorationScale
+ */
+const MINELINE_PEARL_PX = 18;
+const MINELINE_PEARL_SHARE = 0.07;
+/**
+ * Centre-to-centre spacing, as a multiple of a pearl's diameter.
+ *
+ * A little over one, so the discs sit almost touching — a string of beads rather than a
+ * dotted line or a caterpillar. Read off 290101's Example, which is the only statement of
+ * the spacing the standard makes.
+ */
+const MINELINE_PEARL_PITCH = 1.2;
+
+/**
+ * The pearls, as a `MultiPoint` for one filled-circle mark.
+ *
+ * A whole number of them, centred on the route, exactly as the obstacle teeth are fitted:
+ * repeating at a fixed pitch instead would leave a ragged half-gap at one end that moves
+ * as the line is dragged. @see antiTankDitchPaint
+ */
+function minelinePearls(
+    path: ProjectedPosition[],
+    resolution: number,
+): {centers: ProjectedPosition[]; radius: number} | undefined {
+    const availablePx = pathLength(path) / resolution;
+    const scale = Math.max(0, Math.min(1, (availablePx * MINELINE_PEARL_SHARE) / MINELINE_PEARL_PX));
+    if (MINELINE_PEARL_PX * scale < DECORATION_MIN_PX) return undefined;
+    const diameter = MINELINE_PEARL_PX * scale * resolution;
+    if (diameter <= 0) return undefined;
+
+    const pitch = diameter * MINELINE_PEARL_PITCH;
+    const total = pathLength(path);
+    const count = Math.floor(total / pitch);
+    if (count < 1) return undefined;
+
+    // Half a pitch in from each end of the centred run, so the first and last pearl sit
+    // *on* the line rather than hanging off it.
+    const lead = (total - (count - 1) * pitch) / 2;
+    const centers: ProjectedPosition[] = [];
+    for (let i = 0; i < count; i++) {
+        const at = walkPath(path, lead + i * pitch);
+        if (at) centers.push(at.point);
+    }
+    return centers.length ? {centers, radius: (MINELINE_PEARL_PX * scale) / 2} : undefined;
+}
+
+/**
+ * APP-06 290101 mineline: the drawn line strung with filled discs, `N` above each end, and
+ * the free-text modifier above its middle.
+ *
+ * **The discs are the symbol.** The row's Example draws a line of beads — the same
+ * "repeating mark along a route" family as the obstacle teeth, which is why the pattern is
+ * fitted the same way and capped by the same `decorationScale`: a bead sized against the
+ * zoom alone swallows a short line whole. The line itself still runs underneath and past
+ * the outermost pearls, which is how the Example draws it.
  *
  * The end labels hang off the **outside** of the line — aligned left at a start that runs
  * east, right at one that runs west — so the text grows away from the graphic rather than
@@ -78,10 +151,19 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         const end = path[path.length - 1];
         const beforeEnd = path[path.length - 2];
 
+        const color = lineColorOf(feature);
         const paints: Paint[] = [{
             geometry: {type: 'LineString', coordinates: path},
-            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
+            stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
         }];
+
+        const pearls = minelinePearls(path, context.resolution);
+        if (pearls) {
+            paints.push({
+                geometry: {type: 'MultiPoint', coordinates: pearls.centers},
+                circle: {radiusPx: pearls.radius, fill: {color}},
+            });
+        }
 
         paints.push(amplifier(feature, 
             offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
@@ -116,15 +198,22 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
  * lines in this symbol shall be displayed in present and anticipated status"* — so the
  * break is part of the symbol and not a reading of `status`, exactly as it is on the zone
  * of fire. @see dashedOutlinePaint
+ *
+ * Which is precisely why the row is also *"CM Status Type: Circled"*: with the symbol's
+ * own dashes spent, a planned mine cluster has nothing left to say it with, so it says it
+ * by wearing a dash-dot ring. @see plannedStatusRing
  */
 export function mineClusterPaint(): ProtectionPaint {
-    return feature => {
+    return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
-        return [{
+        const paints: Paint[] = [{
             geometry,
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
         }];
+        const ring = plannedStatusRing(paints, feature, context);
+        if (ring) paints.push(ring);
+        return paints;
     };
 }
 
@@ -138,8 +227,6 @@ export function mineClusterPaint(): ProtectionPaint {
 const TRIP_WIRE_STEM: readonly ProjectedPosition[] = [[0, 0.99], [0, -0.74]];
 const TRIP_WIRE_TAIL: readonly ProjectedPosition[] = [[0, -0.74], [0.24, -1.04], [0.61, -1.22]];
 const TRIP_WIRE_BAR: readonly ProjectedPosition[] = [[-0.44, 0.65], [0.51, 0.65]];
-/** How far the wire runs *past* point 1, away from point 2. */
-const TRIP_WIRE_TAIL_OVERHANG = 0.9;
 
 /** Size of the trip wire's stake, in screen pixels before `endMarkScale`. */
 const TRIP_WIRE_MARK_PX = 44;
@@ -170,13 +257,25 @@ export function tripWirePaint(): ProtectionPaint {
             frame.origin[1] + (frame.u[1] * along + frame.v[1] * left) * size,
         ];
 
+        // **The wire runs as far past point 1 as point 2 is beyond it.** The two anchor
+        // points give one arm's length and the template draws the other arm to match, so
+        // the stake stands at the middle of the wire rather than a third of the way along
+        // it. A screen-sized overhang looked right only at the zoom it was tuned at, and
+        // the overhang is the one part of this symbol that is *not* fixed: 290500 makes
+        // the wire's length the thing the two points are for. (User's call, 2026-08-27.)
+        const span = Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]);
+        const far: ProjectedPosition = [
+            frame.origin[0] - frame.u[0] * span,
+            frame.origin[1] - frame.u[1] * span,
+        ];
+
         paints.push({
             geometry: {
                 type: 'MultiLineString',
                 coordinates: [
                     [...TRIP_WIRE_STEM, ...TRIP_WIRE_TAIL.slice(1)].map(at),
                     TRIP_WIRE_BAR.map(at),
-                    [at([-TRIP_WIRE_TAIL_OVERHANG, 0]), frame.origin],
+                    [far, frame.origin],
                 ],
             },
             stroke,
@@ -185,9 +284,8 @@ export function tripWirePaint(): ProtectionPaint {
     };
 }
 
-/** Half the angle between a raft site's two barbs, and how far each runs past the tip. */
+/** Half the angle between a raft site's two barbs. */
 const RAFT_HALF_ANGLE_DEG = 38;
-const RAFT_OVERSHOOT = 0.25;
 /** Length of a raft site barb, in screen pixels before `endMarkScale`. */
 const RAFT_BARB_PX = 30;
 
@@ -195,9 +293,12 @@ const RAFT_BARB_PX = 30;
  * APP-06 290800 raft site: a shaft with a crossed arrowhead at each end, tips on the
  * anchor points.
  *
- * The barbs run **past** the tip rather than stopping at it, which is what makes the mark
- * a cross rather than a chevron and is how the template draws it. `RAFT_HALF_ANGLE_DEG`
- * keeps the pair inside the acute angle the draw rule calls for.
+ * **The barbs stop at the tip.** They used to run a quarter of their length past it, which
+ * put a cross on each end of the shaft — and the template draws a plain Y: two strokes
+ * leaving the tip outward, and nothing on the shaft side of it. The overshoot was the only
+ * thing making this read as an arrowhead rather than as the open fork it is. (User's call,
+ * 2026-08-27.) `RAFT_HALF_ANGLE_DEG` keeps the pair inside the acute angle the draw rule
+ * calls for.
  */
 export function raftSitePaint(): ProtectionPaint {
     return (feature, context) => {
@@ -217,15 +318,14 @@ export function raftSitePaint(): ProtectionPaint {
         for (const atStart of [true, false]) {
             const frame = endFrame(path, atStart);
             if (!frame) continue;
-            // A barb leaves the tip at `-along` (outward, away from the shaft) and comes
-            // back through it to `+along`; the two sides differ only in which way `left`
-            // points, so one loop states both.
+            // A barb leaves the tip outward at `-along` and stops there; the two sides
+            // differ only in which way `left` points, so one loop states both.
             for (const side of [-1, 1]) {
                 const point = (along: number): ProjectedPosition => [
                     frame.origin[0] + (frame.u[0] * along + frame.v[0] * along * spread * side) * size,
                     frame.origin[1] + (frame.u[1] * along + frame.v[1] * along * spread * side) * size,
                 ];
-                barbs.push([point(-1), point(RAFT_OVERSHOOT)]);
+                barbs.push([frame.origin, point(-1)]);
             }
         }
 
