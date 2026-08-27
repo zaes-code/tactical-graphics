@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**253 graphics** are implemented and verified today, covering **266 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**255 graphics** are implemented and verified today, covering **268 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -964,6 +964,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Airspace Coordination Area, Irregular | Airspace Coordinating Measures |
 | Airspace Coordination Area, Rectangular | Airspace Coordinating Measures |
 | Base Defense Zone | Airspace Coordinating Measures |
+| Fighter Engagement Zone | Airspace Coordinating Measures |
 | High-Altitude Missile Engagement Zone | Airspace Coordinating Measures |
 | High-Density Airspace Control Zone | Airspace Coordinating Measures |
 | Identification, Friend-Or-Foe Switch Off-Line | Airspace Coordinating Measures |
@@ -1057,6 +1058,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Relief In Place | Enabling Operations Planning |
 | Screen | Enabling Operations Planning |
 | Fighting Position | Field Fortification Symbols |
+| Fortified Position | Field Fortification Symbols |
 | Fortified/Trench Line | Field Fortification Symbols |
 | Fields Of Fire/Sector Of Fire | Fire Support Coordination Control Measures |
 | Free-Fire Area, Circular | Fire Support Coordination Control Measures |
@@ -1233,8 +1235,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Category |
 |---|---|
-| Fighter Engagement Zone | Airspace Coordinating Measures |
-| Fortified Position | Field Fortification Symbols |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
 | Mined Area, Fenced | Mobility and Countermobility Control Measures |
