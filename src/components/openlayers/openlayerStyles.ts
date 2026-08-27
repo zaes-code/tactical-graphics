@@ -2142,6 +2142,12 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:
         case TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone:
         case TacticalGraphicName.WeaponEngagementZone:
+        // **171400 was missing from this list until 2026-08-26**, so the fighter
+        // engagement zone alone among the eleven fell through to `default:` and drew the
+        // ordinary area block — `FEZ ALPHA` over a date range, with the altitudes its own
+        // dialog collects rendered nowhere. MapLibre had it right the whole time, because
+        // it reads `AIR_COORDINATING_ZONES` from the registry. @see airZoneParity.test.ts
+        case TacticalGraphicName.FighterEngagementZone:
         case TacticalGraphicName.JointEngagementZone:
         case TacticalGraphicName.MissileEngagementZone:
         case TacticalGraphicName.LowAltitudeMissileEngagementZone:
@@ -2224,6 +2230,14 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
+        // **Six more that were missing from this list until 2026-08-26**, found by the
+        // routing comparison the fighter engagement zone prompted. @see areaLabelRouting.test.ts
+        case TacticalGraphicName.TargetBuildUpAreaRectangular:
+        case TacticalGraphicName.TargetBuildUpAreaCircular:
+        case TacticalGraphicName.TargetValueAreaRectangular:
+        case TacticalGraphicName.TargetValueAreaCircular:
+        case TacticalGraphicName.ZoneOfResponsibilityRectangular:
+        case TacticalGraphicName.ZoneOfResponsibilityCircular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
         case TacticalGraphicName.CallForFireZoneRectangular:
@@ -2240,6 +2254,10 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return asStyleFunction(zoneLabelPaint(name, false), name);
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneIrregular:
+        // The irregular half of the same six.
+        case TacticalGraphicName.TargetBuildUpAreaIrregular:
+        case TacticalGraphicName.TargetValueAreaIrregular:
+        case TacticalGraphicName.ZoneOfResponsibilityIrregular:
         case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.DeadSpaceAreaIrregular:
