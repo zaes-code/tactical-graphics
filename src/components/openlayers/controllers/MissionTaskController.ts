@@ -311,6 +311,18 @@ export class PointDropController extends MissionTaskController {
          * at — so the drop can convert it where it lands. @see drop
          */
         private readonly screenSize?: {px: number; resolution: number},
+        /**
+         * …and `rotatable` opts back into the inherited rotate, on the same reasoning.
+         *
+         * It defaults off because every dropped graphic up to now had one doctrinal
+         * orientation, and the refusal was written straight into `handleRotate` as a
+         * result. The demonstration is the first that points somewhere the operator
+         * chooses, and the refusal was invisible to it: `allowedGestures` said the
+         * rotate was allowed, this class said nothing happens, and only OpenLayers was
+         * wrong — MapLibre reads the table. Both now read the same table.
+         * @see allowedGestures, RESIZE_ONLY_SYMBOLS
+         */
+        private readonly rotatable: boolean = false,
     ) {
         super(graphic);
         this.fixedSize = fixedSize;
@@ -343,7 +355,8 @@ export class PointDropController extends MissionTaskController {
         if (this.resizable) super.handleResize(deltaSize);
     }
 
-    /** Not rotatable: these symbols have a single doctrinal orientation. */
-    handleRotate(): void {
+    /** Off unless the graphic opted in: most of these have one doctrinal orientation. */
+    handleRotate(deltaAngle: number): void {
+        if (this.rotatable) super.handleRotate(deltaAngle);
     }
 }

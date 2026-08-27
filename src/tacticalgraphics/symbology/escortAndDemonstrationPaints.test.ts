@@ -9,7 +9,8 @@
 import type {Feature, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import * as turf from '../core/turf';
-import {renderTacticalGraphic} from '../core/render';
+import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
+import {allowedGestures, dropSizePx} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
@@ -29,6 +30,9 @@ const project = ([lon, lat]: Position): ProjectedPosition => [
 ];
 
 const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+
+/** Straight-line distance between two *projected* points. */
+const len = (a: ProjectedPosition, b: ProjectedPosition) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 
 const built = (name: TacticalGraphicName, coordinates: Position[]) =>
     renderTacticalGraphic({
@@ -89,31 +93,114 @@ describe('APP-06 343300 — demonstration', () => {
     // "Point 1 defines the tip of the arrowhead. Point 2 defines the end of the straight
     //  line portion of the first arrow. […] Points 2 and 3 shall be connected by a smooth,
     //  curved line."
-    const POINTS: Position[] = [[-77.0, 38.7], [-76.4, 38.7], [-76.4, 39.1], [-77.0, 39.1]];
+    //
+    // All four are derived from the one the user clicks: the shape has a single set of
+    // proportions and letting an operator vary them only ever produced worse drawings.
+    // @see Demonstration
+    const ANCHOR: Position = [-77.0, 38.7];
+    const SIZE = 100_000;
+
+    const drop = (rotation = 0) =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Demonstration, radius: SIZE, rotation}},
+            geometry: {type: 'Point', coordinates: ANCHOR},
+        } as Feature);
+
+    const graphicOf = (rotation = 0) => drop(rotation).graphic.geometry as MultiLineString;
 
     it('draws two straight legs joined by a turn', () => {
-        const geometry = built(TacticalGraphicName.Demonstration, POINTS) as MultiLineString;
-        expect(geometry.coordinates).toHaveLength(3);
-        expect(geometry.coordinates[0]).toHaveLength(2);
-        expect(geometry.coordinates[2]).toHaveLength(2);
-        expect(geometry.coordinates[1].length).toBeGreaterThan(3);
+        const parts = graphicOf().coordinates;
+        expect(parts).toHaveLength(3);
+        expect(parts[0]).toHaveLength(2);
+        expect(parts[2]).toHaveLength(2);
+        expect(parts[1].length).toBeGreaterThan(3);
     });
 
-    it('bulges the turn away from the arrowheads, whichever way it was drawn', () => {
-        // Drawn the other way round, the turn must still bulge away — a hard-coded side
-        // turns the U into an S for half of all drawings, and an S is a different symbol.
-        for (const points of [POINTS, [...POINTS].reverse()]) {
-            const turn = (built(TacticalGraphicName.Demonstration, points) as MultiLineString).coordinates[1];
-            const apex = turn[Math.floor(turn.length / 2)];
-            const tipsMidLon = (points[0][0] + points[3][0]) / 2;
-            const bendsMidLon = (points[1][0] + points[2][0]) / 2;
-            // The apex lies beyond the bends, on the side away from the tips.
-            expect(Math.sign(apex[0] - bendsMidLon)).toBe(Math.sign(bendsMidLon - tipsMidLon));
+    it('takes point 1 from the click and derives the other three', () => {
+        const parts = graphicOf().coordinates;
+        // Point 1 is the tip, and the tip is where the user clicked — this symbol grows
+        // away from the anchor rather than around it, which is 343300's own numbering.
+        expect(meters(parts[0][0], ANCHOR)).toBeLessThan(1);
+        // Equal legs, one `size` each.
+        expect(meters(parts[0][0], parts[0][1])).toBeCloseTo(SIZE, -1);
+        expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(SIZE, -1);
+        // …and an opening fixed against them, which is the ratio nobody gets to edit.
+        expect(meters(parts[0][1], parts[2][0]) / SIZE).toBeCloseTo(0.7, 2);
+    });
+
+    it('holds the two legs parallel and opposed at every rotation', () => {
+        for (const rotation of [0, 37, 90, 214, 355]) {
+            const parts = graphicOf(rotation).coordinates;
+            const out = turf.bearing(turf.point(parts[0][0]), turf.point(parts[0][1]));
+            const back = turf.bearing(turf.point(parts[2][0]), turf.point(parts[2][1]));
+            expect(Math.abs(((out - back + 360) % 360) - 180)).toBeLessThan(1);
         }
     });
 
-    it('arrowheads both open ends and labels the first leg', () => {
-        const geometry = built(TacticalGraphicName.Demonstration, POINTS) as MultiLineString;
+    it('bulges the turn away from the arrowheads, at every rotation', () => {
+        // A turn on the wrong side folds back between the legs and the U reads as a
+        // flattened Z. Derived points fix the handedness, so this is a guard on the
+        // construction rather than on a drawing order that no longer exists.
+        for (const rotation of [0, 37, 90, 214, 355]) {
+            const parts = graphicOf(rotation).coordinates;
+            const [tip1, bend1] = parts[0];
+            const bend2 = parts[2][0];
+            const apex = parts[1][Math.floor(parts[1].length / 2)];
+            // Along the leg's own axis: the apex is past the bends, the tips are behind.
+            const axis = turf.bearing(turf.point(tip1), turf.point(bend1));
+            const along = (p: Position) =>
+                meters(tip1, p) * Math.cos(((turf.bearing(turf.point(tip1), turf.point(p)) - axis) * Math.PI) / 180);
+            expect(along(apex)).toBeGreaterThan(Math.max(along(bend1), along(bend2)));
+        }
+    });
+
+    it('puts the edge handle on point 2 and the move handle on the anchor', () => {
+        // `[edge, centre]` — the point-anchored contract. The edge is the far end of the
+        // first leg, which is the one anchor point a resize has any reason to grab.
+        const rendered = drop();
+        const parts = (rendered.graphic.geometry as MultiLineString).coordinates;
+        const handles = (rendered.handles.geometry as {coordinates: Position[]}).coordinates;
+        expect(handles).toHaveLength(2);
+        expect(meters(handles[0], parts[0][1])).toBeLessThan(1);
+        expect(meters(handles[1], ANCHOR)).toBeLessThan(1);
+    });
+
+    it('is dropped, not drawn — one click, and it turns and resizes afterwards', () => {
+        expect(baseGeometryFor(TacticalGraphicName.Demonstration)).toBe('Point');
+        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeGreaterThan(0);
+        // The other three points come from the first, so there is no vertex to modify —
+        // but the operator still aims and scales the whole thing.
+        expect(allowedGestures(TacticalGraphicName.Demonstration)).toEqual({
+            translate: true,
+            rotate: true,
+            resize: true,
+            modify: false,
+        });
+    });
+
+    it('holds DEM inside the leg it is set in, at every zoom', () => {
+        // The text sits in a break in the leg, so a scale that only tracks the zoom put a
+        // 65 px `DEM` across an 80 px leg in the sample sweep. The cap is against the
+        // shape, which is the same rule the repeating decorations follow.
+        const parts = graphicOf().coordinates.map(part => part.map(project));
+        for (const resolution of [80, 400, 2000, 9000]) {
+            for (const label of ['1', 'ALPHA BRAVO CHARLIE']) {
+                const feature: PaintFeature = {
+                    geometry: {type: 'MultiLineString', coordinates: parts},
+                    properties: {name: TacticalGraphicName.Demonstration, label},
+                };
+                const ctx = context(resolution);
+                const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text)!;
+                const legPx = len(parts[0][0], parts[0][1]) / resolution;
+                const widthPx = ctx.measureText(mark.text!.text, mark.text!.font) * mark.text!.scale!;
+                expect(widthPx).toBeLessThanOrEqual(legPx * 0.56);
+            }
+        }
+    });
+
+    it('opens one end and labels the first leg', () => {
+        const geometry = graphicOf();
         const feature: PaintFeature = {
             geometry: {
                 type: 'MultiLineString',
@@ -124,9 +211,9 @@ describe('APP-06 343300 — demonstration', () => {
         const paints = demonstrationPaint('DEM')(feature, context());
         expect(paints.filter(p => p.text).map(p => p.text!.text)).toEqual(['DEM 1']);
 
-        // Four barbs — two per open end — and open, not filled: no paint carries a fill.
+        // Two barbs — one open head, at point 1 — and open, not filled.
         const barbs = paints.find(p =>
-            p.geometry.type === 'MultiLineString' && p.geometry.coordinates.length === 4);
+            p.geometry.type === 'MultiLineString' && p.geometry.coordinates.length === 2);
         expect(barbs).toBeDefined();
         expect(paints.some(p => p.fill)).toBe(false);
     });

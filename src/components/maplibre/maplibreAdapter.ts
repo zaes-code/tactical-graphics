@@ -23,6 +23,7 @@ import {
     ratioLockOf,
     drawnAnchorFrame,
     drawnAnchors,
+    droppedFrameFromDrawnBase,
     usesDrawnAnchors,
     resolveRangeFanBands,
     toGraphicOptions,
@@ -660,6 +661,14 @@ export function buildTacticalGraphic(
     // renderer would have called — it just gains the handle it was missing.
     baseGeometry = withNormalizedBase(name, baseGeometry);
     baseGeometry = withCanonicalAnchors(name, baseGeometry);
+    // And the conversions that went the other way: a graphic drawn as a line when the file
+    // was written and dropped from one click now. Without this the generator refuses the
+    // base and the graphic vanishes from an imported snapshot — silently, since a refused
+    // build is how this engine reports "not portable yet". @see droppedFrameFromDrawnBase
+    const droppedFrame = baseGeometry.type === 'LineString'
+        ? droppedFrameFromDrawnBase(name, baseGeometry.coordinates as Position[])
+        : undefined;
+    if (droppedFrame) baseGeometry = {type: 'Point', coordinates: droppedFrame.center};
 
     // **The resolution these screen sizes are spent at, corrected for where the graphic
     // is.** A pixel constant times the raw resolution is a *projected* length, and every
@@ -713,6 +722,9 @@ export function buildTacticalGraphic(
         // The same argument one family over: for the six drawn from anchor points, the
         // points are the description and these figures follow them. @see anchorFrameProperties
         ...anchorFrameProperties(name, baseGeometry),
+        // Same argument once more, for a base that just became a single anchor: the size
+        // and the aim were in the old points and there is nowhere else to read them from.
+        ...(droppedFrame ? {radius: droppedFrame.size, rotation: droppedFrame.rotation} : {}),
     };
 
     const base: GeoJSONFeature = {

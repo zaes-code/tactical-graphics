@@ -591,11 +591,12 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Exfiltrate]: 3,
     [TacticalGraphicName.Infiltration]: 3,
 
-    // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
+    // Four, each meaning something different. @see SweptArcTask
+    // (The demonstration also has four, but they are derived from one click rather
+    // than drawn, so it is not a multi-vertex base at all. @see Demonstration)
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Evacuate]: 4,
     [TacticalGraphicName.Recover]: 4,
-    [TacticalGraphicName.Demonstration]: 4,
 };
 
 /**

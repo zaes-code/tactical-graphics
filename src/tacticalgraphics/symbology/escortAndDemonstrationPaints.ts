@@ -40,6 +40,16 @@ const DEM_ARROW_PX = 30;
 const DEM_ARROW_HALF_ANGLE_DEG = 30;
 /** Clear space either side of `DEM` inside the break it sits in, in screen pixels. */
 const DEM_LABEL_PADDING_PX = 6;
+/**
+ * Most of a leg that `DEM` and its designation may take up.
+ *
+ * The text sits **in** the leg, so its width is bounded by the leg whether the graphic
+ * was dropped small or zoomed away from — the same shape-relative rule the repeating
+ * decorations follow, and the one the arc mission tasks' rim letters needed. A
+ * zoom-anchored scale alone put a 65 px `DEM` across an 80 px leg in the sample sweep,
+ * which is the letter being the graphic. @see decorationScale
+ */
+const DEM_LABEL_LEG_SHARE = 0.55;
 
 /** Straight-line interpolation between two projected points. */
 const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedPosition =>
@@ -190,7 +200,14 @@ export function demonstrationPaint(label: string): TaskPaint {
         const b = leg[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const text = [label, (feature.properties.label ?? '').trim()].filter(Boolean).join(' ');
-        const scale = scaleOf(feature, context);
+        // Capped against the leg it is set in, never merely against the zoom. A longer
+        // designation is held to the same width, so it opens a wider break rather than
+        // one that swallows the line. @see DEM_LABEL_LEG_SHARE
+        const legPx = pathLength(leg) / context.resolution;
+        const widthAtUnitScale = textWidth(context, text, fontStyle, 1);
+        const scale = widthAtUnitScale > 0
+            ? Math.min(scaleOf(feature, context), (legPx * DEM_LABEL_LEG_SHARE) / widthAtUnitScale)
+            : scaleOf(feature, context);
 
         // Set in the leg, not above it. The break is cut from the *rendered* text, so a
         // longer designation opens a wider hole rather than overrunning the line.
