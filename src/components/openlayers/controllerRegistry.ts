@@ -98,7 +98,8 @@ const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
 const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), undefined, name);
+    // Three anchor points, each meaning something. @see GeometryService.createSCurve
+    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3, 0);
 
 const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 2, name);
@@ -551,7 +552,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
-    [TacticalGraphicName.Infiltration]:       movement(),
+    // Three anchor points, each meaning something — but still a *movement* holder, which
+    // is what dispatches its style. @see GeometryService.createSCurve
+    [TacticalGraphicName.Infiltration]:       movement(3),
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
     // ── Ambush (point-based arc graphic) ───────────────────────────────────
