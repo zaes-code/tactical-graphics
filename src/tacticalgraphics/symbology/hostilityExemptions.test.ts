@@ -47,6 +47,26 @@ describe('supportsHostility', () => {
         expect(missionTasks.filter(supportsHostility)).toEqual([]);
     });
 
+    it('is false for every CBRN contaminated area, subtypes included', () => {
+        // A hazard describes ground, not a force. All seven: the four in Table 8-19 and
+        // the three toxic-industrial-material subtypes.
+        for (const name of [
+            TacticalGraphicName.BiologicalContaminatedArea,
+            TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+            TacticalGraphicName.ChemicalContaminatedArea,
+            TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+            TacticalGraphicName.NuclearContaminatedArea,
+            TacticalGraphicName.RadiologicalContaminatedArea,
+            TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+        ]) {
+            expect(supportsHostility(name)).toBe(false);
+            // And the rendering, not just the field list: a bag that arrives carrying an
+            // identity still draws unaffiliated.
+            expect(lineColorOf(hostileFeature(name))).toBe(UNAFFILIATED);
+            expect(hostilityOf(hostileFeature(name))).toBe(TacticalGraphicHostility.unknown);
+        }
+    });
+
     it('is false for the line of contact and the four mission-task twins', () => {
         for (const name of [
             TacticalGraphicName.LineOfContact,

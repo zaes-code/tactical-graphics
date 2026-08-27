@@ -9,7 +9,7 @@ import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
 // The wire and anti-tank tables moved with their paint functions — they describe
 // what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService, getPaintFunction} from '@zaes/tactical-graphics';
 import {
     getLabel,
     TacticalGraphicConfidence,
@@ -178,13 +178,13 @@ import {
     encirclementPaint,
     CARDINAL_LABEL_AREAS,
     CBRN_AREAS,
+    CBRN_TOXIC_AREAS,
     cardinalBoundaryPaint,
     cardinalLabelPaint,
     contourLineBoundaryPaint,
     contourLineLabelPaint,
     nestedZonePaint,
     PSYOPS_ZONES,
-    psyOpsMarkPaint,
     psyOpsZonePaint,
     mineFillPaint,
     minedAreaFencedPaint,
@@ -2094,7 +2094,42 @@ export function getDateLabel(graphicLabels: GraphicLabels): string {
     return '';
 }
 
+/**
+ * The area families whose label layout lives **only** in the shared paint layer.
+ *
+ * `getAreaLabelStylesFromLabels` below is this engine's own switch, and it is still the
+ * route for most areas — the port is not finished. But a layout written for the paint
+ * registry and not also written here renders on MapLibre and not on OpenLayers, which is
+ * exactly the asymmetry the shared layer exists to prevent: measured on a hostile joint
+ * tactical action area, MapLibre drew `JTAA - 02` with `ENY` on both flanks and this
+ * engine drew `JTAA 02` with neither.
+ *
+ * So these names are read from the registry instead. The list is the porting front, and it
+ * shrinks to nothing when the switch does. @see areaLabelPainterFor
+ */
+const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
+    // The three PsyOps zones were the first graphic this list was written for and the
+    // first one it missed: the case here passed `psyOpsMarkPaint(() => [])`, an empty
+    // base, so the speaker and its amplifiers drew and the date-time group outside the
+    // upper-left corner — which the registry's base draws — never appeared on this engine.
+    TacticalGraphicName.PsyOpsZoneIrregular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+    TacticalGraphicName.PsyOpsZoneCircular,
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
+    TacticalGraphicName.AreaGeneric,
+    TacticalGraphicName.HumanTerrain,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    // The Sector 1 / Sector 2 / field H stack. @see sectorModifierPaints
+    TacticalGraphicName.LimitedAccessArea,
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+];
+
 export function getAreaLabelStylesFn(name: TacticalGraphicName): StyleFunction {
+    const painted = PAINT_LAYER_AREA_LABELS.includes(name) ? getPaintFunction(name)?.label : undefined;
+    if (painted) return asStyleFunction(painted, name);
     return (f, resolution) => getAreaLabelStylesFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
 
@@ -2107,6 +2142,12 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:
         case TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone:
         case TacticalGraphicName.WeaponEngagementZone:
+        // **171400 was missing from this list until 2026-08-26**, so the fighter
+        // engagement zone alone among the eleven fell through to `default:` and drew the
+        // ordinary area block — `FEZ ALPHA` over a date range, with the altitudes its own
+        // dialog collects rendered nowhere. MapLibre had it right the whole time, because
+        // it reads `AIR_COORDINATING_ZONES` from the registry. @see airZoneParity.test.ts
+        case TacticalGraphicName.FighterEngagementZone:
         case TacticalGraphicName.JointEngagementZone:
         case TacticalGraphicName.MissileEngagementZone:
         case TacticalGraphicName.LowAltitudeMissileEngagementZone:
@@ -2126,10 +2167,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.MinedAreaFenced:
             return asStyleFunction(mineFillPaint(), name);
         // The loudspeaker rides the label feature; the outline belongs to the polygon.
-        case TacticalGraphicName.PsyOpsZoneIrregular:
-        case TacticalGraphicName.PsyOpsZoneRectangular:
-        case TacticalGraphicName.PsyOpsZoneCircular:
-            return asStyleFunction(psyOpsMarkPaint(() => []), name);
         // The dose goes in the break and nowhere else, so there is no centre block under
         // it — the base painter draws nothing rather than repeating the text.
         case TacticalGraphicName.RadiationDoseRateContourLine:
@@ -2151,6 +2188,19 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
                 cbrnMarkPaint(
                     CBRN_AREAS.find(([cbrn]) => cbrn === name)![1],
                     areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
+        // The three toxic-industrial-material subtypes: the same triangle with a T in the
+        // bottom of it. @see CBRN_TOXIC_AREAS
+        case TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial:
+            return asStyleFunction(
+                cbrnMarkPaint(
+                    CBRN_TOXIC_AREAS.find(([cbrn]) => cbrn === name)![1],
+                    areaDefaultLabelPaint(name),
+                    {toxic: true},
                 ),
                 name,
             );
@@ -2180,6 +2230,14 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
+        // **Six more that were missing from this list until 2026-08-26**, found by the
+        // routing comparison the fighter engagement zone prompted. @see areaLabelRouting.test.ts
+        case TacticalGraphicName.TargetBuildUpAreaRectangular:
+        case TacticalGraphicName.TargetBuildUpAreaCircular:
+        case TacticalGraphicName.TargetValueAreaRectangular:
+        case TacticalGraphicName.TargetValueAreaCircular:
+        case TacticalGraphicName.ZoneOfResponsibilityRectangular:
+        case TacticalGraphicName.ZoneOfResponsibilityCircular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
         case TacticalGraphicName.CallForFireZoneRectangular:
@@ -2196,6 +2254,10 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return asStyleFunction(zoneLabelPaint(name, false), name);
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneIrregular:
+        // The irregular half of the same six.
+        case TacticalGraphicName.TargetBuildUpAreaIrregular:
+        case TacticalGraphicName.TargetValueAreaIrregular:
+        case TacticalGraphicName.ZoneOfResponsibilityIrregular:
         case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.DeadSpaceAreaIrregular:
@@ -2214,7 +2276,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaCircular:
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
-        case TacticalGraphicName.LimitedAccessArea:
             return asStyleFunction(areaLabelStackPaint(name), name);
         // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
         // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been
@@ -2960,8 +3021,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.ZoneOfFire) {
         return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
     }
-    // The yellow hatch; the triangle and its letter ride the label feature below.
-    if (CBRN_AREAS.some(([cbrn]) => cbrn === name)) {
+    // The yellow hatch; the triangle and its letter ride the label feature below. The
+    // toxic-industrial-material subtypes hatch identically — the T is on the label.
+    if (CBRN_AREAS.some(([cbrn]) => cbrn === name) || CBRN_TOXIC_AREAS.some(([cbrn]) => cbrn === name)) {
         return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
     }
     if (name === TacticalGraphicName.MinefieldDynamicDepiction) {

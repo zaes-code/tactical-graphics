@@ -471,6 +471,17 @@ export const RATIO_LOCKED_MISSION_TASKS: ReadonlySet<TacticalGraphicName> = new 
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
+    // **And the last five, 2026-08-26.** The same reasoning had been applied twice and
+    // stopped short both times: these are built from the identical two arcs and carry the
+    // identical rim letter, so leaving them zoom-anchored meant a `LOC` or a `C/S` held
+    // its screen size while the circle around it shrank — at a far zoom the letter is the
+    // graphic. A zoom-anchored scale is *deliberately* insensitive to the shape; this
+    // family needs the opposite.
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
     ...CROSSED_MISSION_TASKS,
 ]);
 
@@ -583,9 +594,52 @@ const MOBILITY_FUNCTION_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.ObstacleBypassImpossible,
 ]);
 
+/**
+ * The CBRN contaminated areas, which describe **ground rather than a force**.
+ *
+ * Table 8-19 draws all seven one way: the hazard yellow, the inverted triangle, the
+ * letter. A contaminated area warns about a place — it belongs to nobody, and asking who
+ * it is affiliated with has no answer the symbol could show.
+ *
+ * The yellow was already fixed for that reason, on the reading that "the outline still
+ * carries the affiliation". That half is gone: a hostile contaminated area drew red line
+ * work around a hazard whose whole point is that it does not care who is standing in it,
+ * and the field offered an identity the plate has no form for. (User's call, 2026-08-26.)
+ */
+const HAZARD_AREAS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ChemicalContaminatedArea,
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.NuclearContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+]);
+
+/**
+ * Restricted terrain and severely restricted terrain, for the same reason as the hazard
+ * areas: they describe **ground rather than a force**.
+ *
+ * APP-06 152400 and 152500 say what a piece of country does to movement -- a gradient, a
+ * marsh, dense woodland -- and the answer is the same whoever is trying to cross it. Their
+ * Templates carry a Sector 1 modifier, a Sector 2 modifier and field H, and nothing else:
+ * no `T`, no `N`, no status form. So the identity had nowhere to go but the outline, where
+ * it turned a statement about the ground into a claim about a side. (User's call,
+ * 2026-08-26.) @see sectorModifierPaints
+ *
+ * **The limited access area is deliberately not here.** Its FM 1-02.2 Template offers a
+ * date-time group, so it is a restriction someone imposes for a while rather than a
+ * standing property of the ground, and the affiliation still reads.
+ */
+const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
-    if (MOBILITY_FUNCTION_SYMBOLS.has(name)) return false;
+    if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
+    if (TERRAIN_DESCRIPTIONS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }
 

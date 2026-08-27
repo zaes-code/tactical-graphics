@@ -88,6 +88,18 @@ const INSET = 0.38;
 const LABEL_GAP = 0.35;
 
 /**
+ * The tallest the speaker is drawn, in screen pixels above its own middle, at label
+ * scale 1.
+ *
+ * Roughly the height of the two-line amplifier block beside it, which is what makes the
+ * two read as one mark. @see the cap in `psyOpsMarkPaint`
+ */
+const GLYPH_MAX_HALF_HEIGHT_PX = 26;
+
+/** The line break between the two amplifier lines, H over T. */
+const BREAK = String.fromCharCode(10);
+
+/**
  * The loudspeaker and the amplifiers, over whatever the area's ordinary label paint drew.
  *
  * Like the CBRN triangle and the airfield's runways, the glyph rides the **label**
@@ -105,7 +117,18 @@ export function psyOpsMarkPaint(base: PsyOpsPaint): PsyOpsPaint {
         if (!center) return paints;
 
         const color = lineColorOf(feature);
-        const scale = fitSymbolScale(feature, center, GLYPH_HALF_WIDTH, HORN_HALF_HEIGHT, SAMPLES) * INSET;
+        /*
+         * **The speaker stops growing where the text does.**
+         *
+         * `fitSymbolScale` answers "how large can this be inside the outline", so on a
+         * large zone the glyph kept growing while the amplifiers beside it hit the label
+         * scale's clamp — the pair stopped reading as one block and the speaker turned
+         * into the graphic. The fit is a ceiling; the label's own scale is the other one,
+         * and the smaller wins. @see labelScale, which is what clamps
+         */
+        const labelling = scaleOf(feature, context);
+        const capped = (GLYPH_MAX_HALF_HEIGHT_PX * labelling * context.resolution) / HORN_HALF_HEIGHT;
+        const scale = Math.min(fitSymbolScale(feature, center, GLYPH_HALF_WIDTH, HORN_HALF_HEIGHT, SAMPLES) * INSET, capped);
         // Left of the interior point by half its own width, so the pair reads as one block.
         const at = (p: ProjectedPosition): ProjectedPosition => [
             center[0] + (p[0] - GLYPH_HALF_WIDTH) * scale,
@@ -118,8 +141,14 @@ export function psyOpsMarkPaint(base: PsyOpsPaint): PsyOpsPaint {
             fill: {color},
         });
 
-        const text = (feature.properties.label ?? '').trim();
-        if (!text) return paints;
+        // **H over T**, which is the Template's arrangement: the free text above the
+        // designation, both to the right of the speaker. Either may be empty; two empty
+        // lines draw nothing at all.
+        const lines = [
+            (feature.properties.additionalInfo ?? '').trim(),
+            (feature.properties.label ?? '').trim(),
+        ].filter(line => line.length > 0);
+        if (!lines.length) return paints;
 
         paints.push({
             geometry: {
@@ -127,13 +156,13 @@ export function psyOpsMarkPaint(base: PsyOpsPaint): PsyOpsPaint {
                 coordinates: [center[0] + GLYPH_HALF_WIDTH * scale * LABEL_GAP, center[1]],
             },
             text: {
-                text,
+                text: lines.join(BREAK),
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'left',
                 baseline: 'middle',
-                scale: scaleOf(feature, context),
+                scale: labelling,
             },
         });
         return paints;
