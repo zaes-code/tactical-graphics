@@ -215,19 +215,19 @@ describe('the three areas that carry a sector modifier', () => {
         expect(Math.min(...ys)).toBeGreaterThan(textY(paints, 'BOGGY')!);
     });
 
-    it('carries the date-time group only where a plate shows one', () => {
-        // FM 1-02.2's limited access area sets W - W1 where APP-06 sets field H.
-        const laa = labelPaints(TacticalGraphicName.LimitedAccessArea, {
-            startDate: '021200ZJUN26', endDate: '021800ZJUN26',
-        });
-        expect(texts(laa).join(' ')).toContain('021200ZJUN26 - 021800ZJUN26');
-
-        // The restricted-terrain Template has no box for one, so nothing draws it even
-        // if a bag carries one from an import.
-        const terrain = labelPaints(TacticalGraphicName.RestrictedTerrain, {
-            startDate: '021200ZJUN26', endDate: '021800ZJUN26',
-        });
-        expect(texts(terrain).join(' ')).not.toContain('021200ZJUN26');
+    it('draws no date-time group on any of the three', () => {
+        // None of them offers the pair, so a `startDate` can only arrive on an imported
+        // bag — and painting a field nobody offered is how one ends up on the map. FM
+        // 1-02.2 does set W - W1 under the limited access area's Sector 1 box; the
+        // graphic follows APP-06, which sets field H in the same box.
+        for (const name of [
+            TacticalGraphicName.LimitedAccessArea,
+            TacticalGraphicName.RestrictedTerrain,
+            TacticalGraphicName.SeverelyRestrictedTerrain,
+        ]) {
+            const paints = labelPaints(name, {startDate: '021200ZJUN26', endDate: '021800ZJUN26'});
+            expect(texts(paints).join(' ')).not.toContain('021200ZJUN26');
+        }
     });
 
     it('offers the Sector 2 word only to the restricted-terrain pair', () => {
@@ -241,6 +241,31 @@ describe('the three areas that carry a sector modifier', () => {
         expect(labelPaints(TacticalGraphicName.RestrictedTerrain, {})).toEqual([]);
         // The limited access area always has its literal.
         expect(texts(labelPaints(TacticalGraphicName.LimitedAccessArea, {}))).toEqual(['LAA']);
+    });
+
+    it('draws the icon at one size, whatever is written beside it', () => {
+        // It used to be a share of the block's widest line, so `DENSE WOODLAND` drew a
+        // visibly larger icon than `SOFT` and the limited access area a different size
+        // again. How large a Sector 1 modifier is drawn is not a fact about the words
+        // next to it.
+        const iconWidth = (name: TacticalGraphicName, properties: Record<string, unknown>): number => {
+            const paints = labelPaints(name, {mobility: TacticalGraphicMobility.tracked, ...properties});
+            const xs = points(paints.filter(p => p.geometry.type === 'LineString')).map(([x]) => x);
+            return Math.max(...xs) - Math.min(...xs);
+        };
+
+        const short = iconWidth(TacticalGraphicName.RestrictedTerrain, {additionalInfo: 'SOFT'});
+        const long = iconWidth(TacticalGraphicName.RestrictedTerrain, {
+            terrain: TacticalGraphicTerrain.vegetation, additionalInfo: 'DENSE WOODLAND EVERYWHERE',
+        });
+        const other = iconWidth(TacticalGraphicName.LimitedAccessArea, {additionalInfo: 'BOGGY GROUND'});
+        const bare = iconWidth(TacticalGraphicName.SeverelyRestrictedTerrain, {});
+
+        expect(long).toBeCloseTo(short, 0);
+        expect(other).toBeCloseTo(short, 0);
+        // Even with no amplifiers at all: the icon is not optional, so it cannot depend on
+        // there being text to measure against.
+        expect(bare).toBeCloseTo(short, 0);
     });
 
     it('stops the icon growing once the text stops', () => {

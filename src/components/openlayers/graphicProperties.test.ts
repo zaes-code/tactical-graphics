@@ -323,17 +323,21 @@ describe('the sector-modifier fields, and where the Remarks column allows them',
         },
     );
 
-    it('gives the limited access area Sector 1, field H and the FM date-time group', () => {
+    it('gives the limited access area Sector 1 and field H, and nothing more', () => {
         const fields = getGraphicFields(TacticalGraphicName.LimitedAccessArea);
         expect(fields.mobility).toBe(true);
         expect(fields.additionalInfo).toBe(true);
-        // FM 1-02.2 table 5-5 sets W - W1 where APP-06 sets H; the graphic carries both.
-        expect(fields.dtg1).toBe(true);
-        expect(fields.dtg2).toBe(true);
+        // FM 1-02.2 table 5-5 sets W - W1 in the same box APP-06 gives to H. One box,
+        // one field: the graphic follows APP-06 rather than stacking both readings.
+        expect(fields.dtg1).toBe(false);
+        expect(fields.dtg2).toBe(false);
         // No Sector 2 box on this Template, and the `LAA` above the icon is the symbol's
         // own literal rather than a designation the user types.
         expect(fields.terrain).toBe(false);
         expect(fields.identifier1).toBe(false);
+        // Still an identity: a limited access area is a restriction someone imposes, not
+        // a standing property of the ground the way restricted terrain is.
+        expect(fields.hostility).toBe(true);
     });
 
     it('keeps each category of Table 8-24 off the graphics the other one owns', () => {
