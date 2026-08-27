@@ -602,25 +602,32 @@ export class MapLibreInteractions {
         const name = this.drawing;
         if (!name) return;
 
+        // **A one-click graphic is done on the first click**, whether or not it can
+        // afterwards be resized, and **whatever shape its base ends up being**. It is
+        // dropped at `dropSizePx` worth of metres and the operator drags its edge handle
+        // if they want it bigger — which is what OpenLayers' `PointDropController` does,
+        // and the two engines have to agree about it or the same button behaves
+        // differently depending on the renderer.
+        //
+        // This used to key off `allowedGestures(name).resize`, on the reasoning that a
+        // resizable point graphic is *sized by the draw* in two clicks. True of the
+        // point-anchored graphics OpenLayers draws through a Circle interaction, and
+        // false of every one-click drop — so the airfield took two clicks here and one
+        // there the moment it stopped being a fixed-size badge, and the completed
+        // roadblock had been doing it all along.
+        //
+        // And it sat **inside** the `Point` branch until the demonstration arrived: four
+        // derived anchor points make its base a `LineString`, so the drop fell through to
+        // the multi-click path and the draw never ended — one click on OpenLayers, an
+        // unfinishable sketch here. The base's shape and the draw's length are two
+        // different questions. @see dropSizePx, anchorDraw
+        if (dropSizePx(name) !== undefined) {
+            this.finishDraw([position]);
+            return;
+        }
+
         const wants = baseGeometryFor(name);
         if (wants === 'Point') {
-            // **A one-click graphic is done on the first click**, whether or not it can
-            // afterwards be resized. It is dropped at `dropSizePx` worth of metres and the
-            // operator drags its edge handle if they want it bigger — which is what
-            // OpenLayers' `PointDropController` does, and the two engines have to agree
-            // about it or the same button behaves differently depending on the renderer.
-            //
-            // This used to key off `allowedGestures(name).resize`, on the reasoning that a
-            // resizable point graphic is *sized by the draw* in two clicks. True of the
-            // point-anchored graphics OpenLayers draws through a Circle interaction, and
-            // false of every one-click drop — so the airfield took two clicks here and one
-            // there the moment it stopped being a fixed-size badge, and the completed
-            // roadblock had been doing it all along. @see dropSizePx
-            if (dropSizePx(name) !== undefined) {
-                this.finishDraw([position]);
-                return;
-            }
-
             // **A graphic that can be resized is otherwise sized by the draw**, in two
             // clicks: the first plants the anchor, the second sets how far out it reaches
             // and which way it faces. Finishing on the first click instead dropped these at
@@ -890,7 +897,21 @@ export class MapLibreInteractions {
         name: TacticalGraphicName,
         vertices: Position[],
     ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
-        if (!usesDrawnAnchors(name) || vertices.length < 2) return undefined;
+        if (!usesDrawnAnchors(name) || !vertices.length) return undefined;
+
+        // A drop has one vertex and states its own size, so there is no second point to
+        // measure — but the anchors still have to be written, or the base would hold the
+        // single click and the four points the standard names would never exist.
+        const drop = dropSizePx(name);
+        if (vertices.length < 2) {
+            if (drop === undefined) return undefined;
+            const size = screenMeters(drop, resolutionOf(this.map), vertices[0][1]);
+            const anchors = drawnAnchors(name, {center: vertices[0], size, rotation: 0});
+            return anchors && {
+                geometry: {type: 'LineString', coordinates: anchors},
+                properties: {name, radius: size, rotation: 0},
+            };
+        }
 
         const center = toMercator([vertices[0][0], vertices[0][1]]);
         const edge = toMercator([vertices[1][0], vertices[1][1]]);

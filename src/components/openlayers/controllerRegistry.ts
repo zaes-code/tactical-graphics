@@ -15,6 +15,7 @@ import {
     AmbushGraphicBase,
     ContainGraphicBase,
     PursuitGraphicBase,
+    DemonstrationGraphicBase,
     MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
@@ -184,11 +185,27 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
  * symbol at every zoom, and at a low one it lands a few pixels across with its handles
  * piled on top of each other.
  */
-const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) => {
+const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new MissionTaskGraphicBase(n, size, res));
+
+/**
+ * The demonstration: dropped like the rest, but its base carries the four anchor points
+ * APP-06 describes it by rather than the single click that placed them.
+ * @see DemonstrationGraphicBase
+ */
+const demonstrationDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new DemonstrationGraphicBase(n, size, res));
+
+const dropped = (
+    name: TacticalGraphicName,
+    res: number,
+    sizing: number,
+    build: (name: TacticalGraphicName, size: number) => MissionTaskGraphicBase,
+) => {
     const px = dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX;
     const size = sizing * px;
     return new PointDropController(
-        new MissionTaskGraphicBase(name, size, res),
+        build(name, size),
         size,
         allowedGestures(name).resize,
         // The controller re-derives this where the click lands, which is exact; `size`
@@ -396,7 +413,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
     // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
-    [TacticalGraphicName.Demonstration]:                    pointDrop,
+    [TacticalGraphicName.Demonstration]:                    demonstrationDrop,
     [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),

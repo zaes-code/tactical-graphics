@@ -65,12 +65,7 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {
-    droppedFrameFromDrawnBase,
-    normalizeDrawnBase,
-    TacticalGraphicName,
-    usesDrawnAnchors,
-} from '@zaes/tactical-graphics';
+import {normalizeDrawnBase, TacticalGraphicName, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
@@ -239,24 +234,6 @@ export function serializeTacticalGraphics(
 }
 
 /**
- * The anchor, size and aim of a dropped graphic, read out of the line it was drawn as.
- *
- * Only for a graphic whose base geometry **is a Point now** and was not when the file was
- * written. Returns `undefined` for anything still drawn, so the ordinary path is untouched.
- *
- * @see droppedFrameFromDrawnBase — the rule itself, which both renderers read.
- */
-function droppedFromDrawnBase(
-    name: TacticalGraphicName,
-    line: LineString,
-): {center: Coordinate; size: number; rotation: number} | undefined {
-    // Converted to lon/lat first, because the rule is stated once in the map-agnostic
-    // half and this half is the only one holding EPSG:3857 metres.
-    const frame = droppedFrameFromDrawnBase(name, line.getCoordinates().map(c => toLonLat(c)));
-    return frame && {...frame, center: fromLonLat(frame.center) as Coordinate};
-}
-
-/**
  * Gives a freshly built handler its base geometry.
  *
  * Point-anchored graphics go through `updateGeom`, not `setBaseFeature`: their center,
@@ -301,15 +278,7 @@ export function applyRestoredGeometry(
             return;
         }
 
-        // **The other direction of the same shim.** A graphic that used to be drawn and
-        // is dropped now saved the line it was drawn as, and those files exist too. The
-        // demonstration went that way on 2026-08-27: its four points are derived from one
-        // click, so the old base's point 1 is the anchor and points 1 and 2 give back the
-        // size and the aim. @see droppedFromDrawnBase
-        const dropped = geometry instanceof LineString
-            ? droppedFromDrawnBase(handler.graphic.name, geometry)
-            : undefined;
-        const coords = dropped?.center ?? (geometry as Point | undefined)?.getCoordinates();
+        const coords = (geometry as Point | undefined)?.getCoordinates();
         if (!coords || coords.length < 2) throw new Error('point-based graphic has no center coordinate');
         // `bend` before `updateGeom`: the holder reads it back out when it
         // regenerates, so setting it afterwards would leave the restored graphic drawn
@@ -339,8 +308,8 @@ export function applyRestoredGeometry(
         try {
             handler.graphic.updateGeom({
                 center: coords as Coordinate,
-                size: dropped?.size ?? state.radius,
-                rotation: dropped?.rotation ?? state.rotation,
+                size: state.radius,
+                rotation: state.rotation,
             });
         } finally {
             if (guarded) holder.suspendMinimumSize = false;

@@ -718,6 +718,31 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
  * decided in a holder: the table is portable, the controller is not.
  * @see ai/conventions.md — "A symbology fact never lives in a holder"
  */
+/**
+ * The graphics whose base points are **derived from the drop, not placed by the operator**.
+ *
+ * A base geometry with several points normally means several things to drag, and
+ * `allowedGestures` reads it that way — a `LineString` base is a modifiable one. That is
+ * the wrong reading for a symbol the standard describes by four anchor points which are
+ * nonetheless one fixed shape: APP-06 343300's demonstration is two straights of equal
+ * length, parallel, joined by a turn whose diameter is the gap between them, and none of
+ * those ratios is an input. The points still travel — they are what the base carries and
+ * what a snapshot holds — but the whole symbol moves, turns and scales together.
+ *
+ * **A table rather than a controller override.** The first version of the dropped
+ * demonstration refused the vertex drag by not having any vertices, which cost the four
+ * points the standard names; the version before that refused a *rotate* inside
+ * `PointDropController`, where only OpenLayers could see it. @see allowedGestures
+ */
+const DERIVED_ANCHOR_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Demonstration,
+]);
+
+/** @see DERIVED_ANCHOR_GRAPHICS */
+export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
+    return DERIVED_ANCHOR_GRAPHICS.has(name);
+}
+
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
@@ -812,7 +837,8 @@ export function dropSizePx(name: TacticalGraphicName): number | undefined {
 
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     // A point-anchored graphic has one vertex and dragging it is a move, not a
-    // reshape — so `modify` is off and `translate` covers it.
+    // reshape — so `modify` is off and `translate` covers it. So is a graphic whose
+    // several points are all derived from one. @see DERIVED_ANCHOR_GRAPHICS
     const pointAnchored = baseGeometryFor(name) === 'Point';
 
     if (ROTATE_ONLY_SYMBOLS.has(name)) {
@@ -821,6 +847,6 @@ export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     if (RESIZE_ONLY_SYMBOLS.has(name)) {
         return {translate: true, rotate: false, resize: true, modify: false};
     }
-    return {translate: true, rotate: true, resize: true, modify: !pointAnchored};
+    return {translate: true, rotate: true, resize: true, modify: !pointAnchored && !DERIVED_ANCHOR_GRAPHICS.has(name)};
 }
 

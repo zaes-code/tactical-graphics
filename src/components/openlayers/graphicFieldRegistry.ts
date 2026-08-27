@@ -353,7 +353,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Capture]: SHAPE_ONLY,
     // Escort's own amplifier is field A, a host-injected unit symbol, not text.
     [TacticalGraphicName.Escort]: SHAPE_ONLY,
-    [TacticalGraphicName.Demonstration]: NAME_FIELD_ONLY,
+    // `DEM` is the symbol's own literal, printed by the plate, and 343300 names no other
+    // amplifier. A designation typed here had nowhere doctrinal to go. (User's call,
+    // 2026-08-27.) The paint still appends one on a restored or imported graphic.
+    [TacticalGraphicName.Demonstration]: SHAPE_ONLY,
     [TacticalGraphicName.Evacuate]: SHAPE_ONLY,
     [TacticalGraphicName.Recover]: SHAPE_ONLY,
     [TacticalGraphicName.DecisionLine]: DECISION_LINE,

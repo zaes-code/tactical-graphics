@@ -10,7 +10,9 @@ import type {Feature, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import * as turf from '../core/turf';
 import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
-import {allowedGestures, dropSizePx} from '../core/symbology';
+import {allowedGestures, dropSizePx, hasDerivedAnchors} from '../core/symbology';
+import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
+import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
@@ -90,21 +92,25 @@ describe('APP-06 343600 — escort', () => {
 });
 
 describe('APP-06 343300 — demonstration', () => {
-    // "Point 1 defines the tip of the arrowhead. Point 2 defines the end of the straight
-    //  line portion of the first arrow. […] Points 2 and 3 shall be connected by a smooth,
-    //  curved line."
+    // "This symbol requires four anchor points. Point 1 defines the tip of the arrowhead.
+    //  Point 2 defines the end of the straight line portion of the first arrow. Points 3
+    //  and 4 define the length of the second straight line. Points 2 and 3 shall be
+    //  connected by a smooth, curved line."
     //
-    // All four are derived from the one the user clicks: the shape has a single set of
-    // proportions and letting an operator vary them only ever produced worse drawings.
-    // @see Demonstration
+    // The base carries all four, and three of them are derived from the first: the shape
+    // has one set of proportions, and letting an operator vary them only ever produced
+    // worse drawings. @see anchorsForParallelLegs
     const ANCHOR: Position = [-77.0, 38.7];
     const SIZE = 100_000;
 
-    const drop = (rotation = 0) =>
+    const drop = (rotation = 0, coordinates?: Position[]) =>
         renderTacticalGraphic({
             type: 'Feature',
-            properties: {tacticalGraphic: {name: TacticalGraphicName.Demonstration, radius: SIZE, rotation}},
-            geometry: {type: 'Point', coordinates: ANCHOR},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Demonstration}},
+            geometry: {
+                type: 'LineString',
+                coordinates: coordinates ?? anchorsForParallelLegs(ANCHOR, SIZE, rotation),
+            },
         } as Feature);
 
     const graphicOf = (rotation = 0) => drop(rotation).graphic.geometry as MultiLineString;
@@ -117,16 +123,36 @@ describe('APP-06 343300 — demonstration', () => {
         expect(parts[1].length).toBeGreaterThan(3);
     });
 
+    it('carries four anchor points, and the base is where they live', () => {
+        expect(baseGeometryFor(TacticalGraphicName.Demonstration)).toBe('LineString');
+        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(true);
+        expect(anchorsForParallelLegs(ANCHOR, SIZE, 0)).toHaveLength(4);
+    });
+
     it('takes point 1 from the click and derives the other three', () => {
         const parts = graphicOf().coordinates;
         // Point 1 is the tip, and the tip is where the user clicked — this symbol grows
-        // away from the anchor rather than around it, which is 343300's own numbering.
+        // away from the anchor rather than around it, which is the standard's numbering.
         expect(meters(parts[0][0], ANCHOR)).toBeLessThan(1);
         // Equal legs, one `size` each.
         expect(meters(parts[0][0], parts[0][1])).toBeCloseTo(SIZE, -1);
         expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(SIZE, -1);
         // …and an opening fixed against them, which is the ratio nobody gets to edit.
         expect(meters(parts[0][1], parts[2][0]) / SIZE).toBeCloseTo(0.7, 2);
+    });
+
+    it('recomputes points 3 and 4 rather than reading them', () => {
+        // A base written while the four were placed freehand — legs splayed, opening
+        // wrong — resolves to the canonical shape rather than to what it had drifted
+        // into. This is what "auto-calculated" has to mean if it is to mean anything.
+        const drifted: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const parts = (drop(0, drifted).graphic.geometry as MultiLineString).coordinates;
+        const leg1 = meters(parts[0][0], parts[0][1]);
+        expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(leg1, -1);
+        expect(meters(parts[0][1], parts[2][0]) / leg1).toBeCloseTo(0.7, 2);
+        // Points 1 and 2 are the ones that *are* read, so they are untouched.
+        expect(meters(parts[0][0], drifted[0])).toBeLessThan(1);
+        expect(meters(parts[0][1], drifted[1])).toBeLessThan(1);
     });
 
     it('holds the two legs parallel and opposed at every rotation', () => {
@@ -167,16 +193,20 @@ describe('APP-06 343300 — demonstration', () => {
     });
 
     it('is dropped, not drawn — one click, and it turns and resizes afterwards', () => {
-        expect(baseGeometryFor(TacticalGraphicName.Demonstration)).toBe('Point');
         expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeGreaterThan(0);
-        // The other three points come from the first, so there is no vertex to modify —
-        // but the operator still aims and scales the whole thing.
+        // A four-point base normally means four things to drag. Not this one: the other
+        // three follow from the first, so the whole symbol moves, turns and scales
+        // together and there is no vertex to modify. @see hasDerivedAnchors
+        expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(true);
         expect(allowedGestures(TacticalGraphicName.Demonstration)).toEqual({
             translate: true,
             rotate: true,
             resize: true,
             modify: false,
         });
+        // …and the draw still ends on the first click, which is a rule about clicks and
+        // not about how many points the base ends up holding.
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBeUndefined();
     });
 
     it('holds DEM inside the leg it is set in, at every zoom', () => {
