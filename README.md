@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**250 graphics** are implemented and verified today, covering **263 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**253 graphics** are implemented and verified today, covering **266 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -1017,6 +1017,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
+| Limited Access Area | Areas |
 | Minimum Safe Distance Zone | Areas |
 | Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
@@ -1032,6 +1033,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
 | Regimental Support Area | Areas |
+| Restricted Terrain | Areas |
+| Severely Restricted Terrain | Areas |
 | Strong Point | Areas |
 | Submarine Action Area | Areas |
 | Submarine-Generated Action Area | Areas |
@@ -1231,9 +1234,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Fighter Engagement Zone | Airspace Coordinating Measures |
-| Limited Access Area | Areas |
-| Restricted Terrain | Areas |
-| Severely Restricted Terrain | Areas |
 | Fortified Position | Field Fortification Symbols |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
