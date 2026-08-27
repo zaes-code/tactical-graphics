@@ -901,7 +901,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: turnPaint(getLabel(name)), label: missionTaskLabelPaint(name)};
     }
     registry[TacticalGraphicName.ReliefInPlace] = {graphic: reliefInPlacePaint('RIP')};
-    registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
+    // **One paint for both.** 343700 and 343800 are the same construction and the letter is
+    // the only difference, so the label has to be set the same way too: the infiltration
+    // used `fixedLetterPaint` at the label span's midpoint, which put `IN` somewhere the
+    // exfiltration never puts `EX`. @see Exfiltrate, Infiltration
+    for (const name of [TacticalGraphicName.Exfiltrate, TacticalGraphicName.Infiltration]) {
+        registry[name] = {graphic: exfiltratePaint(getLabel(name))};
+    }
 
     // The contour line's dose sits in a single break at the top of the outline.
     registry[TacticalGraphicName.RadiationDoseRateContourLine] = {
