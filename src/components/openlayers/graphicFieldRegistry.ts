@@ -395,7 +395,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
-    [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
+    // Modifier 1 and nothing else. 290101's Template sets a `Modifier 1` box between the
+    // two `N`s and no `T`, and the modifier is what the beads are drawn from rather than
+    // a caption to type. Hostility comes from `supportsHostility`, not from here.
+    // (User's call, 2026-08-27.) @see minelinePaint
+    [TacticalGraphicName.Mineline]: f(false, false, false, false, false, {mineType: true}),
     // Status, and nothing else. 290400 is a *"CM Status Type: Circled"* row: its own
     // dashes are spent — the note says they show in present status too — so planned is
     // said with a ring instead, and the operator needs the control that sets it.
