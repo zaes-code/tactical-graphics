@@ -1,11 +1,10 @@
 import {Position} from 'geojson';
-import * as turf from './turf';
-import {baseGeometryFor} from './render';
 import {TacticalGraphicName} from './type';
 import {
     anchorsForArcAndArrow,
     anchorsForBow,
     anchorsForHook,
+    anchorsForParallelLegs,
     anchorsForRunAndArc,
     anchorsFromFrame,
     arcAndArrowFromAnchors,
@@ -15,6 +14,7 @@ import {
     HOOK_DEFAULT_LINE_RATIO,
     hookFromAnchors,
     hookPose,
+    parallelLegsFromAnchors,
     runAndArcFromAnchors,
 } from './anchors';
 import {clampTurnBend, TURN_DEFAULT_BEND} from '../graphics/Turn';
@@ -105,6 +105,14 @@ export function drawnAnchors(name: TacticalGraphicName, frame: DrawnAnchorFrame)
         case TacticalGraphicName.Contain:
             return anchorsFromFrame(center, size, rotation - CONTAIN_OPENING_QUARTER_TURN);
 
+        // The one whose points are **derived rather than drawn**: `center` here is point
+        // 1, the arrowhead's tip, and the other three follow from the leg and the aim.
+        // It is in this family so that the four points are what the base carries and what
+        // a snapshot holds — not so that they can be dragged apart.
+        // @see anchorsForParallelLegs, DERIVED_ANCHOR_GRAPHICS
+        case TacticalGraphicName.Demonstration:
+            return anchorsForParallelLegs(center, size, rotation);
+
         default:
             return undefined;
     }
@@ -175,6 +183,11 @@ export function drawnAnchorFrame(name: TacticalGraphicName, coords: Position[] |
             };
         }
 
+        case TacticalGraphicName.Demonstration: {
+            const frame = parallelLegsFromAnchors(coords);
+            return frame && {center: frame.tip, size: frame.size, rotation: degrees(frame.angle)};
+        }
+
         case TacticalGraphicName.Contain: {
             const frame = frameFromAnchors(coords);
             return frame && {
@@ -189,34 +202,3 @@ export function drawnAnchorFrame(name: TacticalGraphicName, coords: Position[] |
     }
 }
 
-/**
- * What a **dropped** graphic's frame is, read out of the line it used to be drawn as.
- *
- * The mirror of {@link drawnAnchorFrame}, for the conversions that went the other way: a
- * graphic whose points turned out to be one fixed shape at one set of proportions, and
- * which is placed on a single click now. The demonstration went that way on 2026-08-27.
- *
- * Point 1 is the anchor and points 1 → 2 give the size and the aim, because that is what a
- * fresh drop derives everything else from — so a file written before the conversion comes
- * back as the graphic it was rather than being refused.
- *
- * **Here rather than in each renderer's restore.** Both have one, both have to load the
- * same files, and the rule is a fact about the symbol.
- * @see ai/conventions.md, "A symbology fact never lives in a holder"
- */
-export function droppedFrameFromDrawnBase(
-    name: TacticalGraphicName,
-    coords: Position[] | undefined,
-): {center: Position; size: number; rotation: number} | undefined {
-    if (baseGeometryFor(name) !== 'Point') return undefined;
-    if (!coords || coords.length < 2) return undefined;
-
-    const [anchor, next] = coords;
-    const size = turf.distance(turf.point(anchor), turf.point(next), {units: 'meters'});
-    if (!(size > 0)) return undefined;
-
-    // Geodesic bearing → the planar rotation the generators take: 0 is due east and the
-    // angle grows counter-clockwise. @see GeometryService.translateCoordinates
-    const bearing = turf.bearing(turf.point(anchor), turf.point(next));
-    return {center: anchor, size, rotation: ((90 - bearing) % 360 + 360) % 360};
-}

@@ -527,16 +527,17 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
     });
 
     /**
-     * And the conversion that went the other way. The demonstration was drawn as four
-     * points until 2026-08-27 and is dropped from one click now, so an imported snapshot
-     * still holds the old base — and this engine reports a base it cannot use by returning
-     * `undefined`, which reads as "not ported yet" rather than as a broken file.
+     * The demonstration is in that family too, but for the opposite reason: its four
+     * points are **derived from the first**, not placed. What has to hold here is that
+     * they survive the trip as four — the base carries them and a snapshot holds them —
+     * and that points 3 and 4 are recomputed rather than adopted, so a base written while
+     * the four were placed freehand comes back as the canonical shape.
      */
-    describe('a demonstration saved as a drawn line still builds', () => {
+    describe('the demonstration keeps four points, and derives three of them', () => {
         // Point 1 the arrowhead, point 2 the first bend due east, then the second leg.
         const DRAWN = [[-0.6, 51.5], [0.2, 51.5], [0.2, 51.7], [-0.6, 51.7]];
 
-        it('collapses to the anchor it is dropped from, keeping the size and the aim', () => {
+        it('keeps all four in the base', () => {
             const built = buildTacticalGraphic(
                 TacticalGraphicName.Demonstration,
                 {type: 'LineString', coordinates: DRAWN},
@@ -544,29 +545,30 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
                 RESOLUTION,
             );
             expect(built).toBeDefined();
-            expect(built!.base.geometry.type).toBe('Point');
-            expect((built!.base.geometry as {coordinates: number[]}).coordinates[0]).toBeCloseTo(-0.6, 6);
-
-            // Rebuilt from the anchor alone, the first leg ends where point 2 was. The
-            // rendered geometry is in projected metres — the base is the half that stays
-            // in lon/lat — so the expectation is projected too.
-            const parts = (built!.graphic.geometry as {coordinates: number[][][]}).coordinates;
-            const projected = projectGeometry({type: 'Point', coordinates: [0.2, 51.5]}) as
-                {coordinates: [number, number]};
-            expect(parts[0][1][0]).toBeCloseTo(projected.coordinates[0], 0);
-            expect(parts[0][1][1]).toBeCloseTo(projected.coordinates[1], 0);
+            expect(built!.base.geometry.type).toBe('LineString');
+            expect((built!.base.geometry as {coordinates: number[][]}).coordinates).toHaveLength(4);
             expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
         });
 
-        it('leaves a base that is already a point alone', () => {
+        it('reads point 1 and point 2, and rewrites points 3 and 4 from them', () => {
+            // Drawn freehand: the second leg splayed away and the opening is wrong. The
+            // canonical layout is written back over it, and the two points that carry the
+            // description are the two left alone.
+            const drifted = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
             const built = buildTacticalGraphic(
                 TacticalGraphicName.Demonstration,
-                {type: 'Point', coordinates: [-0.6, 51.5]},
-                {radius: 60_000, rotation: 30},
+                {type: 'LineString', coordinates: drifted},
+                {},
                 RESOLUTION,
-            );
-            expect(built).toBeDefined();
-            expect(built!.base.properties?.tacticalGraphic?.rotation).toBe(30);
+            )!;
+            const anchors = (built.base.geometry as {coordinates: number[][]}).coordinates;
+            expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
+            expect(anchors[1][0]).toBeCloseTo(0.2, 4);
+            expect(anchors[2]).not.toEqual(drifted[2]);
+            expect(anchors[3]).not.toEqual(drifted[3]);
+            // …and the description follows the points, as it does for the rest of the
+            // family: the leg length is what the base says, not what a caller stamped.
+            expect(built.base.properties?.tacticalGraphic?.radius).toBeGreaterThan(0);
         });
     });
 
