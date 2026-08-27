@@ -20,6 +20,11 @@ export type GraphicFieldSet = {
     identifier1: boolean;
     /** Second identifier + country codes (Boundary, ACA unit name). */
     identifier2: boolean;
+    /**
+     * Field H — additional information, where the plate sets it *beside* the designation
+     * rather than instead of it. @see TacticalGraphicProperties.additionalInfo
+     */
+    additionalInfo: boolean;
     /** Start date/time (labels.startDate). */
     dtg1: boolean;
     /** End date/time (labels.endDate). */
@@ -31,6 +36,18 @@ export type GraphicFieldSet = {
     echelon: boolean;
     /** Mine-type selector (the two mine areas). @see TacticalGraphicMineType */
     mineType: boolean;
+    /**
+     * Sector 1 mobility selector -- APP-06 Table 8-24's `MOBILITY` category.
+     *
+     * Three graphics, because the table's Remarks column names three: limited access
+     * area, restricted terrain, severely restricted terrain. @see TacticalGraphicMobility
+     */
+    mobility: boolean;
+    /**
+     * Sector 2 terrain selector -- APP-06 Table 8-25. The restricted-terrain pair only;
+     * the limited access area's Template has no box for one. @see TacticalGraphicTerrain
+     */
+    terrain: boolean;
     /** Route direction selector (Route / MSR / ASR). */
     direction: boolean;
     /** Min altitude inputs (airspace graphics). */
@@ -64,11 +81,12 @@ function f(
     dtg1: boolean,
     dtg2: boolean,
     status: boolean,
-    extra: Partial<Pick<GraphicFieldSet, 'echelon' | 'mineType' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
+    extra: Partial<Pick<GraphicFieldSet, 'additionalInfo' | 'echelon' | 'mineType' | 'mobility' | 'terrain' | 'direction' | 'altitude1' | 'altitude2' | 'width' | 'length' | 'radius' | 'grids' | 'weapon' | 'rangeFan' >> = {},
 ): GraphicFieldSet {
     return {
         identifier1,
         identifier2,
+        additionalInfo: false,
         dtg1,
         dtg2,
         // Not a per-graphic choice — see supportsHostility(). getGraphicFields
@@ -77,6 +95,8 @@ function f(
         status,
         echelon: false,
         mineType: false,
+        mobility: false,
+        terrain: false,
         direction: false,
         altitude1: false,
         altitude2: false,
@@ -118,6 +138,37 @@ const LINE_GENERIC = f(true, false, true, true, false);
 const OBSTACLE_LINE = f(true, false, false, false, false);
 /** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
 const MINE_AREA = f(true, false, true, true, false, {mineType: true});
+
+/**
+ * Restricted terrain and severely restricted terrain (APP-06 152400, 152500).
+ *
+ * Sector 1, Sector 2 and field H -- and **nothing else**, which is the whole Template.
+ * There is no `T` box, no status form, and no identity: the pair describe ground, so they
+ * are exempt in `supportsHostility` and `getGraphicFields` clears the flag anyway. The
+ * plate's note is explicit about H: *"Field H must be displayed and contain the cause of
+ * the restriction."*
+ */
+const SECTOR_MODIFIER_TERRAIN = f(false, false, false, false, false, {
+    mobility: true,
+    terrain: true,
+    additionalInfo: true,
+});
+
+/**
+ * Limited access area (APP-06 151100, FM 1-02.2 table 5-5).
+ *
+ * Sector 1 and field H. The two standards draw the same symbol with *different* amplifiers
+ * under the Sector 1 box -- APP-06 sets field H there and FM sets `W - W1` -- and the
+ * graphic follows APP-06: one box, one field, rather than a stack carrying both readings
+ * of the same box. (User's call, 2026-08-26.)
+ *
+ * No designation either: the `LAA` above the modifier is the symbol's own literal, printed
+ * by both plates, not something a user types.
+ */
+const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
+    mobility: true,
+    additionalInfo: true,
+});
 /**
  * Decision line: the designation, and nothing else.
  *
@@ -140,6 +191,30 @@ const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
 const NAME_FIELD_ONLY = f(true, false, false, false, false);
+
+/**
+ * The action areas — JTAA, SAA and SGAA (APP-06 150501-150503).
+ *
+ * One Template serves all three: the literal and **T** on the first line, **W - W1** on
+ * the second, and an `N` at the area's west and east edges when it is hostile. So the
+ * fields are the designation and the two dates; the N is not an input, it is the
+ * affiliation.
+ */
+const ACTION_AREA = f(true, false, true, true, false);
+
+/**
+ * Area, generic (120700): the same block with **H beside T** on the first line.
+ */
+const AREA_GENERIC = f(true, false, true, true, false, {additionalInfo: true});
+
+/** The airfield zone (120400) carries field H and nothing else. */
+const AIRFIELD_ZONE = f(false, false, false, false, false, {additionalInfo: true});
+
+/** Human terrain (370100): the literal `HT` with H under it. No designation. */
+const HUMAN_TERRAIN = f(false, false, false, false, false, {additionalInfo: true});
+
+/** The PsyOps zones: H over T beside the speaker, and W - W1 outside the upper left. */
+const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
 
 /**
  * Obstacle free / restricted area: T over W - W1, inside the toothed ring.
@@ -278,10 +353,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA,
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
-    [TacticalGraphicName.PsyOpsZoneIrregular]: AREA_SIMPLE,
+    [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
-    [TacticalGraphicName.PsyOpsZoneRectangular]: {...AREA_SIMPLE, width: true},
-    [TacticalGraphicName.PsyOpsZoneCircular]: AREA_SIMPLE,
+    [TacticalGraphicName.PsyOpsZoneRectangular]: {...PSYOPS_ZONE, width: true},
+    [TacticalGraphicName.PsyOpsZoneCircular]: PSYOPS_ZONE,
     [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
@@ -464,18 +539,29 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_SIMPLE,
     [TacticalGraphicName.Bridgehead]: AREA_SIMPLE,
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: AREA_SIMPLE,
-    [TacticalGraphicName.HumanTerrain]: AREA_SIMPLE,
-    [TacticalGraphicName.PenetrationBox]: AREA_SIMPLE,
-    [TacticalGraphicName.Area]: AREA_SIMPLE,
-    [TacticalGraphicName.JointTacticalActionArea]: AREA_SIMPLE,
-    [TacticalGraphicName.AreaGeneric]: AREA_SIMPLE,
+    [TacticalGraphicName.HumanTerrain]: HUMAN_TERRAIN,
+    // **Neither carries an amplifier.** 151900's and 150100's Templates are a bare closed
+    // outline: no T, no H, no dates, nothing. A name field on them offered the operator a
+    // label the symbol has nowhere to put.
+    [TacticalGraphicName.PenetrationBox]: SHAPE_ONLY,
+    [TacticalGraphicName.Area]: SHAPE_ONLY,
+    [TacticalGraphicName.JointTacticalActionArea]: ACTION_AREA,
+    [TacticalGraphicName.SubmarineActionArea]: ACTION_AREA,
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: ACTION_AREA,
+    [TacticalGraphicName.AreaGeneric]: AREA_GENERIC,
     [TacticalGraphicName.ZoneOfFire]: AREA_SIMPLE,
-    [TacticalGraphicName.RestrictedTerrain]: AREA_SIMPLE,
-    [TacticalGraphicName.SeverelyRestrictedTerrain]: AREA_SIMPLE,
-    [TacticalGraphicName.BiologicalContaminatedArea]: AREA_SIMPLE,
-    [TacticalGraphicName.ChemicalContaminatedArea]: AREA_SIMPLE,
-    [TacticalGraphicName.NuclearContaminatedArea]: AREA_SIMPLE,
-    [TacticalGraphicName.RadiologicalContaminatedArea]: AREA_SIMPLE,
+    [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
+    // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and
+    // 272000 are the hatched area, the inverted triangle and the letter that names the
+    // hazard. Everything a reader needs is in the glyph.
+    [TacticalGraphicName.BiologicalContaminatedArea]: SHAPE_ONLY,
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: SHAPE_ONLY,
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: SHAPE_ONLY,
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: SHAPE_ONLY,
+    [TacticalGraphicName.ChemicalContaminatedArea]: SHAPE_ONLY,
+    [TacticalGraphicName.NuclearContaminatedArea]: SHAPE_ONLY,
+    [TacticalGraphicName.RadiologicalContaminatedArea]: SHAPE_ONLY,
     [TacticalGraphicName.ArtilleryManeuverArea]: {...(TARGET_ACQUISITION_AREA)},
     [TacticalGraphicName.ArtilleryReservedArea]: {...(TARGET_ACQUISITION_AREA)},
     [TacticalGraphicName.AssemblyArea]: AREA_SIMPLE,
@@ -491,7 +577,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
-    [TacticalGraphicName.AirfieldZone]: AREA_SIMPLE,
+    [TacticalGraphicName.AirfieldZone]: AIRFIELD_ZONE,
     [TacticalGraphicName.Airfield]: NAME_FIELD_ONLY,
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
@@ -574,7 +660,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleFreeArea]: OBSTACLE_AREA,
     [TacticalGraphicName.ObstacleRestrictedArea]: OBSTACLE_AREA,
-    [TacticalGraphicName.LimitedAccessArea]: f(true, false, true, true, false),
+    [TacticalGraphicName.LimitedAccessArea]: LIMITED_ACCESS_AREA,
     [TacticalGraphicName.SmokeObscurant]: f(true, false, true, true, true),
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
 

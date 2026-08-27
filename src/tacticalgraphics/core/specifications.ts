@@ -84,6 +84,11 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.HumanTerrain]: APP6_ONLY, // APP-06 370100 Human Terrain
     [TacticalGraphicName.PenetrationBox]: APP6_ONLY, // APP-06 151900 Penetration Box
     [TacticalGraphicName.Area]: APP6_ONLY, // APP-06 150100 Area
+    [TacticalGraphicName.SubmarineActionArea]: APP6_ONLY, // APP-06 150502 Submarine Action Area (SAA)
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: APP6_ONLY, // APP-06 150503 Submarine-Generated Action Area (SGAA)
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: APP6_ONLY, // APP-06 271701 Toxic Industrial Material
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: APP6_ONLY, // APP-06 271801 Toxic Industrial Material
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: APP6_ONLY, // APP-06 272001 Toxic Industrial Material
     [TacticalGraphicName.JointTacticalActionArea]: APP6_ONLY, // APP-06 150501 Joint Tactical Action Area (JTAA)
     [TacticalGraphicName.AreaGeneric]: APP6_ONLY, // APP-06 120700 Area, Generic
     [TacticalGraphicName.ZoneOfFire]: APP6_ONLY, // APP-06 242600 Zone of Fire

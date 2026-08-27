@@ -64,3 +64,6 @@ output/
 # cost the repo 163 tracked files.
 tmp/spreadsheet-build/
 tmp/spreadsheet-inspect/
+
+# Plate crops, regenerated on demand by tmp/plate.py — 8 MB of derived PNGs.
+tmp/plates/
