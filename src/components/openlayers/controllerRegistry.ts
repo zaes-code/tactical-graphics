@@ -552,9 +552,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
-    // Three anchor points, each meaning something — but still a *movement* holder, which
-    // is what dispatches its style. @see GeometryService.createSCurve
-    [TacticalGraphicName.Infiltration]:       movement(3),
+    // Literally the exfiltration's controller and holder. @see RetrogradeTask.ts
+    [TacticalGraphicName.Infiltration]:       exfiltrate,
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
     // ── Ambush (point-based arc graphic) ───────────────────────────────────

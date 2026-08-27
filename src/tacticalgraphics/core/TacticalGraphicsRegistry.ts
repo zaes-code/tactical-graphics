@@ -31,7 +31,7 @@ import {Bypass} from "../graphics/Bypass";
 import {Canalize} from "../graphics/Canalize";
 import {Clear} from "../graphics/Clear";
 import {Disrupt} from "../graphics/Disrupt";
-import {Exfiltrate, RetrogradeTask} from "../graphics/RetrogradeTask";
+import {Exfiltrate, Infiltration, RetrogradeTask} from "../graphics/RetrogradeTask";
 import {FieldsOfFire} from "../graphics/FieldsOfFire";
 import {ForwardLineOfOwnTroops, LineOfContact} from "../graphics/ForwardLineOfOwnTroops";
 import {Bridge} from "../graphics/Bridge";
@@ -51,7 +51,6 @@ import {
     Envelopment,
     // FlankAttack,
     FrontalAttack,
-    Infiltration,
     InfiltrationLane,
     MobileDefense,
     AdvanceToContact,
