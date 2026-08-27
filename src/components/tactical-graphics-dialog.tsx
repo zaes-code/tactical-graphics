@@ -29,6 +29,8 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicHostility,
     TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
     TacticalGraphicName,
     TacticalGraphicStatus
 } from '@zaes/tactical-graphics';
@@ -83,6 +85,12 @@ function shownLabels(selection: SelectedGraphic): GraphicLabels {
         labels.secondId = stored.secondId ?? '';
         labels.secondCountryCode = stored.secondCountryCode ?? '';
     }
+    if (fields.additionalInfo) labels.additionalInfo = stored.additionalInfo ?? '';
+    // The three selectors that carry a stored value into the dialog rather than a string.
+    // `mineType` was missing, so a mine area reopened with its own type not selected.
+    if (fields.mineType) labels.mineType = stored.mineType;
+    if (fields.mobility) labels.mobility = stored.mobility;
+    if (fields.terrain) labels.terrain = stored.terrain;
     if (fields.hostility) labels.confidence = stored.confidence;
     if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
     if (fields.direction) labels.direction = stored.direction;
@@ -352,7 +360,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     them; now that hostility follows FM 1-02.2 Field N and is on for every
                                     control measure, leaving them out would print "no editable fields"
                                     above a hostility dropdown on most of the catalog. */}
-                                {!fields.identifier1 && !fields.identifier2 && !fields.dtg1 && !fields.dtg2 && !fields.hostility && !fields.status && !fields.echelon && !fields.direction && !fields.width && !fields.altitude1 && !fields.altitude2 && !fields.grids && !fields.weapon && !fields.rangeFan && (
+                                {!fields.identifier1 && !fields.identifier2 && !fields.additionalInfo && !fields.dtg1 && !fields.dtg2 && !fields.hostility && !fields.status && !fields.echelon && !fields.direction && !fields.width && !fields.altitude1 && !fields.altitude2 && !fields.grids && !fields.weapon && !fields.rangeFan && !fields.mineType && !fields.mobility && !fields.terrain && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <InputLabel>No editable fields for this graphic type.</InputLabel>
                                     </Box>
@@ -370,6 +378,28 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                     setPendingChanges(prev => ({
                                                         ...prev,
                                                         labels: {...prev.labels, label: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* Field H. Several plates set it beside the designation rather than
+                                    instead of it — the area generic reads `H  T` on one line — so it is
+                                    its own control. @see TacticalGraphicProperties.additionalInfo */}
+                                {fields.additionalInfo && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="additional-info-input">Additional Information</InputLabel>
+                                            <OutlinedInput
+                                                id="additional-info-input"
+                                                label="Additional Information"
+                                                value={pendingChanges.labels.additionalInfo ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, additionalInfo: e.target.value},
                                                     }))
                                                 }
                                             />
@@ -560,6 +590,56 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {(Object.values(TacticalGraphicMineType) as TacticalGraphicMineType[]).map(h => (
+                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* APP-06 Table 8-24, the MOBILITY half. Offered on the three graphics
+                                    its Remarks column names and nowhere else. */}
+                                {fields.mobility && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Sector 1 mobility</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.mobility ?? ''}
+                                                label="Sector 1 mobility"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicMobility>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, mobility: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicMobility) as TacticalGraphicMobility[]).map(h => (
+                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* APP-06 Table 8-25. Sets a word under the icon and, with it, the
+                                    color the area is hatched in. */}
+                                {fields.terrain && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Sector 2 terrain</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.terrain ?? ''}
+                                                label="Sector 2 terrain"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicTerrain>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, terrain: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicTerrain) as TacticalGraphicTerrain[]).map(h => (
                                                     <MenuItem key={h} value={h}>{h}</MenuItem>
                                                 ))}
                                             </Select>

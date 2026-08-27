@@ -89,7 +89,7 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 275 assignments over 274 distinct codes -- 141100 is the one shared pair.
-        expect(codes).toHaveLength(274);
+        // 280 assignments over 279 distinct codes -- 141100 is the one shared pair.
+        expect(codes).toHaveLength(279);
     });
 });

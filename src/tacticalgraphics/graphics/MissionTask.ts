@@ -27,6 +27,38 @@ export const DEFAULT_LABEL_GAP_DEGREES = 15;
 /** Nothing sensible is left of the circle past this. */
 const MAX_LABEL_GAP_DEGREES = 60;
 
+/**
+ * Where **point 2** sits on an arc mission task, in degrees from the rotation axis.
+ *
+ * APP-06 words it the same way for all nine — secure, isolate, retain, control, occupy,
+ * area defence, locate and the two cordons: *"This symbol requires two anchor points.
+ * Point 1 defines the centre point of the graphic and point 2 defines the graphic's start
+ * point and radius."* The Template draws `PT. 2 (START POINT)` against the **blunt end of
+ * the upper arc**, which is the end the arc is drawn from and the one with no arrowhead on
+ * it — 175 degrees here, since {@link MissionTask.labelGapArcs} runs the upper arc from the
+ * label gap round to there.
+ *
+ * The handle used to sit on `lowerArch[0]` at 205 degrees instead: the *other* free end,
+ * the one carrying the arrowhead. Measured on both engines, every circle in the library
+ * put its red handle at 206 degrees. @see generateHandles
+ */
+export const START_POINT_DEGREES = 175;
+
+/**
+ * Where the radius is drawn on a circular **area**, in degrees from the rotation axis.
+ *
+ * These have no point 2 at all. All eighteen read *"This symbol requires one (1) anchor
+ * point and a radius"*, with `Orientation. Not applicable.` — the radius is an amplifier
+ * (`AM`), and APP-06 240203 adds *"the radius (AM) is for exchange only and is not to be
+ * displayed."* So there is no anchor for a handle to honour.
+ *
+ * What both standards *do* draw is the radius arrow itself, and they draw it in the same
+ * place: measured off APP-06's Template and FM 1-02.2's table 5-24, it runs from the centre
+ * to the rim at 45 degrees below the horizontal, to the lower right. The handle goes there
+ * so the grip is where the documents put the dimension it controls.
+ */
+export const RADIUS_ARROW_DEGREES = -45;
+
 /** Resolved half-gap for the label, in degrees. @see DEFAULT_LABEL_GAP_DEGREES */
 function labelGapDegrees(opts: PointGraphicOptions): number {
     const requested = opts.labelGapDegrees ?? DEFAULT_LABEL_GAP_DEGREES;
@@ -56,10 +88,19 @@ export abstract class MissionTask extends TacticalGraphicsBase<PointGraphicOptio
         };
     }
 
+    /**
+     * `[point 2, centre]` — edge first, which is the order the point-anchored holders
+     * read: `handles[0]` drives rotate and resize, `handles[1]` drives translate.
+     *
+     * The edge handle is **point 2**, the start point the plates annotate.
+     * @see START_POINT_DEGREES
+     */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        let center = base.geometry.coordinates;
-        const lowerArch = geometryService.createCircularArc(center, opts.rotation, opts.size, 205, 345, 100);
-        return this.asMultiPointFeature([lowerArch[0], center])
+        const center = base.geometry.coordinates;
+        const startPoint = geometryService.translateCoordinates(
+            center, opts.size, toRadians(opts.rotation + START_POINT_DEGREES),
+        );
+        return this.asMultiPointFeature([startPoint, center]);
     };
 
     generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {
@@ -252,10 +293,27 @@ export class Contain extends MissionTask {
     }
 
     /** `[edge, center]` — the family's order, now read off the drawn opening. */
+    /**
+     * `[point 2, centre]`, and for contain point 2 is a **drawn anchor** rather than a
+     * position derived from a radius.
+     *
+     * 151204's Template annotates `PT. 1` against the upper end of the semicircle's
+     * opening and `PT. 2` against the lower one, so the second stored coordinate *is* the
+     * handle's place and there is nothing to compute. A base that is still a bare point —
+     * a save written before the anchor-point conversion — has no second coordinate, so
+     * that path falls back to the lower end of the opening in the rotated frame, which is
+     * the same position by construction.
+     *
+     * It used to sit at 205 degrees, which on a half circle running 90 to 270 is neither
+     * end of the opening nor anywhere the plate marks.
+     */
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
         const {center, rotation, size} = this.frame(base, opts);
-        const lowerArch = geometryService.createCircularArc(center, rotation, size, 205, 345, 100);
-        return this.asMultiPointFeature([lowerArch[0], center]);
+        const coords = base.geometry?.coordinates;
+        const drawn = Array.isArray(coords?.[0]) ? (coords as Position[])[1] : undefined;
+        const openingEnd = drawn
+            ?? geometryService.translateCoordinates(center, size, toRadians(rotation + 270));
+        return this.asMultiPointFeature([openingEnd, center]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<Point> {
@@ -319,6 +377,20 @@ export class CircularArea extends MissionTask {
         return this.asPointFeature(center);
     };
 
+    /**
+     * `[radius grip, centre]`. **Not point 2 — there isn't one.**
+     *
+     * The circular areas take one anchor point and a radius amplifier, so the only rim
+     * position either standard commits to is where it draws the radius arrow, and both
+     * draw it to the lower right. @see RADIUS_ARROW_DEGREES
+     */
+    generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        const center = base.geometry.coordinates;
+        const grip = geometryService.translateCoordinates(
+            center, opts.size, toRadians(opts.rotation + RADIUS_ARROW_DEGREES),
+        );
+        return this.asMultiPointFeature([grip, center]);
+    };
 }
 
 /**
@@ -331,9 +403,31 @@ export class CordonAndKnock extends CordonAndSearch {
 }
 
 /**
- * Locate (APP-06 343900) -- the plain arc-and-arrowhead circle the mission-task family
- * is built on, carrying `LOC`. Same body as secure; the letter is the symbol.
+ * Locate (APP-06 343900) — the arc-and-arrowhead circle carrying `LOC`, and **the one
+ * member of the family with an arrowhead on each arc**.
+ *
+ * It had been `extends Secure`, which draws one. Held against the plate that is a defect
+ * you have to look for: secure's Template leaves the upper arc blunt at point 2 and puts a
+ * single barb on the lower arc, while locate's Template *and* its Example put a barb on
+ * both — the pair reading as a search circling in from two directions. Same circle, same
+ * gap, same letter placement; one mark different, and nothing in the library objected
+ * because a missing arrowhead still renders a plausible circle.
+ *
+ * The upper barb points the way the upper arc travels (counter-clockwise, so down and
+ * slightly left where it ends at 175°); the lower one points back along the lower arc,
+ * which is what secure already draws.
  */
-export class Locate extends Secure {
+export class Locate extends MissionTask {
     name: string = TacticalGraphicName.Locate;
+
+    generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
+        const center = base.geometry.coordinates;
+        const {size} = opts;
+        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
+        const upperHead = geometryService.computeArrowheadPoints(
+            upperArch[upperArch.length - 2], upperArch[upperArch.length - 1], size / 4, 45,
+        );
+        const lowerHead = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
+        return this.asMultiLineStringFeature([upperArch, lowerArch, upperHead, lowerHead]);
+    }
 }

@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**228 graphics** are implemented and verified today, covering **241 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**255 graphics** are implemented and verified today, covering **268 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
@@ -121,6 +121,9 @@ tacticalGraphic: {
     // Amplifiers — text rendered on the graphic.
     label: '1-508 IN',        // primary designation
     secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    additionalInfo: 'CONCRETE 3000M', // field H — free text a symbol carries beside its
+                              // designation: the airfield zone's runway note, the PsyOps
+                              // zone's line above its name, human terrain's only text
     countryCode: 'USA',       // country beside the primary designation
     secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
@@ -139,6 +142,11 @@ tacticalGraphic: {
     echelon: 'battalion',
     direction: 'ONE_WAY',     // route graphics
     mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
+    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
+                              // area or restricted terrain carries to say what kind of
+                              // movement the ground admits
+    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
+                              // and the color the area is hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -922,7 +930,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 284 supported names.
+the 289 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 ```
@@ -956,6 +964,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Airspace Coordination Area, Irregular | Airspace Coordinating Measures |
 | Airspace Coordination Area, Rectangular | Airspace Coordinating Measures |
 | Base Defense Zone | Airspace Coordinating Measures |
+| Fighter Engagement Zone | Airspace Coordinating Measures |
 | High-Altitude Missile Engagement Zone | Airspace Coordinating Measures |
 | High-Density Airspace Control Zone | Airspace Coordinating Measures |
 | Identification, Friend-Or-Foe Switch Off-Line | Airspace Coordinating Measures |
@@ -976,8 +985,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Weapon Engagement Zone | Airspace Coordinating Measures |
 | Weapons Free Zone | Airspace Coordinating Measures |
 | Airfield | Areas |
+| Airfield Zone | Areas |
 | Airhead Line | Areas |
+| Area | Areas |
 | Area Of Operations | Areas |
+| Area, Generic | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
 | Attack Position | Areas |
@@ -985,26 +997,48 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Biological Contaminated Area | Areas |
+| Biological Contaminated Area, Toxic Industrial Material | Areas |
+| Bridgehead | Areas |
 | Brigade Support Area | Areas |
+| Chemical Contaminated Area | Areas |
+| Chemical Contaminated Area, Toxic Industrial Material | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
 | Drop Zone | Areas |
 | Encirclement | Areas |
+| Enemy Prisoner Of War Holding Area | Areas |
 | Engagement Area | Areas |
+| Extraction Zone | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
+| Human Terrain | Areas |
+| Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
+| Limited Access Area | Areas |
 | Minimum Safe Distance Zone | Areas |
 | Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
+| Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
+| Penetration Box | Areas |
 | Pickup Zone | Areas |
+| PsyOps Zone, Circular | Areas |
+| PsyOps Zone, Irregular | Areas |
+| PsyOps Zone, Rectangular | Areas |
 | Radiation Dose Rate Contour Line | Areas |
+| Radiological Contaminated Area | Areas |
+| Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
+| Regimental Support Area | Areas |
+| Restricted Terrain | Areas |
+| Severely Restricted Terrain | Areas |
 | Strong Point | Areas |
+| Submarine Action Area | Areas |
+| Submarine-Generated Action Area | Areas |
 | Target Area Of Interest | Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Areas |
 | Enemy Known Boundary | Boundaries |
@@ -1024,6 +1058,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Relief In Place | Enabling Operations Planning |
 | Screen | Enabling Operations Planning |
 | Fighting Position | Field Fortification Symbols |
+| Fortified Position | Field Fortification Symbols |
 | Fortified/Trench Line | Field Fortification Symbols |
 | Fields Of Fire/Sector Of Fire | Fire Support Coordination Control Measures |
 | Free-Fire Area, Circular | Fire Support Coordination Control Measures |
@@ -1200,28 +1235,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Category |
 |---|---|
-| Fighter Engagement Zone | Airspace Coordinating Measures |
-| Airfield Zone | Areas |
-| Area | Areas |
-| Area, Generic | Areas |
-| Biological Contaminated Area | Areas |
-| Bridgehead | Areas |
-| Chemical Contaminated Area | Areas |
-| Enemy Prisoner Of War Holding Area | Areas |
-| Extraction Zone | Areas |
-| Human Terrain | Areas |
-| Joint Tactical Action Area | Areas |
-| Limited Access Area | Areas |
-| Nuclear Contaminated Area | Areas |
-| Penetration Box | Areas |
-| PsyOps Zone, Circular | Areas |
-| PsyOps Zone, Irregular | Areas |
-| PsyOps Zone, Rectangular | Areas |
-| Radiological Contaminated Area | Areas |
-| Regimental Support Area | Areas |
-| Restricted Terrain | Areas |
-| Severely Restricted Terrain | Areas |
-| Fortified Position | Field Fortification Symbols |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
 | Mined Area, Fenced | Mobility and Countermobility Control Measures |

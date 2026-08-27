@@ -269,6 +269,10 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ZF';
         case TacticalGraphicName.JointTacticalActionArea:
             return 'JTAA';
+        case TacticalGraphicName.SubmarineActionArea:
+            return 'SAA';
+        case TacticalGraphicName.SubmarineGeneratedActionArea:
+            return 'SGAA';
         case TacticalGraphicName.HumanTerrain:
             return 'HT';
         case TacticalGraphicName.EnemyPrisonerOfWarHoldingArea:
@@ -719,12 +723,19 @@ export enum TacticalGraphicName {
     PenetrationBox = 'PenetrationBox',
     Area = 'Area',
     JointTacticalActionArea = 'JointTacticalActionArea',
+    SubmarineActionArea = 'SubmarineActionArea',                    // APP-06 150502 Submarine Action Area (SAA)
+    SubmarineGeneratedActionArea = 'SubmarineGeneratedActionArea',  // APP-06 150503 Submarine-Generated Action Area (SGAA)
     AreaGeneric = 'AreaGeneric',
     ZoneOfFire = 'ZoneOfFire',
     RestrictedTerrain = 'RestrictedTerrain',
     SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
     AirfieldZone = 'AirfieldZone',
     BiologicalContaminatedArea = 'BiologicalContaminatedArea',
+    // The three toxic-industrial-material variants. There is no nuclear one: APP-06 gives
+    // 271900 no subtype, which is why this list has three members and not four.
+    BiologicalContaminatedAreaToxicIndustrialMaterial = 'BiologicalContaminatedAreaToxicIndustrialMaterial',
+    ChemicalContaminatedAreaToxicIndustrialMaterial = 'ChemicalContaminatedAreaToxicIndustrialMaterial',
+    RadiologicalContaminatedAreaToxicIndustrialMaterial = 'RadiologicalContaminatedAreaToxicIndustrialMaterial',
     ChemicalContaminatedArea = 'ChemicalContaminatedArea',
     NuclearContaminatedArea = 'NuclearContaminatedArea',
     RadiologicalContaminatedArea = 'RadiologicalContaminatedArea',
@@ -1029,6 +1040,9 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.NuclearContaminatedArea]: 'nuclear contaminated area',
     [TacticalGraphicName.ChemicalContaminatedArea]: 'chemical contaminated area',
     [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: 'biological contaminated area, toxic industrial material',
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: 'chemical contaminated area, toxic industrial material',
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: 'radiological contaminated area, toxic industrial material',
     [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
     [TacticalGraphicName.HandoverLine]: 'handover line',
     [TacticalGraphicName.DecisionLine]: 'decision line',
@@ -1053,6 +1067,8 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.ZoneOfFire]: 'zone of fire',
     [TacticalGraphicName.AreaGeneric]: 'area, generic',
     [TacticalGraphicName.JointTacticalActionArea]: 'joint tactical action area',
+    [TacticalGraphicName.SubmarineActionArea]: 'submarine action area',
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: 'submarine-generated action area',
     [TacticalGraphicName.Area]: 'area',
     [TacticalGraphicName.PenetrationBox]: 'penetration box',
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: 'enemy prisoner of war holding area',
@@ -1110,7 +1126,7 @@ export function getDisplayName(name: TacticalGraphicName): string {
  *
  * The table lists about forty codes; these seven are the primitives and the rest are
  * combinations of two or three of them, drawn across the icon's three slots. Only the
- * primitives are modelled — @see minePaints.ts for what expressing a combination would
+ * primitives are modeled — @see minePaints.ts for what expressing a combination would
  * take, and why it is not here.
  */
 export enum TacticalGraphicMineType {
@@ -1121,6 +1137,57 @@ export enum TacticalGraphicMineType {
     antitankAntihandling = 'Antitank Mine with Antihandling Device',
     wideAreaAntitank = 'Wide Area Antitank Mine',
     mineCluster = 'Mine Cluster',
+}
+
+/**
+ * The **mobility** half of APP-06 Table 8-24, the Sector 1 modifiers.
+ *
+ * The table holds two categories under one numbering. Codes 13-50 are `MINE TYPE` and
+ * carry the remark *"Used with minefields & mined areas only"*; the fourteen here are
+ * `MOBILITY`, remarked *"For use with Limited Access Area, Restricted Terrain, and
+ * Severely Restricted Terrain only."* That remark is the whole reason the two are
+ * separate enums rather than one: a mine glyph offered on restricted terrain, or a
+ * pack animal offered on a minefield, would both be outside the standard.
+ *
+ * The trailing comment on each member is its Sector 1 code. They are not contiguous --
+ * `dismounted` is 51, sitting past the mine block at the table's end.
+ *
+ * @see TacticalGraphicMineType for the other half, and `sectorModifierPaints.ts` for
+ * how each of these is drawn.
+ */
+export enum TacticalGraphicMobility {
+    unspecified = 'Unspecified',                           // 00 - draws nothing
+    standardMobility = 'Standard Mobility/On-Road',        // 01
+    highMobility = 'High Mobility/Off-Road',               // 02
+    tracked = 'Tracked',                                   // 03
+    trackedAndWheeled = 'Tracked and Wheeled Combination', // 04
+    towed = 'Towed',                                       // 05
+    railway = 'Railway',                                   // 06
+    overSnow = 'Over-Snow (Prime Mover)',                  // 07
+    sled = 'Sled',                                         // 08
+    packAnimal = 'Pack Animal',                            // 09
+    barge = 'Barge',                                       // 10
+    amphibious = 'Amphibious',                             // 11
+    noVehicles = 'No Vehicles',                            // 12
+    dismounted = 'Dismounted',                             // 51
+}
+
+/**
+ * APP-06 Table 8-25, the Sector 2 modifiers -- every one of them `TERRAIN`.
+ *
+ * Unlike Sector 1 these are **words, not glyphs**: the table's MODIFIER column prints
+ * `URBAN`, `WATER`, `GROUND`, `VEGETATION`, `OBSTACLES` in type, and the plates for
+ * restricted terrain set that word under the mobility icon. What each one adds beyond
+ * the word is an *optional hatching color*, which is why the value here is the label
+ * and the color is a separate table. @see TERRAIN_HATCH_COLORS
+ */
+export enum TacticalGraphicTerrain {
+    unspecified = 'Unspecified',   // 00 - no word, no color
+    urban = 'Urban',               // 01 - black
+    water = 'Water',               // 02 - blue
+    ground = 'Ground',             // 03 - brown
+    vegetation = 'Vegetation',     // 04 - green
+    obstacles = 'Obstacles',       // 05 - green
 }
 
 export enum TacticalGraphicEchelon {
