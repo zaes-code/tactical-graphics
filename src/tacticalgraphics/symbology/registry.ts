@@ -704,7 +704,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         // symbol's own, not a designation: both plates print it and neither offers a T.
         [TacticalGraphicName.LimitedAccessArea]: {
             graphic: limitedAccessAreaPaint(),
-            label: sectorModifierLabelPaint({literal: 'LAA', dates: true}),
+            label: sectorModifierLabelPaint({literal: 'LAA'}),
         },
         [TacticalGraphicName.NoFireAreaCircular]: {graphic: limitedAccessAreaPaint()},
         [TacticalGraphicName.NoFireAreaIrregular]: {graphic: limitedAccessAreaPaint()},

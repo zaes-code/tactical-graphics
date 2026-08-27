@@ -49,7 +49,6 @@ import {TacticalGraphicMobility, TacticalGraphicTerrain} from '../core/type';
 import {lineColorOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 import {fitLabelScale} from './labelFit';
-import {textWidth} from './decorations';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -338,28 +337,25 @@ export function mobilityMarks(
 // -- The stack the three areas draw -------------------------------------------
 
 /**
- * How wide the glyph is drawn, as a share of the block's widest line.
+ * The glyph's half-width, in screen pixels at label scale 1.
  *
- * The plate sets the icon at about the width of the Sector 2 word under it, and that is
- * a *relationship* rather than a size: whatever the host configures the label size to,
- * the two should still read as one mark. So the glyph is measured against the text
- * rather than given a pixel constant of its own.
+ * **A constant, and it has to be one: the icon is the same size on every graphic that
+ * carries it.** The first version took a share of the block's *widest line*, which reads
+ * plausibly and is wrong -- a restricted terrain saying `DENSE WOODLAND` drew a visibly
+ * larger icon than one saying `SOFT`, and the limited access area a different size again.
+ * The Sector 1 modifier is one symbol out of one table; how large it is drawn is not a
+ * fact about the words beside it. (User's call, 2026-08-26.)
  *
- * The cap exists at all for the reason the PsyOps loudspeaker has one. `fitSymbolScale`
- * answers "how large can this be inside the outline", so on a large area the glyph keeps
- * opening up while the text beside it hits the label scale's clamp, and the pair stops
- * reading as one mark.
+ * It rides the *label* scale rather than a raw pixel count, so the pair still reads as one
+ * mark: a host that configures a larger label size gets a larger icon with it, and an area
+ * too small for its own text shrinks both together.
+ *
+ * The number is the plate's proportion brought down to what reads on a map. A Control
+ * Measure plate gives one symbol a page's worth of room and sets the icon at about the
+ * full width of the Sector 2 word; an operator traces an area at whatever size the ground
+ * is, and there the full-width icon crowds its own text.
  */
-const GLYPH_WIDTH_OF_TEXT = 0.9;
-
-/**
- * The floor on that, in screen pixels of half-width at the block's own scale.
- *
- * A restricted terrain whose only amplifier is `H` of two characters would otherwise
- * shrink the icon to nothing, and the icon is the part of the symbol that is not
- * optional.
- */
-const GLYPH_MIN_HALF_WIDTH_PX = 22;
+const GLYPH_HALF_WIDTH_PX = 53;
 
 /** Share of the largest fitting glyph actually drawn, so it does not touch the outline. */
 const INSET = 0.8;
@@ -398,20 +394,6 @@ function textMark(feature: PaintFeature, at: ProjectedPosition, lines: string[],
 }
 
 /**
- * The date-time group, both ends joined.
- *
- * Only the limited access area offers one: FM 1-02.2's Table 5-5 sets `W` and `W1` under
- * its Sector 1 box where APP-06's Table 8-5 sets field H. The library carries both, since
- * the graphic is tagged against both standards.
- */
-function dateRange(feature: PaintFeature): string {
-    const start = (feature.properties.startDate ?? '').trim();
-    const end = (feature.properties.endDate ?? '').trim();
-    if (start && end) return start + ' - ' + end;
-    return start || end || '';
-}
-
-/**
  * The label block the three sector-modifier areas share: a literal, the Sector 1 glyph,
  * and whatever text hangs under it, stacked and centered on the area's anchor.
  *
@@ -422,15 +404,17 @@ function dateRange(feature: PaintFeature): string {
  * scales. Centered, the assembly reads as one mark at every zoom, and the only thing lost
  * is which edge the lines agree on.
  *
+ * **No date-time group, on any of the three.** FM 1-02.2's Table 5-5 does set `W` and `W1`
+ * under the limited access area's Sector 1 box, where APP-06's Table 8-5 sets field H --
+ * but the graphic offers H and not the pair, so nothing here draws one. An imported bag
+ * can still carry a `startDate` for a symbol that has nowhere to put it, and painting it
+ * anyway is how a field nobody offered ends up on the map. (User's call, 2026-08-26.)
+ *
  * @param options.literal the fixed word above the glyph -- `LAA`, and nothing else today
  * @param options.sectorTwo whether Table 8-25's word joins the block, under the glyph
- * @param options.dates whether the graphic has a box for a date-time group. Off by
- *        default, and the restricted-terrain pair leave it off: an imported bag can carry
- *        a `startDate` for a symbol whose Template has nowhere to put one, and drawing it
- *        anyway is how a field nobody offered ends up on the map.
  */
 export function sectorModifierLabelPaint(
-    options: {literal?: string; sectorTwo?: boolean; dates?: boolean} = {},
+    options: {literal?: string; sectorTwo?: boolean} = {},
 ): AreaPaint {
     return (feature, context) => {
         const at = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
@@ -443,29 +427,26 @@ export function sectorModifierLabelPaint(
         const below = [
             options.sectorTwo ? terrainWord(feature.properties.terrain) : '',
             (feature.properties.additionalInfo ?? '').trim(),
-            options.dates ? dateRange(feature) : '',
         ].filter(line => line.length > 0);
 
         const all = [...above, ...below];
         if (!all.length && !glyph.halfHeight) return [];
 
         // One scale for every line in the block, measured against the whole of it, so the
-        // literal above the glyph and the text below cannot end up at two sizes.
-        const textScale = all.length
-            ? fitLabelScale(feature, context, at, all, fontStyle, labelScale(feature.drawingResolution, context.resolution))
-            : 0;
+        // literal above the glyph and the text below cannot end up at two sizes. A graphic
+        // carrying no text at all still needs the plain label scale, because the glyph is
+        // sized off it.
+        const base = labelScale(feature.drawingResolution, context.resolution);
+        const textScale = all.length ? fitLabelScale(feature, context, at, all, fontStyle, base) : base;
 
+        // The fit is a ceiling, not the answer. It reports how large the glyph *could* be
+        // inside the outline, which on a large area keeps opening up while the text beside
+        // it hits the label scale's clamp, and the pair stops reading as one mark.
         const fit = glyph.halfHeight
             ? fitSymbolScale(feature, at, GLYPH_HALF_WIDTH, GLYPH_HALF_WIDTH * glyph.halfHeight, glyphSamples(glyph.halfHeight)) * INSET
             : 0;
-        const widestPx = all.length
-            ? Math.max(...all.map(line => textWidth(context, line, fontStyle, textScale)))
-            : 0;
-        const capped = widestPx
-            ? (Math.max(GLYPH_MIN_HALF_WIDTH_PX * textScale, (widestPx * GLYPH_WIDTH_OF_TEXT) / 2)
-                * context.resolution) / GLYPH_HALF_WIDTH
-            : fit;
-        const glyphScale = glyph.halfHeight ? Math.min(fit, capped) : 0;
+        const wanted = (GLYPH_HALF_WIDTH_PX * textScale * context.resolution) / GLYPH_HALF_WIDTH;
+        const glyphScale = glyph.halfHeight ? Math.min(fit, wanted) : 0;
 
         // Heights, in projected meters, of each band of the stack.
         const lineHeight = BASE_FONT_SIZE_PX * LINE_HEIGHT * textScale * context.resolution;
