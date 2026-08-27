@@ -33,11 +33,14 @@
  * is simply empty.
  */
 import {Feature} from 'ol';
+import type {FeatureLike} from 'ol/Feature';
+import {LineString, Point} from 'ol/geom';
 import {Icon, Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
 import {
     TacticalGraphicHostility,
     TacticalGraphicName,
+    escortSymbolSizePx,
     getGraphicSecuritySymbolProvider,
     getSecuritySymbolProvider,
     securitySymbolSidc,
@@ -351,4 +354,55 @@ export function securityOperationSymbolStyle(
             active,
         );
     };
+}
+
+/**
+ * The escort's centre symbol: the same provider chain, at a size taken from the bar.
+ *
+ * Separate from {@link securityOperationSymbolStyle} in two ways, both because an escort is
+ * *drawn* where a security operation is *placed*. Its anchor is the middle of the rendered
+ * bar rather than a base point — the generator emits the bar alone, and the break for the
+ * symbol is cut at its midpoint — and its size comes from the bar's on-screen span rather
+ * than the global setting, so the graphic and the symbol scale together.
+ *
+ * The size is `escortSymbolSizePx`, which is also what the paint layer sizes the hole in
+ * the bar from. Reading it from anywhere else is how a symbol ends up not fitting its gap.
+ */
+export function escortSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
+    const geometry = feature.getGeometry();
+    if (!geometry || geometry.getType() !== 'LineString') return undefined;
+    const coords = (geometry as LineString).getCoordinates();
+    if (coords.length < 2) return undefined;
+
+    const start = coords[0];
+    const end = coords[coords.length - 1];
+    const spanPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    if (!(spanPx > 0)) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: TacticalGraphicName.Escort,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securityOperationSidc(hostility),
+            sizePx: escortSymbolSizePx(spanPx),
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
+    // The provider's answer is cached per request, so the returned `Style` is shared
+    // between every escort asking for the same picture at the same size. Give this one its
+    // own geometry rather than mutating the cached style's.
+    const placed = style.clone();
+    placed.setGeometry(new Point([(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]));
+    return placed;
 }

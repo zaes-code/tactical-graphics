@@ -410,6 +410,8 @@ export {
     MIN_SYMBOL_SIZE_PX,
     clearGraphicSecuritySymbolProviders,
     getGraphicSecuritySymbolProvider,
+    CENTER_SYMBOL_GRAPHICS,
+    escortSymbolSizePx,
     getSecuritySymbolProvider,
     getSecuritySymbolSize,
     resolveSecuritySymbol,
