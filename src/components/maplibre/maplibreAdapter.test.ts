@@ -527,6 +527,50 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
     });
 
     /**
+     * And the conversion that went the other way. The demonstration was drawn as four
+     * points until 2026-08-27 and is dropped from one click now, so an imported snapshot
+     * still holds the old base — and this engine reports a base it cannot use by returning
+     * `undefined`, which reads as "not ported yet" rather than as a broken file.
+     */
+    describe('a demonstration saved as a drawn line still builds', () => {
+        // Point 1 the arrowhead, point 2 the first bend due east, then the second leg.
+        const DRAWN = [[-0.6, 51.5], [0.2, 51.5], [0.2, 51.7], [-0.6, 51.7]];
+
+        it('collapses to the anchor it is dropped from, keeping the size and the aim', () => {
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.Demonstration,
+                {type: 'LineString', coordinates: DRAWN},
+                {},
+                RESOLUTION,
+            );
+            expect(built).toBeDefined();
+            expect(built!.base.geometry.type).toBe('Point');
+            expect((built!.base.geometry as {coordinates: number[]}).coordinates[0]).toBeCloseTo(-0.6, 6);
+
+            // Rebuilt from the anchor alone, the first leg ends where point 2 was. The
+            // rendered geometry is in projected metres — the base is the half that stays
+            // in lon/lat — so the expectation is projected too.
+            const parts = (built!.graphic.geometry as {coordinates: number[][][]}).coordinates;
+            const projected = projectGeometry({type: 'Point', coordinates: [0.2, 51.5]}) as
+                {coordinates: [number, number]};
+            expect(parts[0][1][0]).toBeCloseTo(projected.coordinates[0], 0);
+            expect(parts[0][1][1]).toBeCloseTo(projected.coordinates[1], 0);
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+        });
+
+        it('leaves a base that is already a point alone', () => {
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.Demonstration,
+                {type: 'Point', coordinates: [-0.6, 51.5]},
+                {radius: 60_000, rotation: 30},
+                RESOLUTION,
+            );
+            expect(built).toBeDefined();
+            expect(built!.base.properties?.tacticalGraphic?.rotation).toBe(30);
+        });
+    });
+
+    /**
      * The two contact symbols on the second engine. They are separate graphics — FM's
      * badge and APP-06 342900's route — and the failure mode if they ever merge again is
      * silent, since both are hollow arrows with lightning bolts.
