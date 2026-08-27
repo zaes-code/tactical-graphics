@@ -471,6 +471,17 @@ export const RATIO_LOCKED_MISSION_TASKS: ReadonlySet<TacticalGraphicName> = new 
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
+    // **And the last five, 2026-08-26.** The same reasoning had been applied twice and
+    // stopped short both times: these are built from the identical two arcs and carry the
+    // identical rim letter, so leaving them zoom-anchored meant a `LOC` or a `C/S` held
+    // its screen size while the circle around it shrank — at a far zoom the letter is the
+    // graphic. A zoom-anchored scale is *deliberately* insensitive to the shape; this
+    // family needs the opposite.
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
     ...CROSSED_MISSION_TASKS,
 ]);
 
