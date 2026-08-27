@@ -122,6 +122,37 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
         expect(fenced.some(p => p.geometry.type === 'MultiLineString')).toBe(true);
     });
 
+    it('sets the four M markers due north, east, south and west of the middle', () => {
+        // Spacing them along the perimeter put them wherever the drawing happened to
+        // start, so the same area redrawn wore its letters somewhere else and none of them
+        // landed anywhere a reader could name. (User's call, 2026-08-27.)
+        const paints = minedAreaFencedPaint()(areaFeature(), context());
+        const at = paints.filter(p => p.text?.text === 'M')
+            .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        expect(at).toHaveLength(4);
+
+        // The fixture is a rectangle about the origin: north and south on the x axis,
+        // east and west on the y axis, all four on the boundary.
+        // `+ 0` so a rounded negative zero compares equal to zero.
+        const rounded = at.map(([x, y]) => [Math.round(x) + 0, Math.round(y) + 0]).sort();
+        expect(rounded).toEqual([[-400_000, 0], [0, -300_000], [0, 300_000], [400_000, 0]].sort());
+    });
+
+    it('does not draw a cross under a letter', () => {
+        const paints = minedAreaFencedPaint()(areaFeature(), context());
+        const letters = paints.filter(p => p.text)
+            .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        const crosses = (paints.find(p => p.geometry.type === 'MultiLineString')!
+            .geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+        const pitch = 26 * 400;
+        for (const [a, b] of crosses) {
+            const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            for (const l of letters) {
+                expect(Math.hypot(l[0] - mid[0], l[1] - mid[1])).toBeGreaterThan(pitch * 0.5);
+            }
+        }
+    });
+
     // "The area boundary will be filled with the type of mine(s) contained in the
     //  minefield [...] the H field will be filled with an 'S' or a '+S' as appropriate,
     //  and a self-destruct DTG will be posted in the W field."
@@ -154,7 +185,7 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
             return (y - 300_000) / (resolution * mark.text!.scale!);
         };
         expect(clearance(400)).toBeCloseTo(clearance(100), 6);
-        expect(clearance(400)).toBeCloseTo(30, 6);
+        expect(clearance(400)).toBeCloseTo(20, 6);
     });
 
     it('turns each fence cross with the wire it sits on', () => {
@@ -197,15 +228,27 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
             expect(left[1][1]).toBeCloseTo(300_000 + 800_000 * 0.6, 6);
         });
 
-        it('sets an ENY at each end of that base, clear of the sloping sides', () => {
+        it('sets an ENY on the fence itself, between north and each shoulder', () => {
+            // The Template's `N` boxes sit on the boundary, not above it, and the ray that
+            // finds them is the same one the `M`s use. (User's call, 2026-08-27.)
             const paints = minedAreaFencedPaint()(hostile(TacticalGraphicName.MinedAreaFenced), context());
             const eny = paints.filter(p => p.text?.text === 'ENY');
             expect(eny).toHaveLength(2);
-            const xs = eny.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates[0]);
-            expect(xs.map(x => Math.abs(x))).toEqual([400_000 * 0.67, 400_000 * 0.67]);
+
+            const at = eny.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+            // The fixture is a rectangle, so a 45 degree ray from the middle leaves it on
+            // the top edge — one letter either side of north, both on the boundary.
+            for (const [x, y] of at) {
+                expect(y).toBeCloseTo(300_000, 6);
+                expect(Math.abs(x)).toBeCloseTo(300_000, 6);
+            }
+            expect(at[0][0]).toBeGreaterThan(0);
+            expect(at[1][0]).toBeLessThan(0);
         });
 
-        it('lifts field H above the peak rather than into it', () => {
+        it('keeps field H inside the peak, just above the boundary', () => {
+            // Lifted clear of the apex it read as a caption on the marker rather than on
+            // the minefield. (User's call, 2026-08-27.)
             const feature: PaintFeature = {
                 geometry: {type: 'Point', coordinates: ORIGIN},
                 properties: {
@@ -218,7 +261,8 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
             } as unknown as PaintFeature;
             const mark = mineFillPaint()(feature, context()).find(p => p.text)!;
             const y = (mark.geometry as {coordinates: ProjectedPosition}).coordinates[1];
-            expect(y).toBeGreaterThan(300_000 + 800_000 * 0.6);
+            expect(y).toBeGreaterThan(300_000);
+            expect(y).toBeLessThan(300_000 + 800_000 * 0.6);
         });
 
         it('puts the dynamic depiction ENY on its flanks instead, and no peak', () => {

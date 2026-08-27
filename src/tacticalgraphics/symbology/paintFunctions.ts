@@ -486,13 +486,18 @@ const CIRCLED_STATUS_STEPS = 64;
  * defensible reading.
  *
  * Returns nothing when the marks enclose no area, which is a symbol not yet drawn.
+ *
+ * A caller that knows better may hand in the circle outright — the mine cluster's ring is
+ * its own dome completed, which no bounding box can express. @see mineClusterPaint
  */
 export function plannedStatusRing(
     marks: readonly Paint[],
     feature: PaintFeature,
     context: PaintContext,
+    circle?: {center: ProjectedPosition; radius: number},
 ): Paint | undefined {
     if (feature.properties.status !== TacticalGraphicStatus.planned) return undefined;
+    if (circle) return circleMark(circle.center, circle.radius, feature);
 
     let minX = Infinity;
     let minY = Infinity;
@@ -518,7 +523,12 @@ export function plannedStatusRing(
     const radius = Math.hypot(maxX - minX, maxY - minY) / 2 * CIRCLED_STATUS_PADDING;
     if (!(radius > 0)) return undefined;
 
-    const center: ProjectedPosition = [(minX + maxX) / 2, (minY + maxY) / 2];
+    return circleMark([(minX + maxX) / 2, (minY + maxY) / 2], radius, feature);
+}
+
+/** One dash-dot ring, as a closed polyline. @see plannedStatusRing */
+function circleMark(center: ProjectedPosition, radius: number, feature: PaintFeature): Paint | undefined {
+    if (!(radius > 0)) return undefined;
     const ring: ProjectedPosition[] = [];
     for (let i = 0; i <= CIRCLED_STATUS_STEPS; i++) {
         const t = (i / CIRCLED_STATUS_STEPS) * 2 * Math.PI;

@@ -35,7 +35,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
 import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 
@@ -65,8 +65,12 @@ function disc(at: ProjectedPosition, radius: number): ProjectedPosition[] {
  *
  * Everything is expressed against the disc's radius, so the seven stay in proportion with
  * each other however large the row is drawn.
+ *
+ * Exported because the mineline strings the same glyph along a line rather than setting
+ * three of them inside an area — the icon is the same fact either way, and having it in
+ * two places is how the two would drift apart.
  */
-function mineGlyph(
+export function mineGlyph(
     at: ProjectedPosition,
     radius: number,
     type: TacticalGraphicMineType,
@@ -174,35 +178,18 @@ const TEXT_OFFSET = 1.9;
  * declutter drops one of the two labels, so field H simply disappears as you zoom in.
  * A gap in the same units as the thing it is clearing holds at every zoom.
  */
-const AREA_TEXT_GAP_PX = 30;
+const AREA_TEXT_GAP_PX = 20;
 
 /**
- * The hostile marker's height, as a share of its base, and where its `ENY`s sit along that
- * base as a share of the half-width.
+ * The hostile marker's height, as a share of its base.
  *
- * Both measured off 270801's second Example: a base of 458 units carrying a 271-unit peak,
- * with the two letters at 0.67 of the half-width rather than at the corners — where they
- * would sit under the sloping sides.
+ * Measured off 270801's second Example: a base of 458 units carrying a 271-unit peak.
  */
 const HOSTILE_PEAK_HEIGHT = 0.6;
-const HOSTILE_PEAK_LETTER_SHARE = 0.67;
 
 /** Both areas' hostile marker, and the letters that go with it, are the same size rule. */
 function isHostile(feature: PaintFeature): boolean {
     return hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
-}
-
-/**
- * How far the fenced area's hostile peak reaches above the boundary, or zero.
- *
- * Read by the amplifier block as well as by the marker itself, because field H sits above
- * the graphic and the peak *is* above the graphic: without this the two land on top of
- * each other, and `+S` reads as a label on the marker rather than on the minefield.
- * @see hostilePeak
- */
-function hostilePeakLift(feature: PaintFeature, width: number): number {
-    const fenced = feature.properties.name === TacticalGraphicName.MinedAreaFenced;
-    return fenced && isHostile(feature) ? width * HOSTILE_PEAK_HEIGHT : 0;
 }
 
 /**
@@ -263,10 +250,13 @@ export function mineFillPaint(): MinePaint {
         // only two. There is no designation: `T` appears on neither Template, and the box
         // in the middle is Sector 1, which is the mine type drawn rather than typed.
         // (User's call, 2026-08-27.)
+        // **Just above the boundary**, which on a hostile mined area puts it inside the
+        // peak near its base. It was lifted clear of the apex for a while, and that read
+        // as a caption on the marker rather than on the minefield. (User's call,
+        // 2026-08-27.)
         const above = (feature.properties.additionalInfo ?? '').trim();
         if (above) {
-            const lift = bounds ? hostilePeakLift(feature, bounds.maxX - bounds.minX) : 0;
-            const top = bounds ? bounds.maxY + lift + gap : center[1] + ROW_HALF_HEIGHT * scale * TEXT_OFFSET;
+            const top = bounds ? bounds.maxY + gap : center[1] + ROW_HALF_HEIGHT * scale * TEXT_OFFSET;
             paints.push(areaText(feature, [midX, top], above, textScale, 'bottom'));
         }
 
@@ -281,8 +271,51 @@ export function mineFillPaint(): MinePaint {
 /** Screen-pixel size of the fence's crosses, and how far apart they sit. */
 const FENCE_MARK_PX = 9;
 const FENCE_PITCH_PX = 26;
-/** How many `M` markers ring a fenced area. */
-const FENCE_LETTERS = 4;
+
+/**
+ * Where a fenced area's letters sit on its boundary, as compass bearings.
+ *
+ * **Fixed directions, not fixed fractions of the perimeter.** Spacing them evenly along
+ * the walk put them wherever the drawing happened to start, so the same area redrawn with
+ * its first click somewhere else wore its `M`s in different places — and on an irregular
+ * boundary none of them landed anywhere a reader could name. The Template puts `M` at the
+ * four cardinals and the two `N` boxes between north and each shoulder, so that is what
+ * these are: a ray cast from the middle of the area, and the letter set where it crosses
+ * the fence. (User's call, 2026-08-27.)
+ */
+const FENCE_LETTER_BEARINGS = [0, 90, 180, 270];
+const FENCE_ENY_BEARINGS = [45, 315];
+
+/**
+ * Where a ray from `from` at `bearing` degrees (0 = north, clockwise) leaves the ring.
+ *
+ * The furthest crossing, so a boundary that folds back on itself gives the outer edge —
+ * a letter inside a concave lobe would read as belonging to nothing.
+ */
+function ringCrossing(
+    ring: ProjectedPosition[],
+    from: ProjectedPosition,
+    bearingDeg: number,
+): ProjectedPosition | undefined {
+    const t = (bearingDeg * Math.PI) / 180;
+    const dx = Math.sin(t);
+    const dy = Math.cos(t);
+    let best: number | undefined;
+    for (let i = 0; i + 1 < ring.length; i++) {
+        const [ax, ay] = ring[i];
+        const [bx, by] = ring[i + 1];
+        const ex = bx - ax;
+        const ey = by - ay;
+        const denom = dx * ey - dy * ex;
+        if (Math.abs(denom) < 1e-9) continue;
+        // Solve `from + s·d = a + u·e` for s along the ray and u along the segment.
+        const s = ((ax - from[0]) * ey - (ay - from[1]) * ex) / denom;
+        const u = ((ax - from[0]) * dy - (ay - from[1]) * dx) / denom;
+        if (s <= 0 || u < 0 || u > 1) continue;
+        if (best === undefined || s > best) best = s;
+    }
+    return best === undefined ? undefined : [from[0] + dx * best, from[1] + dy * best];
+}
 
 /** Clear space between a boundary and an `ENY` set outside it, in screen pixels. */
 const ENY_GAP_PX = 8;
@@ -336,17 +369,20 @@ export function minefieldAreaPaint(): MinePaint {
 }
 
 /**
- * The dashed peak a hostile mined area wears, and the `ENY` at each end of its base.
+ * The dashed peak a hostile mined area wears.
  *
  * **Its base is the graphic's own width.** The Example draws it that way, and it is the
  * only rule that survives an irregular boundary: the peak is a marker standing on the
  * area, not a shape with a size of its own. The base line itself is never drawn — the two
  * sloping sides meet above the area and that is the whole mark.
+ *
+ * The `ENY` letters belong to the *fence*, not to this: they sit on the boundary where the
+ * Template's `N` boxes do. @see FENCE_ENY_BEARINGS
  */
 function hostilePeak(
-    feature: PaintFeature,
+    _feature: PaintFeature,
     ring: ProjectedPosition[],
-    context: PaintContext,
+    _context: PaintContext,
     stroke: {color: string; widthPx: number},
 ): Paint[] {
     const xs = ring.map(p => p[0]);
@@ -357,21 +393,14 @@ function hostilePeak(
     const halfWidth = (maxX - minX) / 2;
     if (!(halfWidth > 0)) return [];
 
-    const midX = (minX + maxX) / 2;
-    const apex: ProjectedPosition = [midX, top + halfWidth * 2 * HOSTILE_PEAK_HEIGHT];
+    const apex: ProjectedPosition = [(minX + maxX) / 2, top + halfWidth * 2 * HOSTILE_PEAK_HEIGHT];
     const left: ProjectedPosition = [minX, top];
     const right: ProjectedPosition = [maxX, top];
 
-    const scale = scaleOf(feature, context);
-    const letterX = halfWidth * HOSTILE_PEAK_LETTER_SHARE;
-    return [
-        {
-            geometry: {type: 'MultiLineString', coordinates: [[left, apex], [apex, right]]},
-            stroke: {...stroke, dashPx: PLANNED_DASH_PX},
-        },
-        areaText(feature, [midX - letterX, top], 'ENY', scale, 'middle'),
-        areaText(feature, [midX + letterX, top], 'ENY', scale, 'middle'),
-    ];
+    return [{
+        geometry: {type: 'MultiLineString', coordinates: [[left, apex], [apex, right]]},
+        stroke: {...stroke, dashPx: PLANNED_DASH_PX},
+    }];
 }
 
 /**
@@ -395,8 +424,9 @@ export function minedAreaFencedPaint(): MinePaint {
         const paints: Paint[] = [{geometry, stroke}];
         if (isHostile(feature)) paints.push(...hostilePeak(feature, ring, context, stroke));
 
-        // Walk the ring at a constant screen pitch, dropping a cross at each step and an
-        // `M` at four of them.
+        // Walk the ring at a constant screen pitch, dropping a cross at each step, and set
+        // the letters at their own bearings rather than at whichever steps happen to fall
+        // near them. @see FENCE_LETTER_BEARINGS
         const lengths: number[] = [0];
         for (let i = 1; i < ring.length; i++) {
             lengths.push(lengths[i - 1] + Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]));
@@ -406,17 +436,40 @@ export function minedAreaFencedPaint(): MinePaint {
         const size = FENCE_MARK_PX * context.resolution;
         if (!(total > pitch * 4)) return paints;
 
+        const xs = ring.map(p => p[0]);
+        const ys = ring.map(p => p[1]);
+        const middle: ProjectedPosition = [
+            (Math.min(...xs) + Math.max(...xs)) / 2,
+            (Math.min(...ys) + Math.max(...ys)) / 2,
+        ];
+        const scale = scaleOf(feature, context);
+        const letters: ProjectedPosition[] = [];
+        for (const bearing of FENCE_LETTER_BEARINGS) {
+            const at = ringCrossing(ring, middle, bearing);
+            if (!at) continue;
+            letters.push(at);
+            paints.push(areaText(feature, at, 'M', scale, 'middle'));
+        }
+        // The two `N` boxes, between north and each shoulder — on the fence, like the
+        // `M`s, rather than floating above it. (User's call, 2026-08-27.)
+        if (isHostile(feature)) {
+            for (const bearing of FENCE_ENY_BEARINGS) {
+                const at = ringCrossing(ring, middle, bearing);
+                if (!at) continue;
+                letters.push(at);
+                paints.push(areaText(feature, at, 'ENY', scale, 'middle'));
+            }
+        }
+
+        /** A cross this close to a letter would be drawn under it. */
+        const clearOfLetters = (at: ProjectedPosition): boolean =>
+            letters.every(l => Math.hypot(l[0] - at[0], l[1] - at[1]) > pitch * 0.9);
+
         const steps = Math.floor(total / pitch);
         // A cross arm's reach along each of its own two diagonals. `size` is the arm's
         // length, so the diagonal offsets are that over root two.
         const arm = size / Math.SQRT2;
-        // The four steps that carry an `M`, named outright rather than by modulo: a
-        // `s % every === 0` test fires at both ends of a closed ring and draws five.
-        const letterSteps = new Set(
-            Array.from({length: FENCE_LETTERS}, (_letter, i) => Math.round((i * steps) / FENCE_LETTERS)),
-        );
         const crosses: ProjectedPosition[][] = [];
-        const scale = scaleOf(feature, context);
 
         for (let s = 0; s < steps; s++) {
             const d = (s + 0.5) * pitch;
@@ -432,15 +485,7 @@ export function minedAreaFencedPaint(): MinePaint {
             const ux = span > 0 ? (ring[seg][0] - ring[seg - 1][0]) / span : 1;
             const uy = span > 0 ? (ring[seg][1] - ring[seg - 1][1]) / span : 0;
 
-            if (letterSteps.has(s)) {
-                // **The label colour, not the line colour.** `M` is a text amplifier, and
-                // text follows the host's `labelUsesHostilityColor` setting rather than
-                // going red with the fence. Taking `color` here made these four the one
-                // place in the library where an amplifier disagreed with the rule.
-                // (User's call, 2026-08-27.) @see labelColorOf
-                paints.push(areaText(feature, at, 'M', scale, 'middle'));
-                continue;
-            }
+            if (!clearOfLetters(at)) continue;
             // **Turned with the wire, not with the map.** The crosses were built on the
             // screen axes, so a fence running north-south wore upright `x`s while the one
             // running east-west wore the same `x`s — the mark stopped belonging to the
