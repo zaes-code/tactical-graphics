@@ -247,6 +247,20 @@ const MOVEMENT_ARROW = f(true, false, true, true, false);
 const MOV = f(true, false, false, false, false);
 
 /**
+ * Avenue of approach (APP-06 152300): the designation, and **no date-time group**.
+ *
+ * Its Template carries `AA` with field `T` beside it, a field `H` set apart from the arrow,
+ * and field `N` twice down the tail. There is no `W` or `W1` anywhere on it — the graphic
+ * had been sharing `MOVEMENT_ARROW`, which offers both, because it is built from the same
+ * arrow as the axes of advance. (User's call, 2026-08-27.)
+ *
+ * Field H is *not* offered yet: the plate's note says it "should be movable to avoid
+ * obscuring key geographic information", and a movable amplifier is a placement decision
+ * rather than a flag. Field N is per-vertex, which this schema does not express.
+ */
+const AVENUE_OF_APPROACH = f(true, false, false, false, false);
+
+/**
  * Tactical mission task (Chapter 6).
  * FM 1-02.2 line 356: "they do not use modifiers or amplifiers."
  */
@@ -390,7 +404,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
-    [TacticalGraphicName.AvenueOfApproach]: MOVEMENT_ARROW,
+    [TacticalGraphicName.AvenueOfApproach]: AVENUE_OF_APPROACH,
     [TacticalGraphicName.MainAxisOfAdvance]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.SupportingAxisOfAdvance]: MOVEMENT_ARROW,
