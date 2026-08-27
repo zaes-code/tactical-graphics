@@ -87,15 +87,66 @@ describe('a movement label sits the same distance from the arrowhead either way 
         expect(west).toBeCloseTo(east, 0);
     });
 
-    it('flips the alignment rather than the anchor', () => {
-        // The anchor stays where the generator put it — half a radius before the midpoint —
-        // and only the direction the glyphs run changes. Moving the anchor instead would
-        // shift the east-facing case, which was already right.
+    it('flips the alignment, and only the alignment', () => {
+        // The claim is the *flip*, not which side a given family starts from: an axis-style
+        // label reads back from the arrowhead and a fixed-letter one reads forward from its
+        // anchor, so pinning the literal `left` here made the test a hostage to a placement
+        // change rather than a guard on the bug.
+        for (const name of [TacticalGraphicName.CounterattackByFire, TacticalGraphicName.TurningMovement]) {
+            const paint = getPaintFunction(name)!.label!;
+            const east = paint(labelFeature(name, EAST.from, EAST.to), context)[0];
+            const west = paint(labelFeature(name, WEST.from, WEST.to), context)[0];
+            expect(new Set([east.text!.align, west.text!.align])).toEqual(new Set(['left', 'right']));
+            // The anchor is the generator's; the flip must not move it.
+            const at = (p: typeof east) => (p.geometry as {coordinates: ProjectedPosition}).coordinates;
+            expect(Math.abs(at(east)[0] - EAST.from[0])).toBeCloseTo(Math.abs(at(west)[0] - WEST.from[0]), 0);
+        }
+    });
+});
+
+describe('the counterattacks label just behind the arrowhead', () => {
+    const NAMES = [TacticalGraphicName.Counterattack, TacticalGraphicName.CounterattackByFire];
+
+    it.each(NAMES.map(n => [String(n), n] as const))(
+        '%s sets its text against the head end of the span, not the middle',
+        (_label, name) => {
+            // The generator publishes a span one radius long ending where the body does, so
+            // `c1` is the arrowhead base. The text is set a fixed clearance back from it and
+            // reads down the arrow; it used to sit at the midpoint of the whole last segment.
+            const paint = getPaintFunction(name)!.label!;
+            const mark = paint(labelFeature(name, EAST.from, EAST.to), context).find(p => p.text?.text)!;
+            const at = (mark.geometry as {coordinates: ProjectedPosition}).coordinates;
+            const midpoint = (EAST.from[0] + EAST.to[0]) / 2;
+            expect(at[0]).toBeGreaterThan(midpoint);
+            // Backed off the head rather than sitting on it.
+            expect(at[0]).toBeLessThan(EAST.to[0]);
+        },
+    );
+
+    it('sizes the text from the published span, so it shrinks with the arrow', () => {
         const paint = getPaintFunction(TacticalGraphicName.CounterattackByFire)!.label!;
-        const east = paint(labelFeature(TacticalGraphicName.CounterattackByFire, EAST.from, EAST.to), context)[0];
-        const west = paint(labelFeature(TacticalGraphicName.CounterattackByFire, WEST.from, WEST.to), context)[0];
-        expect(east.text!.align).toBe('left');
-        expect(west.text!.align).toBe('right');
+        const scaleFor = (span: number) => {
+            const mark = paint(labelFeature(TacticalGraphicName.CounterattackByFire, [0, 0], [span, 0]), context)
+                .find(p => p.text?.text)!;
+            return mark.text!.scale!;
+        };
+        // Below the ceiling, which at this resolution means a span under about 1.4 km —
+        // anything larger is capped and the two would compare equal, which is what the
+        // first version of this assertion actually measured.
+        expect(scaleFor(400)).toBeLessThan(scaleFor(900));
+        expect(scaleFor(SPAN)).toBeLessThanOrEqual(maxGraphicLabelScale());
+    });
+});
+
+describe('APP-06 152300 — the avenue of approach carries no date-time group', () => {
+    it('draws the literal and the designation, and nothing else', () => {
+        const paint = getPaintFunction(TacticalGraphicName.AvenueOfApproach)!.label!;
+        // The fixture carries a `startDate`, as an imported bag can for a symbol whose
+        // Template has nowhere to put one. The Template shows `AA`, `T`, an `H` set apart
+        // from the arrow and `N` twice down the tail -- no `W`, no `W1`.
+        const mark = paint(labelFeature(TacticalGraphicName.AvenueOfApproach, EAST.from, EAST.to), context)
+            .find(p => p.text?.text)!;
+        expect(mark.text!.text).toBe('AA ALPHA');
     });
 });
 

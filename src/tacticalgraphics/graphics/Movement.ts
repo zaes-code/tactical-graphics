@@ -430,13 +430,20 @@ export class Counterattack extends MovementGraphicBase {
         return geometryService.lineStringToDashes([leftArrowBase, arrowCoords, rightArrowBase.reverse()].flat(), [radius / 3, radius / 3]);
     }
 
+    /**
+     * The same span the axis-of-advance family publishes: `radius` long, ending where the
+     * body does, so the label sits **just behind the arrowhead** rather than at the middle
+     * of the last segment.
+     *
+     * It used to be `labelCoordsAtFraction(..., 0.5, radius)` — a pair straddling the
+     * segment's midpoint — which put `CATK` halfway down the arrow. The span also sets the
+     * label's size, and taking it from the arrow's *width* rather than its length is what
+     * stops a long counterattack carrying an enormous designation.
+     * @see labelSpanNearArrowhead (user's call, 2026-08-27)
+     */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = this.arrowCenterline(base, radius);
-        const secondToLast = baseCoords[baseCoords.length - 2];
-        const lastPoint = baseCoords[baseCoords.length - 1];
-        // Label sits at midpoint of the last body segment (not in the arrowhead).
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(secondToLast, lastPoint, 0.5, radius));
+        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
 }
 
