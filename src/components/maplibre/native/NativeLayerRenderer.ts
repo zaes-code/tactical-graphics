@@ -16,6 +16,8 @@ import {
     getLabelHaloColor,
     getSecuritySymbolSize,
     hasBakedDecoration,
+    CENTER_SYMBOL_GRAPHICS,
+    escortSymbolSizePx,
     resolveSecuritySymbol,
     securitySymbolRevision,
     securitySymbolSidc,
@@ -692,10 +694,20 @@ export class NativeLayerRenderer {
 
         const features: Array<{type: 'Feature'; geometry: {type: 'Point'; coordinates: number[]}; properties: Record<string, unknown>}> = [];
 
+        const resolution = resolutionOf(this.map);
+
         for (const graphic of visible) {
-            if (!SECURITY_OPERATIONS.has(graphic.name)) continue;
-            const center = graphic.base.geometry;
-            if (center.type !== 'Point') continue;
+            if (!CENTER_SYMBOL_GRAPHICS.has(graphic.name)) continue;
+            // The security operations are placed on a point; the escort is drawn, so its
+            // symbol goes in the break at the middle of its bar and takes its size from the
+            // bar's span. @see escortSymbolSizePx
+            const placed = graphic.name === TacticalGraphicName.Escort
+                ? escortCenter(graphic, resolution)
+                : graphic.base.geometry.type === 'Point'
+                    ? {at: graphic.base.geometry.coordinates as number[], sizePx: getSecuritySymbolSize()}
+                    : undefined;
+            if (!placed) continue;
+            const center = {type: 'Point' as const, coordinates: placed.at};
 
             const hostility = graphic.properties.hostility ?? TacticalGraphicHostility.pending;
             const symbol = resolveSecuritySymbol({
@@ -705,7 +717,7 @@ export class NativeLayerRenderer {
                 graphicId: graphic.id,
                 hostility,
                 sidc: securitySymbolSidc(hostility),
-                sizePx: getSecuritySymbolSize(),
+                sizePx: placed.sizePx,
                 // The graphic's own amplifiers, which the OpenLayers provider has
                 // always been handed. A provider is a host's code and may key on
                 // anything in here.
@@ -1028,7 +1040,12 @@ function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
 /** The source and layer id for a dash pattern. One derivation, used by both passes. */
 const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
 
-/** The three graphics that carry a host-provided center symbol. */
+/**
+ * The three graphics whose **geometry** is a screen size.
+ *
+ * Not the same question as "which graphics carry a centre symbol", though the two sets
+ * coincided until the escort joined the second one. @see CENTER_SYMBOL_GRAPHICS
+ */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Cover,
     TacticalGraphicName.Guard,
@@ -1055,6 +1072,38 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
  * too large. That is invisible to a comparison run at one zoom, which is why this
  * was missed until the harness grew a zoom axis.
  */
+/**
+ * Where an escort's centre symbol goes, and how big.
+ *
+ * **Read off the base, not the rendered graphic.** Everything this pass emits goes into a
+ * GeoJSON source, so it has to be lon/lat, and the base is the one geometry guaranteed to
+ * be — which is why the security operations beside it use `graphic.base` too. Taking the
+ * rendered bar instead put the symbol nowhere at all.
+ *
+ * 343600 numbers points 2 and 3 as the ends of the bar, so their midpoint is where the
+ * paint layer cuts the break. The size comes from the bar's on-screen span through the
+ * same function the paint sizes that break with. @see escortSymbolSizePx
+ */
+function escortCenter(
+    graphic: MapLibreTacticalGraphic,
+    resolution: number,
+): {at: number[]; sizePx: number} | undefined {
+    const base = graphic.base.geometry;
+    if (base.type !== 'LineString' || base.coordinates.length < 3) return undefined;
+
+    const start = base.coordinates[1] as number[];
+    const end = base.coordinates[2] as number[];
+    const a = toMercator([start[0], start[1]]);
+    const b = toMercator([end[0], end[1]]);
+    const spanPx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
+    if (!(spanPx > 0)) return undefined;
+
+    return {
+        at: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
+        sizePx: escortSymbolSizePx(spanPx),
+    };
+}
+
 function isScreenSized(name: TacticalGraphicName): boolean {
     return SECURITY_OPERATIONS.has(name) || hasBakedDecoration(name);
 }
