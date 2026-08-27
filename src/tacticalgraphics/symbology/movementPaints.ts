@@ -25,7 +25,7 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
-import {uprightRotation} from './decorations';
+import {alignAlong, uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
@@ -59,6 +59,18 @@ function anchors(feature: PaintFeature): ProjectedPosition[] {
  * unifying it would resize a dozen graphics.
  *
  * `0.7` is the share of the span the text may occupy, and is the same either way.
+ *
+ * **Capped, and the cap lives here rather than at the call sites.** A span-proportional
+ * scale tracks the graphic's on-screen size with nothing stopping it, so a long arrow — or
+ * a short one zoomed into — grows a label without bound: measured on an avenue of approach
+ * spanning six degrees, the designation reached **scale 28, a 448 px line of text**, at a
+ * zoom where the arrow still fitted the screen. `maxGraphicLabelScale()` is the ceiling the
+ * ratio-locked mission tasks, the block family, the scallops and the base defense zone all
+ * already stop at.
+ *
+ * `advanceToContactLabelPaint` had worked this out and applied the ceiling to itself alone,
+ * leaving the other eleven callers uncapped — which is the argument for putting it in the
+ * one place every caller goes through.
  */
 export function spanProportionalScale(
     a: ProjectedPosition,
@@ -67,7 +79,7 @@ export function spanProportionalScale(
     fontPx: number,
 ): number {
     const spanPx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
-    return (spanPx * 0.7) / fontPx;
+    return Math.min(maxGraphicLabelScale(), (spanPx * 0.7) / fontPx);
 }
 
 /** The divisor the default movement label uses — a 24 px font literal. */
@@ -154,7 +166,12 @@ function fixedLetterPaint(
                 : coords.length >= 2
                     ? uprightRotation(coords[0], coords[1])
                     : 0;
-            return [text(feature, [x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
+            // The alignment flips with the rotation, or the glyphs run back down the
+            // segment instead of along it. @see alignAlong
+            const align = coords.length >= 2 && !options.upright
+                ? alignAlong(options.align ?? 'left', coords[0], coords[1])
+                : options.align ?? 'left';
+            return [text(feature, [x0, y0], letter, scale, {rotation, align})];
         }
 
         const [x1, y1] = coords[1];
@@ -213,11 +230,17 @@ export function counterattackLabelPaint(): MovementPaint {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
         const label = feature.properties.label;
-        return [text(feature, 
+        return [text(feature,
             coords[0],
             label ? `CATK ${label}` : 'CATK',
             scaleOf(feature, context),
-            {rotation: uprightRotation(coords[0], coords[1]), align: 'left'},
+            {
+                rotation: uprightRotation(coords[0], coords[1]),
+                // Reads forward from the anchor toward the arrowhead, whichever way the
+                // arrow faces. Left-aligned on a west-facing arrow put the text's far edge
+                // a whole label-width further from the tip. @see alignAlong
+                align: alignAlong('left', coords[0], coords[1]),
+            },
         )];
     };
 }
@@ -273,7 +296,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
 
         return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
-            align: c1[0] >= c0[0] ? 'right' : 'left',
+            align: alignAlong('right', c0, c1),
         })];
     };
 }
@@ -302,7 +325,7 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
             ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
             : [c1[0] - ux * clearance, c1[1] - uy * clearance];
 
-        const align: 'left' | 'center' | 'right' = centered ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
+        const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);
 
         return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
@@ -345,7 +368,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         if (value) {
             paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
-                align: 'left',
+                align: alignAlong('left', coords[0], coords[1]),
             }));
         }
 
@@ -425,15 +448,11 @@ export function advanceToContactLabelPaint(): MovementPaint {
         if (!value) return [];
 
         const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
-        // **Capped, like every other size-proportional label in the library.**
-        // `spanProportionalScale` is unbounded on its own, and this label is the longest
-        // in the family — a designation and two date-time groups — so on a wide arrow it
-        // outgrew the symbol it names. `maxGraphicLabelScale()` is the same ceiling the
-        // block family, the scallops and the base defense zone already apply.
-        const scale = Math.min(
-            maxGraphicLabelScale(),
-            spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX),
-        );
+        // The ceiling moved into `spanProportionalScale`, where every caller gets it. This
+        // label is the longest in the family — a designation and two date-time groups — so
+        // it was the first to outgrow the symbol it names, and for a while the only one
+        // capped. @see spanProportionalScale
+        const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
         return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
     };
 }

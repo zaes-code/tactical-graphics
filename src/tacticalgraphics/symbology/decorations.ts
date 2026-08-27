@@ -334,6 +334,38 @@ export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition):
     return rotation;
 }
 
+/** Whether {@link uprightRotation} turned the text through half a turn to keep it readable. */
+export function uprightFlipped(from: ProjectedPosition, to: ProjectedPosition): boolean {
+    const raw = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+    return raw > Math.PI / 2 || raw < -Math.PI / 2;
+}
+
+/**
+ * The alignment to pair with {@link uprightRotation}, so a label grows **along the
+ * segment** rather than back down it.
+ *
+ * The two are halves of one decision and were only ever half made. `uprightRotation`
+ * turns a westward label through half a turn so it reads the right way up — and that
+ * reverses which way the glyphs run on screen. A `left` alignment held against the same
+ * anchor therefore lays the text out in the *opposite* ground direction: measured on a
+ * counter-attack by fire, the far edge of `CATK ALPHA` sat 294 km from the arrow tip
+ * pointing east and 306 km pointing west, the difference being exactly the label's own
+ * width. It reads as the label drifting away from the arrowhead on west-facing arrows.
+ *
+ * `center` is unaffected, which is why the members that use it never showed the fault.
+ * The axis-of-advance family had already worked this out and open-codes it as
+ * `c1[0] >= c0[0] ? 'right' : 'left'`; this is the same test, derived from the rotation
+ * itself so the two cannot drift apart.
+ */
+export function alignAlong(
+    align: 'left' | 'center' | 'right',
+    from: ProjectedPosition,
+    to: ProjectedPosition,
+): 'left' | 'center' | 'right' {
+    if (align === 'center' || !uprightFlipped(from, to)) return align;
+    return align === 'left' ? 'right' : 'left';
+}
+
 /**
  * Offsets an anchor perpendicular to a segment, on the side that is **up on
  * screen**, by a constant number of pixels.
