@@ -495,7 +495,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_ONLY,
     [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_ONLY,
     // Exfiltrate (Table 6-1, Ch. 6) → no amplifiers.
-    [TacticalGraphicName.Exfiltrate]: MISSION_TASK,
+    // Hostility and nothing else, like its twin: 343700's Template carries `EX` and no
+    // amplifier box at all. (User's call, 2026-08-27.)
+    [TacticalGraphicName.Exfiltrate]: SHAPE_ONLY,
 
     // ── Mission task bubbles ─────────────────────────────────────────────────
     // Cover, Guard, Screen are Chapter 5 security operations (Table 5-13): keep identifier.
