@@ -157,12 +157,15 @@ const SECTOR_MODIFIER_TERRAIN = f(false, false, false, false, false, {
 /**
  * Limited access area (APP-06 151100, FM 1-02.2 table 5-5).
  *
- * The two standards draw the same symbol with different amplifiers under the Sector 1
- * box: APP-06 sets field H there and FM sets `W - W1`. The graphic is tagged against
- * both, so it offers both. Neither offers a designation -- the `LAA` above the modifier
- * is the symbol's own literal, printed by both plates.
+ * Sector 1 and field H. The two standards draw the same symbol with *different* amplifiers
+ * under the Sector 1 box -- APP-06 sets field H there and FM sets `W - W1` -- and the
+ * graphic follows APP-06: one box, one field, rather than a stack carrying both readings
+ * of the same box. (User's call, 2026-08-26.)
+ *
+ * No designation either: the `LAA` above the modifier is the symbol's own literal, printed
+ * by both plates, not something a user types.
  */
-const LIMITED_ACCESS_AREA = f(false, false, true, true, false, {
+const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
     mobility: true,
     additionalInfo: true,
 });
