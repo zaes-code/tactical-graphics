@@ -222,27 +222,58 @@ export const frontalAttackLabelPaint = (): MovementPaint => fixedLetterPaint('A'
 /**
  * Counterattack: "CATK", with the user's designation appended after it.
  *
- * The only fixed-letter member that still shows the user's text — "CATK" is the
- * task and the name identifies which one.
+ * The only fixed-letter member that still shows the user's text — "CATK" is the task and
+ * the name identifies which one.
+ *
+ * **Placed and sized like an avenue of approach** as of 2026-08-27, at the user's call: set
+ * just behind the arrowhead rather than at the midpoint of the last segment, and scaled to
+ * the published span — which is the arrow's width — rather than to the zoom. The
+ * zoom-anchored scale it used before does not shrink with the arrow, so a small
+ * counterattack carried a full-size designation. @see behindArrowhead
  */
 export function counterattackLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-        const label = feature.properties.label;
-        return [text(feature,
-            coords[0],
-            label ? `CATK ${label}` : 'CATK',
-            scaleOf(feature, context),
-            {
-                rotation: uprightRotation(coords[0], coords[1]),
-                // Reads forward from the anchor toward the arrowhead, whichever way the
-                // arrow faces. Left-aligned on a west-facing arrow put the text's far edge
-                // a whole label-width further from the tip. @see alignAlong
-                align: alignAlong('left', coords[0], coords[1]),
-            },
-        )];
+        const label = feature.properties.label?.trim();
+        return behindArrowhead(feature, context, coords[0], coords[1], label ? `CATK ${label}` : 'CATK');
     };
+}
+
+/** Clear space between the label's leading edge and the arrowhead base, in screen pixels. */
+const ARROWHEAD_LABEL_CLEARANCE_PX = 10;
+
+/**
+ * A label set **just behind the arrowhead**, reading back down the arrow.
+ *
+ * The generators publish a two-point span that ends where the body does and is one
+ * `radius` long — @see labelSpanNearArrowhead. Everything the placement needs comes from
+ * that span: the direction, the clearance to back off by, and the size, which is therefore
+ * proportional to the arrow's **width** rather than its length. That is what keeps a long
+ * arrow from carrying an enormous designation.
+ *
+ * Three graphics families were open-coding this identically — the axes of advance, the
+ * avenue of approach, and now the counterattacks, which used to set their label at the
+ * midpoint of the last segment instead.
+ */
+function behindArrowhead(
+    feature: PaintFeature,
+    context: PaintContext,
+    c0: ProjectedPosition,
+    c1: ProjectedPosition,
+    value: string,
+): Paint[] {
+    const dx = c1[0] - c0[0];
+    const dy = c1[1] - c0[1];
+    const span = Math.hypot(dx, dy);
+    if (span === 0 || !value) return [];
+
+    const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+    const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
+    return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        rotation: uprightRotation(c0, c1),
+        align: alignAlong('right', c0, c1),
+    })];
 }
 
 /**
@@ -285,19 +316,11 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         if (coords.length < 2) return [];
 
         const [c0, c1] = coords;
-        const dx = c1[0] - c0[0];
-        const dy = c1[1] - c0[1];
-        const segLenMap = Math.hypot(dx, dy);
-        if (segLenMap === 0) return [];
-
-        const value = ['AA', nameAndDate(feature)].filter(Boolean).join(' ');
-        const clearance = 10 * context.resolution;
-        const at: ProjectedPosition = [c1[0] - (dx / segLenMap) * clearance, c1[1] - (dy / segLenMap) * clearance];
-
-        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
-            rotation: uprightRotation(c0, c1),
-            align: alignAlong('right', c0, c1),
-        })];
+        // The literal and field T, and nothing else: 152300's Template carries no `W`/`W1`.
+        // An imported bag can still hold a `startDate` for a symbol with nowhere to put one,
+        // and painting it anyway is how a field nobody offered ends up on the map.
+        const label = feature.properties.label?.trim();
+        return behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
     };
 }
 
