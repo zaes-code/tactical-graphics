@@ -932,38 +932,53 @@ export class InfiltrationLane extends MovementGraphicBase {
 
 // ─── Infiltration — single-line arrow with "IN" label near tail ──────────────
 
+/**
+ * Infiltrate (APP-06 343800) — the same S as the exfiltration, pointed the other way.
+ *
+ * > Point 1 defines the end of the straight line portion of the graphic. Point 2 defines
+ * > the centre of the two 90 degree circular arcs. Point 3 defines the tip of the
+ * > arrowhead.
+ *
+ * 343700 and 343800 print that rule word for word and draw the same construction: a
+ * straight run carrying the letters, an S of two quarter turns, a straight run to the
+ * arrowhead. The only doctrinal difference is where the arrow points — *"in the direction
+ * of enemy forces"* here, *"of friendly forces"* there.
+ *
+ * This used to be a plain arrow along the drawn polyline, which is the axis-of-advance
+ * shape with a different label. @see GeometryService.createSCurve
+ */
 export class Infiltration extends MovementGraphicBase {
     name: string = TacticalGraphicName.Infiltration;
 
     /** `computeArrowheadPoints` puts the point on the last vertex already. */
     protected tipOverhang: number = 0;
 
-    /**
-     * `[p0, tip]` — no width handle, matching `DirectionOfSupportingAttack`,
-     * which this graphic is the single-line twin of. `radius` sizes nothing but
-     * the arrowhead, so the inherited third point had nothing to drag and simply
-     * floated off the side of the line.
-     */
+    /** The three anchor points, in the order the standard numbers them. */
     generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
+        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const lastPoint = baseCoords[baseCoords.length - 1];
-        const secondToLastPoint = baseCoords[baseCoords.length - 2];
+        const c = base.geometry.coordinates;
+        if (c.length < 3) return this.asMultiLineStringFeature([c]);
 
-        const arrowHead: Position[] = geometryService.computeArrowheadPoints(secondToLastPoint, lastPoint, radius, 45);
-
-        return this.asMultiLineStringFeature([baseCoords, arrowHead]);
+        const path = geometryService.createSCurve(c[0], c[2], c[1]);
+        const arrowHead: Position[] = geometryService.computeArrowheadPoints(
+            path[path.length - 2], path[path.length - 1], radius, 45,
+        );
+        return this.asMultiLineStringFeature([path, arrowHead]);
     }
 
+    /** A span along the **first straight**, which is where the plate sets `IN`. */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.25, radius));
+        const c = base.geometry.coordinates;
+        if (c.length < 3) {
+            return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(c[0], c[1], 0.25, radius));
+        }
+        const path = geometryService.createSCurve(c[0], c[2], c[1]);
+        return this.asMultiPointFeature([path[0], path[1]]);
     }
 }
 

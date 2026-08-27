@@ -1311,6 +1311,82 @@ class GeometryService {
         ];
     }
 
+    /**
+     * The exfiltrate / infiltrate S: a straight run, two 90-degree arcs, a straight run.
+     *
+     * APP-06 343700 and 343800 share one construction and three anchor points — *"point 1
+     * defines the end of the straight line portion, point 2 defines the centre of the two
+     * 90 degree circular arcs, point 3 defines the tip of the arrowhead"*.
+     *
+     * **Two 90-degree arcs make the two straights parallel**, and shift the path diagonally
+     * by the same amount along and across: an arc of radius `r` turning a quarter turn
+     * advances `r` along and `r` across, so the pair moves `2r` each way. That is what makes
+     * this an S rather than a bump, and it means points 1 and 3 cannot both lie on the
+     * symbol's own axis — the axis is tilted off the chord between them by exactly the angle
+     * that produces the offset.
+     *
+     * Which leaves point 2 over-determined in the standard and under-determined in practice:
+     * solving all four unknowns from the three points puts the axis along
+     * `point 2 − midpoint(1, 3)`, which is a few metres long and violently unstable wherever
+     * a user naturally drops point 2. So **point 2 is read as depth and side**: its
+     * perpendicular offset from the chord sets the arcs' radius and which way the S kicks,
+     * and its position along the chord sets where the S sits. (User's call, 2026-08-27.)
+     *
+     * @param steps points per quarter arc
+     */
+    createSCurve(a: Position, b: Position, c: Position, steps = 12): Position[] {
+        const A = this.project(a);
+        const B = this.project(b);
+        const C = this.project(c);
+
+        const px = B[0] - A[0];
+        const py = B[1] - A[1];
+        const chord = Math.hypot(px, py);
+        if (chord === 0) return [a, b];
+
+        const ux = px / chord;
+        const uy = py / chord;
+        // Signed offset of point 2 from the chord: the depth, and the side.
+        const offset = (C[0] - A[0]) * -uy + (C[1] - A[1]) * ux;
+        const side = offset >= 0 ? 1 : -1;
+        // The S consumes `2r` of the run, so it cannot take all of it.
+        const radius = Math.min(Math.abs(offset), chord * 0.24);
+        if (radius <= 0) return [a, b];
+
+        // Tilt the axis off the chord by the angle whose sine puts `2r` across it.
+        const phi = Math.asin(Math.min(1, (2 * radius) / chord)) * side;
+        const cos = Math.cos(phi);
+        const sin = Math.sin(phi);
+        // Axis, and its left normal, in the projected frame.
+        const wx = ux * cos + uy * sin;
+        const wy = -ux * sin + uy * cos;
+        const nx = -wy;
+        const ny = wx;
+
+        const along = chord * Math.cos(phi);
+        const straight = Math.max(0, along - 2 * radius);
+        // Where point 2 sits along the run decides how the two straights share it.
+        const at = (C[0] - A[0]) * wx + (C[1] - A[1]) * wy;
+        const lead = Math.min(straight, Math.max(0, at - radius));
+
+        const out: number[][] = [A];
+        const at2 = (d: number, l: number): number[] => [A[0] + wx * d + nx * l * side, A[1] + wy * d + ny * l * side];
+        out.push(at2(lead, 0));
+
+        // First quarter: centre a radius to the offset side of the straight's end.
+        for (let i = 1; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            out.push(at2(lead + radius * Math.sin(t), radius * (1 - Math.cos(t))));
+        }
+        // Second quarter: the mirror, turning back onto the axis.
+        for (let i = 1; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            out.push(at2(lead + radius + radius * (1 - Math.cos(t)), radius + radius * Math.sin(t)));
+        }
+        out.push(B);
+        return out.map(p => this.unproject(p));
+    }
+
     project([lon, lat]: Position): number[] {
         const x = EARTH_RADIUS_METERS * lon * Math.PI / 180;
         const y = EARTH_RADIUS_METERS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 360)));

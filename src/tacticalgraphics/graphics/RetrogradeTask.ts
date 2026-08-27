@@ -2,6 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {Feature, LineString, MultiLineString, MultiPoint, Point} from "geojson";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
+import * as turf from "../core/turf";
 
 export class RetrogradeTask extends TacticalGraphicsBase<PointGraphicOptions> {
     name: TacticalGraphicName;
@@ -48,29 +49,55 @@ export class Exfiltrate extends TacticalGraphicsBase<PointGraphicOptions> {
     name: TacticalGraphicName = TacticalGraphicName.Exfiltrate;
     type: string = "LineString";
 
+    /**
+     * The S, per 343700's three anchor points.
+     *
+     * > Point 1 defines the end of the straight line portion of the graphic. Point 2
+     * > defines the centre of the two 90 degree circular arcs. Point 3 defines the tip of
+     * > the arrowhead.
+     *
+     * This used to draw the operator's raw polyline with a head on the end — a route, not
+     * the symbol. The plate is a specific shape: a straight run carrying `EX`, an S made of
+     * two quarter turns, and a straight run to the arrowhead.
+     * @see GeometryService.createSCurve for why point 2 reads as depth and side
+     */
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const coords = base.geometry.coordinates;
+        if (coords.length < 3) return this.asMultiLineStringFeature([coords]);
+
+        const path = geometryService.createSCurve(coords[0], coords[2], coords[1]);
+        // **Capped against the run.** `opts.size` is the holder's decoration size in metres
+        // and is far larger than this symbol's head: unclamped it drew a V spanning most of
+        // the graphic, which reads as the path folding back on itself rather than as an
+        // arrowhead. A sixth of the run is what the plate draws.
+        const run = turf.distance(turf.point(coords[0]), turf.point(coords[2]), {units: 'meters'});
+        const head = Math.min(opts.size, run / 6);
         const arrowhead = geometryService.computeArrowheadPoints(
-            coords[coords.length - 2],
-            coords[coords.length - 1],
-            opts.size,
+            path[path.length - 2],
+            path[path.length - 1],
+            head,
             45,
         );
-        return this.asMultiLineStringFeature([coords, arrowhead]);
+        return this.asMultiLineStringFeature([path, arrowhead]);
     }
 
-    /** Every drawn vertex is grabbable — there is no width to adjust. */
+    /** The three anchor points, in the order the standard numbers them. */
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates);
+        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
     }
 
     /**
-     * A two-point span across the middle of the FIRST drawn segment, so a
-     * renderer can take both the anchor and the rotation of the "EX" label from
-     * it without re-deriving the segment.
+     * A two-point span along the **first straight**, so a renderer takes both the anchor
+     * and the rotation of the `EX` label from it.
+     *
+     * Point 1 is the free end of that straight and the S begins part way along it, so the
+     * span runs from point 1 toward point 2 rather than to the next drawn vertex — which
+     * on a three-point base is the middle of the curve.
      */
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        const [p0, p1] = base.geometry.coordinates;
-        return this.asMultiPointFeature([p0, p1]);
+        const c = base.geometry.coordinates;
+        if (c.length < 3) return this.asMultiPointFeature(c.slice(0, 2));
+        const path = geometryService.createSCurve(c[0], c[2], c[1]);
+        return this.asMultiPointFeature([path[0], path[1]]);
     }
 }
