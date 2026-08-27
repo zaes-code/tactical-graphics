@@ -452,6 +452,85 @@ const DEFAULT_LINE_LABEL_GAP_PX = 8;
 export const PLANNED_DASH_PX = [12, 8];
 
 /**
+ * The dash-dot a **circled** control measure's planned ring is drawn with.
+ *
+ * Long dash, gap, dot, gap — measured off 290400's Planned Example, and visibly not the
+ * plain `PLANNED_DASH_PX`: the ring has to read as a different thing from a symbol that
+ * merely dashes when planned, because for these it is the *only* difference between the
+ * two statuses. @see plannedStatusRing
+ */
+export const CIRCLED_STATUS_DASH_PX = [18, 6, 3, 6];
+
+/**
+ * Padding on the ring, as a multiple of the half-diagonal it encloses.
+ *
+ * Enough that the ring clears the symbol's corners rather than grazing them.
+ */
+const CIRCLED_STATUS_PADDING = 1.06;
+
+/** How many segments the ring is drawn with. Smooth at any size a symbol is read at. */
+const CIRCLED_STATUS_STEPS = 64;
+
+/**
+ * The dash-dot ring a *"CM Status Type: Circled"* symbol wears when it is planned.
+ *
+ * 56 rows of APP-06 carry that line, and it means the same thing on every one: planned is
+ * shown by enclosing the symbol in a circle rather than by changing the symbol. The
+ * mechanism is here, in the half both renderers read, because it is a fact about the
+ * symbology and not about a canvas. @see CIRCLED_STATUS_GRAPHICS for which names use it
+ *
+ * **Centred on the bounding box, not on an anchor point.** The rule has to hold for a
+ * symbol at any rotation and of any shape — the family runs from a two-point chord to a
+ * whole area — and the box's centre is the only point every one of them has. 290400's own
+ * illustration draws its ring a little low of that; it is a drawing, and centring is the
+ * defensible reading.
+ *
+ * Returns nothing when the marks enclose no area, which is a symbol not yet drawn.
+ */
+export function plannedStatusRing(
+    marks: readonly Paint[],
+    feature: PaintFeature,
+    context: PaintContext,
+): Paint | undefined {
+    if (feature.properties.status !== TacticalGraphicStatus.planned) return undefined;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const visit = (value: unknown): void => {
+        if (!Array.isArray(value)) return;
+        if (typeof value[0] === 'number') {
+            const [x, y] = value as ProjectedPosition;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            return;
+        }
+        value.forEach(visit);
+    };
+    // The line work only: a text mark's anchor is a point somewhere off the symbol, and
+    // letting one into the box would drag the ring toward whichever amplifier is set.
+    marks.filter(mark => mark.stroke || mark.fill).forEach(mark => visit(mark.geometry.coordinates));
+    if (!isFinite(minX) || !isFinite(minY)) return undefined;
+
+    const radius = Math.hypot(maxX - minX, maxY - minY) / 2 * CIRCLED_STATUS_PADDING;
+    if (!(radius > 0)) return undefined;
+
+    const center: ProjectedPosition = [(minX + maxX) / 2, (minY + maxY) / 2];
+    const ring: ProjectedPosition[] = [];
+    for (let i = 0; i <= CIRCLED_STATUS_STEPS; i++) {
+        const t = (i / CIRCLED_STATUS_STEPS) * 2 * Math.PI;
+        ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
+    }
+    return {
+        geometry: {type: 'LineString', coordinates: ring},
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},
+    };
+}
+
+/**
  * The dash a graphic takes from its amplifiers, or nothing.
  *
  * **Two conditions, not one.** A `planned` status dashes, and so does a *suspected*

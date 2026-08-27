@@ -115,6 +115,50 @@ describe('APP-06 290400 — mine cluster', () => {
     });
 });
 
+describe('APP-06 290101 — the mineline is a string of beads', () => {
+    // The Example draws the line strung with filled discs, which is the whole symbol; the
+    // `N`s and the modifier hang off it. @see minelinePaint
+    const pearls = (resolution: number) =>
+        minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline), context(resolution),
+        ).filter(paint => paint.circle);
+
+    it('strings filled discs along the line', () => {
+        const [disc] = pearls(40);
+        expect(disc).toBeDefined();
+        expect(disc.geometry.type).toBe('MultiPoint');
+        expect((disc.geometry as {coordinates: ProjectedPosition[]}).coordinates.length).toBeGreaterThan(3);
+        // Filled, not outlined: a ring of circles is a different symbol.
+        expect(disc.circle!.fill).toBeDefined();
+        expect(disc.circle!.stroke).toBeUndefined();
+    });
+
+    it('sits every bead on the line and inside it', () => {
+        const [disc] = pearls(40);
+        const centers = (disc.geometry as {coordinates: ProjectedPosition[]}).coordinates;
+        for (const [x, y] of centers) {
+            expect(y).toBeCloseTo(0, 6);
+            expect(x).toBeGreaterThanOrEqual(0);
+            expect(x).toBeLessThanOrEqual(40_000);
+        }
+    });
+
+    it('fits a whole number of them, centred, so neither end is ragged', () => {
+        const centers = (pearls(40)[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+        const lead = centers[0][0];
+        const tail = 40_000 - centers[centers.length - 1][0];
+        expect(lead).toBeCloseTo(tail, 6);
+    });
+
+    it('shrinks the beads against the line, not against the zoom', () => {
+        // The same cap the obstacle teeth use: a bead sized against the zoom alone
+        // swallows a short line whole. @see decorationScale
+        const wide = pearls(40)[0].circle!.radiusPx;
+        const zoomedOut = pearls(4_000)[0]?.circle?.radiusPx ?? 0;
+        expect(zoomedOut).toBeLessThan(wide);
+    });
+});
+
 describe('APP-06 290500 — trip wire', () => {
     it('puts the stake at point 1 and leaves point 2 bare', () => {
         const paints = tripWirePaint()(feature(TacticalGraphicName.TripWire), context());
@@ -133,6 +177,21 @@ describe('APP-06 290500 — trip wire', () => {
         expect(Math.max(...ys)).toBeGreaterThan(0);
         expect(Math.min(...ys)).toBeLessThan(0);
     });
+
+    // "Points 1 and 2 determine the length and orientation of the line drawn from the
+    //  physical mine to the end of the trip wire."
+    it('runs as far past point 1 as point 2 is beyond it, at every zoom', () => {
+        // The stake stands at the middle of the wire. The overhang used to be a screen
+        // size, so the wire was symmetrical only at the zoom that constant was tuned at —
+        // and the two anchor points are what states the length. (User's call.)
+        for (const resolution of [10, 40, 200, 900]) {
+            const paints = tripWirePaint()(feature(TacticalGraphicName.TripWire), context(resolution));
+            const xs = lines(paints).flat().map(([x]) => x);
+            // Point 1 sits at the origin, point 2 at 40 km east; the wire reaches the same
+            // 40 km west of point 1.
+            expect(Math.min(...xs)).toBeCloseTo(-40_000, 3);
+        }
+    });
 });
 
 describe('APP-06 290800 — raft site', () => {
@@ -144,17 +203,23 @@ describe('APP-06 290800 — raft site', () => {
         expect(lines(paints)).toHaveLength(5);
     });
 
-    it('runs each barb past the tip, so the mark crosses', () => {
+    it('stops each barb at the tip, so the shaft stays clean', () => {
+        // The template draws a plain Y at each end: two strokes leaving the tip outward,
+        // and nothing on the shaft side of it. They used to run a quarter of their length
+        // through the tip, which put a cross there — a perfectly plausible arrowhead, and
+        // not this symbol. @see raftSitePaint
         const paints = raftSitePaint()(feature(TacticalGraphicName.RaftSite), context());
         const barbs = lines(paints).filter(path => path !== EAST);
+        expect(barbs).toHaveLength(4);
 
-        // A chevron would stop at the anchor point; these carry on through it, which is
-        // the difference between the template's mark and an ordinary arrowhead.
         const atStart = barbs.filter(path => path.every(([x]) => x < 20_000));
         expect(atStart).toHaveLength(2);
         for (const barb of atStart) {
-            expect(Math.min(...barb.map(([x]) => x))).toBeLessThan(0);
-            expect(Math.max(...barb.map(([x]) => x))).toBeGreaterThan(0);
+            // Point 1 is at the origin and the shaft runs east, so nothing may reach east.
+            expect(Math.max(...barb.map(([x]) => x))).toBeLessThanOrEqual(1e-9);
+        }
+        for (const barb of barbs.filter(path => path.some(([x]) => x > 20_000))) {
+            expect(Math.min(...barb.map(([x]) => x))).toBeGreaterThanOrEqual(40_000 - 1e-9);
         }
     });
 
@@ -163,8 +228,13 @@ describe('APP-06 290800 — raft site', () => {
         const barbs = lines(paints).filter(path => path.every(([x]) => x < 20_000) && path !== EAST);
         const heading = (path: ProjectedPosition[]) =>
             Math.atan2(path[1][1] - path[0][1], path[1][0] - path[0][0]);
-        const between = Math.abs(heading(barbs[0]) - heading(barbs[1])) * (180 / Math.PI);
+        // Wrapped to [0, 180): both barbs now leave the tip heading roughly *west*, so a
+        // raw difference straddles the atan2 branch cut and reads 284 degrees for a fork
+        // that is 76 degrees wide.
+        const raw = Math.abs(heading(barbs[0]) - heading(barbs[1])) * (180 / Math.PI);
+        const between = raw > 180 ? 360 - raw : raw;
         expect(between).toBeLessThan(90);
+        expect(between).toBeGreaterThan(0);
     });
 });
 
