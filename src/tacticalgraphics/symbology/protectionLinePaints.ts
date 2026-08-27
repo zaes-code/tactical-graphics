@@ -18,23 +18,32 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicName, getLabel} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName, getLabel} from '../core/type';
+import {mineGlyph} from './minePaints';
 import {
     DECORATION_MIN_PX,
-    centerSegmentIndex,
     endFrame,
     endMarkScale,
-    offsetAbove,
     pathLength,
     uprightRotation,
     walkPath,
 } from './decorations';
-import {PLANNED_DASH_PX, amplifierDash, lineColorOf, plannedStatusRing, scaleOf, labelColorOf} from './paintFunctions';
+import {
+    PLANNED_DASH_PX,
+    amplifierDash,
+    hostilityOf,
+    lineColorOf,
+    plannedStatusRing,
+    scaleOf,
+    labelColorOf,
+} from './paintFunctions';
 
 type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /** Screen-pixel clearance between the line and the nearest edge of an amplifier. */
 const LABEL_OFFSET_PX = 8;
+/** Screen-pixel clearance between a mineline's end and the letter beyond it. */
+const MINELINE_LABEL_GAP_PX = 10;
 
 /** The path a line graphic was drawn along. */
 function drawnPath(feature: PaintFeature): ProjectedPosition[] {
@@ -61,60 +70,55 @@ function amplifier(
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align,
-            baseline: 'bottom',
+            baseline: 'middle',
             scale,
         },
     };
 }
 
 /**
- * Diameter of one mineline pearl, in screen pixels, and the share of the line's own
- * on-screen length one bead may span before it shrinks.
+ * Diameter of one mineline mine, in screen pixels, and the share of the line's own
+ * on-screen length one of them may span before it shrinks.
  *
  * The pixel figure is a **ceiling**, reached on a line long enough to carry it; the share
  * is what decides the size on everything shorter, which is the shape-relative rule every
  * repeating decoration here follows.
  *
  * **Its own share, not `decorationScale`'s.** That function allows 5%, which suits an
- * obstacle's teeth — twenty small marks whose job is texture. A bead is the symbol rather
- * than texture on it, and 290101's Example draws about a dozen of them at 7% each. At 5%
- * a mineline in the sample sheet came out as a dotted line, which is a different symbol.
- * Same reasoning as `endMarkScale`, one family over. @see decorationScale
+ * obstacle's teeth — twenty small marks whose job is texture. A mine is the symbol rather
+ * than texture on it, and 290101's Example draws about a dozen of them at 7% each. At 5% a
+ * mineline came out as a dotted line, which is a different symbol. Same reasoning as
+ * `endMarkScale`, one family over. @see decorationScale
  */
-const MINELINE_PEARL_PX = 18;
-const MINELINE_PEARL_SHARE = 0.07;
-/**
- * Centre-to-centre spacing, as a multiple of a pearl's diameter.
- *
- * A little over one, so the discs sit almost touching — a string of beads rather than a
- * dotted line or a caterpillar. Read off 290101's Example, which is the only statement of
- * the spacing the standard makes.
- */
-const MINELINE_PEARL_PITCH = 1.2;
+const MINELINE_MINE_PX = 18;
+const MINELINE_MINE_SHARE = 0.07;
+/** Centre-to-centre spacing, as a multiple of a mine's own width. */
+const MINELINE_MINE_PITCH = 1.2;
 
 /**
- * The pearls, as a `MultiPoint` for one filled-circle mark.
+ * Where the mines sit along the line, and how big each is.
  *
  * A whole number of them, centred on the route, exactly as the obstacle teeth are fitted:
  * repeating at a fixed pitch instead would leave a ragged half-gap at one end that moves
  * as the line is dragged. @see antiTankDitchPaint
  */
-function minelinePearls(
+function minelineMines(
     path: ProjectedPosition[],
     resolution: number,
 ): {centers: ProjectedPosition[]; radius: number} | undefined {
     const availablePx = pathLength(path) / resolution;
-    const scale = Math.max(0, Math.min(1, (availablePx * MINELINE_PEARL_SHARE) / MINELINE_PEARL_PX));
-    if (MINELINE_PEARL_PX * scale < DECORATION_MIN_PX) return undefined;
-    const diameter = MINELINE_PEARL_PX * scale * resolution;
+    const scale = Math.max(0, Math.min(1, (availablePx * MINELINE_MINE_SHARE) / MINELINE_MINE_PX));
+    if (MINELINE_MINE_PX * scale < DECORATION_MIN_PX) return undefined;
+
+    const diameter = MINELINE_MINE_PX * scale * resolution;
     if (diameter <= 0) return undefined;
 
-    const pitch = diameter * MINELINE_PEARL_PITCH;
+    const pitch = diameter * MINELINE_MINE_PITCH;
     const total = pathLength(path);
     const count = Math.floor(total / pitch);
     if (count < 1) return undefined;
 
-    // Half a pitch in from each end of the centred run, so the first and last pearl sit
+    // Half a pitch in from each end of the centred run, so the first and last mine sit
     // *on* the line rather than hanging off it.
     const lead = (total - (count - 1) * pitch) / 2;
     const centers: ProjectedPosition[] = [];
@@ -122,22 +126,26 @@ function minelinePearls(
         const at = walkPath(path, lead + i * pitch);
         if (at) centers.push(at.point);
     }
-    return centers.length ? {centers, radius: (MINELINE_PEARL_PX * scale) / 2} : undefined;
+    return centers.length ? {centers, radius: diameter / 2} : undefined;
 }
 
 /**
- * APP-06 290101 mineline: the drawn line strung with filled discs, `N` above each end, and
- * the free-text modifier above its middle.
+ * APP-06 290101 mineline: the drawn line strung with mines, and `N` set beyond each end.
  *
- * **The discs are the symbol.** The row's Example draws a line of beads — the same
- * "repeating mark along a route" family as the obstacle teeth, which is why the pattern is
- * fitted the same way and capped by the same `decorationScale`: a bead sized against the
- * zoom alone swallows a short line whole. The line itself still runs underneath and past
- * the outermost pearls, which is how the Example draws it.
+ * **The mines are the symbol, and Modifier 1 says which mine.** The row's Example draws a
+ * line of beads and its Template sets a `Modifier 1` box between the two `N`s — the same
+ * slot the two mine areas fill from Table 8-24, and the only modifier a *pattern* can be
+ * based on. So the bead is the Table 8-24 glyph rather than a plain disc, and the middle
+ * box is that glyph repeated rather than a caption. (User's call, 2026-08-27.)
  *
- * The end labels hang off the **outside** of the line — aligned left at a start that runs
- * east, right at one that runs west — so the text grows away from the graphic rather than
- * back across it, the same rule the engineer work line uses.
+ * **Table 8-24's mine-type rows are remarked *"Used with minefields & mined areas only"*,
+ * and a mineline is a protection line.** Read strictly, the standard does not offer these
+ * modifiers here — but it does draw a `Modifier 1` box on the row, and no other table
+ * populates it. The constraint is recorded rather than silently broken.
+ *
+ * **The `N`s sit beyond the ends, level with the line, not above it.** That is where the
+ * Template puts them: `[N] — [Modifier 1] — [N]`, one row. They read `ENY` when the
+ * mineline is the enemy's, which is what the `N` box means.
  */
 export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
     return (feature, context) => {
@@ -145,47 +153,43 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         if (path.length < 2) return [];
 
         const scale = scaleOf(feature, context);
-        const endLabel = getLabel(name);
+        const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const endLabel = hostile ? 'ENY' : getLabel(name);
+        const color = lineColorOf(feature);
         const start = path[0];
         const afterStart = path[1];
         const end = path[path.length - 1];
         const beforeEnd = path[path.length - 2];
 
-        const color = lineColorOf(feature);
         const paints: Paint[] = [{
             geometry: {type: 'LineString', coordinates: path},
             stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
         }];
 
-        const pearls = minelinePearls(path, context.resolution);
-        if (pearls) {
-            paints.push({
-                geometry: {type: 'MultiPoint', coordinates: pearls.centers},
-                circle: {radiusPx: pearls.radius, fill: {color}},
-            });
+        const mines = minelineMines(path, context.resolution);
+        if (mines) {
+            const type = feature.properties.mineType ?? TacticalGraphicMineType.unspecified;
+            for (const center of mines.centers) {
+                paints.push(...mineGlyph(center, mines.radius, type, color));
+            }
         }
 
-        paints.push(amplifier(feature, 
-            offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
-            endLabel, scale, uprightRotation(start, afterStart),
-            afterStart[0] >= start[0] ? 'left' : 'right',
+        // Beyond each end and reading outward, so the letters grow away from the graphic
+        // rather than back across the mines.
+        const gap = MINELINE_LABEL_GAP_PX * context.resolution;
+        const outward = (from: ProjectedPosition, to: ProjectedPosition): ProjectedPosition => {
+            const dx = to[0] - from[0];
+            const dy = to[1] - from[1];
+            const len = Math.hypot(dx, dy) || 1;
+            return [to[0] + (dx / len) * gap, to[1] + (dy / len) * gap];
+        };
+        paints.push(amplifier(
+            feature, outward(afterStart, start), endLabel, scale,
+            uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'right' : 'left',
         ));
-        paints.push(amplifier(feature, 
-            offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
-            endLabel, scale, uprightRotation(beforeEnd, end),
-            end[0] >= beforeEnd[0] ? 'right' : 'left',
-        ));
-
-        const modifier = (feature.properties.label ?? '').trim();
-        if (!modifier) return paints;
-
-        const segIdx = centerSegmentIndex(path);
-        const a = path[segIdx];
-        const b = path[segIdx + 1];
-        const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        paints.push(amplifier(feature, 
-            offsetAbove(mid, a, b, context.resolution, LABEL_OFFSET_PX),
-            modifier, scale, uprightRotation(a, b), 'center',
+        paints.push(amplifier(
+            feature, outward(beforeEnd, end), endLabel, scale,
+            uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'left' : 'right',
         ));
         return paints;
     };
@@ -202,6 +206,12 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
  * Which is precisely why the row is also *"CM Status Type: Circled"*: with the symbol's
  * own dashes spent, a planned mine cluster has nothing left to say it with, so it says it
  * by wearing a dash-dot ring. @see plannedStatusRing
+ *
+ * **The ring is the dome's own circle, completed.** Centre on the chord's midpoint, radius
+ * the dome's radius — so the arc lies on the ring rather than floating inside it, and the
+ * two cannot come apart under a rotate or a resize because both are read from points 1 and
+ * 2. The generic bounding-box ring left a visible gap above the apex and a wider one below
+ * the chord, which read as two symbols rather than one. (User's call, 2026-08-27.)
  */
 export function mineClusterPaint(): ProtectionPaint {
     return (feature, context) => {
@@ -211,7 +221,17 @@ export function mineClusterPaint(): ProtectionPaint {
             geometry,
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
         }];
-        const ring = plannedStatusRing(paints, feature, context);
+
+        // Part 0 is the chord — points 1 and 2 as drawn. @see MineCluster
+        const chord = geometry.coordinates[0];
+        const circle = chord && chord.length >= 2
+            ? {
+                center: [(chord[0][0] + chord[1][0]) / 2, (chord[0][1] + chord[1][1]) / 2] as ProjectedPosition,
+                radius: Math.hypot(chord[1][0] - chord[0][0], chord[1][1] - chord[0][1]) / 2,
+            }
+            : undefined;
+
+        const ring = plannedStatusRing(paints, feature, context, circle);
         if (ring) paints.push(ring);
         return paints;
     };
@@ -227,9 +247,6 @@ export function mineClusterPaint(): ProtectionPaint {
 const TRIP_WIRE_STEM: readonly ProjectedPosition[] = [[0, 0.99], [0, -0.74]];
 const TRIP_WIRE_TAIL: readonly ProjectedPosition[] = [[0, -0.74], [0.24, -1.04], [0.61, -1.22]];
 const TRIP_WIRE_BAR: readonly ProjectedPosition[] = [[-0.44, 0.65], [0.51, 0.65]];
-
-/** Size of the trip wire's stake, in screen pixels before `endMarkScale`. */
-const TRIP_WIRE_MARK_PX = 44;
 
 /**
  * APP-06 290500 trip wire: the wire from the mine to its far end, with the stake glyph at
@@ -248,25 +265,28 @@ export function tripWirePaint(): ProtectionPaint {
         const paints: Paint[] = [{geometry: {type: 'LineString', coordinates: path}, stroke}];
 
         const frame = endFrame(path, true);
-        const scale = endMarkScale(path, context.resolution, TRIP_WIRE_MARK_PX);
-        if (!frame || scale <= 0) return paints;
+        if (!frame) return paints;
 
-        const size = TRIP_WIRE_MARK_PX * scale * context.resolution;
+        // **One unit is the distance between the two anchor points**, which is what the
+        // glyph table above is written in and what the template draws: its crossbar
+        // measures 0.97 of point 1 → point 2, and the whole wire measures 1.94 of the
+        // crossbar. Sizing the stake as a screen constant instead broke that ratio at
+        // every zoom but one — on a long wire the crossbar came out a seventh of it.
+        // This symbol is not the "varies only in length" kind; 290500 makes both its
+        // length *and* its proportions the two points' business. (User's call,
+        // 2026-08-27.)
+        const size = Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]);
+        if (!(size > 0)) return paints;
         const at = ([along, left]: ProjectedPosition): ProjectedPosition => [
             frame.origin[0] + (frame.u[0] * along + frame.v[0] * left) * size,
             frame.origin[1] + (frame.u[1] * along + frame.v[1] * left) * size,
         ];
 
-        // **The wire runs as far past point 1 as point 2 is beyond it.** The two anchor
-        // points give one arm's length and the template draws the other arm to match, so
-        // the stake stands at the middle of the wire rather than a third of the way along
-        // it. A screen-sized overhang looked right only at the zoom it was tuned at, and
-        // the overhang is the one part of this symbol that is *not* fixed: 290500 makes
-        // the wire's length the thing the two points are for. (User's call, 2026-08-27.)
-        const span = Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]);
+        // **The wire runs as far past point 1 as point 2 is beyond it**, so the stake
+        // stands at its middle rather than a third of the way along it.
         const far: ProjectedPosition = [
-            frame.origin[0] - frame.u[0] * span,
-            frame.origin[1] - frame.u[1] * span,
+            frame.origin[0] - frame.u[0] * size,
+            frame.origin[1] - frame.u[1] * size,
         ];
 
         paints.push({

@@ -11,7 +11,7 @@ import type {LineString, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
-import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {
     fortifiedPositionPaint,
@@ -59,15 +59,35 @@ describe('APP-06 290101 — mineline', () => {
         expect(texts(paints)).toEqual(['N', 'N']);
     });
 
-    it('adds the modifier at the middle only when one is set', () => {
-        const withModifier = minelinePaint(TacticalGraphicName.Mineline)(
+    it('reads ENY at both ends when the mineline is the enemy\'s', () => {
+        const hostile = feature(TacticalGraphicName.Mineline, EAST, {
+            hostility: TacticalGraphicHostility.hostileFaker,
+        });
+        expect(texts(minelinePaint(TacticalGraphicName.Mineline)(hostile, context()))).toEqual(['ENY', 'ENY']);
+    });
+
+    it('sets them beyond the ends and level with the line, not above it', () => {
+        // `[N] — [Modifier 1] — [N]`, one row: the Template puts the letters on the line's
+        // own level, outboard of its two ends. (User's call, 2026-08-27.)
+        const marks = minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline), context(),
+        ).filter(p => p.text);
+        const at = marks.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        for (const [, y] of at) expect(y).toBeCloseTo(0, 6);
+        expect(at[0][0]).toBeLessThan(0);
+        expect(at[1][0]).toBeGreaterThan(40_000);
+        // …and reading outward, so neither grows back across the mines.
+        expect(marks.map(p => p.text!.align)).toEqual(['right', 'left']);
+    });
+
+    it('sets no free text of its own, whatever a designation says', () => {
+        // Modifier 1 is the mine drawn along the line, not a caption typed into the
+        // middle. A `label` arriving on an imported graphic draws nothing here.
+        const withLabel = minelinePaint(TacticalGraphicName.Mineline)(
             feature(TacticalGraphicName.Mineline, EAST, {label: 'M1'}),
             context(),
         );
-        expect(texts(withModifier)).toEqual(['N', 'N', 'M1']);
-
-        const spot = withModifier.filter(p => p.text?.text === 'M1')[0].geometry as {coordinates: ProjectedPosition};
-        expect(spot.coordinates[0]).toBeCloseTo(20_000, 0);
+        expect(texts(withLabel)).toEqual(['N', 'N']);
     });
 });
 
@@ -115,47 +135,69 @@ describe('APP-06 290400 — mine cluster', () => {
     });
 });
 
-describe('APP-06 290101 — the mineline is a string of beads', () => {
-    // The Example draws the line strung with filled discs, which is the whole symbol; the
-    // `N`s and the modifier hang off it. @see minelinePaint
-    const pearls = (resolution: number) =>
-        minelinePaint(TacticalGraphicName.Mineline)(
-            feature(TacticalGraphicName.Mineline), context(resolution),
-        ).filter(paint => paint.circle);
+describe('APP-06 290101 — the mineline is a string of mines', () => {
+    // The Example draws the line strung with mines, which is the whole symbol, and the
+    // Template's `Modifier 1` box says which mine. @see minelinePaint
+    const mines = (resolution: number, mineType?: TacticalGraphicMineType) => {
+        // Everything but the drawn line itself, which is paint 0, and the two letters.
+        const paints = minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline, EAST, {mineType}), context(resolution),
+        );
+        return paints.slice(1).filter(paint => !paint.text);
+    };
 
-    it('strings filled discs along the line', () => {
-        const [disc] = pearls(40);
-        expect(disc).toBeDefined();
-        expect(disc.geometry.type).toBe('MultiPoint');
-        expect((disc.geometry as {coordinates: ProjectedPosition[]}).coordinates.length).toBeGreaterThan(3);
-        // Filled, not outlined: a ring of circles is a different symbol.
-        expect(disc.circle!.fill).toBeDefined();
-        expect(disc.circle!.stroke).toBeUndefined();
+    /** Every coordinate in a mark, flattened. */
+    const points = (paint: Paint): ProjectedPosition[] => {
+        const out: ProjectedPosition[] = [];
+        const walk = (value: unknown): void => {
+            if (!Array.isArray(value)) return;
+            if (typeof value[0] === 'number') return void out.push(value as ProjectedPosition);
+            value.forEach(walk);
+        };
+        walk((paint.geometry as {coordinates: unknown}).coordinates);
+        return out;
+    };
+
+    it('strings a row of mines along the line', () => {
+        const marks = mines(40);
+        expect(marks.length).toBeGreaterThan(3);
+        // Filled discs by default is the *antitank* mine; the unspecified one is hollow,
+        // and that is the default here as it is inside the two areas.
+        expect(marks.every(m => m.fill)).toBe(false);
     });
 
-    it('sits every bead on the line and inside it', () => {
-        const [disc] = pearls(40);
-        const centers = (disc.geometry as {coordinates: ProjectedPosition[]}).coordinates;
-        for (const [x, y] of centers) {
-            expect(y).toBeCloseTo(0, 6);
-            expect(x).toBeGreaterThanOrEqual(0);
-            expect(x).toBeLessThanOrEqual(40_000);
+    it('draws whichever mine Modifier 1 names', () => {
+        // Table 8-24's own difference between two of the seven: the antipersonnel mine is
+        // a filled disc with antennae, the plain antitank one is a bare filled disc.
+        const antitank = mines(40, TacticalGraphicMineType.antitank).length;
+        const antipersonnel = mines(40, TacticalGraphicMineType.antipersonnel).length;
+        expect(antipersonnel).toBeGreaterThan(antitank);
+    });
+
+    it('sits every mine on the line and inside it', () => {
+        for (const mark of mines(40, TacticalGraphicMineType.antitank)) {
+            const xs = points(mark).map(([x]) => x);
+            expect(Math.min(...xs)).toBeGreaterThan(-2_000);
+            expect(Math.max(...xs)).toBeLessThan(42_000);
         }
     });
 
     it('fits a whole number of them, centred, so neither end is ragged', () => {
-        const centers = (pearls(40)[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
-        const lead = centers[0][0];
-        const tail = 40_000 - centers[centers.length - 1][0];
-        expect(lead).toBeCloseTo(tail, 6);
+        const centres = mines(40, TacticalGraphicMineType.antitank).map(mark => {
+            const xs = points(mark).map(([x]) => x);
+            return (Math.min(...xs) + Math.max(...xs)) / 2;
+        });
+        expect(centres[0]).toBeCloseTo(40_000 - centres[centres.length - 1], 6);
     });
 
-    it('shrinks the beads against the line, not against the zoom', () => {
-        // The same cap the obstacle teeth use: a bead sized against the zoom alone
-        // swallows a short line whole. @see decorationScale
-        const wide = pearls(40)[0].circle!.radiusPx;
-        const zoomedOut = pearls(4_000)[0]?.circle?.radiusPx ?? 0;
-        expect(zoomedOut).toBeLessThan(wide);
+    it('shrinks the mines against the line, not against the zoom', () => {
+        const width = (resolution: number) => {
+            const first = mines(resolution, TacticalGraphicMineType.antitank)[0];
+            if (!first) return 0;
+            const xs = points(first).map(([x]) => x);
+            return (Math.max(...xs) - Math.min(...xs)) / resolution;
+        };
+        expect(width(4_000)).toBeLessThan(width(40));
     });
 });
 
@@ -163,12 +205,35 @@ describe('APP-06 290500 — trip wire', () => {
     it('puts the stake at point 1 and leaves point 2 bare', () => {
         const paints = tripWirePaint()(feature(TacticalGraphicName.TripWire), context());
         const glyph = lines(paints).filter(path => path !== EAST);
+        // The stem and the tail; the wire itself is the third run and reaches both ways.
+        const stake = glyph.filter(path => Math.max(...path.map(([x]) => x)) < 30_000);
 
-        // Every stroke of the glyph is nearer point 1 than point 2 — the far end is where
-        // the mine sits, and the mine is not part of the control measure.
-        const xs = glyph.flat().map(([x]) => x);
+        // Every stroke of the stake stays well short of point 2 — the far end is where the
+        // mine sits, and the mine is not part of the control measure.
+        const xs = stake.flat().map(([x]) => x);
         expect(xs.length).toBeGreaterThan(0);
-        expect(Math.max(...xs)).toBeLessThan(20_000);
+        expect(Math.max(...xs)).toBeLessThan(40_000);
+    });
+
+    // "The distance between the line connecting points 1 and 2 is the length of the trip
+    //  wire connected to the mine."
+    it('holds the template ratio: the wire is twice its own crossbar', () => {
+        // The stake used to be a screen constant, so on a long wire the crossbar came out
+        // a seventh of it and on a short one nearly half. The glyph table is written in
+        // units of point 1 → point 2, and now so is the glyph. (User's call, 2026-08-27.)
+        for (const resolution of [10, 40, 900]) {
+            const runs = lines(tripWirePaint()(feature(TacticalGraphicName.TripWire), context(resolution)))
+                .filter(path => path !== EAST);
+            const span = (path: ProjectedPosition[]) =>
+                Math.max(...path.map(([x]) => x)) - Math.min(...path.map(([x]) => x));
+            // The wire is the drawn line *plus* the arm mirrored beyond point 1, so it is
+            // measured across both rather than off the one run this paint adds.
+            const xs = [...runs.flat(), ...EAST].map(([x]) => x);
+            const wire = Math.max(...xs) - Math.min(...xs);
+            // The crossbar is the one run that sits entirely above the wire.
+            const crossbar = span(runs.find(r => r.every(([, y]) => y > 0))!);
+            expect(wire / crossbar).toBeCloseTo(2.1, 1);
+        }
     });
 
     it('crosses the wire rather than sitting on one side of it', () => {
