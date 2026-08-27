@@ -37,6 +37,55 @@ export function pathLength(path: ProjectedPosition[]): number {
  * graphic's label goes, so it lands on the middle of the *drawn* line rather than
  * on whichever vertex happens to be central in the array.
  */
+/**
+ * A path cut into two runs, with a gap of `halfGap` metres either side of `at` metres
+ * along it.
+ *
+ * The primitive behind every amplifier that sits **in** a line rather than beside one.
+ * `cutArcAtLabel` does the same job for an arc described as a centre and an angle; this is
+ * the free-polyline form, for a curve the operator's own anchor points defined.
+ *
+ * Returns whichever runs survive: a gap that swallows an end returns one run, and a gap
+ * wider than the path returns none, which a caller should read as "no room, draw it whole".
+ */
+export function splitPathAround(
+    path: readonly ProjectedPosition[],
+    at: number,
+    halfGap: number,
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const from = at - halfGap;
+    const to = at + halfGap;
+
+    const before: ProjectedPosition[] = [];
+    const after: ProjectedPosition[] = [];
+    let walked = 0;
+
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const cut = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+
+        if (walked < from) {
+            if (!before.length) before.push(a);
+            before.push(end <= from ? b : cut(from));
+        }
+        if (end > to) {
+            if (!after.length) after.push(walked >= to ? a : cut(to));
+            after.push(b);
+        }
+        walked = end;
+    }
+
+    return [before, after].filter(run => run.length >= 2);
+}
+
 export function centerSegmentIndex(coords: ProjectedPosition[]): number {
     const lengths: number[] = [];
     let total = 0;
