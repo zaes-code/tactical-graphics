@@ -636,7 +636,27 @@ const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.SeverelyRestrictedTerrain,
 ]);
 
+/**
+ * The two mission tasks that **do** carry an identity.
+ *
+ * The category rule below switches hostility off for every tactical mission task, on FM
+ * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
+ * infiltration are the exception the user asked for (2026-08-27), and there is a reading
+ * behind it: these two are told apart by *whose* forces the arrow points toward — APP-06
+ * 343700 says "the direction of friendly forces" and 343800 "the direction of enemy forces"
+ * — so an identity is the one amplifier that means something on them.
+ *
+ * They are also categorised inconsistently: 343700 sits under Tactical Mission Tasks and
+ * 343800 under Movement and Manoeuvre, which is why one of them offered hostility and the
+ * other did not, for a pair that is one symbol with two letters.
+ */
+const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Exfiltrate,
+    TacticalGraphicName.Infiltration,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
+    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name)) return true;
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
     if (TERRAIN_DESCRIPTIONS.has(name)) return false;

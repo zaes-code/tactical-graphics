@@ -932,59 +932,8 @@ export class InfiltrationLane extends MovementGraphicBase {
 
 // ─── Infiltration — single-line arrow with "IN" label near tail ──────────────
 
-/**
- * Infiltrate (APP-06 343800) — the same S as the exfiltration, pointed the other way.
- *
- * > Point 1 defines the end of the straight line portion of the graphic. Point 2 defines
- * > the centre of the two 90 degree circular arcs. Point 3 defines the tip of the
- * > arrowhead.
- *
- * 343700 and 343800 print that rule word for word and draw the same construction: a
- * straight run carrying the letters, an S of two quarter turns, a straight run to the
- * arrowhead. The only doctrinal difference is where the arrow points — *"in the direction
- * of enemy forces"* here, *"of friendly forces"* there.
- *
- * This used to be a plain arrow along the drawn polyline, which is the axis-of-advance
- * shape with a different label. @see GeometryService.createSCurve
- */
-export class Infiltration extends MovementGraphicBase {
-    name: string = TacticalGraphicName.Infiltration;
-
-    /** `computeArrowheadPoints` puts the point on the last vertex already. */
-    protected tipOverhang: number = 0;
-
-    /** The three anchor points, in the order the standard numbers them. */
-    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
-    }
-
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius: number = opts?.radius || 20;
-        const c = base.geometry.coordinates;
-        if (c.length < 3) return this.asMultiLineStringFeature([c]);
-
-        const path = geometryService.createSCurve(c[0], c[2], c[1]);
-        // The same cap the exfiltration takes: the two are one construction and a head
-        // sized differently between them would be the only thing telling them apart other
-        // than the letter, which is the one thing that should. @see Exfiltrate
-        const run = turf.distance(turf.point(c[0]), turf.point(c[2]), {units: 'meters'});
-        const arrowHead: Position[] = geometryService.computeArrowheadPoints(
-            path[path.length - 2], path[path.length - 1], Math.min(radius, run / 6), 45,
-        );
-        return this.asMultiLineStringFeature([path, arrowHead]);
-    }
-
-    /** A span along the **first straight**, which is where the plate sets `IN`. */
-    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const c = base.geometry.coordinates;
-        if (c.length < 3) {
-            return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(c[0], c[1], 0.25, radius));
-        }
-        const path = geometryService.createSCurve(c[0], c[2], c[1]);
-        return this.asMultiPointFeature([path[0], path[1]]);
-    }
-}
+// Infiltrate lives beside the exfiltration now: they are one symbol with two letters.
+// @see RetrogradeTask.ts, `Infiltration`
 
 // ─── Ambush — 1/3-circle arc with 7 horizontal hashes + right-pointing arrow ──
 // Point-based. At rotation = 0 the arc bulges right (convex facing right, concave

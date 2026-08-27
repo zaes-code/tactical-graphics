@@ -43,11 +43,17 @@ const RESOLUTION = 1200;
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
 /**
- * Every tactical mission task, not only the ones the sweep can draw — the rule
- * is doctrinal, so it has to hold for the 13 still finishing their shapes too.
+ * Every tactical mission task that does not take an identity — not only the ones the sweep
+ * can draw, because the rule is doctrinal and has to hold for the 13 still finishing their
+ * shapes too.
+ *
+ * The exfiltration is filtered out rather than special-cased below: it is one of the two
+ * graphics that override the category rule, and the partition here is "does it take a
+ * hostility", not "is it a mission task". @see supportsHostility
  */
 const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
-    .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks);
+    .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks)
+    .filter(n => !supportsHostility(n));
 const others = PROVEN_GRAPHICS.filter(supportsHostility);
 
 /**
@@ -99,8 +105,11 @@ describe('sweeping with a hostility', () => {
         expect(stamped.length).toBeGreaterThan(0);
     });
 
-    it('skips the tactical mission tasks', () => {
+    it('skips the tactical mission tasks, bar the two that carry an identity', () => {
         expect(missionTasks.every(n => !supportsHostility(n))).toBe(true);
+        // The exception, so the filter above cannot quietly empty the list.
+        expect(supportsHostility(TacticalGraphicName.Exfiltrate)).toBe(true);
+        expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
     });
 
     it('skips line of contact, which draws both identities at once', () => {
