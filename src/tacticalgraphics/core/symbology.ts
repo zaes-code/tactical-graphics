@@ -784,6 +784,9 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Neutralize]: 50,
     [TacticalGraphicName.Suppress]: 50,
     [TacticalGraphicName.Airfield]: 34,
+    // The demonstration's leg. The U's opening follows from it, so this one number
+    // fixes the whole symbol. @see Demonstration
+    [TacticalGraphicName.Demonstration]: 70,
     // Twice the crossed tasks', which was only the number these were specified from
     // rather than the size they landed on.
     [TacticalGraphicName.RoadblockCompleteExecuted]: 100,

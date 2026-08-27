@@ -31,6 +31,7 @@ import {
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
+    escortOrDemonstrationStyleFunc,
     barSymbolStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
@@ -196,6 +197,14 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
+        // The demonstration is dropped rather than drawn, so it lives here rather than in
+        // `LineGraphicBase` — but the paint is the same one, and it sets `DEM` **inside**
+        // its own line work, in a break cut from the rendered glyph. The label feature
+        // therefore has nothing to draw, and the mission-task label below would put a
+        // second copy of the text through the middle of the U. @see demonstrationPaint
+        if (name === TacticalGraphicName.Demonstration) {
+            this.graphic.setStyle(escortOrDemonstrationStyleFunc(name));
+        }
         // Pursuit splits its horizontal line around the "P" so the letter always has
         // breathing room; the gap is measured off the rendered glyph.
         if (name === TacticalGraphicName.Pursuit) {
@@ -215,6 +224,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // 24px treatment or the ordinary zoom-anchored one from the name itself, so both
         // renderers make the same choice. @see RATIO_LOCKED_MISSION_TASKS
         this.label.setStyle((feature, resolution) => getMissionTaskStyleFn(name)(feature, resolution));
+        if (name === TacticalGraphicName.Demonstration) {
+            this.label.setStyle(() => []);
+        }
         // BaseDefenseZone uses a hardcoded "BDZ" label whose scale tracks
         // the circle's radius rather than the zoom-anchored
         // featureLabelScale. Override the default mission-task label style

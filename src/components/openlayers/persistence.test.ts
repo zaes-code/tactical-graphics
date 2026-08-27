@@ -8,8 +8,9 @@
  */
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
-import {LineString, Point} from 'ol/geom';
+import {LineString, MultiLineString, Point} from 'ol/geom';
 import type Geometry from 'ol/geom/Geometry';
+import {toLonLat} from 'ol/proj';
 import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
@@ -154,6 +155,10 @@ const FAMILIES: [label: string, name: TacticalGraphicName][] = [
     ['relief in place', TacticalGraphicName.ReliefInPlace],
     ['retrograde', TacticalGraphicName.Delay],
     ['security operation', TacticalGraphicName.Cover],
+    // Dropped on one click and then sized and turned: the whole graphic is derived
+    // from the anchor, so `size` and `rotation` are the only things a snapshot can
+    // carry and everything else has to be rebuilt from them. @see Demonstration
+    ['dropped', TacticalGraphicName.Demonstration],
 ];
 
 describe('every holder family round-trips', () => {
@@ -591,6 +596,55 @@ describe('a graphic saved before the anchor-point conversion', () => {
 
         const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
         expect(holder.bend).toBeCloseTo(-0.5, 10);
+    });
+
+    /**
+     * And the other direction: the demonstration was drawn as four points until
+     * 2026-08-27 and is dropped from one click now. Those files exist, and the shape is
+     * fully described by point 1 and point 2 — the rest were always the same ratios.
+     */
+    it('downgrades a drawn demonstration to the anchor it is dropped from now', () => {
+        const to = fakeManager();
+        // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
+        const drawn = {
+            type: 'FeatureCollection' as const,
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [
+                {
+                    type: 'Feature' as const,
+                    properties: {
+                        role: 'base',
+                        graphicName: TacticalGraphicName.Demonstration,
+                        symbolId: 'legacy-dem',
+                        tacticalGraphic: {name: TacticalGraphicName.Demonstration, label: 'ALPHA'},
+                    },
+                    geometry: {
+                        type: 'LineString' as const,
+                        coordinates: [[-0.6, 51.5], [0.2, 51.5], [0.2, 51.7], [-0.6, 51.7]],
+                    },
+                },
+            ],
+        };
+
+        const report = restoreTacticalGraphics(to, drawn);
+        expect(report.failed).toEqual([]);
+        expect(report.restored).toBe(1);
+
+        const holder = to.graphicControllers[0].graphic;
+        expect(holder.base.getGeometry()).toBeInstanceOf(Point);
+        // Point 1 is the anchor, and it has not moved.
+        const anchor = (holder.base.getGeometry() as Point).getCoordinates();
+        expect(toLonLat(anchor)[0]).toBeCloseTo(-0.6, 6);
+        expect(toLonLat(anchor)[1]).toBeCloseTo(51.5, 6);
+        // …and it came back aimed the way it was drawn: the rebuilt first leg ends on the
+        // point 2 the file held. Asserted through the geometry rather than against a round
+        // `rotation`, because the aim is a *geodesic* bearing — along this parallel the
+        // initial bearing is 89.7 degrees, not 90, and the generator turns it back into
+        // the same point. Pinning 0 would be pinning the projection, not the restore.
+        const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
+        const bend = toLonLat((rebuilt as MultiLineString).getCoordinates()[0][1]);
+        expect(bend[0]).toBeCloseTo(0.2, 4);
+        expect(bend[1]).toBeCloseTo(51.5, 4);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {

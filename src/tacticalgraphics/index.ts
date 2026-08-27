@@ -391,7 +391,7 @@ export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexC
 export {normalizeDrawnBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
-export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
+export {drawnAnchorFrame, drawnAnchors, droppedFrameFromDrawnBase} from './core/drawnAnchors';
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
 // Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
 // panel hint needs the answer, and only one table may hold it. @see core/drawOrder

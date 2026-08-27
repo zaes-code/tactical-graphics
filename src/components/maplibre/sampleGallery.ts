@@ -112,7 +112,10 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      *     line, so the sweep showed three plain lines;
      *   - **capture, evacuate and recover** need four — centre, radius, the arc's middle,
      *     the arrow's end — and with two they draw the circle and stop, letter and all;
-     *   - the **demonstration** needs four for its U, and the **escort** three for its bar.
+     *   - the **escort** needs three for its bar.
+     *
+     * (The demonstration used to be here too. It is dropped from one click now, so the
+     * plain `point` candidate builds it and no layout is needed. @see Demonstration)
      *
      * Each layout below is written in the order the standard numbers the points.
      */
@@ -150,16 +153,6 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
             [lon + HALF * 0.85, lat - HALF * 0.6],
         ],
     })])),
-
-    [TacticalGraphicName.Demonstration]: (lon, lat) => ({
-        type: 'LineString',
-        coordinates: [
-            [lon - HALF, lat - HALF * 0.5],
-            [lon + HALF * 0.3, lat - HALF * 0.5],
-            [lon + HALF * 0.3, lat + HALF * 0.5],
-            [lon - HALF, lat + HALF * 0.5],
-        ],
-    }),
 
     [TacticalGraphicName.Escort]: (lon, lat) => ({
         type: 'LineString',

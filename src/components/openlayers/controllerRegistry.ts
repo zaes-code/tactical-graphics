@@ -195,6 +195,7 @@ const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) => {
         // above is the same number sized for the view centre, and is what the holder
         // starts life with. @see PointDropController.drop
         {px, resolution: res},
+        allowedGestures(name).rotate,
     );
 };
 
@@ -394,7 +395,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
-    [TacticalGraphicName.Demonstration]:                    vertexLine(4, 4, 0),
+    // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
+    [TacticalGraphicName.Demonstration]:                    pointDrop,
     [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
