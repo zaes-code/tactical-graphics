@@ -7,7 +7,7 @@ import {
     createHandleFeature,
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
-    infiltrationGraphicStyleFunc,
+    exfiltrateStyleFunc,
     barSymbolStyleFunc,
     mobileDefenseGraphicStyleFunc,
     movementGraphicPathStyleFunc,
@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -96,7 +96,12 @@ export class MovementGraphicBase implements LineGraphic {
 
         this.setLabelStyle(name);
         if (name === TacticalGraphicName.Infiltration) {
-            this.graphic.setStyle(infiltrationGraphicStyleFunc());
+            // The exfiltration's style, because it is the exfiltration's symbol with a
+            // different letter. @see exfiltrateStyleFunc
+            this.graphic.setStyle(exfiltrateStyleFunc(getLabel(name)));
+            // The graphic paint carries the letter in the break it cuts, so the label
+            // feature draws nothing — two `IN`s otherwise.
+            this.labels.setStyle(undefined);
         }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
