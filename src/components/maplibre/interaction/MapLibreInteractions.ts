@@ -854,7 +854,10 @@ export class MapLibreInteractions {
         const geometry =
             isRectangular(name) && vertices.length >= 2
                 ? buildBox(vertices)
-                : buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
+                : buildBase(wants, wants === 'LineString'
+                    // The resolution holds the S pair's point 2 to a pixel range.
+                    ? normalizeDrawnBase(name, vertices, resolutionOf(this.map))
+                    : vertices);
         if (!geometry) return undefined;
 
         const properties: TacticalGraphicProperties = {

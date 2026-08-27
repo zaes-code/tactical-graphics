@@ -1691,8 +1691,13 @@ export class TacticalGraphicsManager {
         if (!(geometry instanceof LineString)) return;
 
         const drawn = geometry.getCoordinates().map(c => toLonLat(c));
-        const normalized = normalizeDrawnBase(name, drawn);
-        if (normalized.length === drawn.length) return;
+        // **The resolution matters now**: the S pair's point 2 is held to a pixel range, and
+        // a normalizer with no view to ask leaves it where the user put it.
+        const normalized = normalizeDrawnBase(name, drawn, this.map.getView().getResolution());
+        // Compared by *content*, not by length. This used to bail whenever the vertex count
+        // was unchanged, which is every case where a vertex moves rather than appears.
+        if (normalized.length === drawn.length
+            && normalized.every((p, i) => p[0] === drawn[i][0] && p[1] === drawn[i][1])) return;
 
         geometry.setCoordinates(normalized.map(c => fromLonLat(c as Coordinate)));
     };
