@@ -1,14 +1,24 @@
 import {Coordinate} from 'ol/coordinate';
 import {Feature} from 'ol';
 import {LineString, MultiPoint, Point, Polygon} from 'ol/geom';
-import {toLonLat} from 'ol/proj';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
     TacticalGraphicName,
     carriesRectangleLength,
+    constrainRectangleAxis,
     groundLength,
     latitudeFromMercatorY,
 } from '@zaes/tactical-graphics';
-import {createBaseFeature, createHandleFeature, createMeasureFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
+import {
+    createBaseFeature,
+    createHandleFeature,
+    createMeasureFeature,
+    createOffsetHandleFeature,
+    getAreaLabelStylesFn,
+    getStyle,
+} from '../openlayerStyles';
 import {LineGraphic} from '../controllers/LineGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
@@ -52,6 +62,17 @@ export class RectangularAreaGraphicBase implements LineGraphic {
     graphic: Feature = assignRole(new Feature(), 'graphic');
     labels: Feature = assignRole(new Feature(), 'label');
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
+    /**
+     * The width handle, in a feature of its own.
+     *
+     * **Not a third point in `handles`.** The manager routes a width drag by asking which
+     * *feature* was grabbed — `offsetHandler` — and everything in the handles feature goes
+     * to the reshape path, where `nearestBaseVertexIndex` answers with the nearest base
+     * vertex however far away it is. A drag on the width handle therefore moved point 2:
+     * measured, it took 2,300 km off the length and changed the width by nothing. The
+     * mirror handles sit apart for exactly this reason. @see createOffsetHandleFeature
+     */
+    offsetHandle: Feature = <Feature>createOffsetHandleFeature();
     /** The live width read-out. Empty unless a gesture is in progress. @see showMeasure */
     measure: Feature = createMeasureFeature();
     symbolId: string = '';
@@ -86,7 +107,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
         // A zone drawn with two clicks carries no width yet, so it starts at a screen
         // size — the same rule every other drawn width here follows — and the operator
         // drags the third handle from there.
-        this.halfWidth = DEFAULT_HALF_WIDTH_PX * (groundPerPixel > 0 ? groundPerPixel : 1);
+        this.halfWidth = RECTANGLE_DEFAULT_HALF_WIDTH_PX * (groundPerPixel > 0 ? groundPerPixel : 1);
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
             this.labels.set('drawingResolution', drawingResolution);
@@ -97,7 +118,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
     }
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.labels, this.handles, this.measure, this.base];
+        return [this.graphic, this.labels, this.handles, this.offsetHandle, this.measure, this.base];
     }
 
     getCenter = (): Coordinate => {
@@ -157,7 +178,30 @@ export class RectangularAreaGraphicBase implements LineGraphic {
 
     setBaseFeature(base: Feature<LineString>): void {
         if (!base) return;
+
+        /*
+         * **Dragging an anchor point changes the length, not the orientation.**
+         *
+         * `Modify` moves a base vertex freely, so a drag meant to lengthen the zone also
+         * swung it — and there was then no way to change the length *without* risking a
+         * turn. Rotating is the rotate gesture's job. The rule is in the map-agnostic
+         * half so MapLibre's vertex drag obeys the same one, and it recognises the case
+         * by the only thing visible at this level: exactly one endpoint moved.
+         * @see constrainRectangleAxis
+         */
+        // **The remembered axis, not the base's own coordinates.** OpenLayers' `Modify`
+        // mutates the base geometry *in place*, so by the time this runs the "previous"
+        // read off `this.base` is already the dragged one and nothing looks moved.
+        const previous = this.lastAxis;
+        const incoming = base.getGeometry()?.getCoordinates();
+        // Editing only, never while the zone is being drawn. @see drawing
+        if (!this.drawing && previous?.length === 2 && incoming?.length === 2) {
+            const held = constrainRectangleAxis(previous, incoming.map(c => toLonLat(c)) as Position[]);
+            base = new Feature(new LineString(held.map(c => fromLonLat(c as Coordinate))));
+        }
+
         this.base.setGeometry(base.getGeometry());
+        this.lastAxis = (this.base.getGeometry()?.getCoordinates() ?? []).map(c => toLonLat(c)) as Position[];
 
         const built = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
@@ -169,7 +213,12 @@ export class RectangularAreaGraphicBase implements LineGraphic {
 
         this.graphic.setGeometry(graphic);
         this.labels.setGeometry(labels as Point);
-        this.handles.setGeometry(handles as MultiPoint);
+
+        // `[point 1, point 2, width]` — the first two are the base's own vertices and
+        // reshape, the third widens and lives apart. @see offsetHandle
+        const all = (handles as MultiPoint | undefined)?.getCoordinates() ?? [];
+        this.handles.setGeometry(new MultiPoint(all.slice(0, 2)));
+        if (all.length >= 3) this.offsetHandle.setGeometry(new Point(all[2]));
 
         // **Off the built rectangle, not off the base.** Every area label paint reads
         // these — the fitted text scale, the corner a date-time group hangs from, the
@@ -227,6 +276,29 @@ export class RectangularAreaGraphicBase implements LineGraphic {
 
     private measuring = false;
 
+    /**
+     * True from the first click to the last, set by the factory that builds this holder.
+     *
+     * The axis constraint is for *editing* an existing zone: while the shape is still
+     * being authored there is no axis to hold it to, and the draw's own tidy-up levels it
+     * at the last moment — which moves exactly one endpoint and so reads as a length drag.
+     * Measured: 6.5 degrees of tilt survived on OpenLayers and none on MapLibre, for the
+     * identical two clicks.
+     *
+     * **Not `shapingFromGesture`**, which `LineGraphicController` also raises around a
+     * vertex drag — the one case that most needs the constraint. @see polygonRect
+     */
+    drawing = false;
+
+    /**
+     * The axis this holder last built from, in lon/lat.
+     *
+     * Kept rather than read back off `this.base`, because `Modify` edits that geometry in
+     * place: the object the constraint would compare against is the very one the drag has
+     * already changed. @see setBaseFeature
+     */
+    private lastAxis?: Position[];
+
     /** @see AreaGraphicBase.showMeasure — the same read-out, on the same reasoning. */
     showMeasure(active: boolean): void {
         this.measuring = active;
@@ -234,12 +306,16 @@ export class RectangularAreaGraphicBase implements LineGraphic {
     }
 
     /**
-     * Draws the width **across the rectangle**, through the two anchor points' midpoint,
-     * which is where FM 1-02.2 table 5-24 puts its `AM` / "Width (m)" arrow.
+     * Draws the width **across the rectangle, just inside one of its short sides**.
      *
-     * Along the rectangle's own axis rather than down the projected right edge: a zone can
-     * be turned now, and a vertical read-out beside a rotated shape measures nothing the
-     * shape has.
+     * FM 1-02.2 table 5-24 puts its `AM` / "Width (m)" arrow down the edge, and that is
+     * also the only place it can go: across the middle it runs straight through the
+     * designation and the date-time group, and the hashed line and the text are then two
+     * things fighting for the same pixels. (User's call, 2026-08-27.)
+     *
+     * Along the rectangle's own axis rather than down the projected right edge — a zone
+     * can be turned now, and a vertical read-out beside a rotated shape measures nothing
+     * the shape has.
      */
     private refreshMeasure(): void {
         const coords = this.base.getGeometry()?.getCoordinates() ?? [];
@@ -251,13 +327,16 @@ export class RectangularAreaGraphicBase implements LineGraphic {
         const span = Math.hypot(b[0] - a[0], b[1] - a[1]);
         if (!(span > 0)) return;
 
-        const mid: Coordinate = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        // A short way in from point 2, so the line sits inside the rectangle rather than
+        // on its edge — an edge-riding read-out reads as part of the outline.
+        const t = 1 - MEASURE_INSET;
+        const at: Coordinate = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
         // The left normal of point 1 → point 2, one projected half-width each way.
-        const half = this.halfWidth / groundLength(1, latitudeFromMercatorY(mid[1]));
+        const half = this.halfWidth / groundLength(1, latitudeFromMercatorY(at[1]));
         const nx = (-(b[1] - a[1]) / span) * half;
         const ny = ((b[0] - a[0]) / span) * half;
         this.measure.set('measureMeters', this.halfWidth * 2);
-        this.measure.setGeometry(new LineString([[mid[0] - nx, mid[1] - ny], [mid[0] + nx, mid[1] + ny]]));
+        this.measure.setGeometry(new LineString([[at[0] - nx, at[1] - ny], [at[0] + nx, at[1] + ny]]));
     }
 
     /** Where the axis sits, in lon/lat — for anything that needs the portable form. */
@@ -266,15 +345,12 @@ export class RectangularAreaGraphicBase implements LineGraphic {
     }
 }
 
+
+
 /**
- * Half-width a freshly drawn zone starts at, in screen pixels.
+ * How far in from point 2 the width read-out sits, as a share of the axis.
  *
- * **The same twenty the other engine spends**, which is the whole reason it is written
- * down rather than picked: `sizeDefaults` in the MapLibre adapter gives every drawn width
- * `drawingResolution × 20` per side, and a zone drawn with the identical two clicks has to
- * come out the identical size on both. Measured before they agreed: 782 km against 391.
- *
- * The operator drags the third handle from there, and a restore replays whatever they
- * left, so this only has to be grabbable at the zoom it was drawn at.
+ * Enough to clear the short side and stay well away from the centred designation, which
+ * is what it used to run straight through. (User's call, 2026-08-27.)
  */
-const DEFAULT_HALF_WIDTH_PX = 20;
+const MEASURE_INSET = 0.12;

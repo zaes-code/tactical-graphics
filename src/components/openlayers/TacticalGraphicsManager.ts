@@ -807,8 +807,15 @@ export class TacticalGraphicsManager {
         // Latched against the *base*, because handle indices and base vertices do not line
         // up once `visiblePathHandles` has dropped the redundant ones. Held for the whole
         // gesture so the vertex cannot change hands mid-drag.
+        // **Never for the width handle.** `createOffsetHandleFeature` builds on the
+        // handle feature, so it carries `handle` too — and `nearestBaseVertexIndex`
+        // answers with the nearest base vertex however far away it is, so a graphic that
+        // has both vertex dragging and a width handle sent the width drag to the reshape.
+        // Measured on a rectangular zone: a drag on the width handle took 2,300 km off
+        // the length and changed the width by nothing. Same failure the mirror handles
+        // guard against one branch below. @see handleOffset
         this.activeBaseVertex =
-            feature.get('handle') && this.activeController.handleVertexDrag
+            feature.get('handle') && !feature.get('offsetHandler') && this.activeController.handleVertexDrag
                 ? this.nearestBaseVertexIndex(this.activeController, evt.coordinate)
                 : -1;
 
@@ -870,7 +877,11 @@ export class TacticalGraphicsManager {
         // Feed the drag position to any radius read-out, so its line follows the handle
         // under the cursor. The controller has no coordinate of its own during a resize —
         // only a scale delta — so it has to come from here. `handleUpEvent` disarms it.
-        if (this.isResizing()) {
+        // **A width drag is a sizing gesture too.** The read-out exists to show the
+        // number while the hand is moving, and for a rectangular zone the width *is* the
+        // number — it was armed for a resize only, so dragging the one handle that sets
+        // the width showed nothing. @see RectangularAreaGraphicBase.showMeasure
+        if (this.isResizing() || this.activeFeature?.get('offsetHandler')) {
             // **The anchor follows the cursor only for a handle drag.** It exists to keep
             // the hashed read-out under the hand that is moving the rim. An affordance
             // sits outside the graphic entirely, so following it swung the line off to a
