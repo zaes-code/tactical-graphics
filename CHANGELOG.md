@@ -15,8 +15,13 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-**The next release must be a major.** The breaking changes are queued below — two enum
-renames of a public member *and* its value, plus five exported identifiers respelled.
+**The next release must be a major.** Six breaking changes are queued below, and the
+three worth planning for are the ones that reach data a host has already **saved**: the
+point order of thirty-two graphics, the base geometry of the eighteen rectangular zones,
+and the two designation amplifiers. Two of those three are handled on read — the zones
+migrate, the old amplifier names are aliased — and **the point order is not**, so it is
+the one that needs a migration on your side. The rest are two enum renames of a public
+member *and* its value, plus five exported identifiers respelled.
 
 ### Changed — BREAKING
 
@@ -102,6 +107,10 @@ renames of a public member *and* its value, plus five exported identifiers respe
 - **`npm run check:readme-samples`** compiles every README code sample against `dist/`, so an example cannot outlive the API it demonstrates.
 
 - **`CORRIDOR_GRAPHICS`** — the eight air-coordinating corridors that share one shape: air corridor, low level transit route, minimum risk route, safe lane, special corridor, standard use Army aircraft flight route, transit corridor, unmanned aircraft corridor. Exported for the same reason as the other symbology tables: which graphics carry the corridor's rails, ACP markers and amplifier block is a fact about the symbols, and anything drawing them has to agree on the membership.
+
+- **`npm run drive` covers Export and Import.** The serialization under them was already covered exhaustively in jest; the layer either side was covered by nothing — the Blob and the `<a download>` click going out, `JSON.parse(await file.text())` coming back. The driver now presses Export, catches the download, clears the map, feeds the file back through the Import input, and compares whole `tacticalGraphic` bags rather than named fields, so it keeps working across a schema rename. Internal tooling.
+
+- **`npm run shoot-gallery` frames the shot on the graphics.** It used to capture the app's default view, which left a third of the frame as empty ocean; it now zooms to fill the visible map from the drawn extent. Internal tooling; the committed `docs/images/sample-gallery.png` is regenerated from it.
 
 - `scripts/gen-catalog-svgs.js` — generates one SVG per graphic by asking the library to paint it and transcribing the resulting marks, rather than drawing anything by hand. Internal tooling; not part of the published package.
 
