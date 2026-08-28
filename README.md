@@ -1,6 +1,6 @@
 # Tactical Graphics
 
-Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
+Render **MIL-STD-2525E / FM 1-02.2 / APP-06 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
@@ -297,6 +297,7 @@ rather than a broken shape.
 | Base geometry | Graphics | Example |
 |---|---|---|
 | `LineString` | arrows, phase lines, boundaries, corridors | `MainAxisOfAdvance`, `PhaseLine` |
+| `LineString` **+ `width`** | the eighteen rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
 | `Point` | mission tasks, range fans, fighting positions | `Secure`, `Contain`, `BaseDefenseZone` |
 | `Polygon` | areas | `ObjectiveArea`, `NamedAreaOfInterest` |
 
@@ -308,6 +309,25 @@ renderTacticalGraphic({
 });
 ```
 
+**The rectangular zones are the exception worth knowing about.** APP-06 defines them
+from two anchor points and a width rather than from a drawn box — points 1 and 2 sit at
+the centers of two opposing sides, and `width` spans the other dimension — so they take
+a two-point `LineString`, and a `Polygon` throws. `isRectangular(name)` is the test.
+That is what lets the width be dragged and the zone be turned; a drawn box could only be
+reshaped corner by corner.
+
+```ts
+import {isRectangular, axisFromRectangleRing, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+isRectangular(TacticalGraphicName.FreeFireAreaRectangular);   // → true
+axisFromRectangleRing(ring);                                  // → {p1, p2, halfWidth} — halfWidth in meters
+```
+
+Both renderers migrate zones saved as polygons by an earlier version on restore, so a
+saved map opens editable. `axisFromRectangleRing` is the same recovery, exported for
+anyone calling the generator directly: hand it the ring and it returns the two anchor
+points and the half-width in meters.
+
 Discover what is available at run time:
 
 ```ts
@@ -315,18 +335,57 @@ import {
     listTacticalGraphicNames,
     GRAPHIC_CATEGORIES,
     getDisplayName,
+    getEntityCode,
+    getSpecifications,
     TacticalGraphicName,
 } from '@zaes/tactical-graphics';
 
 listTacticalGraphicNames();                                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
 GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
 getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
+getEntityCode(TacticalGraphicName.PhaseLine);                   // → 140300
+getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06']
 ```
+
+**Every graphic says which standard defines it, and carries the identifier that standard
+gives it.** `getSpecifications(name)` answers with one or both — 211 graphics are in both
+FM 1-02.2 and APP-06, 69 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
+returns APP-06's six-digit entity code as a number, or `null` for those 8, since FM 1-02.2
+publishes no identifiers of its own. `getNameByEntityCode(140300)` goes the other way, for
+reading a symbol out of a feed that addresses graphics by code.
 
 `TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
 at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
 `tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member
 rather than the literal, so pass the enum.
+
+### Which end is the arrowhead?
+
+**Thirty-two graphics number their points from the tip**, because APP-06 does: *"Point 1
+defines the tip of the arrowhead. Point N-1 defines the rear of the symbol."* So on an
+axis of advance the **first** coordinate is the head and the last is the tail. The list is
+the axis-of-advance family, avenue of approach, both counterattacks, advance to contact,
+frontal attack, turning movement, mobile defense, the seven retrograde canes, exploit,
+both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and
+fields of fire.
+
+```ts
+import {TIP_FIRST_GRAPHICS, drawsTipFirst} from '@zaes/tactical-graphics';
+
+drawsTipFirst(TacticalGraphicName.MainAxisOfAdvance);   // → true
+TIP_FIRST_GRAPHICS.length;                              // → 32 — the whole list, if you need to migrate
+```
+
+Nothing about the rendered symbol changes — the shape, its decorations, its handles and
+its labels are what they were. What changes is which end of your `coordinates` array the
+arrow points at.
+
+**3.0.0 changed this and saved data is not migrated.** There is no version marker in
+`properties.tacticalGraphic` to detect an older graphic by, so if you hold data written by
+1.x or 2.x, reverse the coordinate array of any graphic `drawsTipFirst` returns true for.
+The other 22 multipoint graphics — the ones drawn from anchor points, demonstration, the
+obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate, the ferry and raft site,
+and the four direction-of-attack graphics — are untouched.
 
 ---
 
@@ -486,7 +545,7 @@ showing where a new vertex would land are all present in both.
 
 | | |
 |---|---|
-| **Label rasterisation** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
+| **Label rasterization** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
 | **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
 | **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
 
@@ -950,6 +1009,8 @@ Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
 the 289 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
+
+Graphic "FreeFireAreaRectangular" expects a LineString base geometry, got Polygon.
 ```
 
 ---
@@ -960,8 +1021,8 @@ The library is projection-agnostic in one specific way: **it works entirely in
 EPSG:4326**, and hands you EPSG:4326 back. Reproject at your renderer's boundary, not
 before you call it.
 
-Sizes (`radius`, `size`) are in **meters**, and range-fan band ranges are in
-**kilometers**.
+Sizes (`radius`, `width`, `length`, `decorationSize`) are in **meters**, and range-fan
+band ranges are in **kilometers**.
 
 ---
 
@@ -1380,6 +1441,9 @@ a fixed-size badge like Destroy has no resize to offer.
 
 - [FM 1-02.2, Military Symbols](https://www.battleorder.org/post/symbolsfm) — US Army
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
+- [APP-06, NATO Joint Military Symbology](https://nso.nato.int/nso/nsdd/main/standards), Edition E — retrieved from the
+  NATO Standardization Document Database. NATO is acknowledged as its publisher; NATO
+  charges no fee for its standardization documents
 - [TurfJS](https://turfjs.org/) — the geospatial math underneath
 
 ## About Zaes
