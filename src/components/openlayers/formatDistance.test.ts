@@ -10,9 +10,9 @@ describe('formatDistance', () => {
         [1, '1 m'],
         [400, '400 m'],
         [999, '999 m'],
-        [999.6, '1000 m'],   // rounds within metres rather than jumping to km
-    ])('shows %d m as metres', (metres, expected) => {
-        expect(formatDistance(metres)).toBe(expected);
+        [999.6, '1000 m'],   // rounds within meters rather than jumping to km
+    ])('shows %d m as meters', (meters, expected) => {
+        expect(formatDistance(meters)).toBe(expected);
     });
 
     it.each([
@@ -21,11 +21,11 @@ describe('formatDistance', () => {
         [9949, '9.9 km'],
         [10_000, '10 km'],   // one decimal stops meaning anything past here
         [117_407, '117 km'],
-    ])('shows %d m as kilometres', (metres, expected) => {
-        expect(formatDistance(metres)).toBe(expected);
+    ])('shows %d m as kilometers', (meters, expected) => {
+        expect(formatDistance(meters)).toBe(expected);
     });
 
-    it('switches to kilometres exactly at 1 km, not before', () => {
+    it('switches to kilometers exactly at 1 km, not before', () => {
         expect(formatDistance(999.4)).toMatch(/ m$/);
         expect(formatDistance(1000)).toMatch(/ km$/);
     });

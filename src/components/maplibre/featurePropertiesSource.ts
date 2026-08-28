@@ -12,10 +12,10 @@
  *
  * The third row is the real difference. OpenLayers keeps live feature objects a
  * style function reads on every frame, so writing an amplifier and calling
- * `changed()` is enough. Here the drawn output is derived — realised into GeoJSON
+ * `changed()` is enough. Here the drawn output is derived — realized into GeoJSON
  * sources — so an edit means running the graphic through the generator again.
  * That is also why this needs no equivalent of the OpenLayers style-patching: the
- * new colour comes out of the paint functions on the rebuild.
+ * new color comes out of the paint functions on the rebuild.
  */
 
 import type {Map as MapLibreMap} from 'maplibre-gl';
@@ -32,8 +32,20 @@ const HIT_RADIUS_PX = 6;
 export function createMapLibrePropertiesSource(
     map: MapLibreMap,
     renderer: NativeLayerRenderer,
+    /**
+     * Whether a click should be ignored right now.
+     *
+     * Supplied by the caller rather than read off an interaction layer this module does
+     * not hold. The demo passes "am I in edit mode", which is the same rule the
+     * OpenLayers source states through `manager.isEditing()`: a click in edit mode picks
+     * the graphic to work on, and answering it with a modal over the map answers a
+     * different question. @see FeaturePropertiesSource.suppressed
+     */
+    isSuppressed: () => boolean = () => false,
 ): FeaturePropertiesSource {
     return {
+        suppressed: () => isSuppressed(),
+
         onSelect(callback) {
             const handleClick = (event: {point: {x: number; y: number}}) => {
                 const graphic = renderer.hitTest(event.point, HIT_RADIUS_PX);

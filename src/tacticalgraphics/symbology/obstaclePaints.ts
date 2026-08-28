@@ -14,7 +14,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {
     ANTI_TANK_DITCH_STYLES,
@@ -27,7 +27,7 @@ import {
     FORTIFIED_HEIGHT_PX,
     FORTIFIED_MERLON_PX,
     castellatedPath,
-    centreSegmentIndex,
+    centerSegmentIndex,
     decorationScale,
     offsetBelow,
     parallelPath,
@@ -35,7 +35,7 @@ import {
     uprightRotation,
     walkPath,
 } from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -77,10 +77,10 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
         const scale = decorationScale(path, false, context.resolution, WIRE_MARK_PX * style.height);
         const width = WIRE_MARK_PX * scale * context.resolution;
         const height = width * style.height;
-        const railOffset = {under: -height / 2, centre: 0, over: height / 2};
+        const railOffset = {under: -height / 2, center: 0, over: height / 2};
 
         if (style.rail || width <= 0) {
-            for (const at of style.railsAt ?? ['centre']) {
+            for (const at of style.railsAt ?? ['center']) {
                 paints.push({
                     geometry: {type: 'LineString', coordinates: parallelPath(path, railOffset[at])},
                     stroke,
@@ -130,8 +130,22 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
     };
 }
 
-/** How far inside its bounding notch a mine disc is drawn. */
-const MINE_CLEARANCE = 0.5;
+/**
+ * How far inside its bounding notch a mine disc is drawn, and how deep into the notch it
+ * sits as a share of the tooth's height.
+ *
+ * The clearance used to be 0.5 at a depth of 0.72, which is a disc of about a *sixth* of
+ * the tooth's width — fine on the page and invisible on a map, because `decorationScale`
+ * has usually already shrunk the whole pattern by half before this is applied to it. The
+ * reinforced ditch then rendered pixel-for-pixel like the completed one, which is the
+ * worst kind of wrong: a symbol that means "there are mines in here" quietly saying
+ * "there are not".
+ *
+ * Sitting the disc a little higher in the notch buys the room to draw it larger, since the
+ * notch narrows toward its apex.
+ */
+const MINE_CLEARANCE = 0.85;
+const MINE_DEPTH_FRACTION = 0.62;
 
 /**
  * The three anti-tank ditches: under construction, completed, and reinforced with
@@ -151,10 +165,10 @@ const MINE_CLEARANCE = 0.5;
  * states the shape exactly.
  *
  * The mine's size is **bounded, not chosen**: the notch is an upward triangle, and
- * a disc centred `mineDepth` down touches both its edges at
- * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it well inside that, because
- * a disc drawn to the limit meets the filled teeth either side and the three merge
- * into one black mass.
+ * a disc centered `mineDepth` down touches both its edges at
+ * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it inside that, because a disc
+ * drawn to the limit meets the filled teeth either side and the three merge into one
+ * black mass. @see MINE_CLEARANCE for why it is no longer held *well* inside.
  */
 export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
     return (feature, context) => {
@@ -176,10 +190,10 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         const teeth = Math.floor(total / width);
         if (teeth < 1 || (mines && teeth < 2)) return paints;
 
-        // Centre the run, so the pattern sits on the route rather than flush to one end.
+        // Center the run, so the pattern sits on the route rather than flush to one end.
         const lead = (total - teeth * width) / 2;
 
-        /** A point `along` the route, `off` metres to the tooth side of it. */
+        /** A point `along` the route, `off` meters to the tooth side of it. */
         const at = (along: number, off: number): ProjectedPosition | null => {
             const p = walkPath(path, Math.min(Math.max(along, 0), total));
             if (!p) return null;
@@ -202,16 +216,16 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         if (!mines) return paints;
 
         const halfAngleSin = (width / 2) / Math.hypot(width / 2, depth);
-        const mineDepth = depth * 0.72;
+        const mineDepth = depth * MINE_DEPTH_FRACTION;
         const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
 
         for (let i = 1; i < teeth; i++) {
-            const centre = at(lead + i * width, -mineDepth);
-            if (!centre) continue;
+            const center = at(lead + i * width, -mineDepth);
+            if (!center) continue;
             const ring: ProjectedPosition[] = [];
             for (let d = 0; d <= 360; d += 20) {
                 const t = (d * Math.PI) / 180;
-                ring.push([centre[0] + Math.cos(t) * radius, centre[1] + Math.sin(t) * radius]);
+                ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
             }
             // Mines are mines, not outlines of one: always solid whatever the teeth do,
             // and unstroked for the same reason the filled teeth are.
@@ -224,7 +238,7 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
 
 /**
  * The fortified line: square merlons standing off the drawn line, with the
- * designation below its centre.
+ * designation below its center.
  *
  * Shares `fortifiedRing`'s pattern-fitting with the fortified *area* — a whole
  * number of merlons distributed over the length rather than repeated at a fixed
@@ -252,13 +266,13 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
         }];
 
-        const text = getFullLabel(name, feature.properties.label ?? '').trim();
+        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!text) return paints;
 
-        // Under the centre-most drawn segment: the merlons take the upper side, so the
-        // two never compete. `offsetBelow` normalises against the map's down, so the
+        // Under the center-most drawn segment: the merlons take the upper side, so the
+        // two never compete. `offsetBelow` normalizes against the map's down, so the
         // label stays beneath whichever way the line was drawn.
-        const segIdx = centreSegmentIndex(path);
+        const segIdx = centerSegmentIndex(path);
         const a = path[segIdx];
         const b = path[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -268,7 +282,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(a, b),
                 align: 'center',

@@ -23,7 +23,7 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
     protected tipOverhang: number = 1.5;
 
     /**
-     * The centre line the arrow body is built from: the user's line with the
+     * The center line the arrow body is built from: the user's line with the
      * arrowhead's overhang taken off the far end.
      */
     protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
@@ -220,12 +220,12 @@ export class AxisOfAttack extends MovementGraphicBase {
 }
 
 /**
- * Emits a 2-point label span lying along the last segment of the arrow's centre
+ * Emits a 2-point label span lying along the last segment of the arrow's center
  * line, ending where the body does. The style function uses this span for
  * rotation + scale and places the right-aligned "name DTG" label just behind the
  * arrowhead.
  *
- * Takes the centre line rather than the base feature: the body stops short of
+ * Takes the center line rather than the base feature: the body stops short of
  * the user's last vertex by the arrowhead's overhang, and a label anchored on
  * the raw vertex would sit inside the head.
  */
@@ -260,6 +260,22 @@ export class MainAttack extends MovementGraphicBase {
         const radius = opts?.radius || 20;
         return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
+}
+
+/**
+ * Avenue of approach (APP-06 152300) — the axis of advance's solid hollow arrow, carrying
+ * `AA` instead of a bare designation.
+ *
+ * > Points 1 through N-1 and 2 determine the symbol's centreline and Point N determines
+ * > the width.
+ *
+ * Which is `MainAttack`'s construction exactly, so it is that class under another name
+ * rather than a second copy of the same arrow. What the plate adds and this does not is a
+ * free-text amplifier at **each** intermediate anchor point — the Example reads "ENY"
+ * twice down the tail — and the schema carries one label per graphic, not one per vertex.
+ */
+export class AvenueOfApproach extends MainAttack {
+    name: string = TacticalGraphicName.AvenueOfApproach;
 }
 
 export class MainAttackFeint extends MovementGraphicBase {
@@ -414,12 +430,79 @@ export class Counterattack extends MovementGraphicBase {
         return geometryService.lineStringToDashes([leftArrowBase, arrowCoords, rightArrowBase.reverse()].flat(), [radius / 3, radius / 3]);
     }
 
+    /**
+     * The same span the axis-of-advance family publishes: `radius` long, ending where the
+     * body does, so the label sits **just behind the arrowhead** rather than at the middle
+     * of the last segment.
+     *
+     * It used to be `labelCoordsAtFraction(..., 0.5, radius)` — a pair straddling the
+     * segment's midpoint — which put `CATK` halfway down the arrow. The span also sets the
+     * label's size, and taking it from the arrow's *width* rather than its length is what
+     * stops a long counterattack carrying an enormous designation.
+     * @see labelSpanNearArrowhead (user's call, 2026-08-27)
+     */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        const baseCoords = this.arrowCenterline(base, radius);
-        const secondToLast = baseCoords[baseCoords.length - 2];
-        const lastPoint = baseCoords[baseCoords.length - 1];
-        // Label sits at midpoint of the last body segment (not in the arrowhead).
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(secondToLast, lastPoint, 0.5, radius));
+        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
     }
 }
+
+/**
+ * Counter-attack by fire (APP-06 340700) — the counterattack arrow with the *by fire*
+ * bracket standing beyond its tip.
+ *
+ * The arrow is the counterattack's, unchanged and dashed for the same reason: FM 1-02.2
+ * says outright that "there are certain control measures such as counterattack which are
+ * drawn in the present status with dashed lines", and APP-06 repeats it as a note on this
+ * row. The break is the symbol, not a status.
+ *
+ * The bracket is `getAttackByFireSymbol`'s — the same feathered bar and shaft that attack
+ * by fire draws, because it is the same amplifier meaning the same thing. Its bar is
+ * dashed with the arrow; **the little shaft and head are solid**, which is what the plate
+ * draws and is the only place in this symbol where a line is not broken.
+ */
+export class CounterattackByFire extends Counterattack {
+    name: string = TacticalGraphicName.CounterattackByFire;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        const radius: number = opts?.radius || 20;
+        const arrow = super.generateGraphics(base, opts);
+
+        const centerline = this.arrowCenterline(base, radius);
+        const last = centerline[centerline.length - 1];
+        const secondToLast = centerline[centerline.length - 2];
+        const tip = geometryService.getExtendedPoint(last, secondToLast, radius);
+        const axis = turf.bearing(turf.point(secondToLast), turf.point(last));
+
+        const along = (from: Position, meters: number): Position =>
+            turf.destination(turf.point(from), meters / 1000, axis, {units: 'kilometers'}).geometry.coordinates;
+
+        // The bracket stands clear of the tip rather than touching it: the arrow's own
+        // point is a `>`, and a bar hard against it reads as one closed shape.
+        const bracketAt = along(tip, radius * BY_FIRE_STANDOFF);
+        const shaftEnd = along(bracketAt, radius * BY_FIRE_SHAFT);
+
+        // Built here rather than through `getAttackByFireSymbol`, which derives its
+        // arrowhead from the bar's height — right for attack by fire, where the head is
+        // the symbol, and far too big here, where it is a mark beside a much larger arrow.
+        const bracket = geometryService.getFirePositionBracket(bracketAt, axis, radius * BY_FIRE_BAR_HALF);
+        const head = geometryService.computeArrowheadPoints(bracketAt, shaftEnd, radius * BY_FIRE_HEAD, 45);
+
+        return this.asMultiLineStringFeature([
+            ...arrow.geometry.coordinates,
+            ...geometryService.lineStringToDashes(bracket, [radius / 3, radius / 3]).geometry.coordinates,
+            [bracketAt, shaftEnd],
+            head,
+        ]);
+    }
+}
+
+/**
+ * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
+ * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
+ * runs about one, and the head is a third of that.
+ */
+const BY_FIRE_STANDOFF = 0.8;
+const BY_FIRE_SHAFT = 1.05;
+const BY_FIRE_BAR_HALF = 2.0;
+const BY_FIRE_HEAD = 0.3;

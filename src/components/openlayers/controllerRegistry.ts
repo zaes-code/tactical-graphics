@@ -6,12 +6,17 @@
  * 300-line switch statement.
  */
 
-import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx, groundLength} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
+import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
 import {
     CircularAreaGraphicBase,
     EnvelopmentGraphicBase,
+    AmbushGraphicBase,
+    ContainGraphicBase,
+    PursuitGraphicBase,
+    DemonstrationGraphicBase,
     MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
@@ -28,22 +33,72 @@ import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
-import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
+import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
-type ControllerFactory = (name: TacticalGraphicName, resolution: number) => TacticalGraphicHandler;
+/**
+ * `resolution` is the zoom the graphic is being created at; `sizing` is that same
+ * resolution corrected for **where** it is being created.
+ *
+ * They differ because a pixel constant times the raw resolution is a *projected* length,
+ * and Web Mercator inflates those by 1/cos(latitude) — so a decoration, a badge or a
+ * default width derived that way came out twice its intended size at 60 degrees north.
+ * Anything measured in screen pixels multiplies `sizing`; `resolution` is what the
+ * holder files as its drawing zoom, because the label scale is anchored to the zoom
+ * itself and is not a distance at all. @see screenMeters
+ */
+type ControllerFactory = (name: TacticalGraphicName, resolution: number, sizing: number) => TacticalGraphicHandler;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const polygon = (name: TacticalGraphicName, res: number) =>
-    new PolygonGraphicController(new AreaGraphicBase(name, res, res));
+const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new PolygonGraphicController(new AreaGraphicBase(name, sizing, res));
 
-const polygonRect = (name: TacticalGraphicName, res: number) =>
-    new RectangularAreaGraphicController(new AreaGraphicBase(name, res, res));
+/**
+ * A rectangular zone: two anchor points and a width, so it draws like a two-point line and
+ * edits like one — `Modify` drags point 1 and point 2, the third handle is the width.
+ * @see RectangularAreaGraphicBase
+ */
+const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) => {
+    // **Vertex dragging, explicitly.** The two anchor points are the only thing an
+    // operator moves to change the zone's length, and `LineGraphicController` routes a
+    // vertex grab only for the graphics that ask. The library holds the axis to its own
+    // bearing, so the drag lengthens rather than turns. @see constrainRectangleAxis
+    const graphic = new RectangularAreaGraphicBase(name, res, sizing);
+    const controller = new LineGraphicController(graphic, 2, name).enableVertexDragging(2);
 
-const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new MovementGraphicBase(name, 20 * res, res), maxPts || undefined, name);
+    // The holder has to know the draw from an edit, and `shapingFromGesture` cannot tell
+    // it: the controller raises that around a vertex drag too, which is the one case that
+    // most needs the axis held. @see RectangularAreaGraphicBase.drawing
+    const started = controller.onDrawStartFunc;
+    const ended = controller.onDrawEndFunc;
+    controller.onDrawStartFunc = event => {
+        graphic.drawing = true;
+        started(event);
+    };
+    controller.onDrawEndFunc = event => {
+        graphic.drawing = false;
+        ended(event);
+    };
+
+    // A rotate turns about point 1, so only point 2 moves — the same shape a length drag
+    // has, and the axis constraint would hold the zone level and merely shorten it.
+    // @see RectangularAreaGraphicBase.rotating
+    const rotate = controller.handleRotate.bind(controller);
+    controller.handleRotate = (delta: number) => {
+        graphic.rotating = true;
+        try {
+            rotate(delta);
+        } finally {
+            graphic.rotating = false;
+        }
+    };
+    return controller;
+};
+
+const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);
 
 // MobileDefense has no vertices worth editing: its ellipse is fully defined by
 // its two endpoints, and rotate / resize / move already reshape it from them.
@@ -51,8 +106,8 @@ const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
 // feature set (getRenderedFeaturesByProp('base')), so the "Modify vertices" mode
 // has nothing to show — no dashed axis line across the ellipse — while every
 // other edit mode still works. Draw and the sample gallery are unchanged.
-const mobileDefense = (name: TacticalGraphicName, res: number) => {
-    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * res, res));
+const mobileDefense = (name: TacticalGraphicName, res: number, sizing: number) => {
+    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res));
     controller.graphic.base.set('base', false);
     return controller;
 };
@@ -69,26 +124,29 @@ const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
  */
 const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) => (name: TacticalGraphicName, res: number) => {
     const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
-    controller.editStretches = true;
+    // **`editStretches` is left to the constructor**, which reads the library's rule.
+    // Forcing it true here contradicted that for the one graphic that wants vertex
+    // handles *and* an inert body — `Fix` — and put the two engines back out of step.
     return controller.enableVertexDragging(minVertices, anchorVertex);
 };
 
-const block = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new Block(name, res * 20, res), 2, name);
+const block = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 2, name);
 
-const retrograde = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new RetrogradeTask(name, res * 20, res), 2, name);
+const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new RetrogradeTask(name, sizing * 20, res), 2, name);
 
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
-const exfiltrate = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new Exfiltrate(name, res * 20, res), undefined, name);
+const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
+    // Three anchor points, each meaning something. @see GeometryService.createSCurve
+    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3, 0);
 
-const reliefInPlace = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new ReliefInPlace(name, res * 20, res), 2, name);
+const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 2, name);
 
-const corridor = (name: TacticalGraphicName, res: number) =>
-    new LineGraphicController(new AirCorridor(name, res * 20, res));
+const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new AirCorridor(name, sizing * 20, res));
 
 // Circle graphics resize on an edit-mode drag, identically to resize mode — see
 // MissionTaskController.editStretches. The range fans join them now that each
@@ -108,11 +166,36 @@ const turn = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-// Envelopment follows Turn exactly: point-anchored, drawn centre-to-edge so the
+// Envelopment follows Turn exactly: point-anchored, drawn center-to-edge so the
 // first click places it and the second sizes it, with a second handle for the
 // half circle's radius riding the manager's per-handle drag hook.
 const envelopment = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new EnvelopmentGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Pursuit needs its own holder for the same reason envelopment does: APP-06 draws it
+// from anchor points, and the points have to be written and read back in that symbol's
+// own layout. @see PursuitGraphicBase
+// Ambush recovers its center from the chord of its arc, so it reads and writes its own
+// point layout too. @see AmbushGraphicBase
+const ambush = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new AmbushGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+// Contain draws the two ends of its arc rather than a center and an edge, so it needs
+// its own holder for the same reason envelopment and pursuit do. @see ContainGraphicBase
+const contain = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new ContainGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
+const pursuit = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new PursuitGraphicBase(name, res, res));
     controller.editStretches = true;
     return controller;
 };
@@ -128,19 +211,50 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
  * `editStretches` stays off: there is nothing to stretch.
  */
 /**
- * Dropped whole on a single click like the crossed tasks, and resizable afterwards - the
- * user places it, then scales it if they need to. There is no vertex to drag, so the
- * shape's integrity is never at risk, and rotation stays off: `PointDropController`
- * no-ops it and the generator ignores it besides.
+ * Every one-click graphic: the crossed mission tasks, the airfield, the completed
+ * roadblock. One click plants it whole, and whether it may then be scaled or turned is
+ * the portable table's business rather than this factory's.
  *
- * `res * 100` — twice Suppress's `res * 50`, which was only the starting point these were
- * specified from, not the size they landed on.
+ * **The drop size comes from `dropSizePx`, not from a literal here.** It used to be
+ * `res * 50`, `res * 34` and `res * 100` in three separate factories, which is the same
+ * fact stated three times in the half of the codebase MapLibre cannot see — so MapLibre
+ * had to guess at one-click-ness from `allowedGestures`, and guessed wrong the moment a
+ * one-click graphic became resizable.
+ *
+ * It is a screen size converted at the moment of the drop: a metre default is a different
+ * symbol at every zoom, and at a low one it lands a few pixels across with its handles
+ * piled on top of each other.
  */
-const explosivesReadiness = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(new MissionTaskGraphicBase(name, res * 100, res), res * 100, true);
+const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new MissionTaskGraphicBase(n, size, res));
 
-const crossedTask = (name: TacticalGraphicName, res: number) =>
-    new PointDropController(new MissionTaskGraphicBase(name, res * 50, res), res * 50);
+/**
+ * The demonstration: dropped like the rest, but its base carries the four anchor points
+ * APP-06 describes it by rather than the single click that placed them.
+ * @see DemonstrationGraphicBase
+ */
+const demonstrationDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new DemonstrationGraphicBase(n, size, res));
+
+const dropped = (
+    name: TacticalGraphicName,
+    res: number,
+    sizing: number,
+    build: (name: TacticalGraphicName, size: number) => MissionTaskGraphicBase,
+) => {
+    const px = dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX;
+    const size = sizing * px;
+    return new PointDropController(
+        build(name, size),
+        size,
+        allowedGestures(name).resize,
+        // The controller re-derives this where the click lands, which is exact; `size`
+        // above is the same number sized for the view centre, and is what the holder
+        // starts life with. @see PointDropController.drop
+        {px, resolution: res},
+        allowedGestures(name).rotate,
+    );
+};
 
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
@@ -174,18 +288,53 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.AssaultPosition]:                       polygon,
     [TacticalGraphicName.GuerrillaBase]:                         polygon,
     [TacticalGraphicName.DetaineeHoldingArea]:                   polygon,
+    [TacticalGraphicName.BombArea]: polygon,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: polygon,
+    [TacticalGraphicName.Bridgehead]: polygon,
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: polygon,
+    [TacticalGraphicName.HumanTerrain]: polygon,
+    [TacticalGraphicName.PenetrationBox]: polygon,
+    [TacticalGraphicName.Area]: polygon,
+    [TacticalGraphicName.JointTacticalActionArea]: polygon,
+    [TacticalGraphicName.SubmarineActionArea]: polygon,
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: polygon,
+    [TacticalGraphicName.AreaGeneric]: polygon,
+    [TacticalGraphicName.ZoneOfFire]: polygon,
+    [TacticalGraphicName.RestrictedTerrain]: polygon,
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: polygon,
+    [TacticalGraphicName.BiologicalContaminatedArea]: polygon,
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: polygon,
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: polygon,
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: polygon,
+    [TacticalGraphicName.ChemicalContaminatedArea]: polygon,
+    [TacticalGraphicName.NuclearContaminatedArea]: polygon,
+    [TacticalGraphicName.RadiologicalContaminatedArea]: polygon,
+    [TacticalGraphicName.ArtilleryManeuverArea]: polygon,
+    [TacticalGraphicName.ArtilleryReservedArea]: polygon,
     [TacticalGraphicName.AssemblyArea]:                          polygon,
     [TacticalGraphicName.EngagementArea]:                        polygon,
     [TacticalGraphicName.RefugeeHoldingArea]:                    polygon,
     [TacticalGraphicName.BrigadeSupportArea]:                    polygon,
-    [TacticalGraphicName.Airfield]:                              polygon,
+    [TacticalGraphicName.AirfieldZone]: polygon,
+    [TacticalGraphicName.RadiationDoseRateContourLine]: polygon,
+    [TacticalGraphicName.MinefieldDynamicDepiction]: polygon,
+    [TacticalGraphicName.MinedAreaFenced]: polygon,
+    [TacticalGraphicName.PsyOpsZoneIrregular]: polygon,
+    [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
+    [TacticalGraphicName.PsyOpsZoneCircular]: circularArea,
+    // Dropped on one click and static, like the crossed tasks: no resize, no rotate.
+    [TacticalGraphicName.Airfield]:                              pointDrop,
     [TacticalGraphicName.DivisionSupportArea]:                   polygon,
     [TacticalGraphicName.CorpsSupportArea]:                      polygon,
+    [TacticalGraphicName.FighterEngagementZone]: polygon,
+    [TacticalGraphicName.ExtractionZone]: polygon,
+    [TacticalGraphicName.RegimentalSupportArea]: polygon,
     [TacticalGraphicName.DropZone]:                              polygon,
     [TacticalGraphicName.LandingZone]:                           polygon,
     [TacticalGraphicName.KillZone]:                              polygon,
     [TacticalGraphicName.PickupZone]:                            polygon,
     [TacticalGraphicName.BattlePosition]:                        polygon,
+    [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:     polygon,
     [TacticalGraphicName.StrongPoint]:                           polygon,
     [TacticalGraphicName.FreeFireAreaIrregular]:                 polygon,
     [TacticalGraphicName.NoFireAreaIrregular]:                   polygon,
@@ -193,6 +342,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PositionAreaArtilleryIrregular]:        polygon,
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]: polygon,
     [TacticalGraphicName.CallForFireZoneIrregular]:              polygon,
+    [TacticalGraphicName.TargetBuildUpAreaIrregular]: polygon,
+    [TacticalGraphicName.TargetValueAreaIrregular]: polygon,
+    [TacticalGraphicName.ZoneOfResponsibilityIrregular]: polygon,
     [TacticalGraphicName.CensorZoneIrregular]:                   polygon,
     [TacticalGraphicName.CriticalFriendlyZoneIrregular]:         polygon,
     [TacticalGraphicName.DeadSpaceAreaIrregular]:                polygon,
@@ -229,6 +381,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PositionAreaArtilleryRectangular]:      polygonRect,
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: polygonRect,
     [TacticalGraphicName.CallForFireZoneRectangular]:            polygonRect,
+    [TacticalGraphicName.TargetBuildUpAreaRectangular]: polygonRect,
+    [TacticalGraphicName.TargetValueAreaRectangular]: polygonRect,
+    [TacticalGraphicName.ZoneOfResponsibilityRectangular]: polygonRect,
     [TacticalGraphicName.CensorZoneRectangular]:                 polygonRect,
     [TacticalGraphicName.CriticalFriendlyZoneRectangular]:       polygonRect,
     [TacticalGraphicName.DeadSpaceAreaRectangular]:              polygonRect,
@@ -240,11 +395,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Movement (arrow) graphics ──────────────────────────────────────────
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]:        movement(),
+    [TacticalGraphicName.AvenueOfApproach]:    movement(),
     [TacticalGraphicName.MainAxisOfAdvance]:   movement(),
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: movement(),
     [TacticalGraphicName.AviationAxisOfAdvance]: movement(),
     [TacticalGraphicName.SupportingAxisOfAdvance]:    movement(),
     [TacticalGraphicName.Counterattack]:       movement(),
+    [TacticalGraphicName.CounterattackByFire]: movement(),
     [TacticalGraphicName.InfiltrationLane]:     movement(),
 
     // ── Engineer / crossing (movement base, max 2 pts) ────────────────────
@@ -267,6 +424,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.LineOfDepartureOrLineOfContact]:   line(),
     [TacticalGraphicName.ProbableLineOfDeployment]:         line(),
     [TacticalGraphicName.CommonSensorBoundary]:             line(),
+    [TacticalGraphicName.LightLine]: line(),
+    [TacticalGraphicName.LineGeneric]: line(),
+    [TacticalGraphicName.HandoverLine]: line(),
+    [TacticalGraphicName.NamedAreaOfInterestLine]: line(),
+    [TacticalGraphicName.HoldingLine]: line(),
+    [TacticalGraphicName.NoFireLine]: line(),
+    [TacticalGraphicName.BattlefieldCoordinationLine]: line(),
     [TacticalGraphicName.RestrictiveFireLine]:              line(),
     [TacticalGraphicName.IntelligenceCoordinationLine]:     line(),
     [TacticalGraphicName.IdentificationFriendOrFoeOff]:     line(),
@@ -281,14 +445,45 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ForwardLineOfOwnTroops]:           line(),
     [TacticalGraphicName.LineOfContact]:                    line(),
     [TacticalGraphicName.ObstacleLine]:                     line(),
+    // The mineline extends with extra vertices; the other four are defined by two
+    // anchor points and nothing else, so their draw stops at two.
+    // Four anchor points, each meaning something different, so every one is draggable.
+    // Handle 0 is the circle's centre and moves the whole graphic.
+    [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
+    // Centre first, then the two ends -- the order the standard numbers them.
+    [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
+    // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
+    [TacticalGraphicName.Demonstration]:                    demonstrationDrop,
+    [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
+    [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.DecisionLine]:                     line(),
+    [TacticalGraphicName.MobilityCorridor]:                 line(),
+    // Three anchor points: two arrow tips and the rear. Handle 2 is the rear, which is
+    // the one that moves the whole shape.
+    // Centre, then the two radii. Handle 0 is the centre and moves the whole zone.
+    [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3, 0),
+    // An even number of points, half per ring, so the draw cannot be capped.
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 6, 0),
+    [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3, 2),
+    [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3, 2),
+    [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3, 2),
+    [TacticalGraphicName.Mineline]:                         line(),
+    [TacticalGraphicName.MineCluster]:                      line(2),
+    [TacticalGraphicName.TripWire]:                         line(2),
+    [TacticalGraphicName.RaftSite]:                         line(2),
+    [TacticalGraphicName.FortifiedPosition]:                line(2),
     [TacticalGraphicName.DirectionOfMainAttack]:            line(),
     [TacticalGraphicName.DirectionOfSupportingAttack]:      line(),
     [TacticalGraphicName.DirectionOfMainAttackFeint]:       line(),
     [TacticalGraphicName.AviationDirectionOfAttack]:           line(),
     [TacticalGraphicName.FerryCrossing]:                    line(2),
-    [TacticalGraphicName.PassageLane]:                      line(2),
-    [TacticalGraphicName.TacticalFix]:                              line(2),
-    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 1),
+    // The end handle moves that vertex — lengthening the lane is what dragging its
+    // end means — while the resize icon still scales the whole symbol. @see Abatis
+    [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
+    [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
+    // The apex is vertex 0: APP-06 140500 numbers this symbol from its vertex, and the
+    // base follows the standard now. It was 1 while the legs were drawn first. @see anchorVertex
+    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 0),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>
@@ -315,11 +510,22 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Exploitation]: block,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
-    [TacticalGraphicName.Abatis]:                 missionTask,
-    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: explosivesReadiness,
-    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: explosivesReadiness,
-    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: explosivesReadiness,
-    [TacticalGraphicName.RoadblockCompleteExecuted]: explosivesReadiness,
+    // Abatis takes a drawn route with as many vertices as the road needs, so it is a
+    // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
+    // **The end handle moves that vertex; the resize icon scales the whole obstacle.**
+    // Its two points are the run, and lengthening the run is what a user means by
+    // dragging its end — the chevron is a decoration with its own size, not something
+    // the drag should be stretching. Scaling everything together is the affordance's
+    // job. @see vertexLine
+    [TacticalGraphicName.Abatis]:                 vertexLine(2, 2),
+    // The demolition family is a drawn centerline with a width, so it takes the
+    // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: movement(2),
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: movement(2),
+    // Roadblock complete stays point-dropped: its symbol is two overlapping X's,
+    // which no centerline-and-width rule in APP-06 describes. @see ai/app-6.md "F2"
+    [TacticalGraphicName.RoadblockCompleteExecuted]: pointDrop,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),
@@ -344,9 +550,12 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Secure]:        missionTask,
     [TacticalGraphicName.Isolate]:       missionTask,
     [TacticalGraphicName.Retain]:        missionTask,
+    [TacticalGraphicName.CordonAndKnock]: missionTask,
+    [TacticalGraphicName.Deny]: missionTask,
+    [TacticalGraphicName.Locate]: missionTask,
     [TacticalGraphicName.CordonAndSearch]: missionTask,
     [TacticalGraphicName.Control]:       missionTask,
-    [TacticalGraphicName.Contain]:       missionTask,
+    [TacticalGraphicName.Contain]:       contain,
     [TacticalGraphicName.Occupy]:        missionTask,
     [TacticalGraphicName.AreaDefense]:   missionTask,
     // Point-anchored bowed arrow with a draggable bend — see Turn.ts.
@@ -359,7 +568,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // the other three are drawn as a two-point line.
     [TacticalGraphicName.Block]:    block,
     [TacticalGraphicName.Disrupt]:  block,
-    [TacticalGraphicName.Fix]:      line(2),
+    [TacticalGraphicName.Fix]:      vertexLine(2, 2),
     [TacticalGraphicName.Turn]:     turn,
 
     // ── Circular area graphics ─────────────────────────────────────────────
@@ -369,6 +578,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.PositionAreaArtilleryCircular]:         circularArea,
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular]: circularArea,
     [TacticalGraphicName.CallForFireZoneCircular]:               circularArea,
+    [TacticalGraphicName.TargetBuildUpAreaCircular]: circularArea,
+    [TacticalGraphicName.TargetValueAreaCircular]: circularArea,
+    [TacticalGraphicName.ZoneOfResponsibilityCircular]: circularArea,
     [TacticalGraphicName.CensorZoneCircular]:                    circularArea,
     [TacticalGraphicName.CriticalFriendlyZoneCircular]:          circularArea,
     [TacticalGraphicName.DeadSpaceAreaCircular]:                 circularArea,
@@ -389,18 +601,22 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Forms of maneuver (movement arrows) ────────────────────────────────
     [TacticalGraphicName.MovementToContact]:  missionTask,
+    // APP-06 342900 builds it from a path and a width, which is the movement
+    // family's own model. @see AdvanceToContact
+    [TacticalGraphicName.AdvanceToContact]:   movement(),
     [TacticalGraphicName.FrontalAttack]:      movement(),
     // [TacticalGraphicName.FlankAttack]:        movement(),
     [TacticalGraphicName.TurningMovement]:    movement(),
-    [TacticalGraphicName.Pursuit]:            missionTask,
+    [TacticalGraphicName.Pursuit]:            pursuit,
     [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
-    [TacticalGraphicName.Infiltration]:       movement(),
+    // Literally the exfiltration's controller and holder. @see RetrogradeTask.ts
+    [TacticalGraphicName.Infiltration]:       exfiltrate,
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
     // ── Ambush (point-based arc graphic) ───────────────────────────────────
-    [TacticalGraphicName.Ambush]: missionTask,
+    [TacticalGraphicName.Ambush]: ambush,
 
     // ── Field fortification ────────────────────────────────────────────────
     [TacticalGraphicName.FightingPosition]: missionTask,
@@ -418,10 +634,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FollowAndSupport]: block,
 
     // ── Crossed-line mission tasks (one click drops a fixed-size badge) ─────
-    [TacticalGraphicName.Destroy]:    crossedTask,
-    [TacticalGraphicName.Interdict]:  crossedTask,
-    [TacticalGraphicName.Neutralize]: crossedTask,
-    [TacticalGraphicName.Suppress]:   crossedTask,
+    [TacticalGraphicName.Destroy]:    pointDrop,
+    [TacticalGraphicName.Interdict]:  pointDrop,
+    [TacticalGraphicName.Neutralize]: pointDrop,
+    [TacticalGraphicName.Suppress]:   pointDrop,
 
     // ── Exfiltrate (multi-vertex route + arrowhead) ─────────────────────────
     [TacticalGraphicName.Exfiltrate]: exfiltrate,
@@ -452,7 +668,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
  */
 export function getController(
     graphicName: TacticalGraphicName,
-    resolution: number
+    resolution: number,
+    /**
+     * Where the graphic is going, in degrees — the latitude its screen-pixel sizes are
+     * spent at. Defaults to the equator, where a projected metre and a real one agree,
+     * which is what every caller assumed before this existed. @see ControllerFactory
+     */
+    latitude: number = 0,
 ): TacticalGraphicHandler {
     const factory = CONTROLLER_REGISTRY[graphicName];
     if (!factory) {
@@ -461,5 +683,5 @@ export function getController(
             `Add an entry to controllerRegistry.ts to support this graphic.`
         );
     }
-    return factory(graphicName, resolution);
+    return factory(graphicName, resolution, groundLength(resolution, latitude));
 }

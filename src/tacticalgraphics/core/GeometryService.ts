@@ -1297,7 +1297,7 @@ class GeometryService {
     }
 
     /**
-     * Returns two EPSG:4326 positions that are `radius` metres apart, centred at
+     * Returns two EPSG:4326 positions that are `radius` meters apart, centered at
      * fraction `t` along segment P0→P1.  Pass these as [c0, c1] to generateLabels
      * so that graphicProportionalLabel (OL StyleFunction) derives font scale from
      * `radius` screen pixels — the same approach as FrontalAttack / TurningMovement.
@@ -1309,6 +1309,82 @@ class GeometryService {
             [P0[0] + (t - tHalf) * (P1[0] - P0[0]), P0[1] + (t - tHalf) * (P1[1] - P0[1])],
             [P0[0] + (t + tHalf) * (P1[0] - P0[0]), P0[1] + (t + tHalf) * (P1[1] - P0[1])],
         ];
+    }
+
+    /**
+     * The exfiltrate / infiltrate S: a straight run, two 90-degree arcs, a straight run.
+     *
+     * APP-06 343700 and 343800 share one construction and three anchor points — *"point 1
+     * defines the end of the straight line portion, point 2 defines the centre of the two
+     * 90 degree circular arcs, point 3 defines the tip of the arrowhead"*.
+     *
+     * **Two 90-degree arcs make the two straights parallel**, and shift the path diagonally
+     * by the same amount along and across: an arc of radius `r` turning a quarter turn
+     * advances `r` along and `r` across, so the pair moves `2r` each way. That is what makes
+     * this an S rather than a bump, and it means points 1 and 3 cannot both lie on the
+     * symbol's own axis — the axis is tilted off the chord between them by exactly the angle
+     * that produces the offset.
+     *
+     * Which leaves point 2 over-determined in the standard and under-determined in practice:
+     * solving all four unknowns from the three points puts the axis along
+     * `point 2 − midpoint(1, 3)`, which is a few metres long and violently unstable wherever
+     * a user naturally drops point 2. So **point 2 is read as depth and side**: its
+     * perpendicular offset from the chord sets the arcs' radius and which way the S kicks,
+     * and its position along the chord sets where the S sits. (User's call, 2026-08-27.)
+     *
+     * @param steps points per quarter arc
+     */
+    createSCurve(a: Position, b: Position, c: Position, steps = 12): Position[] {
+        const A = this.project(a);
+        const B = this.project(b);
+        const C = this.project(c);
+
+        const px = B[0] - A[0];
+        const py = B[1] - A[1];
+        const chord = Math.hypot(px, py);
+        if (chord === 0) return [a, b];
+
+        const ux = px / chord;
+        const uy = py / chord;
+        // Signed offset of point 2 from the chord: the depth, and the side.
+        const offset = (C[0] - A[0]) * -uy + (C[1] - A[1]) * ux;
+        const side = offset >= 0 ? 1 : -1;
+        // The S consumes `2r` of the run, so it cannot take all of it.
+        const radius = Math.min(Math.abs(offset), chord * 0.24);
+        if (radius <= 0) return [a, b];
+
+        // Tilt the axis off the chord by the angle whose sine puts `2r` across it.
+        const phi = Math.asin(Math.min(1, (2 * radius) / chord)) * side;
+        const cos = Math.cos(phi);
+        const sin = Math.sin(phi);
+        // Axis, and its left normal, in the projected frame.
+        const wx = ux * cos + uy * sin;
+        const wy = -ux * sin + uy * cos;
+        const nx = -wy;
+        const ny = wx;
+
+        const along = chord * Math.cos(phi);
+        const straight = Math.max(0, along - 2 * radius);
+        // Where point 2 sits along the run decides how the two straights share it.
+        const at = (C[0] - A[0]) * wx + (C[1] - A[1]) * wy;
+        const lead = Math.min(straight, Math.max(0, at - radius));
+
+        const out: number[][] = [A];
+        const at2 = (d: number, l: number): number[] => [A[0] + wx * d + nx * l * side, A[1] + wy * d + ny * l * side];
+        out.push(at2(lead, 0));
+
+        // First quarter: centre a radius to the offset side of the straight's end.
+        for (let i = 1; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            out.push(at2(lead + radius * Math.sin(t), radius * (1 - Math.cos(t))));
+        }
+        // Second quarter: the mirror, turning back onto the axis.
+        for (let i = 1; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            out.push(at2(lead + radius + radius * (1 - Math.cos(t)), radius + radius * Math.sin(t)));
+        }
+        out.push(B);
+        return out.map(p => this.unproject(p));
     }
 
     project([lon, lat]: Position): number[] {
@@ -1324,13 +1400,13 @@ class GeometryService {
     }
 
     /**
-     * Breaks a line into dashes of the given metre lengths.
+     * Breaks a line into dashes of the given meter lengths.
      *
      * **The pattern is clamped against the line's own length**, because it arrives
      * as a fraction of a caller-supplied `radius` and a caller that supplies none
-     * gets a default measured in tens of metres. On a line hundreds of kilometres
+     * gets a default measured in tens of meters. On a line hundreds of kilometers
      * long that produced 66,600 dashes — 133,000 coordinates for one graphic, where
-     * the next heaviest in the whole catalogue has 237. It is invisible on screen
+     * the next heaviest in the whole catalog has 237. It is invisible on screen
      * (the dashes are far below a pixel) and it is most of a frame's work.
      *
      * The floor is a share of the total length, so the clamp only ever engages when
@@ -1546,7 +1622,7 @@ class GeometryService {
         // the symbol reads "C___>" whichever way the line runs.
         //
         // Everything here is expressed **relative to the line's bearing**. It
-        // used to be absolute — the arc's centre was pinned due north of `start`
+        // used to be absolute — the arc's center was pinned due north of `start`
         // and the sweep used fixed compass bearings, with an `end[0] >= start[0]`
         // test to flip it east/west. That held the hook at a fixed compass
         // orientation, so rotating the graphic turned the base line and the
@@ -1555,11 +1631,11 @@ class GeometryService {
         // once the construction follows the bearing, the hook lands on the
         // correct side on its own, and the arc already starts at `start`.
         //
-        // Centre sits one radius off the line at `start`; the arc sweeps the half
+        // Center sits one radius off the line at `start`; the arc sweeps the half
         // that bulges backwards, away from the tip. Its far end is the free point
         // the holder uses as the offset (width) handle.
         const bearing = turf.bearing(start, end);
-        // The centre sits one radius off the line, on whichever side the user chose.
+        // The center sits one radius off the line, on whichever side the user chose.
         const side = mirrored ? 1 : -1;
         const center = turf.destination(turf.point(start), arrowSize, bearing + side * 90, {units: 'meters'});
 
@@ -1586,7 +1662,7 @@ class GeometryService {
 
     /**
      * The "position" bracket shared by the attack-by-fire and support-by-fire
-     * symbols: a bar perpendicular to the shaft, centred on `start`, with a
+     * symbols: a bar perpendicular to the shaft, centered on `start`, with a
      * feather swept back off each end of it.
      *
      * Emitted as ONE polyline `[featherTop, barTop, barBottom, featherBottom]`
@@ -1616,7 +1692,7 @@ class GeometryService {
     /**
      * AttackByFire symbol — the position bracket at `start` plus one shaft out of
      * the bar's midpoint ending in an open arrowhead. `barHalf` is the bar's
-     * half-height in metres; every other dimension is derived from it, so the
+     * half-height in meters; every other dimension is derived from it, so the
      * whole symbol scales uniformly.
      *
      * Returned MultiLineString segments (in order):
@@ -2133,7 +2209,7 @@ class GeometryService {
      *
      * Teeth are placed with `turf.bearing ± 90`, which is a side of *travel* — left or
      * right of the direction the ring is being walked. Which of those is the outside of
-     * the polygon depends entirely on the winding, and nothing normalises the winding of
+     * the polygon depends entirely on the winding, and nothing normalizes the winding of
      * what a user draws: click the corners of an area clockwise and the teeth point out,
      * click the same corners the other way round and every tooth points in. Callers pass
      * a geometric intent (`outward`), so they need this to turn it into a side.

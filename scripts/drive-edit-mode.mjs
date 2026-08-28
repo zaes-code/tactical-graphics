@@ -1,0 +1,1495 @@
+/**
+ * Drives the real app to prove edit mode works, on BOTH engines.
+ *
+ * Per ai/decisions.md, "browser automation can reach OpenLayers' Pointer interaction"
+ * but only for the FIRST synthetic drag in a page session. The affordance gestures do
+ * not go through OL's Pointer interaction at all — they are window listeners — so they
+ * are not subject to that limit. Still, each engine gets a fresh page.
+ */
+import {chromium} from 'playwright';
+
+const URL = process.env.APP_URL ?? 'http://localhost:3000/';
+const OUT = process.env.OUT_DIR ?? '.';
+const failures = [];
+const notes = [];
+
+function check(name, ok, detail = '') {
+    if (ok) notes.push(`  PASS  ${name}${detail ? ' — ' + detail : ''}`);
+    else failures.push(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`);
+}
+
+async function drawGraphic(page, displayName, points) {
+    // The list is virtualised/long, so it has to be filtered before the name is on
+    // screen — the same two steps `drive-app.mjs` uses.
+    await page.getByPlaceholder('Filter graphics').fill(displayName);
+    await page.getByText(displayName, {exact: true}).first().click();
+    const drawBtn = page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first();
+    await drawBtn.click();
+    const box = await page.locator('.map-container').boundingBox();
+    for (let i = 0; i < points.length - 1; i++) {
+        await page.mouse.click(box.x + points[i][0], box.y + points[i][1]);
+    }
+    const last = points[points.length - 1];
+    await page.mouse.dblclick(box.x + last[0], box.y + last[1]);
+    await page.waitForTimeout(1500);
+    return box;
+}
+
+async function run(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    const consoleErrors = [];
+    page.on('console', m => {
+        if (m.type() === 'error') consoleErrors.push(m.text());
+    });
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    // ---- 1. The panel offers ONE edit button, not four ----
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    check(`${engine}: a single Edit button exists`, await editBtn.count() > 0);
+    const rotateToggle = page.locator('[value="rotate"]');
+    check(`${engine}: the four global mode toggles are gone`, await rotateToggle.count() === 0,
+        `found ${await rotateToggle.count()}`);
+
+    // ---- 2. Draw a phase line ----
+    const mapBox = await drawGraphic(page, 'phase line', [[500, 400], [700, 400], [850, 460]]);
+
+    const graphicCount = await page.evaluate(() => window.__tacticalEngine?.snapshot().features.length ?? -1);
+    check(`${engine}: a graphic was drawn`, graphicCount === 1, `snapshot has ${graphicCount}`);
+
+    // ---- 3. Enter edit mode; nothing selected yet, so no chrome ----
+    await editBtn.click();
+    await page.waitForTimeout(400);
+    const mode = await page.evaluate(() => window.__tacticalEngine?.getInteractionMode());
+    check(`${engine}: the button puts the engine in edit mode`, mode === 'edit', `mode=${mode}`);
+
+    const boxBefore = await page.evaluate(() => window.__tacticalEngine?.selectionBox() ?? null);
+    check(`${engine}: no selection box before anything is selected`, boxBefore === null);
+
+    // ---- 4. Click the graphic to select it ----
+    await page.mouse.click(mapBox.x + 600, mapBox.y + 400);
+    await page.waitForTimeout(600);
+
+    const selected = await page.evaluate(() => {
+        const s = window.__tacticalEngine?.getSelection();
+        return s ? {id: s.id, name: s.name} : null;
+    });
+    check(`${engine}: clicking a graphic selects it`, selected !== null, JSON.stringify(selected));
+
+    const selBox = await page.evaluate(() => window.__tacticalEngine?.selectionBox() ?? null);
+    check(`${engine}: the selection has an on-screen box`, !!selBox && selBox.width > 0 && selBox.height >= 0,
+        JSON.stringify(selBox));
+
+    const gestures = await page.evaluate(() => window.__tacticalEngine?.selectionGestures() ?? null);
+    check(`${engine}: the selection reports its gestures`, !!gestures && gestures.translate === true,
+        JSON.stringify(gestures));
+
+    // ---- 5. The dashed box + affordance buttons are in the DOM ----
+    const moveBtn = page.locator('[aria-label="Move"]');
+    const rotBtn = page.locator('[aria-label="Rotate"]');
+    const sizeBtn = page.locator('[aria-label="Resize"]');
+    check(`${engine}: a Move affordance is rendered`, await moveBtn.count() === 1);
+    check(`${engine}: a Rotate affordance is rendered`, await rotBtn.count() === 1);
+    check(`${engine}: a Resize affordance is rendered`, await sizeBtn.count() === 1);
+
+    await page.screenshot({path: `${OUT}/edit-${engine}-selected.png`});
+
+    // ---- 6. Drag the Move affordance; the graphic must actually move ----
+    const before = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry));
+    const mb = await moveBtn.boundingBox();
+    await page.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(mb.x + mb.width / 2 + 60, mb.y + mb.height / 2 + 40, {steps: 12});
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry));
+    check(`${engine}: the Move affordance moves the graphic`, before !== after);
+
+    await page.screenshot({path: `${OUT}/edit-${engine}-moved.png`});
+
+    // ---- 6b. The graphic's OWN handles must still reshape it ----
+    //
+    // The regression this section exists for: `edit` showed handles but installed no
+    // `Modify` interaction, so the handles were inert and OpenLayers' blue
+    // "a drag here adds a vertex" marker vanished with them. Both went together.
+    const sel = await page.evaluate(() => window.__tacticalEngine.selectionBox());
+    // The line's own end vertex, which sits at a corner of the box.
+    const vx = mapBox.x + sel.x + sel.width;
+    const vy = mapBox.y + sel.y + sel.height;
+
+    const overVertex = await page.evaluate(({x, y}) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? `${el.tagName}.${String(el.className).slice(0, 30)}` : 'none';
+    }, {x: Math.round(vx), y: Math.round(vy)});
+    check(`${engine}: nothing covers the graphic's corner handle`,
+        !/MuiBox|MuiTooltip/.test(overVertex), `topmost = ${overVertex}`);
+
+    const preDrag = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry.coordinates));
+    await page.mouse.move(vx, vy);
+    await page.mouse.down();
+    await page.mouse.move(vx + 70, vy + 50, {steps: 12});
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    const postDrag = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0].geometry.coordinates));
+    check(`${engine}: dragging a handle still reshapes the graphic`, preDrag !== postDrag);
+    await page.screenshot({path: `${OUT}/edit-${engine}-handle-drag.png`});
+
+    // ---- 7. A rotate-refusing symbol shows no rotate button ----
+    await page.evaluate(() => window.__tacticalEngine.clearAll());
+    await page.waitForTimeout(400);
+    const clearedSel = await page.evaluate(() => window.__tacticalEngine.getSelection());
+    check(`${engine}: clearAll drops the selection`, clearedSel === null);
+
+    await drawGraphic(page, 'screen', [[600, 450], [600, 450]]);
+    await editBtn.click();               // clearAll returned us to view; re-arm edit
+    await page.waitForTimeout(300);
+    await page.mouse.click(mapBox.x + 600, mapBox.y + 450);
+    await page.waitForTimeout(600);
+
+    const screenGestures = await page.evaluate(() => window.__tacticalEngine?.selectionGestures() ?? null);
+    check(`${engine}: a Screen refuses resize`, screenGestures && screenGestures.resize === false,
+        JSON.stringify(screenGestures));
+    if (screenGestures) {
+        check(`${engine}: the Resize affordance is not drawn for a Screen`,
+            await page.locator('[aria-label="Resize"]').count() === 0);
+        check(`${engine}: the Rotate affordance IS drawn for a Screen`,
+            await page.locator('[aria-label="Rotate"]').count() === 1);
+    }
+    await page.screenshot({path: `${OUT}/edit-${engine}-screen.png`});
+
+    const realErrors = consoleErrors.filter(t => !/DevTools|favicon|Download the React/i.test(t));
+    check(`${engine}: no console errors`, realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
+
+    await browser.close();
+}
+
+/**
+ * The graphics the user reported as broken, plus a control.
+ *
+ * Each is drawn, selected, and then asked two questions: does the resize *icon* change
+ * its geometry, and — where it has a width handle — does dragging that handle change it.
+ * Both are compared on `properties.tacticalGraphic`, not on pixels.
+ */
+const RESIZE_CASES = [
+    {filter: 'fields of fire / sector of fire', pts: [[520, 380], [700, 420], [640, 520]]},
+    {filter: 'withdraw', pts: [[520, 380], [720, 430]]},
+    {filter: 'retirement', pts: [[520, 380], [720, 430]]},
+    {filter: 'mobile defense', pts: [[520, 380], [720, 430]]},
+    {filter: 'relief in place', pts: [[520, 380], [720, 430]]},
+    {filter: 'disrupt', pts: [[520, 380], [720, 430]]},
+    {filter: 'block', pts: [[520, 380], [720, 430]]},
+    {filter: 'bridge', pts: [[520, 380], [720, 430]]},
+    {filter: 'air corridor', pts: [[520, 380], [660, 400], [780, 460]]},
+    {filter: 'destroy', pts: [[600, 430], [600, 430]]},
+];
+
+async function runResizeSweep(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    for (const {filter, pts} of RESIZE_CASES) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(300);
+        let mapBox;
+        try {
+            mapBox = await drawGraphic(page, filter, pts);
+        } catch {
+            check(`${engine}: "${filter}" could be drawn`, false, 'not found in the list');
+            continue;
+        }
+        const drawn = await page.evaluate(() => {
+            const f = window.__tacticalEngine.snapshot().features[0];
+            return f ? f.properties.tacticalGraphic.name : null;
+        });
+        if (!drawn) {
+            check(`${engine}: "${filter}" produced a graphic`, false);
+            continue;
+        }
+
+        if ((await page.evaluate(() => window.__tacticalEngine.getInteractionMode())) !== 'edit') await editBtn.click();
+        await page.waitForTimeout(250);
+        /*
+         * Selecting by a guessed pixel is a probe bug waiting to happen — a 2-point line
+         * is a few pixels thick and a click 6 px off it hits the basemap. Try each drawn
+         * vertex and every segment midpoint until the engine reports a selection, and
+         * only then call it a failure.
+         */
+        const candidates = [...pts];
+        for (let i = 1; i < pts.length; i++) {
+            const mx = (pts[i - 1][0] + pts[i][0]) / 2;
+            const my = (pts[i - 1][1] + pts[i][1]) / 2;
+            candidates.push([mx, my]);
+            /*
+             * **Several families draw nothing on the line the user drew.** A bridge and an
+             * air corridor are two rails offset either side of the base, so the
+             * centreline is empty map and a click there correctly selects nothing — that
+             * is the symbol, not a defect. Offer the perpendicular offsets too, so the
+             * probe clicks the ink rather than the construction line.
+             */
+            const dx = pts[i][0] - pts[i - 1][0];
+            const dy = pts[i][1] - pts[i - 1][1];
+            const len = Math.hypot(dx, dy) || 1;
+            for (const off of [18, -18, 36, -36]) {
+                candidates.push([mx + (-dy / len) * off, my + (dx / len) * off]);
+            }
+        }
+        for (const [cx, cy] of candidates) {
+            await page.mouse.click(mapBox.x + cx, mapBox.y + cy);
+            await page.waitForTimeout(300);
+            if (await page.evaluate(() => window.__tacticalEngine.getSelection())) break;
+        }
+        const sel = await page.evaluate(() => window.__tacticalEngine.getSelection());
+        if (!sel) {
+            check(`${engine}: ${drawn} could be selected`, false);
+            continue;
+        }
+
+        const sizeBtn = page.locator('[aria-label="Resize"]');
+        await sizeBtn.first().waitFor({state: 'attached', timeout: 5000}).catch(() => {});
+        if (await sizeBtn.count() === 0) {
+            check(`${engine}: ${drawn} offers a resize affordance`, false);
+            continue;
+        }
+        const before = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0]));
+        /*
+         * **Wait for the button to stop moving before pressing it.** The chrome
+         * re-measures every animation frame, and MapLibre is often still easing its
+         * camera for a moment after a click — so a box read immediately after selecting
+         * can be stale by the time the mouse gets there, the press lands on empty map,
+         * and the drag pans instead of resizing. Reading it twice and requiring agreement
+         * is the difference between this sweep being reliable and being flaky.
+         */
+        let rb = await sizeBtn.boundingBox();
+        for (let settle = 0; settle < 20; settle++) {
+            await page.waitForTimeout(100);
+            const next = await sizeBtn.boundingBox();
+            if (next && rb && Math.abs(next.x - rb.x) < 0.5 && Math.abs(next.y - rb.y) < 0.5) { rb = next; break; }
+            rb = next;
+        }
+        const px = rb.x + rb.width / 2;
+        const py = rb.y + rb.height / 2;
+        const under = await page.evaluate(({x, y}) => {
+            const el = document.elementFromPoint(x, y);
+            return el ? `${el.tagName}[${el.getAttribute('aria-label') ?? ''}].${String(el.className).slice(0, 24)}` : 'none';
+        }, {x: Math.round(px), y: Math.round(py)});
+        await page.mouse.move(px, py);
+        await page.mouse.down();
+        await page.mouse.move(px + 90, py + 70, {steps: 14});
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+        const after = await page.evaluate(() => JSON.stringify(window.__tacticalEngine.snapshot().features[0]));
+        if (before !== after) {
+            check(`${engine}: ${drawn} resizes from the icon`, true);
+            continue;
+        }
+        // The mouse route did nothing. Ask the engine directly, so the report says
+        // whether the gesture is refused or merely the pointer never reached it.
+        const direct = await page.evaluate(() => {
+            const started = window.__tacticalEngine.beginGesture(
+                'resize', new PointerEvent('pointerdown', {clientX: 700, clientY: 500, bubbles: true}));
+            window.dispatchEvent(new PointerEvent('pointermove', {clientX: 900, clientY: 700, bubbles: true}));
+            window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+            return {started, snap: JSON.stringify(window.__tacticalEngine.snapshot().features[0])};
+        });
+        check(`${engine}: ${drawn} resizes from the icon`, false,
+            `press at ${Math.round(px)},${Math.round(py)} hit ${under}; direct beginGesture returned ${direct.started}, geometry ${direct.snap === before ? 'unchanged' : 'CHANGED'}`);
+        await page.screenshot({path: `${OUT}/resize-fail-${engine}-${drawn}.png`});
+    }
+
+    await browser.close();
+}
+
+/**
+ * The families whose width is set by dragging an offset handle.
+ *
+ * That handle is the *only* way to set a width — the resize icon scales the whole
+ * graphic — so if it is not reachable in edit mode the dimension is unreachable, which
+ * is what happened when `edit` first shipped: the OpenLayers `handleDownEvent` claimed a
+ * drag only for `editStretches` or a mirror handle, so an offset grab fell through to
+ * the map and panned it.
+ */
+const WIDTH_CASES = [
+    {filter: 'air corridor', pts: [[520, 380], [660, 400], [780, 460]]},
+    {filter: 'bridge', pts: [[520, 400], [720, 430]]},
+];
+
+async function runWidthSweep(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    for (const {filter, pts} of WIDTH_CASES) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(300);
+        let mapBox;
+        try {
+            mapBox = await drawGraphic(page, filter, pts);
+        } catch {
+            check(`${engine}: width case "${filter}" could be drawn`, false, 'not found');
+            continue;
+        }
+        const drawn = await page.evaluate(() => {
+            const f = window.__tacticalEngine.snapshot().features[0];
+            return f ? f.properties.tacticalGraphic.name : null;
+        });
+        if (!drawn) { check(`${engine}: width case "${filter}" produced a graphic`, false); continue; }
+
+        if ((await page.evaluate(() => window.__tacticalEngine.getInteractionMode())) !== 'edit') await editBtn.click();
+        await page.waitForTimeout(250);
+
+        /*
+         * **Select first.** In edit mode the handles belong to the selection, so an
+         * unselected graphic's handles are hidden — and a hidden handle is not a hit
+         * target, so the drag below would have fallen through to the map. This is the
+         * probe reproducing the mode's own rule, not working around it.
+         */
+        const candidates = [...pts];
+        for (let i = 1; i < pts.length; i++) {
+            const mx = (pts[i - 1][0] + pts[i][0]) / 2;
+            const my = (pts[i - 1][1] + pts[i][1]) / 2;
+            const dx = pts[i][0] - pts[i - 1][0];
+            const dy = pts[i][1] - pts[i - 1][1];
+            const len = Math.hypot(dx, dy) || 1;
+            candidates.push([mx, my]);
+            for (const off of [18, -18, 36, -36]) candidates.push([mx + (-dy / len) * off, my + (dx / len) * off]);
+        }
+        for (const [cx, cy] of candidates) {
+            await page.mouse.click(mapBox.x + cx, mapBox.y + cy);
+            await page.waitForTimeout(250);
+            if (await page.evaluate(() => window.__tacticalEngine.getSelection())) break;
+        }
+        if (!(await page.evaluate(() => window.__tacticalEngine.getSelection()))) {
+            check(`${engine}: ${drawn} could be selected for its width handle`, false);
+            continue;
+        }
+
+        // The offset handle is the one furthest off the drawn line. Ask the engine where
+        // the handles are rather than guessing: the OpenLayers holder publishes them as a
+        // MultiPoint, and MapLibre keeps them on the graphic.
+        const handles = await page.evaluate(() => {
+            const w = window;
+            const mgr = w.__tacticalGraphics?.manager;
+            if (mgr) {
+                const f = mgr.renderingVectorSource.getFeatures().find(x => x.get('offsetHandler'));
+                const g = f?.getGeometry();
+                const coords = g?.getCoordinates?.();
+                if (!coords) return null;
+                const pts = Array.isArray(coords[0]) ? coords : [coords];
+                return pts.map(c => mgr.map.getPixelFromCoordinate(c));
+            }
+            /*
+             * MapLibre keeps handles on the graphic in **projected metres** and publishes
+             * no pixel accessor, so the probe converts. Web Mercator inverse, then the
+             * map's own projection — asserting the same thing OpenLayers is asked, rather
+             * than skipping the engine and calling the sweep complete.
+             */
+            const mlb = w.__tacticalGraphicsMapLibre?.native;
+            const map = w.__tacticalGraphicsMapLibre?.map;
+            if (!mlb || !map || !mlb.selection) return null;
+            const graphic = mlb.find(mlb.selection);
+            if (!graphic?.handles?.length) return null;
+            const R = 6378137;
+            const toLonLat = ([x, y]) => [
+                (x / R) * (180 / Math.PI),
+                (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI),
+            ];
+            // The width handle is the one the contract puts last for the movement family
+            // and past the vertex count for a corridor — in both cases, the final one.
+            const rect = map.getCanvasContainer().getBoundingClientRect();
+            const host = document.querySelector('.map-container').getBoundingClientRect();
+            return graphic.handles.map(h => {
+                const p = map.project(toLonLat(h));
+                return [p.x + rect.left - host.left, p.y + rect.top - host.top];
+            });
+        });
+
+        if (!handles || !handles.length) {
+            // MapLibre keeps handles in projected meters on the graphic; there is no
+            // published pixel accessor, so this half is asserted on OpenLayers only and
+            // said so rather than silently skipped.
+            notes.push(`  SKIP  ${engine}: ${drawn} width handle — no pixel accessor on this engine`);
+            continue;
+        }
+
+        const before = await page.evaluate(() => window.__tacticalEngine.snapshot().features[0].properties.tacticalGraphic.width
+            ?? window.__tacticalEngine.snapshot().features[0].properties.tacticalGraphic.radius);
+        // OpenLayers hands back only the offset feature's points; MapLibre hands back
+        // every handle, and the width one is last in both affected contracts.
+        const [hx, hy] = handles.length > 1 && engine === 'maplibre' ? handles[handles.length - 1] : handles[0];
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy);
+        await page.mouse.down();
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy - 55, {steps: 12});
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+        const after = await page.evaluate(() => window.__tacticalEngine.snapshot().features[0].properties.tacticalGraphic.width
+            ?? window.__tacticalEngine.snapshot().features[0].properties.tacticalGraphic.radius);
+        check(`${engine}: ${drawn} width changes from its handle in edit mode`, before !== after,
+            `${before} -> ${after}`);
+    }
+
+    await browser.close();
+}
+
+/**
+ * The editor chrome that is *not* a button: the hashed measure read-out and the handles
+ * a graphic does or does not wear. OpenLayers only — these read the live feature bag,
+ * which is where the three reported defects lived.
+ */
+async function runChromeChecks() {
+    const engine = 'openlayers';
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    const measureState = () => page.evaluate(() => {
+        const src = window.__tacticalGraphics.manager.renderingVectorSource;
+        const f = src.getFeatures().find(x => x.get('measure'));
+        const g = f?.getGeometry();
+        const coords = g?.getCoordinates?.();
+        const handles = src.getFeatures().find(x => x.get('handle') && !x.get('inert') && !x.get('measure'))
+            ?.getGeometry()?.getCoordinates?.();
+        return {measure: coords ?? null, firstHandle: Array.isArray(handles?.[0]) ? handles[0] : handles ?? null};
+    });
+
+    // ── a circular graphic: the read-out must look the same whichever way it resizes ──
+    //
+    // It must be one that *has* a read-out: `RADIUS_GRAPHICS` is a subset of the circular
+    // family, and picking a member outside it measures nothing and passes for the wrong
+    // reason. @see hasRadiusReadout
+    let mapBox = await drawGraphic(page, 'air space coordination area circular', [[600, 430], [700, 430]]);
+    await editBtn.click();
+    await page.waitForTimeout(300);
+    await page.mouse.click(mapBox.x + 700, mapBox.y + 430);
+    await page.waitForTimeout(500);
+    if (!(await page.evaluate(() => window.__tacticalEngine.getSelection()))) {
+        await page.mouse.click(mapBox.x + 600, mapBox.y + 430);
+        await page.waitForTimeout(500);
+    }
+
+    const sizeBtn = page.locator('[aria-label="Resize"]');
+    if (await sizeBtn.count() === 1) {
+        const rb = await sizeBtn.boundingBox();
+        await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(rb.x + rb.width / 2 + 60, rb.y + rb.height / 2 + 45, {steps: 10});
+        await page.waitForTimeout(200);
+        const mid = await measureState();
+        // With the anchor left alone, the hashed line runs to the rim handle — the same
+        // picture a handle drag draws. Following the cursor sent it to a box corner.
+        const ok = !!mid.measure && !!mid.firstHandle
+            && Math.hypot(mid.measure[1][0] - mid.firstHandle[0], mid.measure[1][1] - mid.firstHandle[1])
+               < Math.hypot(mid.measure[1][0] - mid.measure[0][0], mid.measure[1][1] - mid.measure[0][1]) * 0.25;
+        check(`${engine}: an icon resize draws the radius read-out to the rim handle`, ok,
+            mid.measure ? `end ${mid.measure[1].map(Math.round)} vs handle ${mid.firstHandle?.map(Math.round)}` : 'no measure line');
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+        const done = await measureState();
+        check(`${engine}: the radius read-out clears when the icon drag ends`, done.measure === null);
+    } else {
+        check(`${engine}: the circular graphic offers a resize affordance`, false);
+    }
+
+    // ── a rectangular zone: no dead handle, and no read-out left behind ──
+    await page.evaluate(() => window.__tacticalEngine.clearAll());
+    await page.waitForTimeout(300);
+    mapBox = await drawGraphic(page, 'PsyOps zone, rectangular', [[560, 380], [760, 480]]);
+    const rectName = await page.evaluate(() => window.__tacticalEngine.snapshot().features[0]?.properties.tacticalGraphic.name);
+    await editBtn.click();
+    await page.waitForTimeout(300);
+    for (const [cx, cy] of [[660, 380], [560, 430], [660, 480], [660, 430]]) {
+        await page.mouse.click(mapBox.x + cx, mapBox.y + cy);
+        await page.waitForTimeout(250);
+        if (await page.evaluate(() => window.__tacticalEngine.getSelection())) break;
+    }
+    check(`${engine}: the rectangular zone selects`, !!(await page.evaluate(() => window.__tacticalEngine.getSelection())), rectName);
+
+    const shownHandles = await page.evaluate(() => window.__tacticalGraphics.manager.renderingVectorSource
+        .getFeatures().filter(f => f.get('handle') && !f.get('hidden') && !f.get('measure')).length);
+    check(`${engine}: a rectangular zone shows no dead shape handle in edit mode`, shownHandles === 0,
+        `${shownHandles} visible`);
+
+    const rectSize = page.locator('[aria-label="Resize"]');
+    // **Wait for it, don't read it.** The chrome measures on an animation frame, so a
+    // count taken in the same tick as the selection can legitimately be zero — which
+    // reads as "the affordance is missing" when it is merely not painted yet.
+    await rectSize.first().waitFor({state: 'attached', timeout: 5000}).catch(() => {});
+    const rectSizeCount = await rectSize.count();
+    check(`${engine}: a rectangular zone offers a resize affordance`, rectSizeCount === 1, `${rectSizeCount} found`);
+    if (rectSizeCount === 1) {
+        const rb = await rectSize.boundingBox();
+        await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(rb.x + rb.width / 2 + 50, rb.y + rb.height / 2 + 40, {steps: 10});
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+        const afterDrag = await measureState();
+        check(`${engine}: the width read-out clears when the rectangle's drag ends`, afterDrag.measure === null,
+            afterDrag.measure ? 'still drawn' : '');
+    }
+
+    // Leaving edit mode must not leave a read-out on the map.
+    await editBtn.click();
+    await page.waitForTimeout(400);
+    const outOfEdit = await measureState();
+    check(`${engine}: no measure read-out survives leaving edit mode`, outOfEdit.measure === null);
+    await page.screenshot({path: `${OUT}/edit-chrome.png`});
+
+    await browser.close();
+}
+
+/**
+ * The sizing half of a draw: what the user sees between the two clicks.
+ *
+ * Two things are checked and they used to fail in opposite ways. **OpenLayers drew the
+ * circle** and MapLibre drew only a rubber band, so the operator sized a symbol they
+ * could not see. And **both measured the drag in projected metres** and stored it as a
+ * real distance, which is a `1 / cos(latitude)` error — invisible on the equator, where
+ * every fixture in this repository sits, and 1.56x at 50 degrees north, where the rim ran
+ * away from the cursor sizing it.
+ *
+ * So the map is moved north first. A version of this check written over the default view
+ * would pass against both defects.
+ */
+async function runDrawPreview(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    const LAT = 50;
+    await page.evaluate(lat => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, lat], zoom: 4});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * 6378137]);
+        view.setZoom(5);
+    }, LAT);
+    await page.waitForTimeout(600);
+
+    // Mid-draw sizes, in screen pixels: how far the cursor is from the center, how wide
+    // the graphic being previewed is, and how long the hashed read-out is.
+    const sizes = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const bounds = mlb.native.preview?.graphic?.bounds;
+            const resolution = mlb.resolutionOf();
+            return {half: bounds ? (bounds.maxX - bounds.minX) / 2 / resolution : null, measure: null};
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        const features = manager.renderingVectorSource.getFeatures();
+        const line = features.find(f => f.get('measure'))?.getGeometry()?.getCoordinates?.();
+        let extent = null;
+        for (const feature of features) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return {
+            half: extent ? (extent[2] - extent[0]) / 2 / resolution : null,
+            measure: line ? Math.hypot(line[1][0] - line[0][0], line[1][1] - line[0][1]) / resolution : null,
+        };
+    });
+
+    await page.getByPlaceholder('Filter graphics').fill('air space coordination area circular');
+    await page.getByText('air space coordination area circular', {exact: true}).first().click();
+    await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
+    const box = await page.locator(engine === 'maplibre' ? 'canvas' : '.map-container').first().boundingBox();
+
+    const DRAG_PX = 120;
+    await page.mouse.click(box.x + 700, box.y + 470);
+    await page.mouse.move(box.x + 700 + DRAG_PX, box.y + 470, {steps: 6});
+    await page.waitForTimeout(400);
+    const mid = await sizes();
+
+    check(`${engine}: the graphic is on the map while it is being sized`, mid.half !== null,
+        mid.half === null ? 'nothing rendered between the clicks' : `${Math.round(mid.half)} px`);
+    check(`${engine}: the rim follows the cursor at 50 degrees north`,
+        mid.half !== null && Math.abs(mid.half - DRAG_PX) / DRAG_PX < 0.08,
+        `cursor ${DRAG_PX} px, rim ${mid.half === null ? 'none' : Math.round(mid.half)} px`);
+    if (mid.measure !== null) {
+        check(`${engine}: the radius read-out reaches that rim`,
+            Math.abs(mid.measure - DRAG_PX) / DRAG_PX < 0.08,
+            `read-out ${Math.round(mid.measure)} px`);
+    }
+
+    // And the number it commits is the one it previewed.
+    await page.mouse.click(box.x + 700 + DRAG_PX, box.y + 470);
+    await page.waitForTimeout(700);
+    const stored = await page.evaluate(() => {
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        return feature ? feature.properties.tacticalGraphic.radius : null;
+    });
+    // 120 px at this zoom is ~587 km of projected meters, which is ~380 km of ground.
+    check(`${engine}: stores the ground radius, not the projected one`,
+        stored !== null && stored > 330_000 && stored < 430_000,
+        stored === null ? 'nothing stored' : `${Math.round(stored / 1000)} km`);
+
+    /*
+     * The other three families, which have the same right to be seen before they are
+     * committed. A line rebuilt itself from the sketch on OpenLayers from the beginning
+     * and on MapLibre never did; an **area** did neither — all 87 of them showed the
+     * plain sketch outline until the last click and only then became a symbol.
+     *
+     * Each case clicks every vertex but the last and then moves to where the last would
+     * go, which is exactly the moment the user is deciding. Asserting only "something is
+     * rendered" on purpose: what it should look like is the sweep's business, and a
+     * pixel count here would pin the wrong thing.
+     */
+    const FAMILIES = [
+        {filter: 'air corridor', clicks: [[520, 300]], then: [820, 300]},
+        {filter: 'assembly area', clicks: [[520, 620], [760, 620]], then: [700, 760]},
+        {filter: 'target area rectangular', clicks: [[1000, 300]], then: [1180, 430]},
+    ];
+    for (const {filter, clicks, then} of FAMILIES) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(250);
+        await page.getByPlaceholder('Filter graphics').fill(filter);
+        await page.waitForTimeout(250);
+        await page.getByText(filter, {exact: true}).first().click();
+        await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
+        for (const [x, y] of clicks) {
+            await page.mouse.click(box.x + x, box.y + y);
+            await page.waitForTimeout(120);
+        }
+        await page.mouse.move(box.x + then[0], box.y + then[1], {steps: 6});
+        await page.waitForTimeout(350);
+        const shown = await sizes();
+        check(`${engine}: "${filter}" is drawn while it is being drawn`, shown.half !== null,
+            shown.half === null ? 'nothing between the clicks' : `${Math.round(shown.half)} px`);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(200);
+    }
+
+    await browser.close();
+}
+
+/**
+ * A screen size is only a distance at a place.
+ *
+ * A decoration, a one-click badge and a default corridor width are all specified in
+ * **pixels**, and each was turned into metres by multiplying by the map resolution — a
+ * projected length, inflated by `1 / cos(latitude)`. So the same gesture drew a Destroy
+ * twice the size at 60 degrees north as on the equator, and a corridor twice as wide.
+ *
+ * The check is a ratio between two latitudes rather than an absolute pixel size, because
+ * the number that must not change is the *screen* size: whatever the symbol measures on
+ * the equator, it has to measure there too. Run on both engines, and the tolerance is
+ * wide enough for a pixel of rounding on a small extent but nowhere near the 2x it is
+ * guarding against.
+ */
+const LATITUDE_CASES = [
+    {filter: 'destroy', pts: [[700, 500], [820, 500]]},
+    {filter: 'airfield', pts: [[700, 500], [820, 500]]},
+    {filter: 'air corridor', pts: [[600, 500], [900, 500]]},
+    {filter: 'bridge', pts: [[600, 500], [900, 500]]},
+    {filter: 'screen', pts: [[600, 500], [900, 500]]},
+];
+
+async function runLatitudeSweep(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    // The same resolution on both engines: MapLibre's zoom is one behind OpenLayers'
+    // because its tiles are 512 px, and these have been checked to land on the identical
+    // metres-per-pixel.
+    const jump = lat => page.evaluate(l => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, l], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, Math.log(Math.tan(Math.PI / 4 + (l * Math.PI) / 360)) * 6378137]);
+        view.setZoom(6);
+    }, lat);
+
+    const sizePx = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const resolution = mlb.resolutionOf();
+            const bounds = mlb.native.graphics[mlb.native.graphics.length - 1]?.graphic?.bounds;
+            return bounds
+                ? {w: (bounds.maxX - bounds.minX) / resolution, h: (bounds.maxY - bounds.minY) / resolution}
+                : null;
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        let extent = null;
+        for (const feature of manager.renderingVectorSource.getFeatures()) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return extent ? {w: (extent[2] - extent[0]) / resolution, h: (extent[3] - extent[1]) / resolution} : null;
+    });
+
+    /*
+     * **A drag moves the graphic as far as the cursor asked, wherever it is.**
+     *
+     * The line and area path measured the cursor's travel as a ground distance and a
+     * bearing and walked every vertex along a great circle, which bows poleward — so one
+     * horizontal 90 px drag moved a zone 5.306 degrees of longitude at 63 north where it
+     * asked for 4.851, and slid it north as well. Checked at a latitude where that shows;
+     * on the equator the two are the same number.
+     */
+    const DRAG_PX = 120;
+    const editButton = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    for (const filter of ['assembly area', 'air corridor']) {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(250);
+        await jump(60);
+        await page.waitForTimeout(300);
+        try {
+            await drawGraphic(page, filter, filter === 'assembly area'
+                ? [[600, 430], [820, 430], [820, 600]]
+                : [[600, 500], [900, 500]]);
+        } catch {
+            check(`${engine}: "${filter}" could be drawn for the drag check`, false);
+            continue;
+        }
+        await editButton.click();
+        await page.waitForTimeout(250);
+        const dragged = await page.evaluate(async pixels => {
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const api = window.__tacticalEngine;
+            const walk = (node, into) => {
+                if (!Array.isArray(node)) return into;
+                if (typeof node[0] === 'number') { into.push(node); return into; }
+                for (const child of node) walk(child, into);
+                return into;
+            };
+            const centroid = () => {
+                const points = walk(api.snapshot().features[0].geometry.coordinates, []);
+                return points.reduce((acc, [x, y]) => [acc[0] + x / points.length, acc[1] + y / points.length], [0, 0]);
+            };
+            api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+            await pause(200);
+            const box = api.selectionBox();
+            if (!box) return null;
+            const host = document.querySelector('.map-container').getBoundingClientRect();
+            const before = centroid();
+            const startX = box.x + box.width, startY = box.y + box.height;
+            if (!api.beginGesture('translate', new PointerEvent('pointerdown', {
+                clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+            }))) return null;
+            window.dispatchEvent(new PointerEvent('pointermove', {
+                clientX: host.left + startX + pixels, clientY: host.top + startY, bubbles: true,
+            }));
+            window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+            await pause(250);
+            const after = centroid();
+            const resolution = window.__tacticalGraphicsMapLibre
+                ? window.__tacticalGraphicsMapLibre.resolutionOf()
+                : window.__tacticalGraphics.manager.map.getView().getResolution();
+            // Longitude degrees the drag asked for, and what it got.
+            return {
+                asked: (pixels * resolution) / (Math.PI * 6378137 / 180),
+                got: after[0] - before[0],
+                drift: after[1] - before[1],
+            };
+        }, DRAG_PX);
+        await editButton.click();
+        await page.waitForTimeout(200);
+
+        if (!dragged) {
+            check(`${engine}: "${filter}" could be dragged at 60 degrees north`, false);
+            continue;
+        }
+        check(`${engine}: "${filter}" follows the cursor at 60 degrees north`,
+            Math.abs(dragged.got - dragged.asked) / dragged.asked < 0.01 && Math.abs(dragged.drift) < 0.01,
+            `asked ${dragged.asked.toFixed(3)} deg, moved ${dragged.got.toFixed(3)}, drifted ${dragged.drift.toFixed(3)}`);
+    }
+
+    for (const {filter, pts} of LATITUDE_CASES) {
+        const measured = {};
+        for (const lat of [0, 60]) {
+            await page.evaluate(() => window.__tacticalEngine.clearAll());
+            await page.waitForTimeout(250);
+            await jump(lat);
+            await page.waitForTimeout(300);
+            try {
+                await drawGraphic(page, filter, pts);
+            } catch {
+                measured[lat] = null;
+                continue;
+            }
+            measured[lat] = await sizePx();
+        }
+        const [south, north] = [measured[0], measured[60]];
+        if (!south || !north || !south.w || !south.h) {
+            check(`${engine}: "${filter}" could be measured at both latitudes`, false);
+            continue;
+        }
+        const ratios = [north.w / south.w, north.h / south.h];
+        const worst = ratios.reduce((a, b) => (Math.abs(b - 1) > Math.abs(a - 1) ? b : a));
+        check(`${engine}: "${filter}" is the same size on screen at 60 degrees north`,
+            Math.abs(worst - 1) < 0.12,
+            `${Math.round(south.w)}x${Math.round(south.h)} px -> ${Math.round(north.w)}x${Math.round(north.h)} px`);
+    }
+
+    await browser.close();
+}
+
+/**
+ * The same gesture on both engines has to produce the same picture, at the same size.
+ *
+ * Three separate defects hid behind "MapLibre draws it bigger", and none of the existing
+ * checks could see any of them — the unit tests assert one engine at a time, and the
+ * gallery comparison reports ink ratios, which a uniform doubling barely moves.
+ *
+ * 1. Finishing a fixed-vertex draw with a double-click **zoomed the MapLibre map**, so
+ *    every symbol measured twice its size. That one was not a size defect at all.
+ * 2. A stamped `decorationSize` outranked the per-name table on rebuild, so a bridge's
+ *    ticks drifted 15 px -> 20 while OpenLayers stayed at 15.
+ * 3. The block family's 60 px lived in an OpenLayers holder, so MapLibre used 20.
+ *
+ * So this measures the rendered extent, in screen pixels, at the same resolution on both
+ * engines — the thing the user actually looks at — and compares the two afterwards.
+ */
+const DRAW_SIZE_CASES = [
+    {filter: 'phase line', pts: [[600, 500], [900, 500]]},
+    {filter: 'bridge', pts: [[600, 500], [900, 500]]},
+    {filter: 'gap', pts: [[600, 500], [900, 500]]},
+    {filter: 'ferry crossing', pts: [[600, 500], [900, 500]]},
+    {filter: 'fix', pts: [[600, 500], [900, 500]]},
+    {filter: 'abatis', pts: [[600, 500], [900, 500]]},
+    {filter: 'passage lane', pts: [[600, 500], [900, 500]]},
+    {filter: 'air corridor', pts: [[600, 500], [900, 500]]},
+    {filter: 'block', pts: [[600, 500], [900, 500]]},
+    {filter: 'withdraw', pts: [[600, 500], [900, 500]]},
+    {filter: 'destroy', pts: [[700, 500], [820, 500]]},
+    {filter: 'assembly area', pts: [[600, 430], [820, 430], [820, 600]]},
+    // The six drawn from anchor points. Their two clicks are a **centre and an edge** on
+    // both engines — the panel promises exactly that — and MapLibre used to store the raw
+    // pair instead, so each generator's own reader made of them what it would: Turn came
+    // out half size. @see drawnAnchors
+    {filter: 'turn', pts: [[700, 500], [820, 500]]},
+    {filter: 'envelopment', pts: [[700, 500], [820, 500]]},
+    {filter: 'pursuit', pts: [[700, 500], [820, 500]]},
+    {filter: 'ambush', pts: [[700, 500], [820, 500]]},
+    {filter: 'contain', pts: [[700, 500], [820, 500]]},
+    // The same turn again, barely dragged: a curve this short is held to a legible size by
+    // a floor that used to exist on one engine only, so the identical flick drew 100 px on
+    // OpenLayers and 60 on MapLibre. @see minimumDrawnRadiusPx
+    {filter: 'turn', pts: [[700, 700], [730, 700]], as: 'turn (short drag)'},
+    // A rectangular zone, for the **amplifier** rather than the extent: its width is
+    // doctrinal input that the drawn box states, and MapLibre used to derive it only
+    // during a drag — so a freshly drawn zone reported the generic default, 98 km where
+    // OpenLayers reported 391. @see rectangleAmplifiers
+    {filter: 'critical friendly zone rectangular', pts: [[600, 430], [860, 590]], amplifiers: true},
+];
+
+/** Filled by `runDrawSizes` for each engine, compared once both have run. */
+const drawnSizes = {};
+/** The stored amplifiers for the same draws. @see compareDrawSizes */
+const drawnAmplifiers = {};
+/** The same graphics after an affordance resize. @see compareDrawSizes */
+const resizedSizes = {};
+
+async function runDrawSizes(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    drawnSizes[engine] = {};
+    drawnAmplifiers[engine] = {};
+    resizedSizes[engine] = {};
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    // Same centre, same metres-per-pixel. MapLibre's zoom runs one behind OpenLayers'
+    // because its tiles are 512 px; both land on 2445.98 m/px here.
+    const home = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, 0], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, 0]);
+        view.setZoom(6);
+    });
+
+    const extentPx = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) {
+            const resolution = mlb.resolutionOf();
+            const bounds = mlb.native.graphics[0]?.graphic?.bounds;
+            return bounds
+                ? [Math.round((bounds.maxX - bounds.minX) / resolution), Math.round((bounds.maxY - bounds.minY) / resolution)]
+                : null;
+        }
+        const manager = window.__tacticalGraphics.manager;
+        const resolution = manager.map.getView().getResolution();
+        let extent = null;
+        for (const feature of manager.renderingVectorSource.getFeatures()) {
+            if (feature.get('role') !== 'graphic') continue;
+            const box = feature.getGeometry()?.getExtent?.();
+            if (!box || !box.every(Number.isFinite)) continue;
+            extent = extent
+                ? [Math.min(extent[0], box[0]), Math.min(extent[1], box[1]), Math.max(extent[2], box[2]), Math.max(extent[3], box[3])]
+                : box.slice();
+        }
+        return extent
+            ? [Math.round((extent[2] - extent[0]) / resolution), Math.round((extent[3] - extent[1]) / resolution)]
+            : null;
+    });
+
+    for (const {filter, pts, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(200);
+        await home();
+        await page.waitForTimeout(300);
+        try {
+            await drawGraphic(page, filter, pts);
+        } catch {
+            drawnSizes[engine][key] = null;
+            continue;
+        }
+        drawnSizes[engine][key] = await extentPx();
+        drawnAmplifiers[engine][key] = await page.evaluate(() => {
+            const t = window.__tacticalEngine.snapshot().features[0]?.properties?.tacticalGraphic ?? {};
+            return {width: t.width ?? null, length: t.length ?? null};
+        });
+
+        // …and the same graphic after a resize. **A resize is where the two engines drift
+        // apart even when the draw agrees**: a corridor's width and a line's decoration
+        // are filed beside the geometry, so scaling only the vertices leaves the rails
+        // where they were. Measured through the affordance, which is the same gesture on
+        // both engines. @see scaleDrawnSizes
+        await editBtn.click();
+        await page.waitForTimeout(250);
+        resizedSizes[engine][key] = await page.evaluate(async () => {
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const engineApi = window.__tacticalEngine;
+            engineApi.select(engineApi.snapshot().features[0]?.properties?.symbolId ?? null);
+            await pause(200);
+            const selection = engineApi.selectionBox();
+            if (!selection) return null;
+            const host = document.querySelector('.map-container').getBoundingClientRect();
+            const startX = selection.x + selection.width, startY = selection.y + selection.height;
+            const pivotX = selection.x + selection.width / 2, pivotY = selection.y + selection.height / 2;
+            const armX = startX - pivotX, armY = startY - pivotY;
+            const began = engineApi.beginGesture('resize', new PointerEvent('pointerdown', {
+                clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+            }));
+            if (!began) return null;
+            for (const step of [1, 1.5]) {
+                window.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: host.left + pivotX + armX * step,
+                    clientY: host.top + pivotY + armY * step,
+                    bubbles: true,
+                }));
+            }
+            window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+            await pause(250);
+            return true;
+        }) ? await extentPx() : null;
+        await editBtn.click();
+        await page.waitForTimeout(200);
+    }
+
+    await browser.close();
+}
+
+/**
+ * A resize scales; it does not turn the graphic over.
+ *
+ * Dragging a *shape handle* across the axis is how Pursuit's hook and Envelopment's arc
+ * change flanks, and that stays. But the affordance says one thing — make it bigger — and
+ * a drag from the box corner passes the axis on its way out, so a pursuit resized through
+ * the button came back mirrored on OpenLayers while the same gesture on MapLibre did not.
+ */
+async function runMirrorCheck(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    try {
+        await drawGraphic(page, 'pursuit', [[700, 500], [820, 500]]);
+    } catch {
+        check(`${engine}: "pursuit" could be drawn`, false);
+        await browser.close();
+        return;
+    }
+    await editBtn.click();
+    await page.waitForTimeout(300);
+
+    const flipped = await page.evaluate(async () => {
+        const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const api = window.__tacticalEngine;
+        const mirroredNow = () => api.snapshot().features[0]?.properties?.tacticalGraphic?.mirrored ?? null;
+        api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+        await pause(200);
+        const before = mirroredNow();
+        const box = api.selectionBox();
+        if (!box) return null;
+        const host = document.querySelector('.map-container').getBoundingClientRect();
+        const startX = box.x + box.width, startY = box.y + box.height;
+        const pivotX = box.x + box.width / 2, pivotY = box.y + box.height / 2;
+        if (!api.beginGesture('resize', new PointerEvent('pointerdown', {
+            clientX: host.left + startX, clientY: host.top + startY, bubbles: true,
+        }))) return null;
+        for (const step of [1, 1.6]) {
+            window.dispatchEvent(new PointerEvent('pointermove', {
+                clientX: host.left + pivotX + (startX - pivotX) * step,
+                clientY: host.top + pivotY + (startY - pivotY) * step,
+                bubbles: true,
+            }));
+        }
+        window.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+        await pause(250);
+        return {before, after: mirroredNow()};
+    });
+
+    check(`${engine}: an affordance resize does not flip pursuit's hook`,
+        flipped !== null && flipped.before === flipped.after,
+        flipped ? `mirrored ${flipped.before} -> ${flipped.after}` : 'gesture refused');
+
+    await browser.close();
+}
+
+/** @see runDrawSizes — run once both engines have measured. */
+/**
+ * Where the arrowhead lands, on both engines.
+ *
+ * APP-06 numbers thirty-two of these graphics from the tip -- "Point 1 defines the tip of the
+ * arrowhead" -- and they were drawn rear-first, so the head sat on the user's *last*
+ * click. Nothing about that is visible in a size comparison: the symbol is the same
+ * picture either way round, which is why both engines agreed on it for months.
+ *
+ * So this measures the **overhang**. A movement arrow's head overshoots its tip vertex by
+ * one and a half radii, and a cane's 180-degree arc overshoots its rear the same way, so
+ * which end of the drawn line the ink sticks out past says which end the symbol treats as
+ * its head -- and it says it in one number that flips sign if the order is wrong.
+ */
+async function runTipOrder(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+
+    const home = () => page.evaluate(() => {
+        const mlb = window.__tacticalGraphicsMapLibre;
+        if (mlb) return void mlb.map.jumpTo({center: [0, 0], zoom: 5});
+        const view = window.__tacticalGraphics.manager.map.getView();
+        view.setCenter([0, 0]);
+        view.setZoom(6);
+    });
+
+    // The drawn points and the rendered ink, in one projected frame: base coordinates
+    // come back as lon/lat and the geometry is already mercator metres.
+    const measured = () => page.evaluate(() => {
+        const merc = lon => (lon * 20037508.342789244) / 180;
+        const mlb = window.__tacticalGraphicsMapLibre;
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        const coords = feature?.geometry?.coordinates ?? [];
+
+        // Every vertex of the rendered line work, in projected metres. Both engines are
+        // asked for the same thing: MapLibre keeps one realized geometry per graphic,
+        // OpenLayers keeps a feature per role and only `graphic` is the symbol itself.
+        const ink = [];
+        const walk = node => {
+            if (!Array.isArray(node)) return;
+            if (typeof node[0] === 'number') return void ink.push([node[0], node[1]]);
+            for (const child of node) walk(child);
+        };
+        if (mlb) {
+            const geometry = mlb.native.graphics[0]?.graphic?.geometry;
+            const parts = geometry?.type === 'GeometryCollection' ? geometry.geometries : geometry ? [geometry] : [];
+            for (const part of parts) walk(part.coordinates);
+        } else {
+            for (const f of window.__tacticalGraphics.manager.renderingVectorSource.getFeatures()) {
+                if (f.get('role') !== 'graphic') continue;
+                walk(f.getGeometry()?.getCoordinates?.());
+            }
+        }
+
+        return {
+            x: coords.map(c => merc(c[0])),
+            points: coords.length,
+            legs: coords.length >= 3
+                ? [0, 1].map(i => Math.hypot(coords[i + 1][0] - coords[0][0], coords[i + 1][1] - coords[0][1]))
+                : null,
+            ink,
+        };
+    });
+
+    /**
+     * How wide the ink is in the first and last fifth of the symbol's own span.
+     *
+     * An arrowhead is the widest part of an arrow and it sits at the tip, so the end
+     * carrying the wide ink is the end carrying the head. Measured off the shape rather
+     * than off an overhang because the movement family *trims* its centreline so the
+     * point lands exactly on the user's vertex -- there is no overhang to read.
+     */
+    const flare = (ink, axisY) => {
+        if (ink.length < 3) return null;
+        const xs = ink.map(([x]) => x);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const span = maxX - minX;
+        if (!(span > 0)) return null;
+        const widest = (from, to) => {
+            const inside = ink.filter(([x]) => x >= minX + span * from && x <= minX + span * to);
+            return inside.length ? Math.max(...inside.map(([, y]) => Math.abs(y - axisY))) : 0;
+        };
+        return {head: widest(0, 0.2), tail: widest(0.8, 1)};
+    };
+
+    const draw = async (filter, points) => {
+        await page.evaluate(() => window.__tacticalEngine.clearAll());
+        await page.waitForTimeout(200);
+        await home();
+        await page.waitForTimeout(300);
+        await drawGraphic(page, filter, points);
+        return measured();
+    };
+
+    const LEFT = [600, 470];
+    const RIGHT = [900, 470];
+
+    // An axis of advance: the head is point 1, so the ink runs past the *first* click.
+    const avenue = await draw('avenue of approach', [LEFT, RIGHT]);
+    const avenueFlare = avenue.ink ? flare(avenue.ink, 0) : null;
+    if (!avenueFlare || avenue.points < 2) {
+        check(`${engine}: avenue of approach draws`, false, `${avenue.ink?.length ?? 0} vertices rendered`);
+    } else {
+        // Drawn west to east, so the first click is the western end -- and the barbs
+        // there are twice the half-width of the shaft at the other.
+        // 1.5x measured, 1.25 asserted: the reversed order reads 0.67, so the margin is
+        // between the two answers rather than shaved against the one that passes.
+        check(`${engine}: the avenue of approach points at the first click`,
+            avenueFlare.head > avenueFlare.tail * 1.25,
+            `${Math.round(avenueFlare.head)} m of flare at point 1 vs ${Math.round(avenueFlare.tail)} m at point N`);
+    }
+
+    // A cane: point 1 is the head as well, so the overshoot is the *arc*, at the far end.
+    const withdraw = await draw('withdraw', [LEFT, RIGHT]);
+    if (!withdraw.ink?.length || withdraw.points < 2) {
+        check(`${engine}: withdraw draws`, false, 'nothing rendered');
+    } else {
+        const xs = withdraw.ink.map(([x]) => x);
+        const past = {
+            first: withdraw.x[0] - Math.min(...xs),
+            last: Math.max(...xs) - withdraw.x[withdraw.x.length - 1],
+        };
+        check(`${engine}: the withdraw arc hangs off the last click, not the first`,
+            past.last > past.first,
+            `${Math.round(past.last / 1000)} km past the rear vs ${Math.round(past.first / 1000)} km past the tip`);
+    }
+
+    // The V: 140500 numbers it from the vertex, so the first click is the corner and the
+    // two legs -- the drawn one and the one the generator swings -- are equal from it.
+    const vee = await draw('fields of fire / sector of fire', [LEFT, RIGHT]);
+    if (!vee.legs) {
+        check(`${engine}: fields of fire completes its V`, false, `${vee.points} point(s)`);
+    } else {
+        const [a, b] = vee.legs;
+        check(`${engine}: the fields-of-fire vertex is the first click`,
+            Math.abs(a - b) / Math.max(a, b) < 0.05,
+            `legs ${a.toFixed(2)} and ${b.toFixed(2)} degrees from point 1`);
+    }
+
+    await browser.close();
+}
+
+/**
+ * Which side of its own line a cane hangs on, after the handle that flips it.
+ *
+ * The retrograde tasks' first handle only mirrors: the drag carries no width and moves no
+ * vertex. Which side "mirrored" means is decided by the **sign of a perpendicular against
+ * the segment's left normal**, and that is absolute rather than relative — so reversing
+ * the stored points, as APP-06's numbering requires, names the opposite side unless the
+ * measurement is taken against the line the generator built along.
+ *
+ * Nothing else in the sweep would catch it. The symbol is the same size either way, both
+ * engines share the rule, and `mirrored` still toggles — it toggles *away* from the cursor.
+ * So this measures the ink: drag the handle north, the arc must end up north.
+ */
+async function runMirrorSide(engine) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({viewport: {width: 1500, height: 950}});
+    await page.goto(URL, {waitUntil: 'networkidle'});
+    await page.waitForTimeout(1500);
+    if (engine === 'maplibre') {
+        await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
+        await page.waitForTimeout(2500);
+    }
+    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+
+    // How far the symbol's ink sits above (+) or below (-) its own drawn line, in metres.
+    const inkSide = () => page.evaluate(() => {
+        const R = 6378137;
+        const mercY = lat => R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+        const mlb = window.__tacticalGraphicsMapLibre;
+        const feature = window.__tacticalEngine.snapshot().features[0];
+        const base = feature?.geometry?.coordinates ?? [];
+        if (base.length < 2) return null;
+        const axis = (mercY(base[0][1]) + mercY(base[base.length - 1][1])) / 2;
+
+        const ink = [];
+        const walk = node => {
+            if (!Array.isArray(node)) return;
+            if (typeof node[0] === 'number') return void ink.push(node[1]);
+            for (const child of node) walk(child);
+        };
+        if (mlb) {
+            const geometry = mlb.native.graphics[0]?.graphic?.geometry;
+            const parts = geometry?.type === 'GeometryCollection' ? geometry.geometries : geometry ? [geometry] : [];
+            for (const part of parts) walk(part.coordinates);
+        } else {
+            for (const f of window.__tacticalGraphics.manager.renderingVectorSource.getFeatures()) {
+                if (f.get('role') !== 'graphic') continue;
+                walk(f.getGeometry()?.getCoordinates?.());
+            }
+        }
+        if (!ink.length) return null;
+        // The extreme, not the mean: the arc is a minority of the vertices and the
+        // straight run sits on the axis, so an average barely moves.
+        const above = Math.max(...ink) - axis;
+        const below = axis - Math.min(...ink);
+        return above - below;
+    });
+
+    // Where the flipping handle is, in page pixels. It is the contract's handle 0 for
+    // this family, which OpenLayers publishes as its own `offsetHandler` feature.
+    const mirrorHandle = () => page.evaluate(() => {
+        const manager = window.__tacticalGraphics?.manager;
+        if (manager) {
+            const feature = manager.renderingVectorSource.getFeatures().find(f => f.get('offsetHandler'));
+            const coords = feature?.getGeometry()?.getCoordinates?.();
+            if (!coords) return null;
+            const point = Array.isArray(coords[0]) ? coords[0] : coords;
+            return manager.map.getPixelFromCoordinate(point);
+        }
+        const native = window.__tacticalGraphicsMapLibre?.native;
+        const map = window.__tacticalGraphicsMapLibre?.map;
+        if (!native || !map || !native.selection) return null;
+        const graphic = native.find(native.selection);
+        if (!graphic?.handles?.length) return null;
+        const R = 6378137;
+        const [x, y] = graphic.handles[0];
+        const lonLat = [(x / R) * (180 / Math.PI), (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI)];
+        const projected = map.project(lonLat);
+        const canvas = map.getCanvasContainer().getBoundingClientRect();
+        const host = document.querySelector('.map-container').getBoundingClientRect();
+        return [projected.x + canvas.left - host.left, projected.y + canvas.top - host.top];
+    });
+
+    let mapBox;
+    try {
+        mapBox = await drawGraphic(page, 'withdraw', [[620, 470], [900, 470]]);
+    } catch {
+        check(`${engine}: withdraw could be drawn for its mirror handle`, false);
+        await browser.close();
+        return;
+    }
+
+    if ((await page.evaluate(() => window.__tacticalEngine.getInteractionMode())) !== 'edit') await editBtn.click();
+    await page.waitForTimeout(250);
+    await page.evaluate(() => {
+        const api = window.__tacticalEngine;
+        api.select(api.snapshot().features[0]?.properties?.symbolId ?? null);
+    });
+    await page.waitForTimeout(300);
+
+    const drag = async (dy) => {
+        const handle = await mirrorHandle();
+        if (!handle) return false;
+        const [hx, hy] = handle;
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy);
+        await page.mouse.down();
+        await page.mouse.move(mapBox.x + hx, mapBox.y + hy + dy, {steps: 14});
+        await page.mouse.up();
+        await page.waitForTimeout(450);
+        return true;
+    };
+
+    // Screen y grows downward and projected y grows upward, so a drag of -120 px is north.
+    if (!(await drag(-120))) {
+        check(`${engine}: withdraw publishes a mirror handle`, false, 'no handle found');
+        await browser.close();
+        return;
+    }
+    const north = await inkSide();
+    check(`${engine}: dragging the cane's handle north puts the arc north`,
+        north !== null && north > 0,
+        north === null ? 'no ink measured' : `${Math.round(north / 1000)} km above the line`);
+
+    if (!(await drag(240))) {
+        check(`${engine}: the mirror handle survives the first flip`, false, 'no handle found');
+        await browser.close();
+        return;
+    }
+    const south = await inkSide();
+    check(`${engine}: and dragging it south puts the arc south`,
+        south !== null && south < 0,
+        south === null ? 'no ink measured' : `${Math.round(south / 1000)} km above the line`);
+
+    await browser.close();
+}
+
+function compareDrawSizes() {
+    for (const {filter, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
+        const ol = drawnSizes.openlayers?.[key];
+        const mlb = drawnSizes.maplibre?.[key];
+        if (!ol || !mlb) {
+            check(`both engines drew "${key}"`, false, `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
+            continue;
+        }
+        // Generous, because the two measure through their own machinery — OpenLayers
+        // unions its rendered features' extents, MapLibre reads the paint bounds — and a
+        // pixel of rounding on a thin graphic is not a disagreement. The defects this
+        // guards against were 2x and 3x.
+        const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
+        check(`"${key}" is the same size on both engines`, worst < 0.1,
+            `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+    }
+
+    // A resize has to leave them the same size too — the draw agreeing proves nothing
+    // about the gesture. @see resizedSizes
+    for (const {filter, as} of DRAW_SIZE_CASES) {
+        const key = as ?? filter;
+        const ol = resizedSizes.openlayers?.[key];
+        const mlb = resizedSizes.maplibre?.[key];
+        if (!ol || !mlb) continue;   // a graphic that refuses resize has nothing to compare
+        const worst = Math.max(...[0, 1].map(i => (ol[i] ? Math.abs(mlb[i] - ol[i]) / ol[i] : 0)));
+        check(`"${key}" is the same size on both engines after a resize`, worst < 0.1,
+            `OL ${ol[0]}x${ol[1]} px vs MapLibre ${mlb[0]}x${mlb[1]} px`);
+
+        /*
+         * **And each engine grew by the same factor**, which is the sharper question.
+         *
+         * The absolute comparison above has to allow ~10%, because the two engines measure
+         * through their own machinery — one unions its rendered features, the other reads
+         * the paint bounds — and an arrowhead's extent rounds differently in each. That
+         * slack is wide enough to hide a real scale error: a 3% one, injected deliberately,
+         * passed it. Comparing each engine against *itself* first cancels the measurement
+         * difference, so this can be tight.
+         */
+        const drawnOl = drawnSizes.openlayers?.[key];
+        const drawnMlb = drawnSizes.maplibre?.[key];
+        if (drawnOl?.[0] && drawnMlb?.[0]) {
+            const grew = [0, 1]
+                .filter(i => drawnOl[i] > 0 && drawnMlb[i] > 0)
+                .map(i => [ol[i] / drawnOl[i], mlb[i] / drawnMlb[i]]);
+            const apart = Math.max(...grew.map(([a, b]) => Math.abs(a - b) / Math.max(a, b)));
+            check(`"${key}" grew by the same factor on both engines`, apart < 0.02,
+                grew.map(([a, b]) => `${a.toFixed(3)} vs ${b.toFixed(3)}`).join(', '));
+        }
+    }
+
+    // And where a graphic files a figure about itself, the two have to file the same one:
+    // it is what the operator reads and what a consumer reads back.
+    for (const {filter, amplifiers} of DRAW_SIZE_CASES.filter(c => c.amplifiers)) {
+        const ol = drawnAmplifiers.openlayers?.[filter];
+        const mlb = drawnAmplifiers.maplibre?.[filter];
+        void amplifiers;
+        if (!ol?.width || !mlb?.width) {
+            check(`both engines filed a width for "${filter}"`, false,
+                `OL ${JSON.stringify(ol)} MapLibre ${JSON.stringify(mlb)}`);
+            continue;
+        }
+        check(`"${filter}" files the same width on both engines`,
+            Math.abs(mlb.width - ol.width) / ol.width < 0.01,
+            `OL ${Math.round(ol.width)} m vs MapLibre ${Math.round(mlb.width)} m`);
+    }
+}
+
+/**
+ * The sections, by name, so one can be run alone while it is being worked on.
+ *
+ * `SECTIONS=tip npm run drive:edit` runs just that one; unset runs all of them, which
+ * is what CI and a release check want. A whole pass is fifteen minutes, and iterating on
+ * one measurement at that price is how measurements stop being iterated on.
+ */
+const SECTIONS = {
+    edit: run,
+    resize: runResizeSweep,
+    width: runWidthSweep,
+    preview: runDrawPreview,
+    latitude: runLatitudeSweep,
+    sizes: runDrawSizes,
+    mirror: runMirrorCheck,
+    tip: runTipOrder,
+    side: runMirrorSide,
+};
+
+const wanted = (process.env.SECTIONS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+const running = wanted.length ? wanted : Object.keys(SECTIONS);
+for (const name of running) {
+    if (!SECTIONS[name]) {
+        failures.push(`  FAIL  unknown section "${name}" — one of ${Object.keys(SECTIONS).join(', ')}`);
+    }
+}
+
+for (const engine of ['openlayers', 'maplibre']) {
+    try {
+        for (const name of running) await SECTIONS[name]?.(engine);
+    } catch (err) {
+        failures.push(`  FAIL  ${engine}: threw — ${err.message}`);
+    }
+}
+
+if (running.includes('sizes')) compareDrawSizes();
+
+try {
+    if (!wanted.length) await runChromeChecks();
+} catch (err) {
+    failures.push(`  FAIL  chrome checks threw — ${err.message}`);
+}
+
+console.log(notes.join('\n'));
+if (failures.length) {
+    console.log('\nFAILURES:\n' + failures.join('\n'));
+    process.exit(1);
+}
+console.log('\nAll edit-mode checks passed on both engines.');

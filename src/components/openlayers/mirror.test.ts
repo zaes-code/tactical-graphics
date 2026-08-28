@@ -46,7 +46,7 @@ const geoFeature = (name: TacticalGraphicName, mirrored: boolean): GeoJSONFeatur
 describe('mirroring the asymmetric line graphics', () => {
     /**
      * "Different from the unmirrored one" is too weak — the first attempt at this reversed
-     * the arc's sweep as well as its centre, which asks turf for a backwards sweep and
+     * the arc's sweep as well as its center, which asks turf for a backwards sweep and
      * returns a *different, smaller* segment. That passed a difference check while looking
      * obviously wrong on screen. A mirror has to be the same arc reflected: same number of
      * points, same distance off the line, opposite side.

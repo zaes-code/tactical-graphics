@@ -43,7 +43,7 @@ export class Block extends TacticalGraphicsBase<PointGraphicOptions> {
      * `getPenetrationArrowGraphic` reports its own front line.
      *
      * This is load-bearing for the label, not cosmetic. `blockStyleFunc` takes the
-     * baseline it centres the "B" on from `getCoordinates()[0]` when handed a
+     * baseline it centers the "B" on from `getCoordinates()[0]` when handed a
      * MultiLineString, but from the whole coordinate array when handed a plain
      * LineString — and this graphic used to be a plain LineString, so `end` was the
      * crossbar's far tip rather than the shaft's. The label then sat at

@@ -1,5 +1,5 @@
 /**
- * # The centre symbol of a security operation, described without a renderer
+ * # The center symbol of a security operation, described without a renderer
  *
  * Cover, Guard and Screen each render a unit symbol between their two arms. That
  * symbol is a *single-point* icon, which is milsymbol's job and not this
@@ -21,7 +21,7 @@
  *
  * A host registers once and both engines draw the symbol.
  *
- * Registering nothing is a supported state: the arms and letters draw, the centre
+ * Registering nothing is a supported state: the arms and letters draw, the center
  * is simply empty.
  */
 
@@ -65,7 +65,7 @@ export interface SecuritySymbolRequest {
     labels: GraphicLabels;
 }
 
-/** An image to draw at the centre, and optionally the size to draw it at. */
+/** An image to draw at the center, and optionally the size to draw it at. */
 export interface SecuritySymbolImage {
     /** A `data:` URI or a URL. */
     src: string;
@@ -74,7 +74,7 @@ export interface SecuritySymbolImage {
 }
 
 /**
- * Produces the centre symbol as an image, or nothing.
+ * Produces the center symbol as an image, or nothing.
  *
  * Deliberately narrower than the OpenLayers provider: no `Style`, because a
  * renderer-neutral registry cannot speak one engine's style objects. A host that
@@ -83,7 +83,7 @@ export interface SecuritySymbolImage {
  */
 export type SecuritySymbolProvider = (request: SecuritySymbolRequest) => SecuritySymbolImage | string | undefined;
 
-/** On-screen size of the centre symbol in CSS pixels, with no host setting. */
+/** On-screen size of the center symbol in CSS pixels, with no host setting. */
 export const DEFAULT_SYMBOL_SIZE_PX = 25;
 
 /**
@@ -105,7 +105,7 @@ const listeners = new Set<() => void>();
  *
  * The revision alone is a *pull*: a renderer notices it is stale the next time it
  * happens to look. That is enough for OpenLayers, whose style functions re-run on
- * the next draw, and not for MapLibre, which realises its sources on zoom and would
+ * the next draw, and not for MapLibre, which realizes its sources on zoom and would
  * otherwise show the old symbol until something unrelated moved the map. A provider
  * set and nothing visibly happening is not an API worth shipping.
  */
@@ -124,7 +124,7 @@ export function subscribeSecuritySymbolChange(listener: () => void): () => void 
     return () => listeners.delete(listener);
 }
 
-/** Sets how big the centre symbol draws, in CSS pixels, clamped to the readable range. */
+/** Sets how big the center symbol draws, in CSS pixels, clamped to the readable range. */
 export function setSecuritySymbolSize(px: number): void {
     const next = Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, px));
     if (next === symbolSizePx) return;
@@ -132,15 +132,53 @@ export function setSecuritySymbolSize(px: number): void {
     bump();
 }
 
-/** The current centre-symbol size in CSS pixels. */
+/** The current center-symbol size in CSS pixels. */
 export function getSecuritySymbolSize(): number {
     return symbolSizePx;
 }
 
 /**
+ * Share of an escort's bar its unit symbol may span.
+ *
+ * **The escort's symbol is not a fixed screen size, and the security operations' is.**
+ * Cover, guard and screen are badges: every dimension of them is a screen constant, so a
+ * constant symbol beside a constant symbol stays in proportion at any zoom. An escort is
+ * drawn — the operator sets its length, and *"the escort symbol appears above the convoy or
+ * escorted unit symbol"*, so the two have to read as one group. A 25 px unit symbol on a
+ * bar the width of the screen looks like a speck; on a short one it swallows the bar.
+ */
+const ESCORT_SYMBOL_SHARE = 0.16;
+
+/**
+ * How big an escort's centre symbol draws, from its bar's on-screen span.
+ *
+ * Clamped to the same readable range a host's `setSecuritySymbolSize` is, so a very long or
+ * very short bar still gets a symbol somebody can identify. **The paint layer sizes the
+ * break in the bar from this same number**, or the hole and the symbol disagree.
+ */
+export function escortSymbolSizePx(spanPx: number): number {
+    return Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, spanPx * ESCORT_SYMBOL_SHARE));
+}
+
+/**
+ * The graphics that carry a host-injected centre symbol.
+ *
+ * Cover, guard and screen put one between their arms; the escort puts one in the break in
+ * its bar. **A symbology fact, so it lives here** — it had been a private `SECURITY_OPERATIONS`
+ * set inside MapLibre's native renderer, which is the shape of thing that ends up true on
+ * one engine and not the other.
+ */
+export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+    TacticalGraphicName.Escort,
+]);
+
+/**
  * Registers the provider for every security operation on every map.
  *
- * Global, like `configureTacticalGraphics`, and for the same reason: the centre
+ * Global, like `configureTacticalGraphics`, and for the same reason: the center
  * symbol describes the symbology rather than one view, so a host should not have
  * to say it once per map. Pass `undefined` to go back to drawing no symbol.
  */
@@ -167,14 +205,14 @@ export function getSecuritySymbolProvider(): SecuritySymbolProvider | undefined 
  *
  * Held here rather than on a renderer's object so that **one call covers both
  * engines**. OpenLayers can hang a provider on its holder because it keeps one per
- * graphic; MapLibre derives its features from GeoJSON on every realise and has no
+ * graphic; MapLibre derives its features from GeoJSON on every realize and has no
  * such object to hang anything on. Keying by id is the mechanism that works for
  * both, and it is the only one that could be shared.
  */
 const graphicProviders = new Map<string, SecuritySymbolProvider>();
 
 /**
- * Gives one graphic its own centre-symbol provider, on every renderer.
+ * Gives one graphic its own center-symbol provider, on every renderer.
  *
  * `undefined` removes it, putting that graphic back on the global provider. The id
  * is the graphic's own — `symbolId` on an OpenLayers holder, `id` on a
@@ -240,8 +278,8 @@ const SIDC_TEMPLATE = '130#10001413010000000000000000';
  * Standard-identity digit per MIL-STD-2525E, position 4 of the SIDC.
  *
  * `assumedFriend` and `suspectJoker` are distinct identities in the standard and
- * get their own digits here, even though the *colour* accessors alias them onto
- * friend and pending — colour is a rendering choice, identity is what the symbol
+ * get their own digits here, even though the *color* accessors alias them onto
+ * friend and pending — color is a rendering choice, identity is what the symbol
  * asserts.
  */
 const IDENTITY_DIGIT: Partial<Record<TacticalGraphicHostility, string>> = {
@@ -280,7 +318,7 @@ export interface MilsymbolModule {
  * ```
  *
  * `options` is merged into every `ms.Symbol` call, so a host can pass its own
- * fill, mono-colour or frame settings and have the centre symbol match the rest of
+ * fill, mono-color or frame settings and have the center symbol match the rest of
  * its map.
  *
  * **`size` is not how you make the symbol bigger** — use
@@ -304,7 +342,7 @@ export function useMilsymbolSecuritySymbols(ms: MilsymbolModule, options: Record
  * The provider's answer as an image, whichever shape it returned.
  *
  * A provider bound to this graphic wins over the global one; a provider that throws
- * costs the centre symbol and nothing else. The arms, the letter and every
+ * costs the center symbol and nothing else. The arms, the letter and every
  * interaction are already in place, and losing a whole graphic over its decoration
  * is not a trade worth making — a host's provider is a host's code, and a bad SIDC
  * or a missing DOM is the ordinary way it fails.
