@@ -451,6 +451,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Handle 0 is the circle's centre and moves the whole graphic.
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.Seize]:                            vertexLine(4, 4, 0),
+    // Two vertices and no width to drag, so the plain line holder: `movement()` would
+    // reserve an offset handle at handleCoords[2] that these symbols never supply, and
+    // leave the feature empty. The single visible path handle is the family's own rule —
+    // `hidesStartHandle` drops the redundant one on the pivot end. @see visiblePathHandles
     [TacticalGraphicName.FollowAndAssume]:                  line(2),
     [TacticalGraphicName.FollowAndSupport]:                 line(2),
     // Centre first, then the two ends -- the order the standard numbers them.
