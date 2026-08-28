@@ -16,7 +16,12 @@ import {TacticalGraphicName, hasRadiusReadout, supportsHostility} from '@zaes/ta
 // ── Public type ───────────────────────────────────────────────────────────────
 
 export type GraphicFieldSet = {
-    /** Primary name / identifier shown on the graphic (labels.label). */
+    /**
+     * Primary name / identifier shown on the graphic — field T, `labels.designation`.
+     *
+     * The flag keeps its own name: it says which INPUT the dialog offers, which is not
+     * quite the same question as what the amplifier is called.
+     */
     identifier1: boolean;
     /** Second identifier + country codes (Boundary, ACA unit name). */
     identifier2: boolean;
@@ -472,7 +477,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.TacticalDisrupt]: MISSION_TASK,
     // These two sat on MOV, which switched on an identifier that nothing draws:
     // tacticalFixStyleFunc and getMissionTaskStyleFn render the doctrinal letter
-    // and the line work, never labels.label. It was a dialog input that changed
+    // and the line work, never labels.designation. It was a dialog input that changed
     // nothing on the map — the trap the OBSTACLE_LINE note below describes — and
     // it disagreed with their two siblings directly above.
     [TacticalGraphicName.TacticalFix]: MISSION_TASK,

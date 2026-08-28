@@ -377,7 +377,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 onChange={e =>
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, label: e.target.value},
+                                                        labels: {...prev.labels, designation: e.target.value},
                                                     }))
                                                 }
                                             />

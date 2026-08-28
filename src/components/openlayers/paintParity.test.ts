@@ -41,7 +41,7 @@ const ring = () => new Polygon([[[0, 0], [400_000, 0], [400_000, 400_000], [0, 4
 
 function feature(name: TacticalGraphicName, geometry: LineString | Polygon = line()): Feature {
     const f = new Feature(geometry);
-    f.set(TACTICAL_GRAPHIC_KEY, {name, label: 'X'});
+    f.set(TACTICAL_GRAPHIC_KEY, {name, designation: 'X'});
     f.set('graphicName', name);
     return f;
 }
