@@ -43,8 +43,8 @@ function fakeManager() {
 /** Every amplifier this graphic's dialog would offer, filled with a distinctive value. */
 function labelsFor(name: TacticalGraphicName): GraphicLabels {
     const f = getGraphicFields(name);
-    const labels: Record<string, unknown> = {label: ''};
-    if (f.identifier1) labels.label = 'ID-ONE';
+    const labels: Record<string, unknown> = {designation: ''};
+    if (f.identifier1) labels.designation = 'ID-ONE';
     if (f.identifier2) labels.secondDesignation = 'ID-TWO';
     if (f.dtg1) labels.startDate = '021200ZJUN26';
     if (f.dtg2) labels.endDate = '021800ZJUN26';

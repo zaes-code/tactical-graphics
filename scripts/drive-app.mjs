@@ -219,8 +219,8 @@ const main = async () => {
     const revAfter = Math.max(...features.map(f => f.revision));
     check(
         'amplifier persisted onto the feature',
-        features.some(f => f.tacticalGraphic?.label === 'ALPHA'),
-        JSON.stringify(features.map(f => f.tacticalGraphic?.label)),
+        features.some(f => f.tacticalGraphic?.designation === 'ALPHA'),
+        JSON.stringify(features.map(f => f.tacticalGraphic?.designation)),
     );
     check('feature revision bumped (feature.changed() fired)', revAfter > revBefore, `${revBefore} -> ${revAfter}`);
 

@@ -211,8 +211,8 @@ const SHAPED_BASES = {
 
 /** Amplifiers that put text on the symbol. Dropped wholesale for the corridors. */
 const TEXT_AMPLIFIERS = [
-    'label',
-    'secondId',
+    'designation',
+    'secondDesignation',
     'countryCode',
     'secondCountryCode',
     'startDate',
