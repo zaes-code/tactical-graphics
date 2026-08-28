@@ -41,14 +41,52 @@ import {fitSymbolScale} from './symbolFit';
 
 type MinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
-/** The disc's radius at scale 1, in projected meters, and the row's pitch. */
+/** The disc's radius at scale 1, in projected meters. */
 const DISC_RADIUS = 26_000;
-const SLOT_PITCH = DISC_RADIUS * 2.9;
 const SLOTS = 3;
 
-/** Half the width and height the whole row occupies, for fitting it inside an area. */
-const ROW_HALF_WIDTH = SLOT_PITCH + DISC_RADIUS * 1.6;
-const ROW_HALF_HEIGHT = DISC_RADIUS * 2.6;
+/** Clear space between one mine glyph and the next, in screen pixels. */
+export const MINE_GLYPH_GAP_PX = 10;
+
+/**
+ * How far each of Table 8-24's seven glyphs reaches from its own centre, in disc radii.
+ *
+ * **The seven are not the same size, and three of them are not even symmetric.** The plain
+ * antitank mine is a bare disc; the antipersonnel pair carry antennae 1.5 radii out and
+ * 2.2 up; the directional one adds an arrow reaching 2.2 to the right and nothing to the
+ * left; the antihandling device hangs a stem 2.2 below; the wide-area mine stands on a V.
+ * Spacing a row of them at one pitch therefore fits the disc and overlaps everything else
+ * — measured, the antipersonnel pair's antennae crossed their neighbours' at every size,
+ * and the row was only ever checked with the hollow default. (User's call, 2026-08-27.)
+ *
+ * Read by every caller that lays glyphs out — the row inside an area and the string along
+ * a mineline — so that "no two overlap" is one fact rather than two guesses.
+ */
+const MINE_GLYPH_EXTENT: Record<TacticalGraphicMineType, {left: number; right: number; top: number; bottom: number}> = {
+    [TacticalGraphicMineType.unspecified]: {left: 1, right: 1, top: 1, bottom: 1},
+    [TacticalGraphicMineType.antipersonnel]: {left: 1.5, right: 1.5, top: 2.2, bottom: 1},
+    [TacticalGraphicMineType.antipersonnelDirectional]: {left: 1.5, right: 2.2, top: 2.2, bottom: 1},
+    [TacticalGraphicMineType.antitank]: {left: 1, right: 1, top: 1, bottom: 1},
+    [TacticalGraphicMineType.antitankAntihandling]: {left: 1, right: 1, top: 1, bottom: 2.2},
+    [TacticalGraphicMineType.wideAreaAntitank]: {left: 1.2, right: 1.2, top: 1, bottom: 2},
+    [TacticalGraphicMineType.mineCluster]: {left: 1.2, right: 1.2, top: 1.2, bottom: 0.2},
+};
+
+/** @see MINE_GLYPH_EXTENT */
+export function mineGlyphExtent(type: TacticalGraphicMineType) {
+    return MINE_GLYPH_EXTENT[type] ?? MINE_GLYPH_EXTENT[TacticalGraphicMineType.unspecified];
+}
+
+/**
+ * Centre-to-centre spacing for a run of one glyph type, in projected metres.
+ *
+ * The glyph's own width plus the clear space asked for, so the gap between two of them is
+ * what it says whichever of the seven is drawn.
+ */
+export function mineGlyphPitch(type: TacticalGraphicMineType, radius: number, gap: number): number {
+    const {left, right} = mineGlyphExtent(type);
+    return (left + right) * radius + gap;
+}
 
 /** A disc's outline, as a closed ring about a center. */
 function disc(at: ProjectedPosition, radius: number): ProjectedPosition[] {
@@ -146,15 +184,32 @@ export function mineRowMarks(
     scale: number,
     type: TacticalGraphicMineType,
     color: string,
+    gap = 0,
 ): Paint[] {
     const radius = DISC_RADIUS * scale;
-    const pitch = SLOT_PITCH * scale;
+    const pitch = mineGlyphPitch(type, radius, gap);
     const paints: Paint[] = [];
     for (let i = 0; i < SLOTS; i++) {
         const x = at[0] + (i - (SLOTS - 1) / 2) * pitch;
         paints.push(...mineGlyph([x, at[1]], radius, type, color));
     }
     return paints;
+}
+
+/**
+ * Half the width and height a whole row occupies at scale 1, for fitting it inside an area.
+ *
+ * Type-aware for the same reason the pitch is: a row of directional antipersonnel mines is
+ * half as wide again as a row of plain discs, and fitting it against the disc's figures put
+ * its antennae through the boundary. @see MINE_GLYPH_EXTENT
+ */
+function rowHalfExtent(type: TacticalGraphicMineType, gap: number): {width: number; height: number} {
+    const {left, right, top, bottom} = mineGlyphExtent(type);
+    const pitch = mineGlyphPitch(type, DISC_RADIUS, gap);
+    return {
+        width: pitch * (SLOTS - 1) / 2 + Math.max(left, right) * DISC_RADIUS,
+        height: Math.max(top, bottom) * DISC_RADIUS,
+    };
 }
 
 /** Share of the fit the row is drawn at, so it does not touch the outline. @see cbrnPaints */
@@ -238,8 +293,13 @@ export function mineFillPaint(): MinePaint {
         if (!center) return [];
 
         const color = lineColorOf(feature);
-        const scale = fitSymbolScale(feature, center, ROW_HALF_WIDTH, ROW_HALF_HEIGHT, []) * INSET;
-        const paints = mineRowMarks(center, scale, mineTypeOf(feature), color);
+        const type = mineTypeOf(feature);
+        // The gap is a screen size, so it is folded through the same `scale` the glyphs
+        // are: fitting is done at scale 1 and everything shrinks together.
+        const glyphGap = MINE_GLYPH_GAP_PX * context.resolution;
+        const room = rowHalfExtent(type, glyphGap);
+        const scale = fitSymbolScale(feature, center, room.width, room.height, []) * INSET;
+        const paints = mineRowMarks(center, scale, type, color, glyphGap * scale);
 
         const textScale = scaleOf(feature, context);
         const gap = AREA_TEXT_GAP_PX * textScale * context.resolution;
@@ -256,7 +316,7 @@ export function mineFillPaint(): MinePaint {
         // 2026-08-27.)
         const above = (feature.properties.additionalInfo ?? '').trim();
         if (above) {
-            const top = bounds ? bounds.maxY + gap : center[1] + ROW_HALF_HEIGHT * scale * TEXT_OFFSET;
+            const top = bounds ? bounds.maxY + gap : center[1] + room.height * scale * TEXT_OFFSET;
             paints.push(areaText(feature, [midX, top], above, textScale, 'bottom'));
         }
 
@@ -284,7 +344,16 @@ const FENCE_PITCH_PX = 26;
  * the fence. (User's call, 2026-08-27.)
  */
 const FENCE_LETTER_BEARINGS = [0, 90, 180, 270];
-const FENCE_ENY_BEARINGS = [45, 315];
+/*
+ * **Away from north, not toward it.** These two started at 45 and were asked to widen —
+ * and 30/330 is *narrower*: a smaller bearing is closer to north, so on an area with a
+ * point at the top both rays leave near the apex and the two letters land 48 px apart,
+ * which renders as `ENYENY`. 60/300 is the pair a 90-degree spread widens to, and it holds
+ * them clear of the `M`s at north, east and west as well. Measured on the six-sided
+ * fixture: 30 degrees puts them 0.75 units either side of centre, 45 puts them at 1.0,
+ * 60 at 1.47.
+ */
+const FENCE_ENY_BEARINGS = [60, 300];
 
 /**
  * Where a ray from `from` at `bearing` degrees (0 = north, clockwise) leaves the ring.

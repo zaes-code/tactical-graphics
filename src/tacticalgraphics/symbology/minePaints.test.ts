@@ -9,7 +9,13 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
-import {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
+import {
+    MINE_GLYPH_GAP_PX,
+    mineFillPaint,
+    minedAreaFencedPaint,
+    minefieldAreaPaint,
+    mineRowMarks,
+} from './minePaints';
 
 const context = (resolution = 400): PaintContext => ({
     resolution,
@@ -25,6 +31,21 @@ const RING: ProjectedPosition[] = [
 ];
 
 const ALL = Object.values(TacticalGraphicMineType);
+
+/** How far a point lies off a ring, in metres. Zero means it is on the boundary. */
+function onRing(ring: ProjectedPosition[], [px, py]: ProjectedPosition): number {
+    let best = Infinity;
+    for (let i = 0; i + 1 < ring.length; i++) {
+        const [ax, ay] = ring[i];
+        const [bx, by] = ring[i + 1];
+        const ex = bx - ax;
+        const ey = by - ay;
+        const len2 = ex * ex + ey * ey;
+        const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * ex + (py - ay) * ey) / len2)) : 0;
+        best = Math.min(best, Math.hypot(px - (ax + ex * t), py - (ay + ey * t)));
+    }
+    return best;
+}
 
 const strokeCount = (paints: Paint[]) =>
     paints.filter(p => p.stroke).reduce((total, p) => {
@@ -89,6 +110,79 @@ describe('APP-06 Table 8-24 — the mine-type icons', () => {
         // table is otherwise invisible — both entries draw a disc and look fine.
         const shapes = ALL.map(type => JSON.stringify(mineRowMarks(ORIGIN, 1, type, '#000')));
         expect(new Set(shapes).size).toBe(ALL.length);
+    });
+});
+
+/**
+ * # No two Sector 1 glyphs may touch, in any of the seven
+ *
+ * The seven differ in width by more than half: a plain antitank mine is a bare disc, an
+ * antipersonnel one carries antennae 1.5 radii out and 2.2 up, and the directional variant
+ * adds an arrow reaching 2.2 to the right and nothing to the left. A single pitch fits the
+ * disc and overlaps everything else — and the row was only ever looked at with the hollow
+ * default, so nothing said so. @see MINE_GLYPH_EXTENT
+ */
+describe('APP-06 Table 8-24 — a row of any type clears itself', () => {
+    /** The horizontal extents of each glyph in a row, merged from its own marks. */
+    const glyphSpans = (marks: Paint[]): [number, number][] => {
+        const spans = marks.map(mark => {
+            const xs: number[] = [];
+            const walk = (value: unknown): void => {
+                if (!Array.isArray(value)) return;
+                if (typeof value[0] === 'number') return void xs.push(value[0] as number);
+                value.forEach(walk);
+            };
+            walk((mark.geometry as {coordinates: unknown}).coordinates);
+            return [Math.min(...xs), Math.max(...xs)] as [number, number];
+        }).sort((a, b) => a[0] - b[0]);
+
+        const merged: [number, number][] = [[spans[0][0], spans[0][1]]];
+        for (const [lo, hi] of spans.slice(1)) {
+            const last = merged[merged.length - 1];
+            if (lo <= last[1] + 1) last[1] = Math.max(last[1], hi);
+            else merged.push([lo, hi]);
+        }
+        return merged;
+    };
+
+    it.each(ALL.map(t => [String(t), t] as const))('%s', (_label, type) => {
+        // 26 km radius at scale 1, and a 10 px gap at this resolution.
+        const gap = MINE_GLYPH_GAP_PX * 400;
+        const glyphs = glyphSpans(mineRowMarks(ORIGIN, 1, type, '#000', gap));
+        expect(glyphs).toHaveLength(3);
+        for (let i = 1; i < glyphs.length; i++) {
+            expect(glyphs[i][0]).toBeGreaterThan(glyphs[i - 1][1]);
+            // …and the clear space is the one that was asked for, not whatever the disc
+            // happened to leave over.
+            expect((glyphs[i][0] - glyphs[i - 1][1]) / 400).toBeCloseTo(MINE_GLYPH_GAP_PX, 3);
+        }
+    });
+
+    it('fits the widest of them inside the area it labels', () => {
+        // The fit was measured against the disc's figures, so a row of directional
+        // antipersonnel mines put its antennae through the boundary.
+        const HALF = 400_000;
+        for (const type of ALL) {
+            const feature: PaintFeature = {
+                geometry: {type: 'Point', coordinates: ORIGIN},
+                properties: {name: TacticalGraphicName.MinefieldDynamicDepiction, mineType: type},
+                ring: RING,
+                bounds: {minX: -HALF, minY: -300_000, maxX: HALF, maxY: 300_000},
+            } as unknown as PaintFeature;
+            for (const mark of mineFillPaint()(feature, context()).filter(p => !p.text)) {
+                const walk = (value: unknown): void => {
+                    if (!Array.isArray(value)) return;
+                    if (typeof value[0] === 'number') {
+                        const [x, y] = value as [number, number];
+                        expect(Math.abs(x)).toBeLessThanOrEqual(HALF);
+                        expect(Math.abs(y)).toBeLessThanOrEqual(300_000);
+                        return;
+                    }
+                    value.forEach(walk);
+                };
+                walk((mark.geometry as {coordinates: unknown}).coordinates);
+            }
+        }
     });
 });
 
@@ -236,12 +330,18 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
             expect(eny).toHaveLength(2);
 
             const at = eny.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
-            // The fixture is a rectangle, so a 45 degree ray from the middle leaves it on
-            // the top edge — one letter either side of north, both on the boundary.
-            for (const [x, y] of at) {
-                expect(y).toBeCloseTo(300_000, 6);
-                expect(Math.abs(x)).toBeCloseTo(300_000, 6);
-            }
+            // On the boundary, not floating above it: each letter sits where its ray
+            // leaves the ring. The fixture is 800 x 600 km, so a 60 degree ray leaves
+            // through a *side* rather than the top — which is the whole reason this is
+            // asserted against the ring rather than against a named edge.
+            for (const p of at) expect(onRing(RING, p)).toBeLessThan(1);
+            // …north of the middle, one either side of it, and symmetric.
+            for (const [, y] of at) expect(y).toBeGreaterThan(0);
+            expect(at[0][0]).toBeCloseTo(-at[1][0], 3);
+
+            // The point of the bearing: further from north is further apart. A smaller one
+            // brings the pair *together*, which is how 30/330 came to render `ENYENY`.
+            expect(Math.abs(at[0][0] - at[1][0])).toBeGreaterThan(600_000);
             expect(at[0][0]).toBeGreaterThan(0);
             expect(at[1][0]).toBeLessThan(0);
         });
