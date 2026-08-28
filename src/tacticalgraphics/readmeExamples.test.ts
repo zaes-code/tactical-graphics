@@ -10,7 +10,7 @@ import * as turf from './core/turf';
 const LINE: [number, number][] = [[-77.04, 38.89], [-76.95, 38.95]];
 
 describe('README sizing examples', () => {
-    it('radius: a circle sized from its centre', () => {
+    it('radius: a circle sized from its center', () => {
         const out = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
@@ -24,13 +24,13 @@ describe('README sizing examples', () => {
         expect(far).toBeLessThan(6500);
     });
 
-    it('width: full width, halved into rails either side of the centreline', () => {
+    it('width: full width, halved into rails either side of the centerline', () => {
         const out = renderTacticalGraphic({
             type: 'Feature',
             geometry: {type: 'LineString', coordinates: LINE},
             properties: {tacticalGraphic: {name: TacticalGraphicName.MainAxisOfAdvance, label: '1-508 IN', width: 600}},
         } as Feature);
-        // Rail offset from the drawn centreline must be half the stated width.
+        // Rail offset from the drawn centerline must be half the stated width.
         const rail = (out.graphic.geometry as MultiLineString).coordinates[0][0];
         const offset = turf.pointToLineDistance(turf.point(rail), turf.lineString(LINE), {units: 'meters'});
         expect(offset).toBeGreaterThan(250);

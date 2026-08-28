@@ -4,7 +4,7 @@
  * A double-click broke fields of fire in both engines, by two different routes that
  * produced the same complaint — the V angle cannot be modified:
  *
- * - OpenLayers ended the draw at two vertices, and the generator synthesised the
+ * - OpenLayers ended the draw at two vertices, and the generator synthesized the
  *   second leg at a fixed angle on every render. The V was real but frozen: dragging
  *   one leg swung the other with it, so the angle never changed.
  * - MapLibre delivers a double-click's two clicks as ordinary `click`s first, so the
@@ -21,40 +21,48 @@ import {normalizeDrawnBase} from './core/drawnBase';
 import {isRectangular} from './core/handles';
 import {TacticalGraphicName} from './core/type';
 
-const APEX = [10, 0];
-const TIP = [0, 0];
+/**
+ * The two clicks a user makes, in the order APP-06 numbers them: the **vertex** first
+ * ("Point 1 defines the vertex of the symbol. Points 2 and 3 define the tips of the
+ * arrowheads", 140500), then one leg's end. The repeated click a double-click leaves
+ * behind is therefore the *leg*, not the vertex. @see drawOrder.ts
+ */
+const VERTEX = [0, 0];
+const LEG = [10, 0];
 
 describe('normalizeDrawnBase', () => {
     it('materialises the leg a two-point fields-of-fire only implied', () => {
-        const normalized = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP, APEX]);
+        const normalized = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX, LEG]);
         expect(normalized).toHaveLength(3);
-        // The apex stays in the middle — the layout the generator and the handles read.
-        expect(normalized[0]).toEqual(TIP);
-        expect(normalized[1]).toEqual(APEX);
+        // Both drawn clicks survive where they were made, and the synthesized leg is
+        // added after them: `[vertex, leg, leg]`, the order the base is stored in.
+        expect(normalized[0]).toEqual(VERTEX);
+        expect(normalized[1]).toEqual(LEG);
     });
 
     it('drops the repeated click a double-click adds, then completes the V', () => {
-        // What MapLibre collected: the apex twice, giving a leg of zero length.
-        const normalized = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP, APEX, APEX]);
+        // What MapLibre collected: the closing click twice, giving a leg of zero length.
+        const normalized = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX, LEG, LEG]);
         expect(normalized).toHaveLength(3);
-        expect(normalized[2]).not.toEqual(APEX);
+        expect(normalized[2]).not.toEqual(LEG);
     });
 
     it('gives the same base whichever engine collected the clicks', () => {
-        const fromOpenLayers = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP, APEX]);
-        const fromMapLibre = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP, APEX, APEX]);
+        const fromOpenLayers = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX, LEG]);
+        const fromMapLibre = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX, LEG, LEG]);
         expect(fromMapLibre).toEqual(fromOpenLayers);
     });
 
     it('leaves a fields-of-fire the user drew in full alone', () => {
-        const drawn = [TIP, APEX, [20, 5]];
+        const drawn = [VERTEX, LEG, [20, 5]];
         expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, drawn)).toEqual(drawn);
     });
 
     it('opens a V wide enough to read as one', () => {
-        const [tip, apex, swung] = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP, APEX]);
+        // Measured at the vertex, which is the point the two legs are swung about.
+        const [vertex, leg, swung] = normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX, LEG]);
         const bearing = (from: number[], to: number[]) => Math.atan2(to[0] - from[0], to[1] - from[1]) * 180 / Math.PI;
-        const between = Math.abs(bearing(apex, tip) - bearing(apex, swung));
+        const between = Math.abs(bearing(vertex, leg) - bearing(vertex, swung));
         expect(between).toBeGreaterThan(45);
     });
 
@@ -71,7 +79,7 @@ describe('normalizeDrawnBase', () => {
     });
 
     it('is safe on a base too short to mean anything yet', () => {
-        expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [TIP])).toEqual([TIP]);
+        expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [VERTEX])).toEqual([VERTEX]);
         expect(normalizeDrawnBase(TacticalGraphicName.FieldsOfFire, [])).toEqual([]);
     });
 });
@@ -91,8 +99,8 @@ describe('isRectangular', () => {
         expect([...flagged].sort()).toEqual([...named].sort());
     });
 
-    it('covers the fourteen the registry draws as boxes', () => {
-        expect(names.filter(isRectangular)).toHaveLength(14);
+    it('covers the eighteen the registry draws as boxes', () => {
+        expect(names.filter(isRectangular)).toHaveLength(18);
     });
 
     it('does not catch the irregular or circular variants of the same areas', () => {

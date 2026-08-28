@@ -33,7 +33,7 @@ import type {GraphicLabels, TacticalGraphicProperties} from '@zaes/tactical-grap
 export type {GraphicLabels};
 
 /**
- * The geometry inputs a graphic carries — metres and degrees, the portable
+ * The geometry inputs a graphic carries — meters and degrees, the portable
  * description any renderer can rebuild from.
  *
  * A `Pick` of the saved bag rather than its own shape, so the two can never
@@ -41,5 +41,5 @@ export type {GraphicLabels};
  */
 export type GraphicGeometryState = Pick<
     TacticalGraphicProperties,
-    'radius' | 'decorationSize' | 'width' | 'rotation' | 'bend' | 'mirrored'
+    'radius' | 'decorationSize' | 'width' | 'length' | 'rotation' | 'bend' | 'mirrored'
 >;

@@ -31,7 +31,7 @@ import {TACTICAL_GRAPHIC_KEY, TacticalGraphicHostility, TacticalGraphicName} fro
  */
 
 /**
- * Radius in metres for the point-anchored sample.
+ * Radius in meters for the point-anchored sample.
  *
  * Chosen so the circle is ~150 screen px at the demo's opening view, which is
  * large enough for the label gap to be doing visible work and small enough that
@@ -41,7 +41,7 @@ import {TACTICAL_GRAPHIC_KEY, TacticalGraphicHostility, TacticalGraphicName} fro
 const SECURE_RADIUS_M = 1_400_000;
 
 /**
- * A square ring for the area samples, `size` degrees across, centred on `at`.
+ * A square ring for the area samples, `size` degrees across, centered on `at`.
  *
  * Closed explicitly — a polygon ring whose last point does not repeat its first
  * is not a ring, and the difference only shows once something tries to fill it.
@@ -89,7 +89,7 @@ export const SPIKE_SAMPLES: FeatureCollection = {
             },
         },
         {
-            // Hostile, so the same fixture also checks that the affiliation colour
+            // Hostile, so the same fixture also checks that the affiliation color
             // reaches the MapLibre line work — the rule is that hostile line work
             // goes red while text amplifiers stay black.
             type: 'Feature',
@@ -109,8 +109,8 @@ export const SPIKE_SAMPLES: FeatureCollection = {
         // Between them they exercise the three things an area can add to a plain
         // ring: teeth pointing outward, teeth pointing inward under a hatch, and
         // square merlons. The hatched pair matter most — a hatch is the one piece
-        // of area symbology a renderer has to *realise* (a CanvasPattern here, a
-        // registered `fill-pattern` image in MapLibre) rather than just colour in,
+        // of area symbology a renderer has to *realize* (a CanvasPattern here, a
+        // registered `fill-pattern` image in MapLibre) rather than just color in,
         // so it is the sharpest test of whether the two engines really agree.
         area(TacticalGraphicName.ObstacleZone, [10, 20]),
         area(TacticalGraphicName.ObstacleRestrictedArea, [26, 20]),

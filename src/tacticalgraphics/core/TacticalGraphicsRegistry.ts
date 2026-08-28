@@ -1,13 +1,24 @@
 import {IGraphicGenerator, TacticalGraphicName} from "./type";
 import {AirCorridor} from "../graphics/AirCorridor";
 import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
-import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {Airfield} from "../graphics/Airfield";
+import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
+import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
+import {SweptArcTask} from "../graphics/SweptArcTask";
+import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
+import {ObstacleBypass} from "../graphics/ObstacleBypass";
+import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
+import {AreaGraphic, RectangularArea, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {isRectangular} from "./handles";
 import {
     AreaDefense,
     CircularArea,
     Contain,
     Control,
+    CordonAndKnock,
     CordonAndSearch,
+    Deny,
+    Locate,
     Isolate,
     Occupy,
     Retain,
@@ -21,7 +32,7 @@ import {Bypass} from "../graphics/Bypass";
 import {Canalize} from "../graphics/Canalize";
 import {Clear} from "../graphics/Clear";
 import {Disrupt} from "../graphics/Disrupt";
-import {Exfiltrate, RetrogradeTask} from "../graphics/RetrogradeTask";
+import {Exfiltrate, Infiltration, RetrogradeTask} from "../graphics/RetrogradeTask";
 import {FieldsOfFire} from "../graphics/FieldsOfFire";
 import {ForwardLineOfOwnTroops, LineOfContact} from "../graphics/ForwardLineOfOwnTroops";
 import {Bridge} from "../graphics/Bridge";
@@ -31,7 +42,7 @@ import {PassageLane} from "../graphics/PassageLane";
 import {Fix} from "../graphics/Fix";
 import {Turn} from "../graphics/Turn";
 import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackFeint, DirectionOfSupportingAttack} from "../graphics/Direction";
-import {AttackHelicopterAxisOfAdvance, AviationAxisOfAdvance, AxisOfAttack, Counterattack, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
+import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, AxisOfAttack, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
 import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
 import {Exploitation} from "../graphics/Exploitation";
@@ -41,9 +52,9 @@ import {
     Envelopment,
     // FlankAttack,
     FrontalAttack,
-    Infiltration,
     InfiltrationLane,
     MobileDefense,
+    AdvanceToContact,
     MovementToContact,
     Pursuit,
     ReliefInPlace,
@@ -107,6 +118,8 @@ TacticalGraphicsRegistry.register(new MainAttackFeint());
 TacticalGraphicsRegistry.register(new SupportingAttack());
 TacticalGraphicsRegistry.register(new AxisOfAttack());
 TacticalGraphicsRegistry.register(new Counterattack());
+TacticalGraphicsRegistry.register(new CounterattackByFire());
+TacticalGraphicsRegistry.register(new AvenueOfApproach());
 
 let airCorridorGraphics = [
     TacticalGraphicName.AirCorridor,
@@ -144,6 +157,13 @@ let phaseLineGraphicNames: TacticalGraphicName[] = [
     TacticalGraphicName.MainSupplyRoute,
     TacticalGraphicName.AlternateSupplyRoute,
     TacticalGraphicName.CommonSensorBoundary,
+    TacticalGraphicName.LightLine,
+    TacticalGraphicName.LineGeneric,
+    TacticalGraphicName.HandoverLine,
+    TacticalGraphicName.NamedAreaOfInterestLine,
+    TacticalGraphicName.HoldingLine,
+    TacticalGraphicName.NoFireLine,
+    TacticalGraphicName.BattlefieldCoordinationLine,
     TacticalGraphicName.RestrictiveFireLine,
     TacticalGraphicName.IntelligenceCoordinationLine,
     TacticalGraphicName.EngineerWorkLine,
@@ -178,18 +198,50 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.BaseCamp,
     TacticalGraphicName.GuerrillaBase,
     TacticalGraphicName.DetaineeHoldingArea,
+    TacticalGraphicName.BombArea,
+    TacticalGraphicName.TerminallyGuidedMunitionFootprint,
+    TacticalGraphicName.Bridgehead,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    TacticalGraphicName.HumanTerrain,
+    TacticalGraphicName.PenetrationBox,
+    TacticalGraphicName.Area,
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
+    TacticalGraphicName.AreaGeneric,
+    TacticalGraphicName.ZoneOfFire,
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+    TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ChemicalContaminatedArea,
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.NuclearContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
     TacticalGraphicName.AssemblyArea,
     TacticalGraphicName.EngagementArea,
     TacticalGraphicName.RefugeeHoldingArea,
     TacticalGraphicName.BrigadeSupportArea,
     TacticalGraphicName.DivisionSupportArea,
     TacticalGraphicName.CorpsSupportArea,
+    TacticalGraphicName.FighterEngagementZone,
+    TacticalGraphicName.ExtractionZone,
+    TacticalGraphicName.RegimentalSupportArea,
     TacticalGraphicName.DropZone,
     TacticalGraphicName.LandingZone,
     TacticalGraphicName.KillZone,
     TacticalGraphicName.PickupZone,
-    TacticalGraphicName.Airfield,
+    TacticalGraphicName.AirfieldZone,
+    TacticalGraphicName.RadiationDoseRateContourLine,
+    TacticalGraphicName.MinefieldDynamicDepiction,
+    TacticalGraphicName.MinedAreaFenced,
+    TacticalGraphicName.PsyOpsZoneIrregular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.BattlePosition,
+    TacticalGraphicName.BattlePositionPreparedButNotOccupied,
     TacticalGraphicName.StrongPoint,
 
     TacticalGraphicName.FreeFireAreaIrregular,
@@ -204,6 +256,12 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
     TacticalGraphicName.CallForFireZoneIrregular,
     TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.TargetBuildUpAreaIrregular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetValueAreaIrregular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityIrregular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
     TacticalGraphicName.CensorZoneIrregular,
     TacticalGraphicName.CensorZoneRectangular,
     TacticalGraphicName.CriticalFriendlyZoneIrregular,
@@ -235,11 +293,19 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirheadLine,
 ]
 
-areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new AreaGraphic(name)))
+areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(
+    // **The rectangles are not drawn areas.** APP-06 defines each as two anchor points and
+    // a width, so its base is the axis and its shape is derived — where an irregular area's
+    // base *is* its outline. @see RectangularArea, isRectangular
+    isRectangular(name) ? new RectangularArea(name) : new AreaGraphic(name),
+))
 
 //Mission Task Graphics
 TacticalGraphicsRegistry.register(new Control());
 TacticalGraphicsRegistry.register(new CordonAndSearch());
+TacticalGraphicsRegistry.register(new CordonAndKnock());
+TacticalGraphicsRegistry.register(new Locate());
+TacticalGraphicsRegistry.register(new Deny());
 TacticalGraphicsRegistry.register(new Isolate());
 TacticalGraphicsRegistry.register(new Retain());
 TacticalGraphicsRegistry.register(new Secure());
@@ -254,6 +320,9 @@ let circularAreaGraphicNames = [
     TacticalGraphicName.PositionAreaArtilleryCircular,
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
     TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
     TacticalGraphicName.CensorZoneCircular,
     TacticalGraphicName.CriticalFriendlyZoneCircular,
     TacticalGraphicName.DeadSpaceAreaCircular,
@@ -262,9 +331,12 @@ let circularAreaGraphicNames = [
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.TargetAreaCircular,
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.PsyOpsZoneCircular,
 ]
 circularAreaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new CircularArea(name)));
 
+// APP-06 131900 is a one-point symbol, not an area. @see graphics/Airfield.ts
+TacticalGraphicsRegistry.register(new Airfield());
 TacticalGraphicsRegistry.register(new EncirclementArea());
 TacticalGraphicsRegistry.register(new FortifiedArea());
 
@@ -288,6 +360,27 @@ const obstacleFreeGraphics = [
 obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new ObstacleFree(name)));
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
+TacticalGraphicsRegistry.register(new Mineline());
+TacticalGraphicsRegistry.register(new MinimumSafeDistanceZone());
+TacticalGraphicsRegistry.register(new MinimumSafeDistanceMultipleStrike());
+for (const bypass of [
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]) {
+    TacticalGraphicsRegistry.register(new ObstacleBypass(bypass));
+}
+TacticalGraphicsRegistry.register(new DecisionLine());
+TacticalGraphicsRegistry.register(new Escort());
+TacticalGraphicsRegistry.register(new Demonstration());
+for (const swept of [TacticalGraphicName.Capture, TacticalGraphicName.Evacuate, TacticalGraphicName.Recover]) {
+    TacticalGraphicsRegistry.register(new SweptArcTask(swept));
+}
+TacticalGraphicsRegistry.register(new MobilityCorridor());
+TacticalGraphicsRegistry.register(new MineCluster());
+TacticalGraphicsRegistry.register(new TripWire());
+TacticalGraphicsRegistry.register(new RaftSite());
+TacticalGraphicsRegistry.register(new FortifiedPosition());
 
 // Security Operations
 let securityOperationGraphics = [
@@ -328,6 +421,7 @@ retrogradeTasks.forEach(name => TacticalGraphicsRegistry.register(new Retrograde
 
 // Forms of Maneuver — movement arrow variants
 TacticalGraphicsRegistry.register(new MovementToContact());
+TacticalGraphicsRegistry.register(new AdvanceToContact());
 TacticalGraphicsRegistry.register(new FrontalAttack());
 // TacticalGraphicsRegistry.register(new FlankAttack());
 TacticalGraphicsRegistry.register(new TurningMovement());

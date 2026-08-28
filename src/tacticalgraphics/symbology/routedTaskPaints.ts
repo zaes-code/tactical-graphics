@@ -7,7 +7,7 @@
  * first segment.
  *
  * All three size the gap from the **rendered** glyph. The labels are zoom-clamped
- * while the geometry is not, so a gap baked in metres drifts against the letter
+ * while the geometry is not, so a gap baked in meters drifts against the letter
  * it makes room for — wider zoomed in, tighter zoomed out.
  * @see conventions.md, "a gap follows what it makes room for"
  */
@@ -19,11 +19,10 @@ import {
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
     fontStyle,
-    getLabelFillColor,
     getLabelHaloColor,
 } from '../core/symbology';
 import {screenSizedArrowHead, textWidth, uprightRotation} from './decorations';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -33,13 +32,13 @@ const GAP_PADDING_PX = 4;
 const TURN_LABEL_PAD_PX = 5;
 
 /** A text amplifier with the usual halo. */
-function amplifier(at: ProjectedPosition, text: string, font: string, scale: number, rotation: number): Paint {
+function amplifier(feature: PaintFeature, at: ProjectedPosition, text: string, font: string, scale: number, rotation: number): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
             font,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
@@ -80,7 +79,7 @@ function trimFromEnd(coords: ProjectedPosition[], distance: number): ProjectedPo
  * empty label would still leave 10 px of curve missing.
  *
  * The arrowhead is filled, never trimmed, and held at a screen size rather than
- * the metres the generator baked in at draw time.
+ * the meters the generator baked in at draw time.
  */
 export function turnPaint(label: string): TaskPaint {
     return (feature, context) => {
@@ -164,7 +163,7 @@ export function reliefInPlacePaint(label: string): TaskPaint {
             line([p1, gapA]),
             line([gapB, p2]),
             ...coords.slice(1, 5).map(line),
-            amplifier(
+            amplifier(feature, 
                 [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2],
                 label,
                 RATIO_LOCKED_LABEL_FONT,
@@ -220,7 +219,7 @@ export function exfiltratePaint(label: string): TaskPaint {
         }
 
         return [
-            amplifier(
+            amplifier(feature, 
                 [p1[0] + dx * 0.5, p1[1] + dy * 0.5],
                 label,
                 RATIO_LOCKED_LABEL_FONT,

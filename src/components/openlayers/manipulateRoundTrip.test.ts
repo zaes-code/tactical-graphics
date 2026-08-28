@@ -27,7 +27,7 @@ const fakeManager = () => ({
     releaseAllGraphics: () => undefined,
 } as unknown as TacticalGraphicsManager);
 
-/** Extent of the rendered symbol, rounded to the millimetre. */
+/** Extent of the rendered symbol, rounded to the millimeter. */
 function shape(h: TacticalGraphicHandler): number[] | null {
     const g = h.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
     return g ? g.getExtent().map(n => Math.round(n * 1000) / 1000) : null;

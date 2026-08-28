@@ -3,7 +3,7 @@ import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
 import RenderFeature from 'ol/render/Feature';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName, hatchTileSegments} from '@zaes/tactical-graphics';
 import type {
     FillSpec,
     HatchSpec,
@@ -40,11 +40,11 @@ import {getTextWidth} from './textMeasure';
  *
  * ## Why the conversion is this cheap
  *
- * `ProjectedGeometry` holds EPSG:3857 metres, which is exactly the frame an
+ * `ProjectedGeometry` holds EPSG:3857 meters, which is exactly the frame an
  * OpenLayers `StyleFunction` already works in — so the geometry is a constructor
  * call, not a reprojection. The MapLibre side has to invert the Mercator on the
  * way out; this side has nothing to do. That asymmetry is why the paint layer
- * standardised on projected metres rather than lon/lat.
+ * standardized on projected meters rather than lon/lat.
  *
  * Every spec field maps 1:1 onto an OpenLayers style option, because the `Paint`
  * shapes were derived from what these 69 functions actually use.
@@ -57,7 +57,7 @@ import {getTextWidth} from './textMeasure';
  * otherwise, and these run per feature per frame. A tiny record keyed on the four
  * parameters — hosts use one or two hatches, so it stays small.
  *
- * Returns the flat colour when there is no DOM to build a canvas in, which keeps
+ * Returns the flat color when there is no DOM to build a canvas in, which keeps
  * this module importable in Node. @see FillSpec — `color` is the documented
  * fallback for exactly this.
  */
@@ -88,8 +88,12 @@ function buildHatch(spec: HatchSpec): CanvasPattern | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    // The tile's strokes come from the library, so `cross` cannot silently render as
+    // `diagonal` here while looking right somewhere else. @see hatchTileSegments
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
 
     return ctx.createPattern(canvas, 'repeat');
@@ -127,7 +131,7 @@ export function toOlGeometry(geometry: ProjectedGeometry): Geometry {
  * One mark as one `Style`.
  *
  * **`geometry` is always set explicitly**, even when it is the feature's own.
- * A paint function may return a mark whose geometry it synthesised — teeth, a cut
+ * A paint function may return a mark whose geometry it synthesized — teeth, a cut
  * arc, a label anchor — and that is the whole point of the layer; letting a mark
  * fall back to the feature's geometry would silently draw the undecorated shape.
  */
@@ -176,7 +180,7 @@ export function paintToOlStyles(paints: Paint[]): Style[] {
 
 /**
  * An OpenLayers geometry as a paint geometry. Coordinates pass through unchanged —
- * both sides are EPSG:3857 metres.
+ * both sides are EPSG:3857 meters.
  *
  * **`GeometryCollection` has to be handled, not skipped.** Several mission-task
  * generators pack their arcs, arrowheads and solid teeth into one, and returning
@@ -270,9 +274,9 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
         bounds: readBounds(feature),
         ring: feature.get('polygonRing') as ProjectedPosition[] | undefined,
         labelSegment: readLabelSegment(feature),
-        // The demo's properties dialog, sample sweep and basemap re-colour all stamp a
-        // *resolved* colour here. Carried so a feature coloured by that route keeps
-        // its colour; paint functions fall back to the affiliation when it is absent.
+        // The demo's properties dialog, sample sweep and basemap re-color all stamp a
+        // *resolved* color here. Carried so a feature colored by that route keeps
+        // its color; paint functions fall back to the affiliation when it is absent.
         hostilityColor: feature.get('hostilityColor') as string | undefined,
         // Stamped straight onto the feature by the properties dialog, never into the
         // bag — @see PaintFeature.echelon.

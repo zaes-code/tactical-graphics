@@ -27,7 +27,7 @@ import {
  * ## What this approach costs, stated plainly
  *
  * The graphics are CPU-rasterised into a canvas that is composited over the GPU
- * one. There is no GPU labelling, no label collision detection, and no
+ * one. There is no GPU labeling, no label collision detection, and no
  * data-driven styling: MapLibre is drawing the basemap and nothing else. Anyone
  * evaluating this should read it as "MapLibre for the basemap and camera", not as
  * a MapLibre renderer.
@@ -129,7 +129,7 @@ export class CanvasOverlayRenderer {
      * two renderers present the same surface — the native one bakes its paints into
      * GeoJSON sources and genuinely has to be told. @see MapEngineHandle.refreshStyles
      */
-    realise(): void {
+    realize(): void {
         this.map.triggerRepaint();
     }
 

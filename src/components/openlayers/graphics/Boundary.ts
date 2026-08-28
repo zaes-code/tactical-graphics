@@ -19,7 +19,7 @@ export class Boundary implements LineGraphic {
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
     labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     symbolId: string = '';
-    graphicLabel: GraphicLabels = {label: ''};
+    graphicLabel: GraphicLabels = {designation: ''};
 
     constructor(resolution?: number) {
         if (resolution !== undefined) {

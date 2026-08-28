@@ -9,7 +9,7 @@
  * | | ported from | what it proves |
  * |---|---|---|
  * | {@link phaseLinePaint} | `phaseLineStyle` | rotation, upright flip, a gap measured off the glyph |
- * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesised per frame, `decorationScale` against the shape |
+ * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesized per frame, `decorationScale` against the shape |
  * | {@link arcMissionTaskPaint} | `arcMissionTaskStyleFunc` | a gap cut from the *rendered* letter, projected onto a tangent |
  *
  * Each is a transcription of its OpenLayers original — the arithmetic is
@@ -36,6 +36,7 @@ import {
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
+    getLabelUsesHostilityColor,
     getLabelHaloColor,
     labelScale,
     ratioLockedLabelScale,
@@ -44,7 +45,7 @@ import {
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {
-    centreSegmentIndex,
+    centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     obstacleToothSize,
@@ -64,7 +65,7 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
 }
 
 /**
- * The affiliation a feature draws in. `unknown` resolves to the default line colour.
+ * The affiliation a feature draws in. `unknown` resolves to the default line color.
  *
  * **A graphic whose symbol does not take a standard identity always reads
  * `unknown`**, whatever its properties say. @see supportsHostility
@@ -77,9 +78,9 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
 }
 
 /**
- * The colour a graphic's line work draws in: a host's already-resolved override if
+ * The color a graphic's line work draws in: a host's already-resolved override if
  * there is one, otherwise the affiliation's. `getColorByHostility` resolves
- * `unknown` to the default line colour, so the unaffiliated case is covered too.
+ * `unknown` to the default line color, so the unaffiliated case is covered too.
  *
  * ## Why the exemption is enforced here and not only in the UI
  *
@@ -87,7 +88,7 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * hostile Seize is drawn exactly like any other Seize. The demo enforced that by
  * **hiding the input** — which stops a user picking an identity and does nothing
  * about one that arrives in an imported file, from a host writing the bag
- * directly, or from a sweep that colours everything. MapLibre's sample sweep did
+ * directly, or from a sweep that colors everything. MapLibre's sample sweep did
  * exactly that last thing and drew every mission task red.
  *
  * Hiding a control is a UI convenience; this is the rule. Both halves are kept,
@@ -95,12 +96,28 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * wrong.
  *
  * `hostilityColor` is skipped for the same reason: it is a *resolved* affiliation
- * colour, so honouring it would let the same value back in through the other door.
+ * color, so honoring it would let the same value back in through the other door.
  */
 export function lineColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
     if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
     return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
+}
+
+/**
+ * The colour a graphic's **text amplifiers** take.
+ *
+ * `getLabelFillColor()` by default, which is doctrine: FM 1-02.2 colours line work by
+ * affiliation and leaves text black. A host may opt the whole library into affiliation-
+ * coloured text with `labelUsesHostilityColor`, and then a label follows exactly the rule
+ * its line work follows — `lineColorOf`, including its exemptions, so a graphic that does
+ * not take a hostility colour does not take one on its text either.
+ *
+ * Takes the feature rather than a hostility so the two can never disagree about which
+ * affiliation a label belongs to. @see lineColorOf
+ */
+export function labelColorOf(feature: PaintFeature): string {
+    return getLabelUsesHostilityColor() ? lineColorOf(feature) : getLabelFillColor();
 }
 
 /** The halo every label carries, so it stays legible over the basemap. */
@@ -125,14 +142,14 @@ export function halo(): {color: string; widthPx: number} {
  */
 export function axisRotation(feature: PaintFeature): number {
     // Preferred: the axis as *drawn*. A point-anchored label sits on the graphic's own
-    // axis, so the anchor and the centre give the direction directly — in projected
-    // metres, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
+    // axis, so the anchor and the center give the direction directly — in projected
+    // meters, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
     // the same two points for the same reason: EPSG:3857's y is not linear in
     // latitude, so an axis reconstructed from the angle drifts off the drawn line.
-    const centre = feature.graphicCenter;
+    const center = feature.graphicCenter;
     const anchor = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
-    if (centre && anchor && (centre[0] !== anchor[0] || centre[1] !== anchor[1])) {
-        return uprightRotation(anchor, centre);
+    if (center && anchor && (center[0] !== anchor[0] || center[1] !== anchor[1])) {
+        return uprightRotation(anchor, center);
     }
 
     // Fallback for a feature that carries neither: the angle the generator was given.
@@ -160,7 +177,7 @@ const PHASE_LINE_GAP_PX = 8;
  * runs on screen.
  *
  * **Hostile lines prefix their label with "ENY", and the test is the affiliation,
- * not the colour string.** A colour is resolved at stamp time, so a string
+ * not the color string.** A color is resolved at stamp time, so a string
  * compare would both miss a feature stamped under a different palette and be one
  * refactor away from matching some unrelated red.
  */
@@ -170,7 +187,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        let text = getFullLabel(name, feature.properties.label ?? '');
+        let text = getFullLabel(name, feature.properties.designation ?? '');
         if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) text = `ENY ${text}`;
 
         const start = coords[0];
@@ -193,7 +210,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation,
                 align,
@@ -241,10 +258,10 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const text = getFullLabel(name, feature.properties.label ?? '');
+        const text = getFullLabel(name, feature.properties.designation ?? '');
         const paints: Paint[] = [];
 
-        const segIdx = centreSegmentIndex(coords);
+        const segIdx = centerSegmentIndex(coords);
         const p1 = coords[segIdx];
         const p2 = coords[segIdx + 1];
 
@@ -275,7 +292,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation: uprightRotation(p1, p2),
                 align: 'center',
@@ -337,12 +354,12 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         const lines = paintLineWork(feature.geometry);
         if (!lines.length) return [];
 
-        const centre = feature.graphicCenter;
+        const center = feature.graphicCenter;
         const labelPoint = feature.graphicLabelPoint;
-        const radius = centre && labelPoint ? Math.hypot(labelPoint[0] - centre[0], labelPoint[1] - centre[1]) : 0;
+        const radius = center && labelPoint ? Math.hypot(labelPoint[0] - center[0], labelPoint[1] - center[1]) : 0;
 
-        if (centre && labelPoint && radius > 0 && label) {
-            const axis = Math.atan2(labelPoint[1] - centre[1], labelPoint[0] - centre[0]);
+        if (center && labelPoint && radius > 0 && label) {
+            const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
                 ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
                 : scaleOf(feature, context);
@@ -356,7 +373,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
             const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * context.resolution) / radius);
 
             for (const i of [0, 1]) {
-                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], centre, axis, halfGap);
+                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], center, axis, halfGap);
             }
         }
 
@@ -412,7 +429,7 @@ export function missionTaskLabelPaint(
             text: {
                 text: label,
                 font: ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
                     ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
@@ -433,6 +450,95 @@ const DEFAULT_LINE_LABEL_GAP_PX = 8;
 
 /** Dash pattern, in screen pixels, for a graphic whose status is `planned`. */
 export const PLANNED_DASH_PX = [12, 8];
+
+/**
+ * The dash-dot a **circled** control measure's planned ring is drawn with.
+ *
+ * Long dash, gap, dot, gap — measured off 290400's Planned Example, and visibly not the
+ * plain `PLANNED_DASH_PX`: the ring has to read as a different thing from a symbol that
+ * merely dashes when planned, because for these it is the *only* difference between the
+ * two statuses. @see plannedStatusRing
+ */
+export const CIRCLED_STATUS_DASH_PX = [18, 6, 3, 6];
+
+/**
+ * Padding on the ring, as a multiple of the half-diagonal it encloses.
+ *
+ * Enough that the ring clears the symbol's corners rather than grazing them.
+ */
+const CIRCLED_STATUS_PADDING = 1.06;
+
+/** How many segments the ring is drawn with. Smooth at any size a symbol is read at. */
+const CIRCLED_STATUS_STEPS = 64;
+
+/**
+ * The dash-dot ring a *"CM Status Type: Circled"* symbol wears when it is planned.
+ *
+ * 56 rows of APP-06 carry that line, and it means the same thing on every one: planned is
+ * shown by enclosing the symbol in a circle rather than by changing the symbol. The
+ * mechanism is here, in the half both renderers read, because it is a fact about the
+ * symbology and not about a canvas. @see CIRCLED_STATUS_GRAPHICS for which names use it
+ *
+ * **Centred on the bounding box, not on an anchor point.** The rule has to hold for a
+ * symbol at any rotation and of any shape — the family runs from a two-point chord to a
+ * whole area — and the box's centre is the only point every one of them has. 290400's own
+ * illustration draws its ring a little low of that; it is a drawing, and centring is the
+ * defensible reading.
+ *
+ * Returns nothing when the marks enclose no area, which is a symbol not yet drawn.
+ *
+ * A caller that knows better may hand in the circle outright — the mine cluster's ring is
+ * its own dome completed, which no bounding box can express. @see mineClusterPaint
+ */
+export function plannedStatusRing(
+    marks: readonly Paint[],
+    feature: PaintFeature,
+    context: PaintContext,
+    circle?: {center: ProjectedPosition; radius: number},
+): Paint | undefined {
+    if (feature.properties.status !== TacticalGraphicStatus.planned) return undefined;
+    if (circle) return circleMark(circle.center, circle.radius, feature);
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const visit = (value: unknown): void => {
+        if (!Array.isArray(value)) return;
+        if (typeof value[0] === 'number') {
+            const [x, y] = value as ProjectedPosition;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            return;
+        }
+        value.forEach(visit);
+    };
+    // The line work only: a text mark's anchor is a point somewhere off the symbol, and
+    // letting one into the box would drag the ring toward whichever amplifier is set.
+    marks.filter(mark => mark.stroke || mark.fill).forEach(mark => visit(mark.geometry.coordinates));
+    if (!isFinite(minX) || !isFinite(minY)) return undefined;
+
+    const radius = Math.hypot(maxX - minX, maxY - minY) / 2 * CIRCLED_STATUS_PADDING;
+    if (!(radius > 0)) return undefined;
+
+    return circleMark([(minX + maxX) / 2, (minY + maxY) / 2], radius, feature);
+}
+
+/** One dash-dot ring, as a closed polyline. @see plannedStatusRing */
+function circleMark(center: ProjectedPosition, radius: number, feature: PaintFeature): Paint | undefined {
+    if (!(radius > 0)) return undefined;
+    const ring: ProjectedPosition[] = [];
+    for (let i = 0; i <= CIRCLED_STATUS_STEPS; i++) {
+        const t = (i / CIRCLED_STATUS_STEPS) * 2 * Math.PI;
+        ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
+    }
+    return {
+        geometry: {type: 'LineString', coordinates: ring},
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},
+    };
+}
 
 /**
  * The dash a graphic takes from its amplifiers, or nothing.
@@ -463,7 +569,7 @@ export function amplifierDash(feature: PaintFeature): number[] | undefined {
  *   in different directions — a line drawn left-to-right overall may turn back on
  *   its final leg — so the side each label is pushed to is decided per endpoint,
  *   not once for the whole line.
- * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalises
+ * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalizes
  *   against north; a plain counter-clockwise perpendicular flips when the same
  *   line is drawn the other way and puts every label underneath.
  *
@@ -495,7 +601,7 @@ export function defaultLinePaint(
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const identifier = getFullLabel(name, feature.properties.label ?? '');
+        const identifier = getFullLabel(name, feature.properties.designation ?? '');
         const startDate = showDates ? feature.properties.startDate ?? '' : '';
         const endDate = showDates ? feature.properties.endDate ?? '' : '';
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
@@ -525,7 +631,7 @@ export function defaultLinePaint(
             text: {
                 text,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: halo(),
                 rotation,
                 align,
@@ -554,7 +660,7 @@ export function defaultLinePaint(
 // ── 5. Areas — the plain outline behind 60 of the 75 area graphics ────────────
 
 /**
- * An area's outline: one stroke in the affiliation's colour, dashed when the
+ * An area's outline: one stroke in the affiliation's color, dashed when the
  * status is `planned`.
  *
  * Unremarkable, and the highest-coverage paint function in the library — 60 of
@@ -582,7 +688,7 @@ export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature,
 }
 
 /**
- * A filled shape in the affiliation's colour, outlined in the same.
+ * A filled shape in the affiliation's color, outlined in the same.
  *
  * The fallback for holders that install no dedicated style of their own. Distinct
  * from {@link areaOutlinePaint} because the fill is deliberate here — this is what
@@ -591,7 +697,7 @@ export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature,
  * **The fill is only emitted for a geometry that can hold one.** This is the
  * fallback for a whole family, and several of its members are paths rather than
  * areas — exploitation's zigzag among them. OpenLayers drops a fill on a line
- * silently, so asking for one looked harmless; MapLibre honours it, filling the
+ * silently, so asking for one looked harmless; MapLibre honors it, filling the
  * zigzag in as a solid blob. A mark that means nothing to one renderer and
  * something to another is a mark that should not be emitted.
  */

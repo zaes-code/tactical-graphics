@@ -22,13 +22,13 @@ const DEFAULT_VEE_DEGREES = 90;
  * an arrowhead at each end — a different symbol, and one a user could reach simply
  * by clicking twice.
  *
- * So the second leg is synthesised: the drawn leg swung about the apex by
+ * So the second leg is synthesized: the drawn leg swung about the apex by
  * {@link DEFAULT_VEE_DEGREES}. The user then has a real V they can reshape by
  * dragging either end, which is what the handles are for.
  *
  * **Layout is `[end, apex, end]`** — the apex in the middle. That is what
  * `generateGraphics` reads to place its arrowheads and what `generateHandles`
- * publishes, so a synthesised leg has to land in the same order as a drawn one or
+ * publishes, so a synthesized leg has to land in the same order as a drawn one or
  * the arrowheads point at the wrong vertices.
  *
  * Done geodesically rather than by rotating the raw degrees: a leg swung in degree

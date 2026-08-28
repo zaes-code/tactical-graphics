@@ -17,7 +17,7 @@
 
 import type {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
-import {TACTICAL_GRAPHIC_KEY} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, applyAmplifierAliases} from '@zaes/tactical-graphics';
 import type { TacticalGraphicRole} from '@zaes/tactical-graphics';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
@@ -30,14 +30,14 @@ export {TACTICAL_GRAPHIC_KEY};
  * interaction, or for a feature built outside the graphic holders. Frozen so a
  * style function can't accidentally mutate the shared default.
  */
-const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
+const NO_LABELS: GraphicLabels = Object.freeze({designation: ''});
 
 /**
  * The subset of `TacticalGraphicProperties` that describes *how the shape was built*
  * rather than what it says. Persisting these is what makes a reloaded graphic
  * editable rather than merely visible.
  *
- * Every member is portable: metres and degrees, meaningful to any renderer. Values that
+ * Every member is portable: meters and degrees, meaningful to any renderer. Values that
  * only mean something to *this* renderer — the drawing resolution, and the
  * security-operation `scale` that is only interpretable when multiplied by it — are not
  * here. They live under the snapshot's `renderer` object; see `persistence.ts`.
@@ -79,7 +79,8 @@ export function readRole(feature: FeatureLike): TacticalGraphicRole | undefined 
  * user left every field blank.
  */
 export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
-    return (feature.get(TACTICAL_GRAPHIC_KEY) as GraphicLabels | undefined) ?? NO_LABELS;
+    const bag = feature.get(TACTICAL_GRAPHIC_KEY) as GraphicLabels | undefined;
+    return bag ? applyAmplifierAliases(bag) : NO_LABELS;
 }
 
 /**
@@ -91,11 +92,11 @@ export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
  * feature's revision counter does not move. A VectorSource happens to listen
  * for `propertychange` and would redraw anyway, but a feature not yet added to
  * a source, or rendered through any other path, would silently keep its old
- * label. `changed()` restores exactly the behaviour of the `.changed()` calls
+ * label. `changed()` restores exactly the behavior of the `.changed()` calls
  * this function replaced.
  *
  * `geometry` carries the *inputs* a holder needs to reproduce its shape — `size`,
- * `radius`, `rotation`. Without it a graphic serialises to the right picture and the
+ * `radius`, `rotation`. Without it a graphic serializes to the right picture and the
  * wrong state: the rendered geometry survives, but the numbers that produced it live
  * only on the holder instance, so a reloaded graphic cannot be rotated or resized.
  * Only holders whose state the *user* can change need to pass it — anything derived
@@ -121,13 +122,15 @@ export function writeGraphicProperties(
  * object for a feature that carries none, so a caller can spread it unconditionally.
  */
 export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryState {
-    const bag = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
+    const stored = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
+    const bag = stored && applyAmplifierAliases(stored);
     if (!bag) return {};
-    const {radius, decorationSize, width, rotation, bend, mirrored} = bag;
+    const {radius, decorationSize, width, length, rotation, bend, mirrored} = bag;
     const state: GraphicGeometryState = {};
     if (radius !== undefined) state.radius = radius;
     if (decorationSize !== undefined) state.decorationSize = decorationSize;
     if (width !== undefined) state.width = width;
+    if (length !== undefined) state.length = length;
     if (rotation !== undefined) state.rotation = rotation;
     if (bend !== undefined) state.bend = bend;
     if (mirrored !== undefined) state.mirrored = mirrored;

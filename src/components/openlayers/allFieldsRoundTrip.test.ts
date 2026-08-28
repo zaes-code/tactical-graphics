@@ -7,7 +7,15 @@
  * is invisible until a user loses a label they typed.
  */
 import VectorSource from 'ol/source/Vector';
-import {listTacticalGraphicNames, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {
+    listTacticalGraphicNames,
+    RouteDirection,
+    TacticalGraphicHostility,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicName,
+    TacticalGraphicTerrain,
+} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {getGraphicFields} from './graphicFieldRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -35,9 +43,9 @@ function fakeManager() {
 /** Every amplifier this graphic's dialog would offer, filled with a distinctive value. */
 function labelsFor(name: TacticalGraphicName): GraphicLabels {
     const f = getGraphicFields(name);
-    const labels: Record<string, unknown> = {label: ''};
-    if (f.identifier1) labels.label = 'ID-ONE';
-    if (f.identifier2) labels.secondId = 'ID-TWO';
+    const labels: Record<string, unknown> = {designation: ''};
+    if (f.identifier1) labels.designation = 'ID-ONE';
+    if (f.identifier2) labels.secondDesignation = 'ID-TWO';
     if (f.dtg1) labels.startDate = '021200ZJUN26';
     if (f.dtg2) labels.endDate = '021800ZJUN26';
     if (f.hostility) labels.hostility = TacticalGraphicHostility.hostileFaker;
@@ -47,6 +55,13 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     if (f.altitude2) labels.maxAltitude = '2000';
     if (f.grids) labels.grid = '18SUJ2345';
     if (f.weapon) labels.weapon = 'M252 81mm';
+    // The selectors and the free-text field H. Missing here until 2026-08-26, which is
+    // why this suite passed while `shownLabels` was dropping `mineType` on reopen.
+    if (f.additionalInfo) labels.additionalInfo = 'CAUSE OF RESTRICTION';
+    if (f.mineType) labels.mineType = TacticalGraphicMineType.antitank;
+    if (f.mobility) labels.mobility = TacticalGraphicMobility.tracked;
+    if (f.terrain) labels.terrain = TacticalGraphicTerrain.ground;
+    if (f.direction) labels.direction = RouteDirection.ONE_WAY;
     return labels as unknown as GraphicLabels;
 }
 

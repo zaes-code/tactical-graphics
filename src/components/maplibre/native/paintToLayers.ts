@@ -1,7 +1,7 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
+import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -11,7 +11,7 @@ import {toLonLat} from '../projection';
  * this turns each mark into a GeoJSON feature and lets MapLibre's own `line`,
  * `fill`, `circle` and `symbol` layers render it on the GPU.
  *
- * That buys what an overlay cannot: GPU labelling, label collision, and
+ * That buys what an overlay cannot: GPU labeling, label collision, and
  * everything MapLibre already does well. What it costs is recorded here, because
  * every item is a constraint the OpenLayers style layer does not have and a
  * finished renderer would have to live inside.
@@ -39,8 +39,8 @@ import {toLonLat} from '../projection';
  * ## And one it cannot do at all
  *
  * **Geometry is fixed once it is in the source.** MapLibre has no hook that
- * synthesises geometry per frame, so an obstacle line's teeth have to be *realised
- * into the GeoJSON* at the current resolution, and re-realised whenever the zoom
+ * synthesizes geometry per frame, so an obstacle line's teeth have to be *realized
+ * into the GeoJSON* at the current resolution, and re-realized whenever the zoom
  * changes. That is not a styling difference, it is a different rendering model —
  * and it is the cost `NativeLayerRenderer` exists to measure.
  */
@@ -50,14 +50,14 @@ import {toLonLat} from '../projection';
  *
  * Deliberately not part of a graphic's paint list. A handle is editor chrome — it
  * says "you can drag this" — so it is not symbology, it must not take the
- * affiliation colour, and it has to sit above every graphic rather than in draw
+ * affiliation color, and it has to sit above every graphic rather than in draw
  * order among them. @see createHandleFeature, which makes the same argument on the
  * OpenLayers side.
  */
 export interface EditorMarks {
-    /** Draggable handles, in projected metres. */
+    /** Draggable handles, in projected meters. */
     handles: ProjectedPosition[];
-    /** Handles that show but refuse a drag — the inert centre dot. */
+    /** Handles that show but refuse a drag — the inert center dot. */
     inertHandles: ProjectedPosition[];
     /** The line being drawn, if a draw is in progress. */
     sketch?: ProjectedPosition[];
@@ -138,8 +138,10 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
-    ctx.moveTo(0, spec.sizePx);
-    ctx.lineTo(spec.sizePx, 0);
+    for (const [x0, y0, x1, y1] of hatchTileSegments(spec)) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+    }
     ctx.stroke();
 
     return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
@@ -177,7 +179,7 @@ export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets 
  * stamped with the id of the graphic that produced it, which means calling this
  * once per graphic — and a version that allocated its own buckets each time made
  * 215 Maps and 645 arrays per frame, then merged them. At gallery scale that
- * *was* the frame: 24.8 ms of a 27.2 ms realisation.
+ * *was* the frame: 24.8 ms of a 27.2 ms realization.
  */
 export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string): LayerBuckets {
     for (const paint of paints) {
@@ -204,7 +206,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     color: fill.color,
                     // Empty string, not absent: `fill-pattern` needs a value for every
                     // feature in the layer, and MapLibre treats an unknown image name
-                    // as "no pattern" — which is exactly the flat-colour fallback
+                    // as "no pattern" — which is exactly the flat-color fallback
                     // `FillSpec` documents.
                     pattern: fill.pattern ? hatchImageId(fill.pattern) : '',
                 },
@@ -317,18 +319,24 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
  * **Two layers, not one, and this is not a tidiness choice.** A single layer
  * carrying both `fill-color` and a data-driven `fill-pattern` looked like it would
  * serve both cases, on the reasoning that an empty image name would fall back to
- * the colour. It does not: MapLibre draws **nothing** for a feature whose
+ * the color. It does not: MapLibre draws **nothing** for a feature whose
  * `fill-pattern` resolves to an unknown image, and the `fill-color` beside it is
  * ignored entirely.
  *
  * So every solid fill in this renderer was invisible — the ferry crossing's
- * arrowheads, fix, turn, the aviation direction of attack, area defence's teeth,
+ * arrowheads, fix, turn, the aviation direction of attack, area defense's teeth,
  * exploitation. Each still drew its *outline*, from the stroke on the same mark,
  * which is what made it look like a thin-line rendering choice rather than a
  * missing fill.
  *
  * Filtering on the property instead gives each case its own layer and neither can
  * silently swallow the other.
+ *
+ * **The price is that paint order no longer holds between the two.** Within one layer the
+ * source's feature order decides, so a paint list's order survives; across the two it is the
+ * order the layers were added, which applies to every graphic at once. `NativeLayerRenderer`
+ * therefore adds the pattern layer **first**, so hatches sit under solid fills — see the note
+ * there for why that is the right way round and what asserts it stays true.
  */
 export function fillLayer(id: string, source: string): LayerSpecification {
     return {
@@ -381,7 +389,7 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             'text-size': ['get', 'size'],
             'text-rotate': ['get', 'rotate'],
             'text-anchor': ['get', 'anchor'],
-            // Independent of the anchor in MapLibre, and centre by default. @see TextSpec.justify
+            // Independent of the anchor in MapLibre, and center by default. @see TextSpec.justify
             'text-justify': ['get', 'justify'],
             // `['array', 'number', 2, …]` asserts the shape: `get` returns untyped
             // JSON, and `text-offset` will not accept it without the assertion.
@@ -390,7 +398,7 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             // or at a measured standoff from a line. Letting MapLibre drop one for
             // colliding would silently delete a doctrinal amplifier, so both the
             // collision box and the overlap rule are switched off. That discards the
-            // main advantage of GPU labelling, which is worth saying out loud.
+            // main advantage of GPU labeling, which is worth saying out loud.
             'text-allow-overlap': true,
             'text-ignore-placement': true,
             'text-rotation-alignment': 'viewport',
@@ -400,7 +408,7 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             // MapLibre stacked it over three lines while OpenLayers drew one, and the
             // whole axis-of-advance family measured two to three times the ink at a
             // close zoom. Labels that *are* multi-line say so with a newline, and an
-            // explicit break is honoured whatever this is set to.
+            // explicit break is honored whatever this is set to.
             'text-max-width': NO_WRAP_EMS,
         },
         paint: {
@@ -438,7 +446,7 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
 }
 
 /**
- * The editor's handle layer — always the same colour, never the affiliation's.
+ * The editor's handle layer — always the same color, never the affiliation's.
  *
  * A handle is chrome: it says "you can drag this", and that meaning must not change
  * with a graphic's standard identity. Tinting them also made a hostile graphic's
@@ -529,7 +537,7 @@ export function handleLayer(id: string, source: string): LayerSpecification {
  *
  * Styled to `createEditingStyle()` exactly, because the two engines should hint the
  * same edit the same way: a radius-6 dot in OpenLayers' editing blue with a 1.5px
- * white ring. Deliberately **not** the configured handle colour — this is not a handle
+ * white ring. Deliberately **not** the configured handle color — this is not a handle
  * that exists, it is an offer to make one, and OpenLayers distinguishes them the same
  * way.
  */
@@ -563,10 +571,10 @@ export function sketchLayer(id: string, source: string, dashPx: number[], widthP
 }
 
 /**
- * The centre-symbol layer.
+ * The center-symbol layer.
  *
- * `icon-allow-overlap` is on because this symbol *is* the graphic's centre: MapLibre's
- * default collision behaviour would drop it whenever a label happened to sit nearby,
+ * `icon-allow-overlap` is on because this symbol *is* the graphic's center: MapLibre's
+ * default collision behavior would drop it whenever a label happened to sit nearby,
  * which reads as the symbol being missing rather than as decluttering.
  */
 export function iconLayer(id: string, source: string): LayerSpecification {
