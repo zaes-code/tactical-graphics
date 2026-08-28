@@ -159,3 +159,45 @@ describe('the symbol scales with the graphic', () => {
         }
     });
 });
+
+/**
+ * # The vertex handle lengthens the line and nothing else
+ *
+ * The two gestures do different jobs and must not bleed into each other: dragging the
+ * red vertex handle stretches the *line*, leaving the fish tail and the arrowhead the
+ * size they were; only the resize affordance scales the symbol, by scaling
+ * `decorationSize`.
+ *
+ * They bled once already. Running the sizes through `endMarkScale` — the shape-relative
+ * cap the repeating decorations use — ties them to the line's own length, so every drag
+ * of the vertex handle resized the whole symbol with it.
+ */
+describe('lengthening the line leaves the symbol alone', () => {
+    const symbolAt = (lengthMetres: number, decorationSize?: number) => {
+        const paint = getPaintFunction(TacticalGraphicName.FollowAndAssume)!.graphic;
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [REAR, [lengthMetres, 0]]},
+            properties: {name: TacticalGraphicName.FollowAndAssume, ...(decorationSize ? {decorationSize} : {})},
+        } as PaintFeature;
+        const parts = paint(feature, context).filter(p => p.stroke && p.geometry.type === 'LineString');
+        const span = (i: number) => {
+            const c = (parts[i].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+            return Math.max(...c.map(p => p[0])) - Math.min(...c.map(p => p[0]));
+        };
+        return {body: span(0), head: span(parts.length - 1)};
+    };
+
+    it.each([4000, 8000, 16000, 40000])('is the same symbol on a %i m line', lengthMetres => {
+        const reference = symbolAt(8000);
+        const measured = symbolAt(lengthMetres);
+        expect(measured.body).toBeCloseTo(reference.body, 5);
+        expect(measured.head).toBeCloseTo(reference.head, 5);
+    });
+
+    it('still scales when the resize gesture changes the stamped size', () => {
+        const single = symbolAt(8000, 20 * context.resolution);
+        const double = symbolAt(8000, 40 * context.resolution);
+        expect(double.body / single.body).toBeCloseTo(2, 1);
+        expect(double.head / single.head).toBeCloseTo(2, 1);
+    });
+});

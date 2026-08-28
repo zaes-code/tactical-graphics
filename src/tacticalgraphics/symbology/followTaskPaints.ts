@@ -29,7 +29,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {endMarkScale, textWidth} from './decorations';
+import {textWidth} from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -92,15 +92,24 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
         const nx = -uy;
         const ny = ux;
 
-        const scale = endMarkScale(path, context.resolution, BODY_LENGTH_PX + HEAD_LENGTH_PX);
-        if (scale <= 0) return [];
-        // One "pixel" of the plate, in metres on the ground: the stamped decoration size
-        // divided by the unit it was stamped in. Absent — a base built by a caller that
-        // never went through a holder — it falls back to the drawing zoom, which is the
-        // same number the holder would have stamped.
+        /*
+         * **The body and the head are sized by `decorationSize` and by nothing else.**
+         *
+         * Not by the run between the points. Dragging the vertex handle is the user
+         * lengthening the *line*, and it must leave the fish tail and the arrowhead the
+         * size they were — only the resize gesture changes those, by scaling
+         * `decorationSize`. An earlier version put the sizes through `endMarkScale`, the
+         * shape-relative cap the repeating decorations use, which ties them to the line's
+         * own length: every drag of the red handle resized the symbol with it, which is
+         * exactly what the two gestures are supposed to keep apart.
+         *
+         * One "pixel" of the plate, in metres on the ground: the stamped size divided by
+         * the unit it was stamped in. Absent — a base built by a caller that never went
+         * through a holder — it falls back to the drawing zoom, which is the same number
+         * the holder would have stamped.
+         */
         const unit = feature.properties.decorationSize ?? DECORATION_UNIT_PX * context.resolution;
-        const metresPerPx = unit / DECORATION_UNIT_PX;
-        const px = (n: number) => n * scale * metresPerPx;
+        const px = (n: number) => (n * unit) / DECORATION_UNIT_PX;
 
         /** A point `along` metres from the rear and `across` metres to its left. */
         const at = (along: number, across: number): ProjectedPosition => [
@@ -116,7 +125,7 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
         const designation = feature.properties.designation?.trim();
         const textScale = scaleOf(feature, context);
         const textPx = designation ? textWidth(context, designation, fontStyle, textScale) : 0;
-        const bodyLength = Math.max(px(BODY_LENGTH_PX), (textPx + 2 * BODY_TEXT_PADDING_PX * scale) * context.resolution);
+        const bodyLength = Math.max(px(BODY_LENGTH_PX), textPx * context.resolution + px(2 * BODY_TEXT_PADDING_PX));
         const half = px(BODY_HALF_HEIGHT_PX);
         const nose = px(BODY_NOSE_PX);
         const headLength = px(HEAD_LENGTH_PX);
@@ -148,7 +157,7 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
                 geometry: {type: 'LineString', coordinates: [noseTip, headBase]},
                 stroke:
                     variant === 'assume'
-                        ? {...stroke, dashPx: CONNECTOR_DASH_PX.map(d => d * scale)} // px: a dash is drawn, not measured
+                        ? {...stroke, dashPx: CONNECTOR_DASH_PX} // px: a dash is drawn, not measured
                         : stroke,
             });
         }
