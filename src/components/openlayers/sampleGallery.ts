@@ -34,7 +34,18 @@ import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicHostility, TacticalGraphicName, getDisplayName, latitudeFromMercatorY, storedOrder} from '@zaes/tactical-graphics';
+import {
+    GRAPHIC_CATEGORIES,
+    TacticalGraphicCategory,
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getDisplayName,
+    groundLength,
+    isRectangular,
+    latitudeFromMercatorY,
+    rectangleDefaultHalfWidth,
+    storedOrder,
+} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {TacticalGraphicHandler} from './openlayersAdapter';
@@ -712,6 +723,21 @@ export function applyBaseGeometry(
             ] as Coordinate[], symbolId, name));
             return;
         }
+        // **A rectangular zone's width is stamped, not left to the holder's seed.**
+        // The holder starts one at a screen size spent at the resolution it was built
+        // with, and the two sheets are built at different zooms — so the same zone came
+        // out 360 km wide here and 1,005 km on MapLibre, and the comparison's premise
+        // that both engines start from the same base stopped being true.
+        // @see rectangleDefaultHalfWidth
+        if (isRectangular(name)) {
+            const half = LINE_HALF * grow;
+            const axis: Coordinate[] = [[cx - half, cy], [cx + half, cy]];
+            handler.setBaseFeature(lineFeature(axis, symbolId, name));
+            const metres = groundLength(half * 2, latitudeFromMercatorY(cy));
+            (handler as {setOffset?: (value: number) => void}).setOffset?.(rectangleDefaultHalfWidth(metres));
+            return;
+        }
+
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
         // **Drawn in the order the graphic files its points, so every sample still reads
         // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
