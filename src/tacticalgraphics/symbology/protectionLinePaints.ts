@@ -18,13 +18,14 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName, getLabel} from '../core/type';
-import {mineGlyph} from './minePaints';
+import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
+import {MINE_GLYPH_GAP_PX, mineGlyph, mineGlyphExtent, mineGlyphPitch} from './minePaints';
 import {
     DECORATION_MIN_PX,
     endFrame,
     endMarkScale,
     pathLength,
+    splitPathAroundAll,
     uprightRotation,
     walkPath,
 } from './decorations';
@@ -44,6 +45,8 @@ type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[]
 const LABEL_OFFSET_PX = 8;
 /** Screen-pixel clearance between a mineline's end and the letter beyond it. */
 const MINELINE_LABEL_GAP_PX = 10;
+/** Screen-pixel clearance between a mine cluster's dome and the ring around it. */
+const MINE_CLUSTER_RING_GAP_PX = 10;
 
 /** The path a line graphic was drawn along. */
 function drawnPath(feature: PaintFeature): ProjectedPosition[] {
@@ -92,28 +95,32 @@ function amplifier(
  */
 const MINELINE_MINE_PX = 18;
 const MINELINE_MINE_SHARE = 0.07;
-/** Centre-to-centre spacing, as a multiple of a mine's own width. */
-const MINELINE_MINE_PITCH = 1.2;
 
 /**
- * Where the mines sit along the line, and how big each is.
+ * Where the mines sit along the line, how big each is, and where the line is cut for them.
  *
  * A whole number of them, centred on the route, exactly as the obstacle teeth are fitted:
  * repeating at a fixed pitch instead would leave a ragged half-gap at one end that moves
  * as the line is dragged. @see antiTankDitchPaint
+ *
+ * **The spacing is the glyph's own width plus a fixed clear space**, not a multiple of the
+ * disc, because the seven glyphs are not the same width — an antipersonnel mine with
+ * directional effects reaches 2.2 radii one way and 1.5 the other. @see mineGlyphPitch
  */
 function minelineMines(
     path: ProjectedPosition[],
     resolution: number,
-): {centers: ProjectedPosition[]; radius: number} | undefined {
+    type: TacticalGraphicMineType,
+): {centers: ProjectedPosition[]; radius: number; gaps: {at: number; halfGap: number}[]} | undefined {
     const availablePx = pathLength(path) / resolution;
     const scale = Math.max(0, Math.min(1, (availablePx * MINELINE_MINE_SHARE) / MINELINE_MINE_PX));
     if (MINELINE_MINE_PX * scale < DECORATION_MIN_PX) return undefined;
 
-    const diameter = MINELINE_MINE_PX * scale * resolution;
-    if (diameter <= 0) return undefined;
+    const radius = (MINELINE_MINE_PX * scale * resolution) / 2;
+    if (radius <= 0) return undefined;
 
-    const pitch = diameter * MINELINE_MINE_PITCH;
+    const gap = MINE_GLYPH_GAP_PX * resolution;
+    const pitch = mineGlyphPitch(type, radius, gap);
     const total = pathLength(path);
     const count = Math.floor(total / pitch);
     if (count < 1) return undefined;
@@ -121,12 +128,19 @@ function minelineMines(
     // Half a pitch in from each end of the centred run, so the first and last mine sit
     // *on* the line rather than hanging off it.
     const lead = (total - (count - 1) * pitch) / 2;
+    const extent = mineGlyphExtent(type);
     const centers: ProjectedPosition[] = [];
+    const gaps: {at: number; halfGap: number}[] = [];
     for (let i = 0; i < count; i++) {
-        const at = walkPath(path, lead + i * pitch);
-        if (at) centers.push(at.point);
+        const along = lead + i * pitch;
+        const at = walkPath(path, along);
+        if (!at) continue;
+        centers.push(at.point);
+        // Cut the line to the glyph's own reach, so a hollow disc reads hollow instead of
+        // wearing the stroke as a diameter. (User's call, 2026-08-27.)
+        gaps.push({at: along, halfGap: Math.max(extent.left, extent.right) * radius});
     }
-    return centers.length ? {centers, radius: diameter / 2} : undefined;
+    return centers.length ? {centers, radius, gaps} : undefined;
 }
 
 /**
@@ -143,9 +157,12 @@ function minelineMines(
  * modifiers here — but it does draw a `Modifier 1` box on the row, and no other table
  * populates it. The constraint is recorded rather than silently broken.
  *
- * **The `N`s sit beyond the ends, level with the line, not above it.** That is where the
- * Template puts them: `[N] — [Modifier 1] — [N]`, one row. They read `ENY` when the
- * mineline is the enemy's, which is what the `N` box means.
+ * **The line is cut where each mine sits.** A stroke running through a hollow disc is a
+ * disc with a diameter, which is not one of Table 8-24's seven. @see splitPathAroundAll
+ *
+ * **`N` prints nothing.** The Template's box marks where a hostile marker goes, so the
+ * ends carry `ENY` when the mineline is the enemy's and stay bare otherwise. They sit
+ * beyond the ends and level with the line — `[N] — [Modifier 1] — [N]` is one row.
  */
 export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
     return (feature, context) => {
@@ -153,42 +170,46 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         if (path.length < 2) return [];
 
         const scale = scaleOf(feature, context);
-        const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
-        const endLabel = hostile ? 'ENY' : getLabel(name);
         const color = lineColorOf(feature);
-        const start = path[0];
-        const afterStart = path[1];
-        const end = path[path.length - 1];
-        const beforeEnd = path[path.length - 2];
+        const type = feature.properties.mineType ?? TacticalGraphicMineType.unspecified;
+        const stroke = {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
 
-        const paints: Paint[] = [{
-            geometry: {type: 'LineString', coordinates: path},
-            stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
-        }];
+        const mines = minelineMines(path, context.resolution, type);
+        const runs = mines ? splitPathAroundAll(path, mines.gaps) : [path];
+        const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: runs}, stroke}];
 
-        const mines = minelineMines(path, context.resolution);
         if (mines) {
-            const type = feature.properties.mineType ?? TacticalGraphicMineType.unspecified;
             for (const center of mines.centers) {
                 paints.push(...mineGlyph(center, mines.radius, type, color));
             }
         }
 
+        // **`N` is a placeholder, not a letter.** The Template's box says *where the
+        // hostile marker goes*, the way every other `N` box in the standard does — it is
+        // not something to print. So the ends carry `ENY` when the mineline is the
+        // enemy's and nothing at all otherwise. (User's call, 2026-08-27.)
+        if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return paints;
+
+        const start = path[0];
+        const afterStart = path[1];
+        const end = path[path.length - 1];
+        const beforeEnd = path[path.length - 2];
+
         // Beyond each end and reading outward, so the letters grow away from the graphic
         // rather than back across the mines.
-        const gap = MINELINE_LABEL_GAP_PX * context.resolution;
+        const labelGap = MINELINE_LABEL_GAP_PX * context.resolution;
         const outward = (from: ProjectedPosition, to: ProjectedPosition): ProjectedPosition => {
             const dx = to[0] - from[0];
             const dy = to[1] - from[1];
             const len = Math.hypot(dx, dy) || 1;
-            return [to[0] + (dx / len) * gap, to[1] + (dy / len) * gap];
+            return [to[0] + (dx / len) * labelGap, to[1] + (dy / len) * labelGap];
         };
         paints.push(amplifier(
-            feature, outward(afterStart, start), endLabel, scale,
+            feature, outward(afterStart, start), 'ENY', scale,
             uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'right' : 'left',
         ));
         paints.push(amplifier(
-            feature, outward(beforeEnd, end), endLabel, scale,
+            feature, outward(beforeEnd, end), 'ENY', scale,
             uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'left' : 'right',
         ));
         return paints;
@@ -207,11 +228,12 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
  * own dashes spent, a planned mine cluster has nothing left to say it with, so it says it
  * by wearing a dash-dot ring. @see plannedStatusRing
  *
- * **The ring is the dome's own circle, completed.** Centre on the chord's midpoint, radius
- * the dome's radius — so the arc lies on the ring rather than floating inside it, and the
- * two cannot come apart under a rotate or a resize because both are read from points 1 and
- * 2. The generic bounding-box ring left a visible gap above the apex and a wider one below
- * the chord, which read as two symbols rather than one. (User's call, 2026-08-27.)
+ * **The ring is concentric with the dome, standing ten pixels off it.** Centre on the
+ * chord's midpoint, radius the dome's radius plus {@link MINE_CLUSTER_RING_GAP_PX} — so
+ * the two cannot come apart under a rotate or a resize, because both are read from points
+ * 1 and 2. The generic bounding-box ring left a wide gap above the apex and a wider one
+ * below the chord, which read as two symbols rather than one; drawn exactly on the dome
+ * the two dash patterns interleave into a ragged arc. (User's call, 2026-08-27.)
  */
 export function mineClusterPaint(): ProtectionPaint {
     return (feature, context) => {
@@ -227,7 +249,8 @@ export function mineClusterPaint(): ProtectionPaint {
         const circle = chord && chord.length >= 2
             ? {
                 center: [(chord[0][0] + chord[1][0]) / 2, (chord[0][1] + chord[1][1]) / 2] as ProjectedPosition,
-                radius: Math.hypot(chord[1][0] - chord[0][0], chord[1][1] - chord[0][1]) / 2,
+                radius: Math.hypot(chord[1][0] - chord[0][0], chord[1][1] - chord[0][1]) / 2
+                    + MINE_CLUSTER_RING_GAP_PX * context.resolution,
             }
             : undefined;
 

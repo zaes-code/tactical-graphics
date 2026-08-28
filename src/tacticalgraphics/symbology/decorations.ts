@@ -86,6 +86,70 @@ export function splitPathAround(
     return [before, after].filter(run => run.length >= 2);
 }
 
+/**
+ * The runs of a path that survive **several** gaps, in order.
+ *
+ * `splitPathAround` is the one-gap case and the shape most amplifiers need. A line strung
+ * with a repeating symbol needs one gap per symbol: without them a hollow glyph has the
+ * line drawn straight through it and stops reading as hollow, which for the mineline is
+ * the difference between an unspecified mine and an antitank one.
+ *
+ * Gaps are given as distances along the path with a half-width each; overlapping ones
+ * merge. A gap that swallows an end simply shortens the run there.
+ */
+export function splitPathAroundAll(
+    path: readonly ProjectedPosition[],
+    gaps: readonly {at: number; halfGap: number}[],
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const total = pathLength(path as ProjectedPosition[]);
+    const cuts = gaps
+        .map(g => [Math.max(0, g.at - g.halfGap), Math.min(total, g.at + g.halfGap)] as const)
+        .filter(([from, to]) => to > from)
+        .sort((a, b) => a[0] - b[0]);
+    if (!cuts.length) return [path as ProjectedPosition[]];
+
+    // Merge overlaps, then keep what is left over.
+    const merged: [number, number][] = [[cuts[0][0], cuts[0][1]]];
+    for (const [from, to] of cuts.slice(1)) {
+        const last = merged[merged.length - 1];
+        if (from <= last[1]) last[1] = Math.max(last[1], to);
+        else merged.push([from, to]);
+    }
+
+    const runs: ProjectedPosition[][] = [];
+    let cursor = 0;
+    for (const [from, to] of merged) {
+        if (from > cursor) runs.push(pathBetween(path as ProjectedPosition[], cursor, from));
+        cursor = to;
+    }
+    if (cursor < total) runs.push(pathBetween(path as ProjectedPosition[], cursor, total));
+    return runs.filter(run => run.length >= 2);
+}
+
+/** The polyline between two distances along a path, ends interpolated. */
+function pathBetween(path: ProjectedPosition[], from: number, to: number): ProjectedPosition[] {
+    const out: ProjectedPosition[] = [];
+    let walked = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const at = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+        if (end > from && walked < to) {
+            if (!out.length) out.push(walked >= from ? a : at(from));
+            out.push(end <= to ? b : at(to));
+        }
+        walked = end;
+    }
+    return out;
+}
+
 export function centerSegmentIndex(coords: ProjectedPosition[]): number {
     const lengths: number[] = [];
     let total = 0;
