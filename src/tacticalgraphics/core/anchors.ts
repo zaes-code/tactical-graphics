@@ -631,3 +631,76 @@ export function parallelLegsFromAnchors(
     // counter-clockwise. @see anchorsForParallelLegs
     return {tip, size, angle: toRadians(90 - turf.bearing(turf.point(tip), turf.point(bend)))};
 }
+
+/**
+ * # A rectangle from two anchor points and a width — APP-06's own definition
+ *
+ * > This symbol requires two anchor points and a width, defined in metres, to define the
+ * > boundary of the area. Points 1 and 2 will be located in the centre of two opposing
+ * > sides of the rectangle. […] The anchor points determine the length of the rectangle.
+ * > The width, defined in metres, will determine the width of the rectangle. (240202)
+ *
+ * So the axis is the user's two clicks and the width is an amplifier — the length and the
+ * orientation come from the points, and nothing about the shape is a corner the operator
+ * places. Eighteen rectangular zones say it in those words and FM 1-02.2 table 5-24 draws
+ * the same `AM` / "Width (m)" arrow down the edge.
+ *
+ * **This library used to let the user drag a box instead.** That produces the same
+ * picture, and three things followed from it: the width was derived from the ring rather
+ * than set, so it could be read but not dragged; the rectangle could not be turned,
+ * because every dimension came off the projected bounding box; and the two points APP-06
+ * numbers existed nowhere. (User's call, 2026-08-27.)
+ *
+ * `halfWidth` rather than the full figure, because that is what the generators take —
+ * `toGraphicOptions` halves the public `width` on the way in, and this is the one place
+ * the factor of two lives on the way back out.
+ */
+export function rectangleFromAxis(p1: Position, p2: Position, halfWidth: number): Position[] {
+    const axis = turf.bearing(turf.point(p1), turf.point(p2));
+    const off = (from: Position, bearing: number): Position =>
+        halfWidth > 0
+            ? (turf.destination(turf.point(from), halfWidth, bearing, {units: 'meters'}).geometry.coordinates as Position)
+            : from;
+    // Anticlockwise from point 1's left flank, closed.
+    const a = off(p1, axis - 90);
+    const b = off(p2, axis - 90);
+    const c = off(p2, axis + 90);
+    const d = off(p1, axis + 90);
+    return [a, b, c, d, a];
+}
+
+/**
+ * The inverse, for a box drawn before the conversion: the axis through the midpoints of
+ * the two **shorter** sides, and half the longer dimension across it.
+ *
+ * Point 1 is the western of the two midpoints, or the southern when the box is taller
+ * than it is wide — a drawn box records no direction, so this is a convention rather
+ * than a recovery. What it does preserve is the shape: the same rectangle comes back.
+ */
+export function axisFromRectangleRing(
+    ring: Position[] | undefined,
+): {p1: Position; p2: Position; halfWidth: number} | undefined {
+    if (!ring || ring.length < 4) return undefined;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of ring) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+    }
+    if (!isFinite(minX) || maxX <= minX || maxY <= minY) return undefined;
+
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const across = turf.distance(turf.point([midX, minY]), turf.point([midX, maxY]), {units: 'meters'});
+    const along = turf.distance(turf.point([minX, midY]), turf.point([maxX, midY]), {units: 'meters'});
+
+    // The axis runs along the longer dimension, so the two anchor points land on the
+    // shorter sides — which is the pair the standard numbers.
+    return along >= across
+        ? {p1: [minX, midY], p2: [maxX, midY], halfWidth: across / 2}
+        : {p1: [midX, minY], p2: [midX, maxY], halfWidth: along / 2};
+}

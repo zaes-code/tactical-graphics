@@ -23,6 +23,10 @@ import {
     ratioLockOf,
     drawnAnchorFrame,
     drawnAnchors,
+    axisFromRectangleRing,
+    carriesRectangleLength,
+    isRectangular,
+    groundMeters,
     usesDrawnAnchors,
     resolveRangeFanBands,
     toGraphicOptions,
@@ -623,6 +627,24 @@ function anchorFrameProperties(
     };
 }
 
+/**
+ * The rectangular target's `length`, read off the axis its two anchor points describe.
+ *
+ * Every other rectangle takes its length from those points and files nothing; this one
+ * names it as an amplifier, so the number has to exist. A caller's own value wins.
+ * @see carriesRectangleLength
+ */
+function rectangleAxisLength(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+    supplied: Omit<TacticalGraphicProperties, 'name'>,
+): Partial<TacticalGraphicProperties> {
+    if (!carriesRectangleLength(name) || supplied.length !== undefined) return {};
+    if (geometry.type !== 'LineString' || geometry.coordinates.length < 2) return {};
+    const [a, b] = geometry.coordinates as Position[];
+    return {length: Math.round(groundMeters(a as [number, number], b as [number, number]))};
+}
+
 /** A polygon base's outer ring in lon/lat, or undefined for anything else. */
 function ringOf(geometry: GeoJSONFeature['geometry']): [number, number][] | undefined {
     return geometry.type === 'Polygon' ? (geometry.coordinates[0] as [number, number][]) : undefined;
@@ -660,6 +682,22 @@ export function buildTacticalGraphic(
     // renderer would have called — it just gains the handle it was missing.
     baseGeometry = withNormalizedBase(name, baseGeometry);
     baseGeometry = withCanonicalAnchors(name, baseGeometry);
+
+    /*
+     * **A rectangular zone drawn as a box, from before the conversion.**
+     *
+     * APP-06 defines these as two anchor points and a width, and that is what the base
+     * carries now — but every snapshot written before 2026-08-27 holds the drawn ring,
+     * and so does anything that still hands one in. Read the axis and the width back out
+     * of it: the same rectangle comes back, and it comes back editable.
+     * @see axisFromRectangleRing, RectangularArea
+     */
+    const drawnBox = isRectangular(name) && baseGeometry.type === 'Polygon'
+        ? axisFromRectangleRing(baseGeometry.coordinates[0] as Position[])
+        : undefined;
+    if (drawnBox) {
+        baseGeometry = {type: 'LineString', coordinates: [drawnBox.p1, drawnBox.p2]};
+    }
 
     // **The resolution these screen sizes are spent at, corrected for where the graphic
     // is.** A pixel constant times the raw resolution is a *projected* length, and every
@@ -709,7 +747,14 @@ export function buildTacticalGraphic(
          * covers every door — drawn, restored, imported, swept — the same argument
          * `withNormalizedBase` makes at the top of this function.
          */
+        // A box handed in states its own width; an axis takes the caller's, or the
+        // screen-sized default `sizeDefaults` supplies. @see axisFromRectangleRing
+        ...(drawnBox && properties.width === undefined ? {width: Math.round(drawnBox.halfWidth * 2)} : {}),
         ...rectangleAmplifiers(name, ringOf(baseGeometry)),
+        // The rectangular target is the one that files a length, and it now comes from the
+        // two anchor points like every other rectangle's does — the ring it used to be
+        // measured off is derived. @see carriesRectangleLength
+        ...rectangleAxisLength(name, baseGeometry, properties),
         // The same argument one family over: for the six drawn from anchor points, the
         // points are the description and these figures follow them. @see anchorFrameProperties
         ...anchorFrameProperties(name, baseGeometry),

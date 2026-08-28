@@ -8,7 +8,8 @@ import {SweptArcTask} from "../graphics/SweptArcTask";
 import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
 import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
-import {AreaGraphic, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {AreaGraphic, RectangularArea, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {isRectangular} from "./handles";
 import {
     AreaDefense,
     CircularArea,
@@ -292,7 +293,12 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirheadLine,
 ]
 
-areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new AreaGraphic(name)))
+areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(
+    // **The rectangles are not drawn areas.** APP-06 defines each as two anchor points and
+    // a width, so its base is the axis and its shape is derived — where an irregular area's
+    // base *is* its outline. @see RectangularArea, isRectangular
+    isRectangular(name) ? new RectangularArea(name) : new AreaGraphic(name),
+))
 
 //Mission Task Graphics
 TacticalGraphicsRegistry.register(new Control());
