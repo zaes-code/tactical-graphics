@@ -27,8 +27,6 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
-import {levelRectangleAxis} from './anchors';
-import {isRectangular} from './handles';
 import geometryService from './GeometryService';
 
 /**
@@ -112,6 +110,12 @@ function clampSCurveAnchor(coordinates: Position[], resolution: number): Positio
  *
  * Rings are left alone — a polygon's first and last vertex are equal on purpose, and
  * de-duplicating them would open the ring.
+ *
+ * **Levelling a rectangular zone is not done here**, although it is a draw-time tidy-up
+ * and belongs to the same family. MapLibre runs this hook on every *build* — restore,
+ * import, sweep, and after every gesture — so a rule that squares the axis onto a
+ * parallel undid each rotate the moment it was applied. The draw paths level it
+ * themselves. @see levelRectangleAxis
  */
 export function normalizeDrawnBase(
     name: TacticalGraphicName,
@@ -138,8 +142,6 @@ export function normalizeDrawnBase(
         return storedOrder(name, asVee(generatorOrder(name, deduped)));
     }
 
-    // A rectangular zone is drawn level and turned afterwards. @see levelRectangleAxis
-    if (isRectangular(name)) return levelRectangleAxis(deduped);
 
     return deduped;
 }

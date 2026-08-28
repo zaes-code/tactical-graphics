@@ -204,7 +204,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
          * the moment of the last click. Levelling here makes the two the same thing.
          * (User's call, 2026-08-27.) @see levelRectangleAxis, constrainRectangleAxis
          */
-        if (incoming?.length === 2) {
+        if (incoming?.length === 2 && !this.rotating) {
             const lonLat = incoming.map(c => toLonLat(c)) as Position[];
             const held = this.drawing
                 ? levelRectangleAxis(lonLat)
@@ -301,6 +301,16 @@ export class RectangularAreaGraphicBase implements LineGraphic {
      * vertex drag — the one case that most needs the constraint. @see polygonRect
      */
     drawing = false;
+
+    /**
+     * True for the length of a rotate, set by the factory that builds this holder.
+     *
+     * **A rotate turns about point 1**, so only point 2 moves — which is the very shape a
+     * length drag has, and the axis constraint ate it: measured, a 30-degree rotate left
+     * the zone level and cut its length from 3,420 km to 528. The gesture has to say what
+     * it is; nothing about the two points afterwards can. @see polygonRect
+     */
+    rotating = false;
 
     /**
      * The axis this holder last built from, in lon/lat.
