@@ -30,7 +30,7 @@ export class AreaGraphicBase implements PolygonGraphic {
     symbolId: string = '';
     size: number = 1;
 
-    graphicLabels: GraphicLabels = {label: ''};
+    graphicLabels: GraphicLabels = {designation: ''};
     graphicName: TacticalGraphicName;
 
     constructor(name: TacticalGraphicName, size?: number, drawingResolution?: number) {

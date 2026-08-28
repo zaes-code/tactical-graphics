@@ -20,7 +20,7 @@ describe('setLabel keeps the geometry state', () => {
         c.setOffset(9000);
         expect(readGraphicGeometryState(c.getFeatures()[0]).width).toBe(18000);
 
-        c.setLabel({label: 'CORRIDOR-1'});          // what the dialog sends: amplifiers only
+        c.setLabel({designation: 'CORRIDOR-1'});          // what the dialog sends: amplifiers only
         expect(readGraphicGeometryState(c.getFeatures()[0]).width).toBe(18000);
     });
 
@@ -30,7 +30,7 @@ describe('setLabel keeps the geometry state', () => {
         const before = readGraphicGeometryState(g.getFeatures()[0]).decorationSize;
         expect(before).toBeGreaterThan(0);
 
-        g.setLabel({label: 'PL-1'});
+        g.setLabel({designation: 'PL-1'});
         expect(readGraphicGeometryState(g.getFeatures()[0]).decorationSize).toBe(before);
     });
 });

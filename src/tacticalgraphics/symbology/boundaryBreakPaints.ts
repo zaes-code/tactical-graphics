@@ -212,7 +212,7 @@ export function contourLineBoundaryPaint(): CardinalPaint {
 
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
-        const text = (feature.properties.label ?? '').trim();
+        const text = (feature.properties.designation ?? '').trim();
         if (!text) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
 
         const scale = labelScale(feature.drawingResolution, context.resolution);
@@ -226,7 +226,7 @@ export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
     return (feature, context) => {
         const paints = base(feature, context);
         const ring = feature.ring;
-        const text = (feature.properties.label ?? '').trim();
+        const text = (feature.properties.designation ?? '').trim();
         if (!ring || ring.length < 4 || !text) return paints;
 
         const scale = labelScale(feature.drawingResolution, context.resolution);

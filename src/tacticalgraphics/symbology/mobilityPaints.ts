@@ -160,7 +160,7 @@ export function fieldsOfFirePaint(): LinePaint {
             });
         }
 
-        const label = feature.properties.label ?? '';
+        const label = feature.properties.designation ?? '';
         if (leg.length >= 3 && label) {
             paints.push({
                 geometry: {type: 'Point', coordinates: leg[1]},

@@ -194,7 +194,7 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
 
     const labelFeature = (mineType?: TacticalGraphicMineType): PaintFeature => ({
         geometry: {type: 'Point', coordinates: ORIGIN},
-        properties: {name: TacticalGraphicName.MinefieldDynamicDepiction, label: 'SECTOR 1', mineType},
+        properties: {name: TacticalGraphicName.MinefieldDynamicDepiction, designation: 'SECTOR 1', mineType},
         ring: RING,
         bounds: {minX: -400_000, minY: -300_000, maxX: 400_000, maxY: 300_000},
     });
@@ -254,7 +254,7 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
         const feature = labelFeature();
         feature.properties.additionalInfo = '+S';
         feature.properties.startDate = '240700ZMAY2026';
-        feature.properties.label = 'IGNORED';
+        feature.properties.designation = 'IGNORED';
 
         const texts = mineFillPaint()(feature, context()).filter(p => p.text);
         expect(texts.map(p => p.text!.text)).toEqual(['+S', '240700ZMAY2026']);

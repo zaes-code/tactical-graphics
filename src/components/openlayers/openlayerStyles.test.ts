@@ -617,7 +617,7 @@ describe('the library default', () => {
 describe('obstacle line', () => {
     const feature = (drawn: number[][]) => {
         const f = new Feature(new LineString(drawn));
-        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+        writeGraphicProperties([f], TacticalGraphicName.ObstacleLine, {designation: 'OBS-1'});
         return f;
     };
 
@@ -833,7 +833,7 @@ describe('fortified and wave graphics in screen space', () => {
 
     const lineFeature = (name: TacticalGraphicName, drawn: number[][] = LINE) => {
         const f = new Feature(new LineString(drawn));
-        writeGraphicProperties([f], name, {label: ''});
+        writeGraphicProperties([f], name, {designation: ''});
         return f;
     };
 
@@ -1050,7 +1050,7 @@ describe('security operation center symbol', () => {
         });
         const feature = new Feature(new Point([0, 0]));
         writeGraphicProperties([feature], TacticalGraphicName.Screen, {
-            label: '',
+            designation: '',
             hostility: TacticalGraphicHostility.friend,
         });
         const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
@@ -1084,7 +1084,7 @@ describe('security operation center symbol size', () => {
             return undefined;
         });
         const feature = new Feature(new Point([0, 0]));
-        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {designation: ''});
         const style = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature);
 
         style(feature, 10);
@@ -1114,7 +1114,7 @@ describe('per-graphic center symbol providers', () => {
 
     const screenFeature = () => {
         const feature = new Feature(new Point([0, 0]));
-        writeGraphicProperties([feature], TacticalGraphicName.Screen, {label: ''});
+        writeGraphicProperties([feature], TacticalGraphicName.Screen, {designation: ''});
         return feature;
     };
 
@@ -1161,7 +1161,7 @@ describe('per-graphic center symbol providers', () => {
         const byName = (r: {name: TacticalGraphicName}) => `symbol-for-${r.name}`;
         const feature = screenFeature();
         const cover = new Feature(new Point([0, 0]));
-        writeGraphicProperties([cover], TacticalGraphicName.Cover, {label: ''});
+        writeGraphicProperties([cover], TacticalGraphicName.Cover, {designation: ''});
 
         const screenStyle = securityOperationSymbolStyle(TacticalGraphicName.Screen, () => feature, () => byName);
         const coverStyle = securityOperationSymbolStyle(TacticalGraphicName.Cover, () => cover, () => byName);
@@ -1203,7 +1203,7 @@ describe('provider return shapes', () => {
 
     const feature = () => {
         const f = new Feature(new Point([0, 0]));
-        writeGraphicProperties([f], TacticalGraphicName.Screen, {label: ''});
+        writeGraphicProperties([f], TacticalGraphicName.Screen, {designation: ''});
         return f;
     };
 
@@ -1262,7 +1262,7 @@ describe('strong point cross ties', () => {
             [0, 0], [0, sideMeters], [sideMeters, sideMeters], [sideMeters, 0], [0, 0],
         ];
         const f = new Feature(new Polygon([ring]));
-        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {designation: ''});
         const styles = getStyle(TacticalGraphicName.StrongPoint, f, resolution) as Style[];
         return styles
             .map(s => s.getGeometry())
@@ -1299,7 +1299,7 @@ describe('strong point cross ties', () => {
         // fuzz on the outline rather than a symbol. The outline is still drawn.
         expect(tiePx(400, 40)).toHaveLength(0);
         const f = new Feature(new Polygon([[[0, 0], [0, 400], [400, 400], [400, 0], [0, 0]]]));
-        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {label: ''});
+        writeGraphicProperties([f], TacticalGraphicName.StrongPoint, {designation: ''});
         expect((getStyle(TacticalGraphicName.StrongPoint, f, 40) as Style[]).length).toBeGreaterThan(0);
     });
 });
@@ -1388,7 +1388,7 @@ describe('gap labels lie along their line and stay upright', () => {
         // Sub-line 0 is the one the gap is cut from; the second is the arrowhead, which
         // both style functions pass through untouched.
         const f = new Feature(new MultiLineString([drawn, [[1000, 500], [900, 560]]]));
-        writeGraphicProperties([f], name, {label: ''});
+        writeGraphicProperties([f], name, {designation: ''});
         const styles = style(f, 10) as Style[];
         const text = styles.find(s => s.getText?.()?.getText?.());
         expect(text).toBeDefined();
@@ -1455,7 +1455,7 @@ describe('arc mission-task circles cut their label gap from the glyph', () => {
             arc(205, 360, radiusMap),
             [[radiusMap, 0], [radiusMap * 0.9, radiusMap * 0.1]],   // stand-in arrowhead
         ]));
-        writeGraphicProperties([f], TacticalGraphicName.Secure, {label: ''});
+        writeGraphicProperties([f], TacticalGraphicName.Secure, {designation: ''});
         f.set('graphicCenter', CENTER);
         f.set('graphicLabelPoint', [radiusMap, 0]);
         f.set('graphicSize', radiusMap);

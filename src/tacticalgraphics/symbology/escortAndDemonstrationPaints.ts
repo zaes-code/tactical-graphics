@@ -199,7 +199,7 @@ export function demonstrationPaint(label: string): TaskPaint {
         const a = leg[segIdx];
         const b = leg[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        const text = [label, (feature.properties.label ?? '').trim()].filter(Boolean).join(' ');
+        const text = [label, (feature.properties.designation ?? '').trim()].filter(Boolean).join(' ');
         // Capped against the leg it is set in, never merely against the zoom. A longer
         // designation is held to the same width, so it opens a wider break rather than
         // one that swallows the line. @see DEM_LABEL_LEG_SHARE

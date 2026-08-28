@@ -72,7 +72,7 @@ const {graphic, labels, handles} = renderTacticalGraphic({
     properties: {
         tacticalGraphic: {
             name: TacticalGraphicName.MainAxisOfAdvance,
-            label: '1-508 IN',
+            designation: '1-508 IN',
             hostility: 'Friend',
             width: 300,
         },
@@ -119,8 +119,9 @@ tacticalGraphic: {
     name: 'MainAxisOfAdvance',
 
     // Amplifiers — text rendered on the graphic.
-    label: '1-508 IN',        // primary designation
-    secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    designation: '1-508 IN',  // field T — the primary designation
+    secondDesignation: 'TF RAIDER', // field T1 — the second one, where a graphic
+                              // carries two. A boundary shows both
     additionalInfo: 'CONCRETE 3000M', // field H — free text a symbol carries beside its
                               // designation: the airfield zone's runway note, the PsyOps
                               // zone's line above its name, human terrain's only text
@@ -175,6 +176,24 @@ tacticalGraphic: {
     rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 }
 ```
+
+**`label` and `secondId` were renamed in 3.0.0** — they are `designation` and
+`secondDesignation` now. They are fields **T** and **T1**, the standard's unique
+designations, and the old names said neither what they were nor which was which. `label`
+also collided with the three other senses of the word in this library: the anchor
+features `renderTacticalGraphic` returns, the `role: 'label'` tag, and the amplifier bag
+itself, which meant `readGraphicLabels(f).label` read as the label of the labels and was
+none of them.
+
+They are not `identifier1` / `identifier2` for a specific reason: doctrine numbers these
+**T and T1**, so `identifier1` would be field T and `identifier2` would be field T1 —
+off by one against the plate anyone would check them against.
+
+**Saved data keeps working.** The old keys are still accepted on read, everywhere a
+stored `tacticalGraphic` bag is loaded — `renderTacticalGraphic`, both renderers' style
+paths, and both engines' `restore`. Nothing writes them back, they are absent from the
+types, and a bag carrying both keeps the current one. So a file written by 1.x or 2.x
+opens with its designations intact; you migrate when you next save.
 
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
@@ -271,7 +290,7 @@ would measure on the map, and the library halves it internally to offset each ra
 renderTacticalGraphic({
     type: 'Feature',
     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
-    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
+    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', designation: '1-508 IN', width: 600}},
 });                                             // rails 300 m either side of the centerline
 ```
 
@@ -940,7 +959,7 @@ source.addFeatures(handler.getFeatures());     // graphic + labels + handles
 manager.watchResolution(handler);              // see below — not optional
 
 writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
-    label: 'A',
+    designation: 'A',
     hostility: TacticalGraphicHostility.hostileFaker,   // strokes turn red; text stays black
 });
 ```
@@ -984,7 +1003,7 @@ import {TacticalGraphicName, TacticalGraphicHostility} from '@zaes/tactical-grap
 import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
 
 const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
-    label: 'A',
+    designation: 'A',
     hostility: TacticalGraphicHostility.hostileFaker,
 }, resolution);
 if (graphic) renderer.add(graphic);
