@@ -82,7 +82,12 @@ describe('rectangular zones carry their width in meters', () => {
 
         const controller = holderFor(name);
         expect((controller.graphic.base.getGeometry() as LineString).getCoordinates()).toHaveLength(2);
-        expect(controller.graphic.handles.getGeometry()!.getCoordinates()).toHaveLength(3);
+        // The two anchor points reshape and live in the handles feature; the width sits in
+        // an `offsetHandler` feature of its own, which is how the manager tells a width
+        // drag from a reshape. @see RectangularAreaGraphicBase.offsetHandle
+        expect(controller.graphic.handles.getGeometry()!.getCoordinates()).toHaveLength(2);
+        expect(controller.graphic.offsetHandle.getGeometry()).toBeDefined();
+        expect(controller.graphic.offsetHandle.get('offsetHandler')).toBe(true);
     });
 
     it.each(RECTANGULAR)('%s writes the drawn width into the amplifier bag', name => {
@@ -173,17 +178,21 @@ describe('the live width read-out', () => {
         expect(controller.graphic.measure.getGeometry()).toBeUndefined();
     });
 
-    it('runs across the rectangle, through the two anchor points’ midpoint', () => {
+    it('runs across the rectangle, in from one short side and clear of the label', () => {
+        // Across the middle it ran straight through the designation and the date-time
+        // group. (User's call, 2026-08-27.)
         const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
         controller.graphic.showMeasure(true);
         const coords = controller.graphic.measure.getGeometry()!.getCoordinates() as number[][];
         const drawn = (controller.graphic.base.getGeometry() as LineString).getCoordinates();
         const midX = (drawn[0][0] + drawn[1][0]) / 2;
 
-        // Perpendicular to an east-west axis, so both ends sit on its midpoint's meridian.
-        expect(coords[0][0]).toBeCloseTo(midX, 6);
-        expect(coords[1][0]).toBeCloseTo(midX, 6);
+        // Perpendicular to an east-west axis, so both ends share one meridian…
+        expect(coords[0][0]).toBeCloseTo(coords[1][0], 6);
         expect(coords[0][1]).not.toBeCloseTo(coords[1][1], 0);
+        // …and that meridian is well away from the middle, inside the far short side.
+        expect(coords[0][0]).toBeGreaterThan(midX);
+        expect(coords[0][0]).toBeLessThan(drawn[1][0]);
     });
 
     /**

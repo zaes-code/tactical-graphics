@@ -704,3 +704,107 @@ export function axisFromRectangleRing(
         ? {p1: [minX, midY], p2: [maxX, midY], halfWidth: across / 2}
         : {p1: [midX, minY], p2: [midX, maxY], halfWidth: along / 2};
 }
+
+/**
+ * Half-width a freshly drawn rectangular zone starts at, in screen pixels.
+ *
+ * **Wider than the library's generic 20 px drawn offset**, and deliberately its own
+ * number: a corridor's 20 px is a rail standing off a route, where this is half of a
+ * whole area — at 20 px the zone came out a letterbox and the width handle sat almost on
+ * the axis. (User's call, 2026-08-27.)
+ *
+ * Here rather than in a holder because both engines seed it, and a zone drawn with the
+ * identical two clicks has to come out the identical size on either. They disagreed by a
+ * factor of two the first time this was written down in only one of them.
+ */
+export const RECTANGLE_DEFAULT_HALF_WIDTH_PX = 55;
+
+/** Shortest axis a rectangle may be dragged to, in metres — below this it has no shape. */
+const RECTANGLE_MIN_LENGTH = 1;
+/** Metres in a degree of latitude, for the local flattening. @see constrainRectangleAxis */
+const DEGREE_METRES = 111_320;
+
+/**
+ * A rectangle's axis after one of its two anchor points has been dragged.
+ *
+ * **The drag sets the length, never the orientation.** APP-06 puts points 1 and 2 at the
+ * centres of the two opposing sides, so moving one is how an operator makes the zone
+ * longer or shorter — and letting the same drag swing the rectangle round meant there was
+ * no way to change the length *without* risking a turn. Rotating is the rotate gesture's
+ * job, and it still turns the whole symbol freely. (User's call, 2026-08-27.)
+ *
+ * So the moved point is projected back onto the axis the rectangle already had, measured
+ * from the point that did not move.
+ *
+ * Returns `next` untouched when it is not one endpoint moving: a rotate moves both, a
+ * translate moves both, and a rebuild moves neither. That test is the whole discriminator
+ * — there is no flag to read and no gesture name at this level.
+ */
+export function constrainRectangleAxis(previous: Position[] | undefined, next: Position[]): Position[] {
+    if (!previous || previous.length < 2 || next.length < 2) return next;
+    const movedFirst = !samePoint(previous[0], next[0]);
+    const movedLast = !samePoint(previous[1], next[1]);
+    if (movedFirst === movedLast) return next;
+
+    const anchor = movedFirst ? next[1] : next[0];
+    const moved = movedFirst ? next[0] : next[1];
+
+    /*
+     * **Projected in a local plane, not walked along a great circle.**
+     *
+     * The instruction is that a side handle changes the east-west coordinate and nothing
+     * else, and a level rectangle is the ordinary case. A great-circle bearing of 90 does
+     * not hold a latitude — over 4,500 km at 51 degrees north it drifts far enough to be
+     * a visible tilt — so walking `along` metres at the previous bearing put the zone off
+     * level on every length drag. Flattening longitude by `cos(lat)` about the anchor
+     * makes "along the axis" exact for a level zone and correct to a hair for a turned
+     * one, which is the whole range this has to cover.
+     */
+    const scale = Math.cos((anchor[1] * Math.PI) / 180) || 1e-9;
+    const from = movedFirst ? previous[1] : previous[0];
+    const to = movedFirst ? previous[0] : previous[1];
+    const dx = (to[0] - from[0]) * scale;
+    const dy = to[1] - from[1];
+    const axis = Math.hypot(dx, dy);
+    if (!(axis > 0)) return next;
+    const ux = dx / axis;
+    const uy = dy / axis;
+
+    // The component of anchor → moved along the axis. A drag past the anchor is a
+    // zero-length zone, not a flipped one, so it is held at a floor.
+    const along = (moved[0] - anchor[0]) * scale * ux + (moved[1] - anchor[1]) * uy;
+    const minimum = RECTANGLE_MIN_LENGTH / DEGREE_METRES;
+    const held: Position = [
+        anchor[0] + (ux * Math.max(minimum, along)) / scale,
+        anchor[1] + uy * Math.max(minimum, along),
+    ];
+    return movedFirst ? [held, next[1]] : [next[0], held];
+}
+
+/**
+ * A rectangle drawn with two clicks, squared up.
+ *
+ * **The first drawing is always straight**, running due east or due west from point 1 at
+ * the length the operator dragged. A zone clicked out a few pixels off level came out
+ * visibly askew, and nothing about a fire-support area is diagonal by default — so it is
+ * levelled on the draw and turned afterwards, by the gesture whose job that is.
+ * (User's call, 2026-08-27.)
+ *
+ * The direction is kept: drag east and point 2 lands east.
+ */
+export function levelRectangleAxis(coordinates: Position[]): Position[] {
+    if (coordinates.length < 2) return coordinates;
+    const [p1, p2] = [coordinates[0], coordinates[coordinates.length - 1]];
+    // **Point 2 keeps its longitude and takes point 1's latitude**, which is level by
+    // construction. Walking `length` metres due east instead is not: a great-circle
+    // bearing of 90 curves away from the parallel, and over 28 km at 51 degrees north it
+    // lands 93 m off the latitude it started at. The zone spans the east-west extent the
+    // operator dragged, which is what "make it straight" means to the person dragging.
+    if (Math.abs(p2[0] - p1[0]) < 1e-9) return coordinates;
+    return [p1, [p2[0], p1[1]]];
+}
+
+/** Two positions within a millimetre of each other, in degrees. */
+function samePoint(a: Position, b: Position): boolean {
+    return Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+}
