@@ -7,7 +7,6 @@ import {
     createHandleFeature,
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
-    infiltrationGraphicStyleFunc,
     barSymbolStyleFunc,
     mobileDefenseGraphicStyleFunc,
     movementGraphicPathStyleFunc,
@@ -15,7 +14,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import { groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -95,9 +94,6 @@ export class MovementGraphicBase implements LineGraphic {
         }
 
         this.setLabelStyle(name);
-        if (name === TacticalGraphicName.Infiltration) {
-            this.graphic.setStyle(infiltrationGraphicStyleFunc());
-        }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }

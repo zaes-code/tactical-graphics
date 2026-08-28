@@ -28,6 +28,9 @@ const POINTS: Position[] = [[-77.0, 38.9], [-76.7, 38.9], [-76.0, 38.7], [-75.6,
 
 const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
 
+/** Straight-line distance in the *projected* frame, for comparing against paint output. */
+const planar = (a: ProjectedPosition, b: ProjectedPosition) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
 const built = (name: TacticalGraphicName, coordinates: Position[] = POINTS): MultiLineString =>
     renderTacticalGraphic({
         type: 'Feature',
@@ -97,31 +100,70 @@ describe('APP-06 343000 / 344500 / 344600 — the swept-arc tasks', () => {
         expect(meters(arc[arc.length - 1], POINTS[3])).toBeLessThan(1);
     });
 
-    it('draws bare vertices until all four points are placed', () => {
-        // Half a symbol is worse than none: the arc cannot be solved without its
-        // through-point, and a guessed one lurches when the fourth click lands.
-        const partial = built(TacticalGraphicName.Capture, POINTS.slice(0, 3));
-        expect(partial.coordinates).toHaveLength(1);
-        expect(partial.coordinates[0]).toHaveLength(3);
+    it('previews what each click has settled, rather than a scribble', () => {
+        // Four clicks is a long way to go on faith, and the radius is the one measurement
+        // the rule asks the operator to judge — "adjusted as needed to contain the unit
+        // assigned the task". Each state draws what it knows and nothing it does not.
+        const one = built(TacticalGraphicName.Capture, POINTS.slice(0, 1));
+        expect(one.coordinates).toHaveLength(1);
+        expect(one.coordinates[0]).toHaveLength(1);
+
+        // Two: the circle alone, centre and radius both settled.
+        const two = built(TacticalGraphicName.Capture, POINTS.slice(0, 2));
+        expect(two.coordinates).toHaveLength(1);
+        const ring = two.coordinates[0];
+        expect(ring.length).toBeGreaterThan(16);
+        const radius = meters(POINTS[0], POINTS[1]);
+        for (const p of ring) expect(Math.abs(meters(POINTS[0], p) - radius)).toBeLessThan(radius * 0.02);
+
+        // Three: the circle, plus a **straight** run from its rim to point 3. Straight
+        // because a curve through point 3 needs point 4, and a guessed one would swing
+        // when the last click lands where a straight run merely bends.
+        const three = built(TacticalGraphicName.Capture, POINTS.slice(0, 3));
+        expect(three.coordinates).toHaveLength(2);
+        expect(three.coordinates[0]).toEqual(two.coordinates[0]);
+        const run = three.coordinates[1];
+        expect(run).toHaveLength(2);
+        expect(meters(run[0], POINTS[0])).toBeCloseTo(radius, -1);
+        expect(meters(run[1], POINTS[2])).toBeLessThan(1);
     });
 
-    it('puts an arrowhead at the tip and the letter beside the bend', () => {
+    it('ends the sweep in a pair of open barbs, not a filled triangle', () => {
         const geometry = built(TacticalGraphicName.Evacuate);
         const paints = painted('E', geometry);
 
         const texts = paints.filter(p => p.text).map(p => p.text!.text);
         expect(texts).toEqual(['E']);
 
-        // The head is a *filled* triangle, as the plate draws it — an open V reads lighter
-        // than the line it terminates, and this symbology uses both forms deliberately.
-        const head = paints.find(p => p.geometry.type === 'Polygon' && p.fill);
-        expect(head).toBeDefined();
-        const ring = (head!.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
-        expect(ring).toHaveLength(4);
-        // Apex on the arc's own end, and the ring closed.
-        expect(ring[0]).toEqual(ring[3]);
-        expect(ring[0]).toEqual(
-            (paints[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates[1].slice(-1)[0]);
+        // **All six plates draw an open V** — three Templates and three Examples. What is
+        // solid on them is the annotation's own leader arrows, the ones labelled PT.3 and
+        // PT.4, which point at the symbol from outside it; this used to draw a filled
+        // triangle on the strength of those.
+        expect(paints.find(p => p.geometry.type === 'Polygon')).toBeUndefined();
+
+        const barbs = paints.filter(p => p.geometry.type === 'MultiLineString' && !p.fill).slice(-1)[0];
+        const runs = (barbs.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+        expect(runs).toHaveLength(2);
+        // Both barbs spring from the arc's own last point. **Compared in the projected
+        // frame**: the paint is handed projected metres and `geometry` is still degrees, so
+        // measuring one against the other reports a quarter of the earth.
+        const tip = project(geometry.coordinates[1].slice(-1)[0]);
+        for (const run of runs) expect(planar(run[0], tip)).toBeLessThan(1);
+    });
+
+    it('breaks the arc for the letter rather than setting it alongside', () => {
+        const geometry = built(TacticalGraphicName.Evacuate);
+        const paints = painted('E', geometry);
+
+        // The line work is the circle plus **two** arc runs, with the letter in the hole.
+        const line = paints[0].geometry as {coordinates: ProjectedPosition[][]};
+        expect(line.coordinates).toHaveLength(3);
+
+        const letter = paints.find(p => p.text)!;
+        const at = (letter.geometry as {coordinates: ProjectedPosition}).coordinates;
+        const arc = geometry.coordinates[1].map(project);
+        // On the arc, not offset to one side of it.
+        expect(Math.min(...arc.map(p => planar(p, at)))).toBeLessThan(1);
     });
 
     it('is the letter alone that tells the three apart', () => {

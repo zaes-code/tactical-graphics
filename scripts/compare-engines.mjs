@@ -36,7 +36,22 @@ const LIMIT = Number(process.argv[2] ?? 0);
 /** Rounded so floating-point noise between two renderers is not reported as drift. */
 const round = (v, dp = 4) => (typeof v === 'number' && isFinite(v) ? Number(v.toFixed(dp)) : v);
 
-async function runEngine(engine) {
+/**
+ * One engine's run.
+ *
+ * `shared`, when given, is the other engine's sample snapshot: **the same bases, replayed
+ * here**, rather than this engine's own sheet.
+ *
+ * The two sheets are not the same drawing. `openlayers/sampleGallery.ts` lays out the
+ * *proven* graphics from the tracker and `maplibre/sampleGallery.ts` lays out every
+ * *paintable* one, and neither sizes a cell the way the other does. That was invisible
+ * while every compared number was a ratio or a delta — those cancel a difference in base
+ * size — and became a reported difference the moment a rectangle's width turned into an
+ * absolute amplifier: 360 km against 1,005 for the same zone, from two sheets that draw
+ * it at two lengths. The comparison's own premise, in the comment at the head of this
+ * file, is that both engines are handed the identical starting snapshot. Now they are.
+ */
+async function runEngine(engine, shared) {
     const browser = await chromium.launch();
     const page = await browser.newPage({viewport: {width: 1500, height: 950}});
     const errors = [];
@@ -48,10 +63,13 @@ async function runEngine(engine) {
         await page.waitForTimeout(2500);
     }
 
-    // The gallery's own bases: one per graphic, identical on both engines by construction.
-    await page.getByRole('button', {name: /draw samples/i}).click();
-    await page.waitForTimeout(9000);
-    const all = await page.evaluate(() => window.__tacticalEngine.snapshot());
+    // The first engine draws its own sheet; the second replays it. @see runEngine
+    let all = shared;
+    if (!all) {
+        await page.getByRole('button', {name: /draw samples/i}).click();
+        await page.waitForTimeout(9000);
+        all = await page.evaluate(() => window.__tacticalEngine.snapshot());
+    }
     await page.evaluate(() => window.__tacticalEngine.clearAll());
     await page.waitForTimeout(400);
 
@@ -196,11 +214,11 @@ async function runEngine(engine) {
     }
 
     await browser.close();
-    return {results, errors};
+    return {results, errors, snapshot: all};
 }
 
 const ol = await runEngine('openlayers');
-const mlb = await runEngine('maplibre');
+const mlb = await runEngine('maplibre', ol.snapshot);
 
 const names = Object.keys(ol.results);
 const diffs = [];

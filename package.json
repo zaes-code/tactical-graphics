@@ -91,6 +91,7 @@
     "compare:engines": "node scripts/compare-engines.mjs",
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "typecheck": "tsc --noEmit",
+    "check:readme-samples": "node scripts/check-readme-samples.mjs",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "prepublishOnly": "npm run typecheck && npm run build"
   },

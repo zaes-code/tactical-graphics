@@ -7,11 +7,22 @@
  *
  * What is left here is what does *not* scale: the arrowhead at the end of the sweep, and
  * the letter that tells the three tasks apart.
+ *
+ * ## Both marks were read off the wrong arrows
+ *
+ * The head **is not solid**. This drew a filled triangle on the note that "the plate's head
+ * is solid", and all six plates — three Templates, three Examples — show a pair of open
+ * barbs. What is solid on those plates is the *annotation's* leader arrows, the ones
+ * labelled `PT.3` and `PT.4`, which point at the symbol from outside it. Measuring a
+ * callout instead of the symbol is an easy mistake to make once and an easy one to keep.
+ *
+ * And the letter sits **in a break in the arc**, not offset beside it: the curve stops
+ * short of the glyph and picks up again after. @see splitPathAround
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {endMarkScale, solidArrowHead} from './decorations';
+import {endMarkScale, pathLength, splitPathAround, textWidth} from './decorations';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type SweptArcPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -20,15 +31,11 @@ type SweptArcPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 const ARROWHEAD_PX = 26;
 /** Half the angle between the two barbs, in degrees. */
 const ARROWHEAD_HALF_ANGLE_DEG = 22;
-/** Clearance between the arc and the letter beside it, in screen pixels. */
-const LETTER_OFFSET_PX = 14;
+/** Clear space either side of the letter inside its break, in screen pixels. */
+const LETTER_PADDING_PX = 5;
 
 /**
- * The letter beside the arc's middle, plus the arrowhead at its end.
- *
- * **The letter sits on the inside of the bend.** Both plates put it in the elbow, which is
- * also the only side guaranteed to be clear: the outside of a sweep is where the arrow is
- * heading, and on a tight arc the far leg comes back through it.
+ * The letter set in the arc's break, plus the arrowhead at its end.
  *
  * @param letter `C`, `E` or `R`, straight off the plate.
  */
@@ -39,42 +46,49 @@ export function sweptArcTaskPaint(letter: string): SweptArcPaint {
 
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
-        const paints: Paint[] = [{geometry, stroke}];
 
-        const arc = geometry.coordinates[1];
-        if (!arc || arc.length < 3) return paints;
+        const parts = geometry.coordinates;
+        const arc = parts[1];
+        if (!arc || arc.length < 3) return [{geometry, stroke}];
 
-        const scale = endMarkScale(arc, context.resolution, ARROWHEAD_PX);
-        if (scale > 0) {
-            const head = solidArrowHead(
-                arc[arc.length - 2],
-                arc[arc.length - 1],
-                ARROWHEAD_PX * scale * context.resolution,
-                ARROWHEAD_HALF_ANGLE_DEG,
-            );
-            // Filled, not stroked: the plate's head is solid, and a stroked outline would
-            // sit half a line width proud of the shape on every side.
-            if (head) paints.push({geometry: {type: 'Polygon', coordinates: [head]}, fill: {color}});
-        }
-
+        const scale = scaleOf(feature, context);
+        // The arc's own middle, which is where `arcThrough` put point 3 — the anchor the
+        // plate annotates and the letter belongs on.
         const midIndex = Math.floor(arc.length / 2);
         const mid = arc[midIndex];
-        const prev = arc[midIndex - 1];
-        const next = arc[midIndex + 1];
-        // The turn at the middle: its sign is which way the arc bends, so `-normal` on that
-        // side is the concave one whichever direction the user drew in.
-        const turn = (next[0] - mid[0]) * (mid[1] - prev[1]) - (next[1] - mid[1]) * (mid[0] - prev[0]);
-        const tx = next[0] - prev[0];
-        const ty = next[1] - prev[1];
-        const tlen = Math.hypot(tx, ty);
-        const offset = LETTER_OFFSET_PX * context.resolution;
-        const side = turn >= 0 ? 1 : -1;
-        const at: ProjectedPosition = tlen > 0
-            ? [mid[0] + (ty / tlen) * offset * side, mid[1] - (tx / tlen) * offset * side]
-            : mid;
+        const halfGap =
+            (textWidth(context, letter, fontStyle, scale) / 2 + LETTER_PADDING_PX) * context.resolution;
+        const runs = splitPathAround(arc, pathLength(arc.slice(0, midIndex + 1)), halfGap);
+
+        // A gap wider than the arc leaves nothing to draw; keep the arc whole rather than
+        // losing the sweep entirely, and let the halo carry the letter.
+        const drawn = runs.length ? [parts[0], ...runs] : parts;
+        const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: drawn}, stroke}];
+
+        const headScale = endMarkScale(arc, context.resolution, ARROWHEAD_PX);
+        if (headScale > 0) {
+            const tip = arc[arc.length - 1];
+            const inner = arc[arc.length - 2];
+            const dx = tip[0] - inner[0];
+            const dy = tip[1] - inner[1];
+            const len = Math.hypot(dx, dy);
+            if (len > 0) {
+                const size = ARROWHEAD_PX * headScale * context.resolution;
+                const theta = (ARROWHEAD_HALF_ANGLE_DEG * Math.PI) / 180;
+                const barbs: ProjectedPosition[][] = [];
+                for (const sign of [-1, 1]) {
+                    const cos = Math.cos(sign * theta);
+                    const sin = Math.sin(sign * theta);
+                    const bx = (-dx / len) * cos - (-dy / len) * sin;
+                    const by = (-dx / len) * sin + (-dy / len) * cos;
+                    barbs.push([tip, [tip[0] + bx * size, tip[1] + by * size]]);
+                }
+                paints.push({geometry: {type: 'MultiLineString', coordinates: barbs}, stroke});
+            }
+        }
 
         paints.push({
-            geometry: {type: 'Point', coordinates: at},
+            geometry: {type: 'Point', coordinates: mid},
             text: {
                 text: letter,
                 font: fontStyle,
@@ -82,7 +96,7 @@ export function sweptArcTaskPaint(letter: string): SweptArcPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
-                scale: scaleOf(feature, context),
+                scale,
             },
         });
         return paints;

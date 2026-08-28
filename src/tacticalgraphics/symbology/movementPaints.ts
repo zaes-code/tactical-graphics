@@ -25,7 +25,7 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
-import {uprightRotation} from './decorations';
+import {alignAlong, uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
@@ -59,6 +59,18 @@ function anchors(feature: PaintFeature): ProjectedPosition[] {
  * unifying it would resize a dozen graphics.
  *
  * `0.7` is the share of the span the text may occupy, and is the same either way.
+ *
+ * **Capped, and the cap lives here rather than at the call sites.** A span-proportional
+ * scale tracks the graphic's on-screen size with nothing stopping it, so a long arrow — or
+ * a short one zoomed into — grows a label without bound: measured on an avenue of approach
+ * spanning six degrees, the designation reached **scale 28, a 448 px line of text**, at a
+ * zoom where the arrow still fitted the screen. `maxGraphicLabelScale()` is the ceiling the
+ * ratio-locked mission tasks, the block family, the scallops and the base defense zone all
+ * already stop at.
+ *
+ * `advanceToContactLabelPaint` had worked this out and applied the ceiling to itself alone,
+ * leaving the other eleven callers uncapped — which is the argument for putting it in the
+ * one place every caller goes through.
  */
 export function spanProportionalScale(
     a: ProjectedPosition,
@@ -67,7 +79,7 @@ export function spanProportionalScale(
     fontPx: number,
 ): number {
     const spanPx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
-    return (spanPx * 0.7) / fontPx;
+    return Math.min(maxGraphicLabelScale(), (spanPx * 0.7) / fontPx);
 }
 
 /** The divisor the default movement label uses — a 24 px font literal. */
@@ -154,7 +166,12 @@ function fixedLetterPaint(
                 : coords.length >= 2
                     ? uprightRotation(coords[0], coords[1])
                     : 0;
-            return [text(feature, [x0, y0], letter, scale, {rotation, align: options.align ?? 'left'})];
+            // The alignment flips with the rotation, or the glyphs run back down the
+            // segment instead of along it. @see alignAlong
+            const align = coords.length >= 2 && !options.upright
+                ? alignAlong(options.align ?? 'left', coords[0], coords[1])
+                : options.align ?? 'left';
+            return [text(feature, [x0, y0], letter, scale, {rotation, align})];
         }
 
         const [x1, y1] = coords[1];
@@ -205,21 +222,58 @@ export const frontalAttackLabelPaint = (): MovementPaint => fixedLetterPaint('A'
 /**
  * Counterattack: "CATK", with the user's designation appended after it.
  *
- * The only fixed-letter member that still shows the user's text — "CATK" is the
- * task and the name identifies which one.
+ * The only fixed-letter member that still shows the user's text — "CATK" is the task and
+ * the name identifies which one.
+ *
+ * **Placed and sized like an avenue of approach** as of 2026-08-27, at the user's call: set
+ * just behind the arrowhead rather than at the midpoint of the last segment, and scaled to
+ * the published span — which is the arrow's width — rather than to the zoom. The
+ * zoom-anchored scale it used before does not shrink with the arrow, so a small
+ * counterattack carried a full-size designation. @see behindArrowhead
  */
 export function counterattackLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-        const label = feature.properties.label;
-        return [text(feature, 
-            coords[0],
-            label ? `CATK ${label}` : 'CATK',
-            scaleOf(feature, context),
-            {rotation: uprightRotation(coords[0], coords[1]), align: 'left'},
-        )];
+        const label = feature.properties.label?.trim();
+        return behindArrowhead(feature, context, coords[0], coords[1], label ? `CATK ${label}` : 'CATK');
     };
+}
+
+/** Clear space between the label's leading edge and the arrowhead base, in screen pixels. */
+const ARROWHEAD_LABEL_CLEARANCE_PX = 10;
+
+/**
+ * A label set **just behind the arrowhead**, reading back down the arrow.
+ *
+ * The generators publish a two-point span that ends where the body does and is one
+ * `radius` long — @see labelSpanNearArrowhead. Everything the placement needs comes from
+ * that span: the direction, the clearance to back off by, and the size, which is therefore
+ * proportional to the arrow's **width** rather than its length. That is what keeps a long
+ * arrow from carrying an enormous designation.
+ *
+ * Three graphics families were open-coding this identically — the axes of advance, the
+ * avenue of approach, and now the counterattacks, which used to set their label at the
+ * midpoint of the last segment instead.
+ */
+function behindArrowhead(
+    feature: PaintFeature,
+    context: PaintContext,
+    c0: ProjectedPosition,
+    c1: ProjectedPosition,
+    value: string,
+): Paint[] {
+    const dx = c1[0] - c0[0];
+    const dy = c1[1] - c0[1];
+    const span = Math.hypot(dx, dy);
+    if (span === 0 || !value) return [];
+
+    const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+    const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
+    return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        rotation: uprightRotation(c0, c1),
+        align: alignAlong('right', c0, c1),
+    })];
 }
 
 /**
@@ -262,19 +316,11 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         if (coords.length < 2) return [];
 
         const [c0, c1] = coords;
-        const dx = c1[0] - c0[0];
-        const dy = c1[1] - c0[1];
-        const segLenMap = Math.hypot(dx, dy);
-        if (segLenMap === 0) return [];
-
-        const value = ['AA', nameAndDate(feature)].filter(Boolean).join(' ');
-        const clearance = 10 * context.resolution;
-        const at: ProjectedPosition = [c1[0] - (dx / segLenMap) * clearance, c1[1] - (dy / segLenMap) * clearance];
-
-        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
-            rotation: uprightRotation(c0, c1),
-            align: c1[0] >= c0[0] ? 'right' : 'left',
-        })];
+        // The literal and field T, and nothing else: 152300's Template carries no `W`/`W1`.
+        // An imported bag can still hold a `startDate` for a symbol with nowhere to put one,
+        // and painting it anyway is how a field nobody offered ends up on the map.
+        const label = feature.properties.label?.trim();
+        return behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
     };
 }
 
@@ -302,7 +348,7 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
             ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
             : [c1[0] - ux * clearance, c1[1] - uy * clearance];
 
-        const align: 'left' | 'center' | 'right' = centered ? 'center' : c1[0] >= c0[0] ? 'right' : 'left';
+        const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);
 
         return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
@@ -345,7 +391,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         if (value) {
             paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
-                align: 'left',
+                align: alignAlong('left', coords[0], coords[1]),
             }));
         }
 
@@ -425,15 +471,11 @@ export function advanceToContactLabelPaint(): MovementPaint {
         if (!value) return [];
 
         const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
-        // **Capped, like every other size-proportional label in the library.**
-        // `spanProportionalScale` is unbounded on its own, and this label is the longest
-        // in the family — a designation and two date-time groups — so on a wide arrow it
-        // outgrew the symbol it names. `maxGraphicLabelScale()` is the same ceiling the
-        // block family, the scallops and the base defense zone already apply.
-        const scale = Math.min(
-            maxGraphicLabelScale(),
-            spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX),
-        );
+        // The ceiling moved into `spanProportionalScale`, where every caller gets it. This
+        // label is the longest in the family — a designation and two date-time groups — so
+        // it was the first to outgrow the symbol it names, and for a while the only one
+        // capped. @see spanProportionalScale
+        const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
         return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
     };
 }

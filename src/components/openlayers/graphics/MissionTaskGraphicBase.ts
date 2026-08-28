@@ -3,6 +3,7 @@ import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
+    drawnAnchorFrame,
     drawnAnchors,
     groundLength,
     minimumDrawnRadiusPx,
@@ -31,6 +32,7 @@ import {
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
+    escortOrDemonstrationStyleFunc,
     barSymbolStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
@@ -196,6 +198,14 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
+        // The demonstration is dropped rather than drawn, so it lives here rather than in
+        // `LineGraphicBase` — but the paint is the same one, and it sets `DEM` **inside**
+        // its own line work, in a break cut from the rendered glyph. The label feature
+        // therefore has nothing to draw, and the mission-task label below would put a
+        // second copy of the text through the middle of the U. @see demonstrationPaint
+        if (name === TacticalGraphicName.Demonstration) {
+            this.graphic.setStyle(escortOrDemonstrationStyleFunc(name));
+        }
         // Pursuit splits its horizontal line around the "P" so the letter always has
         // breathing room; the gap is measured off the rendered glyph.
         if (name === TacticalGraphicName.Pursuit) {
@@ -215,6 +225,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // 24px treatment or the ordinary zoom-anchored one from the name itself, so both
         // renderers make the same choice. @see RATIO_LOCKED_MISSION_TASKS
         this.label.setStyle((feature, resolution) => getMissionTaskStyleFn(name)(feature, resolution));
+        if (name === TacticalGraphicName.Demonstration) {
+            this.label.setStyle(() => []);
+        }
         // BaseDefenseZone uses a hardcoded "BDZ" label whose scale tracks
         // the circle's radius rather than the zoom-anchored
         // featureLabelScale. Override the default mission-task label style
@@ -699,6 +712,38 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.center = fromLonLat(frame.center as Coordinate);
         this.rotation = (frame.angle * 180) / Math.PI;
         this.updateGeom({size: frame.size});
+    }
+}
+
+/**
+ * Demonstration — four anchor points that are **derived rather than placed**.
+ *
+ * APP-06 343300 describes the symbol by four points, so the base carries four; but they
+ * are one shape at one set of proportions, so the operator places only the first and the
+ * other three follow. That makes this holder the plain centre / size / rotation kind
+ * wearing a four-point base — `anchorPoints` writes them from state and `adoptAnchors`
+ * reads the state back out of points 1 and 2, ignoring 3 and 4 because they are derived.
+ *
+ * The pair still has to be exact inverses, which is why both go through the library's own
+ * statement of the layout rather than restating it here.
+ * @see anchorsForParallelLegs, hasDerivedAnchors
+ */
+export class DemonstrationGraphicBase extends MissionTaskGraphicBase {
+    protected anchorPoints(): Position[] {
+        return drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+        }) ?? [];
+    }
+
+    protected adoptAnchors(coords: Position[]): boolean {
+        const frame = drawnAnchorFrame(this.name, coords);
+        if (!frame) return false;
+        this.center = fromLonLat(frame.center as Coordinate);
+        this.rotation = frame.rotation ?? 0;
+        this.updateGeom({size: frame.size});
+        return true;
     }
 }
 

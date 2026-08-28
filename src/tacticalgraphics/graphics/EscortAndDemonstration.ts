@@ -14,10 +14,15 @@ import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojso
 import * as turf from '../core/turf';
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {IBaseGraphicOptions, TacticalGraphicName} from '../core/type';
+import {toDegrees} from '../core/math';
+import {anchorsForParallelLegs, parallelLegsFromAnchors} from '../core/anchors';
 import geometryService from '../core/GeometryService';
 
 /** How many points the demonstration's turn is drawn with. */
 const TURN_STEPS = 32;
+
+/** Leg length in metres for a base carrying no size at all — a raw-GeoJSON reader. */
+const DEMONSTRATION_DEFAULT_SIZE = 1000;
 
 /**
  * APP-06 343600 escort — a bracket over the unit being escorted, with `E A E` in a break at
@@ -50,50 +55,73 @@ export class Escort extends TacticalGraphicsBase {
 }
 
 /**
- * APP-06 343300 demonstration — two straight legs joined by a turn, arrowheaded at both
- * open ends.
+ * APP-06 343300 demonstration — **dropped whole, described by four points.**
  *
- * > Point 1 defines the tip of the arrowhead. Point 2 defines the end of the straight line
- * > portion of the first arrow. Points 3 and 4 define the length of the second straight
- * > line. […] Points 2 and 3 shall be connected by a smooth, curved line.
+ * > This symbol requires four anchor points. Point 1 defines the tip of the arrowhead.
+ * > Point 2 defines the end of the straight line portion of the first arrow. Points 3 and
+ * > 4 define the length of the second straight line. Points 2 and 3 shall be connected by
+ * > a smooth, curved line.
  *
- * **The turn bulges away from the legs**, which is what makes the symbol a U rather than an
- * S. Which side that is has to be derived — the operator can draw the pair in either
- * order, and a hard-coded left or right flips the graphic inside out for half of them.
+ * The four are the description, and the base carries all four — but they are **one shape
+ * at one set of proportions**: two straights of equal length, parallel, joined by a half
+ * turn whose diameter is the gap between them. Nothing in the rule invites an operator to
+ * vary those ratios, and left free they drifted — the legs splayed, the turn went oval,
+ * and the symbol stopped reading as a demonstration.
+ *
+ * So the first click drops it and points 2, 3 and 4 follow from point 1, the leg length
+ * and the aim. Resize and rotate change the whole graphic together; there is no ratio to
+ * edit and no vertex to drag. (User's call, 2026-08-27.)
+ *
+ * **Point 1 is the anchor, not a centre** — unlike every other layout in
+ * `core/anchors.ts`. That is the standard's numbering, and it means the symbol grows away
+ * from where it was clicked rather than around it.
+ *
+ * @see anchorsForParallelLegs — the layout, stated once for both renderers
+ * @see hasDerivedAnchors — why the four points are not four handles
  */
-export class Demonstration extends TacticalGraphicsBase {
+export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
     name: string = TacticalGraphicName.Demonstration;
     type: string = 'LineString';
 
-    generateGraphics(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiLineString> {
-        const c = base.geometry.coordinates;
-        if (c.length < 4) return this.asMultiLineStringFeature([c]);
+    /**
+     * The four points, from the anchor outward.
+     *
+     * Read off the base when it carries them, which is every base a holder writes. The
+     * `opts` fallback is for a two-point sketch and for a caller handing in a raw anchor
+     * — points 3 and 4 are derived either way, so a base whose legs disagree with them
+     * resolves to the canonical shape rather than to whatever it had drifted into.
+     */
+    private points(base: Feature<LineString>, opts?: IBaseGraphicOptions): Position[] {
+        const coordinates = base.geometry.coordinates;
+        const drawn = parallelLegsFromAnchors(coordinates);
+        const tip = drawn?.tip ?? coordinates[0] ?? [0, 0];
+        const size = drawn?.size ?? (opts?.size && opts.size > 0 ? opts.size : DEMONSTRATION_DEFAULT_SIZE);
+        const rotation = drawn ? toDegrees(drawn.angle) : opts?.rotation ?? 0;
+        return anchorsForParallelLegs(tip, size, rotation);
+    }
 
-        const [tip1, bend1, bend2, tip2] = c;
+    generateGraphics(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiLineString> {
+        const [tip1, bend1, bend2, tip2] = this.points(base, opts);
         const across = turf.bearing(turf.point(bend1), turf.point(bend2));
         const span = turf.distance(turf.point(bend1), turf.point(bend2), {units: 'meters'});
 
-        // The tips sit on one side of the bend-to-bend chord; the turn goes on the other.
-        const towardTips = turf.bearing(
-            turf.midpoint(turf.point(bend1), turf.point(bend2)),
-            turf.midpoint(turf.point(tip1), turf.point(tip2)),
-        );
-        const toTips = ((((towardTips - across) % 360) + 540) % 360) - 180;
-
-        // `createSemicircle` bulges left of bend 1 -> bend 2 unless flipped, so flip when
-        // the tips are on the left. Getting this backwards is not a subtle error — the
-        // turn wraps toward the arrowheads and the U becomes an S — but it is invisible
-        // until the symbol is drawn the other way round, which is why the test does both.
-        const turn = geometryService.createSemicircle(bend1, bend2, across, span / 2, TURN_STEPS, toTips < 0);
+        // `true` puts the bulge on the far side of the chord from the tips — the U rather
+        // than a flattened Z. With the points derived the handedness is fixed by
+        // construction, so there is nothing left to infer from the drawing order.
+        const turn = geometryService.createSemicircle(bend1, bend2, across, span / 2, TURN_STEPS, true);
 
         return this.asMultiLineStringFeature([[tip1, bend1], turn as Position[], [bend2, tip2]]);
     }
 
-    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
+    /** `[edge, centre]` — the point-anchored contract. The edge is the first leg's far end. */
+    generateHandles(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiPoint> {
+        const [tip1, bend1] = this.points(base, opts);
+        return this.asMultiPointFeature([bend1, tip1]);
     }
 
-    generateLabels(base: Feature<LineString>): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 2));
+    /** The first leg, which is where the paint cuts its break for `DEM`. */
+    generateLabels(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiPoint> {
+        const [tip1, bend1] = this.points(base, opts);
+        return this.asMultiPointFeature([tip1, bend1]);
     }
 }
