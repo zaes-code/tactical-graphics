@@ -17,7 +17,7 @@
 
 import type {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
-import {TACTICAL_GRAPHIC_KEY} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, applyAmplifierAliases} from '@zaes/tactical-graphics';
 import type { TacticalGraphicRole} from '@zaes/tactical-graphics';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
@@ -30,7 +30,7 @@ export {TACTICAL_GRAPHIC_KEY};
  * interaction, or for a feature built outside the graphic holders. Frozen so a
  * style function can't accidentally mutate the shared default.
  */
-const NO_LABELS: GraphicLabels = Object.freeze({label: ''});
+const NO_LABELS: GraphicLabels = Object.freeze({designation: ''});
 
 /**
  * The subset of `TacticalGraphicProperties` that describes *how the shape was built*
@@ -79,7 +79,8 @@ export function readRole(feature: FeatureLike): TacticalGraphicRole | undefined 
  * user left every field blank.
  */
 export function readGraphicLabels(feature: FeatureLike): GraphicLabels {
-    return (feature.get(TACTICAL_GRAPHIC_KEY) as GraphicLabels | undefined) ?? NO_LABELS;
+    const bag = feature.get(TACTICAL_GRAPHIC_KEY) as GraphicLabels | undefined;
+    return bag ? applyAmplifierAliases(bag) : NO_LABELS;
 }
 
 /**
@@ -121,7 +122,8 @@ export function writeGraphicProperties(
  * object for a feature that carries none, so a caller can spread it unconditionally.
  */
 export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryState {
-    const bag = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
+    const stored = feature.get(TACTICAL_GRAPHIC_KEY) as (GraphicLabels & GraphicGeometryState) | undefined;
+    const bag = stored && applyAmplifierAliases(stored);
     if (!bag) return {};
     const {radius, decorationSize, width, length, rotation, bend, mirrored} = bag;
     const state: GraphicGeometryState = {};

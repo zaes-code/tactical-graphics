@@ -348,7 +348,7 @@ describe('editable state survives', () => {
         const {to} = roundTrip(from);
         const restored = to.graphicControllers[0];
         const labels = readGraphicLabels(restored.graphic.base);
-        expect(labels.label).toBe('ALPHA');
+        expect(labels.designation).toBe('ALPHA');
         expect(labels.hostility).toBe(TacticalGraphicHostility.hostileFaker);
     });
 

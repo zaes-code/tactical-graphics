@@ -60,7 +60,7 @@ const labelFeature = (label?: string, outline = RING): PaintFeature => {
     const ys = outline.map(p => p[1]);
     return {
         geometry: {type: 'Point', coordinates: [0, 0]},
-        properties: {name: TacticalGraphicName.BiologicalContaminatedArea, label},
+        properties: {name: TacticalGraphicName.BiologicalContaminatedArea, designation: label},
         ring: outline,
         bounds: {minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys)},
     };

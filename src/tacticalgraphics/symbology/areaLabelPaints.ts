@@ -120,8 +120,8 @@ export function areaLabelStackPaint(
          * different arrangement and not one a prefix can express.
          */
         const designation = options.literalLines
-            ? (feature.properties.label ?? '').trim()
-            : getFullLabel(name, feature.properties.label ?? '').trim();
+            ? (feature.properties.designation ?? '').trim()
+            : getFullLabel(name, feature.properties.designation ?? '').trim();
 
         const lines = [
             ...(options.before ?? []),
@@ -160,7 +160,7 @@ export function actionAreaLabelPaint(
         const at = anchorOf(feature);
         if (!at) return [];
 
-        const designation = (feature.properties.label ?? '').trim();
+        const designation = (feature.properties.designation ?? '').trim();
         const literal = getLabel(name);
         const titled = literal && designation ? `${literal} - ${designation}` : literal || designation;
         const info = options.withAdditionalInfo ? (feature.properties.additionalInfo ?? '').trim() : '';
@@ -242,7 +242,7 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
         const at = anchorOf(feature);
         if (!at) return [];
 
-        const userName = (feature.properties.label ?? '').trim();
+        const userName = (feature.properties.designation ?? '').trim();
         const dtg1 = (feature.properties.startDate ?? '').trim();
         const dtg2 = (feature.properties.endDate ?? '').trim();
 
@@ -278,7 +278,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const scale = scaleOf(feature, context);
         const paints: Paint[] = [];
 
-        const nameLines = [getLabel(name), (feature.properties.label ?? '').trim()].filter(s => s.length > 0);
+        const nameLines = [getLabel(name), (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
         if (at && nameLines.length) paints.push(stack(feature, context, at, nameLines, scale));
 
         const dtg1 = (feature.properties.startDate ?? '').trim();
@@ -392,7 +392,7 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
 
         const at = anchorOf(feature);
         const lines = [
-            getFullLabel(name, feature.properties.label ?? '').trim(),
+            getFullLabel(name, feature.properties.designation ?? '').trim(),
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
         if (at && lines.length) paints.push(stack(feature, context, at, lines, scale));
@@ -414,7 +414,7 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
     return (feature, context) => {
         const at = anchorOf(feature);
         const segment = feature.labelSegment;
-        const text = getFullLabel(name, feature.properties.label ?? '').trim();
+        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!at || !segment || !text) return [];
 
         return [stack(feature, context, at, [text], scaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
@@ -453,7 +453,7 @@ export function areaDefaultLabelPaint(
         if (!at) return [];
 
         const scale = scaleOf(feature, context);
-        const designation = feature.properties.label ?? '';
+        const designation = feature.properties.designation ?? '';
         const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
         const date = areaDateLabel(feature);
 

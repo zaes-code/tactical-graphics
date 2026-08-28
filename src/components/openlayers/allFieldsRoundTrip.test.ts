@@ -45,7 +45,7 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     const f = getGraphicFields(name);
     const labels: Record<string, unknown> = {label: ''};
     if (f.identifier1) labels.label = 'ID-ONE';
-    if (f.identifier2) labels.secondId = 'ID-TWO';
+    if (f.identifier2) labels.secondDesignation = 'ID-TWO';
     if (f.dtg1) labels.startDate = '021200ZJUN26';
     if (f.dtg2) labels.endDate = '021800ZJUN26';
     if (f.hostility) labels.hostility = TacticalGraphicHostility.hostileFaker;

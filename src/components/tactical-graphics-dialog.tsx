@@ -76,13 +76,13 @@ function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const fields = getGraphicFields(selection.graphicName);
 
     const labels: GraphicLabels = {
-        label: fields.identifier1 ? (stored.label ?? '') : '',
+        designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
     };
 
     if (fields.identifier2) {
         labels.countryCode = stored.countryCode ?? '';
-        labels.secondId = stored.secondId ?? '';
+        labels.secondDesignation = stored.secondDesignation ?? '';
         labels.secondCountryCode = stored.secondCountryCode ?? '';
     }
     if (fields.additionalInfo) labels.additionalInfo = stored.additionalInfo ?? '';
@@ -103,7 +103,7 @@ function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.altitude1 || fields.altitude2) labels.altitudeDatum = stored.altitudeDatum;
     if (fields.weapon) labels.weapon = stored.weapon ?? '';
     if (fields.grids) {
-        labels.secondId = stored.secondId ?? '';
+        labels.secondDesignation = stored.secondDesignation ?? '';
         labels.grid = stored.grid;
     }
     if (fields.rangeFan) {
@@ -164,7 +164,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
     const defaultProperties = {
         echelon: TacticalGraphicEchelon.brigade,
         identifier: '',
-        labels: {label: '', hostility: TacticalGraphicHostility.unknown}
+        labels: {designation: '', hostility: TacticalGraphicHostility.unknown}
     };
     const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
@@ -373,7 +373,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                             <OutlinedInput
                                                 id="name-input"
                                                 label="Name"
-                                                value={pendingChanges.labels.label}
+                                                value={pendingChanges.labels.designation}
                                                 onChange={e =>
                                                     setPendingChanges(prev => ({
                                                         ...prev,
@@ -431,11 +431,11 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 <OutlinedInput
                                                     id="second-id-input"
                                                     label="Second ID"
-                                                    value={pendingChanges.labels.secondId ?? ''}
+                                                    value={pendingChanges.labels.secondDesignation ?? ''}
                                                     onChange={e =>
                                                         setPendingChanges(prev => ({
                                                             ...prev,
-                                                            labels: {...prev.labels, secondId: e.target.value},
+                                                            labels: {...prev.labels, secondDesignation: e.target.value},
                                                         }))
                                                     }
                                                 />
@@ -826,11 +826,11 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 <OutlinedInput
                                                     id="unit-input"
                                                     label="Unit Name"
-                                                    value={pendingChanges.labels.secondId ?? ''}
+                                                    value={pendingChanges.labels.secondDesignation ?? ''}
                                                     onChange={e =>
                                                         setPendingChanges(prev => ({
                                                             ...prev,
-                                                            labels: {...prev.labels, secondId: e.target.value},
+                                                            labels: {...prev.labels, secondDesignation: e.target.value},
                                                         }))
                                                     }
                                                 />

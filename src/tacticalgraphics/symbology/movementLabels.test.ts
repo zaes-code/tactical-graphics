@@ -37,7 +37,7 @@ const context: PaintContext = {
 function labelFeature(name: TacticalGraphicName, from: ProjectedPosition, to: ProjectedPosition): PaintFeature {
     return {
         geometry: {type: 'MultiPoint', coordinates: [from, to]},
-        properties: {name, label: 'ALPHA', startDate: '021200ZJUN26'},
+        properties: {name, designation: 'ALPHA', startDate: '021200ZJUN26'},
     } as unknown as PaintFeature;
 }
 

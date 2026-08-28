@@ -110,7 +110,7 @@ describe('APP-06 131900 — airfield', () => {
         const center = project(CENTER);
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
-            properties: {name: TacticalGraphicName.Airfield, label: 'JOINT'},
+            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
             graphicSize: SIZE,
         } as PaintFeature, context(200));
 

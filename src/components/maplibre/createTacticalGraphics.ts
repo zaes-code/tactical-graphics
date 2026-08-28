@@ -17,6 +17,7 @@ import {
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicName,
     allowedGestures,
+    applyAmplifierAliases,
     type AllowedGestures,
     type EditMode,
     type GestureKind,
@@ -127,7 +128,9 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
             renderer.clear();
             const resolution = resolutionOf(map);
             for (const feature of snapshot.features ?? []) {
-                const properties = (feature.properties ?? {})[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
+                const stored = (feature.properties ?? {})[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
+                // @see applyAmplifierAliases — a snapshot may predate the 3.0.0 rename.
+                const properties = stored && applyAmplifierAliases(stored);
                 if (!properties?.name || !feature.geometry) continue;
                 // Rebuilt through the generator from the saved description rather than
                 // restored as drawn output, which is what makes a graphic saved in the

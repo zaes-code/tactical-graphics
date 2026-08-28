@@ -54,7 +54,7 @@ beforeEach(() => resetTacticalGraphicsConfig());
 describe('the symbology layer needs no DOM', () => {
     it('paints a phase line with no canvas and no map', () => {
         const paints = phaseLinePaint(TacticalGraphicName.PhaseLine)(
-            lineFeature(LONG_LINE, {properties: {name: TacticalGraphicName.PhaseLine, label: 'BLUE'}}),
+            lineFeature(LONG_LINE, {properties: {name: TacticalGraphicName.PhaseLine, designation: 'BLUE'}}),
             context(1000),
         );
 
@@ -70,7 +70,7 @@ describe('the symbology layer needs no DOM', () => {
             lineFeature(LONG_LINE, {
                 properties: {
                     name: TacticalGraphicName.PhaseLine,
-                    label: 'BLUE',
+                    designation: 'BLUE',
                     hostility: TacticalGraphicHostility.hostileFaker,
                 },
             }),

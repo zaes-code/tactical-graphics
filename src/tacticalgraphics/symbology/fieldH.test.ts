@@ -73,23 +73,23 @@ describe('APP-06 370100 — human terrain', () => {
 describe('APP-06 150501-150503 — the action areas', () => {
     it('joins the literal to the designation with a hyphen, dates beneath', () => {
         const lines = texts(labelPaints(TacticalGraphicName.JointTacticalActionArea, {
-            label: '02', startDate: '240400ZMAY2026', endDate: '250300ZMAY2026',
+            designation: '02', startDate: '240400ZMAY2026', endDate: '250300ZMAY2026',
         })).join('\n').split('\n');
         expect(lines[0]).toBe('JTAA - 02');
         expect(lines[1]).toBe('240400ZMAY2026 - 250300ZMAY2026');
     });
 
     it('gives the submarine areas their own literals', () => {
-        expect(texts(labelPaints(TacticalGraphicName.SubmarineActionArea, {label: '02'}))[0]).toBe('SAA - 02');
-        expect(texts(labelPaints(TacticalGraphicName.SubmarineGeneratedActionArea, {label: '02'}))[0]).toBe('SGAA - 02');
+        expect(texts(labelPaints(TacticalGraphicName.SubmarineActionArea, {designation: '02'}))[0]).toBe('SAA - 02');
+        expect(texts(labelPaints(TacticalGraphicName.SubmarineGeneratedActionArea, {designation: '02'}))[0]).toBe('SGAA - 02');
     });
 
     it('marks the west and east edges only when the graphic is hostile', () => {
-        const friendly = labelPaints(TacticalGraphicName.JointTacticalActionArea, {label: '02'});
+        const friendly = labelPaints(TacticalGraphicName.JointTacticalActionArea, {designation: '02'});
         expect(texts(friendly).filter(t => t === 'ENY')).toEqual([]);
 
         const hostile = labelPaints(TacticalGraphicName.JointTacticalActionArea, {
-            label: '02', hostility: TacticalGraphicHostility.hostileFaker,
+            designation: '02', hostility: TacticalGraphicHostility.hostileFaker,
         });
         const marks = hostile.filter(p => p.text?.text === 'ENY');
         expect(marks).toHaveLength(2);
@@ -101,11 +101,11 @@ describe('APP-06 150501-150503 — the action areas', () => {
     });
 
     it('sets H to the left of T on the generic area, and only there', () => {
-        const generic = texts(labelPaints(TacticalGraphicName.AreaGeneric, {label: 'A-1', additionalInfo: 'NOTE'}));
+        const generic = texts(labelPaints(TacticalGraphicName.AreaGeneric, {designation: 'A-1', additionalInfo: 'NOTE'}));
         expect(generic[0].split('\n')[0]).toBe('NOTE  A-1');
 
         // The three action areas carry no H — their Template has no box for one.
-        const jtaa = texts(labelPaints(TacticalGraphicName.JointTacticalActionArea, {label: '02', additionalInfo: 'NOTE'}));
+        const jtaa = texts(labelPaints(TacticalGraphicName.JointTacticalActionArea, {designation: '02', additionalInfo: 'NOTE'}));
         expect(jtaa.join(' ')).not.toContain('NOTE');
     });
 });
@@ -115,7 +115,7 @@ describe('APP-06 242701-242703 — the PsyOps zones', () => {
         labelPaints(TacticalGraphicName.PsyOpsZoneIrregular, properties);
 
     it('sets H over T beside the speaker', () => {
-        const block = texts(psyOps({label: 'PSY-1', additionalInfo: 'LOUDSPEAKER'}))
+        const block = texts(psyOps({designation: 'PSY-1', additionalInfo: 'LOUDSPEAKER'}))
             .find(t => t.includes('PSY-1'))!;
         expect(block.split('\n')).toEqual(['LOUDSPEAKER', 'PSY-1']);
     });
@@ -140,7 +140,7 @@ describe('APP-06 242701-242703 — the PsyOps zones', () => {
     });
 
     it('hangs the dates outside the upper-left corner', () => {
-        const paints = psyOps({label: 'PSY-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26'});
+        const paints = psyOps({designation: 'PSY-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26'});
         const at = spotOf(paints, '021200ZJUN26');
         expect(at).toBeDefined();
         // The ring's upper-left vertex: west edge, north edge.
@@ -158,7 +158,7 @@ describe('APP-06 242701-242703 — the PsyOps zones', () => {
             ];
             const paints = paint({
                 geometry: {type: 'Point', coordinates: [0, 0]},
-                properties: {name: TacticalGraphicName.PsyOpsZoneIrregular, label: 'PSY-1'},
+                properties: {name: TacticalGraphicName.PsyOpsZoneIrregular, designation: 'PSY-1'},
                 ring,
                 bounds: {minX: -halfSpan, minY: -halfSpan, maxX: halfSpan, maxY: halfSpan},
             } as unknown as PaintFeature, context);

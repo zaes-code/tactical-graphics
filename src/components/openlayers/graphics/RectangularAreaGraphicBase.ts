@@ -78,7 +78,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
     measure: Feature = createMeasureFeature();
     symbolId: string = '';
 
-    graphicLabels: GraphicLabels = {label: ''};
+    graphicLabels: GraphicLabels = {designation: ''};
     graphicName: TacticalGraphicName;
 
     /**
