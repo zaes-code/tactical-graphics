@@ -36,7 +36,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {MapEngineCapabilities} from './mapEngine';
-import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getDisplayName, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
 
@@ -904,11 +904,14 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.Neutralize, TacticalGraphicName.Suppress,
     ];
     if (onePoint.includes(name)) return '1 point (click to place)';
+    // A rectangular zone is two anchor points and a width: the clicks set the length and
+    // the orientation, and the third handle sets the width. @see RectangularArea
+    if (isRectangular(name)) return '2 points (then drag the width)';
     if (twoPoint.includes(name)) return '2 points';
     if (name === TacticalGraphicName.FieldsOfFire) return '3 points';
     // if (name === TacticalGraphicName.SearchArea) return '3 points';
 
-    if (name.endsWith('Irregular') || name.endsWith('Rectangular') ||
+    if (name.endsWith('Irregular') ||
         name === TacticalGraphicName.LimitedAccessArea ||
         name === TacticalGraphicName.SmokeObscurant ||
         name === TacticalGraphicName.GroupOrSeriesOfTargets) {

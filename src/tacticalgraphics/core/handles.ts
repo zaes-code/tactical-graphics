@@ -354,6 +354,21 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (BENT_GRAPHICS.includes(name)) {
         return {roles: ['bend', 'reach']};
     }
+    /*
+     * **A rectangle's two anchor points, then its width.**
+     *
+     * APP-06 gives these two points and a width in metres, so the first two handles are
+     * the base's own vertices — dragging one sets the length and the orientation — and the
+     * third is the width, which is the `offset` role every widthed graphic here uses.
+     *
+     * `offsetScale` is 1 rather than the shared half: the handle sits exactly one
+     * half-width off the axis, so it has to track the cursor 1:1 or it runs away from it.
+     * Same reasoning as the corridors, whose handles sit on the rail itself.
+     * @see RectangularArea.generateHandles
+     */
+    if (RECTANGULAR_GRAPHICS.includes(name)) {
+        return {roles: ['shape', 'shape', 'offset'], offsetScale: 1};
+    }
     if (RANGE_FANS.includes(name)) {
         return {roles: [], repeating: 'band'};
     }
@@ -510,6 +525,27 @@ function pointInRing(ring: [number, number][], [x, y]: [number, number]): boolea
     return inside;
 }
 
+const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.PositionAreaArtilleryRectangular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+];
+
 /**
  * How many points a graphic's base takes, when the answer is fixed.
  *
@@ -598,6 +634,11 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Exfiltrate]: 3,
     [TacticalGraphicName.Infiltration]: 3,
 
+    // The eighteen rectangular zones: point 1 and point 2, at the centres of the two
+    // opposing sides. The width is an amplifier, not a third click.
+    // @see RectangularArea, rectangleFromAxis
+    ...Object.fromEntries(RECTANGULAR_GRAPHICS.map(name => [name, 2])),
+
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Evacuate]: 4,
@@ -650,26 +691,6 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
  * rectangular. MapLibre had no way to know, so it let a corner be dragged to any
  * angle, and once a segment drag could add vertices it let a rectangle grow a fifth.
  */
-const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.FreeFireAreaRectangular,
-    TacticalGraphicName.NoFireAreaRectangular,
-    TacticalGraphicName.RestrictiveFireAreaRectangular,
-    TacticalGraphicName.PositionAreaArtilleryRectangular,
-    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
-    TacticalGraphicName.CallForFireZoneRectangular,
-    TacticalGraphicName.TargetBuildUpAreaRectangular,
-    TacticalGraphicName.TargetValueAreaRectangular,
-    TacticalGraphicName.ZoneOfResponsibilityRectangular,
-    TacticalGraphicName.CensorZoneRectangular,
-    TacticalGraphicName.CriticalFriendlyZoneRectangular,
-    TacticalGraphicName.DeadSpaceAreaRectangular,
-    TacticalGraphicName.BlueKillBoxRectangular,
-    TacticalGraphicName.PurpleKillBoxRectangular,
-    TacticalGraphicName.TargetAreaRectangular,
-    TacticalGraphicName.FireSupportAreaRectangular,
-    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
-    TacticalGraphicName.PsyOpsZoneRectangular,
-];
 
 /**
  * Whether this graphic's base is a rectangle whose corners are not individually
@@ -747,7 +768,7 @@ export function rectangleAmplifiers(
  * two implementations of one amplifier are compared: it is the whole of the 391,193 m
  * against 390,756 m the two engines used to file for the same drawn box.
  */
-function groundMeters(a: [number, number], b: [number, number]): number {
+export function groundMeters(a: [number, number], b: [number, number]): number {
     const R = 6371008.8;
     const toRad = (degrees: number) => (degrees * Math.PI) / 180;
     const dLat = toRad(b[1] - a[1]);

@@ -289,10 +289,26 @@ describe('the sample sweep tells rectangles from areas', () => {
                 corners: (f.geometry as {coordinates: number[][][]}).coordinates[0].length - 1,
             }));
 
-    it('draws every rectangular variant with four corners', () => {
-        const boxes = rings().filter(r => isRectangular(r.name));
-        expect(boxes.length).toBeGreaterThan(0);
-        expect(boxes.every(r => r.corners === 4)).toBe(true);
+    /**
+     * The rectangles left this comparison on 2026-08-27: their base is the axis APP-06
+     * defines them by — two anchor points and a width — so there is no ring in the sweep
+     * to count corners on. What replaces the assertion is the same guarantee stated at
+     * the source: every one of them is a two-point line carrying a width, which is a
+     * different sample from an irregular area's five-cornered ring by construction.
+     * @see RectangularArea
+     */
+    it('draws every rectangular variant from two anchor points', () => {
+        const axes = sampleFeatureCollection().features
+            .map(f => ({
+                name: (f.properties as {tacticalGraphic: {name: TacticalGraphicName}}).tacticalGraphic.name,
+                geometry: f.geometry,
+            }))
+            .filter(f => isRectangular(f.name));
+        expect(axes.length).toBeGreaterThan(0);
+        for (const {geometry} of axes) {
+            expect(geometry.type).toBe('LineString');
+            expect((geometry as {coordinates: number[][]}).coordinates).toHaveLength(2);
+        }
     });
 
     it('draws every other area with five, so the two cannot be confused', () => {

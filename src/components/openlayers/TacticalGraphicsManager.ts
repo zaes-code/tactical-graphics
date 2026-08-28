@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, allowedGestures, generatorOrder, groundLength, handleRole, isRectangular, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, allowedGestures, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -457,24 +457,15 @@ export class TacticalGraphicsManager {
             let visible = anyVisible && (!selectedFeatures || selectedFeatures.includes(feature));
 
             /*
-             * **A rectangular zone shows no shape handle in edit mode.**
+             * **A rectangular zone's handles mean something again.**
              *
-             * Its corner is not a point with a meaning of its own — it is a consequence
-             * of the box — so *both* engines already refuse to reshape one:
-             * `RectangularAreaGraphicController` clears `base` to keep it out of
-             * OpenLayers' `Modify`, and MapLibre's `applyGesture` returns early on
-             * `isRectangular`. The handle was therefore red, which in this library means
-             * "you can drag this", and nothing read it. The resize affordance is what
-             * sizes these now, and the width read-out reports the number.
-             *
-             * Edit mode only: legacy `resize` mode does claim this handle
-             * (`handleDownEvent` returns true for it there), and that behaviour is
-             * published surface.
+             * They were hidden in edit mode because a corner is a consequence of a box
+             * rather than a point with a meaning of its own, and both engines refused to
+             * drag one. The base is APP-06's two anchor points now — the centres of the
+             * two opposing sides — and the third handle is the width, so all three are
+             * live and hiding them would take away the only way to set a width.
+             * @see RectangularAreaGraphicBase
              */
-            if (visible && this.isEditing() && !feature.get('offsetHandler')) {
-                const name = feature.get('graphicName') as TacticalGraphicName | undefined;
-                if (name && isRectangular(name)) visible = false;
-            }
             feature.set('hidden', !visible);
             // The center dot is grabbable for a move and nothing else — see
             // `handleDownEvent`. Publish that so its style can color itself
