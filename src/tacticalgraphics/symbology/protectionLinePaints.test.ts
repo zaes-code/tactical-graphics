@@ -52,26 +52,28 @@ const texts = (paints: Paint[]) => paints.filter(p => p.text).map(p => p.text!.t
 
 beforeEach(() => resetTacticalGraphicsConfig());
 
+const hostile = (coordinates: ProjectedPosition[] = EAST, extra: Record<string, unknown> = {}) =>
+    feature(TacticalGraphicName.Mineline, coordinates, {
+        hostility: TacticalGraphicHostility.hostileFaker,
+        ...extra,
+    });
+
 describe('APP-06 290101 — mineline', () => {
-    // The template sets `N` at point 1 and point N, with `Modifier 1` between them.
-    it('writes N at both ends', () => {
+    // The Template's `N` boxes mark where a hostile marker goes; they are not letters to
+    // print. So the ends stay bare unless the mineline is the enemy's.
+    it('writes nothing at the ends when the mineline is not hostile', () => {
         const paints = minelinePaint(TacticalGraphicName.Mineline)(feature(TacticalGraphicName.Mineline), context());
-        expect(texts(paints)).toEqual(['N', 'N']);
+        expect(texts(paints)).toEqual([]);
     });
 
     it('reads ENY at both ends when the mineline is the enemy\'s', () => {
-        const hostile = feature(TacticalGraphicName.Mineline, EAST, {
-            hostility: TacticalGraphicHostility.hostileFaker,
-        });
-        expect(texts(minelinePaint(TacticalGraphicName.Mineline)(hostile, context()))).toEqual(['ENY', 'ENY']);
+        expect(texts(minelinePaint(TacticalGraphicName.Mineline)(hostile(), context()))).toEqual(['ENY', 'ENY']);
     });
 
     it('sets them beyond the ends and level with the line, not above it', () => {
         // `[N] — [Modifier 1] — [N]`, one row: the Template puts the letters on the line's
         // own level, outboard of its two ends. (User's call, 2026-08-27.)
-        const marks = minelinePaint(TacticalGraphicName.Mineline)(
-            feature(TacticalGraphicName.Mineline), context(),
-        ).filter(p => p.text);
+        const marks = minelinePaint(TacticalGraphicName.Mineline)(hostile(), context()).filter(p => p.text);
         const at = marks.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
         for (const [, y] of at) expect(y).toBeCloseTo(0, 6);
         expect(at[0][0]).toBeLessThan(0);
@@ -87,7 +89,7 @@ describe('APP-06 290101 — mineline', () => {
             feature(TacticalGraphicName.Mineline, EAST, {label: 'M1'}),
             context(),
         );
-        expect(texts(withLabel)).toEqual(['N', 'N']);
+        expect(texts(withLabel)).toEqual([]);
     });
 });
 
@@ -103,6 +105,35 @@ describe('APP-06 290400 — mine cluster', () => {
         }).graphic.geometry as MultiLineString;
 
     const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+
+    it('stands its planned ring off the dome rather than on it', () => {
+        // Concentric with the dome and ten pixels clear of it: drawn exactly on the arc
+        // the two dash patterns interleave into a ragged edge, and floating on a bounding
+        // box the ring read as a second symbol. (User's call, 2026-08-27.)
+        const chord: ProjectedPosition[] = [[0, 0], [40_000, 0]];
+        const dome: ProjectedPosition[] = Array.from({length: 19}, (_p, i) => {
+            const a = (i / 18) * Math.PI;
+            return [20_000 + Math.cos(a) * 20_000, Math.sin(a) * 20_000] as ProjectedPosition;
+        });
+        const planned: PaintFeature = {
+            geometry: {type: 'MultiLineString', coordinates: [chord, dome]},
+            properties: {
+                name: TacticalGraphicName.MineCluster,
+                status: TacticalGraphicStatus.planned,
+            },
+        };
+
+        for (const resolution of [10, 40, 400]) {
+            const ring = mineClusterPaint()(planned, context(resolution))
+                .find(p => p.stroke?.dashPx && p.geometry.type === 'LineString');
+            expect(ring).toBeDefined();
+
+            for (const p of (ring!.geometry as {coordinates: ProjectedPosition[]}).coordinates) {
+                const r = Math.hypot(p[0] - 20_000, p[1]);
+                expect((r - 20_000) / resolution).toBeCloseTo(10, 3);
+            }
+        }
+    });
 
     it('raises the dome to half the chord, so it is a true semicircle', () => {
         const [chord, dome] = geographic().coordinates;
@@ -164,6 +195,58 @@ describe('APP-06 290101 — the mineline is a string of mines', () => {
         // Filled discs by default is the *antitank* mine; the unspecified one is hollow,
         // and that is the default here as it is inside the two areas.
         expect(marks.every(m => m.fill)).toBe(false);
+    });
+
+    it('cuts the line for every mine, so a hollow one reads hollow', () => {
+        // A stroke drawn through a hollow disc is a disc with a diameter, which is not one
+        // of Table 8-24's seven. (User's call, 2026-08-27.) @see splitPathAroundAll
+        const paints = minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline, EAST, {mineType: TacticalGraphicMineType.unspecified}),
+            context(),
+        );
+        const runs = (paints[0].geometry as {type: string; coordinates: ProjectedPosition[][]});
+        expect(runs.type).toBe('MultiLineString');
+
+        const glyphs = mines(40, TacticalGraphicMineType.unspecified);
+        expect(runs.coordinates.length).toBeGreaterThanOrEqual(glyphs.length - 1);
+
+        // No run may cross a mine's centre.
+        const centres = glyphs.map(mark => {
+            const xs = points(mark).map(([x]) => x);
+            return (Math.min(...xs) + Math.max(...xs)) / 2;
+        });
+        for (const [a, b] of runs.coordinates) {
+            for (const c of centres) {
+                expect(Math.min(a[0], b[0]) <= c && c <= Math.max(a[0], b[0])).toBe(false);
+            }
+        }
+    });
+
+    it('leaves the asked-for clear space between one mine and the next', () => {
+        // The seven glyphs are not the same width, so the pitch is the glyph's own reach
+        // plus the gap rather than a multiple of the disc. Measured edge to edge, every
+        // type gets the same clear space. @see mineGlyphPitch
+        for (const type of Object.values(TacticalGraphicMineType)) {
+            const marks = mines(40, type);
+            if (marks.length < 2) continue;
+            const extents = marks.map(mark => {
+                const xs = points(mark).map(([x]) => x);
+                return [Math.min(...xs), Math.max(...xs)] as const;
+            }).sort((a, b) => a[0] - b[0]);
+            // Group the marks that belong to one glyph: consecutive extents that overlap.
+            const glyphs: [number, number][] = [[extents[0][0], extents[0][1]]];
+            for (const [lo, hi] of extents.slice(1)) {
+                const last = glyphs[glyphs.length - 1];
+                if (lo <= last[1] + 1) last[1] = Math.max(last[1], hi);
+                else glyphs.push([lo, hi]);
+            }
+            expect(glyphs.length).toBeGreaterThan(1);
+            for (let i = 1; i < glyphs.length; i++) {
+                const clear = (glyphs[i][0] - glyphs[i - 1][1]) / 40;
+                expect(clear).toBeGreaterThan(8);
+                expect(clear).toBeLessThan(13);
+            }
+        }
     });
 
     it('draws whichever mine Modifier 1 names', () => {
