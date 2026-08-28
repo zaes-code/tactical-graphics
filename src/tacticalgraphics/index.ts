@@ -387,7 +387,7 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both

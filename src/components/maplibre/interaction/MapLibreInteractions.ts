@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -880,6 +880,57 @@ export class MapLibreInteractions {
     };
 
     /**
+     * The same floor, applied to a description a gesture just produced.
+     *
+     * Only the first segment's length can offend, so only a LineString is touched and a
+     * graphic without a floor comes back as it went in.
+     */
+    private withFirstSegmentFloor(description: GraphicDescription): GraphicDescription {
+        if (description.geometry.type !== 'LineString') return description;
+        const held = this.minimumFirstSegment(description.properties.name, description.geometry.coordinates);
+        return held === description.geometry.coordinates
+            ? description
+            : {...description, geometry: {...description.geometry, coordinates: held}};
+    }
+
+    /**
+     * Hold a graphic's first segment to its floor while the shape is being authored.
+     *
+     * Three line graphics bake a mark into the geometry near the start and need room for
+     * it and for the arrowhead. `minimumFirstSegmentPx` says which and how many pixels;
+     * this engine had no equivalent at all, so the same short drag gave a readable symbol
+     * on OpenLayers and, here, a bow-tie sitting off the end of its own line.
+     *
+     * Extends P1 away from P0 along the bearing they already have and carries the rest of
+     * the line with it, so nothing but the length changes. Applied on the DRAW path only
+     * — `buildTacticalGraphic` is the door restore and import come through, and a floor
+     * there would stretch a saved line at whatever resolution the session happens to be
+     * at. @see LineGraphicBase.suspendMinimumLength for the same distinction.
+     */
+    private minimumFirstSegment(name: TacticalGraphicName, vertices: Position[]): Position[] {
+        const floorPx = minimumFirstSegmentPx(name);
+        if (floorPx === undefined || vertices.length < 2) return vertices;
+
+        const asPair = (position: Position): [number, number] => [position[0], position[1]];
+        const [p0, p1] = [toMercator(asPair(vertices[0])), toMercator(asPair(vertices[1]))];
+        const dx = p1[0] - p0[0];
+        const dy = p1[1] - p0[1];
+        const length = Math.hypot(dx, dy);
+        // Projected metres, to match the projected coordinates they are compared with —
+        // which is exactly the pixel count asked for, at any latitude.
+        const floor = floorPx * resolutionOf(this.map);
+        if (length === 0 || length >= floor) return vertices;
+
+        const shiftX = dx * (floor / length - 1);
+        const shiftY = dy * (floor / length - 1);
+        return vertices.map((vertex, index) => {
+            if (index === 0) return vertex;
+            const [x, y] = toMercator(asPair(vertex));
+            return toLonLat([x + shiftX, y + shiftY]);
+        });
+    }
+
+    /**
      * The graphic a set of clicked vertices describes.
      *
      * Shared by the commit and the live preview, which is the point: a preview built by
@@ -904,7 +955,7 @@ export class MapLibreInteractions {
         // instead squared the axis up again on every rebuild, which undid each rotate.
         // @see levelRectangleAxis
         const tidied = wants === 'LineString'
-            ? normalizeDrawnBase(name, vertices, resolutionOf(this.map))
+            ? this.minimumFirstSegment(name, normalizeDrawnBase(name, vertices, resolutionOf(this.map)))
             : vertices;
         const geometry = buildBase(wants, isRectangular(name) ? levelRectangleAxis(tidied) : tidied);
         if (!geometry) return undefined;
@@ -1310,7 +1361,12 @@ export class MapLibreInteractions {
                 // A modify drag that did not grab a vertex moves the whole graphic, which
                 // is what the OpenLayers Modify interaction does when you drag a line
                 // rather than one of its points.
-                return drag.vertex >= 0 ? moveVertex(before, drag.vertex, to) : translate(before, drag.last, to);
+                // A vertex drag authors the shape, so it takes the same floor a draw does
+                // — otherwise a graphic that could not be DRAWN below 80 px could be
+                // dragged below it a moment later, and OpenLayers refuses both.
+                return drag.vertex >= 0
+                    ? this.withFirstSegmentFloor(moveVertex(before, drag.vertex, to))
+                    : translate(before, drag.last, to);
 
             default:
                 return before;
