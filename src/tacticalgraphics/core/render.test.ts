@@ -1,7 +1,9 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import * as turf from './turf';
-import {Feature, MultiLineString} from 'geojson';
+import {Feature, MultiLineString, Position} from 'geojson';
+import {anchorsForBow} from './anchors';
+import {TURN_DEFAULT_BEND} from '../graphics/Turn';
 import {
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
@@ -42,7 +44,7 @@ describe('registry', () => {
  * hook, all three built by `getCaneArrow`.
  *
  * The hook used to be constructed at **absolute compass bearings** — its arc
- * centre pinned due north of the start, the sweep a fixed 180°–360° with an
+ * center pinned due north of the start, the sweep a fixed 180°–360° with an
  * `end[0] >= start[0]` flip for lines drawn right-to-left. The line and the
  * arrowhead follow the drawn coordinates, so rotating one of these graphics
  * turned those two and left the hook pointing wherever it had always pointed.
@@ -80,15 +82,19 @@ describe('the retrograde cane hook follows its line', () => {
         expect(spread).toBeLessThan(2);
     });
 
-    it('starts the arc at the line start, so its far end is the offset handle', () => {
-        const {arc} = cane(37);
-        expect(turf.distance(START, arc[0], {units: 'meters'})).toBeLessThan(1);
+    it('starts the arc at the rear of the symbol, which is the line\'s last point', () => {
+        // APP-06 340800 numbers the cane from its head -- "Point 1 defines the tip of the
+        // arrowhead. Point 2 defines the end of the straight line portion" -- so the arc
+        // hangs off the *end* of the drawn line. It used to hang off the start, back when
+        // these graphics stored their points rear-first. @see core/drawOrder
+        const {end, arc} = cane(37);
+        expect(turf.distance(end, arc[0], {units: 'meters'})).toBeLessThan(1);
     });
 });
 
 describe('readTacticalGraphicProperties', () => {
     it('reads the config off a feature', () => {
-        expect(readTacticalGraphicProperties(axisFeature())?.label).toBe('1-508 IN');
+        expect(readTacticalGraphicProperties(axisFeature())?.designation).toBe('1-508 IN');
     });
 
     it('returns undefined when absent', () => {
@@ -192,20 +198,27 @@ describe('crossed mission tasks', () => {
         TacticalGraphicName.Suppress,
     ];
 
-    it.each(CROSSED)('%s publishes the centre as its only handle', name => {
+    /**
+     * All four, as of 2026-08-17. They were fixed-size badges pinned to a constant 100 px,
+     * so the centre was the only handle worth publishing — an edge handle would have
+     * offered a dimension that could not change. They now cover ground and scale with it.
+     */
+    it.each(CROSSED)('%s publishes [edge, center], so the edge can be dragged', name => {
         const {handles} = renderTacticalGraphic(pointTask(name));
         const coords = (handles.geometry as any).coordinates;
-        expect(coords).toHaveLength(1);
-        expect(coords[0]).toEqual([-77.0, 38.9]);
+        expect(coords).toHaveLength(2);
+        // Edge first — the order the controllers depend on. The centre is the anchor.
+        expect(coords[1]).toEqual([-77.0, 38.9]);
+        expect(coords[0]).not.toEqual([-77.0, 38.9]);
     });
 
-    it.each(CROSSED)('%s emits both arms whole, centred on the base point', name => {
+    it.each(CROSSED)('%s emits both arms whole, centered on the base point', name => {
         const {graphic} = renderTacticalGraphic(pointTask(name));
         const lines = (graphic.geometry as any).coordinates as number[][][];
         expect(graphic.geometry.type).toBe('MultiLineString');
         expect(lines.length).toBeGreaterThanOrEqual(2);
         // The style function opens the label gap, so each arm must arrive as a
-        // single unbroken 2-point line through the centre.
+        // single unbroken 2-point line through the center.
         for (const arm of lines.slice(0, 2)) {
             expect(arm).toHaveLength(2);
             expect((arm[0][0] + arm[1][0]) / 2).toBeCloseTo(-77.0, 5);
@@ -224,12 +237,22 @@ describe('crossed mission tasks', () => {
 });
 
 describe('Turn', () => {
-    const turn = () => renderTacticalGraphic(pointTask(TacticalGraphicName.TacticalTurn));
+    // Since the APP-06 conversion the base is 270504's three anchor points rather than a
+    // dropped center. Built from the same center, size and bend the dropped form used,
+    // so every assertion below is still asking the same question of the same shape.
+    const TURN_CENTER: Position = [-77.0, 38.9];
+    const turn = () =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, 1000, 0, TURN_DEFAULT_BEND)},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn}},
+        });
 
-    it('publishes [bend, arrowTip, centre] — the centre last, per the point convention', () => {
+    it('publishes [bend, arrowTip, center] — the center last, per the point convention', () => {
         const coords = (turn().handles.geometry as any).coordinates as number[][];
         expect(coords).toHaveLength(3);
-        expect(coords[2]).toEqual([-77.0, 38.9]);
+        expect(coords[2][0]).toBeCloseTo(TURN_CENTER[0], 9);
+        expect(coords[2][1]).toBeCloseTo(TURN_CENTER[1], 9);
     });
 
     it('puts the arrow-tip handle on the point of the arrowhead', () => {
@@ -241,27 +264,32 @@ describe('Turn', () => {
         expect(tip[1]).toBeCloseTo(curveEnd[1], 6);
     });
 
-    it('puts the bend handle off the curve, on the perpendicular through the centre', () => {
+    it('puts the bend handle off the curve, on the perpendicular through the center', () => {
         const {handles, graphic} = turn();
         const coords = (handles.geometry as any).coordinates as number[][];
         const bendHandle = coords[0];
-        const centre = coords[2];
+        const center = coords[2];
         // Rotation is 0, so the chord runs east–west and the handle must be
-        // due north or south of the centre — never along the chord.
-        expect(bendHandle[0]).toBeCloseTo(centre[0], 6);
-        expect(bendHandle[1]).not.toBeCloseTo(centre[1], 6);
+        // due north or south of the center — never along the chord.
+        expect(bendHandle[0]).toBeCloseTo(center[0], 6);
+        expect(bendHandle[1]).not.toBeCloseTo(center[1], 6);
         // It is the Bézier control point, so it sits twice as far out as the
         // curve's apex — that is what keeps it clear of the "T".
         const [curve] = (graphic.geometry as any).geometries;
         const apex = (curve.coordinates[1] as number[][])[0];
-        const apexOffset = Math.abs(apex[1] - centre[1]);
-        expect(Math.abs(bendHandle[1] - centre[1])).toBeGreaterThan(apexOffset);
+        const apexOffset = Math.abs(apex[1] - center[1]);
+        expect(Math.abs(bendHandle[1] - center[1])).toBeGreaterThan(apexOffset);
     });
 
     it('bends more sharply for a larger bend, and the other way for a negative one', () => {
+        // The bow is a drawn point now, so it is set by moving anchor point 3 rather
+        // than by an amplifier. Same question, stated the way the symbol states it.
         const apexOf = (bend: number) => {
-            const f = pointTask(TacticalGraphicName.TacticalTurn);
-            (f.properties as any).tacticalGraphic.bend = bend;
+            const f: Feature = {
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, 1000, 0, bend)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn}},
+            };
             const [curve] = (renderTacticalGraphic(f).graphic.geometry as any).geometries;
             return (curve.coordinates[0] as number[][]).slice(-1)[0];
         };
@@ -273,9 +301,11 @@ describe('Turn', () => {
 
     it('sizes the arrowhead off headSize, so a resize leaves it alone', () => {
         const headSpan = (size: number) => {
-            const f = pointTask(TacticalGraphicName.TacticalTurn);
-            (f.properties as any).tacticalGraphic.radius = size;
-            (f.properties as any).tacticalGraphic.headSize = 300;
+            const f: Feature = {
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, size, 0, TURN_DEFAULT_BEND)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn, headSize: 300}},
+            };
             const [, head] = (renderTacticalGraphic(f, {headSize: 300} as any).graphic.geometry as any).geometries;
             const ring = head.coordinates[0] as number[][];
             const xs = ring.map(p => p[0]);
@@ -300,7 +330,7 @@ describe('Turn', () => {
         const [curve] = (graphic.geometry as any).geometries;
         const before = curve.coordinates[0] as number[][];
         // The label sits in the gap: past the end of the first half, and off
-        // the base point the centre handle occupies.
+        // the base point the center handle occupies.
         expect(label).not.toEqual([-77.0, 38.9]);
         expect(Math.hypot(label[0] - before[before.length - 1][0], label[1] - before[before.length - 1][1]))
             .toBeLessThan(Math.hypot(label[0] - before[0][0], label[1] - before[0][1]));
@@ -311,7 +341,7 @@ describe('Turn', () => {
  * The obstacle graphics emit the drawn shape, undecorated.
  *
  * Their teeth used to be baked in here, sized from the drawing resolution — so they were
- * fixed in metres and grew on screen as the map zoomed in. Crenellation carries no
+ * fixed in meters and grew on screen as the map zoomed in. Crenellation carries no
  * measurement, so it belongs in a style function at a constant number of screen pixels,
  * which is where it now lives (`obstacleAreaStyles`). The cost is deliberate: a consumer
  * rendering this GeoJSON outside the OpenLayers entry point gets the plain shape, the
@@ -355,7 +385,7 @@ describe('decorated graphics emit the drawn shape', () => {
         [TacticalGraphicName.LineOfContact, 'LineString'],
     ])('%s returns the drawn line unchanged too', (name, type) => {
         // Their merlons and scallops moved to the style layer for the same reason: both
-        // were sized from the drawing resolution and then fixed in metres. The line of
+        // were sized from the drawing resolution and then fixed in meters. The line of
         // contact is the sharpest case — the *gap between its two waves* is what the
         // symbol says, and baked in it changed with zoom.
         const drawn = [[-77.05, 38.88], [-76.99, 38.91], [-76.95, 38.93]];
@@ -414,14 +444,14 @@ describe('labelGapDegrees on the arc mission tasks', () => {
     const arcEnds = (feature: Feature, subLine: number): [number, number] => {
         const {graphic} = renderTacticalGraphic(feature);
         const geom = graphic.geometry as {type: string; coordinates: number[][][]};
-        const centre = (feature.geometry as {coordinates: number[]}).coordinates;
+        const center = (feature.geometry as {coordinates: number[]}).coordinates;
         const line = geom.coordinates[subLine];
-        // Planar angle about the centre, 0 = east — the frame `createCircularArc`
+        // Planar angle about the center, 0 = east — the frame `createCircularArc`
         // works in. Longitude has to be scaled by cos(lat) first: a degree of it
         // is not a degree of latitude anywhere but the equator, and without the
         // correction a 15° arc end reads as 19°.
-        const lonScale = Math.cos((centre[1] * Math.PI) / 180);
-        const at = (p: number[]) => (Math.atan2(p[1] - centre[1], (p[0] - centre[0]) * lonScale) * 180) / Math.PI;
+        const lonScale = Math.cos((center[1] * Math.PI) / 180);
+        const at = (p: number[]) => (Math.atan2(p[1] - center[1], (p[0] - center[0]) * lonScale) * 180) / Math.PI;
         return [at(line[0]), at(line[line.length - 1])];
     };
 

@@ -77,6 +77,16 @@ export function createOpenLayersPropertiesSource(
     return {
         suppressed() {
             if (manager.isDrawing()) return true;
+            /*
+             * **Edit mode selects; it does not open a form.**
+             *
+             * A click there means "this is the graphic I am working on", and answering
+             * it with a modal over the map is answering a different question — the
+             * operator now has to dismiss a form before they can reach the affordances
+             * that click just summoned. The amplifiers stay one mode away: leave edit,
+             * click the graphic, and the dialog opens as it always has.
+             */
+            if (manager.isEditing()) return true;
             // A `Draw` interaction that is active but has not started still owns the
             // click; opening the dialog would fight it for the next one.
             if (map.getInteractions().getArray().some(i => i instanceof Draw)) return true;

@@ -9,11 +9,11 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {projectedMidSegment, textWidth} from './decorations';
 import {echelonMarks} from './echelonPaints';
-import {amplifierDash, formatFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, formatFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -36,13 +36,13 @@ function echelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
 }
 
 /** A text amplifier with the usual halo. */
-function amplifier(at: ProjectedPosition, text: string, scale: number, rotation: number): Paint {
+function amplifier(feature: PaintFeature, at: ProjectedPosition, text: string, scale: number, rotation: number): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
@@ -56,11 +56,11 @@ function amplifier(at: ProjectedPosition, text: string, scale: number, rotation:
  * The boundary: the line broken open at its projected midpoint, the echelon glyph
  * in the gap, and the two commands' designations above and below it.
  *
- * **The echelon glyph stays in the unaffiliated colour even on a hostile
+ * **The echelon glyph stays in the unaffiliated color even on a hostile
  * boundary** — the documented exception to the "hostile line work goes red" rule.
  * A boundary separates two commands and the glyph belongs to neither, so
- * colouring it by the line's affiliation would assert something the symbol does
- * not say. The line itself does take the affiliation colour.
+ * coloring it by the line's affiliation would assert something the symbol does
+ * not say. The line itself does take the affiliation color.
  *
  * ## The offset is built from what it has to clear
  *
@@ -82,8 +82,8 @@ export function boundaryPaint(): LinePaint {
         if (coords.length < 2) return [];
 
         const props = feature.properties;
-        const topLabel = formatFullLabel(props.label ?? '', props.countryCode ?? '');
-        const bottomLabel = formatFullLabel(props.secondId ?? '', props.secondCountryCode ?? '');
+        const topLabel = formatFullLabel(props.designation ?? '', props.countryCode ?? '');
+        const bottomLabel = formatFullLabel(props.secondDesignation ?? '', props.secondCountryCode ?? '');
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
         const {index, t} = projectedMidSegment(coords);
@@ -122,8 +122,8 @@ export function boundaryPaint(): LinePaint {
         const ny = perpSign * (dx / segLen);
 
         return [
-            amplifier([midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
-            amplifier([midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
+            amplifier(feature, [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
+            amplifier(feature, [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
             ...echelonMarks(
                 midGap,
                 dx,
@@ -145,18 +145,18 @@ export function boundaryPaint(): LinePaint {
  * A range band as the holder resolves it for rendering.
  *
  * Distinct from `RangeFanBand` in `core/type.ts`, which is the **user-facing**
- * config: its azimuths are deflections from the graphic's centre bearing. These
+ * config: its azimuths are deflections from the graphic's center bearing. These
  * are absolute, already resolved. Keeping them apart means a paint function can
  * never be handed a deflection and print it as a bearing.
  */
 export interface ResolvedRangeFanBand {
-    /** Kilometres. */
+    /** Kilometers. */
     range: number;
     label?: string;
     altitude?: string;
     /**
      * Absolute compass bearings, already resolved. The user-facing fields on a
-     * band are deflections from the graphic's centre bearing; resolving them is
+     * band are deflections from the graphic's center bearing; resolving them is
      * the holder's job so the paint function never re-runs the resolver.
      */
     resolvedLeftAz?: number;
@@ -192,9 +192,9 @@ const LABEL_LINE_PX = BASE_FONT_SIZE_PX * 1.2;
 const RANGE_BLOCK_CLEARANCE_PX = 8;
 
 /**
- * How far a sector band's range block sits above its own centre line, at scale 1.
+ * How far a sector band's range block sits above its own center line, at scale 1.
  *
- * **Measured from the block, not fixed.** The block is centred on its anchor and carries
+ * **Measured from the block, not fixed.** The block is centered on its anchor and carries
  * one to three rows depending on which fields are set, so a constant lift either fails to
  * clear a three-row block or throws a one-row block into the arc above it. Half the
  * block's own height puts its bottom edge on the axis; the clearance takes it off.
@@ -216,8 +216,8 @@ function formatAzimuth(deg: number): string {
  *
  * MultiPoint vertex layout, written by `RangeFan.generateLabels`:
  *
- * - circular: `[centre, band1Mid, band2Mid, …]`
- * - sector: `[centre, band1Mid, band1LeftAz, band1RightAz, band2Mid, …]`
+ * - circular: `[center, band1Mid, band2Mid, …]`
+ * - sector: `[center, band1Mid, band1LeftAz, band1RightAz, band2Mid, …]`
  *
  * so the stride is three for a sector and one for a circle. Per band the stack
  * reads: the user's name if there is one, then the range — "MIN RG" on a circle
@@ -251,7 +251,7 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
                 ...offsets,
                 text: value,
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
@@ -260,7 +260,7 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
         });
 
         /**
-         * The largest scale a band's block may take before it runs into its neighbours'.
+         * The largest scale a band's block may take before it runs into its neighbors'.
          *
          * Each band anchors its block at its own mid-radius, so consecutive blocks sit one
          * band's width apart — a fixed distance on the ground, and so a fixed number of
@@ -297,8 +297,8 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             // fan is measured from the same thing.
             const written = formatAltitude(altitude, feature.properties.altitudeDatum);
             if (written) lines.push(`ALT ${written}`);
-            // **Lifted clear of the centre axis, on a sector.** That fan draws an arrow
-            // from the apex along its centre line, and the range block is anchored on the
+            // **Lifted clear of the center axis, on a sector.** That fan draws an arrow
+            // from the apex along its center line, and the range block is anchored on the
             // same line — so the axis ran straight through the middle row and filled the
             // space between the words: `RG 180` read as `RG-180`, which is exactly how it
             // was reported. A circular fan has no such line and needs no lift.
@@ -308,12 +308,12 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             if (lines.length) {
                 const block = lines.join('\n');
                 // Measured against the next band's anchor, or the previous one for the
-                // outermost. **A lone band has no neighbour and takes no cap** — its
-                // fallback would be the fan's own centre, which is not something the
+                // outermost. **A lone band has no neighbor and takes no cap** — its
+                // fallback would be the fan's own center, which is not something the
                 // label can collide with, and capping against it shrank the one-band
                 // sample to an unreadable speck. @see bandScale
-                const neighbour = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
-                const fitted = bandScale(block, coords[midIndex], neighbour);
+                const neighbor = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
+                const fitted = bandScale(block, coords[midIndex], neighbor);
                 paints.push(
                     text(coords[midIndex], block, isSector ? {offsetYPx: -rangeBlockLiftPx(lines.length) * fitted} : {}, fitted),
                 );
@@ -324,13 +324,13 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             // the band's own edges and the range block sits at its midpoint, so on a fan
             // whose arc is short next to a three-line label the two overlap — rendered at
             // 180 km with one band, "045" landed across "RG 180" and read as "RG-180",
-            // which is a bug report someone did file. Pushed along the centre-to-edge
+            // which is a bug report someone did file. Pushed along the center-to-edge
             // ray, so each moves away from the block rather than in some fixed direction
             // that would be wrong at half the bearings.
-            const centre = coords[0];
+            const center = coords[0];
             const outward = (at: ProjectedPosition): {offsetXPx: number; offsetYPx: number} => {
-                const dx = at[0] - centre[0];
-                const dy = at[1] - centre[1];
+                const dx = at[0] - center[0];
+                const dy = at[1] - center[1];
                 const length = Math.hypot(dx, dy);
                 if (length === 0) return {offsetXPx: 0, offsetYPx: 0};
                 // Screen y grows downward while projected y grows north, hence the flip.

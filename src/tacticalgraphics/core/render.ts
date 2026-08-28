@@ -10,7 +10,7 @@
  *   "type": "Feature",
  *   "geometry": {"type": "LineString", "coordinates": [[-77.0, 38.9], [-76.9, 39.0]]},
  *   "properties": {
- *     "tacticalGraphic": {"name": "MainAxisOfAdvance", "label": "1-508 IN"}
+ *     "tacticalGraphic": {"name": "MainAxisOfAdvance", "designation": "1-508 IN"}
  *   }
  * }
  * ```
@@ -28,6 +28,9 @@ import {
     RouteDirection,
     TacticalGraphicConfidence,
     TacticalGraphicEchelon,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
     TacticalGraphicHostility,
     TacticalGraphicName,
     AltitudeDatum,
@@ -47,10 +50,40 @@ export interface TacticalGraphicProperties {
     name: TacticalGraphicName;
 
     // ── Amplifiers (text shown on the graphic) ──────────────────────────────
-    /** Primary free-text designation, e.g. "1-508 IN". */
-    label?: string;
-    /** Secondary designation, rendered beneath the primary on some graphics. */
-    secondId?: string;
+    /**
+     * **Field T — unique designation.** The primary free-text designation, e.g.
+     * "1-508 IN". FM 1-02.2: *"T — Identifies a unique designation"*.
+     *
+     * Named for the field rather than for what it renders as. It was `label`, which
+     * collided with the three other senses of that word in this library — the anchor
+     * features `renderTacticalGraphic` returns, the `role: 'label'` tag, and
+     * {@link GraphicLabels}, the bag this is one member of. `readGraphicLabels(f).label`
+     * read as the label of the labels and was none of them.
+     */
+    designation?: string;
+    /**
+     * **Field T1 — the second unique designation**, rendered beneath the primary on the
+     * graphics that carry two. A boundary shows both.
+     *
+     * Doctrine numbers these T and T1, which is why they are not `identifier1` and
+     * `identifier2`: a reader holding the plate would take `identifier1` for T1.
+     */
+    secondDesignation?: string;
+    /**
+     * **Field H — additional information.** Free text a symbol carries *beside* its
+     * designation, not instead of it.
+     *
+     * Both standards name it that way, and several plates set the two at once: the area
+     * generic (APP-06 120700) reads `H  T` on one line, the PsyOps zone stacks H over T
+     * beside its loudspeaker, and human terrain sets H alone under its `HT`. The airfield
+     * zone (120400) carries only this one — "The Field 'H' for this symbol includes type
+     * of airfield, length of runway and other pertinent information" — which is why a
+     * graphic needing H cannot simply borrow `label`.
+     *
+     * Where it is drawn is each symbol's own business; several rows add that H "should be
+     * movable to avoid obscuring key geographic information", so a host is free to move it.
+     */
+    additionalInfo?: string;
     countryCode?: string;
     secondCountryCode?: string;
     /** Date-time group, formatted by the caller. */
@@ -60,7 +93,7 @@ export interface TacticalGraphicProperties {
      * Altitude or depth, as a **number** in the host's configured {@link AltitudeUnit}.
      *
      * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
-     * in the string", and feet, metres, a flight level and a submerged depth are all
+     * in the string", and feet, meters, a flight level and a submerged depth are all
      * legal — so this was a string. In practice the properties dialog has only ever
      * accepted digits, which made the freedom theoretical while costing every consumer a
      * value it could not sort, compare or arithmetic on. The unit comes from the config
@@ -87,20 +120,39 @@ export interface TacticalGraphicProperties {
     /** Weapon designation. Today only FinalProtectiveFire renders this. */
     weapon?: string;
 
-    // ── Symbology (affects colour and dash pattern) ─────────────────────────
+    // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /**
+     * Which mine the two mine areas draw inside themselves — APP-06 Table 8-24's
+     * Sector 1 Modifier, restricted to its seven primitive types.
+     * @see TacticalGraphicMineType
+     */
+    mineType?: TacticalGraphicMineType;
+    /**
+     * Which mobility icon the three terrain areas draw as their **Sector 1** modifier --
+     * APP-06 Table 8-24's `MOBILITY` category. Limited access area, restricted terrain and
+     * severely restricted terrain, and nothing else: the table's Remarks column says so.
+     * @see TacticalGraphicMobility
+     */
+    mobility?: TacticalGraphicMobility;
+    /**
+     * The **Sector 2** modifier of restricted and severely restricted terrain -- APP-06
+     * Table 8-25. It sets a word under the mobility icon and, optionally, the color the
+     * area is hatched in. @see TacticalGraphicTerrain
+     */
+    terrain?: TacticalGraphicTerrain;
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
-     * Radius in **metres**: how far the symbol reaches from its own centre. The circle
+     * Radius in **meters**: how far the symbol reaches from its own center. The circle
      * radius for the arc mission tasks and circular areas, and the half-length of a
      * point-anchored arrow. Defaults are applied per graphic when omitted.
      *
-     * Only for graphics that *have* a centre. A line graphic's arrowhead or teeth are
+     * Only for graphics that *have* a center. A line graphic's arrowhead or teeth are
      * sized by `decorationSize`, which is a different quantity that was briefly and
      * wrongly folded in here.
      */
@@ -111,27 +163,37 @@ export interface TacticalGraphicProperties {
      *
      * Separate from `radius` because it is not a reach from anywhere:
      * `DirectionOfSupportingAttack` is a MultiLineString of the drawn line plus an
-     * arrowhead, and there is no centre to take a radius of. The two were briefly one
+     * arrowhead, and there is no center to take a radius of. The two were briefly one
      * field, which made `radius` mean two unrelated things depending on the graphic.
      *
      * **Caveat, see `ai/decisions.md`:** the generators that read this still consume it as
-     * metres per *screen pixel* and multiply by a pixel count of their own, so a value in
-     * metres comes out ~20x too large. That is the open item this field's existence makes
+     * meters per *screen pixel* and multiply by a pixel count of their own, so a value in
+     * meters comes out ~20x too large. That is the open item this field's existence makes
      * findable rather than hidden inside `radius`.
      */
     decorationSize?: number;
     /**
-     * **Full** width in metres, measured across a drawn line: rail to rail on an
+     * **Full** width in meters, measured across a drawn line: rail to rail on an
      * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
      * and what a properties dialog shows.
      *
      * Full, not half — the generators work in half-widths (the perpendicular offset
-     * from the centreline), so `toGraphicOptions` halves it on the way in and the
+     * from the centerline), so `toGraphicOptions` halves it on the way in and the
      * holders double it on the way out. The doubling is kept inside the library
      * precisely so a consumer never has to know about it: you send the width you
      * would measure on the map.
      */
     width?: number;
+    /**
+     * Full length in meters, the dimension **along** the graphic rather than across it.
+     *
+     * Only the rectangular target carries both. FM 1-02.2 table 5-25 draws it with
+     * `AM1` across the top and `AM` down the side; APP-06 240802 names them
+     * outright — "the target length (AM1) in metres and target width (AM) in metres".
+     * Every other rectangle takes its length from the anchor points instead, which is
+     * why this is not beside `width` on all of them.
+     */
+    length?: number;
     /**
      * Hangs an asymmetric graphic's hook on the other side of its drawn line.
      *
@@ -157,10 +219,10 @@ export interface TacticalGraphicProperties {
      */
     labelGapDegrees?: number;
     /**
-     * Half the gap left in a bowed curve for its designation, in **metres**. Turn
+     * Half the gap left in a bowed curve for its designation, in **meters**. Turn
      * and the tactical turn are the only readers.
      *
-     * The metres twin of `labelGapDegrees`, and it exists for the same reason: pass
+     * The meters twin of `labelGapDegrees`, and it exists for the same reason: pass
      * 0 when the renderer cuts the gap itself from the rendered glyph, which both of
      * this library's renderers do. Omitting it leaves the generator's fallback of
      * `0.16 * size` — right for a consumer taking the raw GeoJSON, wrong on top of a
@@ -194,9 +256,13 @@ export interface TacticalGraphicProperties {
  * already imports it had to change.
  */
 export interface GraphicLabels {
-    label: string;
+    /** Field T. @see TacticalGraphicProperties.designation */
+    designation: string;
     countryCode?: string;
-    secondId?: string;
+    /** Field T1. @see TacticalGraphicProperties.secondDesignation */
+    secondDesignation?: string;
+    /** Field H — additional information. @see TacticalGraphicProperties.additionalInfo */
+    additionalInfo?: string;
     secondCountryCode?: string;
     startDate?: string;
     endDate?: string;
@@ -206,17 +272,25 @@ export interface GraphicLabels {
     /** What both are measured from. @see AltitudeDatum */
     altitudeDatum?: AltitudeDatum;
     /**
-     * Full width in metres, edge to edge. The same field the geometry schema uses —
+     * Full width in meters, edge to edge. The same field the geometry schema uses —
      * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
      * width rather than a string mirror of it that has to be kept in step.
      */
     width?: number;
+    /** Full length in meters. @see TacticalGraphicProperties.length */
+    length?: number;
     eff?: string;
     grid?: string;
     weapon?: string;
     hostility?: TacticalGraphicHostility;
     echelon?: TacticalGraphicEchelon;
     direction?: RouteDirection;
+    /** @see TacticalGraphicProperties.mineType */
+    mineType?: TacticalGraphicMineType;
+    /** @see TacticalGraphicProperties.mobility */
+    mobility?: TacticalGraphicMobility;
+    /** @see TacticalGraphicProperties.terrain */
+    terrain?: TacticalGraphicTerrain;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;
@@ -252,11 +326,46 @@ export function listTacticalGraphicNames(): string[] {
     return TacticalGraphicsRegistry.list();
 }
 
+/**
+ * Amplifier keys 3.0.0 renamed, and what a file written before it calls them.
+ *
+ * `properties.tacticalGraphic` is what a host SAVES, so renaming a key in it silently
+ * empties that amplifier on every graphic already on disk. The rename was worth making
+ * — @see TacticalGraphicProperties.designation — and it is cheap to make it survivable,
+ * which the point-order change in the same release is not.
+ *
+ * One direction only. Nothing writes the old names back, they are absent from the
+ * types, and a bag carrying both keeps the current one: an old key is evidence about a
+ * file's age, not an override.
+ */
+const RENAMED_AMPLIFIERS: ReadonlyArray<readonly [legacy: string, current: keyof TacticalGraphicProperties]> = [
+    ['label', 'designation'],
+    ['secondId', 'secondDesignation'],
+];
+
+/**
+ * Fills in the current amplifier names from the ones a saved file may still use.
+ *
+ * Applied wherever a stored bag is read — here, and by both renderers — so the alias is
+ * stated once rather than once per engine. Returns the bag untouched when there is
+ * nothing to translate, which is every graphic written by this version.
+ */
+export function applyAmplifierAliases<T extends object>(bag: T): T {
+    const source = bag as Record<string, unknown>;
+    let out: Record<string, unknown> | undefined;
+    for (const [legacy, current] of RENAMED_AMPLIFIERS) {
+        if (source[legacy] === undefined || source[current] !== undefined) continue;
+        out = out ?? {...source};
+        out[current] = source[legacy];
+    }
+    return (out as T) ?? bag;
+}
+
 /** Reads a feature's tactical graphic config, or `undefined` if it has none. */
 export function readTacticalGraphicProperties(feature: Feature): TacticalGraphicProperties | undefined {
     const props = feature.properties as GeoJsonProperties;
     const config = props?.[TACTICAL_GRAPHIC_KEY];
-    return config && typeof config === 'object' ? (config as TacticalGraphicProperties) : undefined;
+    return config && typeof config === 'object' ? applyAmplifierAliases(config as TacticalGraphicProperties) : undefined;
 }
 
 /** True when the feature carries a `properties.tacticalGraphic` object. */
@@ -299,7 +408,7 @@ const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
  *
  * **Exported** because a renderer sometimes has to see what the generator saw. A
  * range fan's bands are consumed by the generator and survive only as anonymous
- * points, so a renderer labelling them must re-resolve them from the same options —
+ * points, so a renderer labeling them must re-resolve them from the same options —
  * and reconstructing the mapping on its own is how the two ended up disagreeing.
  */
 export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
@@ -318,10 +427,10 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
         // than a fraction of `size`, so it survives a resize. It reached the generator
         // only through an OpenLayers holder override, so every other caller — a second
         // renderer, a consumer of the public API — silently got the fallback ratio and
-        // a visibly smaller arrowhead. It is the same metres the holder stamps.
+        // a visibly smaller arrowhead. It is the same meters the holder stamps.
         headSize: props.decorationSize,
         // Public `width` is a full width; the generators' `radius` is the half-width
-        // offset from the centreline. This is the only place the factor of two lives.
+        // offset from the centerline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
         rotation: props.rotation,
         mirrored: props.mirrored,

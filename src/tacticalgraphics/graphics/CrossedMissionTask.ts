@@ -3,6 +3,7 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import {toDegrees, toRadians} from "../core/math";
+import {allowedGestures} from "../core/symbology";
 
 /**
  * Half-height ÷ half-width of the symbol box the two "wide" crossed tasks are
@@ -17,13 +18,13 @@ const ARROWHEAD_RATIO = 0.22;
 const ARROWHEAD_DEG = 30;
 
 /**
- * One of the two straight lines that cross at the symbol's centre.
+ * One of the two straight lines that cross at the symbol's center.
  *
  * Both ends are drawn; `head` puts an open arrowhead on the end in the
  * `+angleDeg` direction only, which is the end FM 1-02.2 marks on Interdict.
  */
 interface CrossArm {
-    /** Planar angle through the centre, degrees, 0 = east, before `rotation`. */
+    /** Planar angle through the center, degrees, 0 = east, before `rotation`. */
     angleDeg: number;
     /** Half-length as a multiple of `opts.size` — the box's half-width. */
     reach: number;
@@ -56,14 +57,14 @@ const CROSS_ARMS: Partial<Record<TacticalGraphicName, CrossArm[]>> = {
  * stroke, "S"), Neutralize (horizontal line plus a hashed diagonal, "N") and
  * Interdict (horizontal and diagonal lines, both arrowheaded, "I").
  *
- * Point-anchored: the user places a centre and the symbol keeps its doctrinal
+ * Point-anchored: the user places a center and the symbol keeps its doctrinal
  * proportions under resize and rotate. Nothing about it is stretchable, so
- * there are no line vertices to edit — `generateHandles` publishes the centre
+ * there are no line vertices to edit — `generateHandles` publishes the center
  * and nothing else.
  *
  * **Sub-line layout**, which `crossedMissionTaskStyleFunc` depends on:
  *   `[0]` first arm, `[1]` second arm, `[2…]` arrowheads.
- * The two arms run right through the centre; the style function is what opens
+ * The two arms run right through the center; the style function is what opens
  * the gap for the label, sized from the glyph it actually renders.
  */
 export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
@@ -99,12 +100,25 @@ export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions
     }
 
     /**
-     * The centre, and only the centre. A crossed mission task has no dimension
+     * The center, and only the center. A crossed mission task has no dimension
      * the user may drag independently — an edge handle would suggest one that
      * does not exist. Resize and rotate work off the symbol itself.
      */
+    /**
+     * `[edge, center]` for the three that resize, and the centre alone for Destroy.
+     *
+     * Edge first, which is the order every point-anchored graphic emits and which the
+     * controllers depend on. Destroy gets no edge handle on purpose: it is pinned to a
+     * screen size, so a handle there would offer a dimension that cannot change — the
+     * drag would store a number the paint divides straight back out.
+     */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature([base.geometry.coordinates]);
+        const center = base.geometry.coordinates;
+        if (!allowedGestures(this.name as TacticalGraphicName).resize) {
+            return this.asMultiPointFeature([center]);
+        }
+        const edge = geometryService.translateCoordinates(center, opts.size, toRadians(opts.rotation));
+        return this.asMultiPointFeature([edge, center]);
     }
 
     generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {

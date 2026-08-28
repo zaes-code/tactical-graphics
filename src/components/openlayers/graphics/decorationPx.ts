@@ -3,4 +3,4 @@
  * surface is unchanged. It is a statement about how big a decoration looks, which
  * is the same for any renderer — see the note there.
  */
-export {decorationMetres} from '@zaes/tactical-graphics';
+export {decorationMeters} from '@zaes/tactical-graphics';

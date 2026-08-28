@@ -1,5 +1,5 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {drawnSizeMeters, getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,
@@ -14,7 +14,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 /**
@@ -46,10 +46,6 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
  * `getBlockArrow` is deliberate: that helper is shared, and was left alone so
  * the excluded FollowAndAssume / FollowAndSupport come back unchanged.
  */
-const DEFAULT_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.TacticalBlock]: 60,
-    [TacticalGraphicName.Block]: 60,
-};
 
 
 export class Block implements LineGraphic {
@@ -87,10 +83,10 @@ export class Block implements LineGraphic {
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         this.name = name;
-        // `size` arrives as 20 × drawingResolution; an override is expressed in the
-        // same screen pixels, so rescale rather than replace.
-        const sizePx = DEFAULT_SIZE_PX[name];
-        this.size = sizePx !== undefined && drawingResolution ? sizePx * drawingResolution : size;
+        // `size` arrives as 20 × drawingResolution; the block family states its own,
+        // larger screen size, which **both** renderers read from the library rather than
+        // from a table in here. @see drawnSizeMeters
+        this.size = (drawingResolution ? drawnSizeMeters(name, drawingResolution) : undefined) ?? size;
         this.ratioLock = ratioLockOf(name);
         this.offsetScale = OFFSET_SCALE[name];
         if (drawingResolution !== undefined) {
@@ -117,7 +113,7 @@ export class Block implements LineGraphic {
                     return clearStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.TacticalDisrupt:
                 case TacticalGraphicName.Disrupt:
-                    // 0.75 places the D at the centre of the middle trident
+                    // 0.75 places the D at the center of the middle trident
                     // prong (which spans 0.5 → 1.0 of the user's base line).
                     return clearStyleFunc(getLabel(name), 0.75)(feature, resolution);
                 default:
@@ -140,10 +136,10 @@ export class Block implements LineGraphic {
 
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
 
-        // Persist the *effective* metre value rather than the viewport factor behind it.
+        // Persist the *effective* meter value rather than the viewport factor behind it.
         // A ratio-locked name re-derives `size` from the base length on restore and
         // ignores this; the rest have no other record of the size they were built with.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {

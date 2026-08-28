@@ -71,7 +71,7 @@ Used by: CoordinatedFireLine, EngineerWorkLine.
 Used by: Boundary (in a separate Boundary.ts file, not LineGraphicBase).
 
 - Draws topLabel above and botLabel below at each segment midpoint.
-- topLabel = formatFullLabel(labels.label, labels.countryCode), botLabel = formatFullLabel(labels.secondId, labels.secondCountryCode).
+- topLabel = formatFullLabel(labels.designation, labels.countryCode), botLabel = formatFullLabel(labels.secondDesignation, labels.secondCountryCode).
 - No fixed prefix from getLabel() — does not include a graphic-type name.
 
   ---

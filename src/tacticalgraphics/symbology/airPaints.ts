@@ -1,15 +1,15 @@
 /**
  * # The air-coordinating areas' label blocks
  *
- * Fourteen graphics whose amplifiers are a **block of labelled lines** rather than a
+ * Fourteen graphics whose amplifiers are a **block of labeled lines** rather than a
  * designation: the eleven air-coordinating zones, and the three airspace coordination
  * areas. They were the last families whose layout lived only in `openlayerStyles.ts`,
  * and the registry said so — they fell through to the default area label, which draws
- * a centred designation and nothing else.
+ * a centered designation and nothing else.
  *
  * With only a `label` set the difference is invisible, which is why it survived every
  * sweep until one carried altitudes and date-time groups. Then MapLibre drew two
- * centred labels on top of each other and no altitudes at all, against OpenLayers'
+ * centered labels on top of each other and no altitudes at all, against OpenLayers'
  * six-line block.
  *
  * The two families look alike and are not the same: the zones take the doctrinal
@@ -20,10 +20,11 @@
  */
 
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
-import {fontStyle, formatAltitude, getLabelFillColor} from '../core/symbology';
+import {fontStyle, formatAltitude} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, halo, scaleOf} from './paintFunctions';
+import {getFullLabel, halo, scaleOf, labelColorOf} from './paintFunctions';
+import {fitLabelScale} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
 type AirPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -44,12 +45,12 @@ const FIT_SHARE = 0.8;
 const column = (label: string, value: string) => `${label.padEnd(LABEL_COLUMN)}${value}`;
 
 /**
- * One multi-line label, left-justified, centred on the anchor as a block.
+ * One multi-line label, left-justified, centered on the anchor as a block.
  *
- * **The block is centred by measuring it, not by centring the text.** The lines are
+ * **The block is centered by measuring it, not by centering the text.** The lines are
  * left-justified against each other — that is what puts the values in a column — so
  * the anchor sits at the block's left edge and is then pushed left by half the widest
- * line. Centring the text instead would ragged-edge the columns.
+ * line. Centering the text instead would ragged-edge the columns.
  *
  * A blank line separates the name block from the altitude block, per the MIL-STD-2525E
  * layout. It is an empty string rather than an offset because the renderer owns line
@@ -66,14 +67,24 @@ function labelBlock(
     if (lines.length === 0 || feature.geometry.type !== 'Point') return [];
 
     const widest = Math.max(...lines.map(line => (line ? textWidth(context, line, fontStyle, 1) : 0)));
-    const scale = fitToPolygon ? Math.min(scaleOf(feature, context), fitScale(feature, context, widest)) : scaleOf(feature, context);
+    // Two caps, and the block has to clear both. `fitScale` measures against the bounding
+    // box's shorter side and knows nothing about how many lines there are; `fitLabelScale`
+    // measures the whole block against the drawn ring, which is what an operator sees.
+    // The box cap stays because it is the only one available before a ring is stamped.
+    const scale = fitToPolygon
+        ? Math.min(
+            scaleOf(feature, context),
+            fitScale(feature, context, widest),
+            fitLabelScale(feature, context, feature.geometry.coordinates, lines, fontStyle, scaleOf(feature, context)),
+        )
+        : scaleOf(feature, context);
 
     return [{
         geometry: feature.geometry,
         text: {
             text: lines.join('\n'),
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: halo(),
             align: 'left',
             justify: 'left',
@@ -117,7 +128,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         const names: string[] = [];
         const identifier = getLabel(name).trim();
         if (identifier) names.push(identifier);
-        if (props.label?.trim()) names.push(props.label.trim());
+        if (props.designation?.trim()) names.push(props.designation.trim());
 
         const values: string[] = [];
         if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
@@ -125,7 +136,17 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.startDate) values.push(column('TIME FROM:', props.startDate));
         if (props.endDate) values.push(column('TIME TO:', props.endDate));
 
-        return labelBlock(names, values, feature, context, false);
+        /*
+         * **Fitted, as of 2026-08-21.** These eleven are drawn as circles, rectangles and
+         * irregular areas like any other zone, and their block is the longest in the
+         * library — a two-line name over four `MIN ALT: / MAX ALT: / TIME FROM: / TIME TO:`
+         * columns. Unfitted it ran 4.6x the width of the zone it belongs to at gallery
+         * scale: 57 px of text across a 12 px shape.
+         *
+         * `fitLabelScale` returns the desired scale untouched when there is no ring to
+         * measure against, so this costs a point-anchored member nothing.
+         */
+        return labelBlock(names, values, feature, context, true);
     };
 }
 
@@ -133,7 +154,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
  * The three airspace coordination areas.
  *
  * Prefix and designation are joined on **one** line here, and the second line is
- * `secondId` rather than `label` — these carry two designations where the zones carry
+ * `secondDesignation` rather than `label` — these carry two designations where the zones carry
  * one. The value block is grid and one combined effective-time line rather than two
  * separate times.
  *
@@ -146,9 +167,9 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
     return (feature, context) => {
         const props = feature.properties;
         const names: string[] = [];
-        const identifier = getFullLabel(name, props.label ?? '').trim();
+        const identifier = getFullLabel(name, props.designation ?? '').trim();
         if (identifier) names.push(identifier);
-        if (props.secondId?.trim()) names.push(props.secondId.trim());
+        if (props.secondDesignation?.trim()) names.push(props.secondDesignation.trim());
 
         const values: string[] = [];
         if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));

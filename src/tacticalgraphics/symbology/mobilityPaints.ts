@@ -7,9 +7,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {dateRangeLabel} from './midLabelLinePaints';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -22,16 +22,16 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
  *
  * ## The clearance is measured, not assumed
  *
- * The DTG has to start behind the *fishtail*, not behind the centre line — which
+ * The DTG has to start behind the *fishtail*, not behind the center line — which
  * is where a flat offset off the start point put it. Sub-line `[2]` is the tail,
  * `[hook, start, hook]`, both hooks swept back from the start, so measuring how
  * far they reach along the line is the only way to know what to clear. A constant
- * cannot: the hooks are `size × 20` metres, so their screen reach changes with
+ * cannot: the hooks are `size × 20` meters, so their screen reach changes with
  * zoom while a pixel offset does not.
  *
  * ## The label's own upright pass
  *
- * The DTG reads across the lane, so it needs a second normalisation — adding a
+ * The DTG reads across the lane, so it needs a second normalization — adding a
  * quarter turn to an already-upright angle pushes it straight back out of range,
  * and a lane drawn north-to-south landed on π, upside down.
  *
@@ -42,7 +42,7 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
  * is fixing. `atan2(sin, cos)` folds any angle back into (−π, π] first.
  *
  * Correcting by ±π keeps the label perpendicular to the lane, so it only ever
- * flips end-for-end about its own centre. That matters twice: the anchor does not
+ * flips end-for-end about its own center. That matters twice: the anchor does not
  * move, and the clearance above stays valid, because it is still the glyph's
  * *height* that overhangs toward the symbol.
  */
@@ -50,11 +50,11 @@ export function passageLanePaint(): LinePaint {
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
-        const centre = geometry.coordinates[1];
-        if (!centre || centre.length < 2) return [];
+        const center = geometry.coordinates[1];
+        if (!center || center.length < 2) return [];
 
-        const [x1, y1] = centre[0];
-        const [x2, y2] = centre[1];
+        const [x1, y1] = center[0];
+        const [x2, y2] = center[1];
         const dx = x2 - x1;
         const dy = y2 - y1;
 
@@ -63,7 +63,7 @@ export function passageLanePaint(): LinePaint {
 
         // Zoom-anchored and clamped, exactly as Bridge sizes its DTG. The
         // span-proportional formula this replaced tied the glyph to the width of the
-        // lane, so a lane drawn a few hundred metres wider rendered text several times
+        // lane, so a lane drawn a few hundred meters wider rendered text several times
         // the height of every other mobility label.
         const scale = scaleOf(feature, context);
 
@@ -96,7 +96,7 @@ export function passageLanePaint(): LinePaint {
                 text: {
                     text: dateRangeLabel(feature.properties),
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     rotation: labelRotation,
                     align: 'center',
@@ -131,7 +131,7 @@ function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): Proje
  *
  * The bar is drawn as a thick butt-capped stroke rather than as a filled polygon,
  * which is what makes its ends square — a rounded cap would read as a lozenge. It
- * is part of the symbol, so it takes the same standard-identity colour as the legs
+ * is part of the symbol, so it takes the same standard-identity color as the legs
  * rather than a fixed black.
  *
  * **The label carries no halo.** It sits below the vertex in open space, where a
@@ -160,14 +160,14 @@ export function fieldsOfFirePaint(): LinePaint {
             });
         }
 
-        const label = feature.properties.label ?? '';
+        const label = feature.properties.designation ?? '';
         if (leg.length >= 3 && label) {
             paints.push({
                 geometry: {type: 'Point', coordinates: leg[1]},
                 text: {
                     text: label,
                     font: fontStyle,
-                    fill: getLabelFillColor(),
+                    fill: labelColorOf(feature),
                     align: 'center',
                     baseline: 'top',
                     offsetYPx: FIELD_OF_FIRE_LABEL_OFFSET_PX,

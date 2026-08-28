@@ -4,7 +4,7 @@
  *
  * The README has twice advertised a property that had been renamed or removed hours
  * earlier — `corridorWidth` existed for about an hour before being folded into `width`,
- * and the catalogue kept listing it. Prose drifts silently; this does not.
+ * and the catalog kept listing it. Prose drifts silently; this does not.
  */
 import {readFileSync} from 'fs';
 import {join} from 'path';
@@ -27,7 +27,7 @@ function schemaFields(): Set<string> {
     return new Set(Array.from(body.matchAll(/^\s{4}(\w+)\??:/gm), m => m[1]));
 }
 
-/** Field names in the README's `tacticalGraphic: { ... }` catalogue block. */
+/** Field names in the README's `tacticalGraphic: { ... }` catalog block. */
 function readmeFields(): Set<string> {
     const md = read('README.md');
     const start = md.indexOf('tacticalGraphic: {\n    // Required');
@@ -56,7 +56,7 @@ describe('the README documents the schema that exists', () => {
      * undocumented — mentioned in a trailing comment on `countryCode`'s line, which
      * reads as documentation and is invisible to a check that parses field names.
      *
-     * A field the catalogue does not list is a field a consumer cannot discover: there
+     * A field the catalog does not list is a field a consumer cannot discover: there
      * is no per-graphic options type to read, which is the point of the flat bag.
      */
     it('documents every field the schema has', () => {
