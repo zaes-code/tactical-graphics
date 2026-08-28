@@ -210,3 +210,44 @@ const MIN_DRAWN_RADIUS_GRAPHICS: readonly TacticalGraphicName[] = [
 export function minimumDrawnRadiusPx(name: TacticalGraphicName): number | undefined {
     return MIN_DRAWN_RADIUS_GRAPHICS.includes(name) ? MIN_DRAWN_RADIUS_PX : undefined;
 }
+
+/**
+ * How short the **first segment** of these graphics may be drawn, in pixels.
+ *
+ * Three line graphics carry a mark baked into the geometry near the start of the line,
+ * and each needs room for it *and* for the arrowhead at the far end. Drawn shorter, the
+ * mark and the head occupy the same stretch of line and the symbol stops being readable
+ * — and shorter still, the mark runs off the end of the line it annotates entirely,
+ * because it is placed by interpolating a fixed distance along the segment.
+ *
+ * - **Aviation direction of attack** — 80 px: the bow-tie reaches 3x the 20 px
+ *   decoration unit from the start, and the arrowhead reaches cos(45 deg) x it back
+ *   from the tip.
+ * - **Fix** and its table 5-19 twin — 145 px: 50 px for the F-labelled first segment,
+ *   45 px for the three triangles, 50 px into the arrowhead. The twin draws no "F" but
+ *   the geometry is otherwise identical, so it takes the same floor.
+ *
+ * **Here so that both renderers apply the same floor at the same moment.** It lived in
+ * `LineGraphicBase.setBaseFeature` as two hard-coded literals, which is the shape of
+ * defect this repository keeps finding: MapLibre had no equivalent, so the same short
+ * drag produced a readable symbol on one engine and a bow-tie sitting off the end of
+ * its own line on the other.
+ *
+ * A floor is a **draw-time affordance and only that** — see `suspendMinimumLength`.
+ * Re-running it on a restore stretches a line that was already valid, at whatever
+ * resolution the restoring session happens to be at.
+ */
+const MIN_FIRST_SEGMENT_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.AviationDirectionOfAttack]: 80,
+    [TacticalGraphicName.Fix]: 145,
+    [TacticalGraphicName.TacticalFix]: 145,
+};
+
+/**
+ * The floor this graphic's first segment is held to while it is being **shaped**, in
+ * pixels, or `undefined` when it has none. Convert with `screenMeters`.
+ * @see MIN_FIRST_SEGMENT_PX
+ */
+export function minimumFirstSegmentPx(name: TacticalGraphicName): number | undefined {
+    return MIN_FIRST_SEGMENT_PX[name];
+}
