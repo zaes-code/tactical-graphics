@@ -53,16 +53,20 @@ describe('the first drawing is level', () => {
         expect(levelRectangleAxis(vertical)).toEqual(vertical);
     });
 
-    it('is what the shared draw hook applies, for every rectangular zone', () => {
-        // Both engines call `normalizeDrawnBase` between the last click and the stored
-        // base, so neither can draw a crooked one.
+    it('is not done by the shared draw hook, which also runs on every rebuild', () => {
+        // **The tempting place, and the wrong one.** `normalizeDrawnBase` is a draw-time
+        // tidy-up and levelling belongs to the same family — but MapLibre runs that hook
+        // on every *build*: restore, import, sweep, and after every gesture. Levelling
+        // there squared the axis back onto the parallel the instant a rotate applied it,
+        // so a rectangular zone could not be turned at all on that engine. The two draw
+        // paths level it themselves. @see RectangularAreaGraphicBase.drawing
+        const askew: Position[] = [P1, [0.2, 51.62]];
         for (const name of [
             TacticalGraphicName.FreeFireAreaRectangular,
             TacticalGraphicName.TargetAreaRectangular,
             TacticalGraphicName.PsyOpsZoneRectangular,
         ]) {
-            const stored = normalizeDrawnBase(name, [P1, [0.2, 51.62]]);
-            expect(stored[1][1]).toBeCloseTo(P1[1], 9);
+            expect(normalizeDrawnBase(name, askew)).toEqual(askew);
         }
     });
 

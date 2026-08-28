@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -223,6 +223,7 @@ function withDerivedAmplifiers(
     name: TacticalGraphicName,
     description: GraphicDescription,
     before?: GraphicDescription,
+    gesture?: string,
 ): GraphicDescription {
     if (usesDrawnAnchors(name)) return withAnchorFrame(name, description);
 
@@ -234,7 +235,9 @@ function withDerivedAmplifiers(
      * resize. Its `width` is an amplifier the gesture already carries, so only the length
      * is derived here. @see carriesRectangleLength, rectangleAxisLength
      */
-    if (isRectangular(name)) return withRectangleAxis(name, description, before);
+    // A rotate moves the two anchor points about point 1, so only one of them changes —
+    // the same shape a length drag has. The constraint has to be told which it is.
+    if (isRectangular(name)) return withRectangleAxis(name, description, gesture === 'rotate' ? undefined : before);
     return description;
 }
 
@@ -895,10 +898,15 @@ export class MapLibreInteractions {
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        const geometry = buildBase(wants, wants === 'LineString'
-            // The resolution holds the S pair's point 2 to a pixel range.
+        // A rectangular zone is drawn level and turned afterwards, and this is the draw:
+        // `previewDraw` and the commit both come through here, so the preview cannot
+        // disagree with what the last click produces. Levelling in `normalizeDrawnBase`
+        // instead squared the axis up again on every rebuild, which undid each rotate.
+        // @see levelRectangleAxis
+        const tidied = wants === 'LineString'
             ? normalizeDrawnBase(name, vertices, resolutionOf(this.map))
-            : vertices);
+            : vertices;
+        const geometry = buildBase(wants, isRectangular(name) ? levelRectangleAxis(tidied) : tidied);
         if (!geometry) return undefined;
 
         const properties: TacticalGraphicProperties = {
@@ -1181,7 +1189,12 @@ export class MapLibreInteractions {
             drag.insertAt = -1;
         }
 
-        const after = withDerivedAmplifiers(drag.graphic.name, this.applyGesture(before, drag, to), before);
+        const after = withDerivedAmplifiers(
+            drag.graphic.name,
+            this.applyGesture(before, drag, to),
+            before,
+            this.effectiveMode(),
+        );
         drag.last = to;
         if (after === before) return;
 

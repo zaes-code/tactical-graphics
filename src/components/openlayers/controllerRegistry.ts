@@ -81,6 +81,19 @@ const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) => 
         graphic.drawing = false;
         ended(event);
     };
+
+    // A rotate turns about point 1, so only point 2 moves — the same shape a length drag
+    // has, and the axis constraint would hold the zone level and merely shorten it.
+    // @see RectangularAreaGraphicBase.rotating
+    const rotate = controller.handleRotate.bind(controller);
+    controller.handleRotate = (delta: number) => {
+        graphic.rotating = true;
+        try {
+            rotate(delta);
+        } finally {
+            graphic.rotating = false;
+        }
+    };
     return controller;
 };
 
