@@ -396,6 +396,7 @@ export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
 export {
     axisFromRectangleRing,
     constrainRectangleAxis,
+    rectangleDefaultHalfWidth,
     levelRectangleAxis,
     rectangleFromAxis,
     RECTANGLE_DEFAULT_HALF_WIDTH_PX,

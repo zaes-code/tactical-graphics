@@ -11,7 +11,7 @@ import Feature from 'ol/Feature';
 import {LineString, MultiLineString, Point} from 'ol/geom';
 import type Geometry from 'ol/geom/Geometry';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -207,6 +207,19 @@ describe('every holder family round-trips', () => {
             };
             expect(width(after) / width(before)).toBeCloseTo(VIEW_RES / RES, 6);
             expect(center(after)).toBeCloseTo(center(before), 3);
+            return;
+        }
+
+        if (isRectangular(name)) {
+            // **To the amplifier's own precision, which is whole metres.** A rectangle's
+            // shape is derived from `width`, and that number is rounded on the way into
+            // the bag because it is a figure an operator reads and types. So the ring
+            // comes back within half a metre of width — measured, 4 cm on a 1,990 km
+            // extent. A millimetre tolerance here would be asserting the rounding.
+            // @see RectangularAreaGraphicBase.publishWidth
+            const a = after?.getExtent() ?? [];
+            const b = before?.getExtent() ?? [];
+            a.forEach((value, i) => expect(value).toBeCloseTo(b[i], -1));
             return;
         }
 
