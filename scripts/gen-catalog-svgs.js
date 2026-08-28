@@ -59,8 +59,13 @@ const argOf = (flag, dflt) => {
 const REPO = path.resolve(__dirname, '..');
 const OUT = path.resolve(REPO, argOf('--out', path.join('..', 'zaes.com', 'img', 'catalog')));
 const ONLY = argOf('--only', null);
-const [TILE_W, TILE_H] = argOf('--size', '260x170').split('x').map(Number);
-const PAD = 18; // px of breathing room inside the tile
+/**
+ * The tile a thumbnail is composed against. A graphic may be painted into a multiple
+ * of it — @see ZOOM_STEPS — and the page scales whatever comes out to its own grid, so
+ * these are proportions rather than pixels a viewer ever sees.
+ */
+const [BASE_TILE_W, BASE_TILE_H] = argOf('--size', '260x170').split('x').map(Number);
+const BASE_PAD = 18; // px of breathing room inside the tile
 
 let lib;
 try {
@@ -81,6 +86,8 @@ const {
     storedOrder,
     getDisplayName,
     GRAPHIC_CATEGORIES,
+    isRectangular,
+    CORRIDOR_GRAPHICS,
 } = lib;
 
 // ── 4326 → 3857 ─────────────────────────────────────────────────────────────
@@ -103,14 +110,59 @@ const project = geom => {
  * Headless text measurement.
  *
  * `PaintContext.measureText` is injected precisely so this layer never needs a
- * DOM, and its docs say an approximation is acceptable — the marks still come
- * out, the glyph-measured gaps are just less exact. 0.58em per character is a
- * reasonable mean for bold sans-serif caps, which is what these labels are.
+ * DOM, and its docs say an approximation is acceptable. This one is better than an
+ * approximation: it adds up per-character advance widths taken from the very metric
+ * set the browser would use, so a label's box is right to a fraction of a pixel
+ * whether it is three bold caps or a 27-character date-time pair.
+ *
+ * It matters twice over — the paints size their own gaps from it, and the tile's
+ * label-collision check believes it. @see CHAR_EM
  */
+/**
+ * Advance widths for printable ASCII, in em, keyed by weight.
+ *
+ * **Measured, not guessed.** These came out of a browser's own `canvas.measureText` at
+ * `bold 64px sans-serif` and `64px sans-serif`, which on every platform this runs on is
+ * the Arial/Helvetica metric set the labels are actually rendered in.
+ *
+ * A single mean per character does not survive contact with these strings: bold caps
+ * average 0.688em and a digit is 0.556em flat, so one figure is 12% wrong on `ROUTE
+ * ALPHA` in one direction and 4% wrong on a DTG pair in the other. That was enough to
+ * report a collision between labels that never touch, and to miss one that does.
+ */
+const CHAR_EM = {
+    bold: [
+        0.278, 0.333, 0.474, 0.556, 0.556, 0.889, 0.722, 0.238, 0.333, 0.333, 0.389, 0.584, 0.278,
+        0.333, 0.278, 0.278, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556,
+        0.333, 0.333, 0.584, 0.584, 0.584, 0.611, 0.975, 0.722, 0.722, 0.722, 0.722, 0.667, 0.611,
+        0.778, 0.722, 0.278, 0.556, 0.722, 0.611, 0.833, 0.722, 0.778, 0.667, 0.778, 0.722, 0.667,
+        0.611, 0.722, 0.667, 0.944, 0.667, 0.667, 0.611, 0.333, 0.278, 0.333, 0.584, 0.556, 0.333,
+        0.556, 0.611, 0.556, 0.611, 0.556, 0.333, 0.611, 0.611, 0.278, 0.278, 0.556, 0.278, 0.889,
+        0.611, 0.611, 0.611, 0.611, 0.389, 0.556, 0.333, 0.611, 0.556, 0.778, 0.556, 0.556, 0.5, 0.389,
+        0.28, 0.389, 0.584
+    ],
+    regular: [
+        0.278, 0.278, 0.355, 0.556, 0.556, 0.889, 0.667, 0.191, 0.333, 0.333, 0.389, 0.584, 0.278,
+        0.333, 0.278, 0.278, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556, 0.556,
+        0.278, 0.278, 0.584, 0.584, 0.584, 0.556, 1.015, 0.667, 0.667, 0.722, 0.722, 0.667, 0.611,
+        0.778, 0.722, 0.278, 0.5, 0.667, 0.556, 0.833, 0.722, 0.778, 0.667, 0.778, 0.722, 0.667, 0.611,
+        0.722, 0.667, 0.944, 0.667, 0.667, 0.611, 0.278, 0.278, 0.278, 0.469, 0.556, 0.333, 0.556,
+        0.556, 0.5, 0.556, 0.556, 0.278, 0.556, 0.556, 0.222, 0.222, 0.5, 0.222, 0.833, 0.556, 0.556,
+        0.556, 0.556, 0.333, 0.5, 0.278, 0.556, 0.5, 0.722, 0.5, 0.5, 0.5, 0.334, 0.26, 0.334, 0.584
+    ],
+};
+const FALLBACK_EM = 0.6; // anything outside printable ASCII
+
 const measureText = (text, font) => {
     const m = /([0-9.]+)px/.exec(font || '');
     const size = m ? parseFloat(m[1]) : 16;
-    return String(text == null ? '' : text).length * size * 0.58;
+    const widths = /bold|[6-9]00/.test(font || '') ? CHAR_EM.bold : CHAR_EM.regular;
+    let em = 0;
+    for (const ch of String(text == null ? '' : text)) {
+        const code = ch.charCodeAt(0) - 32;
+        em += code >= 0 && code < widths.length ? widths[code] : FALLBACK_EM;
+    }
+    return em * size;
 };
 
 // ── Canned base geometry ────────────────────────────────────────────────────
@@ -118,8 +170,96 @@ const LON = -77.0;
 const LAT = 38.9;
 const D = 0.02;
 
+/**
+ * **Presentation overrides — the thumbnail is a portrait, not a screenshot.**
+ *
+ * One canned base and one full amplifier bag suit most of the 288. The handful below
+ * do not, and each for a reason the symbol itself states: a fields-of-fire is a V and
+ * its arrowheads point out along the legs, so the apex has to be at the bottom for
+ * them to read as pointing up; a ford is two rails a readable distance apart, and the
+ * rails come from `width`; a corridor's amplifier block is five stacked lines that
+ * bury the corridor it annotates.
+ *
+ * These change what the CATALOG asks for. None of them changes what the library draws
+ * when asked the same question — if a symbol only looks right here, that belongs in
+ * the library, not in this table.
+ */
+
+/** Fields of fire: generator order is `[end, apex, end]` — @see asVee in graphics/FieldsOfFire.ts. */
+const veeBase = () => [
+    [LON - D * 1.05, LAT + D * 0.62],
+    [LON, LAT - D * 0.72],
+    [LON + D * 1.05, LAT + D * 0.62],
+];
+
+/** A straight run of `span` degrees, for the symbols whose glyphs need elbow room. */
+const straightBase = span => () => [
+    [LON - D * span, LAT],
+    [LON + D * span, LAT],
+];
+
+const SHAPED_BASES = {
+    [TacticalGraphicName.FieldsOfFire]: veeBase,
+    // The bowtie and the label are both fixed screen sizes sitting ON the line, so a
+    // short run packs them into each other however the tile is fitted.
+    [TacticalGraphicName.AviationDirectionOfAttack]: straightBase(3.1),
+    // A ford reads as a crossing only if its two dashed rails are far enough apart to
+    // be two lines. They are offset by width/2, so the run has to stay short.
+    [TacticalGraphicName.FordEasy]: straightBase(0.85),
+    [TacticalGraphicName.FordDifficult]: straightBase(0.85),
+};
+
+/** Amplifiers that put text on the symbol. Dropped wholesale for the corridors. */
+const TEXT_AMPLIFIERS = [
+    'label',
+    'secondId',
+    'countryCode',
+    'secondCountryCode',
+    'startDate',
+    'endDate',
+    'eff',
+    'weapon',
+    'grid',
+    'minAltitude',
+    'maxAltitude',
+    'altitudeDatum',
+    'echelon',
+];
+
+/**
+ * The corridors carry an amplifier block — name, width, both altitudes, both DTGs —
+ * anchored above the run. At thumbnail size it is larger than the corridor and covers
+ * it, so the catalog draws these without it.
+ *
+ * What stays is the part that identifies the symbol rather than annotating it: the
+ * designator the corridor always carries (`AC`, `MRR`, `SC`, …) and its ACP markers.
+ * Dropping those too would leave eight different corridors rendering as one identical
+ * picture, which is the failure a catalog exists to prevent.
+ *
+ * `width` is the awkward one: the block's WIDTH line is derived from it, but so are
+ * the rails. So it is dropped from the properties handed to the PAINTERS and kept in
+ * the ones handed to the generator. @see paintPropsFor
+ *
+ * The membership is the library's own `CORRIDOR_GRAPHICS`, not a copy — a list kept
+ * here was already missing the safe lane.
+ */
+const isCorridor = name => CORRIDOR_GRAPHICS.includes(name);
+
+/**
+ * A rectangular zone's amplifiers are stacked INSIDE it, so its across dimension is
+ * what decides whether they fit. 500 m against a ~4.9 km axis is a slot a tenth as
+ * tall as the text it has to hold. This is the catalog choosing a comfortable zone to
+ * draw, exactly as an operator would drag one.
+ */
+const RECTANGLE_WIDTH_M = 2600;
+
+/** A ford's rails are ±width/2 off the base. @see SHAPED_BASES for the matching run. */
+const FORD_WIDTH_M = 700;
+
 function makeBase(name) {
     const type = baseGeometryFor ? baseGeometryFor(name) : 'LineString';
+    const shaped = SHAPED_BASES[name];
+    if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};
     if (type === 'Polygon') {
         const w = D * 1.35;
@@ -187,14 +327,52 @@ const AMPLIFIERS = {
     rangeFan: {bands: [{range: 12, label: 'MIN'}, {range: 28, altitude: '3000FT AGL'}]},
 };
 
+/**
+ * The bag handed to the PAINTERS, which is not always the bag the geometry was built
+ * from. A corridor needs `width` to have rails and does not need it read back out as a
+ * line of text over them.
+ */
+function paintPropsFor(name, props) {
+    if (!isCorridor(name)) return props;
+    const painted = Object.assign({}, props);
+    delete painted.width;
+    return painted;
+}
+
+/**
+ * When a symbol's text will not fit a thumbnail at any canvas, this is the order it is
+ * given up in.
+ *
+ * A date-time pair is 27 characters — wider than the tile — and the lines carry one at
+ * BOTH ends, so eleven of them cannot be drawn to scale with the pair intact. Zooming
+ * far enough to separate them shrinks the symbol to a sixth of the tile and the text to
+ * a smudge, which answers the collision and loses the thing the catalog is for.
+ *
+ * So the end date goes first, then the pair, and the designation — the amplifier that
+ * says which symbol this is — is never dropped.
+ */
+const AMPLIFIER_FALLBACKS = [[], ['endDate'], ['endDate', 'startDate', 'eff']];
+
+/** The bag this graphic is drawn with. @see the presentation overrides above. */
+function amplifiersFor(name, drop) {
+    const amp = Object.assign({}, AMPLIFIERS);
+    for (const field of drop || []) delete amp[field];
+    if (isCorridor(name)) for (const field of TEXT_AMPLIFIERS) delete amp[field];
+
+    if (isRectangular && isRectangular(name)) amp.width = RECTANGLE_WIDTH_M;
+    if (name === TacticalGraphicName.FordEasy || name === TacticalGraphicName.FordDifficult) amp.width = FORD_WIDTH_M;
+    return amp;
+}
+
 // ── Paint collection ────────────────────────────────────────────────────────
-function paintsFor(name, resolution) {
-    const props = Object.assign({name}, AMPLIFIERS);
+function paintsFor(name, resolution, drop) {
+    const props = Object.assign({name}, amplifiersFor(name, drop));
     const baseGeom = makeBase(name);
     const render = renderTacticalGraphic({type: 'Feature', geometry: baseGeom, properties: {tacticalGraphic: props}});
     const painters = getPaintFunction(name);
     if (!painters) return [];
 
+    const paintProps = paintPropsFor(name, props);
     const ctx = {resolution, measureText};
     const projectedBase = project(baseGeom);
     const out = [];
@@ -233,7 +411,7 @@ function paintsFor(name, resolution) {
     const run = (fn, geom) => {
         if (!fn || !geom) return null;
         try {
-            const r = fn({geometry: geom, properties: props, graphicSize: AMPLIFIERS.radius, ring, bounds}, ctx);
+            const r = fn({geometry: geom, properties: paintProps, graphicSize: props.radius, ring, bounds}, ctx);
             return Array.isArray(r) ? r : [];
         } catch (e) {
             return null;
@@ -248,8 +426,15 @@ function paintsFor(name, resolution) {
     }
     if (g) out.push(...g);
 
-    let l = run(painters.label, project(render.labels && render.labels.geometry));
-    if (l === null || l.length === 0) {
+    // **An empty anchor set is an answer, not a miss.** The fallback below exists for
+    // painters that synthesise their text from the base; a generator that returns zero
+    // label anchors is saying this symbol carries no text, and both fords do. Falling
+    // back for them drew an ALPHA and a DTG pair straight across the rails — text the
+    // app never draws, invented by the harness.
+    const labelGeom = project(render.labels && render.labels.geometry);
+    const declaresNoLabels = !!labelGeom && labelGeom.coordinates.length === 0;
+    let l = run(painters.label, labelGeom);
+    if ((l === null || l.length === 0) && !declaresNoLabels) {
         const viaBase = run(painters.label, projectedBase);
         if (viaBase && viaBase.length) l = viaBase;
     }
@@ -319,6 +504,8 @@ function emitPaints(paints, toPx) {
      * show. Dots and stroke weight overhang for the same reason, just less.
      */
     let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    /** Every emitted label's box, for the collision check in buildSvg. */
+    const textBoxes = [];
     const grow = (x0, y0, x1, y1) => {
         if (x0 < bx0) bx0 = x0;
         if (y0 < by0) by0 = y0;
@@ -423,11 +610,14 @@ function emitPaints(paints, toPx) {
                 const ty = y + dy;
                 if (rot) {
                     // Rotated: bound by the diagonal rather than modelling the box.
-                    growPoint(tx, ty, Math.hypot(widest, tall) / 2);
+                    const r = Math.hypot(widest, tall) / 2;
+                    growPoint(tx, ty, r);
+                    textBoxes.push({x0: tx - r, y0: ty - r, x1: tx + r, y1: ty + r});
                 } else {
                     const left = anchor === 'start' ? tx : anchor === 'end' ? tx - widest : tx - widest / 2;
                     const top = baseline === 'hanging' ? ty : baseline === 'alphabetic' ? ty - tall : ty - tall / 2;
                     grow(left, top, left + widest, top + tall);
+                    textBoxes.push({x0: left, y0: top, x1: left + widest, y1: top + tall});
                 }
                 if (lines.length === 1) {
                     body.push(`<text ${a.join(' ')}>${esc(p.text.text)}</text>`);
@@ -442,13 +632,93 @@ function emitPaints(paints, toPx) {
     }
 
     const bounds = isFinite(bx0) ? {x0: bx0, y0: by0, x1: bx1, y1: by1} : null;
-    return {body, defs, bounds};
+    return {body, defs, bounds, textBoxes};
+}
+
+/**
+ * How badly do two labels sit on top of each other?
+ *
+ * Returns the worst overlap as a share of the smaller label's area — 0 when nothing
+ * touches. A share rather than a pixel count because the widths being compared are
+ * estimates: this harness measures text arithmetically (@see measureText), so a box is
+ * a few percent wrong either way and a pixel rule turns that error into a verdict.
+ *
+ * Measured in the pre-wrap px space, which is safe because the wrap is a uniform scale.
+ */
+const TEXT_OVERLAP_SHARE = 0.08;
+function textOverlap(boxes) {
+    let worst = 0;
+    for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i], b = boxes[j];
+            const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+            const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+            if (w <= 0 || h <= 0) continue;
+            const smaller = Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0));
+            if (smaller <= 0) continue;
+            const share = (w * h) / smaller;
+            if (share > worst) worst = share;
+        }
+    }
+    return worst > TEXT_OVERLAP_SHARE ? worst : 0;
 }
 
 // ── One graphic ─────────────────────────────────────────────────────────────
+/**
+ * **Zooming out is how two labels stop overlapping.**
+ *
+ * A label is a fixed number of screen pixels; the symbol is fitted to the tile. So the
+ * ratio between the two — not the tile size, and not the zoom the symbol was drawn at —
+ * decides whether "MSR ALPHA" at one end runs into "MSR ALPHA" at the other. Painting
+ * into a canvas `k` times the tile and letting the page scale the result back down
+ * leaves the geometry filling the frame and makes every label `k` times smaller
+ * against it.
+ *
+ * Everything but the point-anchored symbols, which are already right and are left
+ * alone. The ladder stops at the first size that clears, so a symbol pays only for the
+ * room it actually needs and a thumbnail that never collides is never touched.
+ *
+ * **It also stops as soon as a step fails to help.** Some labels are sized from the
+ * graphic rather than from the screen — an artillery area's designation grows with the
+ * area — so for those the overlap is identical at every canvas. Zooming on regardless
+ * shrinks a perfectly good symbol to a sixth of the tile chasing a gap that cannot
+ * close, which is what it did to both artillery areas.
+ */
+const ZOOM_STEPS = [1, 1.3, 1.7, 2.2];
+
+/**
+ * A wider canvas has to cut the overlap to this share of the best seen so far before it
+ * is worth the room it costs. Ties keep the smallest canvas, which is what leaves a
+ * symbol whose labels scale WITH it — an artillery area's designation does — at its
+ * natural size instead of shrinking it chasing a gap that cannot close.
+ */
+const ZOOM_PROGRESS = 0.95;
+
 function buildSvg(name) {
+    const zoomable = (baseGeometryFor ? baseGeometryFor(name) : 'LineString') !== 'Point';
+    // The whole ladder is walked rather than stopped at the first setback: the overlap
+    // is NOT monotonic in the canvas. A label anchored to the zoom grows as the canvas
+    // widens and only stops once its scale clamps, so several symbols get worse at 1.3
+    // and clear completely at 3.5. Stopping early left two dozen of them overlapping.
+    let best = null;
+    for (const drop of AMPLIFIER_FALLBACKS) {
+        for (const k of zoomable ? ZOOM_STEPS : [1]) {
+            const attempt = buildAt(name, k, drop);
+            if (!attempt) continue;
+            if (process.env.TG_DEBUG) console.error(`  ${name} k=${k} drop=[${drop}] overlap=${attempt.overlap.toFixed(3)}`);
+            if (attempt.overlap === 0) return attempt;
+            if (!best || attempt.overlap < best.overlap * ZOOM_PROGRESS) best = attempt;
+        }
+    }
+    return best;
+}
+
+function buildAt(name, zoom, drop) {
+    const TILE_W = Math.round(BASE_TILE_W * zoom);
+    const TILE_H = Math.round(BASE_TILE_H * zoom);
+    const PAD = BASE_PAD * zoom;
     // Pass 1 — learn the metre extent at a guessed resolution.
-    let paints = paintsFor(name, 4);
+    let paints = paintsFor(name, 4, drop);
     let ext = extentOf(paints);
     if (!ext) return null;
 
@@ -461,7 +731,7 @@ function buildSvg(name) {
 
     // Pass 2 — repaint at the solved resolution so screen-sized decorations are
     // correct for the size they will actually be shown at.
-    paints = paintsFor(name, resolution);
+    paints = paintsFor(name, resolution, drop);
     ext = extentOf(paints) || ext;
 
     const w = (ext.maxX - ext.minX) / resolution;
@@ -471,7 +741,7 @@ function buildSvg(name) {
     // Y flips: projected north is up, SVG y grows downward.
     const toPx = ([mx, my]) => [offX + (mx - ext.minX) / resolution, offY + (ext.maxY - my) / resolution];
 
-    const {body, defs, bounds} = emitPaints(paints, toPx);
+    const {body, defs, bounds, textBoxes} = emitPaints(paints, toPx);
     if (!body.length) return null;
 
     // Fit the *emitted* extent — labels and dots included — into the tile.
@@ -492,15 +762,15 @@ function buildSvg(name) {
     }
 
     const title = getDisplayName ? getDisplayName(name) : name;
-    return (
+    const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TILE_W} ${TILE_H}" width="${TILE_W}" height="${TILE_H}" role="img" aria-label="${esc(title)}">` +
         `<title>${esc(title)}</title>` +
         (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
         wrapOpen +
         body.join('') +
         wrapClose +
-        `</svg>\n`
-    );
+        `</svg>\n`;
+    return {svg, overlap: textOverlap(textBoxes)};
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -509,6 +779,8 @@ fs.mkdirSync(OUT, {recursive: true});
 const names = listTacticalGraphicNames().filter(n => !ONLY || n === ONLY);
 const manifest = [];
 const skipped = [];
+/** Graphics whose labels still touch at the widest canvas the ladder offers. */
+const collided = [];
 
 for (const name of names) {
     if (!isPaintable(name)) {
@@ -517,7 +789,9 @@ for (const name of names) {
     }
     let svg = null;
     try {
-        svg = buildSvg(name);
+        const built = buildSvg(name);
+        svg = built && built.svg;
+        if (built && built.overlap) collided.push(name);
     } catch (e) {
         skipped.push([name, e.message.slice(0, 80)]);
         continue;
@@ -562,3 +836,5 @@ console.log(`out       : ${OUT}`);
 console.log(`generated : ${manifest.length}`);
 console.log(`skipped   : ${skipped.length}`);
 for (const s of skipped.slice(0, 30)) console.log(`   - ${s[0]} => ${s[1]}`);
+console.log(`labels still touching : ${collided.length}`);
+for (const n of collided) console.log(`   - ${n}`);
