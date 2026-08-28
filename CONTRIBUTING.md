@@ -97,7 +97,9 @@ These are the conventions the codebase depends on. Skipping them produces graphi
    | `CONTROLLER_REGISTRY` | `openlayers/controllerRegistry.ts` | which holder and controller drive it |
    | `GRAPHIC_FIELDS` | `openlayers/graphicFieldRegistry.ts` | which inputs its properties dialog offers |
 
-Every one of the five is a `Record<TacticalGraphicName, …>`, so none of this is optional and none of it is a thing to remember: add the enum member and TypeScript walks you through the rest. `GRAPHIC_ENTITY_CODES` and `GRAPHIC_SPECIFICATIONS` are asserted against each other — a `null` code means exactly "FM 1-02.2 only" — so look the symbol up rather than guessing.
+Every one of the five is a `Record<TacticalGraphicName, …>`, so none of this is optional and none of it is a thing to remember: add the enum member and TypeScript walks you through the rest.
+
+5. If — and only if — APP-06 numbers the new graphic's anchor points from its arrowhead, and your generator builds that end last, add it to `TIP_FIRST_GRAPHICS` in `core/drawOrder.ts`. That list is not exhaustive and not a default: a graphic whose draw rule already agrees, or that has no arrowhead, stays off it. `GRAPHIC_ENTITY_CODES` and `GRAPHIC_SPECIFICATIONS` are asserted against each other — a `null` code means exactly "FM 1-02.2 only" — so look the symbol up rather than guessing.
 
 A graphic is **done** when a user can draw it, label it, and reposition, modify, rotate and resize it *wherever those gestures mean something for that symbol*. Some refuse a gesture on purpose — a fixed-size symbol has no resize — and that refusal belongs in the shared tables, not in one renderer.
 
