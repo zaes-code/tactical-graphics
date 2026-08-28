@@ -132,25 +132,26 @@ tacticalGraphic: {
     eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
     minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
     maxAltitude: 2000,
-    altitudeDatum: 'AGL',     // MSL | AGL | FL — what those numbers are measured from
+    altitudeDatum: 'AGL',     // AltitudeDatum — what those numbers are measured from
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
-    // Symbology — affects color and dash pattern.
-    hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
-    status: 'present',        // present | planned  (planned ⇒ dashed)
-    confidence: 'known',      // known | suspected — rendered where doctrine shows a
-                              // reliability rating
-    echelon: 'Battalion/Squadron', // Squad | Section | Platoon/Detachment |
-                              // Company/Battery/Troop | Battalion/Squadron |
-                              // Regiment/Group | Brigade | Unknown
-    direction: 'ONE_WAY',     // route graphics
-    mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
-    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
-                              // area or restricted terrain carries to say what kind of
-                              // movement the ground admits
-    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
-                              // and the color the area is hatched in
+    // Symbology — affects color and dash pattern. Every field below is backed by an
+    // exported enum; the table after this block lists each one's complete set of values.
+    hostility: 'Friend',      // TacticalGraphicHostility
+    status: 'present',        // TacticalGraphicStatus — planned ⇒ dashed
+    confidence: 'known',      // TacticalGraphicConfidence — rendered where doctrine
+                              // shows a reliability rating
+    echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
+    direction: 'ONE_WAY',     // RouteDirection — route graphics
+    mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the two mine
+                              // areas draw inside themselves
+    mobility: 'Tracked',      // TacticalGraphicMobility — APP-06 Table 8-24 sector 1,
+                              // the icon a limited access area or restricted terrain
+                              // carries to say what kind of movement the ground admits
+    terrain: 'Ground',        // TacticalGraphicTerrain — APP-06 Table 8-25 sector 2,
+                              // the word under that icon, and the color the area is
+                              // hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -176,6 +177,32 @@ tacticalGraphic: {
     rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 }
 ```
+
+### The selector fields, and every value they take
+
+Each of these is a **string enum**, exported from the root entry point, so the member and
+its value are the same string at run time — `TacticalGraphicHostility.friend` **is**
+`'Friend'`. Pass the member; the literal works too, and is what a saved file holds.
+
+| Field | Enum | Every accepted value |
+|---|---|---|
+| `hostility` | `TacticalGraphicHostility` | `Assumed Friend` · `Friend` · `Hostile/Faker` · `Neutral` · `Pending` · `Suspect/Joker` · `Unknown` |
+| `status` | `TacticalGraphicStatus` | `present` · `planned` |
+| `confidence` | `TacticalGraphicConfidence` | `known` · `suspected` |
+| `echelon` | `TacticalGraphicEchelon` | `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Unknown` |
+| `direction` | `RouteDirection` | `GENERAL` · `ONE_WAY` · `TWO_WAY` · `ALTERNATING` |
+| `mineType` | `TacticalGraphicMineType` | `Unspecified Mine` · `Antipersonnel Mine` · `Antipersonnel Mine with Directional Effects` · `Antitank Mine` · `Antitank Mine with Antihandling Device` · `Wide Area Antitank Mine` · `Mine Cluster` |
+| `mobility` | `TacticalGraphicMobility` | `Unspecified` · `Standard Mobility/On-Road` · `High Mobility/Off-Road` · `Tracked` · `Tracked and Wheeled Combination` · `Towed` · `Railway` · `Over-Snow (Prime Mover)` · `Sled` · `Pack Animal` · `Barge` · `Amphibious` · `No Vehicles` · `Dismounted` |
+| `terrain` | `TacticalGraphicTerrain` | `Unspecified` · `Urban` · `Water` · `Ground` · `Vegetation` · `Obstacles` |
+| `altitudeDatum` | `AltitudeDatum` | `MSL` · `AGL` · `FL` |
+
+`AltitudeUnit` (`meters` · `feet`) is not a per-graphic field — it is host configuration,
+set once with `configureTacticalGraphics({altitudeUnit})`, because a map does not mix
+units. A graphic that needs its own is free to pass a string altitude instead.
+
+**A value not in these lists is ignored rather than drawn**, so a typo shows up as a
+missing amplifier rather than an error. The table is generated from the enums by a test,
+so it cannot drift from them.
 
 **`label` and `secondId` were renamed in 3.0.0** — they are `designation` and
 `secondDesignation` now. They are fields **T** and **T1**, the standard's unique
@@ -1025,7 +1052,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 289 supported names.
+the 292 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1047,7 +1074,9 @@ band ranges are in **kilometers**.
 
 ## Supported graphics
 
-The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
+
+**Which plate that is depends on the graphic, and each one records its own answer.** 211 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
@@ -1361,7 +1390,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ## Upcoming graphics
 
-Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against FM 1-02.2, **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against the plate that defines it — FM 1-02.2, APP-06, or both — **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
 
 | Graphic | Category |
 |---|---|

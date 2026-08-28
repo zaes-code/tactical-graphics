@@ -15,6 +15,22 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **Three tactical mission tasks: seize (342300), follow and assume (341200), follow and support (341300).** All three are defined by FM 1-02.2 *and* APP-06, so they carry both specifications and their entity codes.
+
+  **Seize** is the swept arc its family already draws, lettered `S` — FM 1-02.2 draws a circled unit with an arc arrow to the objective, and APP-06 342300 agrees. It differs from capture (343000) only in that letter, which is also why capture is APP-06 only and seize is not: seize is an FM 3-90 mission task and capture is not.
+
+  **The two follow tasks** are one shape read from the rear point to the tip — a hollow body carrying field T, a connector, and a head — and they differ in exactly two ways: assume dashes its connector and ends in an open chevron, support runs solid into a filled head and notches its rear edge. Both take two anchor points with point 1 at the arrowhead, so both are in `TIP_FIRST_GRAPHICS`, and both are drawn at paint time because the rule says the symbol "varies only in length".
+
+  Two details worth recording. APP-06 341200 notes that *"the dashed lines in this symbol shall be displayed in present and anticipated status"*, so the connector's dash is its own rather than the status dash — a planned follow-and-assume dashes for both reasons and the two must not cancel. And the standards disagree on the support variant's head: FM 1-02.2 draws it open, APP-06's example fills it. The fill is drawn; the divergence is recorded in `followTaskPaints.ts` rather than resolved silently.
+
+- **The README documents every selector enum in full.** `hostility` trailed off after four of its seven values and `direction`, `mineType`, `mobility` and `terrain` named none at all — a consumer cannot guess a string enum's members, and a value outside the set is ignored rather than rejected, so an incomplete list shows up as an amplifier that silently does not draw. Each field now names its enum, a table lists every accepted value, and a test asserts the table against the enums so it cannot drift.
+
+### Changed
+
+- The **Supported** and **Upcoming** graphics sections credit the standard that actually defines each graphic. Both said "checked against FM 1-02.2", which stopped being the whole truth when APP-06 became a first-class source: 211 graphics are defined by both, 69 by APP-06 alone, 8 by FM 1-02.2 alone.
+
 ## [3.0.0] — 2026-08-28
 
 **A major, and it earns it.** Six breaking changes, of which the three worth planning

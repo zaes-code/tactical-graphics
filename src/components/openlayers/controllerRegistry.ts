@@ -450,6 +450,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Four anchor points, each meaning something different, so every one is draggable.
     // Handle 0 is the circle's centre and moves the whole graphic.
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.Seize]:                            vertexLine(4, 4, 0),
+    [TacticalGraphicName.FollowAndAssume]:                  line(2),
+    [TacticalGraphicName.FollowAndSupport]:                 line(2),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
     // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration

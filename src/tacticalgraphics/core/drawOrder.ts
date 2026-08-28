@@ -67,6 +67,8 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // Registered without an enum member -- the axis family's fifth variant, reachable
     // through the registry but not through the UI. @see ai/context.md, "Counts"
     'AxisOfAttack',
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
     TacticalGraphicName.Counterattack,                    // 340600 Counter-Attack
     TacticalGraphicName.CounterattackByFire,              // 340700 Counter-Attack by Fire
     TacticalGraphicName.AdvanceToContact,                 // 342900

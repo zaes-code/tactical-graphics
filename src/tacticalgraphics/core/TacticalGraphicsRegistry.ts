@@ -42,6 +42,7 @@ import {PassageLane} from "../graphics/PassageLane";
 import {Fix} from "../graphics/Fix";
 import {Turn} from "../graphics/Turn";
 import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackFeint, DirectionOfSupportingAttack} from "../graphics/Direction";
+import {FollowTask} from "../graphics/FollowTask";
 import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, AxisOfAttack, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
 import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
@@ -373,8 +374,11 @@ for (const bypass of [
 TacticalGraphicsRegistry.register(new DecisionLine());
 TacticalGraphicsRegistry.register(new Escort());
 TacticalGraphicsRegistry.register(new Demonstration());
-for (const swept of [TacticalGraphicName.Capture, TacticalGraphicName.Evacuate, TacticalGraphicName.Recover]) {
+for (const swept of [TacticalGraphicName.Capture, TacticalGraphicName.Seize, TacticalGraphicName.Evacuate, TacticalGraphicName.Recover]) {
     TacticalGraphicsRegistry.register(new SweptArcTask(swept));
+}
+for (const follow of [TacticalGraphicName.FollowAndAssume, TacticalGraphicName.FollowAndSupport]) {
+    TacticalGraphicsRegistry.register(new FollowTask(follow));
 }
 TacticalGraphicsRegistry.register(new MobilityCorridor());
 TacticalGraphicsRegistry.register(new MineCluster());
