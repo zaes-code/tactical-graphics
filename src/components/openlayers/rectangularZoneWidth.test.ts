@@ -178,6 +178,32 @@ describe('the live width read-out', () => {
         expect(controller.graphic.measure.getGeometry()).toBeUndefined();
     });
 
+    it('is put away by the drag ending, not only by a caller remembering to', () => {
+        // `endGesture` is what the manager calls when any drag finishes.
+        // `MissionTaskController` has always had one; the line controller never needed it
+        // until a line holder drew a read-out, so the hashed line and its figure stayed on
+        // the map afterwards and read as part of the symbol. (User's report, 2026-08-27.)
+        const controller = holderFor(TacticalGraphicName.FreeFireAreaRectangular);
+        controller.graphic.showMeasure(true);
+        expect(controller.graphic.measure.getGeometry()).toBeDefined();
+
+        controller.endGesture();
+        expect(controller.graphic.measure.getGeometry()).toBeUndefined();
+    });
+
+    it('previews level, so the shape does not jump at the last click', () => {
+        // The holder is also the preview: `LineGraphicController` republishes the base on
+        // every pointer move. It followed the mouse in any direction while the committed
+        // geometry came out level. (User's report, 2026-08-27.)
+        const controller: any = getController(TacticalGraphicName.FreeFireAreaRectangular, RESOLUTION);
+        controller.graphic.drawing = true;
+        controller.setBaseFeature(new Feature({
+            geometry: new LineString([fromLonLat([-0.2, 51.5]), fromLonLat([0.2, 51.62])]),
+        }));
+        const drawn = (controller.graphic.base.getGeometry() as LineString).getCoordinates();
+        expect(drawn[1][1]).toBeCloseTo(drawn[0][1], 6);
+    });
+
     it('runs across the rectangle, in from one short side and clear of the label', () => {
         // Across the middle it ran straight through the designation and the date-time
         // group. (User's call, 2026-08-27.)
