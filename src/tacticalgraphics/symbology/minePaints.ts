@@ -386,28 +386,8 @@ function ringCrossing(
     return best === undefined ? undefined : [from[0] + dx * best, from[1] + dy * best];
 }
 
-/** Clear space between a boundary and an `ENY` set outside it, in screen pixels. */
-const ENY_GAP_PX = 8;
-
-/**
- * The midpoints of a ring's westmost and eastmost segments.
- *
- * The Template puts an `N` box against each flank, and *"flank"* on an irregular boundary
- * is the segment that reaches furthest that way — not the bounding box's corner, which for
- * a shape with a point on it can sit well off the line. Compared by midpoint rather than by
- * vertex so a long sloping side wins over a short vertical one that merely touches the
- * extreme.
- */
-function flankMidpoints(ring: ProjectedPosition[]): {west: ProjectedPosition; east: ProjectedPosition} | undefined {
-    let west: ProjectedPosition | undefined;
-    let east: ProjectedPosition | undefined;
-    for (let i = 0; i + 1 < ring.length; i++) {
-        const mid: ProjectedPosition = [(ring[i][0] + ring[i + 1][0]) / 2, (ring[i][1] + ring[i + 1][1]) / 2];
-        if (!west || mid[0] < west[0]) west = mid;
-        if (!east || mid[0] > east[0]) east = mid;
-    }
-    return west && east ? {west, east} : undefined;
-}
+/** Where a dynamic depiction's two `N` boxes sit, as compass bearings. @see ringCrossing */
+const MINEFIELD_ENY_BEARINGS = [90, 270];
 
 /**
  * APP-06 270707 minefield, dynamic depiction — a plain area outline, with an `ENY` against
@@ -415,8 +395,13 @@ function flankMidpoints(ring: ProjectedPosition[]): {west: ProjectedPosition; ea
  *
  * Everything else that makes it a minefield is the mine row inside it. @see mineFillPaint
  *
- * The `N` boxes of the Template are the two the Example fills with `ENY`, one at the west
- * and one at the east, set *outside* the boundary so neither lands on the line work.
+ * **Due east and due west of the middle, sitting on the boundary.** The Example puts the
+ * two letters at the graphic's widest points and halfway up it, which is exactly where a
+ * horizontal ray from the centre leaves the ring — the same construction the fenced area's
+ * letters use, so the two symbols place their amplifiers by one rule rather than two.
+ * Setting them at the *midpoint of the widest segment* and nudging them clear was close on
+ * a regular shape and visibly off on a lopsided one, and it left them floating beside the
+ * line rather than on it. (User's call, 2026-08-27.)
  */
 export function minefieldAreaPaint(): MinePaint {
     return (feature, context) => {
@@ -426,13 +411,18 @@ export function minefieldAreaPaint(): MinePaint {
 
         const ring = geometry.coordinates[0];
         if (!isHostile(feature) || !ring || ring.length < 4) return paints;
-        const flanks = flankMidpoints(ring);
-        if (!flanks) return paints;
 
+        const xs = ring.map(p => p[0]);
+        const ys = ring.map(p => p[1]);
+        const middle: ProjectedPosition = [
+            (Math.min(...xs) + Math.max(...xs)) / 2,
+            (Math.min(...ys) + Math.max(...ys)) / 2,
+        ];
         const scale = scaleOf(feature, context);
-        const gap = ENY_GAP_PX * context.resolution;
-        paints.push(areaText(feature, [flanks.west[0] - gap, flanks.west[1]], 'ENY', scale, 'middle', 'right'));
-        paints.push(areaText(feature, [flanks.east[0] + gap, flanks.east[1]], 'ENY', scale, 'middle', 'left'));
+        for (const bearing of MINEFIELD_ENY_BEARINGS) {
+            const at = ringCrossing(ring, middle, bearing);
+            if (at) paints.push(areaText(feature, at, 'ENY', scale, 'middle'));
+        }
         return paints;
     };
 }

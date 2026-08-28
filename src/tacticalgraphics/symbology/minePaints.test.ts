@@ -365,19 +365,47 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
             expect(y).toBeLessThan(300_000 + 800_000 * 0.6);
         });
 
-        it('puts the dynamic depiction ENY on its flanks instead, and no peak', () => {
+        it('puts the dynamic depiction ENY due east and west, on the line, and no peak', () => {
             const paints = minefieldAreaPaint()(hostile(TacticalGraphicName.MinefieldDynamicDepiction), context());
             expect(paints.some(p => p.stroke?.dashPx)).toBe(false);
 
             const eny = paints.filter(p => p.text?.text === 'ENY');
             expect(eny).toHaveLength(2);
-            // The midpoints of the westmost and eastmost segments, pushed outward so the
-            // letters clear the line work, and reading away from the shape.
-            const [west, east] = eny.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
-            expect(west[0]).toBeLessThan(-400_000);
-            expect(east[0]).toBeGreaterThan(400_000);
-            expect(west[1]).toBeCloseTo(0, 6);
-            expect(eny.map(p => p.text!.align)).toEqual(['right', 'left']);
+
+            // Where a horizontal ray from the middle leaves the ring: the graphic's widest
+            // points, halfway up it, sitting *on* the boundary rather than beside it.
+            // (User's call, 2026-08-27.)
+            const at = eny.map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+            for (const p of at) expect(onRing(RING, p)).toBeLessThan(1);
+            for (const [, y] of at) expect(y).toBeCloseTo(0, 6);
+            expect(at.map(([x]) => x).sort((a, b) => a - b)).toEqual([-400_000, 400_000]);
+            // Centred on the crossing, not aligned away from it.
+            expect(eny.map(p => p.text!.align)).toEqual(['center', 'center']);
+        });
+
+        it('holds that rule on a lopsided boundary too', () => {
+            // A shape whose widest segment is nowhere near its vertical middle: the old
+            // rule set the letters at the segment's own midpoint, which drifted with the
+            // shape. The ray does not.
+            const lopsided: ProjectedPosition[] = [
+                [-500_000, -300_000], [500_000, -100_000], [200_000, 300_000],
+                [-300_000, 200_000], [-500_000, -300_000],
+            ];
+            const paints = minefieldAreaPaint()({
+                geometry: {type: 'Polygon', coordinates: [lopsided]},
+                properties: {
+                    name: TacticalGraphicName.MinefieldDynamicDepiction,
+                    hostility: TacticalGraphicHostility.hostileFaker,
+                },
+            }, context());
+            const at = paints.filter(p => p.text?.text === 'ENY')
+                .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+            expect(at).toHaveLength(2);
+            for (const p of at) {
+                expect(onRing(lopsided, p)).toBeLessThan(1);
+                // Halfway between the boundary's lowest and highest points.
+                expect(p[1]).toBeCloseTo(0, 6);
+            }
         });
 
         it('draws neither when the graphic is not hostile', () => {
