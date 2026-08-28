@@ -1,6 +1,7 @@
 import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {
     getPaintFunction,
+    boundsOf,
     paintGeometryMembers,
     paintGeometryPositions,
     renderTacticalGraphic,
@@ -11,23 +12,34 @@ import {
     type ProjectedGeometry,
     type ProjectedInputGeometry,
     type ProjectedPosition,
-    SECURITY_OPERATION_PX,
-    CROSSED_MISSION_TASKS,
-    crossedMissionTaskMetres,
+    SECURITY_OPERATION_HALF_EXTENT_PX,
     normalizeDrawnBase,
     GLYPH_CUT_GAP_GRAPHICS,
-    arrowheadMetres,
+    arrowheadMeters,
+    groundLength,
     RANGE_FANS,
+    outerRingOf,
+    rectangleAmplifiers,
     ratioLockOf,
+    drawnAnchorFrame,
+    drawnAnchors,
+    axisFromRectangleRing,
+    carriesRectangleLength,
+    rectangleDefaultHalfWidth,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+    isRectangular,
+    groundMeters,
+    usesDrawnAnchors,
     resolveRangeFanBands,
     toGraphicOptions,
-    decorationMetres,
+    decorationMeters,
+    drawnSizeMeters,
     hasBakedDecoration,
     isMovementGraphic,
     TacticalGraphicName,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
-import {toMercator} from './projection';
+import {toLonLat, toMercator} from './projection';
 
 /**
  * # Generator output → paint features
@@ -37,7 +49,7 @@ import {toMercator} from './projection';
  *
  * `ai/maplibre-renderer.md` predicted the 4326 → 3857 hop would go away because
  * MapLibre consumes lon/lat directly. It does not. Every screen-pixel decoration
- * in this library is `pixels × resolution` in *projected metres*, and every
+ * in this library is `pixels × resolution` in *projected meters*, and every
  * distance and angle in the ported paint functions is planar — so the paint layer
  * still has to work in EPSG:3857, and it is the **renderer** that converts back
  * to lon/lat on the way out. What actually changed is that the conversion is now
@@ -51,7 +63,7 @@ import {toMercator} from './projection';
  */
 
 /**
- * GeoJSON `Position` (lon/lat) → projected metres, recursively, keeping structure.
+ * GeoJSON `Position` (lon/lat) → projected meters, recursively, keeping structure.
  *
  * Recurses on nesting depth rather than switching on the geometry type, so one
  * function covers Point through MultiPolygon. The base case is "an array whose
@@ -59,7 +71,7 @@ import {toMercator} from './projection';
  */
 function projectCoordinates(coordinates: unknown): unknown {
     // Guarded, not assumed: a generator handed a degenerate base (an empty
-    // LineString, most often a draw that was cancelled on its first click) can
+    // LineString, most often a draw that was canceled on its first click) can
     // return a geometry whose `coordinates` is absent, and indexing that threw a
     // TypeError straight out of the render loop. Returning an empty list lets the
     // caller draw nothing, which is what a half-finished graphic should do.
@@ -69,7 +81,7 @@ function projectCoordinates(coordinates: unknown): unknown {
 }
 
 /**
- * A GeoJSON geometry in lon/lat → the same shape in projected metres.
+ * A GeoJSON geometry in lon/lat → the same shape in projected meters.
  *
  * **`GeometryCollection` has to be handled, not skipped.** Several mission-task
  * generators pack their arcs, arrowheads and solid teeth into one — `AreaDefense`,
@@ -114,7 +126,7 @@ export interface MapLibreTacticalGraphic {
     graphic: PaintFeature;
     /** The text anchors, when the graphic keeps its label on a separate feature. */
     labels?: PaintFeature;
-    /** Drag handles, in projected metres. */
+    /** Drag handles, in projected meters. */
     handles: ProjectedPosition[];
 }
 
@@ -187,9 +199,9 @@ const DEFAULT_OFFSET_PX = 20;
  *
  * ## Why the renderer, and not the generators
  *
- * Every generator falls back to a flat `20` **metres** for a missing `radius` or
+ * Every generator falls back to a flat `20` **meters** for a missing `radius` or
  * `size`. On a 700 km corridor that puts the rails 20 m apart — collapsed onto the
- * centreline — and it is why a corridor drawn in this renderer looked nothing like
+ * centerline — and it is why a corridor drawn in this renderer looked nothing like
  * the same corridor in OpenLayers.
  *
  * Fixing it in the generators is the tempting move and it is wrong: `LineGraphicBase`
@@ -198,14 +210,14 @@ const DEFAULT_OFFSET_PX = 20;
  * bearing for the renderer that already ships.
  *
  * So the *renderer* supplies them, which is exactly what the OpenLayers holders do —
- * `MovementGraphicBase` passes `{radius: this.offset, size: decorationMetres(…)}`
+ * `MovementGraphicBase` passes `{radius: this.offset, size: decorationMeters(…)}`
  * derived from the map resolution. This is the same job done from the base's own
  * length, because that is what a MapLibre view has to hand.
  *
  * An explicit value always wins: these are spread *before* the caller's properties.
  *
  * **The underlying library gap is real and is not fixed here.** A consumer calling
- * `renderTacticalGraphic` with only a centre still gets 20 m rails. Closing that
+ * `renderTacticalGraphic` with only a center still gets 20 m rails. Closing that
  * means changing what those 41 graphics draw in OpenLayers, which is a decision
  * about the shipped renderer rather than a bug fix. @see ai/current-task.md
  */
@@ -223,10 +235,26 @@ function sizeDefaults(
     // The base's own length is the fallback, for a restore that carries no
     // resolution — a snapshot deliberately holds no viewport state, so there is
     // nothing else to measure against. @see ai/context.md, "No viewport state travels"
-    const metres = drawingResolution
+    const meters = drawingResolution
         ? drawingResolution * DEFAULT_OFFSET_PX
-        : baseLengthMetres(geometry) * DEFAULT_SIZE_FRACTION;
-    if (metres <= 0) return {};
+        : baseLengthMeters(geometry) * DEFAULT_SIZE_FRACTION;
+    if (meters <= 0) return {};
+
+    /*
+     * **A rectangular zone's un-supplied width.**
+     *
+     * With a zoom to spend it at it is a screen size, wider than the generic drawn offset
+     * because half of it is half an *area* rather than a rail standing off a route. With
+     * no zoom — a sample sheet, a raw-GeoJSON reader — it is a share of the axis, which is
+     * the figure both engines reach from the same function and therefore the only one that
+     * makes two sheets comparable. @see rectangleDefaultHalfWidth
+     */
+    if (isRectangular(name) && supplied.width === undefined) {
+        const half = drawingResolution
+            ? RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution
+            : rectangleDefaultHalfWidth(baseLengthMeters(geometry));
+        return {width: half * 2};
+    }
 
     // A stamped `radius` on a line graphic **is** its half-width: that is what
     // `LineGraphicBase.setOffset` replays on restore, and what the OpenLayers holder
@@ -234,13 +262,39 @@ function sizeDefaults(
     // different corridors from one saved description — 6.3% of the frame, the largest
     // single disagreement left in the sweep. A supplied `width` still wins over both.
     // @see ai/context.md, "A saved graphic carries one object"
-    const halfWidth = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : metres;
+    const halfWidth = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : meters;
+
+    /*
+     * **A graphic with a baked decoration gets its own size, not the generic 20 px.**
+     *
+     * `meters` is the default *offset* — the half-width of a corridor's rails — and
+     * stamping it as `decorationSize` was harmless only until something rebuilt the
+     * graphic: `bakedDecorationSize` prefers a stamped `decorationSize` over the
+     * per-name table, so the second build silently replaced the symbol's own size with
+     * 20 px worth. A bridge's ticks went 15 px -> 20, Fix's zigzag 14 -> 20, and Abatis's
+     * chevron *shrank* 26 -> 20 — each of them drifting away from OpenLayers, which
+     * derives `decorationMeters` on every render and never stores it.
+     *
+     * A rebuild is not rare: every zoom change re-derives the screen-sized graphics.
+     * @see NativeLayerRenderer.rebuildScreenSized, decorationMeters
+     */
+    // The block family states a size of its own — a bar across the line, three times the
+    // generic offset — and it is a library fact both engines read. @see drawnSizeMeters
+    const decoration = hasBakedDecoration(name)
+        ? decorationMeters(name, drawingResolution ?? 0)
+        : drawnSizeMeters(name, drawingResolution ?? 0) ?? meters;
+
+    // **A graphic whose size is stated as a bar has no width to default.** The block
+    // family files `decorationSize` and nothing else on OpenLayers; handing it the generic
+    // offset put a `width` in the file that the other engine's restore then replayed as
+    // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
+    const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
 
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
-            ? {decorationSize: metres}
+            ? {decorationSize: decoration}
             : {}),
     };
 }
@@ -248,13 +302,13 @@ function sizeDefaults(
 /**
  * Turn and Envelopment's arrowhead, when the caller did not stamp one.
  *
- * Their heads are a **screen** length baked into metres once at draw time — 26 px
+ * Their heads are a **screen** length baked into meters once at draw time — 26 px
  * and 22 px — not a fraction of the graphic. The OpenLayers holders do this in their
  * constructors; without the same default here the generator fell back to its
  * fraction-of-`size` ratio and drew a visibly smaller head.
  *
  * A stamped `decorationSize` wins, because that is a restore replaying the head the
- * graphic was actually drawn with. @see arrowheadMetres
+ * graphic was actually drawn with. @see arrowheadMeters
  */
 function arrowheadDefault(
     name: TacticalGraphicName,
@@ -262,8 +316,8 @@ function arrowheadDefault(
     drawingResolution?: number,
 ): Partial<TacticalGraphicProperties> {
     if (!drawingResolution || supplied.decorationSize !== undefined) return {};
-    const metres = arrowheadMetres(name, drawingResolution);
-    return metres === undefined ? {} : {decorationSize: metres};
+    const meters = arrowheadMeters(name, drawingResolution);
+    return meters === undefined ? {} : {decorationSize: meters};
 }
 
 /**
@@ -272,13 +326,13 @@ function arrowheadDefault(
  * For these, `size` means "how big is the chevron" rather than "how far does this
  * reach", so it belongs to the renderer, which knows the zoom. The OpenLayers
  * holder does exactly this — `LineGraphicBase` passes
- * `decorationMetres(name, resolution)` and lets a stamped value override it.
+ * `decorationMeters(name, resolution)` and lets a stamped value override it.
  *
  * Applied **after** the caller's properties, like the security operations and for
  * the same reason: a `radius` arriving from a sweep or a snapshot is a reach in
- * metres, and `toGraphicOptions` prefers it over `decorationSize` — so leaving it
+ * meters, and `toGraphicOptions` prefers it over `decorationSize` — so leaving it
  * in place drew a bridge tick at 200 km. A caller who genuinely means to set the
- * decoration passes `decorationSize`, which is honoured here.
+ * decoration passes `decorationSize`, which is honored here.
  */
 function bakedDecorationSize(
     name: TacticalGraphicName,
@@ -290,15 +344,15 @@ function bakedDecorationSize(
     // A stamped `radius` is the decoration size for the line family — that is what
     // `LineGraphicBase.setOffset` replays on restore — but means nothing for the
     // movement family, whose holder stamps `width` for its rails and derives the
-    // decoration from the resolution every time. Honouring it there drew a bridge
+    // decoration from the resolution every time. Honoring it there drew a bridge
     // tick 200 km tall; ignoring it here shrank a restored fields-of-fire arrowhead
     // to a quarter of its size. The two families genuinely differ.
     const stamped = isMovementGraphic(name) ? undefined : supplied.radius;
-    return {radius: supplied.decorationSize ?? stamped ?? decorationMetres(name, drawingResolution)};
+    return {radius: supplied.decorationSize ?? stamped ?? decorationMeters(name, drawingResolution)};
 }
 
 /**
- * Moves an origin-centred graphic onto its base point.
+ * Moves an origin-centered graphic onto its base point.
  *
  * Three graphics need it — Cover, Guard and Screen. Their generator emits arms and
  * label anchors as offsets from `[0, 0]` and never looks at the base, so whatever
@@ -307,32 +361,46 @@ function bakedDecorationSize(
  * rather than re-derived.
  *
  * The offsets are added in **lon/lat**, because that is the space the generator
- * built them in — `getSearchAreaArrow` converts its metre inputs to degrees on the
- * way out. OpenLayers adds them in projected metres instead, and is self-consistent
- * because its holder passes the five dimensions already in projected metres; the two
+ * built them in — `getSearchAreaArrow` converts its meter inputs to degrees on the
+ * way out. OpenLayers adds them in projected meters instead, and is self-consistent
+ * because its holder passes the five dimensions already in projected meters; the two
  * renderers therefore feed the same generator different units. That is the open item
- * in `ai/decisions.md` about `size` meaning metres-per-pixel, and it is not resolved
+ * in `ai/decisions.md` about `size` meaning meters-per-pixel, and it is not resolved
  * here — this only puts the arms where the graphic is.
  *
- * A rotation turns the arms about the centre, as the holder's does. Everything else
+ * A rotation turns the arms about the center, as the holder's does. Everything else
  * passes through untouched.
  */
-function placeOriginCentred(
+function placeOriginCentered(
     name: TacticalGraphicName,
     rendered: {graphic: GeoJSONFeature; labels: GeoJSONFeature; handles: GeoJSONFeature},
     baseGeometry: GeoJSONFeature['geometry'],
     rotationDegrees?: number,
 ): {graphic: GeoJSONFeature['geometry']; labels: GeoJSONFeature['geometry']; handles: GeoJSONFeature['geometry']} {
     const asIs = {graphic: rendered.graphic.geometry, labels: rendered.labels.geometry, handles: rendered.handles.geometry};
-    if (!ORIGIN_CENTRED.has(name) || baseGeometry.type !== 'Point') return asIs;
+    if (!ORIGIN_CENTERED.has(name) || baseGeometry.type !== 'Point') return asIs;
 
-    const centre = baseGeometry.coordinates as [number, number];
+    const center = toMercator(baseGeometry.coordinates as [number, number]);
     const rotation = ((rotationDegrees ?? 0) * Math.PI) / 180;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
+    /*
+     * **Placed in projected metres, not in degrees.**
+     *
+     * The generator builds these three around `[0, 0]`, so their offsets are degrees at
+     * the equator — where a degree of longitude and a degree of latitude are the same
+     * distance and a projected metre is a real one. Adding those degrees to the target
+     * point pasted an equator-shaped symbol onto a stretched parallel: at 60 degrees
+     * north the arms held their width and the symbol grew to **1.93x** its height, so a
+     * screen it drew as a 410 x 29 px bracket on the equator came out 410 x 56. Converting
+     * the offset to metres and adding it in the projected frame is what OpenLayers'
+     * holder does, and it is what keeps the symbol the same shape and size anywhere.
+     */
     const place = (offset: Position): Position => {
-        const [x, y] = offset;
-        return [centre[0] + x * cos - y * sin, centre[1] + x * sin + y * cos];
+        const [xDegrees, yDegrees] = offset;
+        const x = xDegrees * EQUATOR_METERS_PER_DEGREE;
+        const y = yDegrees * EQUATOR_METERS_PER_DEGREE;
+        return toLonLat([center[0] + x * cos - y * sin, center[1] + x * sin + y * cos]);
     };
 
     return {
@@ -342,8 +410,14 @@ function placeOriginCentred(
     };
 }
 
-/** @see placeOriginCentred */
-const ORIGIN_CENTRED = new Set<TacticalGraphicName>([
+/**
+ * Metres per degree on the equator, where these symbols are generated and where a
+ * projected metre is a ground metre. @see placeOriginCentered
+ */
+const EQUATOR_METERS_PER_DEGREE = (6378137 * Math.PI) / 180;
+
+/** @see placeOriginCentered */
+const ORIGIN_CENTERED = new Set<TacticalGraphicName>([
     TacticalGraphicName.Cover,
     TacticalGraphicName.Guard,
     TacticalGraphicName.Screen,
@@ -381,7 +455,7 @@ function rangeFanFields(name: TacticalGraphicName, props: TacticalGraphicPropert
  * refuses the width drag outright — so a `radius` arriving from a snapshot or a
  * sweep does not get to override it.
  *
- * Measured in projected metres end to end, which is what the OpenLayers holder
+ * Measured in projected meters end to end, which is what the OpenLayers holder
  * measures. Both `radius` and `decorationSize` are set: the first is what
  * `toGraphicOptions` turns into the generator's `size`, the second is what the
  * holder stamps, so a graphic handed between the engines carries the same number.
@@ -406,11 +480,25 @@ function ratioLockedSize(
     if (!(length > 0)) return {};
 
     const size = length * ratio;
-    return {radius: size, decorationSize: size};
+    /*
+     * **Filed as the decoration it is, and nothing else.**
+     *
+     * For this family `size` is the bar across the line, not a reach — the OpenLayers
+     * holder stamps `decorationSize` alone — so writing `radius` as well put a number in
+     * the file under a key that means something different, and `toGraphicOptions` prefers
+     * `radius` over `decorationSize` when both are present. `width` goes the same way: a
+     * block has no rails, and the generic 20 px offset `sizeDefaults` hands every drawn
+     * graphic is not one of its amplifiers.
+     *
+     * Cleared rather than omitted, because this is spread *after* the caller's properties:
+     * a stale `radius` from a snapshot would otherwise outrank the size derived here,
+     * which is the whole reason this runs last.
+     */
+    return {decorationSize: size, radius: undefined, width: undefined};
 }
 
 /**
- * The size a security operation is drawn at, in metres.
+ * The size a security operation is drawn at, in meters.
  *
  * These are badges: the OpenLayers holder builds every dimension as a pixel
  * constant times the live map resolution, so the symbol is the same size on screen
@@ -428,28 +516,28 @@ function securityOperationSize(
 ): Partial<TacticalGraphicProperties> {
     if (!drawingResolution || !SECURITY_OPERATIONS.has(name)) return {};
 
-    const halfExtentPx = SECURITY_OPERATION_PX.labelPadding
-        + SECURITY_OPERATION_PX.labelGap
-        + 2 * SECURITY_OPERATION_PX.arrowLength;
-    return {radius: halfExtentPx * drawingResolution};
+    // The library's figure, not this file's arithmetic — OpenLayers files the same one,
+    // and the generator builds the arms from it. @see SECURITY_OPERATION_HALF_EXTENT_PX
+    return {radius: SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution};
 }
 
 /**
- * The crossed mission tasks' size, which is a screen constant and not a user's choice.
+ * **Gone, and deliberately not replaced.** This used to overwrite the caller's `radius`
+ * for all four crossed mission tasks, correctly, while all four were fixed-size badges
+ * pinned to a screen constant.
  *
- * After the caller's properties, like `securityOperationSize` and for the same reason:
- * a radius arriving from a saved snapshot or a sweep is a number in metres from some
- * other zoom, and honouring it draws the symbol at the wrong size. These graphics refuse
- * resize, so there is no size of theirs a caller may set. @see CROSSED_MISSION_TASK_PX
+ * They all carry a real size as of 2026-08-17, and the override is why unpinning them did
+ * not work the first time: the paint, the controller, the handles and the gesture table
+ * were all changed and the symbols still came out the same width, because the number was
+ * replaced on the way in. **The size was stored, the handle moved, and nothing looked
+ * wrong at the zoom the graphic was placed at.** When a graphic's category changes, hunt
+ * for the code that *overwrites* a property, not the code that reads it — a reader that
+ * ignores a value at least leaves it visible in the data.
+ *
+ * `CROSSED_MISSION_TASK_PX` and `crossedMissionTaskMeters` stay exported: they shipped in
+ * 2.0.0 and removing them is a consumer's breaking change, not a tidy-up.
+ * @see dropSizePx, which is what a renderer should ask now.
  */
-function crossedMissionTaskSize(
-    name: TacticalGraphicName,
-    drawingResolution?: number,
-): Partial<TacticalGraphicProperties> {
-    if (!CROSSED_MISSION_TASKS.includes(name)) return {};
-    const radius = crossedMissionTaskMetres(drawingResolution);
-    return radius ? {radius} : {};
-}
 
 /** @see securityOperationSize */
 const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
@@ -459,13 +547,13 @@ const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * A base's drawn length in metres.
+ * A base's drawn length in meters.
  *
  * A local equirectangular approximation rather than turf: this runs on every build
  * and the answer only has to be the right order of magnitude. The cosine keeps a
  * north-south and an east-west drag of the same *distance* measuring the same.
  */
-function baseLengthMetres(geometry: GeoJSONFeature['geometry']): number {
+function baseLengthMeters(geometry: GeoJSONFeature['geometry']): number {
     const positions: number[][] = [];
     const walk = (node: unknown): void => {
         if (!Array.isArray(node) || !node.length) return;
@@ -475,13 +563,13 @@ function baseLengthMetres(geometry: GeoJSONFeature['geometry']): number {
     walk((geometry as {coordinates?: unknown}).coordinates);
     if (positions.length < 2) return 0;
 
-    const METRES_PER_DEGREE = 111_319;
+    const METERS_PER_DEGREE = 111_319;
     let length = 0;
     for (let i = 0; i < positions.length - 1; i++) {
         const [x1, y1] = positions[i];
         const [x2, y2] = positions[i + 1];
         const dx = (x2 - x1) * Math.cos((((y1 + y2) / 2) * Math.PI) / 180);
-        length += Math.hypot(dx, y2 - y1) * METRES_PER_DEGREE;
+        length += Math.hypot(dx, y2 - y1) * METERS_PER_DEGREE;
     }
     return length;
 }
@@ -499,6 +587,98 @@ function withNormalizedBase(name: TacticalGraphicName, geometry: GeoJSONFeature[
     return coordinates === geometry.coordinates ? geometry : {...geometry, coordinates};
 }
 
+/**
+ * The latitude a base sits at, for sizing anything specified in screen pixels.
+ *
+ * The first coordinate rather than a centroid: it is defined for every geometry this
+ * takes — point, line, ring — and a graphic is never long enough for the difference to
+ * show against a factor that changes by 1% per degree.
+ */
+/**
+ * A drawn-anchor graphic's base, rewritten as the point layout its symbol is defined by.
+ *
+ * **The points are the truth for these six, so they have to be the *right* points.** A
+ * base can arrive with a set that describes the symbol without being the one APP-06 names:
+ * the sample sweep hands Contain three points where its layout is two and Envelopment
+ * three where its layout is four, and OpenLayers silently rewrote them — its holder
+ * republishes the base from state on every gesture — while this engine kept whatever it
+ * was given. The two engines then held different anchor counts for the same picture, and
+ * offered a different number of handles to drag.
+ *
+ * Read the frame, write it back: idempotent for a base that is already canonical, which is
+ * every base this engine draws itself. @see drawnAnchorFrame, drawnAnchors
+ */
+function withCanonicalAnchors(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+): GeoJSONFeature['geometry'] {
+    if (!usesDrawnAnchors(name) || geometry.type !== 'LineString') return geometry;
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates as Position[]);
+    const anchors = frame && drawnAnchors(name, frame);
+    if (!anchors) return geometry;
+    return {type: 'LineString', coordinates: anchors};
+}
+
+/**
+ * What a drawn-anchor graphic's own points say about it, as properties.
+ *
+ * `radius` and `rotation` describe where the anchors are; they are not a second input
+ * beside them. A base whose points disagreed with its stamped figures — the sweep's do —
+ * left this engine reporting the stamped ones while OpenLayers reported what it had
+ * adopted from the geometry: 180,000 m against 125,392 for the same restored turn.
+ * Spread after the caller's properties for that reason. @see drawnAnchorFrame
+ */
+function anchorFrameProperties(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+): Partial<TacticalGraphicProperties> {
+    if (!usesDrawnAnchors(name) || geometry.type !== 'LineString') return {};
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates as Position[]);
+    if (!frame) return {};
+    return {
+        radius: frame.size,
+        rotation: frame.rotation ?? 0,
+        ...(frame.bend === undefined ? {} : {bend: frame.bend}),
+        ...(frame.mirrored === undefined ? {} : {mirrored: frame.mirrored}),
+    };
+}
+
+/**
+ * The rectangular target's `length`, read off the axis its two anchor points describe.
+ *
+ * Every other rectangle takes its length from those points and files nothing; this one
+ * names it as an amplifier, so the number has to exist. A caller's own value wins.
+ * @see carriesRectangleLength
+ */
+function rectangleAxisLength(
+    name: TacticalGraphicName,
+    geometry: GeoJSONFeature['geometry'],
+    supplied: Omit<TacticalGraphicProperties, 'name'>,
+): Partial<TacticalGraphicProperties> {
+    if (!carriesRectangleLength(name) || supplied.length !== undefined) return {};
+    if (geometry.type !== 'LineString' || geometry.coordinates.length < 2) return {};
+    const [a, b] = geometry.coordinates as Position[];
+    return {length: Math.round(groundMeters(a as [number, number], b as [number, number]))};
+}
+
+/** A polygon base's outer ring in lon/lat, or undefined for anything else. */
+function ringOf(geometry: GeoJSONFeature['geometry']): [number, number][] | undefined {
+    return geometry.type === 'Polygon' ? (geometry.coordinates[0] as [number, number][]) : undefined;
+}
+
+function latitudeOf(geometry: GeoJSONFeature['geometry']): number {
+    let found: number | undefined;
+    const walk = (node: unknown): void => {
+        if (found !== undefined || !Array.isArray(node) || !node.length) return;
+        if (typeof node[0] === 'number') found = (node as number[])[1];
+        else node.forEach(walk);
+    };
+    walk((geometry as {coordinates?: unknown}).coordinates);
+    return found ?? 0;
+}
+
 export function buildTacticalGraphic(
     name: TacticalGraphicName,
     baseGeometry: GeoJSONFeature['geometry'],
@@ -510,15 +690,42 @@ export function buildTacticalGraphic(
     // rather than in each of those paths.
     //
     // The sweep is why this is not in the draw handler. A drawn fields-of-fire was
-    // normalised there and came out editable; the sweep builds its base directly from a
+    // normalized there and came out editable; the sweep builds its base directly from a
     // candidate geometry, got the two-point version, and produced a graphic whose second
-    // leg was synthesised on every render and whose V therefore could not be opened. Same
+    // leg was synthesized on every render and whose V therefore could not be opened. Same
     // symbol, same engine, editable or not depending on which door it came through.
     //
     // Restore and import get the repair too, which upgrades a fields-of-fire saved before
     // this: the shape does not move — `normalizeDrawnBase` calls the very function the
     // renderer would have called — it just gains the handle it was missing.
     baseGeometry = withNormalizedBase(name, baseGeometry);
+    baseGeometry = withCanonicalAnchors(name, baseGeometry);
+
+    /*
+     * **A rectangular zone drawn as a box, from before the conversion.**
+     *
+     * APP-06 defines these as two anchor points and a width, and that is what the base
+     * carries now — but every snapshot written before 2026-08-27 holds the drawn ring,
+     * and so does anything that still hands one in. Read the axis and the width back out
+     * of it: the same rectangle comes back, and it comes back editable.
+     * @see axisFromRectangleRing, RectangularArea
+     */
+    const drawnBox = isRectangular(name) && baseGeometry.type === 'Polygon'
+        ? axisFromRectangleRing(baseGeometry.coordinates[0] as Position[])
+        : undefined;
+    if (drawnBox) {
+        baseGeometry = {type: 'LineString', coordinates: [drawnBox.p1, drawnBox.p2]};
+    }
+
+    // **The resolution these screen sizes are spent at, corrected for where the graphic
+    // is.** A pixel constant times the raw resolution is a *projected* length, and every
+    // decoration, badge and default width derived that way came out 1/cos(latitude) too
+    // big — twice the size at 60 degrees north. The raw value still travels as
+    // `drawingResolution`, because the label scale is anchored to the zoom itself and is
+    // not a distance at all. @see screenMeters
+    const sizingResolution = drawingResolution === undefined
+        ? undefined
+        : groundLength(drawingResolution, latitudeOf(baseGeometry));
 
     const props: TacticalGraphicProperties = {
         name,
@@ -526,8 +733,8 @@ export function buildTacticalGraphic(
         // to the label axis and `arcMissionTaskPaint` takes back exactly what the
         // rendered glyph needs. A fixed angular gap cannot track a capped label scale.
         ...(getPaintFunction(name)?.label ? {labelGapDegrees: 0} : {}),
-        ...sizeDefaults(name, baseGeometry, properties, drawingResolution),
-        ...arrowheadDefault(name, properties, drawingResolution),
+        ...sizeDefaults(name, baseGeometry, properties, sizingResolution),
+        ...arrowheadDefault(name, properties, sizingResolution),
         // The paint layer measures the letter and cuts its own hole, so the geometry
         // must arrive unbroken. @see GLYPH_CUT_GAP_GRAPHICS
         ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) && properties.labelGap === undefined ? {labelGap: 0} : {}),
@@ -536,14 +743,39 @@ export function buildTacticalGraphic(
         // security operation's size is not a ground distance a caller may set — it is
         // a screen constant, and these graphics refuse a resize for exactly that
         // reason. A `radius` arriving from a saved snapshot or a sweep is a number in
-        // metres from some other zoom, and honouring it draws the symbol at the wrong
+        // meters from some other zoom, and honoring it draws the symbol at the wrong
         // size. @see allowedGestures
+        // **The raw resolution, unlike everything else here.** These three are placed in
+        // projected metres rather than walked out geodesically — @see placeOriginCentered
+        // — so their pixel size is already latitude-invariant and correcting it would
+        // shrink them by cos(latitude) instead.
         ...securityOperationSize(name, drawingResolution),
-        ...crossedMissionTaskSize(name, drawingResolution),
-        ...bakedDecorationSize(name, properties, drawingResolution),
+        ...bakedDecorationSize(name, properties, sizingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
         ...ratioLockedSize(name, baseGeometry),
+        /*
+         * **A rectangle's width is what its own ring measures.**
+         *
+         * APP-06 defines these as "two anchor points and a width, defined in metres", and
+         * the user draws the box — so the shape is the input and the amplifier describes
+         * it. It was derived only *during a drag*, so a freshly drawn zone carried the
+         * generic 20 px default instead: a box drawn 160 px tall at zoom 6 reported 98 km
+         * where OpenLayers reported 391. Doing it here rather than in the draw handler
+         * covers every door — drawn, restored, imported, swept — the same argument
+         * `withNormalizedBase` makes at the top of this function.
+         */
+        // A box handed in states its own width; an axis takes the caller's, or the
+        // screen-sized default `sizeDefaults` supplies. @see axisFromRectangleRing
+        ...(drawnBox && properties.width === undefined ? {width: Math.round(drawnBox.halfWidth * 2)} : {}),
+        ...rectangleAmplifiers(name, ringOf(baseGeometry)),
+        // The rectangular target is the one that files a length, and it now comes from the
+        // two anchor points like every other rectangle's does — the ring it used to be
+        // measured off is derived. @see carriesRectangleLength
+        ...rectangleAxisLength(name, baseGeometry, properties),
+        // The same argument one family over: for the six drawn from anchor points, the
+        // points are the description and these figures follow them. @see anchorFrameProperties
+        ...anchorFrameProperties(name, baseGeometry),
     };
 
     const base: GeoJSONFeature = {
@@ -561,23 +793,23 @@ export function buildTacticalGraphic(
         return undefined;
     }
 
-    // The security operations come back **centred on the origin**: their generator
+    // The security operations come back **centered on the origin**: their generator
     // builds every arm from `[0, 0]` and never reads the base point, so all three
-    // stacked at lon/lat 0 in this renderer while their centre icons sat where the
+    // stacked at lon/lat 0 in this renderer while their center icons sat where the
     // user clicked. OpenLayers has always placed them itself, in its holder; this is
-    // the same step, and the same arithmetic. @see placeOriginCentred
-    const placed = placeOriginCentred(name, rendered, baseGeometry, props.rotation);
+    // the same step, and the same arithmetic. @see placeOriginCentered
+    const placed = placeOriginCentered(name, rendered, baseGeometry, props.rotation);
 
     const graphicGeometry = projectGeometry(placed.graphic);
     if (!graphicGeometry) return undefined;
 
     const labelGeometry = projectGeometry(placed.labels);
-    const centre = projectGeometry(baseGeometry);
+    const center = projectGeometry(baseGeometry);
 
-    // The projected centre cannot be recovered from the drawn geometry: the
+    // The projected center cannot be recovered from the drawn geometry: the
     // generator walks out geodesically and Mercator does not preserve a midpoint.
     // Same reasoning as `MissionTaskGraphicBase.updateGeometry`, which stamps it.
-    const graphicCenter = centre?.type === 'Point' ? centre.coordinates : undefined;
+    const graphicCenter = center?.type === 'Point' ? center.coordinates : undefined;
     // Where the label sits — which direction that is differs per graphic (Contain's
     // is due west, everyone else's follows the rotation axis), so it is published by
     // the generator rather than re-derived from `rotation` here.
@@ -598,7 +830,10 @@ export function buildTacticalGraphic(
         // bare anchor point and cannot work them out for itself, so whichever layer
         // owns the holder has to supply them. Here that is this adapter.
         bounds: boundsOf(graphicGeometry),
-        ring: outerRingOf(projectGeometry(baseGeometry)),
+        // The base first — an area the operator traced *is* its own outline — then the
+        // rendered shape, which is where a circular variant's outline comes from, since its
+        // base is a single point. @see outerRingOf
+        ring: outerRingOf(projectGeometry(baseGeometry)) ?? outerRingOf(graphicGeometry),
         // A range fan's bands reach the generator and come back as anonymous points,
         // so the label paint has to re-resolve them with the generator's own
         // defaults. `RangeFanGraphicBase` does the same call. @see resolveRangeFanBands
@@ -612,7 +847,7 @@ export function buildTacticalGraphic(
         base,
         graphic: {geometry: graphicGeometry, ...shared},
         labels: labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
-        // **`placed`, not `rendered`.** The security operations are generated centred
+        // **`placed`, not `rendered`.** The security operations are generated centered
         // on the origin and moved onto their base here; taking the handles from the
         // raw output left all three graphics' handles at null island, so the symbol
         // drew in the right place and could not be grabbed at all.
@@ -620,35 +855,7 @@ export function buildTacticalGraphic(
     };
 }
 
-/**
- * A geometry's axis-aligned extent, in projected metres.
- *
- * `undefined` for an empty geometry rather than a zero-size box at the origin: the
- * zone labels hang their date-time group off a corner of this, and a box at [0,0]
- * would put the dates in the Gulf of Guinea.
- */
-function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['bounds'] {
-    if (!geometry) return undefined;
-    const positions = paintGeometryMembers(geometry).flatMap(paintGeometryPositions);
-    if (!positions.length) return undefined;
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const [x, y] of positions) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return {minX, minY, maxX, maxY};
-}
-
 /** The outer ring of a polygon base, for the irregular zones' vertex anchor. */
-function outerRingOf(geometry: ProjectedInputGeometry | undefined): ProjectedPosition[] | undefined {
-    if (geometry?.type === 'Polygon') return geometry.coordinates[0];
-    if (geometry?.type === 'MultiPolygon') return geometry.coordinates[0]?.[0];
-    return undefined;
-}
-
 function handlePositions(geometry: GeoJSONFeature['geometry']): ProjectedPosition[] {
     const projected = projectGeometry(geometry);
     if (!projected) return [];
@@ -660,9 +867,10 @@ function handlePositions(geometry: GeoJSONFeature['geometry']): ProjectedPositio
 /**
  * Every mark one graphic contributes at this view scale.
  *
- * Returns an empty list for a graphic with no paint function yet — the spike has
- * three of 69 — rather than throwing or drawing a placeholder. `isPaintable` is
- * how a caller finds out in advance.
+ * Returns an empty list for a graphic with no paint function rather than throwing or
+ * drawing a placeholder. That is now the rare case — 215 of the 216 registered names
+ * are paintable — but it is still the honest response, and `isPaintable` is how a
+ * caller finds out in advance.
  */
 export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: PaintContext): Paint[] {
     const painters = getPaintFunction(graphic.name);

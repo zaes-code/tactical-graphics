@@ -40,14 +40,14 @@ export class RoadblockComplete extends TacticalGraphicsBase<PointGraphicOptions>
      * sit diagonally apart instead of level - the same trap the readiness states hit.
      */
     private bars(base: Feature<Point>, opts: PointGraphicOptions): Position[][] {
-        const centre = turf.point(base.geometry.coordinates);
+        const center = turf.point(base.geometry.coordinates);
         const span = Math.max(opts?.size ?? 1, 1);
         const half = span / 2;
         const gap = (span * SEPARATION_RATIO) / 2;
 
         // 270 = due west, 90 = due east: same latitude, so the crosses stay level.
         const bar = (bearingToAnchor: number, lean: number): Position[] => {
-            const anchor = turf.destination(centre, gap, bearingToAnchor, {units: 'meters'});
+            const anchor = turf.destination(center, gap, bearingToAnchor, {units: 'meters'});
             return [
                 turf.destination(anchor, half, lean + 180, {units: 'meters'}).geometry.coordinates as Position,
                 turf.destination(anchor, half, lean, {units: 'meters'}).geometry.coordinates as Position,
@@ -61,7 +61,7 @@ export class RoadblockComplete extends TacticalGraphicsBase<PointGraphicOptions>
     }
 
     /**
-     * `[edge, centre]` - edge first, as every point-dropped graphic must: `handles[0]` drives
+     * `[edge, center]` - edge first, as every point-dropped graphic must: `handles[0]` drives
      * resize, `handles[1]` drives translate. Rotation is off, so the edge handle only scales.
      */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {

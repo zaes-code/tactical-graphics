@@ -1,6 +1,6 @@
 # Tactical Graphics
 
-Render **MIL-STD-2525E / FM 1-02.2 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
+Render **MIL-STD-2525E / FM 1-02.2 / APP-06 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
@@ -8,11 +8,11 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**228 graphics** are implemented and verified today, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**288 graphics** are implemented and verified today, covering **301 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
-![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
+![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
-*Every paintable graphic, drawn in one sweep by the demo's **Draw all samples** button. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
+*The demo's **Draw samples** button, drawing every verified graphic in one sweep — framed on the middle of the block, so the rows above and below run past the edge of the frame. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
 
 ---
 
@@ -22,7 +22,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 npm install @zaes/tactical-graphics
 ```
 
-The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 32 packages, all permissively licensed.
+The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 34 packages — 32 MIT, one Unlicense, one 0BSD. No copyleft, and every one of them declares a license.
 
 Three entry points ship, and you can use any of them on its own:
 
@@ -72,7 +72,7 @@ const {graphic, labels, handles} = renderTacticalGraphic({
     properties: {
         tacticalGraphic: {
             name: TacticalGraphicName.MainAxisOfAdvance,
-            label: '1-508 IN',
+            designation: '1-508 IN',
             hostility: 'Friend',
             width: 300,
         },
@@ -119,8 +119,12 @@ tacticalGraphic: {
     name: 'MainAxisOfAdvance',
 
     // Amplifiers — text rendered on the graphic.
-    label: '1-508 IN',        // primary designation
-    secondId: 'TF RAIDER',    // secondary designation — boundaries show both
+    designation: '1-508 IN',  // field T — the primary designation
+    secondDesignation: 'TF RAIDER', // field T1 — the second one, where a graphic
+                              // carries two. A boundary shows both
+    additionalInfo: 'CONCRETE 3000M', // field H — free text a symbol carries beside its
+                              // designation: the airfield zone's runway note, the PsyOps
+                              // zone's line above its name, human terrain's only text
     countryCode: 'USA',       // country beside the primary designation
     secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
@@ -135,9 +139,18 @@ tacticalGraphic: {
     // Symbology — affects color and dash pattern.
     hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
     status: 'present',        // present | planned  (planned ⇒ dashed)
-    confidence: 'confirmed',  // rendered where doctrine shows a reliability rating
-    echelon: 'battalion',
+    confidence: 'known',      // known | suspected — rendered where doctrine shows a
+                              // reliability rating
+    echelon: 'Battalion/Squadron', // Squad | Section | Platoon/Detachment |
+                              // Company/Battery/Troop | Battalion/Squadron |
+                              // Regiment/Group | Brigade | Unknown
     direction: 'ONE_WAY',     // route graphics
+    mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
+    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
+                              // area or restricted terrain carries to say what kind of
+                              // movement the ground admits
+    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
+                              // and the color the area is hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -148,7 +161,11 @@ tacticalGraphic: {
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
     width: 600,               // FULL width across a drawn line — rail to rail on an axis
-                              // of advance, edge to edge on a corridor
+                              // of advance, edge to edge on a corridor, and the across
+                              // dimension of a rectangular zone
+    length: 1120,             // FULL length ALONG the graphic. Only the rectangular
+                              // target carries both; every other rectangle takes its
+                              // length from the anchor points instead
     rotation: 45,             // degrees, counter-clockwise from east (point graphics)
     mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
                               // withdrawal, the chevron on an abatis
@@ -160,9 +177,27 @@ tacticalGraphic: {
 }
 ```
 
+**`label` and `secondId` were renamed in 3.0.0** — they are `designation` and
+`secondDesignation` now. They are fields **T** and **T1**, the standard's unique
+designations, and the old names said neither what they were nor which was which. `label`
+also collided with the three other senses of the word in this library: the anchor
+features `renderTacticalGraphic` returns, the `role: 'label'` tag, and the amplifier bag
+itself, which meant `readGraphicLabels(f).label` read as the label of the labels and was
+none of them.
+
+They are not `identifier1` / `identifier2` for a specific reason: doctrine numbers these
+**T and T1**, so `identifier1` would be field T and `identifier2` would be field T1 —
+off by one against the plate anyone would check them against.
+
+**Saved data keeps working.** The old keys are still accepted on read, everywhere a
+stored `tacticalGraphic` bag is loaded — `renderTacticalGraphic`, both renderers' style
+paths, and both engines' `restore`. Nothing writes them back, they are absent from the
+types, and a bag carrying both keeps the current one. So a file written by 1.x or 2.x
+opens with its designations intact; you migrate when you next save.
+
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
-`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Metres})`.
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Meters})`.
 
 `altitudeDatum` says what they are measured **from**, and it is a property rather than a
 setting because two zones on one map can honestly differ: 1500 AGL over a 3000 ft ridge
@@ -204,7 +239,7 @@ rangeFan: {
 | `leftAzimuthDeg` / `rightAzimuthDeg` | sector fan only: this band's own edges, degrees clockwise from north. Omit them and the band spans the sector |
 
 **`range` is in kilometers, and it is the only distance here that is not meters.**
-`radius`, `width` and `decorationSize` are all meters. A range fan is quoted in
+`radius`, `width`, `length` and `decorationSize` are all meters. A range fan is quoted in
 kilometers because that is how an envelope is written and the label prints the number
 bare — meters would put three zeroes on every ring. It is a wart, and it stays one: the
 alternative silently rescales every range fan already saved by a factor of a thousand.
@@ -234,7 +269,8 @@ are all in meters and none of them overlap — a graphic reads one.
 | Field | Means | Graphics |
 |---|---|---|
 | `radius` | reach from the symbol's own center | circles and point-anchored symbols |
-| `width` | **full** width across a drawn line | axes of advance, corridors |
+| `width` | **full** width across a drawn line | axes of advance, corridors, rectangular zones |
+| `length` | **full** length along the graphic | the rectangular target, which is the only one that carries both |
 | `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
 
 **`radius` — a circle, sized from its center:**
@@ -254,7 +290,7 @@ would measure on the map, and the library halves it internally to offset each ra
 renderTacticalGraphic({
     type: 'Feature',
     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
-    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', label: '1-508 IN', width: 600}},
+    properties: {tacticalGraphic: {name: 'MainAxisOfAdvance', designation: '1-508 IN', width: 600}},
 });                                             // rails 300 m either side of the centerline
 ```
 
@@ -280,6 +316,7 @@ rather than a broken shape.
 | Base geometry | Graphics | Example |
 |---|---|---|
 | `LineString` | arrows, phase lines, boundaries, corridors | `MainAxisOfAdvance`, `PhaseLine` |
+| `LineString` **+ `width`** | the eighteen rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
 | `Point` | mission tasks, range fans, fighting positions | `Secure`, `Contain`, `BaseDefenseZone` |
 | `Polygon` | areas | `ObjectiveArea`, `NamedAreaOfInterest` |
 
@@ -291,15 +328,83 @@ renderTacticalGraphic({
 });
 ```
 
+**The rectangular zones are the exception worth knowing about.** APP-06 defines them
+from two anchor points and a width rather than from a drawn box — points 1 and 2 sit at
+the centers of two opposing sides, and `width` spans the other dimension — so they take
+a two-point `LineString`, and a `Polygon` throws. `isRectangular(name)` is the test.
+That is what lets the width be dragged and the zone be turned; a drawn box could only be
+reshaped corner by corner.
+
+```ts
+import {isRectangular, axisFromRectangleRing, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+isRectangular(TacticalGraphicName.FreeFireAreaRectangular);   // → true
+axisFromRectangleRing(ring);                                  // → {p1, p2, halfWidth} — halfWidth in meters
+```
+
+Both renderers migrate zones saved as polygons by an earlier version on restore, so a
+saved map opens editable. `axisFromRectangleRing` is the same recovery, exported for
+anyone calling the generator directly: hand it the ring and it returns the two anchor
+points and the half-width in meters.
+
 Discover what is available at run time:
 
 ```ts
-import {listTacticalGraphicNames, GRAPHIC_CATEGORIES, getDisplayName} from '@zaes/tactical-graphics';
+import {
+    listTacticalGraphicNames,
+    GRAPHIC_CATEGORIES,
+    getDisplayName,
+    getEntityCode,
+    getSpecifications,
+    TacticalGraphicName,
+} from '@zaes/tactical-graphics';
 
-listTacticalGraphicNames();                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
-GRAPHIC_CATEGORIES['PhaseLine'];                // → 'Lines'
-getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
+listTacticalGraphicNames();                                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
+GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
+getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
+getEntityCode(TacticalGraphicName.PhaseLine);                   // → 140300
+getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06']
 ```
+
+**Every graphic says which standard defines it, and carries the identifier that standard
+gives it.** `getSpecifications(name)` answers with one or both — 211 graphics are in both
+FM 1-02.2 and APP-06, 69 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
+returns APP-06's six-digit entity code as a number, or `null` for those 8, since FM 1-02.2
+publishes no identifiers of its own. `getNameByEntityCode(140300)` goes the other way, for
+reading a symbol out of a feed that addresses graphics by code.
+
+`TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
+at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
+`tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member
+rather than the literal, so pass the enum.
+
+### Which end is the arrowhead?
+
+**Thirty-two graphics number their points from the tip**, because APP-06 does: *"Point 1
+defines the tip of the arrowhead. Point N-1 defines the rear of the symbol."* So on an
+axis of advance the **first** coordinate is the head and the last is the tail. The list is
+the axis-of-advance family, avenue of approach, both counterattacks, advance to contact,
+frontal attack, turning movement, mobile defense, the seven retrograde canes, exploit,
+both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and
+fields of fire.
+
+```ts
+import {TIP_FIRST_GRAPHICS, drawsTipFirst} from '@zaes/tactical-graphics';
+
+drawsTipFirst(TacticalGraphicName.MainAxisOfAdvance);   // → true
+TIP_FIRST_GRAPHICS.length;                              // → 32 — the whole list, if you need to migrate
+```
+
+Nothing about the rendered symbol changes — the shape, its decorations, its handles and
+its labels are what they were. What changes is which end of your `coordinates` array the
+arrow points at.
+
+**3.0.0 changed this and saved data is not migrated.** There is no version marker in
+`properties.tacticalGraphic` to detect an older graphic by, so if you hold data written by
+1.x or 2.x, reverse the coordinate array of any graphic `drawsTipFirst` returns true for.
+The other 22 multipoint graphics — the ones drawn from anchor points, demonstration, the
+obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate, the ferry and raft site,
+and the four direction-of-attack graphics — are untouched.
 
 ---
 
@@ -459,9 +564,9 @@ showing where a new vertex would land are all present in both.
 
 | | |
 |---|---|
-| **Label rasterisation** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
+| **Label rasterization** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
 | **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
-| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realise geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
+| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
 
 ### The radius read-out
 
@@ -508,7 +613,7 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 `label` features by default; ask for `handle` too when you are building an editor.
 
 **Geometry is not the whole symbol.** Obstacle teeth, the gap cut around a mission
-task's letter, a screen-sized arrowhead and the rest are synthesised at paint time,
+task's letter, a screen-sized arrowhead and the rest are synthesized at paint time,
 so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
 exported from the root entry point for exactly this — `getPaintFunction(name)`
 returns the marks to draw, in projected meters, with no renderer in them. That is
@@ -521,10 +626,10 @@ third.
 properties, or from `getLabel()` for graphics whose abbreviation is fixed by doctrine:
 
 ```ts
-import {getLabel} from '@zaes/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 
-getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
-getLabel('FinalProtectiveFire'); // → 'FPF'
+getLabel(TacticalGraphicName.PhaseLine);           // → 'PL'   (doctrinal, not user-editable)
+getLabel(TacticalGraphicName.FinalProtectiveFire); // → 'FPF'
 ```
 
 **Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain,
@@ -678,7 +783,7 @@ rendering: one registration serves whichever engine is drawing, and both read it
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
-dependency: a consumer who wants the geometry, or the other 200-odd graphics, never
+dependency: a consumer who wants the geometry, or the other 280-odd graphics, never
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
@@ -739,7 +844,7 @@ setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global 
 
 It wins over the global provider for that graphic and returns `undefined` to draw no
 center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayers holder,
-`id` on a `MapLibreTacticalGraphic`. Both engines honour it, and both repaint straight
+`id` on a `MapLibreTacticalGraphic`. Both engines honor it, and both repaint straight
 away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
 
@@ -845,6 +950,7 @@ Skip the draw interaction when the geometry comes from data rather than a user's
 You build the base feature; the controller does the rest:
 
 ```ts
+import {TacticalGraphicName, TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
 
 const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
@@ -853,7 +959,8 @@ source.addFeatures(handler.getFeatures());     // graphic + labels + handles
 manager.watchResolution(handler);              // see below — not optional
 
 writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
-    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
+    designation: 'A',
+    hostility: TacticalGraphicHostility.hostileFaker,   // strokes turn red; text stays black
 });
 ```
 
@@ -892,10 +999,12 @@ counterpart to `getController` for placing graphics from data, and hands back a 
 graphic rather than mutating a holder:
 
 ```ts
+import {TacticalGraphicName, TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
 
 const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
-    label: 'A', hostility: 'Hostile/Faker',
+    designation: 'A',
+    hostility: TacticalGraphicHostility.hostileFaker,
 }, resolution);
 if (graphic) renderer.add(graphic);
 ```
@@ -916,9 +1025,11 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 216 supported names.
+the 289 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
+
+Graphic "FreeFireAreaRectangular" expects a LineString base geometry, got Polygon.
 ```
 
 ---
@@ -929,8 +1040,8 @@ The library is projection-agnostic in one specific way: **it works entirely in
 EPSG:4326**, and hands you EPSG:4326 back. Reproject at your renderer's boundary, not
 before you call it.
 
-Sizes (`radius`, `size`) are in **meters**, and range-fan band ranges are in
-**kilometers**.
+Sizes (`radius`, `width`, `length`, `decorationSize`) are in **meters**, and range-fan
+band ranges are in **kilometers**.
 
 ---
 
@@ -950,6 +1061,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Airspace Coordination Area, Irregular | Airspace Coordinating Measures |
 | Airspace Coordination Area, Rectangular | Airspace Coordinating Measures |
 | Base Defense Zone | Airspace Coordinating Measures |
+| Fighter Engagement Zone | Airspace Coordinating Measures |
 | High-Altitude Missile Engagement Zone | Airspace Coordinating Measures |
 | High-Density Airspace Control Zone | Airspace Coordinating Measures |
 | Identification, Friend-Or-Foe Switch Off-Line | Airspace Coordinating Measures |
@@ -970,8 +1082,11 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Weapon Engagement Zone | Airspace Coordinating Measures |
 | Weapons Free Zone | Airspace Coordinating Measures |
 | Airfield | Areas |
+| Airfield Zone | Areas |
 | Airhead Line | Areas |
+| Area | Areas |
 | Area Of Operations | Areas |
+| Area, Generic | Areas |
 | Assault Position | Areas |
 | Assembly Area | Areas |
 | Attack Position | Areas |
@@ -979,23 +1094,48 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Battle Position | Areas |
 | Battle Position Planned But Not Prepared | Areas |
 | Battle Position Prepared But Not Occupied | Areas |
+| Biological Contaminated Area | Areas |
+| Biological Contaminated Area, Toxic Industrial Material | Areas |
+| Bridgehead | Areas |
 | Brigade Support Area | Areas |
+| Chemical Contaminated Area | Areas |
+| Chemical Contaminated Area, Toxic Industrial Material | Areas |
 | Corps Support Area | Areas |
 | Detainee Holding Area | Areas |
 | Division Support Area | Areas |
 | Drop Zone | Areas |
 | Encirclement | Areas |
+| Enemy Prisoner Of War Holding Area | Areas |
 | Engagement Area | Areas |
+| Extraction Zone | Areas |
 | Fortified Area | Areas |
 | Forward Arming And Refueling Point | Areas |
 | Guerrilla Base | Areas |
+| Human Terrain | Areas |
+| Joint Tactical Action Area | Areas |
 | Kill Zone | Areas |
 | Landing Zone | Areas |
+| Limited Access Area | Areas |
+| Minimum Safe Distance Zone | Areas |
+| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
+| Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
+| Penetration Box | Areas |
 | Pickup Zone | Areas |
+| PsyOps Zone, Circular | Areas |
+| PsyOps Zone, Irregular | Areas |
+| PsyOps Zone, Rectangular | Areas |
+| Radiation Dose Rate Contour Line | Areas |
+| Radiological Contaminated Area | Areas |
+| Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
+| Regimental Support Area | Areas |
+| Restricted Terrain | Areas |
+| Severely Restricted Terrain | Areas |
 | Strong Point | Areas |
+| Submarine Action Area | Areas |
+| Submarine-Generated Action Area | Areas |
 | Target Area Of Interest | Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Areas |
 | Enemy Known Boundary | Boundaries |
@@ -1015,6 +1155,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Relief In Place | Enabling Operations Planning |
 | Screen | Enabling Operations Planning |
 | Fighting Position | Field Fortification Symbols |
+| Fortified Position | Field Fortification Symbols |
 | Fortified/Trench Line | Field Fortification Symbols |
 | Fields Of Fire/Sector Of Fire | Fire Support Coordination Control Measures |
 | Free-Fire Area, Circular | Fire Support Coordination Control Measures |
@@ -1030,21 +1171,30 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Restrictive Fire Area, Circular | Fire Support Coordination Control Measures |
 | Restrictive Fire Area, Irregular | Fire Support Coordination Control Measures |
 | Restrictive Fire Area, Rectangular | Fire Support Coordination Control Measures |
+| Battlefield Coordination Line | Lines |
 | Battlefield Handover Line | Lines |
 | Bridgehead Line | Lines |
 | Common Sensor Boundary | Lines |
 | Coordinated Fire Line | Lines |
+| Decision Line | Lines |
 | Delay Line | Lines |
 | Engineer Work Line | Lines |
 | Final Coordination Line | Lines |
 | Fire Support Coordination Line | Lines |
 | Forward Edge Of The Battle Area | Lines |
 | Forward Line Of Own Troops | Lines |
+| Handover Line | Lines |
+| Holding Line | Lines |
 | Intelligence Coordination Line | Lines |
+| Light Line | Lines |
 | Limit Of Advance | Lines |
 | Line Of Contact | Lines |
 | Line Of Departure | Lines |
 | Line Of Departure Or Line Of Contact | Lines |
+| Line, Generic | Lines |
+| Mobility Corridor | Lines |
+| Named Area Of Interest Line | Lines |
+| No Fire Line | Lines |
 | Phase Line | Lines |
 | Probable Line Of Deployment | Lines |
 | Release Line | Lines |
@@ -1073,18 +1223,27 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Mine Cluster | Mobility and Countermobility Control Measures |
+| Mined Area, Fenced | Mobility and Countermobility Control Measures |
+| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
+| Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
 | Obstacle Group | Mobility and Countermobility Control Measures |
 | Obstacle Line | Mobility and Countermobility Control Measures |
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Raft Site | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Trip Wire | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
 | Wire, Double Fence | Mobility and Countermobility Control Measures |
@@ -1097,6 +1256,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
+| Avenue Of Approach | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
 | Direction Of Main Attack | Movement and Maneuver |
 | Direction Of Main Attack Feint | Movement and Maneuver |
@@ -1110,9 +1270,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Penetration | Movement and Maneuver |
 | Supporting Axis Of Advance | Movement and Maneuver |
 | Turning Movement | Movement and Maneuver |
+| Advance To Contact | Offense Operations Planning |
 | Ambush | Offense Operations Planning |
+| Cordon And Knock | Offense Operations Planning |
 | Cordon And Search | Offense Operations Planning |
 | Counterattack | Offense Operations Planning |
+| Counterattack By Fire | Offense Operations Planning |
 | Exploitation | Offense Operations Planning |
 | Movement To Contact | Offense Operations Planning |
 | Pursuit | Offense Operations Planning |
@@ -1121,29 +1284,39 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Breach | Tactical Mission Tasks |
 | Bypass | Tactical Mission Tasks |
 | Canalize | Tactical Mission Tasks |
+| Capture | Tactical Mission Tasks |
 | Clear | Tactical Mission Tasks |
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
+| Demonstration | Tactical Mission Tasks |
+| Deny | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
 | Disengage | Tactical Mission Tasks |
 | Disrupt | Tactical Mission Tasks |
+| Escort | Tactical Mission Tasks |
+| Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
+| Locate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
+| Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
+| Artillery Maneuver Area | Target Acquisition Control Measures |
+| Artillery Reserved Area | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Circular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Irregular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Rectangular | Target Acquisition Control Measures |
 | Blue Kill Box, Circular | Target Acquisition Control Measures |
 | Blue Kill Box, Irregular | Target Acquisition Control Measures |
 | Blue Kill Box, Rectangular | Target Acquisition Control Measures |
+| Bomb Area | Target Acquisition Control Measures |
 | Call For Fire Zone, Circular | Target Acquisition Control Measures |
 | Call For Fire Zone, Irregular | Target Acquisition Control Measures |
 | Call For Fire Zone, Rectangular | Target Acquisition Control Measures |
@@ -1159,8 +1332,19 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Purple Kill Box, Circular | Target Acquisition Control Measures |
 | Purple Kill Box, Irregular | Target Acquisition Control Measures |
 | Purple Kill Box, Rectangular | Target Acquisition Control Measures |
+| Target Build-Up Area, Circular | Target Acquisition Control Measures |
+| Target Build-Up Area, Irregular | Target Acquisition Control Measures |
+| Target Build-Up Area, Rectangular | Target Acquisition Control Measures |
+| Target Value Area, Circular | Target Acquisition Control Measures |
+| Target Value Area, Irregular | Target Acquisition Control Measures |
+| Target Value Area, Rectangular | Target Acquisition Control Measures |
+| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan, Circular | Target Acquisition Control Measures |
+| Zone Of Fire | Target Acquisition Control Measures |
+| Zone Of Responsibility, Circular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |
 | Final Protective Fire | Target Control Measures |
 | Fire Support Area, Circular | Target Control Measures |
 | Fire Support Area, Irregular | Target Control Measures |
@@ -1181,9 +1365,9 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Category |
 |---|---|
-| Limited Access Area | Areas |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
+| Axis Of Attack | Movement and Maneuver |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |
@@ -1276,6 +1460,9 @@ a fixed-size badge like Destroy has no resize to offer.
 
 - [FM 1-02.2, Military Symbols](https://www.battleorder.org/post/symbolsfm) — US Army
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
+- [APP-06, NATO Joint Military Symbology](https://nso.nato.int/nso/nsdd/main/standards), Edition E — retrieved from the
+  NATO Standardization Document Database. NATO is acknowledged as its publisher; NATO
+  charges no fee for its standardization documents
 - [TurfJS](https://turfjs.org/) — the geospatial math underneath
 
 ## About Zaes

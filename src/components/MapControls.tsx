@@ -24,9 +24,6 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import RotateLeftIcon from '@mui/icons-material/RotateLeft';
-import OpenWithIcon from '@mui/icons-material/OpenWith';
-import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -39,15 +36,24 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {MapEngineCapabilities} from './mapEngine';
-import {getDisplayName, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getDisplayName, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
+import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
 
 interface Props {
     onDrawTacticalGraphics(): void;
     onShapeChange(name: TacticalGraphicName): void;
     onReset(): void;
     /** Hostility applied to every sample that accepts one; undefined = leave default. */
-    onDrawSamples(hostility?: TacticalGraphicHostility): void;
+    /**
+     * Draws a sample of each graphic currently listed.
+     *
+     * `names` is what the panel is showing — the specification filter and the category
+     * checkboxes, narrowed by the search box. The sweep is a way of *looking* at the
+     * library, so it should show what the operator has asked to look at; drawing all 273
+     * every time made it useless for checking one category.
+     */
+    onDrawSamples(hostility: TacticalGraphicHostility | undefined, names: TacticalGraphicName[]): void;
     onClearAll(): void;
     /** Downloads every graphic on the map as a .geojson file. */
     onExportGeoJson(): void;
@@ -63,7 +69,7 @@ interface Props {
     /**
      * What the live engine can actually do.
      *
-     * The panel **greys** what an engine does not support and puts the reason on the
+     * The panel **grays** what an engine does not support and puts the reason on the
      * tooltip, rather than hiding it. A missing control reads as a different app; a
      * live control that silently does nothing is worse still. A disabled one with
      * "MapLibre has no draw interaction yet" is the honest version, and it makes the
@@ -76,6 +82,8 @@ interface GraphicOption {
     label: string;
     value: TacticalGraphicName;
     category: string;
+    /** The specifications that define this graphic — FM 1-02.2, APP-06, or both. */
+    specifications: readonly TacticalGraphicSpecification[];
     isNew?: boolean;
 }
 
@@ -121,7 +129,38 @@ const NEW_GRAPHICS = new Set<TacticalGraphicName>([
 const CATEGORY_ORDER: string[] = Object.values(TacticalGraphicCategory);
 const ALL_CATEGORIES: TacticalGraphicCategory[] = Object.values(TacticalGraphicCategory);
 
+const ALL_SPECIFICATIONS: TacticalGraphicSpecification[] = Object.values(TacticalGraphicSpecification);
+
+/**
+ * How the panel filters by standard.
+ *
+ * Exclusive choices rather than a checkbox per specification, and the last three
+ * are a genuine partition: every graphic is in both catalogues, or in exactly one.
+ *
+ * It was three options while every graphic in the registry was in FM 1-02.2 — an
+ * "FM 1-02.2" tick box hid nothing then and read as broken. Now that NATO defines
+ * seven the manual does not, both "only" halves are worth asking for.
+ */
+type SpecificationFilter = 'all' | 'both' | 'fmOnly' | 'app6Only';
+
+const SPECIFICATION_FILTERS: {value: SpecificationFilter; label: string; help: string}[] = [
+    {value: 'all', label: 'All', help: 'Every graphic in the registry'},
+    {value: 'both', label: 'Both', help: 'Defined by FM 1-02.2 and NATO APP-06 alike'},
+    {value: 'fmOnly', label: 'FM only', help: 'FM 1-02.2 defines these and APP-06 does not'},
+    {value: 'app6Only', label: 'APP-06 only', help: 'NATO APP-06 defines these and FM 1-02.2 does not'},
+];
+
+function matchesSpecificationFilter(option: GraphicOption, filter: SpecificationFilter): boolean {
+    if (filter === 'all') return true;
+    const inApp6 = option.specifications.includes(TacticalGraphicSpecification.APP6);
+    const inFm = option.specifications.includes(TacticalGraphicSpecification.FM1_02_2);
+    if (filter === 'both') return inApp6 && inFm;
+    if (filter === 'fmOnly') return inFm && !inApp6;
+    return inApp6 && !inFm;
+}
+
 const LS_CATEGORIES = 'tg_enabledCategories';
+const LS_SPECIFICATION_FILTER = 'tg_specificationFilter';
 
 function loadEnabledCategories(): Set<TacticalGraphicCategory> {
     try {
@@ -139,11 +178,20 @@ function loadEnabledCategories(): Set<TacticalGraphicCategory> {
     return new Set(ALL_CATEGORIES);
 }
 
+function loadSpecificationFilter(): SpecificationFilter {
+    try {
+        const raw = localStorage.getItem(LS_SPECIFICATION_FILTER);
+        if (raw && SPECIFICATION_FILTERS.some(f => f.value === raw)) return raw as SpecificationFilter;
+    } catch {}
+    return 'all';
+}
+
 const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
     .map(val => ({
         label: getDisplayName(val),
         value: val,
         category: GRAPHIC_CATEGORIES[val] ?? 'Other',
+        specifications: getSpecifications(val),
         isNew: NEW_GRAPHICS.has(val),
     }))
     .sort((a, b) => {
@@ -176,6 +224,7 @@ const MapControls: React.FC<Props> = ({
     const [search, setSearch] = useState('');
     const [filterOpen, setFilterOpen] = useState(false);
     const [enabledCategories, setEnabledCategories] = useState<Set<TacticalGraphicCategory>>(loadEnabledCategories);
+    const [specificationFilter, setSpecificationFilter] = useState<SpecificationFilter>(loadSpecificationFilter);
     const listRef = useRef<HTMLDivElement>(null);
     /** The hidden file input the Import button clicks on the user's behalf. */
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -184,9 +233,16 @@ const MapControls: React.FC<Props> = ({
         localStorage.setItem(LS_CATEGORIES, JSON.stringify(Array.from(enabledCategories)));
     }, [enabledCategories]);
 
+    useEffect(() => {
+        localStorage.setItem(LS_SPECIFICATION_FILTER, specificationFilter);
+    }, [specificationFilter]);
+
     const visibleOptions = useMemo(
-        () => ALL_OPTIONS.filter(o => enabledCategories.has(o.category as TacticalGraphicCategory)),
-        [enabledCategories]
+        () => ALL_OPTIONS.filter(o =>
+            enabledCategories.has(o.category as TacticalGraphicCategory) &&
+            matchesSpecificationFilter(o, specificationFilter)
+        ),
+        [enabledCategories, specificationFilter]
     );
 
     const filtered = useMemo(() => {
@@ -199,6 +255,8 @@ const MapControls: React.FC<Props> = ({
     }, [search, visibleOptions]);
 
     const hiddenCategoryCount = ALL_CATEGORIES.length - enabledCategories.size;
+    /** Graphics the two filters are hiding between them — what the badge counts. */
+    const hiddenGraphicCount = ALL_OPTIONS.length - visibleOptions.length;
 
     // Group filtered options by category, preserving CATEGORY_ORDER
     const groups = useMemo(() => {
@@ -217,16 +275,23 @@ const MapControls: React.FC<Props> = ({
 
     const isDrawing = interactionMode === 'drawing';
 
-    // **The button values are the modes.** They used to be strings this panel mapped on
-    // and off a numeric enum through two switch blocks; `EditMode` is a string union, so
-    // the toggle group's own value is already the answer.
-    const EDIT_BUTTONS: EditMode[] = ['rotate', 'resize', 'translate', 'modify'];
-    const activeEditMode = EDIT_BUTTONS.includes(interactionMode) ? interactionMode : null;
+    /**
+     * **One button, because the operator is picking a graphic, not a verb.**
+     *
+     * This panel used to offer four — rotate, resize, move, edit — each a *global* mode.
+     * That made the toolbar the thing being manipulated: you chose a verb, then hunted
+     * for a noun, every graphic on the map wore handles at once, and a symbol that
+     * refuses the verb you picked simply did nothing when you dragged it.
+     *
+     * `edit` inverts it. Click a graphic; it wears its own handles, a dashed box, and a
+     * button for each gesture *it* accepts. The four old modes are still in `EditMode`
+     * and still work — they are published surface — but nothing in this panel selects
+     * them any more. @see EditAffordances
+     */
+    const isEditing = interactionMode === 'edit';
 
-    const handleEditMode = (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
-        // Re-pressing the selected button clears it, which is what a toggle group means
-        // by handing back the mode that is already active.
-        onToggleInteraction(newMode === null || newMode === activeEditMode ? 'view' : (newMode as EditMode));
+    const handleEditMode = () => {
+        onToggleInteraction(isEditing ? 'view' : 'edit');
     };
 
     const pointHint = selected ? getPointHint(selected.value) : null;
@@ -259,26 +324,48 @@ const MapControls: React.FC<Props> = ({
                 gap: 1,
                 flexShrink: 0,
             }}>
-                <Typography sx={{
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: 'primary.main',
-                    flexGrow: 1,
-                }}>
-                    Tactical Graphics
-                </Typography>
-                <Tooltip title={hiddenCategoryCount > 0 ? `Filter categories (${hiddenCategoryCount} hidden)` : 'Filter categories'}>
+                <Box sx={{flexGrow: 1, minWidth: 0}}>
+                    <Typography sx={{
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: 'primary.main',
+                    }}>
+                        Tactical Graphics
+                    </Typography>
+                    {/*
+                     * The two standards this library implements. Worth stating in the
+                     * header rather than burying in the filter: which catalogue a symbol
+                     * comes from is the first thing a NATO user asks, and until now the
+                     * app only ever claimed FM 1-02.2 by implication.
+                     */}
+                    <Typography sx={{fontSize: '0.6rem', letterSpacing: '0.06em', color: 'text.secondary', mt: 0.15}}>
+                        {specificationFilter === 'fmOnly'
+                            ? `${TacticalGraphicSpecification.FM1_02_2} only`
+                            : specificationFilter === 'app6Only'
+                                ? `${TacticalGraphicSpecification.APP6} only`
+                                : ALL_SPECIFICATIONS.join(' · ')}
+                    </Typography>
+                </Box>
+                <Tooltip title={hiddenGraphicCount > 0 ? `Filter graphics (${hiddenGraphicCount} hidden)` : 'Filter graphics'}>
                     <IconButton
                         size="small"
                         onClick={() => setFilterOpen(true)}
-                        sx={{color: hiddenCategoryCount > 0 ? 'primary.main' : 'text.secondary', '&:hover': {color: 'primary.main'}}}
+                        sx={{color: hiddenGraphicCount > 0 ? 'primary.main' : 'text.secondary', '&:hover': {color: 'primary.main'}}}
                     >
+                        {/*
+                         * A dot, not a count. Filtering to APP-06 hides 7 and filtering
+                         * to FM-only hides 208, so a numeric badge renders "99+" for a
+                         * filter that is working exactly as asked. The list already
+                         * states how many graphics survive; the badge only needs to say
+                         * that a filter is on.
+                         */}
                         <Badge
-                            badgeContent={hiddenCategoryCount > 0 ? hiddenCategoryCount : null}
+                            variant="dot"
+                            invisible={hiddenGraphicCount === 0}
                             color="primary"
-                            sx={{'& .MuiBadge-badge': {fontSize: '0.55rem', minWidth: 14, height: 14, p: '0 3px'}}}
+                            sx={{'& .MuiBadge-badge': {minWidth: 6, height: 6}}}
                         >
                             <FilterAltIcon fontSize="small"/>
                         </Badge>
@@ -533,35 +620,22 @@ const MapControls: React.FC<Props> = ({
                     }}>
                         Edit Mode
                     </Typography>
-                    <ToggleButtonGroup
-                        exclusive
-                        value={activeEditMode}
-                        onChange={handleEditMode}
-                        size="small"
-                        disabled={!capabilities.edit}
-                        sx={{width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)'}}
-                    >
-                        <Tooltip title={capabilities.edit ? 'Rotate' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="rotate" sx={{py: 0.75}}>
-                                <RotateLeftIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Resize' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="resize" sx={{py: 0.75}}>
-                                <ZoomOutMapIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Drag / Reposition' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="translate" sx={{py: 0.75}}>
-                                <OpenWithIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title={capabilities.edit ? 'Edit' : capabilities.unsupportedReason ?? ''}>
-                            <ToggleButton value="modify" sx={{py: 0.75}}>
-                                <EditIcon sx={{fontSize: 16}}/>
-                            </ToggleButton>
-                        </Tooltip>
-                    </ToggleButtonGroup>
+                    <Tooltip title={capabilities.edit ? 'Select a graphic to move, rotate, resize or reshape it' : capabilities.unsupportedReason ?? ''}>
+                        {/* A span, because MUI cannot attach a tooltip to a disabled button. */}
+                        <span>
+                            <Button
+                                fullWidth
+                                variant={isEditing ? 'contained' : 'outlined'}
+                                size="small"
+                                disabled={!capabilities.edit}
+                                onClick={handleEditMode}
+                                startIcon={<EditIcon sx={{fontSize: 16}}/>}
+                                sx={{textTransform: 'none'}}
+                            >
+                                {isEditing ? 'Editing — click a graphic' : 'Edit'}
+                            </Button>
+                        </span>
+                    </Tooltip>
                 </Box>
 
                 <Divider/>
@@ -578,7 +652,7 @@ const MapControls: React.FC<Props> = ({
                     }}>
                         Sample Gallery
                     </Typography>
-                    {/* Draw the whole catalogue at one hostility — a one-click check
+                    {/* Draw the whole catalog at one hostility — a one-click check
                         that hostility rendering works everywhere it should. Graphics
                         without the field are drawn unchanged. */}
                     <Select
@@ -597,7 +671,7 @@ const MapControls: React.FC<Props> = ({
                     <Box sx={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 0.75}}>
                         <Box
                             component="button"
-                            onClick={() => onDrawSamples(sampleHostility || undefined)}
+                            onClick={() => onDrawSamples(sampleHostility || undefined, filtered.map(o => o.value))}
                             sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
                                 py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
@@ -607,7 +681,7 @@ const MapControls: React.FC<Props> = ({
                             }}
                         >
                             <GridViewIcon sx={{fontSize: 15}}/>
-                            Draw all samples
+                            Draw samples
                         </Box>
                         <Box
                             component="button"
@@ -684,7 +758,7 @@ const MapControls: React.FC<Props> = ({
             </Box>
         </Paper>
 
-        {/* Category filter modal */}
+        {/* Specification + category filter modal */}
         <Dialog
             open={filterOpen}
             onClose={() => setFilterOpen(false)}
@@ -694,7 +768,7 @@ const MapControls: React.FC<Props> = ({
         >
             <DialogTitle sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1, pr: 1}}>
                 <Typography sx={{fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase'}}>
-                    Filter Categories
+                    Filter Graphics
                 </Typography>
                 <IconButton onClick={() => setFilterOpen(false)} size="small" sx={{color: 'text.secondary', '&:hover': {color: 'text.primary'}}}>
                     <CloseIcon fontSize="small"/>
@@ -704,6 +778,41 @@ const MapControls: React.FC<Props> = ({
             <Divider/>
 
             <DialogContent sx={{pt: 1.5, pb: 2}}>
+                <Typography sx={{fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5}}>
+                    Specification
+                </Typography>
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    fullWidth
+                    value={specificationFilter}
+                    onChange={(_, next) => {
+                        // MUI hands back null when the active button is clicked again;
+                        // keep the current filter rather than dropping to no selection.
+                        if (next) setSpecificationFilter(next as SpecificationFilter);
+                    }}
+                    sx={{mb: 1}}
+                >
+                    {SPECIFICATION_FILTERS.map(({value, label, help}) => {
+                        const count = ALL_OPTIONS.filter(o => matchesSpecificationFilter(o, value)).length;
+                        return (
+                            <Tooltip key={value} title={help}>
+                                <ToggleButton value={value} sx={{fontSize: '0.68rem', py: 0.4, textTransform: 'none'}}>
+                                    {label}
+                                    <Box component="span" sx={{ml: 0.5, fontSize: '0.6rem', color: 'text.disabled'}}>
+                                        {count}
+                                    </Box>
+                                </ToggleButton>
+                            </Tooltip>
+                        );
+                    })}
+                </ToggleButtonGroup>
+
+                <Divider sx={{my: 1}}/>
+
+                <Typography sx={{fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5}}>
+                    Category
+                </Typography>
                 <Box sx={{display: 'flex', gap: 1, mb: 1.5}}>
                     <Button
                         size="small"
@@ -724,7 +833,16 @@ const MapControls: React.FC<Props> = ({
                 </Box>
                 <FormGroup>
                     {ALL_CATEGORIES.map(cat => {
-                        const count = ALL_OPTIONS.filter(o => o.category === cat).length;
+                        /*
+                         * **Counted against the specification filter directly above it.**
+                         * This read `ALL_OPTIONS`, so switching to "APP-06 only" narrowed
+                         * the list while every category still advertised its full total —
+                         * the dialog contradicted itself, and a category that had become
+                         * empty still showed a number worth clicking.
+                         */
+                        const count = ALL_OPTIONS.filter(
+                            o => o.category === cat && matchesSpecificationFilter(o, specificationFilter),
+                        ).length;
                         return (
                             <FormControlLabel
                                 key={cat}
@@ -786,11 +904,14 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.Neutralize, TacticalGraphicName.Suppress,
     ];
     if (onePoint.includes(name)) return '1 point (click to place)';
+    // A rectangular zone is two anchor points and a width: the clicks set the length and
+    // the orientation, and the third handle sets the width. @see RectangularArea
+    if (isRectangular(name)) return '2 points (then drag the width)';
     if (twoPoint.includes(name)) return '2 points';
     if (name === TacticalGraphicName.FieldsOfFire) return '3 points';
     // if (name === TacticalGraphicName.SearchArea) return '3 points';
 
-    if (name.endsWith('Irregular') || name.endsWith('Rectangular') ||
+    if (name.endsWith('Irregular') ||
         name === TacticalGraphicName.LimitedAccessArea ||
         name === TacticalGraphicName.SmokeObscurant ||
         name === TacticalGraphicName.GroupOrSeriesOfTargets) {

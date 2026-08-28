@@ -50,7 +50,7 @@ export interface CircularAreaOptions extends BaseGraphicOptions {
     radius?: number;
 }
 
-/** Options for the Encirclement graphic which uses a hostility arrow colour. */
+/** Options for the Encirclement graphic which uses a hostility arrow color. */
 export interface EncirclementOptions extends BaseGraphicOptions {
     hostility?: TacticalGraphicHostility;
 }
@@ -71,10 +71,10 @@ export interface RouteOptions extends BaseGraphicOptions {
  * @see SecurityOperation.dimensions
  */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
-    /** Distance from the centre to where each arm's line begins, in metres. */
+    /** Distance from the center to where each arm's line begins, in meters. */
     centerPadding?: number;
     /**
-     * Distance from the centre to the label anchor, in metres.
+     * Distance from the center to the label anchor, in meters.
      *
      * Separate from `centerPadding` so the gap between the label and the line
      * that follows it is a number someone can set, rather than whatever falls out
@@ -108,11 +108,11 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  */
 export interface RangeFanBand {
     /**
-     * How far the band reaches, in **kilometres**.
+     * How far the band reaches, in **kilometers**.
      *
-     * The one distance in this schema that is not metres — `radius`, `width` and
-     * `decorationSize` all are. It is kilometres because a weapon or sensor envelope is
-     * quoted that way and the label prints the number bare, so metres here would put
+     * The one distance in this schema that is not meters — `radius`, `width` and
+     * `decorationSize` all are. It is kilometers because a weapon or sensor envelope is
+     * quoted that way and the label prints the number bare, so meters here would put
      * three zeroes on every ring. Kept rather than corrected: changing it would silently
      * rescale every range fan already saved by a factor of a thousand.
      */
@@ -174,10 +174,10 @@ export interface TurnOptions extends BaseGraphicOptions {
      * negative bends the other way. Defaults to `TURN_DEFAULT_BEND`.
      */
     bend?: number;
-    /** Arrowhead length in **metres**. Defaults to a fraction of `size`. */
+    /** Arrowhead length in **meters**. Defaults to a fraction of `size`. */
     headSize?: number;
     /**
-     * Half the gap left in the curve for the "T", in **metres**. Defaults to a
+     * Half the gap left in the curve for the "T", in **meters**. Defaults to a
      * fraction of `size`. Set it from the rendered glyph where the label does
      * not scale with the graphic. Clamped so a gap can never swallow the curve.
      */
@@ -261,6 +261,28 @@ export function getLabel(name: TacticalGraphicName) {
             return 'ASLT';
         case TacticalGraphicName.AreaOfOperations:
             return 'AO';
+        case TacticalGraphicName.ArtilleryReservedArea:
+            return 'ARA';
+        case TacticalGraphicName.ArtilleryManeuverArea:
+            return 'AMA';
+        case TacticalGraphicName.ZoneOfFire:
+            return 'ZF';
+        case TacticalGraphicName.JointTacticalActionArea:
+            return 'JTAA';
+        case TacticalGraphicName.SubmarineActionArea:
+            return 'SAA';
+        case TacticalGraphicName.SubmarineGeneratedActionArea:
+            return 'SGAA';
+        case TacticalGraphicName.HumanTerrain:
+            return 'HT';
+        case TacticalGraphicName.EnemyPrisonerOfWarHoldingArea:
+            return 'EPW HOLDING AREA';
+        case TacticalGraphicName.Bridgehead:
+            return 'BA';
+        case TacticalGraphicName.TerminallyGuidedMunitionFootprint:
+            return 'TGMF';
+        case TacticalGraphicName.BombArea:
+            return 'BOMB';
 
         case TacticalGraphicName.BaseCamp:
         case TacticalGraphicName.GuerrillaBase:
@@ -294,6 +316,10 @@ export function getLabel(name: TacticalGraphicName) {
             return "R";
         case TacticalGraphicName.CordonAndSearch:
             return "C/S";
+        case TacticalGraphicName.CordonAndKnock:
+            return "C/K";
+        case TacticalGraphicName.Locate:
+            return 'LOC';
         case TacticalGraphicName.Occupy:
             return "O";
         case TacticalGraphicName.AreaDefense:
@@ -359,6 +385,46 @@ export function getLabel(name: TacticalGraphicName) {
             return 'FSCL';
         case TacticalGraphicName.CommonSensorBoundary:
             return 'CSB';
+        case TacticalGraphicName.LightLine:
+            return 'LL';
+        case TacticalGraphicName.HoldingLine:
+            return 'HL';
+        case TacticalGraphicName.NamedAreaOfInterestLine:
+            return 'NAI';
+        // The letter the template sets at *both* ends of a mineline, which is the
+        // symbol's only distinguishing mark. @see minelinePaint
+        case TacticalGraphicName.Mineline:
+            return 'N';
+        case TacticalGraphicName.Capture:
+            return 'C';
+        case TacticalGraphicName.AvenueOfApproach:
+            return 'AA';
+        case TacticalGraphicName.Deny:
+            return 'D';
+        case TacticalGraphicName.Escort:
+            return 'E';
+        case TacticalGraphicName.Demonstration:
+            return 'DEM';
+        case TacticalGraphicName.Evacuate:
+            return 'E';
+        case TacticalGraphicName.Recover:
+            return 'R';
+        // Not an abbreviation of the name — "(P)" is drawn as part of the symbol, ahead
+        // of whatever the position is called. The Example reads "(P) MARS".
+        case TacticalGraphicName.BattlePositionPreparedButNotOccupied:
+            return '(P)';
+        case TacticalGraphicName.HandoverLine:
+            return 'HOL';
+        case TacticalGraphicName.NoFireLine:
+            return 'NFL';
+        case TacticalGraphicName.BattlefieldCoordinationLine:
+            return 'BCL';
+        case TacticalGraphicName.FighterEngagementZone:
+            return 'FEZ';
+        case TacticalGraphicName.ExtractionZone:
+            return 'EZ';
+        case TacticalGraphicName.RegimentalSupportArea:
+            return 'RSA';
         case TacticalGraphicName.RestrictiveFireLine:
             return 'RFL';
         case TacticalGraphicName.IntelligenceCoordinationLine:
@@ -427,6 +493,21 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.CallForFireZoneCircular:
             return 'CFF ZONE';
 
+        case TacticalGraphicName.TargetBuildUpAreaIrregular:
+        case TacticalGraphicName.TargetBuildUpAreaRectangular:
+        case TacticalGraphicName.TargetBuildUpAreaCircular:
+            return 'TBA';
+
+        case TacticalGraphicName.TargetValueAreaIrregular:
+        case TacticalGraphicName.TargetValueAreaRectangular:
+        case TacticalGraphicName.TargetValueAreaCircular:
+            return 'TVAR';
+
+        case TacticalGraphicName.ZoneOfResponsibilityIrregular:
+        case TacticalGraphicName.ZoneOfResponsibilityRectangular:
+        case TacticalGraphicName.ZoneOfResponsibilityCircular:
+            return 'ZOR';
+
         case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
@@ -457,8 +538,11 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.FireSupportAreaCircular:
             return 'FSA';
 
+        // HIDACZ, not HDACZ. FM 1-02.2 prints the abbreviation on the symbol's own
+        // example block and uses HIDACZ there; the manual contains no occurrence of
+        // HDACZ at all, and MIL-STD-2525 and APP-06 agree on the longer form.
         case TacticalGraphicName.HighDensityAirspaceControlZone:
-            return 'HDACZ';
+            return 'HIDACZ';
         case TacticalGraphicName.RestrictedOperationsZone:
             return 'ROZ';
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:
@@ -582,7 +666,9 @@ export enum TacticalGraphicName {
     SupportingAxisOfAdvance = 'SupportingAxisOfAdvance',
     AviationAxisOfAdvance = 'AviationAxisOfAdvance',
     AttackHelicopterAxisOfAdvance = 'AttackHelicopterAxisOfAdvance',
+    AvenueOfApproach = 'AvenueOfApproach',        // APP-06 152300 Avenue of Approach
     Counterattack = 'Counterattack',
+    CounterattackByFire = 'CounterattackByFire',  // APP-06 340700 Counter-Attack by Fire
 
     //phase lines
     PhaseLine = 'PhaseLine',
@@ -598,6 +684,16 @@ export enum TacticalGraphicName {
     LineOfDeparture = 'LineOfDeparture',
     LineOfDepartureOrLineOfContact = 'LineOfDepartureOrLineOfContact',
     ProbableLineOfDeployment = 'ProbableLineOfDeployment',
+    LightLine = 'LightLine',  // APP-06 110200 Light Line
+    LineGeneric = 'LineGeneric',  // APP-06 110400 Line, Generic
+    HandoverLine = 'HandoverLine',  // APP-06 141800 Handover Line (HOL)
+    NamedAreaOfInterestLine = 'NamedAreaOfInterestLine',  // APP-06 142000 Named Area of Interest Line (NAI)
+    HoldingLine = 'HoldingLine',  // APP-06 141500 Holding Line (HL)
+    NoFireLine = 'NoFireLine',  // APP-06 260300 No Fire Line
+    BattlefieldCoordinationLine = 'BattlefieldCoordinationLine',  // APP-06 260400 Battlefield Coordination Line
+    FighterEngagementZone = 'FighterEngagementZone',  // APP-06 171400 Fighter Engagement Zone (FEZ)
+    ExtractionZone = 'ExtractionZone',  // APP-06 150700 Extraction Zone (EZ)
+    RegimentalSupportArea = 'RegimentalSupportArea',  // APP-06 310500 Regimental Support Area
     IdentificationFriendOrFoeOff = 'IdentificationFriendOrFoeOff',
     IdentificationFriendOrFoeOn = 'IdentificationFriendOrFoeOn',
     // boundaries with symbol modifiers
@@ -619,6 +715,32 @@ export enum TacticalGraphicName {
     // area graphics
     Airfield = 'Airfield',
     AreaOfOperations = 'AreaOfOperations',
+    BombArea = 'BombArea',
+    TerminallyGuidedMunitionFootprint = 'TerminallyGuidedMunitionFootprint',
+    Bridgehead = 'Bridgehead',
+    EnemyPrisonerOfWarHoldingArea = 'EnemyPrisonerOfWarHoldingArea',
+    HumanTerrain = 'HumanTerrain',
+    PenetrationBox = 'PenetrationBox',
+    Area = 'Area',
+    JointTacticalActionArea = 'JointTacticalActionArea',
+    SubmarineActionArea = 'SubmarineActionArea',                    // APP-06 150502 Submarine Action Area (SAA)
+    SubmarineGeneratedActionArea = 'SubmarineGeneratedActionArea',  // APP-06 150503 Submarine-Generated Action Area (SGAA)
+    AreaGeneric = 'AreaGeneric',
+    ZoneOfFire = 'ZoneOfFire',
+    RestrictedTerrain = 'RestrictedTerrain',
+    SeverelyRestrictedTerrain = 'SeverelyRestrictedTerrain',
+    AirfieldZone = 'AirfieldZone',
+    BiologicalContaminatedArea = 'BiologicalContaminatedArea',
+    // The three toxic-industrial-material variants. There is no nuclear one: APP-06 gives
+    // 271900 no subtype, which is why this list has three members and not four.
+    BiologicalContaminatedAreaToxicIndustrialMaterial = 'BiologicalContaminatedAreaToxicIndustrialMaterial',
+    ChemicalContaminatedAreaToxicIndustrialMaterial = 'ChemicalContaminatedAreaToxicIndustrialMaterial',
+    RadiologicalContaminatedAreaToxicIndustrialMaterial = 'RadiologicalContaminatedAreaToxicIndustrialMaterial',
+    ChemicalContaminatedArea = 'ChemicalContaminatedArea',
+    NuclearContaminatedArea = 'NuclearContaminatedArea',
+    RadiologicalContaminatedArea = 'RadiologicalContaminatedArea',
+    ArtilleryManeuverArea = 'ArtilleryManeuverArea',
+    ArtilleryReservedArea = 'ArtilleryReservedArea',
     AssemblyArea = 'AssemblyArea',
     BaseCamp = 'BaseCamp',
     EngagementArea = 'EngagementArea',
@@ -658,6 +780,8 @@ export enum TacticalGraphicName {
     Isolate = 'Isolate',
     Retain = 'Retain',
     Control = 'Control',
+    CordonAndKnock = 'CordonAndKnock',
+    Locate = 'Locate',
     CordonAndSearch = 'CordonAndSearch',
     Contain = 'Contain',
     Occupy = 'Occupy',
@@ -706,6 +830,15 @@ export enum TacticalGraphicName {
     CallForFireZoneRectangular = 'CallForFireZoneRectangular',
     CallForFireZoneCircular = 'CallForFireZoneCircular',
 
+    TargetBuildUpAreaIrregular = 'TargetBuildUpAreaIrregular',
+    TargetBuildUpAreaRectangular = 'TargetBuildUpAreaRectangular',
+    TargetBuildUpAreaCircular = 'TargetBuildUpAreaCircular',
+    TargetValueAreaIrregular = 'TargetValueAreaIrregular',
+    TargetValueAreaRectangular = 'TargetValueAreaRectangular',
+    TargetValueAreaCircular = 'TargetValueAreaCircular',
+    ZoneOfResponsibilityIrregular = 'ZoneOfResponsibilityIrregular',
+    ZoneOfResponsibilityRectangular = 'ZoneOfResponsibilityRectangular',
+    ZoneOfResponsibilityCircular = 'ZoneOfResponsibilityCircular',
     CensorZoneIrregular = 'CensorZoneIrregular',
     CensorZoneRectangular = 'CensorZoneRectangular',
     CensorZoneCircular = 'CensorZoneCircular',
@@ -793,6 +926,37 @@ export enum TacticalGraphicName {
     WireDoubleStrandConcertina = 'WireDoubleStrandConcertina',
     WireTripleStrandConcertina = 'WireTripleStrandConcertina',
     ObstacleLine = 'ObstacleLine',
+
+    // APP-06 protection lines (Tables 8-17 and 8-18). None has an FM 1-02.2
+    // counterpart. @see graphics/ProtectionLine.ts
+    BattlePositionPreparedButNotOccupied = 'BattlePositionPreparedButNotOccupied',  // APP-06 151202 / FM 1-02.2 table 5-5
+    // The three that share one four-point construction. @see graphics/SweptArcTask.ts
+    Capture = 'Capture',                          // APP-06 343000 Capture
+    Deny = 'Deny',                                // APP-06 343400 Deny
+    Escort = 'Escort',                            // APP-06 343600 Escort
+    Demonstration = 'Demonstration',              // APP-06 343300 Demonstration/Demonstrate
+    Evacuate = 'Evacuate',                        // APP-06 344500 Evacuate
+    Recover = 'Recover',                          // APP-06 344600 Recover
+    DecisionLine = 'DecisionLine',                // APP-06 110500 Decision Line
+    MobilityCorridor = 'MobilityCorridor',        // APP-06 142100 Mobility Corridor
+    // FM 1-02.2 table 5-28 "CBRN Contour Lines", and APP-06's own codes.
+    PsyOpsZoneIrregular = 'PsyOpsZoneIrregular',      // APP-06 242701 PsyOps Zone, Irregular
+    PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
+    PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
+    MinefieldDynamicDepiction = 'MinefieldDynamicDepiction',  // APP-06 270707 Minefield, Dynamic Depiction
+    MinedAreaFenced = 'MinedAreaFenced',                      // APP-06 270801 Mined Area, Fenced
+    MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
+    MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
+    RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
+    ObstacleBypassEasy = 'ObstacleBypassEasy',            // APP-06 270601 Obstacle Bypass Easy
+    ObstacleBypassDifficult = 'ObstacleBypassDifficult',  // APP-06 270602 Obstacle Bypass Difficult
+    ObstacleBypassImpossible = 'ObstacleBypassImpossible',// APP-06 270603 Obstacle Bypass Impossible
+    Mineline = 'Mineline',                        // APP-06 290101 Mineline
+    MineCluster = 'MineCluster',                  // APP-06 290400 Mine Cluster
+    TripWire = 'TripWire',                        // APP-06 290500 Trip Wire
+    RaftSite = 'RaftSite',                        // APP-06 290800 Raft Site
+    FortifiedPosition = 'FortifiedPosition',      // APP-06 291000 Fortified Position
+
     TacticalFix = 'TacticalFix',
     TacticalTurn = 'TacticalTurn',
 
@@ -814,6 +978,8 @@ export enum TacticalGraphicName {
     Infiltration = 'Infiltration',
     InfiltrationLane = "InfiltrationLane",
     MovementToContact = 'MovementToContact',
+    /** APP-06 342900. A different symbol from MovementToContact, not a rename. @see AdvanceToContact */
+    AdvanceToContact = 'AdvanceToContact',
     FrontalAttack = 'FrontalAttack',
     // FlankAttack = 'FlankAttack',
     TurningMovement = 'TurningMovement',
@@ -868,6 +1034,45 @@ export enum TacticalGraphicName {
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
+    [TacticalGraphicName.ArtilleryReservedArea]: 'artillery reserved area',
+    [TacticalGraphicName.ArtilleryManeuverArea]: 'artillery maneuver area',
+    [TacticalGraphicName.RadiologicalContaminatedArea]: 'radiological contaminated area',
+    [TacticalGraphicName.NuclearContaminatedArea]: 'nuclear contaminated area',
+    [TacticalGraphicName.ChemicalContaminatedArea]: 'chemical contaminated area',
+    [TacticalGraphicName.BiologicalContaminatedArea]: 'biological contaminated area',
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: 'biological contaminated area, toxic industrial material',
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: 'chemical contaminated area, toxic industrial material',
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: 'radiological contaminated area, toxic industrial material',
+    [TacticalGraphicName.NamedAreaOfInterestLine]: 'named area of interest line',
+    [TacticalGraphicName.HandoverLine]: 'handover line',
+    [TacticalGraphicName.DecisionLine]: 'decision line',
+    [TacticalGraphicName.MobilityCorridor]: 'mobility corridor',
+    [TacticalGraphicName.PsyOpsZoneIrregular]: 'PsyOps zone, irregular',
+    [TacticalGraphicName.PsyOpsZoneRectangular]: 'PsyOps zone, rectangular',
+    [TacticalGraphicName.PsyOpsZoneCircular]: 'PsyOps zone, circular',
+    [TacticalGraphicName.MinefieldDynamicDepiction]: 'minefield, dynamic depiction',
+    [TacticalGraphicName.MinedAreaFenced]: 'mined area, fenced',
+    [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',
+    [TacticalGraphicName.RadiationDoseRateContourLine]: 'radiation dose rate contour line',
+    [TacticalGraphicName.Mineline]: 'mineline',
+    [TacticalGraphicName.MineCluster]: 'mine cluster',
+    [TacticalGraphicName.TripWire]: 'trip wire',
+    [TacticalGraphicName.RaftSite]: 'raft site',
+    [TacticalGraphicName.FortifiedPosition]: 'fortified position',
+    [TacticalGraphicName.LineGeneric]: 'line, generic',
+    [TacticalGraphicName.AirfieldZone]: 'airfield zone',
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',
+    [TacticalGraphicName.RestrictedTerrain]: 'restricted terrain',
+    [TacticalGraphicName.ZoneOfFire]: 'zone of fire',
+    [TacticalGraphicName.AreaGeneric]: 'area, generic',
+    [TacticalGraphicName.JointTacticalActionArea]: 'joint tactical action area',
+    [TacticalGraphicName.SubmarineActionArea]: 'submarine action area',
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: 'submarine-generated action area',
+    [TacticalGraphicName.Area]: 'area',
+    [TacticalGraphicName.PenetrationBox]: 'penetration box',
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: 'enemy prisoner of war holding area',
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: 'terminally guided munition footprint',
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
@@ -914,6 +1119,75 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
 export function getDisplayName(name: TacticalGraphicName): string {
     if (name in DISPLAY_NAME_OVERRIDES) return DISPLAY_NAME_OVERRIDES[name]!;
     return name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+/**
+ * The mine types of APP-06 Table 8-24, codes 13 through 19.
+ *
+ * The table lists about forty codes; these seven are the primitives and the rest are
+ * combinations of two or three of them, drawn across the icon's three slots. Only the
+ * primitives are modeled — @see minePaints.ts for what expressing a combination would
+ * take, and why it is not here.
+ */
+export enum TacticalGraphicMineType {
+    unspecified = 'Unspecified Mine',
+    antipersonnel = 'Antipersonnel Mine',
+    antipersonnelDirectional = 'Antipersonnel Mine with Directional Effects',
+    antitank = 'Antitank Mine',
+    antitankAntihandling = 'Antitank Mine with Antihandling Device',
+    wideAreaAntitank = 'Wide Area Antitank Mine',
+    mineCluster = 'Mine Cluster',
+}
+
+/**
+ * The **mobility** half of APP-06 Table 8-24, the Sector 1 modifiers.
+ *
+ * The table holds two categories under one numbering. Codes 13-50 are `MINE TYPE` and
+ * carry the remark *"Used with minefields & mined areas only"*; the fourteen here are
+ * `MOBILITY`, remarked *"For use with Limited Access Area, Restricted Terrain, and
+ * Severely Restricted Terrain only."* That remark is the whole reason the two are
+ * separate enums rather than one: a mine glyph offered on restricted terrain, or a
+ * pack animal offered on a minefield, would both be outside the standard.
+ *
+ * The trailing comment on each member is its Sector 1 code. They are not contiguous --
+ * `dismounted` is 51, sitting past the mine block at the table's end.
+ *
+ * @see TacticalGraphicMineType for the other half, and `sectorModifierPaints.ts` for
+ * how each of these is drawn.
+ */
+export enum TacticalGraphicMobility {
+    unspecified = 'Unspecified',                           // 00 - draws nothing
+    standardMobility = 'Standard Mobility/On-Road',        // 01
+    highMobility = 'High Mobility/Off-Road',               // 02
+    tracked = 'Tracked',                                   // 03
+    trackedAndWheeled = 'Tracked and Wheeled Combination', // 04
+    towed = 'Towed',                                       // 05
+    railway = 'Railway',                                   // 06
+    overSnow = 'Over-Snow (Prime Mover)',                  // 07
+    sled = 'Sled',                                         // 08
+    packAnimal = 'Pack Animal',                            // 09
+    barge = 'Barge',                                       // 10
+    amphibious = 'Amphibious',                             // 11
+    noVehicles = 'No Vehicles',                            // 12
+    dismounted = 'Dismounted',                             // 51
+}
+
+/**
+ * APP-06 Table 8-25, the Sector 2 modifiers -- every one of them `TERRAIN`.
+ *
+ * Unlike Sector 1 these are **words, not glyphs**: the table's MODIFIER column prints
+ * `URBAN`, `WATER`, `GROUND`, `VEGETATION`, `OBSTACLES` in type, and the plates for
+ * restricted terrain set that word under the mobility icon. What each one adds beyond
+ * the word is an *optional hatching color*, which is why the value here is the label
+ * and the color is a separate table. @see TERRAIN_HATCH_COLORS
+ */
+export enum TacticalGraphicTerrain {
+    unspecified = 'Unspecified',   // 00 - no word, no color
+    urban = 'Urban',               // 01 - black
+    water = 'Water',               // 02 - blue
+    ground = 'Ground',             // 03 - brown
+    vegetation = 'Vegetation',     // 04 - green
+    obstacles = 'Obstacles',       // 05 - green
 }
 
 export enum TacticalGraphicEchelon {

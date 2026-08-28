@@ -42,10 +42,10 @@ import {
  * represented, so the panel is the visible inventory of what the library exposes — add
  * a config field and it belongs here too.
  *
- * **Colours are overrides, not values.** A colour the user has not touched is absent
+ * **Colors are overrides, not values.** A color the user has not touched is absent
  * from `settings` and something below resolves it: the doctrinal value for an
- * affiliation, and for the base colours the palette this app sends for its current mode
- * (`MapRendering.paletteFor`). So each swatch shows the *effective* colour
+ * affiliation, and for the base colors the palette this app sends for its current mode
+ * (`MapRendering.paletteFor`). So each swatch shows the *effective* color
  * (read live off the library) while the reset button is enabled only when an override
  * actually exists. Clearing one deletes the key rather than writing a default back —
  * see `MapRendering.applyGraphicsConfig` for why that is what restores mode-following.
@@ -64,7 +64,7 @@ interface SettingsModalProps {
      * palette, so the panel showed dark values while the map had already repainted
      * light. Deriving it from the same input the apply uses cannot drift.
      *
-     * Affiliation colours need no such treatment — they are mode-independent.
+     * Affiliation colors need no such treatment — they are mode-independent.
      */
     basePalette: TacticalGraphicsConfigOptions;
     /** Merge a partial change. Pass `undefined` for a field to clear that override. */
@@ -156,7 +156,7 @@ const NumberSetting: React.FC<NumberSettingProps> = ({label, hint, value, min, m
 /**
  * `<input type="color">` only accepts `#rrggbb`, but the library's defaults are `rgb()`
  * and `rgba()` strings. Best-effort conversion so the swatch shows something truthful;
- * the text field beside it stays authoritative and accepts any CSS colour, which is the
+ * the text field beside it stays authoritative and accepts any CSS color, which is the
  * only way to express the alpha several of the defaults carry.
  */
 function toSwatchHex(color: string): string {
@@ -174,6 +174,25 @@ function toSwatchHex(color: string): string {
     return '#000000';
 }
 
+/**
+ * A boolean setting, laid out on the same row grid as the colour pickers so the two read
+ * as one list rather than two.
+ */
+const ToggleSetting: React.FC<{
+    label: string;
+    hint: string;
+    checked: boolean;
+    onChange: (next: boolean) => void;
+}> = ({label, hint, checked, onChange}) => (
+    <Box sx={rowSx}>
+        <Box sx={{minWidth: 0}}>
+            <Typography sx={labelSx}>{label}</Typography>
+            <Typography sx={hintSx}>{hint}</Typography>
+        </Box>
+        <Switch size="small" checked={checked} onChange={(_, next) => onChange(next)}/>
+    </Box>
+);
+
 interface ColorSettingProps {
     label: string;
     hint: string;
@@ -182,17 +201,27 @@ interface ColorSettingProps {
     /** What the library currently resolves this to — shown when there is no override. */
     effective: string;
     onChange: (color: string | undefined) => void;
+    /**
+     * Greyed out, with the reason on a tooltip.
+     *
+     * For a setting another setting has taken over — the label colour when the labels
+     * follow their affiliation instead. Disabled rather than hidden: a control that
+     * vanishes reads as a different dialog, while a greyed one with a reason says which
+     * switch is in charge. @see mapEngine.ts, the same rule for engine capabilities.
+     */
+    disabledReason?: string;
 }
 
-const ColorSetting: React.FC<ColorSettingProps> = ({label, hint, value, effective, onChange}) => {
+const ColorSetting: React.FC<ColorSettingProps> = ({label, hint, value, effective, onChange, disabledReason}) => {
     const shown = value ?? effective;
     const overridden = value !== undefined;
+    const off = disabledReason !== undefined;
 
     return (
-        <Box sx={rowSx}>
+        <Box sx={{...rowSx, opacity: off ? 0.45 : 1, pointerEvents: off ? 'none' : 'auto'}} title={disabledReason}>
             <Box sx={{minWidth: 0}}>
                 <Typography sx={labelSx}>{label}</Typography>
-                <Typography sx={hintSx}>{hint}</Typography>
+                <Typography sx={hintSx}>{off ? disabledReason : hint}</Typography>
             </Box>
             <Box sx={{display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0}}>
                 <Box
@@ -238,7 +267,7 @@ const ColorSetting: React.FC<ColorSettingProps> = ({label, hint, value, effectiv
     );
 };
 
-/** The four affiliations that carry a colour. `assumedFriend` / `suspectJoker` follow these. */
+/** The four affiliations that carry a color. `assumedFriend` / `suspectJoker` follow these. */
 const AFFILIATIONS: {hostility: TacticalGraphicHostility; label: string; hint: string}[] = [
     {hostility: TacticalGraphicHostility.friend, label: 'Friendly', hint: 'Also assumed friend'},
     {hostility: TacticalGraphicHostility.hostileFaker, label: 'Hostile', hint: 'Hostile / faker'},
@@ -274,7 +303,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Box sx={rowSx}>
                 <Box>
                     <Typography sx={labelSx}>Appearance</Typography>
-                    <Typography sx={hintSx}>Basemap, app chrome, and the base colours below</Typography>
+                    <Typography sx={hintSx}>Basemap, app chrome, and the base colors below</Typography>
                 </Box>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
                     <LightModeIcon sx={{fontSize: 16, color: darkMode ? 'text.disabled' : 'warning.main'}}/>
@@ -313,7 +342,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             />
 
             <Divider/>
-            <Typography sx={sectionSx}>Affiliation colours</Typography>
+            <Typography sx={sectionSx}>Affiliation colors</Typography>
             <Typography sx={{...hintSx, mt: -1.5}}>
                 Doctrinal FM 1-02.2 by default, and identical in light and dark mode.
             </Typography>
@@ -330,7 +359,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             ))}
 
             <Divider/>
-            <Typography sx={sectionSx}>Base colours</Typography>
+            <Typography sx={sectionSx}>Base colors</Typography>
             <Typography sx={{...hintSx, mt: -1.5}}>
                 Unset, these follow the appearance mode. Override one and it stops following.
             </Typography>
@@ -342,12 +371,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 effective={basePalette.defaultLineColor ?? getDefaultLineColor()}
                 onChange={defaultLineColor => onChange({defaultLineColor})}
             />
+            <ToggleSetting
+                label="Label Text Uses Hostility"
+                hint="Color text amplifiers by affiliation instead of a fixed color"
+                checked={settings.labelUsesHostilityColor === true}
+                onChange={labelUsesHostilityColor => onChange({labelUsesHostilityColor})}
+            />
             <ColorSetting
                 label="Label Text"
-                hint="Follows the line colour unless set"
+                hint="Follows the line color unless set"
                 value={settings.labelFillColor}
                 effective={basePalette.labelFillColor ?? getLabelFillColor()}
                 onChange={labelFillColor => onChange({labelFillColor})}
+                disabledReason={settings.labelUsesHostilityColor === true
+                    ? 'Superseded — labels follow their affiliation'
+                    : undefined}
             />
             <ColorSetting
                 label="Label Halo"
@@ -360,7 +398,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Divider/>
             <Typography sx={sectionSx}>Editor chrome</Typography>
             <Typography sx={{...hintSx, mt: -1.5}}>
-                The affordances for editing a graphic. Not part of any symbol, so they never take an affiliation colour.
+                The affordances for editing a graphic. Not part of any symbol, so they never take an affiliation color.
             </Typography>
 
             <ColorSetting
