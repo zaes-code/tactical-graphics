@@ -117,3 +117,45 @@ describe('the parts both of them share', () => {
         expect(connector?.stroke?.dashPx?.length).toBeGreaterThan(0);
     });
 });
+
+/**
+ * # A resize scales the whole symbol, not just the line
+ *
+ * The body and the head are sized from `decorationSize` — the metre distance the holder
+ * stamps and a resize multiplies — rather than from `context.resolution` alone. Derived
+ * from the resolution, as the first version was, a resize stretched the axis and left the
+ * body and head exactly the size they were: "the resize handle was elongating the line vs
+ * making the whole graphic bigger", which is the user's own description of it.
+ *
+ * The vertex handle still lengthens the line alone. That is the other half of the rule and
+ * it is unchanged: only the *resize* gesture scales `decorationSize`.
+ * @see LineGraphicController.handleResize, scaleDrawnSizes
+ */
+describe('the symbol scales with the graphic', () => {
+    const bodyLengthWith = (decorationSize?: number) => {
+        const paints = paintsFor(TacticalGraphicName.FollowAndAssume, decorationSize ? {decorationSize} : {});
+        const body = (lines(paints)[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+        return Math.max(...body.map(p => p[0])) - Math.min(...body.map(p => p[0]));
+    };
+
+    it('doubles the body when the stamped decoration size doubles', () => {
+        const single = bodyLengthWith(20 * context.resolution);
+        const double = bodyLengthWith(40 * context.resolution);
+        expect(double / single).toBeCloseTo(2, 1);
+    });
+
+    it('draws the plate size when nothing is stamped, so the default is unchanged', () => {
+        // The fallback is the same number the holder would have stamped at this zoom,
+        // which is what keeps a graphic built outside a holder looking identical.
+        expect(bodyLengthWith(undefined)).toBeCloseTo(bodyLengthWith(20 * context.resolution), 5);
+    });
+
+    it('leaves the head clear of the body at either size', () => {
+        for (const size of [20 * context.resolution, 40 * context.resolution]) {
+            const paints = paintsFor(TacticalGraphicName.FollowAndAssume, {decorationSize: size});
+            const body = (lines(paints)[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+            const bodyEnd = Math.max(...body.map(p => p[0]));
+            expect(bodyEnd).toBeLessThan(TIP[0]);
+        }
+    });
+});
