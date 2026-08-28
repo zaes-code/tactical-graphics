@@ -456,33 +456,31 @@ describe('the width handle is claimed in edit mode', () => {
     );
 });
 
-describe('a rectangular zone wears no dead handle in edit mode', () => {
+/**
+ * A rectangular zone's handles used to be hidden in edit mode, because a corner is a
+ * consequence of a box rather than a point with a meaning of its own and neither engine
+ * would drag one. Its base is APP-06's two anchor points now — the centres of the two
+ * opposing sides — and the third handle is the width, so all three are live: hiding them
+ * would take away the only way to set a width. @see RectangularAreaGraphicBase
+ */
+describe('a rectangular zone shows its anchor points and its width handle', () => {
     it.each([TacticalGraphicName.PsyOpsZoneRectangular, TacticalGraphicName.NoFireAreaRectangular])(
-        "hides %s's shape handle",
+        "shows %s's handles in edit mode",
         name => {
             const manager = stubbedManager();
             const handler = build(manager, name, 'a');
+            seedLine(handler);
             manager.setInteractionMode(InteractionType.edit);
             manager.setSelection(handler);
 
             const shown = handler
                 .getFeatures()
                 .filter(feature => feature.get('handle') && !feature.get('hidden') && !feature.get('measure'));
-            expect(shown).toHaveLength(0);
+            expect(shown.length).toBeGreaterThan(0);
+            // …and the width drag is wired, which is the gesture the box model never had.
+            expect(handler.setOffset).toBeDefined();
         },
     );
-
-    /** The legacy mode still claims that handle, and that behaviour is published. */
-    it('still shows it in the legacy resize mode', () => {
-        const manager = stubbedManager();
-        const handler = build(manager, TacticalGraphicName.PsyOpsZoneRectangular, 'a');
-        manager.setInteractionMode(InteractionType.resize);
-
-        const shown = handler
-            .getFeatures()
-            .filter(feature => feature.get('handle') && !feature.get('hidden') && !feature.get('measure'));
-        expect(shown.length).toBeGreaterThan(0);
-    });
 });
 
 /**

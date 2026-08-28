@@ -686,10 +686,31 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * start of the run: it is where the "E" stacks, and a dot under the label reads as
      * clutter.
      */
+    /**
+     * `[point 3, point 2, centre]` — the two anchor points the operator sets, and the grip
+     * that moves the whole graphic.
+     *
+     * **Handle 0 is point 3, the diameter**, at `size + 2 * radius` along the approach and
+     * nothing off it. It used to be drawn on the arc's *apex* — `size + radius` along and
+     * one radius to the flank — while `setBandRange` had always read it as the point on the
+     * axis, its own comment saying so in as many words. So the dot the operator grabbed and
+     * the position the drag solved from were different places, and the handle jumped to the
+     * axis on first movement.
+     *
+     * **Point 4 is not a handle and cannot be.** The standard calls it "the orientation of
+     * the 180 degree circular arc" — which flank the arc bulges to, not a position. Dragging
+     * point 3 to one side or the other of the approach is what picks it, which is what
+     * `setBandRange` already does: *"distance along the axis past the line's end is the
+     * circle's diameter, and the side the cursor strays to picks the flank."*
+     *
+     * Point 1, the beginning of the straight line, is likewise determined — it is `size`
+     * back from the centre along the approach — so it carries no grip of its own; the centre
+     * is the move affordance. (User's call, 2026-08-27.)
+     */
     generateHandles(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
-        const {center, angle, size, radius, side} = this.frame(base, opts);
+        const {center, angle, size, radius} = this.frame(base, opts);
         return this.asMultiPointFeature([
-            this.at(center, angle, size + radius, side * radius),
+            this.at(center, angle, size + 2 * radius, 0),
             this.at(center, angle, size, 0),
             center,
         ]);
@@ -932,40 +953,8 @@ export class InfiltrationLane extends MovementGraphicBase {
 
 // ─── Infiltration — single-line arrow with "IN" label near tail ──────────────
 
-export class Infiltration extends MovementGraphicBase {
-    name: string = TacticalGraphicName.Infiltration;
-
-    /** `computeArrowheadPoints` puts the point on the last vertex already. */
-    protected tipOverhang: number = 0;
-
-    /**
-     * `[p0, tip]` — no width handle, matching `DirectionOfSupportingAttack`,
-     * which this graphic is the single-line twin of. `radius` sizes nothing but
-     * the arrowhead, so the inherited third point had nothing to drag and simply
-     * floated off the side of the line.
-     */
-    generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1]]);
-    }
-
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius: number = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const lastPoint = baseCoords[baseCoords.length - 1];
-        const secondToLastPoint = baseCoords[baseCoords.length - 2];
-
-        const arrowHead: Position[] = geometryService.computeArrowheadPoints(secondToLastPoint, lastPoint, radius, 45);
-
-        return this.asMultiLineStringFeature([baseCoords, arrowHead]);
-    }
-
-    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.25, radius));
-    }
-}
+// Infiltrate lives beside the exfiltration now: they are one symbol with two letters.
+// @see RetrogradeTask.ts, `Infiltration`
 
 // ─── Ambush — 1/3-circle arc with 7 horizontal hashes + right-pointing arrow ──
 // Point-based. At rotation = 0 the arc bulges right (convex facing right, concave

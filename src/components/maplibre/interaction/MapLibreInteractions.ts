@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, dropSizePx, editStretches, groundLength, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -219,8 +219,57 @@ function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition
  * airspace zone on MapLibre left `width` at whatever it was drawn with, and the snapshot
  * disagreed with its own geometry. @see rectangleAmplifiers
  */
-function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+function withDerivedAmplifiers(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+    gesture?: string,
+): GraphicDescription {
     if (usesDrawnAnchors(name)) return withAnchorFrame(name, description);
+
+    /*
+     * **A rectangle's length is its two anchor points', so a gesture that moves them has
+     * to rewrite it.** Only the rectangular target files one — every other rectangle takes
+     * its length from the points and states nothing — and left alone it went on reporting
+     * the length it was drawn at: measured, 197 km against OpenLayers' 270 for the same
+     * resize. Its `width` is an amplifier the gesture already carries, so only the length
+     * is derived here. @see carriesRectangleLength, rectangleAxisLength
+     */
+    // A rotate moves the two anchor points about point 1, so only one of them changes —
+    // the same shape a length drag has. The constraint has to be told which it is.
+    if (isRectangular(name)) return withRectangleAxis(name, description, gesture === 'rotate' ? undefined : before);
+    return description;
+}
+
+/**
+ * A rectangle after a gesture: its axis held to its own bearing, and its length refiled.
+ *
+ * The constraint is the library's — one endpoint moving is a length change, never a turn
+ * — and it is applied here rather than in the drag itself for the same reason
+ * OpenLayers applies it in the holder: that is the one place both a vertex drag and a
+ * rebuild pass through. @see constrainRectangleAxis
+ */
+function withRectangleAxis(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+): GraphicDescription {
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    let axis = geometry.type === 'LineString' ? geometry.coordinates : undefined;
+    if (!axis || axis.length < 2) return description;
+
+    const was = before?.geometry as {type: string; coordinates?: Position[]} | undefined;
+    const held = constrainRectangleAxis(was?.type === 'LineString' ? was.coordinates : undefined, axis);
+    let next = held === axis ? description : {...description, geometry: {type: 'LineString' as const, coordinates: held}};
+    axis = held;
+    if (carriesRectangleLength(name)) {
+        const geometry = description.geometry as {type: string; coordinates?: Position[]};
+        const length = Math.round(groundMeters(axis[0] as [number, number], axis[axis.length - 1] as [number, number]));
+        if (description.properties.length !== length) {
+            next = {...next, properties: {...next.properties, length}};
+        }
+    }
+    return next;
 
     const ring = (description.geometry as {type: string; coordinates?: unknown}).type === 'Polygon'
         ? ((description.geometry as unknown as {coordinates: [number, number][][]}).coordinates?.[0])
@@ -602,25 +651,32 @@ export class MapLibreInteractions {
         const name = this.drawing;
         if (!name) return;
 
+        // **A one-click graphic is done on the first click**, whether or not it can
+        // afterwards be resized, and **whatever shape its base ends up being**. It is
+        // dropped at `dropSizePx` worth of metres and the operator drags its edge handle
+        // if they want it bigger — which is what OpenLayers' `PointDropController` does,
+        // and the two engines have to agree about it or the same button behaves
+        // differently depending on the renderer.
+        //
+        // This used to key off `allowedGestures(name).resize`, on the reasoning that a
+        // resizable point graphic is *sized by the draw* in two clicks. True of the
+        // point-anchored graphics OpenLayers draws through a Circle interaction, and
+        // false of every one-click drop — so the airfield took two clicks here and one
+        // there the moment it stopped being a fixed-size badge, and the completed
+        // roadblock had been doing it all along.
+        //
+        // And it sat **inside** the `Point` branch until the demonstration arrived: four
+        // derived anchor points make its base a `LineString`, so the drop fell through to
+        // the multi-click path and the draw never ended — one click on OpenLayers, an
+        // unfinishable sketch here. The base's shape and the draw's length are two
+        // different questions. @see dropSizePx, anchorDraw
+        if (dropSizePx(name) !== undefined) {
+            this.finishDraw([position]);
+            return;
+        }
+
         const wants = baseGeometryFor(name);
         if (wants === 'Point') {
-            // **A one-click graphic is done on the first click**, whether or not it can
-            // afterwards be resized. It is dropped at `dropSizePx` worth of metres and the
-            // operator drags its edge handle if they want it bigger — which is what
-            // OpenLayers' `PointDropController` does, and the two engines have to agree
-            // about it or the same button behaves differently depending on the renderer.
-            //
-            // This used to key off `allowedGestures(name).resize`, on the reasoning that a
-            // resizable point graphic is *sized by the draw* in two clicks. True of the
-            // point-anchored graphics OpenLayers draws through a Circle interaction, and
-            // false of every one-click drop — so the airfield took two clicks here and one
-            // there the moment it stopped being a fixed-size badge, and the completed
-            // roadblock had been doing it all along. @see dropSizePx
-            if (dropSizePx(name) !== undefined) {
-                this.finishDraw([position]);
-                return;
-            }
-
             // **A graphic that can be resized is otherwise sized by the draw**, in two
             // clicks: the first plants the anchor, the second sets how far out it reaches
             // and which way it faces. Finishing on the first click instead dropped these at
@@ -652,13 +708,6 @@ export class MapLibreInteractions {
         if (previous && this.pixelsApart(previous, position) < DUPLICATE_CLICK_PX) return;
 
         this.sketch.push(position);
-
-        // A rectangle is two opposite corners and nothing else — the other two follow.
-        // @see buildBox, isRectangular
-        if (isRectangular(name) && this.sketch.length >= 2) {
-            this.finishDraw(this.sketch.slice(0, 2));
-            return;
-        }
 
         // A graphic with a fixed base finishes on its own last click. It never sends
         // the double-click a free-form line ends on, so waiting for one meant a
@@ -816,8 +865,6 @@ export class MapLibreInteractions {
     private sketchIsComplete(): boolean {
         const name = this.drawing;
         if (!name) return false;
-        // Two corners is a whole rectangle. @see buildBox
-        if (isRectangular(name)) return this.sketch.length >= 2;
         const wanted = baseVertexCount(name);
         // Asked of the **normalized** sketch, not the raw one, so a graphic that defines
         // part of its own base counts as finished once the rest is implied: two points
@@ -851,10 +898,15 @@ export class MapLibreInteractions {
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        const geometry =
-            isRectangular(name) && vertices.length >= 2
-                ? buildBox(vertices)
-                : buildBase(wants, wants === 'LineString' ? normalizeDrawnBase(name, vertices) : vertices);
+        // A rectangular zone is drawn level and turned afterwards, and this is the draw:
+        // `previewDraw` and the commit both come through here, so the preview cannot
+        // disagree with what the last click produces. Levelling in `normalizeDrawnBase`
+        // instead squared the axis up again on every rebuild, which undid each rotate.
+        // @see levelRectangleAxis
+        const tidied = wants === 'LineString'
+            ? normalizeDrawnBase(name, vertices, resolutionOf(this.map))
+            : vertices;
+        const geometry = buildBase(wants, isRectangular(name) ? levelRectangleAxis(tidied) : tidied);
         if (!geometry) return undefined;
 
         const properties: TacticalGraphicProperties = {
@@ -887,7 +939,21 @@ export class MapLibreInteractions {
         name: TacticalGraphicName,
         vertices: Position[],
     ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
-        if (!usesDrawnAnchors(name) || vertices.length < 2) return undefined;
+        if (!usesDrawnAnchors(name) || !vertices.length) return undefined;
+
+        // A drop has one vertex and states its own size, so there is no second point to
+        // measure — but the anchors still have to be written, or the base would hold the
+        // single click and the four points the standard names would never exist.
+        const drop = dropSizePx(name);
+        if (vertices.length < 2) {
+            if (drop === undefined) return undefined;
+            const size = screenMeters(drop, resolutionOf(this.map), vertices[0][1]);
+            const anchors = drawnAnchors(name, {center: vertices[0], size, rotation: 0});
+            return anchors && {
+                geometry: {type: 'LineString', coordinates: anchors},
+                properties: {name, radius: size, rotation: 0},
+            };
+        }
 
         const center = toMercator([vertices[0][0], vertices[0][1]]);
         const edge = toMercator([vertices[1][0], vertices[1][1]]);
@@ -1123,7 +1189,12 @@ export class MapLibreInteractions {
             drag.insertAt = -1;
         }
 
-        const after = withDerivedAmplifiers(drag.graphic.name, this.applyGesture(before, drag, to));
+        const after = withDerivedAmplifiers(
+            drag.graphic.name,
+            this.applyGesture(before, drag, to),
+            before,
+            this.effectiveMode(),
+        );
         drag.last = to;
         if (after === before) return;
 
@@ -1228,11 +1299,6 @@ export class MapLibreInteractions {
                 // instead slid the whole graphic, so the angle could not be changed that
                 // way at all. @see editStretches
                 if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.last, to);
-                // **A rectangle's corners are a consequence of its box, not points with
-                // meanings of their own**, so a reshape drag is refused outright and the
-                // shape can only be moved, turned or scaled. OpenLayers withdraws these
-                // from its Modify interaction to the same end. @see isRectangular
-                if (isRectangular(drag.graphic.name)) return before;
                 // A graphic that does not reshape and does not stretch is left alone.
                 // Falling through to the move below would make "edit" a second "move" for
                 // the point-anchored symbols, where OpenLayers does nothing at all.
@@ -1355,8 +1421,9 @@ export class MapLibreInteractions {
      */
     private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
         if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
-        // A rectangle with a fifth vertex is not a rectangle. @see isRectangular
-        if (isRectangular(graphic.name)) return -1;
+        // A rectangle's base is two anchor points and nothing else, so there is no
+        // segment to insert into — `baseVertexCount` already says so above, and this
+        // second guard was for the drawn box. @see RectangularArea
 
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return -1;

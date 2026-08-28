@@ -527,6 +527,52 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
     });
 
     /**
+     * The demonstration is in that family too, but for the opposite reason: its four
+     * points are **derived from the first**, not placed. What has to hold here is that
+     * they survive the trip as four — the base carries them and a snapshot holds them —
+     * and that points 3 and 4 are recomputed rather than adopted, so a base written while
+     * the four were placed freehand comes back as the canonical shape.
+     */
+    describe('the demonstration keeps four points, and derives three of them', () => {
+        // Point 1 the arrowhead, point 2 the first bend due east, then the second leg.
+        const DRAWN = [[-0.6, 51.5], [0.2, 51.5], [0.2, 51.7], [-0.6, 51.7]];
+
+        it('keeps all four in the base', () => {
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.Demonstration,
+                {type: 'LineString', coordinates: DRAWN},
+                {},
+                RESOLUTION,
+            );
+            expect(built).toBeDefined();
+            expect(built!.base.geometry.type).toBe('LineString');
+            expect((built!.base.geometry as {coordinates: number[][]}).coordinates).toHaveLength(4);
+            expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
+        });
+
+        it('reads point 1 and point 2, and rewrites points 3 and 4 from them', () => {
+            // Drawn freehand: the second leg splayed away and the opening is wrong. The
+            // canonical layout is written back over it, and the two points that carry the
+            // description are the two left alone.
+            const drifted = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
+            const built = buildTacticalGraphic(
+                TacticalGraphicName.Demonstration,
+                {type: 'LineString', coordinates: drifted},
+                {},
+                RESOLUTION,
+            )!;
+            const anchors = (built.base.geometry as {coordinates: number[][]}).coordinates;
+            expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
+            expect(anchors[1][0]).toBeCloseTo(0.2, 4);
+            expect(anchors[2]).not.toEqual(drifted[2]);
+            expect(anchors[3]).not.toEqual(drifted[3]);
+            // …and the description follows the points, as it does for the rest of the
+            // family: the leg length is what the base says, not what a caller stamped.
+            expect(built.base.properties?.tacticalGraphic?.radius).toBeGreaterThan(0);
+        });
+    });
+
+    /**
      * The two contact symbols on the second engine. They are separate graphics — FM's
      * badge and APP-06 342900's route — and the failure mode if they ever merge again is
      * silent, since both are hollow arrows with lightning bolts.

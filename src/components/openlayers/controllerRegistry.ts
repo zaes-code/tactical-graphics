@@ -9,12 +9,14 @@
 import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx, groundLength} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
+import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
 import {
     CircularAreaGraphicBase,
     EnvelopmentGraphicBase,
     AmbushGraphicBase,
     ContainGraphicBase,
     PursuitGraphicBase,
+    DemonstrationGraphicBase,
     MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
@@ -31,7 +33,7 @@ import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
-import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
+import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
@@ -53,8 +55,47 @@ type ControllerFactory = (name: TacticalGraphicName, resolution: number, sizing:
 const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
     new PolygonGraphicController(new AreaGraphicBase(name, sizing, res));
 
-const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new RectangularAreaGraphicController(new AreaGraphicBase(name, sizing, res));
+/**
+ * A rectangular zone: two anchor points and a width, so it draws like a two-point line and
+ * edits like one — `Modify` drags point 1 and point 2, the third handle is the width.
+ * @see RectangularAreaGraphicBase
+ */
+const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) => {
+    // **Vertex dragging, explicitly.** The two anchor points are the only thing an
+    // operator moves to change the zone's length, and `LineGraphicController` routes a
+    // vertex grab only for the graphics that ask. The library holds the axis to its own
+    // bearing, so the drag lengthens rather than turns. @see constrainRectangleAxis
+    const graphic = new RectangularAreaGraphicBase(name, res, sizing);
+    const controller = new LineGraphicController(graphic, 2, name).enableVertexDragging(2);
+
+    // The holder has to know the draw from an edit, and `shapingFromGesture` cannot tell
+    // it: the controller raises that around a vertex drag too, which is the one case that
+    // most needs the axis held. @see RectangularAreaGraphicBase.drawing
+    const started = controller.onDrawStartFunc;
+    const ended = controller.onDrawEndFunc;
+    controller.onDrawStartFunc = event => {
+        graphic.drawing = true;
+        started(event);
+    };
+    controller.onDrawEndFunc = event => {
+        graphic.drawing = false;
+        ended(event);
+    };
+
+    // A rotate turns about point 1, so only point 2 moves — the same shape a length drag
+    // has, and the axis constraint would hold the zone level and merely shorten it.
+    // @see RectangularAreaGraphicBase.rotating
+    const rotate = controller.handleRotate.bind(controller);
+    controller.handleRotate = (delta: number) => {
+        graphic.rotating = true;
+        try {
+            rotate(delta);
+        } finally {
+            graphic.rotating = false;
+        }
+    };
+    return controller;
+};
 
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);
@@ -98,7 +139,8 @@ const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
 const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), undefined, name);
+    // Three anchor points, each meaning something. @see GeometryService.createSCurve
+    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3, 0);
 
 const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 2, name);
@@ -183,17 +225,34 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
  * symbol at every zoom, and at a low one it lands a few pixels across with its handles
  * piled on top of each other.
  */
-const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) => {
+const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new MissionTaskGraphicBase(n, size, res));
+
+/**
+ * The demonstration: dropped like the rest, but its base carries the four anchor points
+ * APP-06 describes it by rather than the single click that placed them.
+ * @see DemonstrationGraphicBase
+ */
+const demonstrationDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
+    dropped(name, res, sizing, (n, size) => new DemonstrationGraphicBase(n, size, res));
+
+const dropped = (
+    name: TacticalGraphicName,
+    res: number,
+    sizing: number,
+    build: (name: TacticalGraphicName, size: number) => MissionTaskGraphicBase,
+) => {
     const px = dropSizePx(name) ?? CROSSED_HALF_WIDTH_PX;
     const size = sizing * px;
     return new PointDropController(
-        new MissionTaskGraphicBase(name, size, res),
+        build(name, size),
         size,
         allowedGestures(name).resize,
         // The controller re-derives this where the click lands, which is exact; `size`
         // above is the same number sized for the view centre, and is what the holder
         // starts life with. @see PointDropController.drop
         {px, resolution: res},
+        allowedGestures(name).rotate,
     );
 };
 
@@ -393,7 +452,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
-    [TacticalGraphicName.Demonstration]:                    vertexLine(4, 4, 0),
+    // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
+    [TacticalGraphicName.Demonstration]:                    demonstrationDrop,
     [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
@@ -551,7 +611,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Envelopment]:        envelopment,
     // [TacticalGraphicName.DoubleEnvelopment]:  movement(),
     [TacticalGraphicName.MobileDefense]:      mobileDefense,
-    [TacticalGraphicName.Infiltration]:       movement(),
+    // Literally the exfiltration's controller and holder. @see RetrogradeTask.ts
+    [TacticalGraphicName.Infiltration]:       exfiltrate,
     [TacticalGraphicName.ReliefInPlace]:      reliefInPlace,
 
     // ── Ambush (point-based arc graphic) ───────────────────────────────────

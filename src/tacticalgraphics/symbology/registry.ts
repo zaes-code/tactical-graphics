@@ -760,7 +760,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const [name, label] of CARDINAL_LABEL_AREAS) {
         registry[name] = {
             graphic: cardinalBoundaryPaint(label),
-            label: cardinalLabelPaint(label, areaDefaultLabelPaint(name)),
+            // **No literal in the middle.** These two write their abbreviation into their
+            // own boundary, four times over, so the centre block carries the designation
+            // and the date and nothing else. (User's call, 2026-08-27.)
+            label: cardinalLabelPaint(label, areaDefaultLabelPaint(name, false)),
         };
     }
     for (const [name, letter] of CBRN_AREAS) {
@@ -901,7 +904,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: turnPaint(getLabel(name)), label: missionTaskLabelPaint(name)};
     }
     registry[TacticalGraphicName.ReliefInPlace] = {graphic: reliefInPlacePaint('RIP')};
-    registry[TacticalGraphicName.Exfiltrate] = {graphic: exfiltratePaint(getLabel(TacticalGraphicName.Exfiltrate))};
+    // **One paint for both.** 343700 and 343800 are the same construction and the letter is
+    // the only difference, so the label has to be set the same way too: the infiltration
+    // used `fixedLetterPaint` at the label span's midpoint, which put `IN` somewhere the
+    // exfiltration never puts `EX`. @see Exfiltrate, Infiltration
+    for (const name of [TacticalGraphicName.Exfiltrate, TacticalGraphicName.Infiltration]) {
+        registry[name] = {graphic: exfiltratePaint(getLabel(name))};
+    }
 
     // The contour line's dose sits in a single break at the top of the outline.
     registry[TacticalGraphicName.RadiationDoseRateContourLine] = {

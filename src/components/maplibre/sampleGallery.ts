@@ -102,8 +102,63 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      */
     if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
 
+    /*
+     * **And another eight whose points are numbered roles rather than a path.** The rule
+     * here is "the first candidate that builds wins", and a two-point line *builds* for all
+     * of them — it simply builds the wrong thing, or the not-yet-finished thing:
+     *
+     *   - the three **obstacle bypasses** read points 1 and 2 as the two ends of the
+     *     opening and 3 as the rear, and with two points their generator returns the raw
+     *     line, so the sweep showed three plain lines;
+     *   - **capture, evacuate and recover** need four — centre, radius, the arc's middle,
+     *     the arrow's end — and with two they draw the circle and stop, letter and all;
+     *   - the **escort** needs three for its bar.
+     *
+     * (The demonstration used to be here too. It is dropped from one click now, so the
+     * plain `point` candidate builds it and no layout is needed. @see Demonstration)
+     *
+     * Each layout below is written in the order the standard numbers the points.
+     */
+    const roles = ROLE_SAMPLE_LAYOUTS[name];
+    if (roles) return [roles(lon, lat), line, ring, point];
+
     return [line, ring, point];
 }
+
+/** @see candidateGeometries — the layouts for graphics whose points are numbered roles. */
+const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat: number) => Geometry>> = {
+    ...Object.fromEntries([
+        TacticalGraphicName.ObstacleBypassEasy,
+        TacticalGraphicName.ObstacleBypassDifficult,
+        TacticalGraphicName.ObstacleBypassImpossible,
+    ].map(name => [name, (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon + HALF * 0.6, lat + HALF * 0.6],
+            [lon + HALF * 0.6, lat - HALF * 0.6],
+            [lon - HALF * 0.8, lat],
+        ],
+    })])),
+
+    ...Object.fromEntries([
+        TacticalGraphicName.Capture,
+        TacticalGraphicName.Evacuate,
+        TacticalGraphicName.Recover,
+    ].map(name => [name, (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon - HALF * 0.5, lat + HALF * 0.3],
+            [lon - HALF * 0.5, lat + HALF * 0.85],
+            [lon + HALF * 0.2, lat + HALF * 0.55],
+            [lon + HALF * 0.85, lat - HALF * 0.6],
+        ],
+    })])),
+
+    [TacticalGraphicName.Escort]: (lon, lat) => ({
+        type: 'LineString',
+        coordinates: [[lon, lat], [lon - HALF, lat], [lon + HALF, lat]],
+    }),
+};
 
 /**
  * A three-anchor base spanning the same cell the two-point line does.
