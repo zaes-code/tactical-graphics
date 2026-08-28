@@ -66,6 +66,7 @@ import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
 import {
+    applyAmplifierAliases,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
@@ -138,7 +139,7 @@ function toLabels(bag: Record<string, unknown>): GraphicLabels {
     const labels: Record<string, unknown> = {...bag};
     delete labels.name;
     for (const key of GEOMETRY_KEYS) delete labels[key];
-    return {label: '', ...labels} as GraphicLabels;
+    return {designation: '', ...labels} as GraphicLabels;
 }
 
 /** First value of `prop` found across a handler's features, if any. */
@@ -424,7 +425,9 @@ export function restoreTacticalGraphics(
         // Derived features carry the same properties as their base; only bases rebuild.
         if (props.role !== undefined && props.role !== 'base') continue;
 
-        const bag = (props.tacticalGraphic ?? {}) as Record<string, unknown>;
+        // A snapshot is exactly the case the alias exists for: this bag may have been
+        // written before 3.0.0 renamed `label` and `secondId`. @see applyAmplifierAliases
+        const bag = applyAmplifierAliases((props.tacticalGraphic ?? {}) as Record<string, unknown>);
         const name = (bag.name ?? props.graphicName) as TacticalGraphicName | undefined;
         const symbolId = (props.symbolId as string) || crypto.randomUUID();
 

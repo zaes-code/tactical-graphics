@@ -194,7 +194,7 @@ const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
  * `1X/007`, so the paint still joins two fields with a slash when both are set. The dialog
  * offers only the first: the second half is not something this program's operators fill in,
  * and a control nobody uses is a control that gets filled in by accident. Setting
- * `secondId` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
+ * `secondDesignation` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
  */
 const DECISION_LINE = f(true, false, false, false, false);
 /** Mobility corridor: free text plus the echelon its own note makes mandatory. */

@@ -10,7 +10,7 @@
  * const {graphic, labels} = renderTacticalGraphic({
  *     type: 'Feature',
  *     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
- *     properties: {tacticalGraphic: {name: TacticalGraphicName.MainAxisOfAdvance, label: '1-508 IN'}},
+ *     properties: {tacticalGraphic: {name: TacticalGraphicName.MainAxisOfAdvance, designation: '1-508 IN'}},
  * });
  * ```
  *
@@ -23,6 +23,7 @@ export {
     renderTacticalGraphic,
     toFeatureCollection,
     readTacticalGraphicProperties,
+    applyAmplifierAliases,
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
     TacticalGraphicError,

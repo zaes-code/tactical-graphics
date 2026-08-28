@@ -82,8 +82,8 @@ export function boundaryPaint(): LinePaint {
         if (coords.length < 2) return [];
 
         const props = feature.properties;
-        const topLabel = formatFullLabel(props.label ?? '', props.countryCode ?? '');
-        const bottomLabel = formatFullLabel(props.secondId ?? '', props.secondCountryCode ?? '');
+        const topLabel = formatFullLabel(props.designation ?? '', props.countryCode ?? '');
+        const bottomLabel = formatFullLabel(props.secondDesignation ?? '', props.secondCountryCode ?? '');
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
         const {index, t} = projectedMidSegment(coords);

@@ -124,7 +124,7 @@ function text(
  */
 function nameAndDate(feature: PaintFeature): string {
     const parts: string[] = [];
-    if (feature.properties.label) parts.push(feature.properties.label);
+    if (feature.properties.designation) parts.push(feature.properties.designation);
     const date = areaDateLabel(feature);
     if (date) parts.push(date);
     return parts.join('     ');
@@ -235,7 +235,7 @@ export function counterattackLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-        const label = feature.properties.label?.trim();
+        const label = feature.properties.designation?.trim();
         return behindArrowhead(feature, context, coords[0], coords[1], label ? `CATK ${label}` : 'CATK');
     };
 }
@@ -319,7 +319,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         // The literal and field T, and nothing else: 152300's Template carries no `W`/`W1`.
         // An imported bag can still hold a `startDate` for a symbol with nowhere to put one,
         // and painting it anyway is how a field nobody offered ends up on the map.
-        const label = feature.properties.label?.trim();
+        const label = feature.properties.designation?.trim();
         return behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
     };
 }
@@ -499,7 +499,7 @@ export function movementLabelPaint(): MovementPaint {
         const rotation = uprightRotation(c0, c1);
         const midpoint: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
 
-        paints.push(text(feature, midpoint, feature.properties.label ?? '', scale, {rotation, halo: false}));
+        paints.push(text(feature, midpoint, feature.properties.designation ?? '', scale, {rotation, halo: false}));
 
         const date = areaDateLabel(feature);
         if (date) {
@@ -661,7 +661,7 @@ export function bridgeLabelPaint(): MovementPaint {
         const scale = scaleOf(feature, context);
 
         const paints: Paint[] = [
-            text(feature, c0, feature.properties.label ?? '', scale, {rotation: uprightRotation(c0, c1)}),
+            text(feature, c0, feature.properties.designation ?? '', scale, {rotation: uprightRotation(c0, c1)}),
         ];
 
         const date = areaDateLabel(feature);

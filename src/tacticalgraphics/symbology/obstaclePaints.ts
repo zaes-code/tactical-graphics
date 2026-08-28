@@ -266,7 +266,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
         }];
 
-        const text = getFullLabel(name, feature.properties.label ?? '').trim();
+        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!text) return paints;
 
         // Under the center-most drawn segment: the merlons take the upper side, so the

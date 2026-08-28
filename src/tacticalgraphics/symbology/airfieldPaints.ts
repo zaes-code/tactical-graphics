@@ -166,7 +166,7 @@ const AIRFIELD_FALLBACK_HALF_WIDTH = 2_000;
 export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPaint {
     return (feature, context) => {
         const center = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
-        const text = getFullLabel(name, feature.properties.label ?? '').trim();
+        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!center || !text) return [];
 
         // The runway's reach is metres now, so the clearance is the only part in pixels — a

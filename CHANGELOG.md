@@ -33,6 +33,16 @@ renames of a public member *and* its value, plus five exported identifiers respe
   APP-06 also spends its **last** anchor point on an arrow's width; this library still carries width as a `width` / `radius` amplifier in meters. That divergence is unchanged.
 
 - **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change.
+- **The two designation amplifiers are renamed: `label` is `designation`, `secondId` is `secondDesignation`.** Both `TacticalGraphicProperties` and `GraphicLabels` change, so the rename reaches the saved bag, the style functions, the Feature Properties dialog and any host reading amplifiers off a feature.
+
+  They are fields **T** and **T1** — FM 1-02.2: *"T — Identifies a unique designation"* — and the old names said neither what they were nor which was which. `label` also collided with the three other senses of that word in this library: the anchor features `renderTacticalGraphic` returns, the `role: 'label'` tag, and `GraphicLabels`, the bag it is a member of. `readGraphicLabels(f).label` read as the label of the labels and was none of them.
+
+  They are deliberately **not** `identifier1` / `identifier2`. Doctrine numbers these T and T1, so `identifier1` would be field T and `identifier2` would be field T1 — off by one against the plate a reader would check them against. `designation` / `secondDesignation` also matches the `countryCode` / `secondCountryCode` pair already in the schema.
+
+  **Saved data is not broken.** Unlike the point-order change above, this one is aliased: `applyAmplifierAliases` (exported) fills the current names in from the old ones, and it is applied wherever a stored bag is read — `readTacticalGraphicProperties` and therefore `renderTacticalGraphic`, both renderers' style paths, and both engines' `restore`. Nothing writes the old names back, they are absent from the types, and a bag carrying both keeps the current one. A file written by 1.x or 2.x opens with its designations intact and migrates the next time it is saved.
+
+  `RangeFanBand.label` is untouched — a band's own label is not field T.
+
 - **`AltitudeUnit.Metres` is now `AltitudeUnit.Meters`**, and its value changed from `'metres'` to `'meters'`. Both the member and the string it resolves to change, so anything persisting or comparing the value needs updating.
 
   Both renames are for the same reason: the library implements a US Army field manual for US programs, and the neighboring members already used US spelling — `DefenseOperationsPlanning` sat three lines from `OffenceOperationsPlanning`.
