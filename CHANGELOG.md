@@ -15,13 +15,15 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-**The next release must be a major.** Six breaking changes are queued below, and the
-three worth planning for are the ones that reach data a host has already **saved**: the
-point order of thirty-two graphics, the base geometry of the eighteen rectangular zones,
-and the two designation amplifiers. Two of those three are handled on read — the zones
-migrate, the old amplifier names are aliased — and **the point order is not**, so it is
-the one that needs a migration on your side. The rest are two enum renames of a public
-member *and* its value, plus five exported identifiers respelled.
+## [3.0.0] — 2026-08-28
+
+**A major, and it earns it.** Six breaking changes, of which the three worth planning
+for are the ones that reach data you have already **saved**: the point order of
+thirty-two graphics, the base geometry of the eighteen rectangular zones, and the two
+designation amplifiers. Two of those three are handled on read — the zones migrate, the
+old amplifier names are aliased — and **the point order is not**, so it is the one that
+needs a migration on your side. The rest are two enum renames of a public member *and*
+its value, plus five exported identifiers respelled.
 
 ### Changed — BREAKING
 
@@ -432,7 +434,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...develop
+[3.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.13.0...v2.0.0
 [1.13.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.12.0...v1.13.0
