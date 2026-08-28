@@ -7,6 +7,17 @@
  * and the catalog kept listing it. Prose drifts silently; this does not.
  */
 import {readFileSync} from 'fs';
+import {
+    AltitudeDatum,
+    RouteDirection,
+    TacticalGraphicConfidence,
+    TacticalGraphicEchelon,
+    TacticalGraphicHostility,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicStatus,
+    TacticalGraphicTerrain,
+} from './core/type';
 import {join} from 'path';
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
@@ -63,5 +74,49 @@ describe('the README documents the schema that exists', () => {
         const documented = readmeFields();
         const undocumented = Array.from(schemaFields()).filter(f => !documented.has(f));
         expect(undocumented).toEqual([]);
+    });
+});
+
+/**
+ * # The selector table lists exactly what the enums hold
+ *
+ * The README used to trail off — `hostility` was documented as
+ * "Friend | Hostile/Faker | Neutral | Unknown | ..." and `direction`, `mineType`,
+ * `mobility` and `terrain` named no values at all. A consumer cannot guess a string
+ * enum's members, and a value outside the set is ignored rather than rejected, so an
+ * incomplete list shows up as an amplifier that silently does not draw.
+ *
+ * The table is now complete, and this is what stops it drifting: every member of every
+ * documented enum must appear in that enum's row, and the row may not invent values the
+ * enum does not have.
+ */
+describe('the README documents the enums that exist', () => {
+    const ENUMS: ReadonlyArray<readonly [string, Record<string, string>]> = [
+        ['TacticalGraphicHostility', TacticalGraphicHostility],
+        ['TacticalGraphicStatus', TacticalGraphicStatus],
+        ['TacticalGraphicConfidence', TacticalGraphicConfidence],
+        ['TacticalGraphicEchelon', TacticalGraphicEchelon],
+        ['RouteDirection', RouteDirection],
+        ['TacticalGraphicMineType', TacticalGraphicMineType],
+        ['TacticalGraphicMobility', TacticalGraphicMobility],
+        ['TacticalGraphicTerrain', TacticalGraphicTerrain],
+        ['AltitudeDatum', AltitudeDatum],
+    ];
+
+    /** The `Every accepted value` cell of the row naming this enum. */
+    function documentedValues(enumName: string): string[] {
+        const md = read('README.md');
+        const row = md.split('\n').find(line => line.includes(`\`${enumName}\``) && line.startsWith('|'));
+        if (!row) return [];
+        const cells = row.split('|').map(c => c.trim());
+        return cells[cells.length - 2].split('·').map(v => v.trim().replace(/^`|`$/g, '')).filter(Boolean);
+    }
+
+    it.each(ENUMS.map(([name]) => name))('%s has a row', name => {
+        expect(documentedValues(name).length).toBeGreaterThan(0);
+    });
+
+    it.each(ENUMS)('%s lists every value it holds, and no others', (name, members) => {
+        expect(documentedValues(name).sort()).toEqual(Object.values(members).sort());
     });
 });
