@@ -17,7 +17,7 @@ import {join} from 'path';
  * found rather than fixing the single instance.
  */
 const BRITISH =
-    /\b(centre|centres|centred|colour|colours|coloured|metre|metres|kilometre|kilometres|behaviour|labelled|modelling|cancelled|fulfil|organis(e|ed|ing|ation)|synthesis(e|ed|ing)|realis(e|ed|ing)|recognis(e|ed|ing)|normalis(e|ed|ing)|initialis(e|ed|ing)|optimis(e|ed|ing)|minimis(e|ed|ing)|analys(e|ed|ing)|licence|defence|artefact|catalogue|favour|neighbour|grey|whilst)\b/gi;
+    /\b(centre|centres|centred|colour|colours|coloured|metre|metres|kilometre|kilometres|behaviour|labelled|modelling|cancelled|fulfil|organis(e|ed|ing|ation)|synthesis(e|ed|ing)|realis(e|ed|ing)|recognis(e|ed|ing)|normalis(e|ed|ing)|initialis(e|ed|ing)|optimis(e|ed|ing)|minimis(e|ed|ing)|analys(e|ed|ing)|licence|defence|artefact|catalogue|favour|neighbour|rasteris(e|ed|ing|ation)|visualis(e|ed|ing|ation)|serialis(e|ed|ing|ation)|standardis(e|ed|ing|ation)|prioritis(e|ed|ing)|customis(e|ed|ing)|characteris(e|ed|ing)|utilis(e|ed|ing)|generalis(e|ed|ing)|offence|manoeuvre|manoeuvres|programme|programmes|judgement|travelling|signalling|grey|whilst)\b/gi;
 
 describe('README spelling', () => {
     it('uses US English throughout the prose', () => {

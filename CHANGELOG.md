@@ -91,6 +91,8 @@ renames of a public member *and* its value, plus five exported identifiers respe
 
 - **`npm run check:readme-samples`** compiles every README code sample against `dist/`, so an example cannot outlive the API it demonstrates.
 
+- **`CORRIDOR_GRAPHICS`** — the eight air-coordinating corridors that share one shape: air corridor, low level transit route, minimum risk route, safe lane, special corridor, standard use Army aircraft flight route, transit corridor, unmanned aircraft corridor. Exported for the same reason as the other symbology tables: which graphics carry the corridor's rails, ACP markers and amplifier block is a fact about the symbols, and anything drawing them has to agree on the membership.
+
 - `scripts/gen-catalog-svgs.js` — generates one SVG per graphic by asking the library to paint it and transcribing the resulting marks, rather than drawing anything by hand. Internal tooling; not part of the published package.
 
 - The progress tracker gained a `Graphic Key` column linking each row to its `TacticalGraphicName` member, so the README generator can validate itself against the enum and report graphics separately from doctrinal variants.
