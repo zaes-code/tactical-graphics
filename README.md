@@ -22,7 +22,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 npm install @zaes/tactical-graphics
 ```
 
-The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 32 packages, all permissively licensed.
+The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 34 packages — 32 MIT, one Unlicense, one 0BSD. No copyleft, and every one of them declares a license.
 
 Three entry points ship, and you can use any of them on its own:
 
