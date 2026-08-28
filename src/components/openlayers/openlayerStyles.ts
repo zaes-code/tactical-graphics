@@ -9,7 +9,7 @@ import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
 // The wire and anti-tank tables moved with their paint functions — they describe
 // what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
-import {geometryService} from '@zaes/tactical-graphics';
+import {geometryService, getPaintFunction} from '@zaes/tactical-graphics';
 import {
     getLabel,
     TacticalGraphicConfidence,
@@ -20,9 +20,10 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
+import {escortSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
- * The colour table, the line weight and the three label-scale formulas now live in the
+ * The color table, the line weight and the three label-scale formulas now live in the
  * map-agnostic half (`core/symbology.ts`) — none of them mentions OpenLayers, and a
  * second renderer that cannot reach them has to reinvent the palette and then drift from
  * it. Imported here and re-exported below, so this module's public surface is unchanged
@@ -54,6 +55,7 @@ import {
     getHandleColor,
     getInertHandleColor,
     getLabelFillColor,
+    getLabelUsesHostilityColor,
     getLabelHaloColor,
     labelZoomMultiplier,
     maxGraphicLabelScale,
@@ -96,6 +98,8 @@ import {
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
     airfieldPaint,
+    airfieldPointLabelPaint,
+    airfieldPointPaint,
     plainOutlinePaint,
     areaDefaultLabelPaint,
     airCorridorLabelPaint,
@@ -137,12 +141,14 @@ import {
     clearPaint,
     aviationAxisLabelPaint,
     axisOfAdvanceLabelPaint,
+    avenueOfApproachLabelPaint,
     counterattackLabelPaint,
     directionArrowPaint,
     envelopmentLabelPaint,
     frontalAttackLabelPaint,
     infiltrationLabelPaint,
     mobileDefenseLabelPaint,
+    advanceToContactLabelPaint,
     movementLabelPaint,
     turningMovementLabelPaint,
     retrogradeTaskPaint,
@@ -154,13 +160,41 @@ import {
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     fortifiedLinePaint,
+    decisionLinePaint,
+    fortifiedPositionPaint,
+    mobilityCorridorPaint,
+    obstacleBypassPaint,
+    demonstrationPaint,
+    escortPaint,
+    sweptArcTaskPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
     smokeObscurantLabelPaint,
     wireObstaclePaint,
     zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
     encirclementPaint,
+    CARDINAL_LABEL_AREAS,
+    CBRN_AREAS,
+    CBRN_TOXIC_AREAS,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+    PSYOPS_ZONES,
+    psyOpsZonePaint,
+    mineFillPaint,
+    minedAreaFencedPaint,
+    minefieldAreaPaint,
+    cbrnContaminatedAreaPaint,
+    cbrnMarkPaint,
+    dashedOutlinePaint,
     fortifiedAreaPaint,
+    restrictedTerrainPaint,
     freeFireAreaCircularPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
@@ -188,7 +222,7 @@ const OBSTACLE_LABEL_GAP_PX = 8;
  * otherwise the value from `DEFAULT_PALETTE`. The defaults live in the config module
  * rather than as literals here so that "what does this library look like unconfigured"
  * has exactly one answer, and so a host composing its own set can start from it —
- * `{...DEFAULT_PALETTE, ...myColours}`.
+ * `{...DEFAULT_PALETTE, ...myColors}`.
  *
  * A host that wants different line work on a dark basemap supplies it through
  * `configureTacticalGraphics`. The library has no mode of its own to consult: only the
@@ -205,7 +239,7 @@ const OBSTACLE_LABEL_GAP_PX = 8;
  * — the documented way to set amplifiers, and the only way the library itself sets them
  * — writes `properties.tacticalGraphic` and nothing else. The `hostility` /
  * `hostilityColor` keys are stamped by three paths in the *demo* (the properties dialog,
- * the sample sweep, and the basemap re-colour in `OpenLayers.tsx`), so a style function
+ * the sample sweep, and the basemap re-color in `OpenLayers.tsx`), so a style function
  * that reads only those keys is correct only while a human is driving this app.
  *
  * Two things it was wrong for, both silent:
@@ -219,7 +253,7 @@ const OBSTACLE_LABEL_GAP_PX = 8;
  *   strokes turn red. They did not.
  *
  * The key is kept as a fallback rather than deleted: the demo paths above still set it,
- * and a host may be colouring features by some route of its own.
+ * and a host may be coloring features by some route of its own.
  */
 export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
     return readGraphicLabels(feature).hostility
@@ -228,10 +262,26 @@ export function readHostility(feature: FeatureLike): TacticalGraphicHostility {
 }
 
 /**
- * The line colour for a feature: an explicit `hostilityColor` override if something set
- * one, otherwise the affiliation's colour. `getColorByHostility` already resolves
- * `unknown` to the default line colour, so this covers the unaffiliated case too.
+ * The line color for a feature: an explicit `hostilityColor` override if something set
+ * one, otherwise the affiliation's color. `getColorByHostility` already resolves
+ * `unknown` to the default line color, so this covers the unaffiliated case too.
  */
+/**
+ * The fill a text amplifier takes.
+ *
+ * `getLabelFillColor()` unless the host opted the library into affiliation-coloured text,
+ * in which case the label follows exactly the rule its line work follows — including the
+ * exemptions `readHostilityColor` applies, so a graphic that does not take a hostility
+ * colour does not take one on its text either. The map-agnostic half states the same rule
+ * once, in `labelColorOf`; this is the OpenLayers-only style functions reading it.
+ *
+ * Falls back to the configured fill when no feature is in scope, which is what the
+ * editor's own read-outs want — they are chrome and belong to no affiliation.
+ */
+export function labelFillFor(feature?: FeatureLike): string {
+    return getLabelUsesHostilityColor() && feature ? readHostilityColor(feature) : getLabelFillColor();
+}
+
 export function readHostilityColor(feature: FeatureLike): string {
     return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
 }
@@ -261,7 +311,7 @@ export function drawMarkerStyle(): Style {
  * interaction for any controller that does not supply a `drawStyleFunc` of its own.
  *
  * Before this existed only `MissionTaskController` styled its draw, so the draw-marker
- * colours reached point-anchored graphics and nothing else: every line, polygon and area
+ * colors reached point-anchored graphics and nothing else: every line, polygon and area
  * fell through to OpenLayers' built-in editing style, which is hardcoded and ignores the
  * config entirely. A host could set `drawMarkerColor` and watch it apply to a handful of
  * graphics.
@@ -269,7 +319,7 @@ export function drawMarkerStyle(): Style {
  * OpenLayers renders a draw in two features — the sketch geometry, and a separate Point
  * for the cursor. Both arrive here, which is why the `Point` branch is the marker and
  * everything else is the sketch line. The sketch is dashed and drawn over an outline in
- * the marker's outline colour, so it stays legible over both the basemap and any graphic
+ * the marker's outline color, so it stays legible over both the basemap and any graphic
  * already on the map.
  */
 export function defaultDrawStyleFunc(): StyleFunction {
@@ -296,14 +346,14 @@ export function defaultDrawStyleFunc(): StyleFunction {
 /**
  * Halo used for the label background.
  *
- * A function, not a `const`. As a module-level const the halo colour was frozen at
+ * A function, not a `const`. As a module-level const the halo color was frozen at
  * import and could never follow a later change — harmless while it was always white,
  * a silent bug the moment a host overrode it. Cached so the ~75 call sites don't
  * allocate a `Stroke` per style call.
  *
- * Keyed on the resolved colour rather than on the mode: the halo now comes from the
+ * Keyed on the resolved color rather than on the mode: the halo now comes from the
  * config, which a host may change at any time, so the mode flag is no longer a
- * complete cache key. In practice a host uses one or two halo colours, so the cache
+ * complete cache key. In practice a host uses one or two halo colors, so the cache
  * stays tiny. (A plain record, not a `Map` — `Map` is OpenLayers' in this module.)
  */
 const haloStrokeCache: Record<string, Stroke> = {};
@@ -407,6 +457,18 @@ export const createMap = (target: HTMLElement) => {
                 -20037508.34, -20037508.34,   // left, bottom  (approx. full world in Web Mercator)
                 20037508.34, 20037508.34,    // right, top
             ],
+            /**
+             * **Let the view zoom out until the whole extent is visible.**
+             *
+             * The default is false, which stops the zoom at the point where the extent
+             * *fills* the viewport — a hard floor at `worldWidth / viewportWidth`, which
+             * on a 1500 px window is 26 717 m/px. The sample sweep lays 273 graphics out
+             * across 46 million metres, wider than the Earth, so `view.fit` asked for
+             * 39 842 and was silently clamped: the gallery zoomed, and still ran off both
+             * sides of the window. MapLibre has no such constraint and framed the same
+             * sweep correctly, which is how the clamp was found.
+             */
+            showFullExtent: true,
         }),
     });
 };
@@ -446,17 +508,17 @@ export const createBaseFeature = () => {
 };
 
 /**
- * Base feature for a point-anchored graphic — the centre it is generated around.
+ * Base feature for a point-anchored graphic — the center it is generated around.
  *
  * Two things it must get right, and a plain `new Feature()` gets neither:
  *
  * - **A style function.** A feature with no style falls through to OpenLayers' own
  *   default, which paints a dot — and that default cannot consult `hidden`, so the
- *   centre showed in every mode. `createBaseFeature`'s style returns an empty `Style`
+ *   center showed in every mode. `createBaseFeature`'s style returns an empty `Style`
  *   while hidden, which is what makes the flag mean anything.
  * - **`base` cleared.** That flag means "has vertices the Modify interaction may drag".
  *   A point-anchored graphic has none — it is reshaped by rotate / resize / translate —
- *   so leaving it set would put a draggable vertex on the centre. Same reasoning as
+ *   so leaving it set would put a draggable vertex on the center. Same reasoning as
  *   `mobileDefense` in `controllerRegistry.ts`. `role` still marks it as the base.
  */
 export const createCenterBaseFeature = (): Feature<Point> => {
@@ -473,8 +535,8 @@ export const createCenterBaseFeature = (): Feature<Point> => {
  * paint in source order — which is the order the holders happened to be added
  * in. That let a label's background plate, or a graphic's own fill, cover the
  * handle you were trying to grab: the range-fan band labels sat on their rim
- * handles, and a large centred label ("BDZ", and the crossed mission tasks'
- * letters) hid the centre dot.
+ * handles, and a large centered label ("BDZ", and the crossed mission tasks'
+ * letters) hid the center dot.
  *
  * **Handles are editor chrome and always paint last.** A handle you cannot see
  * is a handle you cannot use, and hit-testing follows draw order too, so
@@ -484,10 +546,10 @@ export const HANDLE_Z_INDEX = 1000;
 
 // used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
 /**
- * A distance for a user to read, from metres.
+ * A distance for a user to read, from meters.
  *
- * Metres below a kilometre — a 400 m radius shown as "0.4 km" is both harder to read and
- * less precise than the number it came from. Above that, kilometres: one decimal while
+ * Meters below a kilometer — a 400 m radius shown as "0.4 km" is both harder to read and
+ * less precise than the number it came from. Above that, kilometers: one decimal while
  * the figure is small enough for it to mean something, whole numbers beyond 10 km where
  * it is noise.
  *
@@ -498,7 +560,7 @@ export const HANDLE_Z_INDEX = 1000;
 
 /**
  * The radius read-out shown while a circular graphic is drawn or resized: a hashed line
- * from centre to edge with the radius in km on it.
+ * from center to edge with the radius in km on it.
  *
  * Editor chrome, not symbology — `role: 'handle'` keeps it out of `serializeTacticalGraphics`
  * and out of anything that counts rendered graphics. It draws only when the holder has put
@@ -506,7 +568,14 @@ export const HANDLE_Z_INDEX = 1000;
  * in the sample gallery or a restored map.
  *
  * Dashes are in screen pixels via `resolution`, so the hatching stays the same density at
- * every zoom. The distance is measured in EPSG:3857 metres — Euclidean, no turf.
+ * every zoom.
+ *
+ * The distance is measured in EPSG:3857 meters by default — Euclidean, no turf — which is
+ * what the radius read-out has always shown. **A holder that knows the real ground
+ * distance can say so** by setting `measureMeters` on the feature, and the rectangular
+ * zones do: their width amplifier is filed geodesically, and a hashed line reporting the
+ * projected figure beside it would show two different numbers for one edge (at 51° the
+ * projected one is 1.6x larger).
  */
 export const createMeasureFeature = () => {
     const feature = new Feature();
@@ -519,21 +588,24 @@ export const createMeasureFeature = () => {
         if (!coords || coords.length < 2) return new Style({});
 
         const [a, b] = coords;
-        const text = formatDistance(Math.hypot(b[0] - a[0], b[1] - a[1]));
+        const stated = f.get('measureMeters') as number | undefined;
+        const text = formatDistance(
+            typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
+        );
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the
         // handle around — no rotation to compute, and none to keep in step.
         // `lineDash` is in canvas pixels, so the hatching holds its density at any zoom.
         return new Style({
-            // The inert-handle colour: this is a passive read-out, the same class of
-            // chrome as the centre dot you cannot drag — not a live handle.
+            // The inert-handle color: this is a passive read-out, the same class of
+            // chrome as the center dot you cannot drag — not a live handle.
             stroke: new Stroke({color: getInertHandleColor(), width: LINE_WIDTH(), lineDash: [8, 6]}),
             text: new Text({
                 text,
                 font: fontStyle,
                 placement: 'line',
-                // The label colour, not the handle colour: this reads as an amplifier on
+                // The label color, not the handle color: this reads as an amplifier on
                 // the graphic, and a host that re-themes its labels expects this to move
                 // with them. @see getLabelFillColor
                 fill: new Fill({color: getLabelFillColor()}),
@@ -554,12 +626,12 @@ export const createHandleFeature = () => {
 
         if (isHidden) return new Style({});
 
-        // Always red, never the hostility colour. A handle is a piece of editor
+        // Always red, never the hostility color. A handle is a piece of editor
         // chrome, not part of the symbol: it says "you can drag this", and that
         // meaning must not change with the graphic's affiliation. Tinting them
         // also made a hostile graphic's handles the same red as its own strokes,
-        // so they stopped reading as handles at all. Grey stays reserved for
-        // `createInertHandleFeature` — see it for why the colours must not blur.
+        // so they stopped reading as handles at all. Gray stays reserved for
+        // `createInertHandleFeature` — see it for why the colors must not blur.
         return new Style({
             zIndex: HANDLE_Z_INDEX,
             image: new CircleStyle({
@@ -584,16 +656,16 @@ export const createOffsetHandleFeature = () => {
 };
 
 /**
- * The centre dot on a point-anchored graphic.
+ * The center dot on a point-anchored graphic.
  *
- * **Grey means "you cannot drag this right now", and it has to stay honest.** The
- * centre is refused as a drag origin for resize (the scale ratio divides by
- * distance-to-centre, which is ~0 there) and for rotate (a point on the axis carries
+ * **Gray means "you cannot drag this right now", and it has to stay honest.** The
+ * center is refused as a drag origin for resize (the scale ratio divides by
+ * distance-to-center, which is ~0 there) and for rotate (a point on the axis carries
  * no angle) — but it *is* the natural grab point for a move, so
  * `TacticalGraphicsManager.handleDownEvent` accepts it in translate mode. This style
- * follows that: red like every other live handle while a move is possible, grey
- * otherwise. A grey dot that silently accepted a drag would teach the colour to mean
- * nothing, which is the trap this comment used to warn about when the centre was
+ * follows that: red like every other live handle while a move is possible, gray
+ * otherwise. A gray dot that silently accepted a drag would teach the color to mean
+ * nothing, which is the trap this comment used to warn about when the center was
  * genuinely never draggable.
  *
  * Deliberately ignores hostility either way: a hostile graphic's line work is red, and
@@ -630,14 +702,14 @@ export const createInertHandleFeature = () => {
  * install a dedicated style function of its own.
  *
  * **Reads the hostility off the feature.** It used to hardcode
- * `getDefaultLineColor()`, which meant changing a graphic's hostility recoloured
+ * `getDefaultLineColor()`, which meant changing a graphic's hostility recolored
  * nothing for anything on this style: all the circle graphics (base defense
  * zone, the circular kill boxes and fire areas), bridge, and every other
  * movement graphic without a bespoke style. Only the graphics with their own
- * style function ever honoured it.
+ * style function ever honored it.
  *
  * `hostilityColor` is what the properties dialog stamps; `hostility` is the raw
- * enum, kept as a fallback for features coloured by some other path.
+ * enum, kept as a fallback for features colored by some other path.
  *
  * **Stroke only, no fill.** There used to be a translucent blue fill here, left over
  * from a selection highlight that never tracked selection — it painted every
@@ -713,7 +785,7 @@ function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coo
         text: new Text({
             text: label,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation: rotation,
             textAlign: 'center',
             textBaseline: 'middle',
@@ -734,7 +806,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
     if (coords.length < 2) return []; // need at least 2 pts
 
     const hostilityColor = readHostilityColor(feature);
-    // Test the affiliation, not the colour string. `hostilityColor` is a colour resolved
+    // Test the affiliation, not the color string. `hostilityColor` is a color resolved
     // at stamp time, so once the palette became mode-dependent a string compare would
     // both miss a feature stamped in the other mode and be one refactor away from
     // matching some unrelated red.
@@ -800,7 +872,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: startOutsideRight ? GAP_PX : -GAP_PX - textWidth,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -817,7 +889,7 @@ export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelTe
                 textBaseline: 'middle',
                 offsetX: endOutsideRight ? GAP_PX + textWidth : -GAP_PX,
                 stroke: getHaloStroke(),
-                fill: new Fill({color: getLabelFillColor()}),
+                fill: new Fill({color: labelFillFor(feature)}),
                 scale: scale,
             }),
         }),
@@ -860,7 +932,7 @@ export function passageLaneGraphicStyle(): StyleFunction {
  * Recomputes the gap around the "IN" label on every render using the live
  * resolution, keeping the gap constant in screen pixels regardless of zoom.
  *
- * NOTE: OL geometry is in EPSG:3857 (projected metres), so gap math must use
+ * NOTE: OL geometry is in EPSG:3857 (projected meters), so gap math must use
  * plain Euclidean vectors — NOT turf/GeometryService geographic helpers.
  */
 /** **Ported.** @see movementPaints.ts, `infiltrationGraphicPaint`. */
@@ -891,7 +963,7 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
  * used to derive scale — so the label stays proportional at every zoom level.
  * Font is declared at 24px; scale = (spanPx * 0.7) / 24.
  */
-function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
+function graphicProportionalLabel(feature: FeatureLike | undefined, c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
     const [x0, y0] = c0;
     const [x1, y1] = c1;
     const dx = x1 - x0, dy = y1 - y0;
@@ -904,7 +976,7 @@ function graphicProportionalLabel(c0: Coordinate, c1: Coordinate, resolution: nu
         text: new Text({
             text,
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             rotation,
             textAlign,
             textBaseline: 'middle',
@@ -943,9 +1015,13 @@ const MOVEMENT_LABEL_PAINTS: Partial<Record<TacticalGraphicName, () => (f: Paint
     [TacticalGraphicName.MobileDefense]: mobileDefenseLabelPaint,
     [TacticalGraphicName.TurningMovement]: turningMovementLabelPaint,
     [TacticalGraphicName.FrontalAttack]: frontalAttackLabelPaint,
+    [TacticalGraphicName.AvenueOfApproach]: avenueOfApproachLabelPaint,
     [TacticalGraphicName.Counterattack]: counterattackLabelPaint,
+    // The by-fire variant carries the same `CATK` amplifier; only the line work differs.
+    [TacticalGraphicName.CounterattackByFire]: counterattackLabelPaint,
     [TacticalGraphicName.AviationAxisOfAdvance]: aviationAxisLabelPaint,
     [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: attackHelicopterAxisLabelPaint,
+    [TacticalGraphicName.AdvanceToContact]: advanceToContactLabelPaint,
 };
 
 /** The four that share the axis-of-advance layout, which needs its own name. */
@@ -962,7 +1038,7 @@ function movementLabelPaintFor(name: TacticalGraphicName) {
 }
 
 function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution: number) {
-    let primaryLabel = label.label ?? '';
+    let primaryLabel = label.designation ?? '';
     let dateLabel = getDateLabel(label);
     const geom = f.getGeometry() as MultiPoint;
     if (!geom) return [];
@@ -970,7 +1046,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
     if (!coords || coords.length < 2) return [];
 
     const styles: Style[] = [];
-    styles.push(graphicProportionalLabel(coords[0], coords[1], resolution, primaryLabel));
+    styles.push(graphicProportionalLabel(f, coords[0], coords[1], resolution, primaryLabel));
 
     if (!!dateLabel) {
         // Shift one span-width along line direction for date label offset
@@ -979,7 +1055,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
         const dx = x1 - x0, dy = y1 - y0;
         const dc0: Coordinate = [x0 + dx, y0 + dy];
         const dc1: Coordinate = [x1 + dx, y1 + dy];
-        styles.push(graphicProportionalLabel(dc0, dc1, resolution, dateLabel));
+        styles.push(graphicProportionalLabel(f, dc0, dc1, resolution, dateLabel));
     }
 
     return styles;
@@ -989,7 +1065,7 @@ function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution:
  * Downward nudge, in screen pixels per unit of label scale, that puts a capital
  * letter's *ink* on the line rather than its em box. @see clearStyleFunc
  */
-const OPTICAL_CENTRE_PX_PER_SCALE = 2.2;
+const OPTICAL_CENTER_PX_PER_SCALE = 2.2;
 
 /** **Ported.** @see blockPaints.ts, `clearPaint`. */
 export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFunction {
@@ -1090,7 +1166,7 @@ function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: nu
  * 4 — at `lineWidth: 1` the "thinner" decoration came out *thicker* than the line it
  * decorates. Floors at 1 so it never vanishes, which also stops it from crossing over.
  */
-/** Centreline of the arrow row nearest the route. */
+/** Centerline of the arrow row nearest the route. */
 /** Row-to-row pitch for the two-way pair. */
 /** Clear space either side of the ALT word before its arrows start. */
 /**
@@ -1185,7 +1261,7 @@ export function blockStyleFunc(label: string): StyleFunction {
 }
 
 /**
- * The whole geometry in one hostility-coloured stroke, no label. Both
+ * The whole geometry in one hostility-colored stroke, no label. Both
  * fire-position symbols are shape-only in FM 1-02.2 table 6-1 — the bracket and
  * the arrows *are* the symbol, there is no letter to render — and every sub-line
  * they emit is part of the same pen line, so a single Style keeps the bar, the
@@ -1247,7 +1323,7 @@ export function engineerWorkLineStyle(name: TacticalGraphicName): StyleFunction 
  *
  * They used to be baked into the geometry by the generator, sized from the drawing
  * resolution — 15 px at whatever zoom the graphic happened to be drawn at, then fixed in
- * metres, so they grew on screen as the map zoomed in and shrank to nothing zoomed out.
+ * meters, so they grew on screen as the map zoomed in and shrank to nothing zoomed out.
  * That also made the obstacle line's label clearance a measuring exercise: with teeth of
  * unknown map-unit height, the label had to scan the rendered geometry to find out how
  * far to stand off. A constant in pixels needs no measuring.
@@ -1352,7 +1428,7 @@ const ARROWHEAD_MAX_SHARE = 0.25;
 /**
  * Redraws a generator-emitted solid arrowhead at a fixed screen size.
  *
- * The generators build their heads in metres — Fix's off the drawn line's length,
+ * The generators build their heads in meters — Fix's off the drawn line's length,
  * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
  * — so resizing the graphic resized the head, and Turn's swelled on screen as you
  * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
@@ -1430,10 +1506,10 @@ function offsetPath(path: Coordinate[], sideSign: number, offsetMap: number): Co
     const total = pathLength(path);
     if (total === 0) return path;
 
-    let travelled = 0;
+    let traveled = 0;
     return path.map((point, i) => {
-        if (i > 0) travelled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
-        const {dir} = pathPointAt(path, Math.min(travelled, total));
+        if (i > 0) traveled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(traveled, total));
         return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as Coordinate;
     });
 }
@@ -1494,7 +1570,7 @@ function pathLength(path: Coordinate[]): number {
 }
 
 /**
- * Tooth dimensions in map units for one path, honouring the cap.
+ * Tooth dimensions in map units for one path, honoring the cap.
  *
  * `available` is what the teeth have to fit inside: the smaller side of a closed ring's
  * extent, or the length of an open one — a horizontal line's extent has no height, so
@@ -1610,7 +1686,7 @@ export function defaultStyleFunc(): StyleFunction {
 
 /**
  * BaseDefenseZone label: hardcoded "BDZ" centered on the circle, scaled so
- * the text grows/shrinks with the circle. The circle's radius (in metres)
+ * the text grows/shrinks with the circle. The circle's radius (in meters)
  * is read from `feature.get('graphicSize')` — `MissionTaskGraphicBase`
  * stamps it on the label feature each time the geometry updates.
  *
@@ -1647,6 +1723,18 @@ export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunct
 }
 
 /**
+ * Abatis: a drawn route carrying one fixed-size chevron. The whole symbol is in the
+ * geometry, so a plain stroke draws it.
+ *
+ * It cannot fall through to `defaultLineStyle`, which returns nothing at all for a
+ * MultiLineString — that is what left the obstacle invisible when it stopped being
+ * point-anchored. **Ported.** @see paintFunctions.ts, `plainOutlinePaint`.
+ */
+export function abatisStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(plainOutlinePaint(), name);
+}
+
+/**
  * FortifiedLine: a continuous baseline plus rectangular teeth (merlons)
  * bumping up from it. Geometry is a MultiLineString — sub-line [0] is the
  * baseline, sub-lines [1..N] are each tooth as 4 points (leftBase, leftTop,
@@ -1654,6 +1742,83 @@ export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunct
  * (when set) sits below the baseline midpoint so the teeth above don't
  * overlap it.
  */
+/** The two minimum safe distance zones. @see boundaryBreakPaints.ts, `nestedZonePaint` */
+export function nestedZoneStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(nestedZonePaint(), name);
+}
+
+/** The point airfield's crossed arms. @see airfieldPaints.ts, `airfieldPointPaint` */
+export function airfieldPointStyleFunc(): StyleFunction {
+    return asStyleFunction(airfieldPointPaint(), TacticalGraphicName.Airfield);
+}
+
+/** Its designation, beside the runway rather than through it. */
+export function airfieldPointLabelStyleFn(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(airfieldPointLabelPaint(name), name);
+}
+
+/** The three obstacle bypasses. @see obstacleBypassPaints.ts */
+export function obstacleBypassStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(obstacleBypassPaint(name), name);
+}
+
+/**
+ * Escort and demonstration. @see escortAndDemonstrationPaints.ts
+ *
+ * The escort carries a host-injected unit symbol in the break in its bar, like the security
+ * operations carry one between their arms — but sized from the bar rather than from the
+ * global setting, so the graphic and the symbol scale together. @see escortSymbolStyle
+ */
+export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const paint = name === TacticalGraphicName.Escort
+        ? escortPaint(getLabel(name))
+        : demonstrationPaint(getLabel(name));
+    const styled = asStyleFunction(paint, name);
+    if (name !== TacticalGraphicName.Escort) return styled;
+
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = escortSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
+}
+
+/** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
+export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
+}
+
+/** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
+export function endGlyphLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(
+        name === TacticalGraphicName.DecisionLine ? decisionLinePaint() : mobilityCorridorPaint(),
+        name,
+    );
+}
+
+/**
+ * APP-06's five protection lines. @see protectionLinePaints.ts
+ *
+ * One entry point rather than five: the holder switch names the graphic, and every one
+ * of these is `asStyleFunction` over a paint of the same name, so a per-graphic wrapper
+ * would be five identical lines.
+ */
+export function protectionLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    switch (name) {
+        case TacticalGraphicName.MineCluster:
+            return asStyleFunction(mineClusterPaint(), name);
+        case TacticalGraphicName.TripWire:
+            return asStyleFunction(tripWirePaint(), name);
+        case TacticalGraphicName.RaftSite:
+            return asStyleFunction(raftSitePaint(), name);
+        case TacticalGraphicName.FortifiedPosition:
+            return asStyleFunction(fortifiedPositionPaint(), name);
+        default:
+            return asStyleFunction(minelinePaint(name), name);
+    }
+}
+
 /** **Ported.** @see obstaclePaints.ts, `fortifiedLinePaint`. */
 export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(fortifiedLinePaint(name), name);
@@ -1668,7 +1833,7 @@ export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction
  * `decorationScale`, so they shrink once they would swamp a short line and drop out
  * entirely below `DECORATION_MIN_PX`, leaving the plain wire behind.
  *
- * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
+ * All the maths is Euclidean on EPSG:3857 meters. Nothing here may call turf.
  */
 
 /**
@@ -1698,10 +1863,10 @@ export function fortifiedLineStyleFunc(name: TacticalGraphicName): StyleFunction
  * short to carry them, leaving the bare line.
  *
  * They **touch**: consecutive bases share a corner, and the notch between two teeth is what
- * a mine sits in. The run is centred on the route and always starts and ends with a tooth,
+ * a mine sits in. The run is centered on the route and always starts and ends with a tooth,
  * because a mine with no tooth beside it has no notch to nest in.
  *
- * All the maths is Euclidean on EPSG:3857 metres. Nothing here may call turf.
+ * All the maths is Euclidean on EPSG:3857 meters. Nothing here may call turf.
  */
 /** **Ported.** @see obstaclePaints.ts, `antiTankDitchPaint`. */
 export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction {
@@ -1760,8 +1925,8 @@ export function boundariesStyleFunc(): StyleFunction {
 }
 
 function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    const topLabel = formatFullLabel(labels.label, labels.countryCode ?? '');
-    const botLabel = formatFullLabel(labels.secondId ?? '', labels.secondCountryCode ?? '');
+    const topLabel = formatFullLabel(labels.designation, labels.countryCode ?? '');
+    const botLabel = formatFullLabel(labels.secondDesignation ?? '', labels.secondCountryCode ?? '');
     return (f, resolution) => {
         const geom = f.getGeometry() as MultiPoint;
         const coords = geom.getCoordinates();
@@ -1873,7 +2038,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: topLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1888,7 +2053,7 @@ function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
                 text: new Text({
                     text: botLabel,
                     font: fontStyle,
-                    fill: new Fill({color: getLabelFillColor()}),
+                    fill: new Fill({color: labelFillFor(f)}),
                     rotation: rotation,
                     textAlign: 'center',
                     textBaseline: 'middle',
@@ -1944,12 +2109,47 @@ export function getDateLabel(graphicLabels: GraphicLabels): string {
     return '';
 }
 
+/**
+ * The area families whose label layout lives **only** in the shared paint layer.
+ *
+ * `getAreaLabelStylesFromLabels` below is this engine's own switch, and it is still the
+ * route for most areas — the port is not finished. But a layout written for the paint
+ * registry and not also written here renders on MapLibre and not on OpenLayers, which is
+ * exactly the asymmetry the shared layer exists to prevent: measured on a hostile joint
+ * tactical action area, MapLibre drew `JTAA - 02` with `ENY` on both flanks and this
+ * engine drew `JTAA 02` with neither.
+ *
+ * So these names are read from the registry instead. The list is the porting front, and it
+ * shrinks to nothing when the switch does. @see areaLabelPainterFor
+ */
+const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
+    // The three PsyOps zones were the first graphic this list was written for and the
+    // first one it missed: the case here passed `psyOpsMarkPaint(() => [])`, an empty
+    // base, so the speaker and its amplifiers drew and the date-time group outside the
+    // upper-left corner — which the registry's base draws — never appeared on this engine.
+    TacticalGraphicName.PsyOpsZoneIrregular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+    TacticalGraphicName.PsyOpsZoneCircular,
+    TacticalGraphicName.JointTacticalActionArea,
+    TacticalGraphicName.SubmarineActionArea,
+    TacticalGraphicName.SubmarineGeneratedActionArea,
+    TacticalGraphicName.AreaGeneric,
+    TacticalGraphicName.HumanTerrain,
+    TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
+    // The Sector 1 / Sector 2 / field H stack. @see sectorModifierPaints
+    TacticalGraphicName.LimitedAccessArea,
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+];
+
 export function getAreaLabelStylesFn(name: TacticalGraphicName): StyleFunction {
+    const painted = PAINT_LAYER_AREA_LABELS.includes(name) ? getPaintFunction(name)?.label : undefined;
+    if (painted) return asStyleFunction(painted, name);
     return (f, resolution) => getAreaLabelStylesFromLabels(name, readGraphicLabels(f))(f, resolution);
 }
 
 function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const fullLabel = getFullLabel(name, labels.label ?? '');
+    const fullLabel = getFullLabel(name, labels.designation ?? '');
     const dateLabel = getDateLabel(labels);
     switch (name) {
         case TacticalGraphicName.HighDensityAirspaceControlZone:
@@ -1957,6 +2157,12 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:
         case TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone:
         case TacticalGraphicName.WeaponEngagementZone:
+        // **171400 was missing from this list until 2026-08-26**, so the fighter
+        // engagement zone alone among the eleven fell through to `default:` and drew the
+        // ordinary area block — `FEZ ALPHA` over a date range, with the altitudes its own
+        // dialog collects rendered nowhere. MapLibre had it right the whole time, because
+        // it reads `AIR_COORDINATING_ZONES` from the registry. @see airZoneParity.test.ts
+        case TacticalGraphicName.FighterEngagementZone:
         case TacticalGraphicName.JointEngagementZone:
         case TacticalGraphicName.MissileEngagementZone:
         case TacticalGraphicName.LowAltitudeMissileEngagementZone:
@@ -1969,8 +2175,52 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirSpaceCoordinationAreaIrregular:
         case TacticalGraphicName.AirSpaceCoordinationAreaCircular:
             return airspaceCoordinationAreaStyle(name);
-        case TacticalGraphicName.Airfield:
+        case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // The row of mines rides the label feature, like the loudspeaker below it.
+        case TacticalGraphicName.MinefieldDynamicDepiction:
+        case TacticalGraphicName.MinedAreaFenced:
+            return asStyleFunction(mineFillPaint(), name);
+        // The loudspeaker rides the label feature; the outline belongs to the polygon.
+        // The dose goes in the break and nowhere else, so there is no centre block under
+        // it — the base painter draws nothing rather than repeating the text.
+        case TacticalGraphicName.RadiationDoseRateContourLine:
+            return asStyleFunction(contourLineLabelPaint(() => []), name);
+        case TacticalGraphicName.ArtilleryManeuverArea:
+        case TacticalGraphicName.ArtilleryReservedArea:
+            return asStyleFunction(
+                cardinalLabelPaint(
+                    CARDINAL_LABEL_AREAS.find(([area]) => area === name)![1],
+                    // No literal in the middle: it is already in the boundary, four times
+                    // over. @see areaDefaultLabelPaint
+                    areaDefaultLabelPaint(name, false),
+                ),
+                name,
+            );
+        case TacticalGraphicName.BiologicalContaminatedArea:
+        case TacticalGraphicName.ChemicalContaminatedArea:
+        case TacticalGraphicName.NuclearContaminatedArea:
+        case TacticalGraphicName.RadiologicalContaminatedArea:
+            return asStyleFunction(
+                cbrnMarkPaint(
+                    CBRN_AREAS.find(([cbrn]) => cbrn === name)![1],
+                    areaDefaultLabelPaint(name),
+                ),
+                name,
+            );
+        // The three toxic-industrial-material subtypes: the same triangle with a T in the
+        // bottom of it. @see CBRN_TOXIC_AREAS
+        case TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial:
+        case TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial:
+            return asStyleFunction(
+                cbrnMarkPaint(
+                    CBRN_TOXIC_AREAS.find(([cbrn]) => cbrn === name)![1],
+                    areaDefaultLabelPaint(name),
+                    {toxic: true},
+                ),
+                name,
+            );
         case TacticalGraphicName.NoFireAreaRectangular:
         case TacticalGraphicName.NoFireAreaCircular:
         case TacticalGraphicName.NoFireAreaIrregular:
@@ -1997,6 +2247,14 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
+        // **Six more that were missing from this list until 2026-08-26**, found by the
+        // routing comparison the fighter engagement zone prompted. @see areaLabelRouting.test.ts
+        case TacticalGraphicName.TargetBuildUpAreaRectangular:
+        case TacticalGraphicName.TargetBuildUpAreaCircular:
+        case TacticalGraphicName.TargetValueAreaRectangular:
+        case TacticalGraphicName.TargetValueAreaCircular:
+        case TacticalGraphicName.ZoneOfResponsibilityRectangular:
+        case TacticalGraphicName.ZoneOfResponsibilityCircular:
         case TacticalGraphicName.CensorZoneRectangular:
         case TacticalGraphicName.CensorZoneCircular:
         case TacticalGraphicName.CallForFireZoneRectangular:
@@ -2007,12 +2265,16 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.BlueKillBoxCircular:
         case TacticalGraphicName.PurpleKillBoxRectangular:
         case TacticalGraphicName.PurpleKillBoxCircular:
-            // Prefix over name, centred; the two DTGs outside the bounding box's
+            // Prefix over name, centered; the two DTGs outside the bounding box's
             // upper-left. A rectangle's corner is a real vertex and a circle has none,
             // so the box is the right anchor for both.
             return asStyleFunction(zoneLabelPaint(name, false), name);
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneIrregular:
+        // The irregular half of the same six.
+        case TacticalGraphicName.TargetBuildUpAreaIrregular:
+        case TacticalGraphicName.TargetValueAreaIrregular:
+        case TacticalGraphicName.ZoneOfResponsibilityIrregular:
         case TacticalGraphicName.CensorZoneIrregular:
         case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.DeadSpaceAreaIrregular:
@@ -2031,10 +2293,14 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaCircular:
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
-        case TacticalGraphicName.LimitedAccessArea:
             return asStyleFunction(areaLabelStackPaint(name), name);
+        // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
+        // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been
+        // reading `areaDefaultLabelPaint` all along, so the two engines were drawing the same
+        // label through two implementations — and only one of them could be given the cap
+        // that keeps a designation inside its own outline. @see fitLabelScale
         default:
-            return getAreaLabelFn(fullLabel, dateLabel);
+            return asStyleFunction(areaDefaultLabelPaint(name), name);
     }
 }
 
@@ -2042,7 +2308,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
 /**
  * Points along the two runway strokes, in unscaled path units, used to test the
  * symbol against the polygon outline. Endpoints alone are not enough: both arms
- * pass through the centre, so a notch can cut a stroke without containing either
+ * pass through the center, so a notch can cut a stroke without containing either
  * of its ends.
  */
 
@@ -2050,7 +2316,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
  * Ray-cast point-in-polygon.
  *
  * Deliberately hand-rolled: a style function receives **projected EPSG:3857
- * metres**, and turf expects geographic degrees, so `booleanPointInPolygon`
+ * meters**, and turf expects geographic degrees, so `booleanPointInPolygon`
  * would quietly give wrong answers here. @see conventions.md
  */
 function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
@@ -2066,7 +2332,7 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
 
 /**
  * How much to scale the crossed-runway symbol so it is proportional to the area
- * it marks rather than a fixed number of metres — a USA-sized airfield used to
+ * it marks rather than a fixed number of meters — a USA-sized airfield used to
  * carry the same ~400 km cross as a runway-sized one, which read as a tiny "x".
  *
  * Two stages, because the bounding box is not the polygon:
@@ -2081,44 +2347,6 @@ function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
 /** **Ported.** @see airfieldPaints.ts, `airfieldPaint`. */
 export function getAirfieldStyle(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(airfieldPaint(areaDefaultLabelPaint(name)), name);
-}
-
-export function getAreaLabelStyles(feature: FeatureLike, resolution: number, textLabel: string, dateLabel: string, rotation: number, offsetY: number = 0) {
-    const geom = feature.getGeometry() as Point;
-    let styles = [];
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: textLabel,
-            font: fontStyle,
-            offsetY: offsetY,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            stroke: getHaloStroke(),
-        }),
-    }));
-
-    styles.push(new Style({
-        geometry: geom,
-        text: new Text({
-            rotation: rotation,
-            text: dateLabel,
-            font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
-            scale: featureLabelScale(feature, resolution),
-            offsetY: 18 + offsetY,
-            stroke: getHaloStroke(),
-        }),
-    }));
-    return styles;
-}
-
-export function getAreaLabelFn(textLabel: string, dateLabel: string, rotation: number = 0): StyleFunction {
-    return (feature: FeatureLike, resolution: number) => {
-        return getAreaLabelStyles(feature, resolution, textLabel, dateLabel, rotation);
-    };
 }
 
 /**
@@ -2222,12 +2450,12 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  *
  * Sub-line layout, written by `CrossedMissionTask.generateGraphics`:
  *   `[0]` first arm, `[1]` second arm, `[2…]` arrowheads.
- * The arms arrive whole, running right through the centre; the gap for the
+ * The arms arrive whole, running right through the center; the gap for the
  * label is opened here, sized from the glyph that actually renders. Baking it
  * into the geometry would be a second place to keep in step with the label's
  * scale formula.
  *
- * The whole symbol is also **scaled about its centre onto the screen**, so it
+ * The whole symbol is also **scaled about its center onto the screen**, so it
  * renders `CROSSED_HALF_WIDTH_PX × 2` wide at every zoom level — it neither
  * grows on zoom-in nor recedes on zoom-out. Nothing about the stored `size`
  * survives that: the scale factor divides it straight back out. It has to
@@ -2257,7 +2485,7 @@ const TURN_LABEL_PAD_PX = 5;
 
 /**
  * Drops `distance` map units off the far end of a polyline, interpolating the
- * new last vertex. Euclidean — these are projected EPSG:3857 metres.
+ * new last vertex. Euclidean — these are projected EPSG:3857 meters.
  * Returns fewer than two points when the line is shorter than the trim.
  */
 function trimFromEnd(coords: number[][], distance: number): Coordinate[] {
@@ -2706,7 +2934,7 @@ export function battlePositionStyleFunction(labels: GraphicLabels, feature: Feat
 }
 
 /**
- * The affiliation colour table, the doctrinal lookup and `withOpacity` now live in the
+ * The affiliation color table, the doctrinal lookup and `withOpacity` now live in the
  * map-agnostic half (`core/symbology.ts`) and are re-exported from the import block at
  * the top of this file. Nothing about "hostile line work is red" is an OpenLayers fact,
  * and a second renderer that cannot reach the table has to restate it.
@@ -2788,6 +3016,10 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
+    // APP-06 151202 — the same outline and echelon, broken whatever the status says.
+    if (name === TacticalGraphicName.BattlePositionPreparedButNotOccupied) {
+        return asStyleFunction(battlePositionPaint({alwaysDashed: true}), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.UnexplodedExplosiveOrdnanceArea) return unexplodedExplosiveOrdenanceStyle(feature, resolution);
     // ── Ported to the paint layer ────────────────────────────────────────────
     // Every branch below is `asStyleFunction(...)` over a paint function, so the
@@ -2800,6 +3032,41 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     }
     if (name === TacticalGraphicName.FortifiedArea) {
         return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
+    }
+    // APP-06 242600 note 1: broken line in *all* status depictions, so the dash belongs
+    // to the symbol rather than to `plannedDash`.
+    if (name === TacticalGraphicName.ZoneOfFire) {
+        return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
+    }
+    // The yellow hatch; the triangle and its letter ride the label feature below. The
+    // toxic-industrial-material subtypes hatch identically — the T is on the label.
+    if (CBRN_AREAS.some(([cbrn]) => cbrn === name) || CBRN_TOXIC_AREAS.some(([cbrn]) => cbrn === name)) {
+        return asStyleFunction(cbrnContaminatedAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
+        return asStyleFunction(minefieldAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinedAreaFenced) {
+        return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);
+    }
+    if (PSYOPS_ZONES.includes(name)) {
+        return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);
+    }
+    // One break at the top, holding the dose the operator typed.
+    if (name === TacticalGraphicName.RadiationDoseRateContourLine) {
+        return asStyleFunction(contourLineBoundaryPaint(), name)(feature, resolution);
+    }
+    // The outline broken at four cardinal points; the abbreviation fills each break.
+    const cardinal = CARDINAL_LABEL_AREAS.find(([area]) => area === name);
+    if (cardinal) {
+        return asStyleFunction(cardinalBoundaryPaint(cardinal[1]), name)(feature, resolution);
+    }
+    // The pair APP-06 tells apart by hatch texture alone. @see hatchTileSegments
+    if (name === TacticalGraphicName.RestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.SeverelyRestrictedTerrain) {
+        return asStyleFunction(restrictedTerrainPaint({dense: true}), name)(feature, resolution);
     }
     if (
         name === TacticalGraphicName.ObstacleBelt ||
@@ -2862,7 +3129,7 @@ export function createAirCoordinatingAreaLabelStyle(
     // ── Name / identifier block ───────────────────────────────────────────────
     const nameLines: string[] = [];
     if (identifier?.trim()) nameLines.push(identifier.trim());
-    if (labels.label?.trim()) nameLines.push(labels.label.trim());
+    if (labels.designation?.trim()) nameLines.push(labels.designation.trim());
 
     // ── Alt / time block — pad label to 11 chars for rough column alignment ───
     const altLines: string[] = [];
@@ -2889,7 +3156,7 @@ export function createAirCoordinatingAreaLabelStyle(
         text: new Text({
             text: allLines.join('\n'),
             font: fontStyle,
-            fill: new Fill({color: getLabelFillColor()}),
+            fill: new Fill({color: labelFillFor(feature)}),
             stroke: getHaloStroke(),
             padding: hasHatchPattern ? [4, 8, 4, 8] : undefined,
             textAlign: 'left',

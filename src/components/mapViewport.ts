@@ -2,15 +2,15 @@
  * # Where the map is looking, shared between the two engines
  *
  * Switching renderers rebuilds the map from nothing, so without this the new engine
- * opens at the library's default centre and zoom and the user has to find their way
+ * opens at the library's default center and zoom and the user has to find their way
  * back to what they were looking at. The graphics already cross the switch; the view
  * onto them should too.
  *
- * ## Centre and resolution, not centre and zoom
+ * ## Center and resolution, not center and zoom
  *
  * A zoom *number* is not portable: MapLibre's tiles are 512 px and OpenLayers' are
  * 256, so the same view is `z` in one engine and `z - 1` in the other, and storing
- * the raw number would halve or double the scale on every switch. Metres per CSS
+ * the raw number would halve or double the scale on every switch. Meters per CSS
  * pixel is the same quantity in both — it is what the whole paint layer is already
  * expressed in — so it converts cleanly at each end. Together with the container
  * size, which both engines share, it also fixes the bounds.
@@ -27,7 +27,7 @@
 export interface MapViewport {
     lon: number;
     lat: number;
-    /** Metres per CSS pixel. @see resolutionOf */
+    /** Meters per CSS pixel. @see resolutionOf */
     resolution: number;
 }
 
@@ -36,7 +36,7 @@ const LS_VIEWPORT = 'tg_viewport';
 /**
  * The stored viewport, or `undefined` if there is none or it is unusable.
  *
- * Validated rather than trusted: this is user-writable storage, and a `NaN` centre
+ * Validated rather than trusted: this is user-writable storage, and a `NaN` center
  * or a zero resolution does not fail loudly — it produces a blank map with no error,
  * which is a bad afternoon. Latitude is bounded by Mercator's own limit.
  */

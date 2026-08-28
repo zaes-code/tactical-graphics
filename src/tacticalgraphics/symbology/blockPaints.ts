@@ -24,12 +24,11 @@ import {
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
-    getLabelFillColor,
     getLabelHaloColor,
     graphicLabelScale,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf} from './paintFunctions';
+import {lineColorOf, labelColorOf} from './paintFunctions';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -37,14 +36,14 @@ type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * Downward nudge, in screen pixels per unit of label scale, that puts a capital
  * letter's *ink* on the line rather than its em box.
  *
- * `baseline: 'middle'` centres the font's em box on the anchor, not the capital's
- * ink, so the letter renders high and the line looks as if it passes below centre.
+ * `baseline: 'middle'` centers the font's em box on the anchor, not the capital's
+ * ink, so the letter renders high and the line looks as if it passes below center.
  * Measured on the rendered glyph the error is 2.2 px per unit of scale — a
- * font-metric artefact, hence proportional. OpenLayers applies `offsetY` in raw
+ * font-metric artifact, hence proportional. OpenLayers applies `offsetY` in raw
  * screen pixels and does **not** multiply it by `scale`, so the scale is applied
  * here.
  */
-const OPTICAL_CENTRE_PX_PER_SCALE = 2.2;
+const OPTICAL_CENTER_PX_PER_SCALE = 2.2;
 
 /** Flat half-gap used by breach and clear, in screen pixels. */
 const FLAT_GAP_PX = 10;
@@ -59,31 +58,31 @@ function subLines(feature: PaintFeature): ProjectedPosition[][] {
     return [];
 }
 
-/** The label mark set in a gap, with the optical-centre correction applied. */
+/** The label mark set in a gap, with the optical-center correction applied. */
 function gapLabel(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
-    opticalCentre: boolean,
+    opticalCenter: boolean,
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
             font: RATIO_LOCKED_LABEL_FONT,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
             baseline: 'middle',
-            offsetYPx: opticalCentre ? OPTICAL_CENTRE_PX_PER_SCALE * scale : undefined,
+            offsetYPx: opticalCenter ? OPTICAL_CENTER_PX_PER_SCALE * scale : undefined,
             scale,
         },
     };
 }
 
-/** Cuts a gap of `halfGapMap` metres at fraction `t` along `p1`→`p2`. */
+/** Cuts a gap of `halfGapMap` meters at fraction `t` along `p1`→`p2`. */
 function cutGap(
     p1: ProjectedPosition,
     p2: ProjectedPosition,
@@ -123,7 +122,7 @@ export function breachPaint(label: string): BlockPaint {
         const {before, after, middle} = cutGap(opening[0], opening[1], 0.5, FLAT_GAP_PX * context.resolution);
         outline.push(before, after);
 
-        if (label) paints.push(gapLabel(middle, label, scale, 0, false));
+        if (label) paints.push(gapLabel(feature, middle, label, scale, 0, false));
 
         paints.push({
             geometry: {type: 'MultiLineString', coordinates: outline},
@@ -138,7 +137,7 @@ export function breachPaint(label: string): BlockPaint {
  * prong.
  *
  * `t` is where along that prong the letter sits — 0.6 for Clear, 0.75 for Disrupt,
- * which is what centres the "D" on the middle prong given that it spans 0.5 to 1.0
+ * which is what centers the "D" on the middle prong given that it spans 0.5 to 1.0
  * of the user's drawn base.
  */
 export function clearPaint(label: string, t = 0.6): BlockPaint {
@@ -156,7 +155,7 @@ export function clearPaint(label: string, t = 0.6): BlockPaint {
             const scale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
             const {before, after, middle} = cutGap(mid[0], mid[1], t, FLAT_GAP_PX * context.resolution);
             outline.push(before, after);
-            paints.push(gapLabel(middle, label, scale, uprightRotation(mid[0], mid[1]), true));
+            paints.push(gapLabel(feature, middle, label, scale, uprightRotation(mid[0], mid[1]), true));
         }
 
         paints.push({
@@ -198,11 +197,11 @@ export function blockPaint(label: string): BlockPaint {
         const minProj = Math.min(...projected);
         const maxProj = Math.max(...projected);
         const span = maxProj - minProj;
-        const normalised = projected.map(d => (span === 0 ? 0 : (d - minProj) / span));
+        const normalized = projected.map(d => (span === 0 ? 0 : (d - minProj) / span));
 
         let midIndex = 0;
-        for (let i = 0; i < normalised.length - 1; i++) {
-            if (normalised[i] <= 0.5 && normalised[i + 1] >= 0.5) {
+        for (let i = 0; i < normalized.length - 1; i++) {
+            if (normalized[i] <= 0.5 && normalized[i + 1] >= 0.5) {
                 midIndex = i;
                 break;
             }
@@ -214,8 +213,8 @@ export function blockPaint(label: string): BlockPaint {
 
         const p1 = coords[midIndex];
         const p2 = coords[midIndex + 1];
-        const denom = normalised[midIndex + 1] - normalised[midIndex];
-        const t = denom === 0 ? 0.5 : (0.5 - normalised[midIndex]) / denom;
+        const denom = normalized[midIndex + 1] - normalized[midIndex];
+        const t = denom === 0 ? 0.5 : (0.5 - normalized[midIndex]) / denom;
 
         const paints: Paint[] = [];
 
@@ -228,7 +227,7 @@ export function blockPaint(label: string): BlockPaint {
                 * context.resolution;
             const {before, after, middle} = cutGap(p1, p2, t, halfGapMap);
             outline.push(before, after);
-            paints.push(gapLabel(middle, label, scale, uprightRotation(p1, p2), false));
+            paints.push(gapLabel(feature, middle, label, scale, uprightRotation(p1, p2), false));
         }
 
         paints.push({

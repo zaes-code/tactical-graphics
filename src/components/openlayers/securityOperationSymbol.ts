@@ -1,5 +1,5 @@
 /**
- * The 2525E point symbol that sits at the centre of a security operation.
+ * The 2525E point symbol that sits at the center of a security operation.
  *
  * Cover, Guard and Screen each render a unit symbol between their two arms. That
  * symbol is a *single-point* icon, which is milsymbol's job and not this
@@ -19,7 +19,7 @@
  *
  * It also buys three things the hardcoded version could not do:
  *
- *   - **Affiliation is honoured.** The old code used one frozen SIDC for all
+ *   - **Affiliation is honored.** The old code used one frozen SIDC for all
  *     three graphics, so a hostile Screen drew a friend-framed symbol. The SIDC
  *     is now derived from the graphic's own `hostility`.
  *   - **The symbol tracks a change.** It was built once at `drawend`, so editing
@@ -29,15 +29,18 @@
  *     milsymbol — its own size, frame, fill or icon conventions — gets the same
  *     symbol here as everywhere else on its map, instead of ours.
  *
- * Registering nothing is a supported state: the arms and labels draw, the centre
+ * Registering nothing is a supported state: the arms and labels draw, the center
  * is simply empty.
  */
 import {Feature} from 'ol';
+import type {FeatureLike} from 'ol/Feature';
+import {LineString, Point} from 'ol/geom';
 import {Icon, Style} from 'ol/style';
 import {StyleFunction} from 'ol/style/Style';
 import {
     TacticalGraphicHostility,
     TacticalGraphicName,
+    escortSymbolSizePx,
     getGraphicSecuritySymbolProvider,
     getSecuritySymbolProvider,
     securitySymbolSidc,
@@ -82,7 +85,7 @@ export interface SecurityOperationSymbolRequest {
  * The middle ground between the two original return types. A bare string is
  * sized by {@link setSecurityOperationSymbolSize}, which is global; overriding it
  * per graphic used to mean returning a whole `Style`, and building a `Style` and
- * an `Icon` — remembering the centring anchor — to change one number is a poor
+ * an `Icon` — remembering the centering anchor — to change one number is a poor
  * trade. Omit `sizePx` and the library's size applies, exactly as for a string.
  */
 export interface SecurityOperationSymbolImage {
@@ -93,19 +96,19 @@ export interface SecurityOperationSymbolImage {
 }
 
 /**
- * Produces the centre symbol. Four shapes, in ascending order of control:
+ * Produces the center symbol. Four shapes, in ascending order of control:
  *
  * - a **string** — used as an image `src`, drawn at the library's size
  * - a **{@link SecurityOperationSymbolImage}** — a `src` plus its own `sizePx`
  * - an **`ol` `Style`** — used verbatim; the library builds no `Icon`, so sizing,
  *   anchoring and everything else are yours
- * - **`undefined`** — draw no centre symbol
+ * - **`undefined`** — draw no center symbol
  */
 export type SecurityOperationSymbolProvider = (
     request: SecurityOperationSymbolRequest,
 ) => Style | string | SecurityOperationSymbolImage | undefined;
 
-/** On-screen size of the centre symbol in CSS pixels, with no host setting. */
+/** On-screen size of the center symbol in CSS pixels, with no host setting. */
 export const DEFAULT_SYMBOL_SIZE_PX = 25;
 
 /**
@@ -119,7 +122,7 @@ export const MAX_SYMBOL_SIZE_PX = 96;
 let symbolSizePx = DEFAULT_SYMBOL_SIZE_PX;
 
 /**
- * Sets how big the centre symbol draws, in CSS pixels, for every security
+ * Sets how big the center symbol draws, in CSS pixels, for every security
  * operation on every map.
  *
  * The size is the *library's*, not the provider's, because the library is what
@@ -139,7 +142,7 @@ export function setSecurityOperationSymbolSize(px: number): void {
     styleCache.clear();
 }
 
-/** The current centre-symbol size in CSS pixels. */
+/** The current center-symbol size in CSS pixels. */
 export function getSecurityOperationSymbolSize(): number {
     return symbolSizePx;
 }
@@ -166,7 +169,7 @@ let provider: SecurityOperationSymbolProvider | undefined;
 /**
  * Registers the provider for every security operation on every map.
  *
- * Global, like `configureTacticalGraphics`, and for the same reason: the centre
+ * Global, like `configureTacticalGraphics`, and for the same reason: the center
  * symbol describes the symbology rather than one view, so a host should not have
  * to say it once per map. Pass `undefined` to go back to drawing no symbol.
  */
@@ -207,7 +210,7 @@ export interface MilsymbolModule {
  * ```
  *
  * `options` is merged into every `ms.Symbol` call, so a host can pass its own
- * `fill`, `monoColor` or frame settings and have the centre symbol match the rest
+ * `fill`, `monoColor` or frame settings and have the center symbol match the rest
  * of its map.
  *
  * **`size` is not how you make the symbol bigger** — use
@@ -257,8 +260,8 @@ const cacheKey = (request: SecurityOperationSymbolRequest): string =>
  * Wraps a provider's `src` in the `Icon` the library builds on its behalf.
  *
  * The anchor is the reason this exists rather than being left to the caller: the
- * symbol sits between the two arms and is centred on the graphic's base point, so
- * it must be anchored at its own centre. A provider that returned a `Style` and
+ * symbol sits between the two arms and is centered on the graphic's base point, so
+ * it must be anchored at its own center. A provider that returned a `Style` and
  * forgot that got a symbol hanging down and to the right of where it belongs.
  *
  * `image.sizePx` wins over the library's when it is given.
@@ -300,7 +303,7 @@ function resolve(request: SecurityOperationSymbolRequest, active: SecurityOperat
         style = produced instanceof Style || produced === undefined ? produced : iconStyle(produced, request.sizePx);
     } catch {
         // A provider that throws — a missing DOM, a SIDC milsymbol rejects — costs
-        // the centre glyph and nothing else. The arms, the labels and every
+        // the center glyph and nothing else. The arms, the labels and every
         // interaction are already in place, and losing the whole graphic over its
         // decoration is not an acceptable trade.
         style = undefined;
@@ -311,7 +314,7 @@ function resolve(request: SecurityOperationSymbolRequest, active: SecurityOperat
 }
 
 /**
- * The StyleFunction for a security operation's centre symbol.
+ * The StyleFunction for a security operation's center symbol.
  *
  * Reads the affiliation off `source` on every render rather than closing over it,
  * so changing a graphic's hostility updates the glyph — the old code built the
@@ -339,7 +342,7 @@ export function securityOperationSymbolStyle(
         // OpenLayers ones are supersets — they may return an `ol` `Style` — and the
         // two shared ones reach both engines from a single call. The shared pair
         // used to be missed entirely on this side: a host that registered only
-        // `setSecuritySymbolProvider` got symbols in MapLibre and an empty centre
+        // `setSecuritySymbolProvider` got symbols in MapLibre and an empty center
         // here, while the README called that call application-wide.
         const active =
             override() ??
@@ -351,4 +354,55 @@ export function securityOperationSymbolStyle(
             active,
         );
     };
+}
+
+/**
+ * The escort's centre symbol: the same provider chain, at a size taken from the bar.
+ *
+ * Separate from {@link securityOperationSymbolStyle} in two ways, both because an escort is
+ * *drawn* where a security operation is *placed*. Its anchor is the middle of the rendered
+ * bar rather than a base point — the generator emits the bar alone, and the break for the
+ * symbol is cut at its midpoint — and its size comes from the bar's on-screen span rather
+ * than the global setting, so the graphic and the symbol scale together.
+ *
+ * The size is `escortSymbolSizePx`, which is also what the paint layer sizes the hole in
+ * the bar from. Reading it from anywhere else is how a symbol ends up not fitting its gap.
+ */
+export function escortSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
+    const geometry = feature.getGeometry();
+    if (!geometry || geometry.getType() !== 'LineString') return undefined;
+    const coords = (geometry as LineString).getCoordinates();
+    if (coords.length < 2) return undefined;
+
+    const start = coords[0];
+    const end = coords[coords.length - 1];
+    const spanPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    if (!(spanPx > 0)) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: TacticalGraphicName.Escort,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securityOperationSidc(hostility),
+            sizePx: escortSymbolSizePx(spanPx),
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
+    // The provider's answer is cached per request, so the returned `Style` is shared
+    // between every escort asking for the same picture at the same size. Give this one its
+    // own geometry rather than mutating the cached style's.
+    const placed = style.clone();
+    placed.setGeometry(new Point([(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]));
+    return placed;
 }

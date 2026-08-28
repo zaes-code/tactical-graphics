@@ -22,6 +22,7 @@ import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {renderTacticalGraphic} from '../core/render';
+import {anchorsFromFrame} from '../core/anchors';
 import {encirclementPaint} from './areaPaints';
 import {crenellatedPath, decorationScale, uprightRotation} from './decorations';
 import {envelopmentLabelPaint} from './movementPaints';
@@ -53,7 +54,7 @@ beforeEach(() => resetTacticalGraphicsConfig());
 describe('the symbology layer needs no DOM', () => {
     it('paints a phase line with no canvas and no map', () => {
         const paints = phaseLinePaint(TacticalGraphicName.PhaseLine)(
-            lineFeature(LONG_LINE, {properties: {name: TacticalGraphicName.PhaseLine, label: 'BLUE'}}),
+            lineFeature(LONG_LINE, {properties: {name: TacticalGraphicName.PhaseLine, designation: 'BLUE'}}),
             context(1000),
         );
 
@@ -69,7 +70,7 @@ describe('the symbology layer needs no DOM', () => {
             lineFeature(LONG_LINE, {
                 properties: {
                     name: TacticalGraphicName.PhaseLine,
-                    label: 'BLUE',
+                    designation: 'BLUE',
                     hostility: TacticalGraphicHostility.hostileFaker,
                 },
             }),
@@ -78,8 +79,8 @@ describe('the symbology layer needs no DOM', () => {
 
         expect(paints[1].text?.text).toBe('ENY PL BLUE');
         expect(paints[0].stroke?.color).toBe('rgba(255, 0, 0, 1)');
-        // The amplifier stays in the label colour — hostile line work goes red, text
-        // does not. @see ai/decisions.md, the hostility colour rule.
+        // The amplifier stays in the label color — hostile line work goes red, text
+        // does not. @see ai/decisions.md, the hostility color rule.
         expect(paints[1].text?.fill).not.toBe('rgba(255, 0, 0, 1)');
     });
 
@@ -149,12 +150,12 @@ describe('obstacle teeth are sized against the shape', () => {
  * graphic was drawn at, so they were a *ground* distance: they grew and shrank with
  * the map while the obstacle belt beside them held its size, and far enough out they
  * degenerated into sub-pixel fuzz along the outline instead of dropping out. These
- * pin the belt's behaviour on them.
+ * pin the belt's behavior on them.
  */
 describe('encirclement teeth are sized against the shape, like the obstacle belt', () => {
     const paintEncirclement = encirclementPaint();
 
-    /** A square ring, `half` metres from centre to edge, anticlockwise. */
+    /** A square ring, `half` meters from center to edge, anticlockwise. */
     const square = (half: number): ProjectedPosition[] => [
         [-half, -half], [half, -half], [half, half], [-half, half], [-half, -half],
     ];
@@ -269,7 +270,7 @@ describe('a mission-task letter is sized by which family it is in', () => {
      * of its hole as the graphic grew, and only at large sizes.
      *
      * So this asserts the letter is **on the drawn segment**, not merely near the right
-     * bearing, and at a size where the old error was metres wide.
+     * bearing, and at a size where the old error was meters wide.
      */
     it('puts the letter on the run as drawn, at every bearing and at size', () => {
         const R = 6378137;
@@ -277,10 +278,13 @@ describe('a mission-task letter is sized by which family it is in', () => {
             [(x * Math.PI * R) / 180, Math.log(Math.tan(Math.PI / 4 + (y * Math.PI) / 360)) * R];
 
         for (const rotation of [0, 30, 45, 90, 135, 200, 270, 300, 359]) {
+            // Envelopment is drawn from anchor points now, so the fixture states the
+            // same frame the dropped version used to and lets `anchorsFromFrame` turn it
+            // into the points APP-06 asks for. @see core/anchors.ts
             const rendered = renderTacticalGraphic({
                 type: 'Feature',
-                geometry: {type: 'Point', coordinates: [0, 0]},
-                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, radius: 900_000, rotation}},
+                geometry: {type: 'LineString', coordinates: anchorsFromFrame([0, 0], 900_000, rotation)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, rotation}},
             } as never)!;
 
             // Sub-line 0 is the straight run the "E" lies along.
@@ -295,13 +299,13 @@ describe('a mission-task letter is sized by which family it is in', () => {
             const at = (painted[0].geometry as {coordinates: ProjectedPosition}).coordinates;
 
             // Distance from the letter to the segment it is cut into. Planar, because
-            // these are projected metres — which is the whole point.
+            // these are projected meters — which is the whole point.
             const dx = b[0] - a[0];
             const dy = b[1] - a[1];
             const t = ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / (dx * dx + dy * dy);
             const offBy = Math.hypot(at[0] - (a[0] + t * dx), at[1] - (a[1] + t * dy));
 
-            // A metre, on a run of some 1800 km. The old placement missed by kilometres.
+            // A meter, on a run of some 1800 km. The old placement missed by kilometers.
             expect(offBy).toBeLessThan(1);
             // And a quarter of the way along it, where the gap is.
             expect(t).toBeCloseTo(0.25, 3);

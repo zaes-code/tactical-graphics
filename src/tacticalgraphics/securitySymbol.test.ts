@@ -1,5 +1,5 @@
 /**
- * # The renderer-neutral centre-symbol registry
+ * # The renderer-neutral center-symbol registry
  *
  * The contract both engines read. It had no tests, which is most of why the two
  * renderers could ask milsymbol for different symbols for a year without anything
@@ -31,7 +31,7 @@ import {
 } from './core/securitySymbol';
 import type {SecuritySymbolRequest} from './core/securitySymbol';
 
-const labels = (over: Partial<GraphicLabels> = {}): GraphicLabels => ({label: '', ...over});
+const labels = (over: Partial<GraphicLabels> = {}): GraphicLabels => ({designation: '', ...over});
 
 const request = (over: Partial<SecuritySymbolRequest> = {}): SecuritySymbolRequest => ({
     name: TacticalGraphicName.Guard,
@@ -49,7 +49,7 @@ afterEach(() => {
 });
 
 describe('registering nothing', () => {
-    it('is a supported state — the centre is simply empty', () => {
+    it('is a supported state — the center is simply empty', () => {
         expect(getSecuritySymbolProvider()).toBeUndefined();
         expect(resolveSecuritySymbol(request())).toBeUndefined();
     });
@@ -112,7 +112,7 @@ describe('what a provider may answer', () => {
         expect(resolveSecuritySymbol(request({sizePx: 25}))?.sizePx).toBe(25);
     });
 
-    it('takes undefined, drawing no centre symbol for that graphic alone', () => {
+    it('takes undefined, drawing no center symbol for that graphic alone', () => {
         setSecuritySymbolProvider(r => (r.name === TacticalGraphicName.Cover ? undefined : 'data:image/svg+xml,x'));
         expect(resolveSecuritySymbol(request({name: TacticalGraphicName.Cover}))).toBeUndefined();
         expect(resolveSecuritySymbol(request({name: TacticalGraphicName.Guard}))).toBeDefined();
@@ -169,7 +169,7 @@ describe('the size', () => {
  *
  * Keyed by id rather than hung on a renderer's object, because that is the only shape
  * both engines can implement: OpenLayers keeps a holder per graphic and MapLibre
- * rebuilds its features from GeoJSON on every realise, with nothing to hang on to.
+ * rebuilds its features from GeoJSON on every realize, with nothing to hang on to.
  */
 describe('a provider bound to one graphic', () => {
     it('wins over the global one, for that graphic only', () => {
@@ -217,7 +217,7 @@ describe('a provider bound to one graphic', () => {
 });
 
 describe('a provider that throws', () => {
-    it('costs the centre symbol and nothing else', () => {
+    it('costs the center symbol and nothing else', () => {
         setSecuritySymbolProvider(() => {
             throw new Error('milsymbol rejected the SIDC');
         });
@@ -229,7 +229,7 @@ describe('a provider that throws', () => {
 /**
  * The revision is a *pull* — a renderer notices it is stale next time it looks. That
  * suits OpenLayers, whose style functions re-run on the next draw, and not MapLibre,
- * which realises its sources on zoom and would otherwise show the old symbol until
+ * which realizes its sources on zoom and would otherwise show the old symbol until
  * something unrelated moved the map.
  */
 describe('the change notification', () => {

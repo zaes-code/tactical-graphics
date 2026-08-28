@@ -16,6 +16,8 @@
  * the graphic from the one part of it that does not move.
  */
 
+import type {Position} from 'geojson';
+import {anchorsForHook} from './core/anchors';
 import {handleContract, handleRole, supportsMirror} from './core/handles';
 import {baseGeometryFor, listTacticalGraphicNames, renderTacticalGraphic, toFeatureCollection} from './index';
 import {TacticalGraphicName} from './core/type';
@@ -128,11 +130,24 @@ describe('mirroring', () => {
  * the bulge stays east, and the perpendicular decides it like every other graphic here.
  */
 describe('a pursuit reflects about its own axis', () => {
+    // Since the APP-06 conversion the flip is expressed by **where point 3 was drawn**,
+    // not by an amplifier: the three anchor points say which side the hook falls on, so
+    // there is nothing left for a `mirrored` flag to decide. The property under test is
+    // unchanged — the whole construction reflects — only the way it is stated is.
+    const PURSUIT_RADIUS = 60000;
     const rendered = (mirrored: boolean) =>
         renderTacticalGraphic({
             type: 'Feature',
-            geometry: BASES.Point as never,
-            properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit, rotation: 0, radius: 60000, mirrored}},
+            geometry: {
+                type: 'LineString',
+                coordinates: anchorsForHook(
+                    BASES.Point.coordinates as Position,
+                    PURSUIT_RADIUS,
+                    0,
+                    mirrored ? -1 : 1,
+                ),
+            } as never,
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit}},
         });
 
     it('needs no special axis — the perpendicular decides it', () => {

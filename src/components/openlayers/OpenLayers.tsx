@@ -35,6 +35,15 @@ interface Props {
     onInteractionModeChange(mode: EditMode): void;
 }
 
+/**
+ * How far the sample sweep keeps its content from the map's edges, in pixels — and how
+ * far from the *left* edge, where the controls panel floats over the map and would
+ * otherwise swallow a whole column of samples. The same two numbers `sampleGallery.ts`
+ * lays its grid out with.
+ */
+const SAMPLE_VIEW_PADDING_PX = 14;
+const SAMPLE_CONTROL_PANEL_PX = 326;
+
 const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
     const [map, setMap] = useState<ol.Map | null>(null);
     const mapRef = useRef<HTMLDivElement | null>(null);
@@ -67,10 +76,10 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         }
         const rememberView = () => {
             const view = olMap.getView();
-            const centre = view.getCenter();
+            const center = view.getCenter();
             const resolution = view.getResolution();
-            if (!centre || !resolution) return;
-            const [lon, lat] = toLonLat(centre);
+            if (!center || !resolution) return;
+            const [lon, lat] = toLonLat(center);
             writeViewport({lon, lat, resolution});
         };
         olMap.on('moveend', rememberView);
@@ -113,10 +122,15 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         // real browser and asserts on feature properties. Stripped from production
         // builds. Nothing in the app may read this.
         if (process.env.NODE_ENV !== 'production') {
+            // The projection the map is in, so a driving script can put the view on a
+            // lon/lat without importing `ol`. MapLibre's own `jumpTo` takes lon/lat
+            // directly, which is the asymmetry this closes.
+            (window as unknown as Record<string, unknown>).__olFromLonLat = fromLonLat;
+            (window as unknown as Record<string, unknown>).__olToLonLat = toLonLat;
             (window as unknown as Record<string, unknown>).__tacticalGraphics = {
                 map: olMap,
                 manager: tacticalGraphicManager.current,
-                // The centre-symbol controls, so a driving script can change the size
+                // The center-symbol controls, so a driving script can change the size
                 // and read back what the style function resolves. Module-level state,
                 // so this is a handle on it rather than a copy.
                 setSecurityOperationSymbolSize,
@@ -142,7 +156,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             reset: () => {
                 engine.current?.clearAll();
             },
-            drawSamples: hostility => {
+            drawSamples: (hostility, names) => {
                 // **The same grid MapLibre draws, restored through the ordinary path.**
                 // The two sweeps used to be different programs — this one packed measured
                 // cells under category banners, that one tiled a plain grid — so the
@@ -150,7 +164,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 // the sweep is for. Handing both the identical GeoJSON makes them
                 // identical by construction rather than by imitation.
                 setInteractionMode('view');
-                engine.current?.restore(sampleFeatureCollection(hostility));
+                engine.current?.restore(sampleFeatureCollection(hostility, names));
+                fitToGraphics();
             },
             exportGeoJson: () => {
                 const snapshot = engine.current?.snapshot();
@@ -196,7 +211,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     useEffect(() => {
         if (!map) return;
         // Nothing to publish to the library: `MapRendering` is the single writer of the
-        // config, chrome colours included. This effect only swaps the basemap layers and
+        // config, chrome colors included. This effect only swaps the basemap layers and
         // sweeps the drawn features so they re-render.
         const tileLayers = map.getLayers().getArray();
         if (isEmpty(tileLayers)) return;
@@ -210,8 +225,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             darkTileLayer.setVisible(false);
             lightTileLayer.setVisible(true);
         }
-        // `hostilityColor` caches a *resolved* colour, so a feature drawn in one mode would
-        // keep that mode's colour forever. Re-derive it before invalidating, or the sweep
+        // `hostilityColor` caches a *resolved* color, so a feature drawn in one mode would
+        // keep that mode's color forever. Re-derive it before invalidating, or the sweep
         // below faithfully re-renders the stale value.
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
             const hostility = f.get('hostility');
@@ -225,7 +240,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
 
     // Re-render already-drawn graphics when any config setting changes — style functions
     // read the config live, but OL caches the rendered output per feature revision, so a
-    // feature that hasn't otherwise changed keeps its old stroke width and colours until
+    // feature that hasn't otherwise changed keeps its old stroke width and colors until
     // something bumps its revision. Same reasoning as the dark-mode sweep above.
     //
     // `MapRendering`'s own effect publishes the config, and child effects run first — but
@@ -237,7 +252,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
             const hostility = f.get('hostility');
             // Same stale-stamp problem as the mode sweep: `hostilityColor` caches a
-            // *resolved* colour, so re-tinting an affiliation has to re-derive it.
+            // *resolved* color, so re-tinting an affiliation has to re-derive it.
             if (hostility && f.get('hostilityColor')) {
                 f.set('hostilityColor', getColorByHostility(hostility));
             }
@@ -258,6 +273,44 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         if (!map) return;
         tacticalGraphicManager.current?.renderingVectorSource.clear();
         setInteractionMode('view');
+    };
+
+    /**
+     * Zooms the view to everything now on the map.
+     *
+     * **The sweep used to do this and stopped.** `drawProvenSamples` ended with a
+     * `view.fit` over the grid it had just laid out; the sweep now goes through the
+     * ordinary `restore` path so both engines draw identical GeoJSON, and the fit went
+     * with the code that was replaced. The result was a gallery drawn correctly and
+     * off screen — 273 graphics at whatever zoom the user happened to be at.
+     *
+     * The padding is asymmetric because the controls panel floats over the map's left
+     * edge and would otherwise swallow a whole column of samples.
+     */
+    const fitToGraphics = (passes = 3) => {
+        const manager = tacticalGraphicManager.current;
+        const view = manager?.map?.getView();
+        const extent = manager?.renderingVectorSource.getExtent();
+        if (!view || !extent || !extent.every(Number.isFinite) || extent[2] <= extent[0]) return;
+        view.fit(extent, {
+            size: manager!.map.getSize(),
+            padding: [SAMPLE_VIEW_PADDING_PX, SAMPLE_VIEW_PADDING_PX, SAMPLE_VIEW_PADDING_PX, SAMPLE_CONTROL_PANEL_PX],
+        });
+
+        /*
+         * **Fit again, because fitting changes what there is to fit.**
+         *
+         * Every screen-sized graphic — the security operations, and anything else whose
+         * geometry is a pixel constant times the resolution — re-derives itself on
+         * `change:resolution`. So the zoom this fit chose makes those graphics grow in
+         * metres, and the extent that was correct a moment ago is now too small: measured
+         * on the full sweep, one pass left 1730 px of content in a 1160 px pane.
+         *
+         * It converges quickly because each pass moves the zoom less than the last, so a
+         * small bounded number of passes is enough and a loop-until-stable is not worth
+         * the risk of never settling.
+         */
+        if (passes > 1) requestAnimationFrame(() => fitToGraphics(passes - 1));
     };
 
     const drawSamples = (hostility?: TacticalGraphicHostility) => {

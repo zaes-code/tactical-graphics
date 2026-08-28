@@ -19,7 +19,7 @@ export class AirCorridor extends MovementGraphicBase {
     }
 
     /**
-     * The perpendicular distance from the corridor centre-line to a width
+     * The perpendicular distance from the corridor center-line to a width
      * handle IS the circle radius, so the radius must track the cursor 1:1 for
      * the handle to stay under it. The shared default halves that distance,
      * which is right for graphics whose offset is a full width rather than a
@@ -102,7 +102,7 @@ export class AirCorridor extends MovementGraphicBase {
     setOffset(offset: number) {
         super.setOffset(offset);
         // `offset` is the circle radius, so the corridor spans twice that. The
-        // generator consumes the same number as turf metres when it builds the
+        // generator consumes the same number as turf meters when it builds the
         // rails, so this is the width of the shape as actually drawn.
         this.setLabel({...this.graphicLabels, width: offset * 2});
     }
@@ -111,22 +111,22 @@ export class AirCorridor extends MovementGraphicBase {
 
 /**
  * AM is a *numeric* amplifier, and the dialog's Width input strips everything
- * that isn't a digit — so the stored value is bare metres, with no separators
+ * that isn't a digit — so the stored value is bare meters, with no separators
  * and no unit. That way a drag-written value survives being hand-edited. The
  * `M` suffix and thousands separators are added when the label is drawn
  * (`formatWidthAmplifier` in openlayerStyles).
  *
- * Rounds to whole metres below 1 km and to 10 m above, so a drag doesn't churn
+ * Rounds to whole meters below 1 km and to 10 m above, so a drag doesn't churn
  * insignificant digits on a wide corridor.
  */
-function formatCorridorWidth(metres: number): string {
-    const rounded = metres >= 1000 ? Math.round(metres / 10) * 10 : Math.round(metres);
+function formatCorridorWidth(meters: number): string {
+    const rounded = meters >= 1000 ? Math.round(meters / 10) * 10 : Math.round(meters);
     return `${rounded}`;
 }
 
 /**
  * Reads a width value: `"93910"` from the dialog, or `"1.5 KM"` / `"93,910 M"`
- * from imported properties. A bare number is metres. Returns null for anything
+ * from imported properties. A bare number is meters. Returns null for anything
  * else — including units we don't read, such as feet — so the caller can
  * decline to touch the geometry rather than resize it from a misread number.
  */
@@ -134,6 +134,6 @@ function parseCorridorWidth(value?: string): number | null {
     if (!value) return null;
     const match = /^([0-9]*\.?[0-9]+)\s*(m|km)?$/i.exec(value.replace(/,/g, '').trim());
     if (!match) return null;
-    const metres = Number(match[1]) * (match[2]?.toLowerCase() === 'km' ? 1000 : 1);
-    return Number.isFinite(metres) && metres > 0 ? metres : null;
+    const meters = Number(match[1]) * (match[2]?.toLowerCase() === 'km' ? 1000 : 1);
+    return Number.isFinite(meters) && meters > 0 ? meters : null;
 }

@@ -31,10 +31,10 @@ export interface SelectedGraphic {
     labels: GraphicLabels;
     /** Kept outside `labels` because it is stamped outside the bag. @see PaintFeature.echelon */
     echelon: string;
-    /** Read-only geometry inputs in metres — what the user set by dragging. */
+    /** Read-only geometry inputs in meters — what the user set by dragging. */
     measured: GraphicGeometryState;
     /**
-     * The size the graphic was drawn at, in projected metres.
+     * The size the graphic was drawn at, in projected meters.
      *
      * Only the range fans read it, to seed a first band at the drawn radius so that
      * opening the editor and pressing OK does not snap the geometry to the 1 km

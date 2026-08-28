@@ -19,7 +19,7 @@
  * development builds.
  */
 import {chromium} from 'playwright';
-import {mkdirSync} from 'fs';
+import {mkdirSync, readFileSync, statSync} from 'fs';
 import {join} from 'path';
 
 const URL = process.env.APP_URL ?? 'http://localhost:3000/';
@@ -219,8 +219,8 @@ const main = async () => {
     const revAfter = Math.max(...features.map(f => f.revision));
     check(
         'amplifier persisted onto the feature',
-        features.some(f => f.tacticalGraphic?.label === 'ALPHA'),
-        JSON.stringify(features.map(f => f.tacticalGraphic?.label)),
+        features.some(f => f.tacticalGraphic?.designation === 'ALPHA'),
+        JSON.stringify(features.map(f => f.tacticalGraphic?.designation)),
     );
     check('feature revision bumped (feature.changed() fired)', revAfter > revBefore, `${revBefore} -> ${revAfter}`);
 
@@ -480,7 +480,15 @@ const main = async () => {
         await page.waitForTimeout(7000);
     };
 
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    /*
+     * **Clear the filter first.** The sweep draws what the panel is listing, so the
+     * search term an earlier step typed would narrow it — which is the feature working,
+     * and a driver that did not know it drew three graphics and called the sweep broken.
+     */
+    await page.getByPlaceholder('Filter graphics').fill('');
+    await page.waitForTimeout(500);
+
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(5000);
     const drawnOnOl = await engineCount();
     check('the sweep draws on OpenLayers', drawnOnOl > 100, `${drawnOnOl} graphics`);
@@ -496,7 +504,7 @@ const main = async () => {
     // A removal has to cross too, or switching back would resurrect the map.
     check('a removal crosses back', afterClear === 0, `${afterClear} left`);
 
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(5000);
     const redrawn = await engineCount();
     await switchTo('MapLibre');
@@ -510,7 +518,7 @@ const main = async () => {
     // storing the raw number would halve or double the scale on every switch. Assert
     // the resolution rather than the zoom for exactly that reason.
     const viewOf = () => page.evaluate(() => JSON.parse(localStorage.getItem('tg_viewport') ?? 'null'));
-    await page.getByRole('button', {name: /draw all samples/i}).click();
+    await page.getByRole('button', {name: /draw samples/i}).click();
     await page.waitForTimeout(4000);
     await page.evaluate(() => {
         const view = window.__tacticalGraphics.map.getView();
@@ -545,8 +553,178 @@ const main = async () => {
     await page.waitForTimeout(3000);
     check('a refresh starts empty — the handover is not persisted', (await engineCount()) === 0);
 
-    // ── 7. No console errors ────────────────────────────────────────────────
-    console.log('\n7. Console is clean');
+    // ── 7. Export writes a file Import can read back ─────────────────────────
+    //
+    // The serialization itself is covered exhaustively in jest — every registered
+    // graphic, every amplifier it offers, and gestures applied before the round trip.
+    // What no test touched is the layer either side of it: the Blob and the synthetic
+    // `<a download>` click on the way out, and `JSON.parse(await file.text())` on the
+    // way back. Both live in `OpenLayers.tsx`, neither is reachable from jsdom, and a
+    // user who presses Export meets them before meeting anything that is tested.
+    //
+    // **The comparison never names a field.** It diffs whole `tacticalGraphic` bags,
+    // so it keeps working across a schema rename — which matters, because the suites
+    // that DO name fields quietly stopped covering one when it was renamed.
+    console.log('\n7. Export and re-import a saved map');
+
+    const snap = () => page.evaluate(() => window.__tacticalEngine?.snapshot() ?? null);
+    const graphicCount = async () => (await snap())?.features.length ?? -1;
+
+    /** Wait for the sample sweep to stop adding graphics rather than guess a delay. */
+    const settle = async () => {
+        let previous = -1;
+        for (let i = 0; i < 40; i++) {
+            await page.waitForTimeout(500);
+            const n = await graphicCount();
+            if (n > 0 && n === previous) return n;
+            previous = n;
+        }
+        return previous;
+    };
+
+    /**
+     * Is every key the saved bag carried still there, with the same value?
+     *
+     * One-directional on purpose: a rebuild legitimately *stamps* values it derived —
+     * a holder writes back the metre size it handed the generator — so an extra key
+     * after a restore is correct, while a missing one is lost work. Numbers compare
+     * with a relative tolerance because they make a float round trip through JSON.
+     */
+    const bagKeeps = (before, after) => {
+        if (!before) return true;
+        if (!after) return false;
+        for (const [key, value] of Object.entries(before)) {
+            const back = after[key];
+            if (typeof value === 'number' && typeof back === 'number') {
+                if (Math.abs(value - back) / Math.max(1e-9, Math.abs(value), Math.abs(back)) > 1e-6) return false;
+            } else if (JSON.stringify(value) !== JSON.stringify(back)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const bagsOf = collection =>
+        new Map((collection?.features ?? []).map(f => [f.properties?.symbolId, f.properties?.tacticalGraphic]));
+    const geometriesOf = collection =>
+        new Map((collection?.features ?? []).map(f => [f.properties?.symbolId, JSON.stringify(f.geometry)]));
+
+    await page.getByRole('button', {name: /draw samples/i}).click();
+    const drawn = await settle();
+    const beforeExport = await snap();
+    check('a map to save', drawn > 0, `${drawn} graphics`);
+
+    // The download event is the only proof the anchor click actually fired.
+    const [download] = await Promise.all([
+        page.waitForEvent('download', {timeout: 30000}),
+        page.getByRole('button', {name: /^export$/i}).click(),
+    ]);
+    const savedPath = join(SHOTS, 'exported.geojson');
+    await download.saveAs(savedPath);
+
+    check(
+        'Export offers the file under its own name',
+        download.suggestedFilename() === 'tactical-graphics.geojson',
+        download.suggestedFilename(),
+    );
+    check('Export wrote bytes', statSync(savedPath).size > 0, `${statSync(savedPath).size} bytes`);
+
+    let saved = null;
+    try {
+        saved = JSON.parse(readFileSync(savedPath, 'utf8'));
+    } catch (e) {
+        check('the exported file parses as JSON', false, e.message);
+    }
+    check('the file is a FeatureCollection', saved?.type === 'FeatureCollection', String(saved?.type));
+    check('the file carries its snapshot version', Number.isFinite(saved?.tacticalGraphicsVersion), String(saved?.tacticalGraphicsVersion));
+    check('one saved feature per graphic', saved?.features?.length === drawn, `${saved?.features?.length} of ${drawn}`);
+
+    // What went out must be what was on the map — checked before anything is cleared,
+    // so a failure here blames the writer rather than the reader.
+    const liveBags = bagsOf(beforeExport);
+    const fileBags = bagsOf(saved);
+    const unwritten = [...liveBags].filter(([id, bag]) => !bagKeeps(bag, fileBags.get(id)));
+    check(
+        'every graphic on the map reached the file, amplifiers intact',
+        unwritten.length === 0,
+        unwritten.slice(0, 3).map(([id]) => id).join(', '),
+    );
+
+    await page.getByRole('button', {name: /clear all/i}).click();
+    await page.waitForTimeout(1500);
+    check('Clear all empties the map', (await graphicCount()) === 0);
+
+    // The hidden input the Import button clicks on the user's behalf. Driving it
+    // directly is the same code path — the click only opens the picker.
+    await page.locator('input[type="file"]').setInputFiles(savedPath);
+    await page.waitForTimeout(4000);
+    const afterImport = await snap();
+    const importedCount = afterImport?.features?.length ?? -1;
+
+    check('every graphic came back', importedCount === drawn, `${importedCount} of ${drawn}`);
+
+    const backBags = bagsOf(afterImport);
+    const lost = [...fileBags].filter(([id, bag]) => !bagKeeps(bag, backBags.get(id)));
+    check('every amplifier survived the file', lost.length === 0, lost.slice(0, 3).map(([id]) => id).join(', '));
+
+    /**
+     * Did any vertex actually move?
+     *
+     * Compared as numbers against a tolerance rather than as JSON text. A coordinate
+     * makes a float round trip through the file and comes back as -77.04000000000001:
+     * the same place, a different string. The first version of this check compared
+     * `JSON.stringify` and reported five graphics moved — every one of them by a
+     * measured 0.00 m.
+     *
+     * A changed vertex COUNT is a different failure and is reported as such: it means
+     * the restore rebuilt a different shape, not that a float drifted.
+     */
+    const METRES_PER_DEGREE = 111_320; // rough, and only ever used to express a tolerance
+    const VERTEX_TOLERANCE_M = 0.01;
+    const movedBy = (a, b) => {
+        if (!b) return {metres: Infinity, note: 'did not come back'};
+        const flat = json => {
+            const out = [];
+            (function walk(c) {
+                typeof c[0] === 'number' ? out.push(c) : c.forEach(walk);
+            })(JSON.parse(json).coordinates);
+            return out;
+        };
+        const before = flat(a);
+        const after = flat(b);
+        if (before.length !== after.length) return {metres: Infinity, note: `${before.length} vertices -> ${after.length}`};
+        let worst = 0;
+        for (let i = 0; i < before.length; i++) {
+            worst = Math.max(worst, Math.hypot(before[i][0] - after[i][0], before[i][1] - after[i][1]));
+        }
+        return {metres: worst * METRES_PER_DEGREE, note: null};
+    };
+
+    const fileGeom = geometriesOf(saved);
+    const backGeom = geometriesOf(afterImport);
+    const nameOf = new Map((saved?.features ?? []).map(f => [f.properties?.symbolId, f.properties?.tacticalGraphic?.name]));
+    const moved = [...fileGeom]
+        .map(([id, geometry]) => ({name: nameOf.get(id), ...movedBy(geometry, backGeom.get(id))}))
+        .filter(m => m.metres > VERTEX_TOLERANCE_M);
+    check(
+        'every graphic came back to the same coordinates',
+        moved.length === 0,
+        moved.slice(0, 5).map(m => `${m.name} ${m.note ?? `${m.metres.toFixed(2)} m`}`).join(', '),
+    );
+
+    // Restore promises *editable*, not merely visible: a graphic with no controller is
+    // a picture of itself. @see persistence.ts
+    const controllers = await page.evaluate(() => window.__tacticalGraphics?.manager?.graphicControllers?.length ?? -1);
+    check(
+        'imported graphics are editable, not just drawn',
+        controllers === importedCount,
+        `${controllers} controllers for ${importedCount} graphics`,
+    );
+
+    await page.screenshot({path: join(SHOTS, '07-imported.png')});
+
+    // ── 8. No console errors ────────────────────────────────────────────────
+    console.log('\n8. Console is clean');
     const realErrors = consoleErrors.filter(e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e));
     check('no console/page errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 

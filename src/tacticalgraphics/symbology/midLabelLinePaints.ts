@@ -1,5 +1,5 @@
 /**
- * # The lines labelled at their middle
+ * # The lines labeled at their middle
  *
  * Coordinated fire line, engineer work line and munition flight path. Each puts
  * its amplifiers at the **projected** midpoint of the drawn path rather than at
@@ -14,10 +14,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
-import {PLANNED_DASH_PX, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -46,7 +46,7 @@ function plannedDash(feature: PaintFeature): number[] | undefined {
 
 /** A text amplifier with the usual halo. */
 function amplifier(
-    at: ProjectedPosition,
+    feature: PaintFeature, at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
@@ -58,7 +58,7 @@ function amplifier(
         text: {
             text,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align,
@@ -100,12 +100,12 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const rotation = uprightRotation(p1, p2);
 
         return [
-            amplifier(
+            amplifier(feature, 
                 offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                getFullLabel(name, feature.properties.label ?? ''),
+                getFullLabel(name, feature.properties.designation ?? ''),
                 scale, rotation, 'center', 'bottom',
             ),
-            amplifier(
+            amplifier(feature, 
                 offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
                 dateRangeLabel(feature.properties),
                 scale, rotation, 'center', 'top',
@@ -134,8 +134,8 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const props = feature.properties;
         const endLabel = getFullLabel(name, '');
         const joinParts = (a?: string, b?: string) => [a?.trim(), b?.trim()].filter(Boolean).join(' ');
-        const midTop = joinParts(props.label, props.countryCode);
-        const midBottom = joinParts(props.secondId, props.secondCountryCode);
+        const midTop = joinParts(props.designation, props.countryCode);
+        const midBottom = joinParts(props.secondDesignation, props.secondCountryCode);
 
         const scale = scaleOf(feature, context);
         const start = coords[0];
@@ -144,7 +144,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const beforeEnd = coords[coords.length - 2];
 
         const paints: Paint[] = [
-            amplifier(
+            amplifier(feature, 
                 offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
                 endLabel,
                 scale,
@@ -152,7 +152,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
                 afterStart[0] >= start[0] ? 'left' : 'right',
                 'bottom',
             ),
-            amplifier(
+            amplifier(feature, 
                 offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
                 endLabel,
                 scale,
@@ -166,13 +166,13 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const rotation = uprightRotation(p1, p2);
 
         if (midTop) {
-            paints.push(amplifier(
+            paints.push(amplifier(feature, 
                 offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
                 midTop, scale, rotation, 'center', 'bottom',
             ));
         }
         if (midBottom) {
-            paints.push(amplifier(
+            paints.push(amplifier(feature, 
                 offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
                 midBottom, scale, rotation, 'center', 'top',
             ));
@@ -247,7 +247,7 @@ export function munitionFlightPathPaint(): LinePaint {
         const afterStart = coords[1];
 
         return [
-            amplifier(
+            amplifier(feature, 
                 [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2],
                 'MFP', scale, uprightRotation(p1, p2), 'center', 'middle',
             ),
@@ -258,8 +258,8 @@ export function munitionFlightPathPaint(): LinePaint {
             // "up is north" rule the rest of this file uses: it sits to the right of
             // a path drawn eastward and to the left of one drawn westward. That is
             // what the symbol has always done, so it is preserved rather than
-            // quietly normalised — but it is an inconsistency, not a doctrine.
-            amplifier(
+            // quietly normalized — but it is an inconsistency, not a doctrine.
+            amplifier(feature, 
                 travelRightOffset(start, afterStart, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
                 dateRangeLabel(feature.properties),
                 scale, uprightRotation(start, afterStart), 'left', 'middle',

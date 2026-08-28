@@ -9,6 +9,7 @@ import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import MapControls from './MapControls';
+import EditAffordances from './EditAffordances';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
@@ -53,7 +54,7 @@ function loadEngine(): MapEngine {
 }
 
 /**
- * The demo's colours for a dark basemap — **the app's, not the library's.**
+ * The demo's colors for a dark basemap — **the app's, not the library's.**
  *
  * The library ships one palette (`DEFAULT_PALETTE`) and has no idea whether this app is
  * in dark mode; it cannot, since it never sees the basemap. So a host that wants a
@@ -62,8 +63,8 @@ function loadEngine(): MapEngine {
  * enough to undo the other, since `setTacticalGraphicsConfig` replaces rather than
  * merges.
  *
- * No `hostilityColors`: the four affiliation colours are doctrine and stay put in both
- * modes. What moves is the unaffiliated neutrals — the default line colour, the label
+ * No `hostilityColors`: the four affiliation colors are doctrine and stay put in both
+ * modes. What moves is the unaffiliated neutrals — the default line color, the label
  * text that follows it, the halo behind that text — and the editor chrome, all of which
  * are black-on-white by default and would be invisible on a dark basemap.
  */
@@ -77,13 +78,13 @@ const DARK_PALETTE: TacticalGraphicsConfigOptions = {
     drawMarkerOutlineColor: 'rgb(23,23,23)',
 };
 
-// The demo is a consumer, so it supplies the centre symbol for Cover / Guard /
+// The demo is a consumer, so it supplies the center symbol for Cover / Guard /
 // Screen the way any consumer would — by handing over the milsymbol it already
 // depends on. The library names milsymbol nowhere, which is what makes the optional
 // peer dependency actually optional; this is the other half of that.
 //
 // **Registered by the host, not by one of the engines.** It used to run at module
-// scope inside `OpenLayers.tsx`, so MapLibre only had a centre symbol because the
+// scope inside `OpenLayers.tsx`, so MapLibre only had a center symbol because the
 // other engine's module happened to be imported — a MapLibre-only app would have
 // drawn all three with an empty middle. Module scope rather than an effect: it is
 // global, idempotent, and a graphic drawn before the first render would otherwise
@@ -97,13 +98,13 @@ const paletteFor = (dark: boolean): TacticalGraphicsConfigOptions => dark ? DARK
  * overrides on top.
  *
  * **`setTacticalGraphicsConfig`, not `configureTacticalGraphics`.** The replacing form
- * is what makes "reset this colour" work: the settings panel clears an override by
+ * is what makes "reset this color" work: the settings panel clears an override by
  * deleting the key, and only a wholesale replace drops a value that is no longer in the
- * object. A merge would leave the cleared colour in force forever.
+ * object. A merge would leave the cleared color in force forever.
  *
  * It also means this is the *single* place the library's config is written. Applying the
  * palette from more than one component would have each clobber the other's half — the
- * mode palette would re-impose itself over a user's colour on every toggle.
+ * mode palette would re-impose itself over a user's color on every toggle.
  */
 function applyGraphicsConfig(dark: boolean, overrides: TacticalGraphicsConfigOptions): void {
     setTacticalGraphicsConfig(new TacticalGraphicsConfig({...paletteFor(dark), ...overrides}));
@@ -153,8 +154,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
      */
     const handoverRef = useRef<FeatureCollection | null>(null);
 
+    /**
+     * The same handle as `engineRef`, as state.
+     *
+     * The ref is what the callbacks and effects read, because they run outside render
+     * and want the current value without re-subscribing. The edit chrome is a *rendered*
+     * child, so it needs the engine to arrive as a prop — a ref never re-renders anyone,
+     * and the affordances stayed invisible until some unrelated state change happened to
+     * flush them.
+     */
+    const [engineHandle, setEngineHandle] = useState<MapEngineHandle | null>(null);
+
     const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
         engineRef.current = handle;
+        setEngineHandle(handle);
         // The live engine, for the driving scripts. Each engine already publishes its
         // own map; this is the one thing above them — the handle the panel talks to.
         // Stripped from production builds; nothing in the app may read it.
@@ -194,7 +207,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         // Configuring changes what the symbology answers; it does not tell the map that
         // the answer moved. OpenLayers hides this — its style functions run again on the
         // next frame — but MapLibre bakes each paint into a GeoJSON source and keeps
-        // drawing the old colours until the paints re-run. Every host needs both halves.
+        // drawing the old colors until the paints re-run. Every host needs both halves.
         // @see MapEngineHandle.refreshStyles
         engineRef.current?.refreshStyles();
         localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
@@ -214,7 +227,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
     /**
      * `null` when the user clicks the already-selected button — `ToggleButtonGroup`
-     * reports a deselect, and honouring it would leave the app with no map at all.
+     * reports a deselect, and honoring it would leave the app with no map at all.
      */
     const handleEngineChange = (_: React.MouseEvent<HTMLElement>, next: MapEngine | null) => {
         if (!next) return;
@@ -278,7 +291,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                                 textTransform: 'none',
                             }}
                         >
-                            MIL-STD-2525E &middot; FM 1-02.2
+                            MIL-STD-2525E &middot; FM 1-02.2 &middot; NATO APP-06
                         </Typography>
                     </Typography>
 
@@ -314,10 +327,10 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               *
               * Both engines attach to a container div and own it for their lifetime. Without
               * a distinct key React reuses the same DOM node across the swap, and the
-              * incoming map initialises against a container the outgoing one has not
+              * incoming map initializes against a container the outgoing one has not
               * finished tearing down — MapLibre in particular leaves its canvas behind.
               * Remounting is also what makes the comparison honest: each engine starts from
-              * a clean map at the same centre and zoom.
+              * a clean map at the same center and zoom.
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {engine === 'openlayers'
@@ -337,11 +350,20 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                     />}
 
                 {/*
+                  * The edit chrome, above both maps and outside either engine.
+                  *
+                  * Mounted here rather than inside each view because it is the same
+                  * component for both — it asks the engine for a rectangle in screen
+                  * pixels and knows nothing else about it. @see EditAffordances
+                  */}
+                <EditAffordances engine={engineHandle} active={interactionMode === 'edit'}/>
+
+                {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
                   * which is why the MapLibre view had none at all — and why the two
                   * views could not be compared with the same controls in front of them.
                   * Everything it calls goes through `MapEngineHandle`; what an engine
-                  * cannot do it declares, and the panel greys rather than hides.
+                  * cannot do it declares, and the panel grays rather than hides.
                   */}
                 {capabilities && (
                     <MapControls
@@ -357,7 +379,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         }}
                         onShapeChange={setSelectedShape}
                         onReset={() => engineRef.current?.reset()}
-                        onDrawSamples={hostility => engineRef.current?.drawSamples(hostility)}
+                        onDrawSamples={(hostility, names) => engineRef.current?.drawSamples(hostility, names)}
                         onClearAll={() => engineRef.current?.clearAll()}
                         onExportGeoJson={() => engineRef.current?.exportGeoJson()}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}

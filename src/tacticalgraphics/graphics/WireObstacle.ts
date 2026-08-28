@@ -21,7 +21,7 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * ```
  * low wire fence    X X X X X   under            single concertina   O O O O O   under
  * high wire fence   X X X X X   under + over     triple concertina   O O O O O   under + over
- *                                                double concertina   O O O O O   under + centre
+ *                                                double concertina   O O O O O   under + center
  * ```
  *
  * The first three are barbed wire separated by *density* alone - `perGroup` and `gap`:
@@ -38,7 +38,7 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  */
 
 /** Where a wire runs relative to the marks it carries. */
-export type WireRail = 'under' | 'centre' | 'over';
+export type WireRail = 'under' | 'center' | 'over';
 
 /** What a wire graphic repeats along its line. */
 export interface WireStyle {
@@ -78,13 +78,13 @@ export const WIRE_STYLES: Partial<Record<TacticalGraphicName, WireStyle>> = {
     [TacticalGraphicName.WireDoubleFence]: {mark: 'cross', rail: true, perGroup: 2, gap: 3.5, innerGap: PX(5), height: 1},
     [TacticalGraphicName.WireDoubleApronFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1},
 
-    // The last two fences keep double apron's spacing and move the wire off centre.
+    // The last two fences keep double apron's spacing and move the wire off center.
     [TacticalGraphicName.WireLowWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under']},
     [TacticalGraphicName.WireHighWireFence]: {mark: 'cross', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'over']},
 
     // Concertina: the same three patterns with an O in place of the X.
     [TacticalGraphicName.WireSingleConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under']},
-    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'centre']},
+    [TacticalGraphicName.WireDoubleStrandConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'center']},
     [TacticalGraphicName.WireTripleStrandConcertina]: {mark: 'oval', rail: true, perGroup: 1, gap: 1.5, height: 1, railsAt: ['under', 'over']},
 };
 
@@ -102,10 +102,10 @@ export class WireObstacle extends TacticalGraphicsBase<BaseGraphicOptions> {
     /**
      * The drawn route, and only that.
      *
-     * The marks are *not* here. They are screen-space decorations, so they are synthesised
+     * The marks are *not* here. They are screen-space decorations, so they are synthesized
      * in `wireObstacleStyleFunc` from the `WIRE_STYLES` row, exactly as the fortified line
-     * synthesises its merlons and the obstacle line its teeth. Baking them here froze them
-     * in metres at the drawing zoom, which made a wire obstacle grow to absurdity a few
+     * synthesizes its merlons and the obstacle line its teeth. Baking them here froze them
+     * in meters at the drawing zoom, which made a wire obstacle grow to absurdity a few
      * zoom levels in.
      *
      * The cost, taken deliberately: all nine now return identical GeoJSON, so the *name* is
