@@ -10,9 +10,9 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **288 graphics** are implemented and verified today, covering **301 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
-![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
+![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
-*Every verified graphic, drawn in one sweep by the demo's **Draw samples** button. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
+*The demo's **Draw samples** button, drawing every verified graphic in one sweep — framed on the middle of the block, so the rows above and below run past the edge of the frame. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
 
 ---
 
