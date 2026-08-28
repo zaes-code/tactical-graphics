@@ -38,14 +38,22 @@ type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 export type FollowVariant = 'assume' | 'support';
 
 /**
- * The body, the head, and the dash, in screen pixels.
+ * The body, the head, and the dash, as multiples of the graphic's decoration unit.
  *
- * Every one of these is a screen size because the rule says the symbol "varies only in
- * length": the run between the two points is the only thing the operator sets, and the
- * cross-section stays put at every zoom. They pass through `endMarkScale` so a graphic
- * drawn shorter than its own decorations shrinks them rather than drawing a body longer
- * than the axis it sits on.
+ * Written in screen pixels **at the zoom the graphic was drawn at**, because that is
+ * what `decorationMeters` converts: `DECORATION_UNIT_PX` worth of ground is stamped into
+ * `decorationSize` when the symbol is drawn, and every number here is measured against
+ * it. So they are screen sizes at first, as the rule's "varies only in length" asks — and
+ * they scale with the symbol afterwards, because a **resize multiplies `decorationSize`**
+ * along with the vertices. Deriving them from `context.resolution` instead, which is what
+ * the first version did, made a resize stretch the axis and leave the body and head the
+ * size they were. @see scaleDrawnSizes, LineGraphicController.handleResize
+ *
+ * They still pass through `endMarkScale`, so a graphic shorter than its own decorations
+ * shrinks them rather than drawing a body longer than the axis it sits on.
  */
+/** The unit these are measured in. Matches this graphic's entry in `DECORATION_PX`. */
+const DECORATION_UNIT_PX = 20;
 const BODY_LENGTH_PX = 46;
 const BODY_HALF_HEIGHT_PX = 15;
 /** Clear space either side of field T inside the body, in screen pixels. */
@@ -86,7 +94,13 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
 
         const scale = endMarkScale(path, context.resolution, BODY_LENGTH_PX + HEAD_LENGTH_PX);
         if (scale <= 0) return [];
-        const px = (n: number) => n * scale * context.resolution;
+        // One "pixel" of the plate, in metres on the ground: the stamped decoration size
+        // divided by the unit it was stamped in. Absent — a base built by a caller that
+        // never went through a holder — it falls back to the drawing zoom, which is the
+        // same number the holder would have stamped.
+        const unit = feature.properties.decorationSize ?? DECORATION_UNIT_PX * context.resolution;
+        const metresPerPx = unit / DECORATION_UNIT_PX;
+        const px = (n: number) => n * scale * metresPerPx;
 
         /** A point `along` metres from the rear and `across` metres to its left. */
         const at = (along: number, across: number): ProjectedPosition => [
@@ -134,7 +148,7 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
                 geometry: {type: 'LineString', coordinates: [noseTip, headBase]},
                 stroke:
                     variant === 'assume'
-                        ? {...stroke, dashPx: CONNECTOR_DASH_PX.map(d => d * scale)}
+                        ? {...stroke, dashPx: CONNECTOR_DASH_PX.map(d => d * scale)} // px: a dash is drawn, not measured
                         : stroke,
             });
         }
