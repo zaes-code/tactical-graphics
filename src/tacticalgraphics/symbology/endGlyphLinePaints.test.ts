@@ -69,7 +69,7 @@ beforeEach(() => resetTacticalGraphicsConfig());
 
 describe('APP-06 110500 — decision line', () => {
     const paint = decisionLinePaint();
-    const props = {label: '1X', secondId: '007'};
+    const props = {designation: '1X', secondDesignation: '007'};
     const starOf = (paints: Paint[]) => lines(paints).find(path => path.length === 11)!;
 
     // "The end-of line information will typically be posted at the ends of the line within
@@ -83,8 +83,8 @@ describe('APP-06 110500 — decision line', () => {
     });
 
     it('joins the two fields with a slash, and shows a lone one alone', () => {
-        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {label: '1X'}), context()))[0]).toBe('1X');
-        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {secondId: '007'}), context()))[0]).toBe('007');
+        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {designation: '1X'}), context()))[0]).toBe('1X');
+        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {secondDesignation: '007'}), context()))[0]).toBe('007');
         // No dangling separator either way round.
         expect(texts(paint(feature(TacticalGraphicName.DecisionLine, props), context()))[0]).toBe('1X/007');
     });
@@ -104,8 +104,8 @@ describe('APP-06 110500 — decision line', () => {
     it('grows the star to hold the text rather than letting it hang out', () => {
         // The bug this replaces: a fixed radius left "1X/007" wider than the star at every
         // realistic font size, so the information sat outside the mark holding it.
-        const short = paint(feature(TacticalGraphicName.DecisionLine, {label: 'A'}), context());
-        const long = paint(feature(TacticalGraphicName.DecisionLine, {label: 'A VERY LONG NAME'}), context());
+        const short = paint(feature(TacticalGraphicName.DecisionLine, {designation: 'A'}), context());
+        const long = paint(feature(TacticalGraphicName.DecisionLine, {designation: 'A VERY LONG NAME'}), context());
         expect(halfWidth(starOf(long), EAST[0])).toBeGreaterThan(halfWidth(starOf(short), EAST[0]));
     });
 
@@ -217,7 +217,7 @@ describe('APP-06 142100 — mobility corridor', () => {
     // line *beside* it, and the row's note asks only that H "be movable to avoid obscuring
     // key geographic information".
     it('puts the free-text amplifier above the line and clear of the echelon', () => {
-        const paints = paint(feature(TacticalGraphicName.MobilityCorridor, {label: 'SMALL DITCHES'}), context());
+        const paints = paint(feature(TacticalGraphicName.MobilityCorridor, {designation: 'SMALL DITCHES'}), context());
         expect(texts(paints)).toEqual(['SMALL DITCHES']);
         const at = (paints.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
 
@@ -234,7 +234,7 @@ describe('APP-06 142100 — mobility corridor', () => {
         const uneven: ProjectedPosition[] = [[0, 0], [6_000, 0], [8_000, 0]];
         const paints = paint({
             geometry: {type: 'LineString', coordinates: uneven},
-            properties: {name: TacticalGraphicName.MobilityCorridor, label: 'A CORRIDOR NAME THAT IS LONG'},
+            properties: {name: TacticalGraphicName.MobilityCorridor, designation: 'A CORRIDOR NAME THAT IS LONG'},
         }, context());
         const at = (paints.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
         // Past the echelon, on the longer side — the leading run cannot hold that text.
@@ -242,7 +242,7 @@ describe('APP-06 142100 — mobility corridor', () => {
 
         // With room on both sides it goes on the leading run, which is where the plate
         // draws it.
-        const even = paint(feature(TacticalGraphicName.MobilityCorridor, {label: 'MC1'}), context());
+        const even = paint(feature(TacticalGraphicName.MobilityCorridor, {designation: 'MC1'}), context());
         const evenAt = (even.find(p => p.text)!.geometry as {coordinates: ProjectedPosition}).coordinates;
         expect(evenAt[0]).toBeLessThan(20_000);
     });

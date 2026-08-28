@@ -275,7 +275,7 @@ export function applyHostility(
 ): void {
     if (!supportsHostility(name)) return;
 
-    const labels: GraphicLabels = {label: '', hostility};
+    const labels: GraphicLabels = {designation: '', hostility};
     const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
     if (holder.setLabel) holder.setLabel(labels);
     else writeGraphicProperties(handler.getFeatures(), name, labels);

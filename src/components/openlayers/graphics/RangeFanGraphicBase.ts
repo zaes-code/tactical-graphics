@@ -36,7 +36,7 @@ const KM_TO_M = 1000;
 const BAND_SEPARATION_FRACTION = 0.02;
 
 export class RangeFanGraphicBase extends MissionTaskGraphicBase {
-    graphicLabels: GraphicLabels = {label: ''};
+    graphicLabels: GraphicLabels = {designation: ''};
 
     constructor(
         name: TacticalGraphicName,

@@ -48,7 +48,7 @@ export class LineGraphicBase implements LineGraphic {
     graphicName: TacticalGraphicName;
     /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
     hidesStartHandle?: boolean;
-    graphicLabel: GraphicLabels = {label: ''};
+    graphicLabel: GraphicLabels = {designation: ''};
     resolution: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {

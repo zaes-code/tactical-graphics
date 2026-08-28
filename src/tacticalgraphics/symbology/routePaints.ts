@@ -170,7 +170,7 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         const coords = geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const text = getFullLabel(name, feature.properties.label ?? '');
+        const text = getFullLabel(name, feature.properties.designation ?? '');
         const direction = feature.properties.direction ?? RouteDirection.GENERAL;
         const scale = scaleOf(feature, context);
 

@@ -256,7 +256,7 @@ describe('hostility survives a bag-only stamp, as restore and consumers produce'
     const bagOnly = (name: TacticalGraphicName) => {
         const handler = sample(name);
         const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
-        const labels: GraphicLabels = {label: '', hostility: TacticalGraphicHostility.hostileFaker};
+        const labels: GraphicLabels = {designation: '', hostility: TacticalGraphicHostility.hostileFaker};
         // Deliberately not `applyHostility`: no loose keys, exactly what restore leaves.
         if (holder.setLabel) holder.setLabel(labels);
         else writeGraphicProperties(handler.getFeatures(), name, labels);

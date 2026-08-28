@@ -16,7 +16,12 @@ import {TacticalGraphicName, hasRadiusReadout, supportsHostility} from '@zaes/ta
 // ── Public type ───────────────────────────────────────────────────────────────
 
 export type GraphicFieldSet = {
-    /** Primary name / identifier shown on the graphic (labels.label). */
+    /**
+     * Primary name / identifier shown on the graphic — field T, `labels.designation`.
+     *
+     * The flag keeps its own name: it says which INPUT the dialog offers, which is not
+     * quite the same question as what the amplifier is called.
+     */
     identifier1: boolean;
     /** Second identifier + country codes (Boundary, ACA unit name). */
     identifier2: boolean;
@@ -194,7 +199,7 @@ const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
  * `1X/007`, so the paint still joins two fields with a slash when both are set. The dialog
  * offers only the first: the second half is not something this program's operators fill in,
  * and a control nobody uses is a control that gets filled in by accident. Setting
- * `secondId` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
+ * `secondDesignation` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
  */
 const DECISION_LINE = f(true, false, false, false, false);
 /** Mobility corridor: free text plus the echelon its own note makes mandatory. */
@@ -472,7 +477,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.TacticalDisrupt]: MISSION_TASK,
     // These two sat on MOV, which switched on an identifier that nothing draws:
     // tacticalFixStyleFunc and getMissionTaskStyleFn render the doctrinal letter
-    // and the line work, never labels.label. It was a dialog input that changed
+    // and the line work, never labels.designation. It was a dialog input that changed
     // nothing on the map — the trap the OBSTACLE_LINE note below describes — and
     // it disagreed with their two siblings directly above.
     [TacticalGraphicName.TacticalFix]: MISSION_TASK,

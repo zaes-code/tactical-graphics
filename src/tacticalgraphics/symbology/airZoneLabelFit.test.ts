@@ -35,7 +35,7 @@ const zone = (half: number): PaintFeature => ({
     geometry: {type: 'Point', coordinates: [0, 0]},
     properties: {
         name: TacticalGraphicName.RestrictedOperationsZone,
-        label: 'LONGNAME ALPHA',
+        designation: 'LONGNAME ALPHA',
         minAltitude: 500,
         maxAltitude: 20000,
         altitudeDatum: AltitudeDatum.aboveGroundLevel,

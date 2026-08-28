@@ -162,7 +162,7 @@ export function decisionLinePaint(): EndGlyphPaint {
         const stroke = {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const paints: Paint[] = [];
 
-        const text = [feature.properties.label, feature.properties.secondId]
+        const text = [feature.properties.designation, feature.properties.secondDesignation]
             .map(part => (part ?? '').trim())
             .filter(Boolean)
             .join('/');
@@ -292,7 +292,7 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
             if (arms.length) paints.push({geometry: {type: 'MultiLineString', coordinates: arms}, stroke});
         }
 
-        const text = (feature.properties.label ?? '').trim();
+        const text = (feature.properties.designation ?? '').trim();
         if (!text) return paints;
 
         /*
