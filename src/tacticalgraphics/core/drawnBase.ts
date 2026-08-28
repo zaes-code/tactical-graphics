@@ -27,6 +27,8 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
+import {levelRectangleAxis} from './anchors';
+import {isRectangular} from './handles';
 import geometryService from './GeometryService';
 
 /**
@@ -135,6 +137,9 @@ export function normalizeDrawnBase(
     if (name === TacticalGraphicName.FieldsOfFire) {
         return storedOrder(name, asVee(generatorOrder(name, deduped)));
     }
+
+    // A rectangular zone is drawn level and turned afterwards. @see levelRectangleAxis
+    if (isRectangular(name)) return levelRectangleAxis(deduped);
 
     return deduped;
 }

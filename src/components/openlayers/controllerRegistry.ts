@@ -60,8 +60,29 @@ const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
  * edits like one — `Modify` drags point 1 and point 2, the third handle is the width.
  * @see RectangularAreaGraphicBase
  */
-const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new RectangularAreaGraphicBase(name, res, sizing), 2, name);
+const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) => {
+    // **Vertex dragging, explicitly.** The two anchor points are the only thing an
+    // operator moves to change the zone's length, and `LineGraphicController` routes a
+    // vertex grab only for the graphics that ask. The library holds the axis to its own
+    // bearing, so the drag lengthens rather than turns. @see constrainRectangleAxis
+    const graphic = new RectangularAreaGraphicBase(name, res, sizing);
+    const controller = new LineGraphicController(graphic, 2, name).enableVertexDragging(2);
+
+    // The holder has to know the draw from an edit, and `shapingFromGesture` cannot tell
+    // it: the controller raises that around a vertex drag too, which is the one case that
+    // most needs the axis held. @see RectangularAreaGraphicBase.drawing
+    const started = controller.onDrawStartFunc;
+    const ended = controller.onDrawEndFunc;
+    controller.onDrawStartFunc = event => {
+        graphic.drawing = true;
+        started(event);
+    };
+    controller.onDrawEndFunc = event => {
+        graphic.drawing = false;
+        ended(event);
+    };
+    return controller;
+};
 
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);

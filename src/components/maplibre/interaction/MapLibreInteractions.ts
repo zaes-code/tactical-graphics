@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -219,7 +219,11 @@ function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition
  * airspace zone on MapLibre left `width` at whatever it was drawn with, and the snapshot
  * disagreed with its own geometry. @see rectangleAmplifiers
  */
-function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+function withDerivedAmplifiers(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+): GraphicDescription {
     if (usesDrawnAnchors(name)) return withAnchorFrame(name, description);
 
     /*
@@ -230,16 +234,39 @@ function withDerivedAmplifiers(name: TacticalGraphicName, description: GraphicDe
      * resize. Its `width` is an amplifier the gesture already carries, so only the length
      * is derived here. @see carriesRectangleLength, rectangleAxisLength
      */
-    if (isRectangular(name) && carriesRectangleLength(name)) {
+    if (isRectangular(name)) return withRectangleAxis(name, description, before);
+    return description;
+}
+
+/**
+ * A rectangle after a gesture: its axis held to its own bearing, and its length refiled.
+ *
+ * The constraint is the library's — one endpoint moving is a length change, never a turn
+ * — and it is applied here rather than in the drag itself for the same reason
+ * OpenLayers applies it in the holder: that is the one place both a vertex drag and a
+ * rebuild pass through. @see constrainRectangleAxis
+ */
+function withRectangleAxis(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+): GraphicDescription {
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    let axis = geometry.type === 'LineString' ? geometry.coordinates : undefined;
+    if (!axis || axis.length < 2) return description;
+
+    const was = before?.geometry as {type: string; coordinates?: Position[]} | undefined;
+    const held = constrainRectangleAxis(was?.type === 'LineString' ? was.coordinates : undefined, axis);
+    let next = held === axis ? description : {...description, geometry: {type: 'LineString' as const, coordinates: held}};
+    axis = held;
+    if (carriesRectangleLength(name)) {
         const geometry = description.geometry as {type: string; coordinates?: Position[]};
-        const axis = geometry.type === 'LineString' ? geometry.coordinates : undefined;
-        if (axis && axis.length >= 2) {
-            const length = Math.round(groundMeters(axis[0] as [number, number], axis[axis.length - 1] as [number, number]));
-            if (description.properties.length !== length) {
-                return {...description, properties: {...description.properties, length}};
-            }
+        const length = Math.round(groundMeters(axis[0] as [number, number], axis[axis.length - 1] as [number, number]));
+        if (description.properties.length !== length) {
+            next = {...next, properties: {...next.properties, length}};
         }
     }
+    return next;
 
     const ring = (description.geometry as {type: string; coordinates?: unknown}).type === 'Polygon'
         ? ((description.geometry as unknown as {coordinates: [number, number][][]}).coordinates?.[0])
@@ -1154,7 +1181,7 @@ export class MapLibreInteractions {
             drag.insertAt = -1;
         }
 
-        const after = withDerivedAmplifiers(drag.graphic.name, this.applyGesture(before, drag, to));
+        const after = withDerivedAmplifiers(drag.graphic.name, this.applyGesture(before, drag, to), before);
         drag.last = to;
         if (after === before) return;
 

@@ -25,6 +25,7 @@ import {
     drawnAnchors,
     axisFromRectangleRing,
     carriesRectangleLength,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
     isRectangular,
     groundMeters,
     usesDrawnAnchors,
@@ -237,6 +238,12 @@ function sizeDefaults(
         ? drawingResolution * DEFAULT_OFFSET_PX
         : baseLengthMeters(geometry) * DEFAULT_SIZE_FRACTION;
     if (meters <= 0) return {};
+
+    // **A rectangular zone starts wider than the generic drawn offset**, and states its
+    // own figure so both engines seed the identical size. @see RECTANGLE_DEFAULT_HALF_WIDTH_PX
+    if (isRectangular(name) && supplied.width === undefined && drawingResolution) {
+        return {width: RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution * 2};
+    }
 
     // A stamped `radius` on a line graphic **is** its half-width: that is what
     // `LineGraphicBase.setOffset` replays on restore, and what the OpenLayers holder

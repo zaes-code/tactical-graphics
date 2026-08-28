@@ -855,6 +855,15 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
  * none.
  */
 const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
+    /*
+     * **A rectangular zone has two gestures of its own and wants neither of them
+     * borrowed.** Its base carries a vertex count, which is what usually makes an
+     * edit drag stretch — but dragging an anchor point sets its length and dragging the
+     * third handle sets its width, and letting a stray drag scale the whole thing meant
+     * both numbers moved at once. Measured on OpenLayers: a drag meant to lengthen the
+     * zone put 400 km on the width as well. (User's call, 2026-08-27.)
+     */
+    ...RECTANGULAR_GRAPHICS,
     TacticalGraphicName.MobileDefense,
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,

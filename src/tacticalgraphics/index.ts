@@ -393,7 +393,13 @@ export {normalizeDrawnBase} from './core/drawnBase';
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
 // The rectangles' own construction: two anchor points and a width. @see rectangleFromAxis
-export {axisFromRectangleRing, rectangleFromAxis} from './core/anchors';
+export {
+    axisFromRectangleRing,
+    constrainRectangleAxis,
+    levelRectangleAxis,
+    rectangleFromAxis,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+} from './core/anchors';
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
 // Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
 // panel hint needs the answer, and only one table may hold it. @see core/drawOrder
