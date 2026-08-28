@@ -594,7 +594,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.SubmarineActionArea]: ACTION_AREA,
     [TacticalGraphicName.SubmarineGeneratedActionArea]: ACTION_AREA,
     [TacticalGraphicName.AreaGeneric]: AREA_GENERIC,
-    [TacticalGraphicName.ZoneOfFire]: AREA_SIMPLE,
+    // **No status.** `dashedOutlinePaint` breaks this outline whatever the status says —
+    // the dashes are the symbol, not a reading of `planned` — so the control changed
+    // nothing on the map, which is the same trap "Label Plate" was. (User's call,
+    // 2026-08-27.) @see dashedOutlinePaint
+    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false),
     [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and
