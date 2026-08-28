@@ -218,7 +218,7 @@ describe('APP-06 343300 — demonstration', () => {
             for (const label of ['1', 'ALPHA BRAVO CHARLIE']) {
                 const feature: PaintFeature = {
                     geometry: {type: 'MultiLineString', coordinates: parts},
-                    properties: {name: TacticalGraphicName.Demonstration, label},
+                    properties: {name: TacticalGraphicName.Demonstration, designation: label},
                 };
                 const ctx = context(resolution);
                 const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text)!;
@@ -236,7 +236,7 @@ describe('APP-06 343300 — demonstration', () => {
                 type: 'MultiLineString',
                 coordinates: geometry.coordinates.map(part => part.map(project)),
             },
-            properties: {name: TacticalGraphicName.Demonstration, label: '1'},
+            properties: {name: TacticalGraphicName.Demonstration, designation: '1'},
         };
         const paints = demonstrationPaint('DEM')(feature, context());
         expect(paints.filter(p => p.text).map(p => p.text!.text)).toEqual(['DEM 1']);

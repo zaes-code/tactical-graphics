@@ -47,8 +47,8 @@ const RING: ProjectedPosition[] = [
  * text the other engine drew and this one did not.
  */
 const BAG = {
-    label: 'ALPHA',
-    secondId: 'BRAVO',
+    designation: 'ALPHA',
+    secondDesignation: 'BRAVO',
     additionalInfo: 'NOTE',
     minAltitude: 500,
     maxAltitude: 2000,

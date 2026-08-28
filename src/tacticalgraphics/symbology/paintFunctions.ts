@@ -187,7 +187,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        let text = getFullLabel(name, feature.properties.label ?? '');
+        let text = getFullLabel(name, feature.properties.designation ?? '');
         if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) text = `ENY ${text}`;
 
         const start = coords[0];
@@ -258,7 +258,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const text = getFullLabel(name, feature.properties.label ?? '');
+        const text = getFullLabel(name, feature.properties.designation ?? '');
         const paints: Paint[] = [];
 
         const segIdx = centerSegmentIndex(coords);
@@ -601,7 +601,7 @@ export function defaultLinePaint(
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const identifier = getFullLabel(name, feature.properties.label ?? '');
+        const identifier = getFullLabel(name, feature.properties.designation ?? '');
         const startDate = showDates ? feature.properties.startDate ?? '' : '';
         const endDate = showDates ? feature.properties.endDate ?? '' : '';
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';

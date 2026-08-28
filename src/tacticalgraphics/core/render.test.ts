@@ -94,7 +94,7 @@ describe('the retrograde cane hook follows its line', () => {
 
 describe('readTacticalGraphicProperties', () => {
     it('reads the config off a feature', () => {
-        expect(readTacticalGraphicProperties(axisFeature())?.label).toBe('1-508 IN');
+        expect(readTacticalGraphicProperties(axisFeature())?.designation).toBe('1-508 IN');
     });
 
     it('returns undefined when absent', () => {

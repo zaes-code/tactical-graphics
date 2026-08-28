@@ -45,7 +45,7 @@ const BAR_SYMBOL_GRAPHIC_NAMES: TacticalGraphicName[] = [
 
 export class MovementGraphicBase implements LineGraphic {
     offset: number;
-    graphicLabels: GraphicLabels = {label: ''};
+    graphicLabels: GraphicLabels = {designation: ''};
     /** @see LineGraphic.offsetScale — read off the controller by the manager. */
     offsetScale?: number;
 

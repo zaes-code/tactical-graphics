@@ -720,7 +720,7 @@ export class NativeLayerRenderer {
                 // The graphic's own amplifiers, which the OpenLayers provider has
                 // always been handed. A provider is a host's code and may key on
                 // anything in here.
-                labels: {...graphic.properties, label: graphic.properties.label ?? ''},
+                labels: {...graphic.properties, designation: graphic.properties.designation ?? ''},
             });
             if (!symbol) continue;
 

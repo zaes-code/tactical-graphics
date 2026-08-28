@@ -136,7 +136,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         if (!coords.length) return [];
 
         const props = feature.properties;
-        const text = getFullLabel(name, props.label ?? '');
+        const text = getFullLabel(name, props.designation ?? '');
         const baseScale = scaleOf(feature, context);
 
         // The ACP labels track the circle rather than the zoom: `graphicSize` is the
@@ -150,7 +150,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const paints: Paint[] = [];
 
         const infoLines: string[] = [];
-        const corridorName = props.label?.trim();
+        const corridorName = props.designation?.trim();
         if (corridorName) infoLines.push(`NAME:       ${corridorName}`);
         if (props.width) infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(props.width))}`);
         if (props.minAltitude) infoLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude, props.altitudeDatum)}`);

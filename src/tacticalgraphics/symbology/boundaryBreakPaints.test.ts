@@ -118,9 +118,9 @@ describe('the cardinal-label boundary', () => {
 });
 
 describe('APP-06 272200 — the radiation dose rate contour line', () => {
-    const doseFeature = (label?: string): PaintFeature => ({
+    const doseFeature = (designation?: string): PaintFeature => ({
         geometry: {type: 'Polygon', coordinates: [RING]},
-        properties: {name: TacticalGraphicName.RadiationDoseRateContourLine, label},
+        properties: {name: TacticalGraphicName.RadiationDoseRateContourLine, designation},
         ring: RING,
     });
 

@@ -169,7 +169,7 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
             }
         }
 
-        const text = (feature.properties.label ?? '').trim();
+        const text = (feature.properties.designation ?? '').trim();
         const scale = scaleOf(feature, context);
         const gapHalfMap = text ? (textWidth(context, text, fontStyle, scale) / 2 + 6) * context.resolution : 0;
 

@@ -32,7 +32,7 @@ beforeEach(() => resetTacticalGraphicsConfig());
 
 describe('APP-06 310200 — enemy prisoner of war holding area', () => {
     it('stacks the designation under the literal, not beside it', () => {
-        const lines = textOf(labelPaints(TacticalGraphicName.EnemyPrisonerOfWarHoldingArea, {label: 'EPW-4'}))
+        const lines = textOf(labelPaints(TacticalGraphicName.EnemyPrisonerOfWarHoldingArea, {designation: 'EPW-4'}))
             .join('\n')
             .split('\n');
         expect(lines.slice(0, 3)).toEqual(['EPW', 'HOLDING AREA', 'EPW-4']);
@@ -48,7 +48,7 @@ describe('APP-06 310200 — enemy prisoner of war holding area', () => {
     it('leaves a prefixed area setting its literal beside the name', () => {
         // The rule is per-plate, not a new default: the objective area still reads
         // "OBJ SWORD" on one line.
-        const lines = textOf(labelPaints(TacticalGraphicName.ObjectiveArea, {label: 'SWORD'}));
+        const lines = textOf(labelPaints(TacticalGraphicName.ObjectiveArea, {designation: 'SWORD'}));
         expect(lines.join(' ')).toContain('OBJ SWORD');
     });
 });

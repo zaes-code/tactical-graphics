@@ -102,7 +102,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         return [
             amplifier(feature, 
                 offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                getFullLabel(name, feature.properties.label ?? ''),
+                getFullLabel(name, feature.properties.designation ?? ''),
                 scale, rotation, 'center', 'bottom',
             ),
             amplifier(feature, 
@@ -134,8 +134,8 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const props = feature.properties;
         const endLabel = getFullLabel(name, '');
         const joinParts = (a?: string, b?: string) => [a?.trim(), b?.trim()].filter(Boolean).join(' ');
-        const midTop = joinParts(props.label, props.countryCode);
-        const midBottom = joinParts(props.secondId, props.secondCountryCode);
+        const midTop = joinParts(props.designation, props.countryCode);
+        const midBottom = joinParts(props.secondDesignation, props.secondCountryCode);
 
         const scale = scaleOf(feature, context);
         const start = coords[0];

@@ -343,12 +343,12 @@ describe('editable state survives', () => {
         const from = fakeManager();
         const handler = build(from, TacticalGraphicName.PhaseLine);
         const holder = handler.graphic as {setLabel?: (l: unknown) => void};
-        holder.setLabel?.({label: 'ALPHA', hostility: TacticalGraphicHostility.hostileFaker});
+        holder.setLabel?.({designation: 'ALPHA', hostility: TacticalGraphicHostility.hostileFaker});
 
         const {to} = roundTrip(from);
         const restored = to.graphicControllers[0];
         const labels = readGraphicLabels(restored.graphic.base);
-        expect(labels.label).toBe('ALPHA');
+        expect(labels.designation).toBe('ALPHA');
         expect(labels.hostility).toBe(TacticalGraphicHostility.hostileFaker);
     });
 
@@ -630,7 +630,7 @@ describe('a graphic saved before the anchor-point conversion', () => {
                         role: 'base',
                         graphicName: TacticalGraphicName.Demonstration,
                         symbolId: 'legacy-dem',
-                        tacticalGraphic: {name: TacticalGraphicName.Demonstration, label: 'ALPHA'},
+                        tacticalGraphic: {name: TacticalGraphicName.Demonstration, designation: 'ALPHA'},
                     },
                     // Splayed: the second leg is neither parallel nor the same length.
                     geometry: {

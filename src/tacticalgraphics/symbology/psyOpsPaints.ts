@@ -146,7 +146,7 @@ export function psyOpsMarkPaint(base: PsyOpsPaint): PsyOpsPaint {
         // lines draw nothing at all.
         const lines = [
             (feature.properties.additionalInfo ?? '').trim(),
-            (feature.properties.label ?? '').trim(),
+            (feature.properties.designation ?? '').trim(),
         ].filter(line => line.length > 0);
         if (!lines.length) return paints;
 

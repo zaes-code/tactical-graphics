@@ -1038,7 +1038,7 @@ function movementLabelPaintFor(name: TacticalGraphicName) {
 }
 
 function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution: number) {
-    let primaryLabel = label.label ?? '';
+    let primaryLabel = label.designation ?? '';
     let dateLabel = getDateLabel(label);
     const geom = f.getGeometry() as MultiPoint;
     if (!geom) return [];
@@ -1925,8 +1925,8 @@ export function boundariesStyleFunc(): StyleFunction {
 }
 
 function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    const topLabel = formatFullLabel(labels.label, labels.countryCode ?? '');
-    const botLabel = formatFullLabel(labels.secondId ?? '', labels.secondCountryCode ?? '');
+    const topLabel = formatFullLabel(labels.designation, labels.countryCode ?? '');
+    const botLabel = formatFullLabel(labels.secondDesignation ?? '', labels.secondCountryCode ?? '');
     return (f, resolution) => {
         const geom = f.getGeometry() as MultiPoint;
         const coords = geom.getCoordinates();
@@ -2149,7 +2149,7 @@ export function getAreaLabelStylesFn(name: TacticalGraphicName): StyleFunction {
 }
 
 function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: GraphicLabels): StyleFunction {
-    const fullLabel = getFullLabel(name, labels.label ?? '');
+    const fullLabel = getFullLabel(name, labels.designation ?? '');
     const dateLabel = getDateLabel(labels);
     switch (name) {
         case TacticalGraphicName.HighDensityAirspaceControlZone:
@@ -3129,7 +3129,7 @@ export function createAirCoordinatingAreaLabelStyle(
     // ── Name / identifier block ───────────────────────────────────────────────
     const nameLines: string[] = [];
     if (identifier?.trim()) nameLines.push(identifier.trim());
-    if (labels.label?.trim()) nameLines.push(labels.label.trim());
+    if (labels.designation?.trim()) nameLines.push(labels.designation.trim());
 
     // ── Alt / time block — pad label to 11 chars for rough column alignment ───
     const altLines: string[] = [];

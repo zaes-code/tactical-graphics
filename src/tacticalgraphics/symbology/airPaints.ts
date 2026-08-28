@@ -128,7 +128,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         const names: string[] = [];
         const identifier = getLabel(name).trim();
         if (identifier) names.push(identifier);
-        if (props.label?.trim()) names.push(props.label.trim());
+        if (props.designation?.trim()) names.push(props.designation.trim());
 
         const values: string[] = [];
         if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
@@ -154,7 +154,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
  * The three airspace coordination areas.
  *
  * Prefix and designation are joined on **one** line here, and the second line is
- * `secondId` rather than `label` — these carry two designations where the zones carry
+ * `secondDesignation` rather than `label` — these carry two designations where the zones carry
  * one. The value block is grid and one combined effective-time line rather than two
  * separate times.
  *
@@ -167,9 +167,9 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
     return (feature, context) => {
         const props = feature.properties;
         const names: string[] = [];
-        const identifier = getFullLabel(name, props.label ?? '').trim();
+        const identifier = getFullLabel(name, props.designation ?? '').trim();
         if (identifier) names.push(identifier);
-        if (props.secondId?.trim()) names.push(props.secondId.trim());
+        if (props.secondDesignation?.trim()) names.push(props.secondDesignation.trim());
 
         const values: string[] = [];
         if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
