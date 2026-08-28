@@ -101,7 +101,7 @@ function App() {
     });
 
     // Nothing to tell the library here. It has no concept of light or dark — it has
-    // colours, and `MapRendering` sends them (mode palette plus the user's overrides) in
+    // colors, and `MapRendering` sends them (mode palette plus the user's overrides) in
     // one call. This state drives the basemap and the MUI theme only.
     const handleToggleDarkMode = () => {
         setDarkMode(d => {

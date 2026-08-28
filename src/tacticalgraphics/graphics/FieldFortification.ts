@@ -75,7 +75,7 @@ export class FortifiedLine extends TacticalGraphicsBase {
      * The drawn line, undecorated — the merlons are drawn in screen space by
      * `fortifiedLineStyleFunc`. They used to be baked in here at the drawing resolution,
      * so they were 15 px at whatever zoom the line happened to be drawn at and then
-     * fixed in metres. @see Obstacle in AreaGraphic.ts
+     * fixed in meters. @see Obstacle in AreaGraphic.ts
      */
     generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<LineString> {
         return this.asLineStringFeature(base.geometry.coordinates);

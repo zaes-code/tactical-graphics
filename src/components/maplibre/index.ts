@@ -18,7 +18,7 @@
  *   Style functions port 1:1 and text is measured with the same ruler that draws
  *   it. MapLibre renders only the basemap. Redraws every frame: ~7.7 ms for 1,000
  *   graphics, paid continuously while panning.
- * - {@link NativeLayerRenderer} — geometry realised into GeoJSON sources and drawn
+ * - {@link NativeLayerRenderer} — geometry realized into GeoJSON sources and drawn
  *   by MapLibre's own layers, on the GPU. Rebuilds geometry on zoom change only:
  *   ~4.7 ms for the same 1,000 graphics, and free while panning. Costs a glyph
  *   server for text, and shares one canvas with the basemap.
@@ -66,7 +66,7 @@ export type {InteractionCallbacks} from './interaction/MapLibreInteractions';
  * than from the pointer — a slider that sets a width, a form that sets a bearing.
  * Each takes a description and returns a new one; none of them touch a map.
  */
-export {centreOf, insertVertex, moveVertex, positionsOf, resize, rotate, setBandRange, setBend, setMirror, setOffset, setReach, translate} from './interaction/editGeometry';
+export {centerOf, insertVertex, moveVertex, positionsOf, resize, rotate, setBandRange, setBend, setMirror, setOffset, setReach, translate} from './interaction/editGeometry';
 export type {GraphicDescription} from './interaction/editGeometry';
 
 export {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
@@ -75,7 +75,6 @@ export type {MapLibreTacticalGraphic} from './maplibreAdapter';
 // The projection seam: MapLibre's camera as an OpenLayers `resolution`, and back.
 export {
     MERCATOR_HALF_WORLD,
-    MERCATOR_MAX_LATITUDE,
     MERCATOR_WORLD_SIZE,
     resolutionOf,
     toLonLat,
@@ -97,7 +96,7 @@ export {createBasemapStyle} from './basemapStyle';
 /**
  * ## The library's own names, re-exported
  *
- * Configuration, the palette, the property key and the centre-symbol controls belong to
+ * Configuration, the palette, the property key and the center-symbol controls belong to
  * the root entry point — they describe the *symbology*, not a renderer. The OpenLayers
  * subpath has always re-exported them as a convenience, and this one did not, so the
  * same program written for the two engines needed different import lines for things

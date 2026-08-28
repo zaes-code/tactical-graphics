@@ -6,7 +6,7 @@
  * redrawn here at a screen size.
  *
  * Both groups exist because their decoration is *screen*-sized. Baked into the
- * geometry a scallop is fixed in metres, so a FLOT drawn zoomed out comes back as
+ * geometry a scallop is fixed in meters, so a FLOT drawn zoomed out comes back as
  * a row of huge bulges; an arrowhead built off the drawn length grows every time
  * the graphic is resized. @see decorationScale
  */
@@ -20,8 +20,6 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     fontStyle,
     getColorByHostility,
-    getDefaultLineColor,
-    getLabelFillColor,
     getLabelHaloColor,
     maxGraphicLabelScale,
 } from '../core/symbology';
@@ -39,7 +37,7 @@ import {
     uprightRotation,
     wavePath,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -50,7 +48,7 @@ function vertices(feature: PaintFeature): ProjectedPosition[] {
     return [];
 }
 
-/** The forward line of own troops: one scalloped line in the affiliation's colour. */
+/** The forward line of own troops: one scalloped line in the affiliation's color. */
 export function forwardLineOfOwnTroopsPaint(): LinePaint {
     return (feature, context) => {
         const coords = vertices(feature);
@@ -81,7 +79,7 @@ const LC_LABEL_PAD_PX = 10;
  *
  * **This is the one graphic that draws both identities at once**, so the enemy-side
  * wave goes through the palette rather than a literal red: the pair has to stay
- * balanced when a host recolours the library.
+ * balanced when a host recolors the library.
  *
  * Which side is which is a property of the map, not of the drawing gesture. The
  * enemy-side wave takes the upper side of the line however the user drew it.
@@ -122,7 +120,7 @@ export function lineOfContactPaint(): LinePaint {
             text: {
                 text: 'LC',
                 font: fontStyle,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation,
                 align,
@@ -139,7 +137,12 @@ export function lineOfContactPaint(): LinePaint {
             },
             {
                 geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)},
-                stroke: {color: getDefaultLineColor(), widthPx: LINE_WIDTH()},
+                // **The friendly identity's colour, not the unaffiliated default.** This
+                // wave *is* the friendly side of the symbol — the graphic draws both
+                // identities at once — so painting it in the fallback line colour said
+                // "unaffiliated" beside a wave that said "hostile", and a host that
+                // re-coloured its affiliations re-coloured only half the symbol.
+                stroke: {color: getColorByHostility(TacticalGraphicHostility.friend), widthPx: LINE_WIDTH()},
             },
             lc(start, uprightRotation(start, end), reversed ? 'left' : 'right', reversed ? 1 : -1),
             lc(end, uprightRotation(end, start), reversed ? 'right' : 'left', reversed ? -1 : 1),
@@ -214,7 +217,7 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
             text: {
                 text: label,
                 font: RATIO_LOCKED_LABEL_FONT,
-                fill: getLabelFillColor(),
+                fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 rotation: uprightRotation(start, end),
                 align: 'center',

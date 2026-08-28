@@ -76,7 +76,7 @@ describe('the shared façade', () => {
     });
 
     it('offers the library own names from both subpaths, or from neither', () => {
-        // Configuration, the palette, the property key and the centre-symbol controls
+        // Configuration, the palette, the property key and the center-symbol controls
         // describe the symbology rather than a renderer, so which engine you picked must
         // not change how you import them. OpenLayers re-exported 27 of these and MapLibre
         // none, so the same program needed different import lines for things that have

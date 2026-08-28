@@ -25,10 +25,10 @@ const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 /**
- * Background colour when the tiles are off or still loading.
+ * Background color when the tiles are off or still loading.
  *
  * Not a theme: MapLibre paints nothing where there is no layer, which shows the
- * page through the map. A neutral mid-grey reads as "map" under both palettes.
+ * page through the map. A neutral mid-gray reads as "map" under both palettes.
  */
 const EMPTY_BACKGROUND = '#2a2e35';
 

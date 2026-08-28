@@ -9,7 +9,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {LineGraphic, visiblePathHandles} from "../controllers/LineGraphicController";
+import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
 
 
@@ -66,17 +66,27 @@ export class RetrogradeTask implements LineGraphic {
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), this.base.getGeometry()?.getCoordinates()[0], this.hidesStartHandle)));
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
         this.offsetHandle.setGeometry(new Point(handleCoords[0]));
-        // Persist the *effective* metre value, not the viewport factor it came from.
+        // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
-        // consumed is a distance in metres — and that is what a snapshot can carry and a
+        // consumed is a distance in meters — and that is what a snapshot can carry and a
         // restore can replay without knowing anything about zoom. Stamped on every
         // rebuild, not just on a width drag, so a graphic the user never touched still
         // describes itself.
         this.publish();
     };
 
+
+    /**
+     * `handles` is `handleCoords.slice(1)`: `handleCoords[0]` goes to `offsetHandle`.
+     *
+     * The generator's contract calls index 0 the `mirror` handle, so without this the
+     * manager read the arrow tip — contract index 1 — as the mirror and claimed its drag
+     * as a flip, which is why that handle appeared to do nothing.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    handleIndexOffset = 1;
 
     getBaseGraphicFeature = (): Feature<LineString> => {
         return this.base;
@@ -99,7 +109,7 @@ export class RetrogradeTask implements LineGraphic {
         this.updateGeometry();
         // `size` here is the width the user dragged, not a construction-time constant,
         // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
-        // decoration, and is not a reach from any centre. @see TacticalGraphicProperties.
+        // decoration, and is not a reach from any center. @see TacticalGraphicProperties.
         this.publish();
     }
 

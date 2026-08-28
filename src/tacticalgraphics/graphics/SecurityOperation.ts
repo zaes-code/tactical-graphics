@@ -15,7 +15,7 @@ import * as turf from '../core/turf';
  * two symbols that silently disagree.
  */
 export const SECURITY_OPERATION_PX = {
-    /** Where the label anchor sits, measured from the centre. */
+    /** Where the label anchor sits, measured from the center. */
     labelPadding: 50,
     /**
      * Clear space between the label and the line that runs away from it.
@@ -40,7 +40,7 @@ const ARROW_HEAD_LENGTH_PX = SECURITY_OPERATION_PX.arrowHeadLength;
 const ARROW_HEAD_DEGREE = SECURITY_OPERATION_PX.arrowHeadDegree;
 
 /**
- * Centre to arrow tip at scale 1, in screen pixels - what `size` measures.
+ * Center to arrow tip at scale 1, in screen pixels - what `size` measures.
  *
  * Each arm runs from `centerPadding` out to `2 x arrowLength`, so the tip is the
  * padding plus twice the arm.
@@ -48,13 +48,13 @@ const ARROW_HEAD_DEGREE = SECURITY_OPERATION_PX.arrowHeadDegree;
 const HALF_EXTENT_PX = CENTER_PADDING_PX + 2 * ARROW_LENGTH_PX;
 
 /**
- * The half-extent used when a caller supplies no size at all, in metres.
+ * The half-extent used when a caller supplies no size at all, in meters.
  *
  * The shipped pixel sizes at a mid-scale view (~100 m per pixel), so a graphic
- * built from nothing but a centre point is legible rather than a dot. A caller
+ * built from nothing but a center point is legible rather than a dot. A caller
  * that cares passes `radius`.
  */
-const DEFAULT_HALF_EXTENT_METRES = HALF_EXTENT_PX * 100;
+const DEFAULT_HALF_EXTENT_METERS = HALF_EXTENT_PX * 100;
 
 export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOptions> {
     name: string;
@@ -66,7 +66,7 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
     }
 
     /**
-     * Every dimension of the symbol, in metres.
+     * Every dimension of the symbol, in meters.
      *
      * ## Why these can be derived rather than passed
      *
@@ -86,9 +86,9 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
      * An explicit value always wins, so the holder's geometry is unchanged.
      */
     private dimensions(opts: SecurityOperationOptions) {
-        // `size` is the symbol's half-extent: centre to arrow tip, which at scale 1
+        // `size` is the symbol's half-extent: center to arrow tip, which at scale 1
         // is the padding plus twice the arm length.
-        const size = opts.size ?? DEFAULT_HALF_EXTENT_METRES;
+        const size = opts.size ?? DEFAULT_HALF_EXTENT_METERS;
         const of = (px: number) => (size * px) / HALF_EXTENT_PX;
 
         const centerPadding = opts.centerPadding ?? of(CENTER_PADDING_PX);

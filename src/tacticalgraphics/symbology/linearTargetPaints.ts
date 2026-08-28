@@ -9,10 +9,10 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelFillColor, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {offsetAbove, offsetBelow, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Half-height of the end caps, in screen pixels **at the drawing resolution**. */
 const BAR_HALF_PX = 14;
@@ -89,7 +89,7 @@ function linearTargetPaints(
         text: {
             text: value,
             font: fontStyle,
-            fill: getLabelFillColor(),
+            fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align: 'center',
@@ -114,13 +114,13 @@ function linearTargetPaints(
 /** Linear target: designation above the line, nothing below. */
 export function linearTargetPaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) =>
-        linearTargetPaints(feature, context, getFullLabel(name, feature.properties.label ?? ''), []);
+        linearTargetPaints(feature, context, getFullLabel(name, feature.properties.designation ?? ''), []);
 }
 
 /** Linear smoke target: as above, with "SMOKE" below the line. */
 export function linearSmokeTargetPaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) =>
-        linearTargetPaints(feature, context, getFullLabel(name, feature.properties.label ?? ''), ['SMOKE']);
+        linearTargetPaints(feature, context, getFullLabel(name, feature.properties.designation ?? ''), ['SMOKE']);
 }
 
 /**
@@ -133,10 +133,10 @@ export function linearSmokeTargetPaint(name: TacticalGraphicName): (f: PaintFeat
  */
 export function finalProtectiveFirePaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
-        const {label, secondId, weapon} = feature.properties;
-        const belowLines = ['FPF', secondId ?? '', weapon ?? ''].filter(s => s.length > 0);
+        const {designation, secondDesignation, weapon} = feature.properties;
+        const belowLines = ['FPF', secondDesignation ?? '', weapon ?? ''].filter(s => s.length > 0);
         // Not trimmed: matching the original exactly, so the port cannot change what
         // a user's trailing space does.
-        return linearTargetPaints(feature, context, label ?? '', belowLines);
+        return linearTargetPaints(feature, context, designation ?? '', belowLines);
     };
 }

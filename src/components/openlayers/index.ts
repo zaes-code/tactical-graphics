@@ -48,12 +48,12 @@ export {TACTICAL_GRAPHIC_KEY, readGraphicLabels, writeGraphicProperties} from '.
 export {getGraphicFields, supportsHostility} from './graphicFieldRegistry';
 export type {GraphicFieldSet} from './graphicFieldRegistry';
 
-// Every style function, plus the colour and width constants they share.
+// Every style function, plus the color and width constants they share.
 export * from './openlayerStyles';
 
-// Configuration — label size, line width, colours. These are **re-exports**: the config
+// Configuration — label size, line width, colors. These are **re-exports**: the config
 // is defined in the root entry point (`@zaes/tactical-graphics`), because none of it is
-// specific to OpenLayers. Pixel sizes and affiliation colours mean the same thing to any
+// specific to OpenLayers. Pixel sizes and affiliation colors mean the same thing to any
 // renderer, so a second one inherits them rather than reinventing them.
 //
 // Mirrored here as a convenience, so a host wiring up this renderer does not need a
@@ -83,11 +83,11 @@ export {
 } from '@zaes/tactical-graphics';
 export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
-// Editor-chrome colours, resolved. Handle dots, the inert centre and the draw marker —
+// Editor-chrome colors, resolved. Handle dots, the inert center and the draw marker —
 // the affordances this renderer draws so a user can edit a graphic. Each falls back to
 // `DEFAULT_PALETTE` until the host overrides it through the config.
 //
-// The library has no concept of light or dark: it has colours, and the host decides
+// The library has no concept of light or dark: it has colors, and the host decides
 // them. Keep whatever sets your app needs and send one on a mode change — that is the
 // whole of it. `defaultDrawStyleFunc` is the draw-time style built from the marker pair;
 // the manager installs it for every graphic, and it is exported for a host driving the
@@ -147,12 +147,12 @@ export {MissionTaskController, PointDropController} from './controllers/MissionT
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 export {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
-// The centre symbol a security operation draws between its arms. A single-point
+// The center symbol a security operation draws between its arms. A single-point
 // 2525E icon, which is milsymbol's job — so this package asks a provider for it
 // and never imports milsymbol itself. Register one with
 // `useMilsymbolSecurityOperationSymbols(ms)` if you already depend on milsymbol,
 // or `setSecurityOperationSymbolProvider` to draw it yourself. Register nothing
-// and the arms and labels draw with an empty centre.
+// and the arms and labels draw with an empty center.
 // Its on-screen size is the library's rather than the provider's, because the
 // library is what builds the Icon around a provider that returns a `src` string:
 // `setSecurityOperationSymbolSize`, not milsymbol's own `size` option.

@@ -11,6 +11,7 @@ import {
     GeoJsonProperties, LineString
 } from "geojson";
 import {ITacticalGraphic} from "../core/type";
+import {featureInGeneratorOrder} from "../core/drawOrder";
 
 
 export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBaseGraphicOptions> implements IGraphicGenerator {
@@ -89,14 +90,28 @@ export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBase
         };
     }
 
+    /**
+     * The one place a generator is handed its base, and so the one place APP-06's point
+     * numbering is applied.
+     *
+     * Thirty-two graphics store their points **tip first**, because that is how the standard
+     * numbers them; every `generateGraphics` in this package was written to build its
+     * head at the last vertex. `featureInGeneratorOrder` reconciles the two by reversing
+     * the line on the way in, which leaves the shape, the decoration sizes and the handle
+     * contracts exactly as they were and keeps the reversal out of thirty-two generators.
+     *
+     * `base` on the way out is the caller's own feature, not the reversed copy: the
+     * caller drew it, saves it, and edits its vertices. @see drawOrder.ts
+     */
     generate(base: Feature, opts?: T): ITacticalGraphic {
+        const drawn = featureInGeneratorOrder(this.name, base);
         return <ITacticalGraphic>{
             name: this.name,
             type: this.type,
             base: base,
-            graphic: this.generateGraphics(base, opts),
-            handles: this.generateHandles(base, opts),
-            labels: this.generateLabels(base, opts),
+            graphic: this.generateGraphics(drawn, opts),
+            handles: this.generateHandles(drawn, opts),
+            labels: this.generateLabels(drawn, opts),
         }
     }
 

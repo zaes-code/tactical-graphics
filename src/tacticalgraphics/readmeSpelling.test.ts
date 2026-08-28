@@ -10,7 +10,14 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
 
-const BRITISH = /\b(centre|centres|colour|colours|coloured|metre|metres|kilometre|kilometres|behaviour|labelled|organis(e|ed|ing|ation))\b/gi;
+/**
+ * The list is deliberately long. A short one passes while the prose is still wrong:
+ * "synthesised" and "re-realise" both survived a review of this file because neither
+ * was listed, and only a manual read caught them. Add to this whenever a new one is
+ * found rather than fixing the single instance.
+ */
+const BRITISH =
+    /\b(centre|centres|centred|colour|colours|coloured|metre|metres|kilometre|kilometres|behaviour|labelled|modelling|cancelled|fulfil|organis(e|ed|ing|ation)|synthesis(e|ed|ing)|realis(e|ed|ing)|recognis(e|ed|ing)|normalis(e|ed|ing)|initialis(e|ed|ing)|optimis(e|ed|ing)|minimis(e|ed|ing)|analys(e|ed|ing)|licence|defence|artefact|catalogue|favour|neighbour|rasteris(e|ed|ing|ation)|visualis(e|ed|ing|ation)|serialis(e|ed|ing|ation)|standardis(e|ed|ing|ation)|prioritis(e|ed|ing)|customis(e|ed|ing)|characteris(e|ed|ing)|utilis(e|ed|ing)|generalis(e|ed|ing)|offence|manoeuvre|manoeuvres|programme|programmes|judgement|travelling|signalling|grey|whilst)\b/gi;
 
 describe('README spelling', () => {
     it('uses US English throughout the prose', () => {
@@ -18,7 +25,7 @@ describe('README spelling', () => {
         const prose = md
             .slice(0, md.indexOf('## Supported graphics'))
             // Code is not prose. A fenced block is someone's program and an inline span
-            // is usually an identifier — `AltitudeUnit.Metres` is the name of a thing, and
+            // is usually an identifier — `AltitudeUnit.Meters` is the name of a thing, and
             // respelling it would make the documentation wrong rather than American.
             .replace(/```[\s\S]*?```/g, '')
             .replace(/`[^`]*`/g, '');

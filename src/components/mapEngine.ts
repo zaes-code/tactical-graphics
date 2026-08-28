@@ -1,4 +1,4 @@
-import type {EditMode, EngineCapabilities, TacticalGraphicHostility, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
+import type {EditMode, EngineCapabilities, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 
 /**
@@ -20,7 +20,7 @@ import type {FeatureCollection} from 'geojson';
  *
  * An engine says what it supports and the panel **disables** what it does not, with the
  * reason on the tooltip. That is deliberately not the same as hiding the controls: a
- * greyed button with a reason tells you the state of the port, a missing button reads
+ * grayed button with a reason tells you the state of the port, a missing button reads
  * as a different app, and a live button that silently does nothing is the worst of the
  * three. Both engines currently declare everything true; the shape stays because a
  * third renderer will arrive unfinished.
@@ -52,7 +52,13 @@ export interface MapEngineHandle extends TacticalGraphicsEngine {
     reset(): void;
 
     /** Draw the sample sweep, optionally forcing one hostility. */
-    drawSamples(hostility?: TacticalGraphicHostility): void;
+    /**
+     * Draw the sample sweep, optionally forcing one hostility.
+     *
+     * `names` narrows it to the graphics the panel is listing. Omitted or empty means
+     * everything, which is what a host with no filter of its own wants.
+     */
+    drawSamples(hostility?: TacticalGraphicHostility, names?: TacticalGraphicName[]): void;
 
     /** Downloads the map as a `.geojson` file. The on-disk twin of `snapshot`. */
     exportGeoJson(): void;

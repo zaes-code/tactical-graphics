@@ -59,7 +59,7 @@ describe('round trip', () => {
         }
     });
 
-    it('normalises an old four-digit DTG to the short form on the way back out', () => {
+    it('normalizes an old four-digit DTG to the short form on the way back out', () => {
         expect(dateTimeLocalToDtg(dtgToDateTimeLocal('021200ZJUN2026'))).toBe('021200ZJUN26');
     });
 });

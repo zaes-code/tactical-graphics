@@ -8,8 +8,8 @@
  *   - LineGraphicController      → a LineString (2 pts, or `maxPoints`; multi → 3 = 2 segments)
  *   - PolygonGraphicController   → a Polygon (5-sided ring)
  *   - RectangularAreaGraphicController → a Polygon box (4 corners)
- *   - MissionTaskController      → a centre point + radius, via updateGeom()
- *   - SecurityOperationsController → a centre point, via setBaseFeature()
+ *   - MissionTaskController      → a center point + radius, via updateGeom()
+ *   - SecurityOperationsController → a center point, via setBaseFeature()
  *
  * A generator that throws (a genuinely broken graphic) is caught and reported,
  * not fatal — the rest of the sweep still renders.
@@ -40,6 +40,11 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     getDisplayName,
+    groundLength,
+    isRectangular,
+    latitudeFromMercatorY,
+    rectangleDefaultHalfWidth,
+    storedOrder,
 } from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
@@ -59,11 +64,11 @@ import ms from 'milsymbol';
 import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
 
 /**
- * A different unit symbol in the centre of each security operation.
+ * A different unit symbol in the center of each security operation.
  *
  * Cover, Guard and Screen otherwise draw the same generic land unit, which makes
  * three graphics that already look alike harder still to tell apart in a
- * catalogue. It also demonstrates the per-graphic provider — the global one is set
+ * catalog. It also demonstrates the per-graphic provider — the global one is set
  * once for the whole app and cannot, by itself, give two Screens different
  * symbols.
  *
@@ -86,7 +91,7 @@ const SAMPLE_UNIT_FUNCTION_ID: Partial<Record<TacticalGraphicName, string>> = {
  *
  * Returned per symbol as `{src, sizePx}` rather than set through
  * `setSecurityOperationSymbolSize`, which is global — the gallery has no business
- * resizing the centre symbol for the rest of the host's application.
+ * resizing the center symbol for the rest of the host's application.
  */
 const SAMPLE_UNIT_SIZE_PX = 50;
 
@@ -163,7 +168,7 @@ const DECORATED_GRAPHICS = new Set<TacticalGraphicName>([
  */
 const DECORATED_SAMPLE_SCALE = 3;
 
-/** EPSG:3857 metres an area graphic (polygon, rectangle, circle) spans from its centre. */
+/** EPSG:3857 meters an area graphic (polygon, rectangle, circle) spans from its center. */
 export const HALF = 30_600;
 /**
  * How much longer a line graphic is drawn than an area graphic. Arrows, axes and
@@ -176,7 +181,7 @@ export const LINE_HALF = HALF * LINE_SCALE;
 /**
  * Spacing, in screen pixels at the resolution the samples are generated at.
  * GAP is the clearance around every sample — the guarantee against touching
- * neighbours; TITLE and HEADING are the bands reserved for a caption and for a
+ * neighbors; TITLE and HEADING are the bands reserved for a caption and for a
  * category banner.
  */
 const GAP_PX = 10;
@@ -210,14 +215,14 @@ const CONTROL_PANEL_PX = 326;
 const VIEW_PADDING_PX = 14;
 
 /** A measured box wider than this is a wrapped or degenerate geometry, not a big graphic. */
-const SANE_METRES = 4_000_000;
+const SANE_METERS = 4_000_000;
 
 export interface SampleSweepResult {
     drawn: number;
     failed: {name: TacticalGraphicName; error: string}[];
 }
 
-/** A sample's rendered extent, relative to the centre it was generated at. */
+/** A sample's rendered extent, relative to the center it was generated at. */
 interface Box {
     dx0: number;
     dy0: number;
@@ -228,7 +233,7 @@ interface Box {
 const boxWidth = (b: Box) => b.dx1 - b.dx0;
 const boxHeight = (b: Box) => b.dy1 - b.dy0;
 
-/** Where one sample ends up: the centre to generate it at, and its caption anchor. */
+/** Where one sample ends up: the center to generate it at, and its caption anchor. */
 interface Placement {
     name: TacticalGraphicName;
     cx: number;
@@ -247,7 +252,7 @@ interface Layout {
     headings: Heading[];
     /** Resolution the samples were measured at — generate at this, or the boxes lie. */
     resolution: number;
-    /** Full span of the packed layout, centred on (0, 0). */
+    /** Full span of the packed layout, centered on (0, 0). */
     width: number;
     height: number;
 }
@@ -270,7 +275,7 @@ export function applyHostility(
 ): void {
     if (!supportsHostility(name)) return;
 
-    const labels: GraphicLabels = {label: '', hostility};
+    const labels: GraphicLabels = {designation: '', hostility};
     const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
     if (holder.setLabel) holder.setLabel(labels);
     else writeGraphicProperties(handler.getFeatures(), name, labels);
@@ -295,8 +300,8 @@ export {clearAllGraphics};
  *
  * `hostility`, when given, is applied to every sample that doctrinally accepts
  * one — which makes the sweep a one-click check of hostility rendering across
- * the whole catalogue. Graphics without the field (the Chapter 6 tactical
- * mission tasks) are skipped rather than coloured, so the sweep shows what a
+ * the whole catalog. Graphics without the field (the Chapter 6 tactical
+ * mission tasks) are skipped rather than colored, so the sweep shows what a
  * user could actually produce.
  */
 export function drawProvenSamples(
@@ -330,7 +335,12 @@ export function drawProvenSamples(
     // gallery image readable, and it is not what a banner was doing.
 
     layout.placements.forEach(({name, cx, cy, titleY}) => {
-        const handler = getController(name, layout.resolution);
+        // Sized for the row it lands in. The sheet spans most of the globe, so its top
+        // rows sit where a projected metre is worth half a real one — every decoration
+        // and badge up there drew at twice the size of the identical symbol on the
+        // equator, which is exactly the comparison this sweep exists to make.
+        // @see screenMeters
+        const handler = getController(name, layout.resolution, latitudeFromMercatorY(cy));
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
         if (handler instanceof SecurityOperationsController) {
@@ -478,7 +488,7 @@ function nominalBox(name: TacticalGraphicName): Box {
  * says so, rather than laying out around the garbage.
  */
 function sane(box: Box, name: TacticalGraphicName): Box {
-    if (boxWidth(box) <= SANE_METRES && boxHeight(box) <= SANE_METRES) return box;
+    if (boxWidth(box) <= SANE_METERS && boxHeight(box) <= SANE_METERS) return box;
     // eslint-disable-next-line no-console
     console.warn(`[sample sweep] ${name} measured ${Math.round(boxWidth(box) / 1000)}×${Math.round(boxHeight(box) / 1000)}km — using its nominal size`);
     return nominalBox(name);
@@ -579,7 +589,7 @@ function layoutBlock(
 /**
  * Stands the category blocks in `columns` columns, each block going to whichever
  * column is currently shortest — which keeps the columns level without
- * reordering the categories. Coordinates come out centred on (0, 0) with y up,
+ * reordering the categories. Coordinates come out centered on (0, 0) with y up,
  * ready to hand straight to the generators.
  */
 function assembleColumns(
@@ -607,7 +617,7 @@ function assembleColumns(
         width,
         height,
         layout: {
-            // A cell is [gap/2 | title | box | gap/2]; the box is centred across the
+            // A cell is [gap/2 | title | box | gap/2]; the box is centered across the
             // cell's width and hangs from its top, so captions never collide with the
             // sample above them.
             placements: placed.flatMap(({block, left, top}) => block.cells.map(({name, left: cl, top: ct, box}) => {
@@ -654,7 +664,7 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     });
     if (isEmpty(extent)) return null;
 
-    // A security operation's centre symbol is a Point with an Icon style, and a
+    // A security operation's center symbol is a Point with an Icon style, and a
     // point has no extent — so the measured box counted the arms and the labels and
     // nothing at all for the symbol between them. Cells came out too small and the
     // caption landed on top of the symbol: invisible while the symbol was the
@@ -681,7 +691,7 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
 }
 
-/** Feeds a handler the base geometry its controller expects, centred on (cx, cy). */
+/** Feeds a handler the base geometry its controller expects, centered on (cx, cy). */
 export function applyBaseGeometry(
     handler: TacticalGraphicHandler,
     name: TacticalGraphicName,
@@ -699,17 +709,61 @@ export function applyBaseGeometry(
         const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy, half) : pentagonRing(cx, cy, half);
         handler.setBaseFeature(polygonFeature(ring, symbolId, name));
     } else if (handler instanceof LineGraphicController) {
+        // **A few line graphics number their points rather than sequencing them**, and the
+        // generic left-to-right run means something different to each. The three obstacle
+        // bypasses take points 1 and 2 as the two ends of the *opening* and point 3 as the
+        // rear, so a shallow V hands them an opening a few pixels wide and a rear off to one
+        // side — which draws as a line, and is what the samples showed.
+        if (BYPASS_POINTS.has(name)) {
+            // Points 1 and 2 stand on the cell's east edge and point 3 on its west, so the
+            // sample spans the same 2 x LINE_HALF every other line sample does. Nudging
+            // them inward reads as a bypass drawn small rather than as a narrower one.
+            const half = LINE_HALF * grow;
+            handler.setBaseFeature(lineFeature([
+                [cx + half, cy + half * 0.55],
+                [cx + half, cy - half * 0.55],
+                [cx - half, cy],
+            ] as Coordinate[], symbolId, name));
+            return;
+        }
+        // **A rectangular zone's width is stamped, not left to the holder's seed.**
+        // The holder starts one at a screen size spent at the resolution it was built
+        // with, and the two sheets are built at different zooms — so the same zone came
+        // out 360 km wide here and 1,005 km on MapLibre, and the comparison's premise
+        // that both engines start from the same base stopped being true.
+        // @see rectangleDefaultHalfWidth
+        if (isRectangular(name)) {
+            const half = LINE_HALF * grow;
+            const axis: Coordinate[] = [[cx - half, cy], [cx + half, cy]];
+            handler.setBaseFeature(lineFeature(axis, symbolId, name));
+            const metres = groundLength(half * 2, latitudeFromMercatorY(cy));
+            (handler as {setOffset?: (value: number) => void}).setOffset?.(rectangleDefaultHalfWidth(metres));
+            return;
+        }
+
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-        handler.setBaseFeature(lineFeature(lineCoords(cx, cy, pts, LINE_HALF * grow), symbolId, name));
+        // **Drawn in the order the graphic files its points, so every sample still reads
+        // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
+        // line handed to one of those puts its head on the *west* end — a sheet of arrows
+        // pointing back the way the standard's own plates draw them coming. @see storedOrder
+        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow)) as Coordinate[];
+        handler.setBaseFeature(lineFeature(path, symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }
 }
 
+/** The graphics whose drawn points are *numbered roles*, not a path. @see applyBaseGeometry */
+const BYPASS_POINTS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]);
+
 // ── geometry synthesis ──────────────────────────────────────────────────────
 
 /**
- * Line vertices centred on (cx, cy): 2 points → 1 segment; 3+ → a shallow
+ * Line vertices centered on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
 function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
@@ -763,7 +817,7 @@ const pointFeature = (coord: Coordinate, id: string, name: TacticalGraphicName) 
 
 /**
  * Word-wraps a caption onto short lines so it stays within its cell instead of
- * bleeding into neighbours. Truncates to `maxLines` with an ellipsis.
+ * bleeding into neighbors. Truncates to `maxLines` with an ellipsis.
  */
 function wrapLabel(text: string, maxChars = 14, maxLines = 2): string {
     const lines: string[] = [];
@@ -781,7 +835,7 @@ function wrapLabel(text: string, maxChars = 14, maxLines = 2): string {
 /**
  * A non-interactive caption above each sample so you can tell which is which.
  * Wrapped and bottom-anchored at the top of the cell so multi-line names grow
- * up into the gap between rows rather than over the graphic or its neighbours.
+ * up into the gap between rows rather than over the graphic or its neighbors.
  */
 function titleFeature(coord: Coordinate, text: string): Feature {
     const f = new Feature(new Point(coord));

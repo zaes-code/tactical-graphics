@@ -5,10 +5,15 @@
  * where a graphic is; these say what it looks like, and return plain
  * {@link Paint} objects rather than an OpenLayers `Style`.
  *
- * **Partial by design, and currently a spike.** Three of 69 style functions are
- * ported. The point was to measure what porting the other 66 costs and whether a
- * declarative renderer could take them at all — see `ai/maplibre-renderer.md` for
- * the answer.
+ * **No longer a spike.** This began as three ported style functions, to measure what
+ * the rest would cost and whether a declarative renderer could take them at all. The
+ * port is done: `isPaintable` is true for **215 of the 216 registered names**, and both
+ * shipping renderers paint through here rather than owning any symbology of their own.
+ * `ai/maplibre-renderer.md` has the original estimate and how it turned out.
+ *
+ * **Everything exported here is a renderer contract.** `/openlayers` and `/maplibre`
+ * are separately published entry points that consume it by package name, so removing
+ * an export breaks them for consumers. See the note in the root barrel.
  */
 
 export {
@@ -17,7 +22,7 @@ export {
     OBSTACLE_TOOTH_GAP_PX,
     OBSTACLE_TOOTH_HEIGHT_PX,
     angleBetween,
-    centreSegmentIndex,
+    centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
     decorationScale,
@@ -64,7 +69,32 @@ export {
     zoneLabelPaint,
 } from './areaLabelPaints';
 
+export {fitLabelScale, liftedAnchor} from './labelFit';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minelinePaint,
+    raftSitePaint,
+    tripWirePaint,
+} from './protectionLinePaints';
+export {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
+export {sweptArcTaskPaint} from './sweptArcTaskPaints';
+export {obstacleBypassPaint} from './obstacleBypassPaints';
+export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
+export {avenueOfApproachLabelPaint} from './movementPaints';
+export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
+export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
+export type {MobilityGlyph} from './sectorModifierPaints';
+export {
+    GLYPH_HALF_WIDTH,
+    MOBILITY_GLYPHS,
+    TERRAIN_HATCH_COLORS,
+    mobilityMarks,
+    sectorModifierLabelPaint,
+    terrainHatchColor,
+    terrainWord,
+} from './sectorModifierPaints';
 export {directionArrowPaint} from './linePaints';
 export {routeControlMeasurePaint} from './routePaints';
 export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
@@ -87,7 +117,7 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
-export {airfieldPaint} from './airfieldPaints';
+export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 export type {ResolvedRangeFanBand} from './boundaryPaints';
