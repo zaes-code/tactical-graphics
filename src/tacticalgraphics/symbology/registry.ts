@@ -760,7 +760,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const [name, label] of CARDINAL_LABEL_AREAS) {
         registry[name] = {
             graphic: cardinalBoundaryPaint(label),
-            label: cardinalLabelPaint(label, areaDefaultLabelPaint(name)),
+            // **No literal in the middle.** These two write their abbreviation into their
+            // own boundary, four times over, so the centre block carries the designation
+            // and the date and nothing else. (User's call, 2026-08-27.)
+            label: cardinalLabelPaint(label, areaDefaultLabelPaint(name, false)),
         };
     }
     for (const [name, letter] of CBRN_AREAS) {

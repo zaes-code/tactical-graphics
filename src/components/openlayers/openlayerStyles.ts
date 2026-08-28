@@ -2191,7 +2191,9 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return asStyleFunction(
                 cardinalLabelPaint(
                     CARDINAL_LABEL_AREAS.find(([area]) => area === name)![1],
-                    areaDefaultLabelPaint(name),
+                    // No literal in the middle: it is already in the boundary, four times
+                    // over. @see areaDefaultLabelPaint
+                    areaDefaultLabelPaint(name, false),
                 ),
                 name,
             );

@@ -29,8 +29,14 @@ type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 /** North, east, south, west — the four the standard names, clockwise from up. */
 const CARDINALS = [Math.PI / 2, 0, -Math.PI / 2, Math.PI] as const;
 
-/** Clear space either side of the text inside its break, in screen pixels. */
-const GAP_PADDING_PX = 6;
+/**
+ * Clear space either side of the text inside its break, in screen pixels.
+ *
+ * **Just enough to keep the glyphs off the stroke ends.** It was six, which on a
+ * three-letter abbreviation opened a break half as wide again as the word it holds — the
+ * outline read as broken rather than as lettered. (User's call, 2026-08-27.)
+ */
+const GAP_PADDING_PX = 2;
 
 /** Centroid of a ring, good enough to shoot the rays from. */
 export function ringCenter(ring: readonly ProjectedPosition[]): ProjectedPosition {
