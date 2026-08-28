@@ -126,6 +126,10 @@ member *and* its value, plus five exported identifiers respelled.
 
 ### Fixed
 
+- **The aviation direction of attack keeps its bow-tie on its own line.** The mark is baked into the geometry at a fixed multiple of the decoration size along the first segment, so a base shorter than that multiple placed it *past* the end of the line — at a quarter of the length it needs, the furthest bow-tie vertex sat six times the line's own length beyond it. It is now clamped to the segment and held clear of the arrowhead: it slides back while there is room to slide, shrinks when there is not, and is omitted rather than misplaced when there is no room at all. The clamp is in the generator, so it holds for an imported file and for a host calling `renderTacticalGraphic` directly, not only for the two renderers.
+
+- **`minimumFirstSegmentPx` — the draw-time floor that keeps that from happening in the first place, now applied by both engines.** Aviation direction of attack (80 px) and both fixes (145 px) carry a mark near the start of the line and need room for it and for the arrowhead. The rule lived as two hard-coded literals inside an OpenLayers holder, so MapLibre had none: measured, the same 40-pixel drag gave a line held to 80 px on OpenLayers and left at 40 px on MapLibre, where the bow-tie then sat off the end of the graphic. Both engines read the shared table now, on the draw *and* on a vertex drag, and a parity test guards the pair.
+
 - A movement label's alignment now flips with its rotation, so a westward graphic's text is not upside down, and its span scale is capped.
 - The counterattack label sits behind the arrowhead; the avenue of approach no longer offers date fields it does not carry.
 - Exfiltrate and infiltrate are built on their own draw rule rather than reconciled against each other.
