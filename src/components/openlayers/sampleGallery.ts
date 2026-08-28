@@ -715,11 +715,14 @@ export function applyBaseGeometry(
         // rear, so a shallow V hands them an opening a few pixels wide and a rear off to one
         // side — which draws as a line, and is what the samples showed.
         if (BYPASS_POINTS.has(name)) {
+            // Points 1 and 2 stand on the cell's east edge and point 3 on its west, so the
+            // sample spans the same 2 x LINE_HALF every other line sample does. Nudging
+            // them inward reads as a bypass drawn small rather than as a narrower one.
             const half = LINE_HALF * grow;
             handler.setBaseFeature(lineFeature([
-                [cx + half * 0.6, cy + half * 0.55],
-                [cx + half * 0.6, cy - half * 0.55],
-                [cx - half * 0.8, cy],
+                [cx + half, cy + half * 0.55],
+                [cx + half, cy - half * 0.55],
+                [cx - half, cy],
             ] as Coordinate[], symbolId, name));
             return;
         }
