@@ -329,6 +329,8 @@ export {
 } from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
+export {followTaskPaint} from './symbology/followTaskPaints';
+export type {FollowVariant} from './symbology/followTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
