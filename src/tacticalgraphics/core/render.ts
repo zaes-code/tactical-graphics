@@ -10,7 +10,7 @@
  *   "type": "Feature",
  *   "geometry": {"type": "LineString", "coordinates": [[-77.0, 38.9], [-76.9, 39.0]]},
  *   "properties": {
- *     "tacticalGraphic": {"name": "MainAxisOfAdvance", "label": "1-508 IN"}
+ *     "tacticalGraphic": {"name": "MainAxisOfAdvance", "designation": "1-508 IN"}
  *   }
  * }
  * ```
@@ -50,10 +50,25 @@ export interface TacticalGraphicProperties {
     name: TacticalGraphicName;
 
     // ── Amplifiers (text shown on the graphic) ──────────────────────────────
-    /** Primary free-text designation, e.g. "1-508 IN". */
-    label?: string;
-    /** Secondary designation, rendered beneath the primary on some graphics. */
-    secondId?: string;
+    /**
+     * **Field T — unique designation.** The primary free-text designation, e.g.
+     * "1-508 IN". FM 1-02.2: *"T — Identifies a unique designation"*.
+     *
+     * Named for the field rather than for what it renders as. It was `label`, which
+     * collided with the three other senses of that word in this library — the anchor
+     * features `renderTacticalGraphic` returns, the `role: 'label'` tag, and
+     * {@link GraphicLabels}, the bag this is one member of. `readGraphicLabels(f).label`
+     * read as the label of the labels and was none of them.
+     */
+    designation?: string;
+    /**
+     * **Field T1 — the second unique designation**, rendered beneath the primary on the
+     * graphics that carry two. A boundary shows both.
+     *
+     * Doctrine numbers these T and T1, which is why they are not `identifier1` and
+     * `identifier2`: a reader holding the plate would take `identifier1` for T1.
+     */
+    secondDesignation?: string;
     /**
      * **Field H — additional information.** Free text a symbol carries *beside* its
      * designation, not instead of it.
@@ -241,9 +256,11 @@ export interface TacticalGraphicProperties {
  * already imports it had to change.
  */
 export interface GraphicLabels {
-    label: string;
+    /** Field T. @see TacticalGraphicProperties.designation */
+    designation: string;
     countryCode?: string;
-    secondId?: string;
+    /** Field T1. @see TacticalGraphicProperties.secondDesignation */
+    secondDesignation?: string;
     /** Field H — additional information. @see TacticalGraphicProperties.additionalInfo */
     additionalInfo?: string;
     secondCountryCode?: string;
@@ -309,11 +326,46 @@ export function listTacticalGraphicNames(): string[] {
     return TacticalGraphicsRegistry.list();
 }
 
+/**
+ * Amplifier keys 3.0.0 renamed, and what a file written before it calls them.
+ *
+ * `properties.tacticalGraphic` is what a host SAVES, so renaming a key in it silently
+ * empties that amplifier on every graphic already on disk. The rename was worth making
+ * — @see TacticalGraphicProperties.designation — and it is cheap to make it survivable,
+ * which the point-order change in the same release is not.
+ *
+ * One direction only. Nothing writes the old names back, they are absent from the
+ * types, and a bag carrying both keeps the current one: an old key is evidence about a
+ * file's age, not an override.
+ */
+const RENAMED_AMPLIFIERS: ReadonlyArray<readonly [legacy: string, current: keyof TacticalGraphicProperties]> = [
+    ['label', 'designation'],
+    ['secondId', 'secondDesignation'],
+];
+
+/**
+ * Fills in the current amplifier names from the ones a saved file may still use.
+ *
+ * Applied wherever a stored bag is read — here, and by both renderers — so the alias is
+ * stated once rather than once per engine. Returns the bag untouched when there is
+ * nothing to translate, which is every graphic written by this version.
+ */
+export function applyAmplifierAliases<T extends object>(bag: T): T {
+    const source = bag as Record<string, unknown>;
+    let out: Record<string, unknown> | undefined;
+    for (const [legacy, current] of RENAMED_AMPLIFIERS) {
+        if (source[legacy] === undefined || source[current] !== undefined) continue;
+        out = out ?? {...source};
+        out[current] = source[legacy];
+    }
+    return (out as T) ?? bag;
+}
+
 /** Reads a feature's tactical graphic config, or `undefined` if it has none. */
 export function readTacticalGraphicProperties(feature: Feature): TacticalGraphicProperties | undefined {
     const props = feature.properties as GeoJsonProperties;
     const config = props?.[TACTICAL_GRAPHIC_KEY];
-    return config && typeof config === 'object' ? (config as TacticalGraphicProperties) : undefined;
+    return config && typeof config === 'object' ? applyAmplifierAliases(config as TacticalGraphicProperties) : undefined;
 }
 
 /** True when the feature carries a `properties.tacticalGraphic` object. */

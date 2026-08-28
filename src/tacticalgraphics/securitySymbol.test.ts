@@ -31,7 +31,7 @@ import {
 } from './core/securitySymbol';
 import type {SecuritySymbolRequest} from './core/securitySymbol';
 
-const labels = (over: Partial<GraphicLabels> = {}): GraphicLabels => ({label: '', ...over});
+const labels = (over: Partial<GraphicLabels> = {}): GraphicLabels => ({designation: '', ...over});
 
 const request = (over: Partial<SecuritySymbolRequest> = {}): SecuritySymbolRequest => ({
     name: TacticalGraphicName.Guard,

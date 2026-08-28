@@ -26,13 +26,13 @@ const texts = (result: Style | Style[] | void): string[] => {
 describe('readGraphicLabels', () => {
     it('returns the stamped amplifiers', () => {
         const f = lineFeature();
-        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {label: 'ALPHA', secondId: 'BRAVO'});
-        expect(readGraphicLabels(f).label).toBe('ALPHA');
-        expect(readGraphicLabels(f).secondId).toBe('BRAVO');
+        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'ALPHA', secondDesignation: 'BRAVO'});
+        expect(readGraphicLabels(f).designation).toBe('ALPHA');
+        expect(readGraphicLabels(f).secondDesignation).toBe('BRAVO');
     });
 
     it('defaults to blank amplifiers on an unstamped feature', () => {
-        expect(readGraphicLabels(lineFeature())).toEqual({label: ''});
+        expect(readGraphicLabels(lineFeature())).toEqual({designation: ''});
     });
 
     it('never returns undefined, so style functions need no null check', () => {
@@ -42,34 +42,34 @@ describe('readGraphicLabels', () => {
     it('does not let a caller mutate the shared default', () => {
         const labels = readGraphicLabels(new Feature());
         expect(() => {
-            (labels as {label: string}).label = 'MUTATED';
+            (labels as {designation: string}).designation = 'MUTATED';
         }).toThrow();
-        expect(readGraphicLabels(new Feature()).label).toBe('');
+        expect(readGraphicLabels(new Feature()).designation).toBe('');
     });
 });
 
 describe('writeGraphicProperties', () => {
     it('stamps the graphic name alongside the amplifiers', () => {
         const f = lineFeature();
-        writeGraphicProperties([f], TacticalGraphicName.CoordinatedFireLine, {label: 'X'});
-        expect(f.get(TACTICAL_GRAPHIC_KEY)).toEqual({name: TacticalGraphicName.CoordinatedFireLine, label: 'X'});
+        writeGraphicProperties([f], TacticalGraphicName.CoordinatedFireLine, {designation: 'X'});
+        expect(f.get(TACTICAL_GRAPHIC_KEY)).toEqual({name: TacticalGraphicName.CoordinatedFireLine, designation: 'X'});
     });
 
     it('stamps every feature it is given', () => {
         const [a, b, c] = [lineFeature(), lineFeature(), lineFeature()];
-        writeGraphicProperties([a, b, c], TacticalGraphicName.PhaseLine, {label: 'Y'});
-        for (const f of [a, b, c]) expect(readGraphicLabels(f).label).toBe('Y');
+        writeGraphicProperties([a, b, c], TacticalGraphicName.PhaseLine, {designation: 'Y'});
+        for (const f of [a, b, c]) expect(readGraphicLabels(f).designation).toBe('Y');
     });
 
     it('tolerates undefined features (optional offset handles)', () => {
-        expect(() => writeGraphicProperties([undefined], TacticalGraphicName.PhaseLine, {label: 'Z'})).not.toThrow();
+        expect(() => writeGraphicProperties([undefined], TacticalGraphicName.PhaseLine, {designation: 'Z'})).not.toThrow();
     });
 
     it('fires a change event so OpenLayers re-renders', () => {
         const f = lineFeature();
         const onChange = jest.fn();
         f.on('change', onChange);
-        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {label: 'Q'});
+        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'Q'});
         expect(onChange).toHaveBeenCalled();
     });
 });
@@ -79,7 +79,7 @@ describe('writeGraphicProperties', () => {
 describe('style functions read amplifiers off the feature', () => {
     it('phaseLineStyleFunc renders the doctrinal prefix plus the user label', () => {
         const f = lineFeature();
-        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {label: 'ALPHA'});
+        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'ALPHA'});
         expect(texts(phaseLineStyleFunc(TacticalGraphicName.PhaseLine)(f, 10))).toContain('PL ALPHA');
     });
 
@@ -87,16 +87,16 @@ describe('style functions read amplifiers off the feature', () => {
         const f = lineFeature();
         const style = phaseLineStyleFunc(TacticalGraphicName.PhaseLine);
 
-        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {label: 'ALPHA'});
+        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'ALPHA'});
         expect(texts(style(f, 10))).toContain('PL ALPHA');
 
-        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {label: 'BRAVO'});
+        writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'BRAVO'});
         expect(texts(style(f, 10))).toContain('PL BRAVO');
     });
 
     it('coordinatedFireLineStyle picks up the label', () => {
         const f = lineFeature();
-        writeGraphicProperties([f], TacticalGraphicName.CoordinatedFireLine, {label: 'CFL1'});
+        writeGraphicProperties([f], TacticalGraphicName.CoordinatedFireLine, {designation: 'CFL1'});
         expect(texts(coordinatedFireLineStyle(TacticalGraphicName.CoordinatedFireLine)(f, 10)).join(' ')).toContain('CFL1');
     });
 
@@ -107,8 +107,8 @@ describe('style functions read amplifiers off the feature', () => {
     it('reads status, not just text — planned graphics dash their stroke', () => {
         const present = lineFeature();
         const planned = lineFeature();
-        writeGraphicProperties([present], TacticalGraphicName.PhaseLine, {label: 'P', status: TacticalGraphicStatus.present});
-        writeGraphicProperties([planned], TacticalGraphicName.PhaseLine, {label: 'P', status: TacticalGraphicStatus.planned});
+        writeGraphicProperties([present], TacticalGraphicName.PhaseLine, {designation: 'P', status: TacticalGraphicStatus.present});
+        writeGraphicProperties([planned], TacticalGraphicName.PhaseLine, {designation: 'P', status: TacticalGraphicStatus.planned});
 
         const dashOf = (f: Feature) => {
             const result = defaultLineStyle(TacticalGraphicName.PhaseLine)(f, 10);
@@ -137,7 +137,7 @@ describe('route traffic arrows scale with the configured line width', () => {
     const routeFeature = () => {
         const f = new Feature(new MultiPoint([[0, 0], [40000, 0]]));
         writeGraphicProperties([f], TacticalGraphicName.Route, {
-            label: 'MSR1',
+            designation: 'MSR1',
             direction: RouteDirection.TWO_WAY,
         });
         return f;
@@ -192,7 +192,7 @@ describe('obstacle area amplifiers', () => {
 
     const block = (name: TacticalGraphicName, labels: Partial<GraphicLabels>) => {
         const f = areaFeature();
-        writeGraphicProperties([f], name, {label: '', ...labels});
+        writeGraphicProperties([f], name, {designation: '', ...labels});
         return texts(getAreaLabelStylesFn(name)(f, 10))[0] ?? '';
     };
 
@@ -207,7 +207,7 @@ describe('obstacle area amplifiers', () => {
 
     it('stacks FREE over the name over the dates, in that order', () => {
         const text = block(TacticalGraphicName.ObstacleFreeArea, {
-            label: 'T-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
+            designation: 'T-1', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
         });
         expect(text.split('\n')).toEqual(['FREE', 'T-1', '021200ZJUN26 - 021800ZJUN26']);
     });
@@ -218,7 +218,7 @@ describe('obstacle area amplifiers', () => {
 
     it('gives the restricted area the same block without the literal', () => {
         const text = block(TacticalGraphicName.ObstacleRestrictedArea, {
-            label: 'T-2', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
+            designation: 'T-2', startDate: '021200ZJUN26', endDate: '021800ZJUN26',
         });
         expect(text.split('\n')).toEqual(['T-2', '021200ZJUN26 - 021800ZJUN26']);
     });
@@ -228,9 +228,9 @@ describe('obstacle area amplifiers', () => {
     });
 
     it('drops the hyphen when only one DTG is set', () => {
-        expect(block(TacticalGraphicName.ObstacleFreeArea, {label: 'T-1', startDate: '021200ZJUN26'}))
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {designation: 'T-1', startDate: '021200ZJUN26'}))
             .toBe('FREE\nT-1\n021200ZJUN26');
-        expect(block(TacticalGraphicName.ObstacleFreeArea, {label: 'T-1', endDate: '021800ZJUN26'}))
+        expect(block(TacticalGraphicName.ObstacleFreeArea, {designation: 'T-1', endDate: '021800ZJUN26'}))
             .toBe('FREE\nT-1\n021800ZJUN26');
     });
 
@@ -290,8 +290,8 @@ describe('obstacle line fields', () => {
         const withStatus = new Feature(new LineString([[0, 0], [10000, 0]]));
         const without = new Feature(new LineString([[0, 0], [10000, 0]]));
         writeGraphicProperties([withStatus], TacticalGraphicName.ObstacleLine,
-            {label: 'OBS-1', status: TacticalGraphicStatus.planned});
-        writeGraphicProperties([without], TacticalGraphicName.ObstacleLine, {label: 'OBS-1'});
+            {designation: 'OBS-1', status: TacticalGraphicStatus.planned});
+        writeGraphicProperties([without], TacticalGraphicName.ObstacleLine, {designation: 'OBS-1'});
 
         const dashes = (f: Feature) => (obstacleLineStyle(TacticalGraphicName.ObstacleLine)(f, 10) as Style[])
             .map(s => JSON.stringify(s.getStroke()?.getLineDash() ?? null));

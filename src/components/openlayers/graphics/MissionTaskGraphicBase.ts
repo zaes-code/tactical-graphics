@@ -807,7 +807,7 @@ export class AmbushGraphicBase extends MissionTaskGraphicBase {
 }
 
 export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
-    graphicLabels: GraphicLabels = {label: ''};
+    graphicLabels: GraphicLabels = {designation: ''};
 
     constructor(
         name: TacticalGraphicName,

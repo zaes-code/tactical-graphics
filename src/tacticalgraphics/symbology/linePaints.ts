@@ -119,7 +119,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         const scale = scaleOf(feature, context);
         const align: 'left' | 'right' = p2[0] >= p1[0] ? 'right' : 'left';
 
-        const nameText = getFullLabel(name, feature.properties.label ?? '');
+        const nameText = getFullLabel(name, feature.properties.designation ?? '');
         const dateText = areaDateLabel(feature);
         const showEny =
             name === TacticalGraphicName.DirectionOfSupportingAttack

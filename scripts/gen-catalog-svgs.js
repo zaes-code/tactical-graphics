@@ -305,8 +305,8 @@ const AMPLIFIERS = {
     decorationSize: undefined,
 
     // Text amplifiers.
-    label: 'ALPHA',
-    secondId: 'BRAVO',
+    designation: 'ALPHA',
+    secondDesignation: 'BRAVO',
     countryCode: 'USA',
     secondCountryCode: 'CAN',
     startDate: '021200ZJUN26',
