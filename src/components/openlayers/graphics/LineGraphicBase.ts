@@ -34,7 +34,7 @@ import {
     tacticalFixStyleFunc,
     phaseLineStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -196,16 +196,24 @@ export class LineGraphicBase implements LineGraphic {
     shapingFromGesture = false;
 
     setBaseFeature(base: Feature<LineString>): void {
-        // AviationDirectionOfAttack carries a bow-tie baked into geometry near
-        // the start of the line. Enforce a minimum first-segment length so the
-        // bow-tie (centerDist + halfWidth = 60 px) plus the arrowhead (~20 px)
-        // always fit. Modifying the shared geometry re-fires the draw
-        // interaction's 'change' event, which lands back here with the line
-        // already long enough and falls through to the normal update. The
-        // `enforcingMinLength` flag + tolerance guard against floating-point
-        // recursion where the re-fired change event sees `len` a ULP below min.
+        /*
+         * **A floor on the first segment, while the shape is being authored.**
+         *
+         * Three graphics bake a mark into the geometry near the start of the line and
+         * need room for it and for the arrowhead at the far end. Which graphics, and how
+         * many pixels, is `minimumFirstSegmentPx` — in the map-agnostic half, so MapLibre
+         * applies the same floor rather than none at all, which is what it did while
+         * these were two literals here.
+         *
+         * Modifying the shared geometry re-fires the draw interaction's `change` event,
+         * which lands back here with the line already long enough and falls through to
+         * the normal update. The `enforcingMinLength` flag and the tolerance inside
+         * guard against floating-point recursion where the re-fired event sees `len` a
+         * ULP below the minimum.
+         */
+        const minFirstSegmentPx = minimumFirstSegmentPx(this.graphicName);
         if (
-            this.graphicName === TacticalGraphicName.AviationDirectionOfAttack &&
+            minFirstSegmentPx !== undefined &&
             this.resolution &&
             this.shapingFromGesture &&
             !this.suspendMinimumLength &&
@@ -213,26 +221,10 @@ export class LineGraphicBase implements LineGraphic {
         ) {
             this.enforcingMinLength = true;
             try {
-                this.enforceMinFirstSegmentLength(base, 80 * this.resolution);
-            } finally {
-                this.enforcingMinLength = false;
-            }
-        }
-
-        // Fix: 145px minimum line length — 50px for the F-labeled first
-        // segment, 45px for the three triangles, 50px for the trailing segment
-        // leading into the arrowhead. The table 5-19 twin draws no "F" but the
-        // geometry is otherwise identical, so it takes the same floor.
-        if (
-            (this.graphicName === TacticalGraphicName.TacticalFix || this.graphicName === TacticalGraphicName.Fix) &&
-            this.resolution &&
-            this.shapingFromGesture &&
-            !this.suspendMinimumLength &&
-            !this.enforcingMinLength
-        ) {
-            this.enforcingMinLength = true;
-            try {
-                this.enforceMinFirstSegmentLength(base, 145 * this.resolution);
+                // Projected metres against projected coordinates, which is exactly the
+                // pixel count asked for. MapLibre corrects for latitude because it holds
+                // ground distances; the two agree on the screen.
+                this.enforceMinFirstSegmentLength(base, minFirstSegmentPx * this.resolution);
             } finally {
                 this.enforcingMinLength = false;
             }
