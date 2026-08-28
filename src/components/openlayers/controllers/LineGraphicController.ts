@@ -269,6 +269,18 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     /**
+     * Ends the width read-out. Called by the manager when any drag finishes.
+     *
+     * `MissionTaskController` has always had this and the line controller never needed
+     * one, because no line holder drew a read-out. A rectangular zone does — and without
+     * the hook the hashed line and its figure stayed on the map after the drag was over,
+     * which reads as part of the symbol. @see RectangularAreaGraphicBase.showMeasure
+     */
+    endGesture(): void {
+        (this.graphic as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
+    }
+
+    /**
      * The width the holder is currently drawing with.
      *
      * Duck-typed on the holder rather than declared on a shared base, because the

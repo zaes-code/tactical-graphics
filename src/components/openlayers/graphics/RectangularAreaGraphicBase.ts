@@ -9,6 +9,7 @@ import {
     carriesRectangleLength,
     constrainRectangleAxis,
     groundLength,
+    levelRectangleAxis,
     latitudeFromMercatorY,
 } from '@zaes/tactical-graphics';
 import {
@@ -194,9 +195,20 @@ export class RectangularAreaGraphicBase implements LineGraphic {
         // read off `this.base` is already the dragged one and nothing looks moved.
         const previous = this.lastAxis;
         const incoming = base.getGeometry()?.getCoordinates();
-        // Editing only, never while the zone is being drawn. @see drawing
-        if (!this.drawing && previous?.length === 2 && incoming?.length === 2) {
-            const held = constrainRectangleAxis(previous, incoming.map(c => toLonLat(c)) as Position[]);
+        /*
+         * **Level while drawing, held to its own axis while editing.**
+         *
+         * `LineGraphicController` republishes the base on every pointer move, so this is
+         * also the preview — and the preview followed the mouse in any direction while
+         * the committed geometry came out level, which is a symbol that changes shape at
+         * the moment of the last click. Levelling here makes the two the same thing.
+         * (User's call, 2026-08-27.) @see levelRectangleAxis, constrainRectangleAxis
+         */
+        if (incoming?.length === 2) {
+            const lonLat = incoming.map(c => toLonLat(c)) as Position[];
+            const held = this.drawing
+                ? levelRectangleAxis(lonLat)
+                : previous?.length === 2 ? constrainRectangleAxis(previous, lonLat) : lonLat;
             base = new Feature(new LineString(held.map(c => fromLonLat(c as Coordinate))));
         }
 
