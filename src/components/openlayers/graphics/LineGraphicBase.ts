@@ -18,6 +18,7 @@ import {
     nestedZoneStyleFunc,
     obstacleBypassStyleFunc,
     escortOrDemonstrationStyleFunc,
+    followTaskStyleFunc,
     sweptArcTaskStyleFunc,
     protectionLineStyleFunc,
     wireObstacleStyleFunc,
@@ -109,9 +110,13 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.Demonstration:
                     return escortOrDemonstrationStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.Capture:
+                case TacticalGraphicName.Seize:
                 case TacticalGraphicName.Evacuate:
                 case TacticalGraphicName.Recover:
                     return sweptArcTaskStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.FollowAndAssume:
+                case TacticalGraphicName.FollowAndSupport:
+                    return followTaskStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.DecisionLine:
                 case TacticalGraphicName.MobilityCorridor:
                     return endGlyphLineStyleFunc(name)(feature, resolution);

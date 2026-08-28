@@ -166,6 +166,7 @@ import {
     obstacleBypassPaint,
     demonstrationPaint,
     escortPaint,
+    followTaskPaint,
     sweptArcTaskPaint,
     mineClusterPaint,
     minelinePaint,
@@ -1787,6 +1788,11 @@ export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): Style
 /** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
 export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
+}
+
+/** Follow and assume, follow and support. @see followTaskPaints.ts */
+export function followTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(followTaskPaint(name === TacticalGraphicName.FollowAndAssume ? 'assume' : 'support'), name);
 }
 
 /** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
