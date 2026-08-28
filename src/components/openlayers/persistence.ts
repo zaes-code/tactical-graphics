@@ -65,7 +65,13 @@ import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
-import {normalizeDrawnBase, TacticalGraphicName, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {
+    axisFromRectangleRing,
+    isRectangular,
+    normalizeDrawnBase,
+    TacticalGraphicName,
+    usesDrawnAnchors,
+} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
@@ -246,6 +252,26 @@ export function applyRestoredGeometry(
     base: Feature,
     state: GraphicGeometryState,
 ): void {
+    /*
+     * **A rectangular zone saved as the box it was drawn as.**
+     *
+     * APP-06 defines these as two anchor points and a width, and that is what the base
+     * carries as of 2026-08-27 — but every file written before it holds the drawn ring.
+     * Read the axis and the width back out: the same rectangle returns, and it returns
+     * with a width the operator can drag. @see axisFromRectangleRing
+     */
+    const geometry = base.getGeometry();
+    const restoredName = (handler.graphic as {name?: TacticalGraphicName; graphicName?: TacticalGraphicName}).name
+        ?? (handler.graphic as {graphicName?: TacticalGraphicName}).graphicName;
+    if (restoredName && isRectangular(restoredName) && geometry instanceof Polygon) {
+        const ring = geometry.getCoordinates()[0]?.map(c => toLonLat(c)) as [number, number][] | undefined;
+        const axis = axisFromRectangleRing(ring);
+        if (axis) {
+            base = new Feature(new LineString([fromLonLat(axis.p1 as Coordinate), fromLonLat(axis.p2 as Coordinate)]));
+            if (state.width === undefined) state = {...state, width: Math.round(axis.halfWidth * 2)};
+        }
+    }
+
     if (handler instanceof MissionTaskController) {
         // **The shim.** A graphic converted to APP-06's drawn anchor points saves a
         // LineString base, and one saved before the conversion saves a Point. Both have

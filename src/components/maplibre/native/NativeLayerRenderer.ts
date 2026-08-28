@@ -11,7 +11,6 @@ import {
     MERCATOR_MAX_LATITUDE,
     latitudeFromMercatorY,
     getInertHandleColor,
-    isRectangular,
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
@@ -866,13 +865,15 @@ export class NativeLayerRenderer {
         const selected = this.selectedId ? this.find(this.selectedId) : undefined;
         if (!selected) return [];
         /*
-         * **A rectangular zone wears no handle in edit mode.** `applyGesture` already
-         * returns early on `isRectangular` — a box's corner is a consequence of the box,
-         * not a point with a meaning of its own — so the dots were drawn in the live
-         * handle color and read by nothing. The resize affordance sizes these now.
-         * OpenLayers states the same rule in `toggleHandleFeatures`.
+         * A rectangular zone used to wear no handle here: its corner was a consequence of
+         * the box, not a point with a meaning of its own, so the dots were drawn in the
+         * live handle colour and read by nothing. Its base is APP-06's two anchor points
+         * now — the centres of the two opposing sides — and the third handle is the
+         * width, so all three do something and hiding them would take away the only way
+         * to set a width. OpenLayers dropped the same rule from `toggleHandleFeatures`.
+         * @see RectangularArea
          */
-        return isRectangular(selected.name) ? [] : [selected];
+        return [selected];
     }
 
     /**

@@ -9,6 +9,7 @@
 import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx, groundLength} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
+import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
 import {
     CircularAreaGraphicBase,
     EnvelopmentGraphicBase,
@@ -32,7 +33,7 @@ import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
-import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
+import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
 import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
@@ -54,8 +55,13 @@ type ControllerFactory = (name: TacticalGraphicName, resolution: number, sizing:
 const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
     new PolygonGraphicController(new AreaGraphicBase(name, sizing, res));
 
+/**
+ * A rectangular zone: two anchor points and a width, so it draws like a two-point line and
+ * edits like one — `Modify` drags point 1 and point 2, the third handle is the width.
+ * @see RectangularAreaGraphicBase
+ */
 const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new RectangularAreaGraphicController(new AreaGraphicBase(name, sizing, res));
+    new LineGraphicController(new RectangularAreaGraphicBase(name, res, sizing), 2, name);
 
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);

@@ -56,18 +56,37 @@ describe('a drawn rectangular zone', () => {
     });
 
     /**
-     * **The geometry outranks a supplied number**, which is what keeps the two from
-     * drifting: a snapshot carrying a width from some other box cannot make the zone
-     * report a figure its own ring contradicts.
+     * **The width outranks the box now**, which is the conversion in one assertion: APP-06
+     * makes it an *input* — "two anchor points and a width, defined in metres" — so a
+     * snapshot that carries one is stating the zone's width, not describing a ring it
+     * happens to have been drawn as. The old rule was the other way round, and it had to
+     * be: there was nowhere else for the number to come from. @see rectangleFromAxis
      */
-    it('ignores a width that disagrees with the shape', () => {
+    it('honours a width the caller states, over the box it was drawn as', () => {
         const built = buildTacticalGraphic(
             TacticalGraphicName.CriticalFriendlyZoneRectangular,
             polygon(),
             {width: 12_345},
             RES,
         );
-        expect(built!.properties.width).toBe(rectangleAmplifiers(TacticalGraphicName.CriticalFriendlyZoneRectangular, box()).width);
+        expect(built!.properties.width).toBe(12_345);
+    });
+
+    it('converts a drawn box to the two anchor points that define it', () => {
+        // Every file written before 2026-08-27 holds the ring. The same rectangle comes
+        // back, and it comes back with a width the operator can drag.
+        // @see axisFromRectangleRing
+        const built = buildTacticalGraphic(TacticalGraphicName.CensorZoneRectangular, polygon(), {}, RES);
+        expect(built!.base.geometry.type).toBe('LineString');
+        const axis = (built!.base.geometry as {coordinates: number[][]}).coordinates;
+        expect(axis).toHaveLength(2);
+        // The box is a degree wide and half a degree tall, so the axis runs east-west
+        // through its middle — along the longer dimension, which puts the two points on
+        // the shorter sides exactly as the standard says.
+        expect(axis[0][1]).toBeCloseTo(40.25, 6);
+        expect(axis[1][1]).toBeCloseTo(40.25, 6);
+        expect(axis[0][0]).toBeCloseTo(10, 6);
+        expect(axis[1][0]).toBeCloseTo(11, 6);
     });
 
     /** An irregular zone has no box to measure, and must not gain one. */
