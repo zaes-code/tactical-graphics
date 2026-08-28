@@ -4,6 +4,7 @@ import {
     anchorsForArcAndArrow,
     anchorsForBow,
     anchorsForHook,
+    anchorsForParallelLegs,
     anchorsForRunAndArc,
     anchorsFromFrame,
     arcAndArrowFromAnchors,
@@ -13,6 +14,7 @@ import {
     HOOK_DEFAULT_LINE_RATIO,
     hookFromAnchors,
     hookPose,
+    parallelLegsFromAnchors,
     runAndArcFromAnchors,
 } from './anchors';
 import {clampTurnBend, TURN_DEFAULT_BEND} from '../graphics/Turn';
@@ -103,6 +105,14 @@ export function drawnAnchors(name: TacticalGraphicName, frame: DrawnAnchorFrame)
         case TacticalGraphicName.Contain:
             return anchorsFromFrame(center, size, rotation - CONTAIN_OPENING_QUARTER_TURN);
 
+        // The one whose points are **derived rather than drawn**: `center` here is point
+        // 1, the arrowhead's tip, and the other three follow from the leg and the aim.
+        // It is in this family so that the four points are what the base carries and what
+        // a snapshot holds — not so that they can be dragged apart.
+        // @see anchorsForParallelLegs, DERIVED_ANCHOR_GRAPHICS
+        case TacticalGraphicName.Demonstration:
+            return anchorsForParallelLegs(center, size, rotation);
+
         default:
             return undefined;
     }
@@ -173,6 +183,11 @@ export function drawnAnchorFrame(name: TacticalGraphicName, coords: Position[] |
             };
         }
 
+        case TacticalGraphicName.Demonstration: {
+            const frame = parallelLegsFromAnchors(coords);
+            return frame && {center: frame.tip, size: frame.size, rotation: degrees(frame.angle)};
+        }
+
         case TacticalGraphicName.Contain: {
             const frame = frameFromAnchors(coords);
             return frame && {
@@ -186,3 +201,4 @@ export function drawnAnchorFrame(name: TacticalGraphicName, coords: Position[] |
             return undefined;
     }
 }
+

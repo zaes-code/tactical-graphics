@@ -8,9 +8,10 @@
  */
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
-import {LineString, Point} from 'ol/geom';
+import {LineString, MultiLineString, Point} from 'ol/geom';
 import type Geometry from 'ol/geom/Geometry';
-import {TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {toLonLat} from 'ol/proj';
+import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -154,6 +155,10 @@ const FAMILIES: [label: string, name: TacticalGraphicName][] = [
     ['relief in place', TacticalGraphicName.ReliefInPlace],
     ['retrograde', TacticalGraphicName.Delay],
     ['security operation', TacticalGraphicName.Cover],
+    // Dropped on one click and then sized and turned: the whole graphic is derived
+    // from the anchor, so `size` and `rotation` are the only things a snapshot can
+    // carry and everything else has to be rebuilt from them. @see Demonstration
+    ['dropped', TacticalGraphicName.Demonstration],
 ];
 
 describe('every holder family round-trips', () => {
@@ -202,6 +207,19 @@ describe('every holder family round-trips', () => {
             };
             expect(width(after) / width(before)).toBeCloseTo(VIEW_RES / RES, 6);
             expect(center(after)).toBeCloseTo(center(before), 3);
+            return;
+        }
+
+        if (isRectangular(name)) {
+            // **To the amplifier's own precision, which is whole metres.** A rectangle's
+            // shape is derived from `width`, and that number is rounded on the way into
+            // the bag because it is a figure an operator reads and types. So the ring
+            // comes back within half a metre of width — measured, 4 cm on a 1,990 km
+            // extent. A millimetre tolerance here would be asserting the rounding.
+            // @see RectangularAreaGraphicBase.publishWidth
+            const a = after?.getExtent() ?? [];
+            const b = before?.getExtent() ?? [];
+            a.forEach((value, i) => expect(value).toBeCloseTo(b[i], -1));
             return;
         }
 
@@ -591,6 +609,61 @@ describe('a graphic saved before the anchor-point conversion', () => {
 
         const holder = to.graphicControllers[0].graphic as unknown as {bend: number};
         expect(holder.bend).toBeCloseTo(-0.5, 10);
+    });
+
+    /**
+     * The demonstration is in the family for a different reason: its four points are
+     * derived from the first rather than placed. A file written while they were drawn
+     * freehand still loads, and comes back as the canonical shape — which is what
+     * "auto-calculated" means once the ratios stop being an input.
+     */
+    it('snaps a freehand demonstration onto the ratios it is now fixed at', () => {
+        const to = fakeManager();
+        // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
+        const drawn = {
+            type: 'FeatureCollection' as const,
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [
+                {
+                    type: 'Feature' as const,
+                    properties: {
+                        role: 'base',
+                        graphicName: TacticalGraphicName.Demonstration,
+                        symbolId: 'legacy-dem',
+                        tacticalGraphic: {name: TacticalGraphicName.Demonstration, label: 'ALPHA'},
+                    },
+                    // Splayed: the second leg is neither parallel nor the same length.
+                    geometry: {
+                        type: 'LineString' as const,
+                        coordinates: [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]],
+                    },
+                },
+            ],
+        };
+
+        const report = restoreTacticalGraphics(to, drawn);
+        expect(report.failed).toEqual([]);
+        expect(report.restored).toBe(1);
+
+        const holder = to.graphicControllers[0].graphic;
+        // Still four points, and still a LineString: the count is what the standard
+        // describes the symbol by, and it survives the trip.
+        const base = holder.base.getGeometry();
+        expect(base).toBeInstanceOf(LineString);
+        const anchors = (base as LineString).getCoordinates().map(c => toLonLat(c));
+        expect(anchors).toHaveLength(4);
+        // Points 1 and 2 are the two that are read, and they have not moved.
+        expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
+        expect(anchors[0][1]).toBeCloseTo(51.5, 6);
+        expect(anchors[1][0]).toBeCloseTo(0.2, 4);
+        // Points 3 and 4 were rewritten from them, so the legs come back equal. Within a
+        // percent, and as a ratio: these are *projected* metres, and the second leg sits a
+        // quarter of a degree further north, where Mercator's scale factor is 0.8% larger.
+        // Asserting equality here would be asserting the projection.
+        const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
+        const parts = (rebuilt as MultiLineString).getCoordinates();
+        const legLength = (part: number[][]) => Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]);
+        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 1);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {

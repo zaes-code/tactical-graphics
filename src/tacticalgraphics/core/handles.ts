@@ -131,6 +131,13 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Ambush,
     TacticalGraphicName.Contain,
+    // **The four points are the base; they are just not the user's to place.** The
+    // demonstration is dropped on one click and points 2, 3 and 4 are derived from point
+    // 1 — but the standard describes the symbol by four anchor points, and that is what
+    // the base carries and what a snapshot holds. Membership here is about the *shape of
+    // the description*; whether a vertex can be dragged is a separate question, and the
+    // answer for this one is no. @see DERIVED_ANCHOR_GRAPHICS
+    TacticalGraphicName.Demonstration,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,
@@ -347,6 +354,21 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (BENT_GRAPHICS.includes(name)) {
         return {roles: ['bend', 'reach']};
     }
+    /*
+     * **A rectangle's two anchor points, then its width.**
+     *
+     * APP-06 gives these two points and a width in metres, so the first two handles are
+     * the base's own vertices — dragging one sets the length and the orientation — and the
+     * third is the width, which is the `offset` role every widthed graphic here uses.
+     *
+     * `offsetScale` is 1 rather than the shared half: the handle sits exactly one
+     * half-width off the axis, so it has to track the cursor 1:1 or it runs away from it.
+     * Same reasoning as the corridors, whose handles sit on the rail itself.
+     * @see RectangularArea.generateHandles
+     */
+    if (RECTANGULAR_GRAPHICS.includes(name)) {
+        return {roles: ['shape', 'shape', 'offset'], offsetScale: 1};
+    }
     if (RANGE_FANS.includes(name)) {
         return {roles: [], repeating: 'band'};
     }
@@ -503,6 +525,27 @@ function pointInRing(ring: [number, number][], [x, y]: [number, number]): boolea
     return inside;
 }
 
+const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.PositionAreaArtilleryRectangular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+];
+
 /**
  * How many points a graphic's base takes, when the answer is fixed.
  *
@@ -586,12 +629,24 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
     [TacticalGraphicName.Escort]: 3,
     [TacticalGraphicName.MinimumSafeDistanceZone]: 3,
+    // The S pair: the straight's end, the arcs' centre, the arrowhead's tip.
+    // @see GeometryService.createSCurve
+    [TacticalGraphicName.Exfiltrate]: 3,
+    [TacticalGraphicName.Infiltration]: 3,
+
+    // The eighteen rectangular zones: point 1 and point 2, at the centres of the two
+    // opposing sides. The width is an amplifier, not a third click.
+    // @see RectangularArea, rectangleFromAxis
+    ...Object.fromEntries(RECTANGULAR_GRAPHICS.map(name => [name, 2])),
 
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Evacuate]: 4,
     [TacticalGraphicName.Recover]: 4,
-    [TacticalGraphicName.Demonstration]: 4,
+    // **Not the demonstration**, though its base carries four points too. This table is a
+    // rule about *clicks* — "the draw has to end on the third one" — and the demonstration
+    // ends on the first, with points 2, 3 and 4 derived from it. What says so is
+    // `dropSizePx`. @see anchorsForParallelLegs
 };
 
 /**
@@ -636,26 +691,6 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
  * rectangular. MapLibre had no way to know, so it let a corner be dragged to any
  * angle, and once a segment drag could add vertices it let a rectangle grow a fifth.
  */
-const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.FreeFireAreaRectangular,
-    TacticalGraphicName.NoFireAreaRectangular,
-    TacticalGraphicName.RestrictiveFireAreaRectangular,
-    TacticalGraphicName.PositionAreaArtilleryRectangular,
-    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
-    TacticalGraphicName.CallForFireZoneRectangular,
-    TacticalGraphicName.TargetBuildUpAreaRectangular,
-    TacticalGraphicName.TargetValueAreaRectangular,
-    TacticalGraphicName.ZoneOfResponsibilityRectangular,
-    TacticalGraphicName.CensorZoneRectangular,
-    TacticalGraphicName.CriticalFriendlyZoneRectangular,
-    TacticalGraphicName.DeadSpaceAreaRectangular,
-    TacticalGraphicName.BlueKillBoxRectangular,
-    TacticalGraphicName.PurpleKillBoxRectangular,
-    TacticalGraphicName.TargetAreaRectangular,
-    TacticalGraphicName.FireSupportAreaRectangular,
-    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
-    TacticalGraphicName.PsyOpsZoneRectangular,
-];
 
 /**
  * Whether this graphic's base is a rectangle whose corners are not individually
@@ -733,7 +768,7 @@ export function rectangleAmplifiers(
  * two implementations of one amplifier are compared: it is the whole of the 391,193 m
  * against 390,756 m the two engines used to file for the same drawn box.
  */
-function groundMeters(a: [number, number], b: [number, number]): number {
+export function groundMeters(a: [number, number], b: [number, number]): number {
     const R = 6371008.8;
     const toRad = (degrees: number) => (degrees * Math.PI) / 180;
     const dLat = toRad(b[1] - a[1]);
@@ -820,6 +855,15 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
  * none.
  */
 const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
+    /*
+     * **A rectangular zone has two gestures of its own and wants neither of them
+     * borrowed.** Its base carries a vertex count, which is what usually makes an
+     * edit drag stretch — but dragging an anchor point sets its length and dragging the
+     * third handle sets its width, and letting a stray drag scale the whole thing meant
+     * both numbers moved at once. Measured on OpenLayers: a drag meant to lengthen the
+     * zone put 400 km on the width as well. (User's call, 2026-08-27.)
+     */
+    ...RECTANGULAR_GRAPHICS,
     TacticalGraphicName.MobileDefense,
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,

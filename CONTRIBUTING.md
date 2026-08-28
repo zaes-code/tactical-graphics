@@ -6,7 +6,7 @@ Thanks for helping build out MIL-STD-2525E / FM 1-02.2 coverage.
 
 Understanding this split is the single most important thing before you write code.
 
-- **`src/tacticalgraphics/`** is the library — the thing published to npm. Pure GeoJSON geometry, no map library. It depends only on `@turf/turf` and the `geojson` types, and it must **never** import from `src/components/`.
+- **`src/tacticalgraphics/`** is the library — the thing published to npm. Pure GeoJSON geometry, no map library. It depends only on the individual `@turf/*` modules it calls and the `geojson` types, and it must **never** import from `src/components/`. (Import the module, not the `@turf/turf` meta-package — that dragged an AGPL-3.0 transitive dependency in, and 2.1.0 removed it.)
 - **`src/components/`** is a *sample implementation* showing how to consume the library. Two renderers live there — OpenLayers and MapLibre — and both are published as subpath entry points; the React demo around them is not. A Cesium view is a planned addition.
 
   Anything that decides **what a symbol looks like or how it edits** belongs in `src/tacticalgraphics/`, not in a renderer: both read it from there, and that is what keeps them identical. A rule written into one renderer is invisible to the other and to every test.
@@ -47,7 +47,7 @@ For your work to appear under your profile on GitHub, add that address to your G
 Two more things that quietly cost people credit:
 
 - **Nobody should re-commit your diff.** `git cherry-pick` and `git rebase` preserve authorship; re-applying your changes by hand does not. If a maintainer has to commit on your behalf, they should pass `--author="Your Name <you@zaes.com>"`.
-- **Merge commits made through a web UI are authored by the merger**, sometimes under a synthesised address. Your own commits are unaffected, and the release mirror normalises the rest.
+- **Merge commits made through a web UI are authored by the merger**, sometimes under a synthesized address. Your own commits are unaffected, and the release mirror normalizes the rest.
 
 ## Before you open a PR
 
@@ -67,25 +67,39 @@ npm run drive        # terminal 2 — Playwright drives the real app
 
 `npm run drive` draws graphics, edits them through the Feature Properties dialog, and asserts on the live OpenLayers features. Screenshots land in `.playwright-out/`.
 
+```bash
+npm run compare:engines   # same bases through both renderers, differences reported
+```
+
+**Validate a rendering change on both engines.** The two read the same symbology, so an asymmetry means a fact ended up in a renderer instead of in `src/tacticalgraphics/` — which no unit test can see.
+
 ## Rules that will bite you
 
 These are the conventions the codebase depends on. Skipping them produces graphics that look right at one zoom level and wrong at every other:
 
-- **Never use turf or `GeometryService` inside an OpenLayers `StyleFunction`.** Style functions receive projected EPSG:3857 metres; turf expects geographic degrees. Use plain Euclidean vector math.
+- **Never use turf or `GeometryService` inside an OpenLayers `StyleFunction`.** Style functions receive projected EPSG:3857 meters; turf expects geographic degrees. Use plain Euclidean vector math.
 - **Zoom-invariant gaps and offsets belong in the style function**, computed from the live `resolution`. A metric offset baked into the GeoJSON will not stay a constant number of screen pixels.
 - **Style functions read amplifiers from the feature**, via `readGraphicLabels(feature)` — never from a closure argument.
-- **Stroke widths come from the exported `LINE_WIDTH` constant**, never an inline `width: 2|3|4`.
+- **Stroke widths come from the exported `LINE_WIDTH()` accessor**, never an inline `width: 2|3|4`. It is a *function* backed by the config — call it at paint time. Caching it in a module-level const freezes whatever the config held at import, and a host's change can never reach that stroke.
 
 ## Adding a graphic
 
 1. Add the name to `TacticalGraphicName` in `src/tacticalgraphics/core/type.ts`.
 2. Write a generator in `src/tacticalgraphics/graphics/`, extending `TacticalGraphicsBase`.
 3. Register it in `src/tacticalgraphics/core/TacticalGraphicsRegistry.ts`.
-4. Add it to `GRAPHIC_CATEGORIES` in `src/tacticalgraphics/core/categories.ts`.
+4. Fill in the five exhaustive tables the compiler will now be failing on:
 
-Steps 1 and 4 are compiler-enforced — `GRAPHIC_CATEGORIES` is an exhaustive `Record<TacticalGraphicName, …>`, so TypeScript tells you what's missing. To wire the graphic into the demo app you also need entries in `controllerRegistry.ts` and `graphicFieldRegistry.ts`.
+   | Table | File | What it says |
+   |---|---|---|
+   | `GRAPHIC_CATEGORIES` | `core/categories.ts` | which menu group it belongs to |
+   | `GRAPHIC_SPECIFICATIONS` | `core/specifications.ts` | which of FM 1-02.2 / APP-06 defines it |
+   | `GRAPHIC_ENTITY_CODES` | `core/entityCodes.ts` | its six-digit APP-06 code, or `null` |
+   | `CONTROLLER_REGISTRY` | `openlayers/controllerRegistry.ts` | which holder and controller drive it |
+   | `GRAPHIC_FIELDS` | `openlayers/graphicFieldRegistry.ts` | which inputs its properties dialog offers |
 
-A graphic is **done** when a user can draw it, label it, and rotate, resize, reposition, and modify it.
+Every one of the five is a `Record<TacticalGraphicName, …>`, so none of this is optional and none of it is a thing to remember: add the enum member and TypeScript walks you through the rest. `GRAPHIC_ENTITY_CODES` and `GRAPHIC_SPECIFICATIONS` are asserted against each other — a `null` code means exactly "FM 1-02.2 only" — so look the symbol up rather than guessing.
+
+A graphic is **done** when a user can draw it, label it, and reposition, modify, rotate and resize it *wherever those gestures mean something for that symbol*. Some refuse a gesture on purpose — a fixed-size symbol has no resize — and that refusal belongs in the shared tables, not in one renderer.
 
 Doctrinal reference is [FM 1-02.2](https://www.battleorder.org/post/symbolsfm). Cite the figure or table number in your PR so a reviewer can check the shape.
 

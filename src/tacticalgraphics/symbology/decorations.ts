@@ -37,6 +37,119 @@ export function pathLength(path: ProjectedPosition[]): number {
  * graphic's label goes, so it lands on the middle of the *drawn* line rather than
  * on whichever vertex happens to be central in the array.
  */
+/**
+ * A path cut into two runs, with a gap of `halfGap` metres either side of `at` metres
+ * along it.
+ *
+ * The primitive behind every amplifier that sits **in** a line rather than beside one.
+ * `cutArcAtLabel` does the same job for an arc described as a centre and an angle; this is
+ * the free-polyline form, for a curve the operator's own anchor points defined.
+ *
+ * Returns whichever runs survive: a gap that swallows an end returns one run, and a gap
+ * wider than the path returns none, which a caller should read as "no room, draw it whole".
+ */
+export function splitPathAround(
+    path: readonly ProjectedPosition[],
+    at: number,
+    halfGap: number,
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const from = at - halfGap;
+    const to = at + halfGap;
+
+    const before: ProjectedPosition[] = [];
+    const after: ProjectedPosition[] = [];
+    let walked = 0;
+
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const cut = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+
+        if (walked < from) {
+            if (!before.length) before.push(a);
+            before.push(end <= from ? b : cut(from));
+        }
+        if (end > to) {
+            if (!after.length) after.push(walked >= to ? a : cut(to));
+            after.push(b);
+        }
+        walked = end;
+    }
+
+    return [before, after].filter(run => run.length >= 2);
+}
+
+/**
+ * The runs of a path that survive **several** gaps, in order.
+ *
+ * `splitPathAround` is the one-gap case and the shape most amplifiers need. A line strung
+ * with a repeating symbol needs one gap per symbol: without them a hollow glyph has the
+ * line drawn straight through it and stops reading as hollow, which for the mineline is
+ * the difference between an unspecified mine and an antitank one.
+ *
+ * Gaps are given as distances along the path with a half-width each; overlapping ones
+ * merge. A gap that swallows an end simply shortens the run there.
+ */
+export function splitPathAroundAll(
+    path: readonly ProjectedPosition[],
+    gaps: readonly {at: number; halfGap: number}[],
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const total = pathLength(path as ProjectedPosition[]);
+    const cuts = gaps
+        .map(g => [Math.max(0, g.at - g.halfGap), Math.min(total, g.at + g.halfGap)] as const)
+        .filter(([from, to]) => to > from)
+        .sort((a, b) => a[0] - b[0]);
+    if (!cuts.length) return [path as ProjectedPosition[]];
+
+    // Merge overlaps, then keep what is left over.
+    const merged: [number, number][] = [[cuts[0][0], cuts[0][1]]];
+    for (const [from, to] of cuts.slice(1)) {
+        const last = merged[merged.length - 1];
+        if (from <= last[1]) last[1] = Math.max(last[1], to);
+        else merged.push([from, to]);
+    }
+
+    const runs: ProjectedPosition[][] = [];
+    let cursor = 0;
+    for (const [from, to] of merged) {
+        if (from > cursor) runs.push(pathBetween(path as ProjectedPosition[], cursor, from));
+        cursor = to;
+    }
+    if (cursor < total) runs.push(pathBetween(path as ProjectedPosition[], cursor, total));
+    return runs.filter(run => run.length >= 2);
+}
+
+/** The polyline between two distances along a path, ends interpolated. */
+function pathBetween(path: ProjectedPosition[], from: number, to: number): ProjectedPosition[] {
+    const out: ProjectedPosition[] = [];
+    let walked = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const at = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+        if (end > from && walked < to) {
+            if (!out.length) out.push(walked >= from ? a : at(from));
+            out.push(end <= to ? b : at(to));
+        }
+        walked = end;
+    }
+    return out;
+}
+
 export function centerSegmentIndex(coords: ProjectedPosition[]): number {
     const lengths: number[] = [];
     let total = 0;
@@ -332,6 +445,38 @@ export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition):
     if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
     if (rotation > Math.PI) rotation -= 2 * Math.PI;
     return rotation;
+}
+
+/** Whether {@link uprightRotation} turned the text through half a turn to keep it readable. */
+export function uprightFlipped(from: ProjectedPosition, to: ProjectedPosition): boolean {
+    const raw = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+    return raw > Math.PI / 2 || raw < -Math.PI / 2;
+}
+
+/**
+ * The alignment to pair with {@link uprightRotation}, so a label grows **along the
+ * segment** rather than back down it.
+ *
+ * The two are halves of one decision and were only ever half made. `uprightRotation`
+ * turns a westward label through half a turn so it reads the right way up — and that
+ * reverses which way the glyphs run on screen. A `left` alignment held against the same
+ * anchor therefore lays the text out in the *opposite* ground direction: measured on a
+ * counter-attack by fire, the far edge of `CATK ALPHA` sat 294 km from the arrow tip
+ * pointing east and 306 km pointing west, the difference being exactly the label's own
+ * width. It reads as the label drifting away from the arrowhead on west-facing arrows.
+ *
+ * `center` is unaffected, which is why the members that use it never showed the fault.
+ * The axis-of-advance family had already worked this out and open-codes it as
+ * `c1[0] >= c0[0] ? 'right' : 'left'`; this is the same test, derived from the rotation
+ * itself so the two cannot drift apart.
+ */
+export function alignAlong(
+    align: 'left' | 'center' | 'right',
+    from: ProjectedPosition,
+    to: ProjectedPosition,
+): 'left' | 'center' | 'right' {
+    if (align === 'center' || !uprightFlipped(from, to)) return align;
+    return align === 'left' ? 'right' : 'left';
 }
 
 /**

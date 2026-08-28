@@ -275,6 +275,32 @@ describe('resize carries the sizes the vertices do not', () => {
         const before = {geometry: LINE, properties: props({radius: 20_000, width: 40_000})};
         expect(resize(before, [2, 0], [3, 0]).properties.radius).toBe(20_000);
     });
+
+    /**
+     * The other half of the same rule, and the half that reads backwards until you know
+     * what the number is.
+     *
+     * A hostile Encirclement's `decorationSize` is the width of the *gaps* its outline is
+     * cut into for the `ENY` amplifiers — a hole sized to hold text, not a decoration
+     * sized to match the shape. Scaling it with a 1.5x resize opened the gaps to 293 km
+     * against OpenLayers' 196 while the text in them stayed the size it was.
+     *
+     * OpenLayers splits this by controller family: `LineGraphicController.handleResize`
+     * scales the size along with the line, `PolygonGraphicController.handleResize`
+     * transforms the base and nothing else. Here the base's geometry type says the same
+     * thing, which is why the assertion is on a ring rather than on a name.
+     */
+    it('leaves an area’s decoration size alone — it is a label gap, not a decoration', () => {
+        const before = {
+            geometry: RING,
+            properties: props({name: TacticalGraphicName.Encirclement, decorationSize: 195_678}),
+        };
+        const bigger = resize(before, [2, 1], [3, 1]);
+
+        // The ring itself did grow — otherwise the assertion below proves nothing.
+        expect(positionsOf(bigger.geometry)[1][0]).toBeGreaterThan(positionsOf(before.geometry)[1][0]);
+        expect(bigger.properties.decorationSize).toBe(195_678);
+    });
 });
 
 describe('setBend and setReach — the curve handles', () => {

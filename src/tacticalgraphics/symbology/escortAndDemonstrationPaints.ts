@@ -10,10 +10,12 @@ import {
     centerSegmentIndex,
     endFrame,
     endMarkScale,
-    offsetAbove,
+    pathLength,
+    splitPathAround,
     textWidth,
     uprightRotation,
 } from './decorations';
+import {escortSymbolSizePx} from '../core/securitySymbol';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -22,14 +24,32 @@ type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 const ESCORT_LEG_PX = 34;
 /** Clear space either side of the `E A E` block inside its break, in screen pixels. */
 const ESCORT_GAP_PADDING_PX = 6;
-/** How wide the host's unit symbol is allowed to be, between the two `E`s. */
-const ESCORT_SYMBOL_PX = 34;
+/**
+ * How wide the host's unit symbol is, between the two `E`s.
+ *
+ * Taken from the bar's own on-screen span rather than being a constant, so the symbol and
+ * the graphic scale together — and taken from the **same** function the renderers draw it
+ * at, or the hole and the symbol disagree. @see escortSymbolSizePx
+ */
+function escortSymbolPx(spanPx: number): number {
+    return escortSymbolSizePx(spanPx);
+}
 
 /** Length of a demonstration arrowhead's barbs, and half the angle between them. */
 const DEM_ARROW_PX = 30;
 const DEM_ARROW_HALF_ANGLE_DEG = 30;
-/** Clearance between the leg and the `DEM` amplifier above it, in screen pixels. */
-const DEM_LABEL_OFFSET_PX = 8;
+/** Clear space either side of `DEM` inside the break it sits in, in screen pixels. */
+const DEM_LABEL_PADDING_PX = 6;
+/**
+ * Most of a leg that `DEM` and its designation may take up.
+ *
+ * The text sits **in** the leg, so its width is bounded by the leg whether the graphic
+ * was dropped small or zoomed away from — the same shape-relative rule the repeating
+ * decorations follow, and the one the arc mission tasks' rim letters needed. A
+ * zoom-anchored scale alone put a 65 px `DEM` across an 80 px leg in the sample sweep,
+ * which is the letter being the graphic. @see decorationScale
+ */
+const DEM_LABEL_LEG_SHARE = 0.55;
 
 /** Straight-line interpolation between two projected points. */
 const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedPosition =>
@@ -88,7 +108,9 @@ export function escortPaint(letter: string): TaskPaint {
         if (span === 0) return [{geometry, stroke}];
 
         const halfGapPx =
-            textWidth(context, letter, fontStyle, scale) + ESCORT_SYMBOL_PX / 2 + ESCORT_GAP_PADDING_PX;
+            textWidth(context, letter, fontStyle, scale)
+            + escortSymbolPx(span / context.resolution) / 2
+            + ESCORT_GAP_PADDING_PX;
         const gap = Math.min((halfGapPx * context.resolution) / span, 0.45);
 
         const bar: ProjectedPosition[][] = [
@@ -123,12 +145,18 @@ export function escortPaint(letter: string): TaskPaint {
 }
 
 /**
- * The demonstration: the drawn U, an open arrowhead on each straight, and `DEM` above the
- * first leg.
+ * The demonstration: the drawn U, **one** open arrowhead, and `DEM` set in a break in the
+ * leg that carries it.
  *
- * **The heads are open, not filled.** Both forms are in use in this symbology and they are
- * not interchangeable — the bypass and the swept-arc tasks draw solid triangles, this draws
- * a pair of barbs, and the plate is what decides which. @see solidArrowHead
+ * The heads are open, not filled — both forms are in use in this symbology and the plate
+ * decides which. @see solidArrowHead
+ *
+ * **One head, not two.** 343300 numbers point 1 as "the tip of the arrowhead", singular,
+ * and points 3 and 4 as the length of "the second straight line" with no head named. Both
+ * the Template and the Example draw the second leg ending blunt. This drew a head on each,
+ * which reads as a symbol pointing two ways at once.
+ *
+ * And `DEM` sits **in** the leg rather than above it, which is where the plate puts it.
  */
 export function demonstrationPaint(label: string): TaskPaint {
     return (feature, context) => {
@@ -141,21 +169,20 @@ export function demonstrationPaint(label: string): TaskPaint {
         if (parts.length < 3) return paints;
 
         const legs = [parts[0], parts[2]];
-        const scale = endMarkScale(legs[0], context.resolution, DEM_ARROW_PX);
-        if (scale > 0) {
-            const size = DEM_ARROW_PX * scale * context.resolution;
+        const headScale = endMarkScale(legs[0], context.resolution, DEM_ARROW_PX);
+        if (headScale > 0) {
+            const size = DEM_ARROW_PX * headScale * context.resolution;
             const theta = (DEM_ARROW_HALF_ANGLE_DEG * Math.PI) / 180;
             const barbs: ProjectedPosition[][] = [];
 
-            for (const leg of legs) {
-                // The tip is the leg's *outer* end: part 0 runs tip → bend, part 2 runs
-                // bend → tip, so each leg's tip is the end away from the turn.
-                const tip = leg === parts[0] ? leg[0] : leg[leg.length - 1];
-                const inner = leg === parts[0] ? leg[1] : leg[leg.length - 2];
-                const dx = tip[0] - inner[0];
-                const dy = tip[1] - inner[1];
-                const len = Math.hypot(dx, dy);
-                if (len === 0) continue;
+            // Point 1 only: part 0 runs tip → bend, so the head is at its first vertex.
+            const head = parts[0];
+            const tip = head[0];
+            const inner = head[1];
+            const dx = tip[0] - inner[0];
+            const dy = tip[1] - inner[1];
+            const len = Math.hypot(dx, dy);
+            if (len > 0) {
                 for (const sign of [-1, 1]) {
                     const cos = Math.cos(sign * theta);
                     const sin = Math.sin(sign * theta);
@@ -173,15 +200,26 @@ export function demonstrationPaint(label: string): TaskPaint {
         const b = leg[segIdx + 1];
         const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const text = [label, (feature.properties.label ?? '').trim()].filter(Boolean).join(' ');
+        // Capped against the leg it is set in, never merely against the zoom. A longer
+        // designation is held to the same width, so it opens a wider break rather than
+        // one that swallows the line. @see DEM_LABEL_LEG_SHARE
+        const legPx = pathLength(leg) / context.resolution;
+        const widthAtUnitScale = textWidth(context, text, fontStyle, 1);
+        const scale = widthAtUnitScale > 0
+            ? Math.min(scaleOf(feature, context), (legPx * DEM_LABEL_LEG_SHARE) / widthAtUnitScale)
+            : scaleOf(feature, context);
 
-        paints.push(amplifier(feature, 
-            offsetAbove(mid, a, b, context.resolution, DEM_LABEL_OFFSET_PX),
-            text,
-            scaleOf(feature, context),
-            uprightRotation(a, b),
-            'center',
-            'bottom',
-        ));
+        // Set in the leg, not above it. The break is cut from the *rendered* text, so a
+        // longer designation opens a wider hole rather than overrunning the line.
+        const halfGap =
+            (textWidth(context, text, fontStyle, scale) / 2 + DEM_LABEL_PADDING_PX) * context.resolution;
+        const runs = splitPathAround(leg, pathLength(leg) / 2, halfGap);
+        if (runs.length) {
+            const rest = parts.slice(1);
+            paints[0] = {geometry: {type: 'MultiLineString', coordinates: [...runs, ...rest]}, stroke};
+        }
+
+        paints.push(amplifier(feature, mid, text, scale, uprightRotation(a, b), 'center', 'middle'));
         return paints;
     };
 }

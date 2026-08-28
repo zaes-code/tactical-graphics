@@ -138,6 +138,44 @@ export function getSecuritySymbolSize(): number {
 }
 
 /**
+ * Share of an escort's bar its unit symbol may span.
+ *
+ * **The escort's symbol is not a fixed screen size, and the security operations' is.**
+ * Cover, guard and screen are badges: every dimension of them is a screen constant, so a
+ * constant symbol beside a constant symbol stays in proportion at any zoom. An escort is
+ * drawn — the operator sets its length, and *"the escort symbol appears above the convoy or
+ * escorted unit symbol"*, so the two have to read as one group. A 25 px unit symbol on a
+ * bar the width of the screen looks like a speck; on a short one it swallows the bar.
+ */
+const ESCORT_SYMBOL_SHARE = 0.16;
+
+/**
+ * How big an escort's centre symbol draws, from its bar's on-screen span.
+ *
+ * Clamped to the same readable range a host's `setSecuritySymbolSize` is, so a very long or
+ * very short bar still gets a symbol somebody can identify. **The paint layer sizes the
+ * break in the bar from this same number**, or the hole and the symbol disagree.
+ */
+export function escortSymbolSizePx(spanPx: number): number {
+    return Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, spanPx * ESCORT_SYMBOL_SHARE));
+}
+
+/**
+ * The graphics that carry a host-injected centre symbol.
+ *
+ * Cover, guard and screen put one between their arms; the escort puts one in the break in
+ * its bar. **A symbology fact, so it lives here** — it had been a private `SECURITY_OPERATIONS`
+ * set inside MapLibre's native renderer, which is the shape of thing that ends up true on
+ * one engine and not the other.
+ */
+export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+    TacticalGraphicName.Escort,
+]);
+
+/**
  * Registers the provider for every security operation on every map.
  *
  * Global, like `configureTacticalGraphics`, and for the same reason: the center

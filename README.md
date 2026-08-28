@@ -8,11 +8,11 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**255 graphics** are implemented and verified today, covering **268 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**288 graphics** are implemented and verified today, covering **301 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![Every verified tactical graphic, rendered at once by the sample gallery](docs/images/sample-gallery.png)
 
-*Every paintable graphic, drawn in one sweep by the demo's **Draw all samples** button. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
+*Every verified graphic, drawn in one sweep by the demo's **Draw samples** button. Press it yourself in the [live demo](https://zaes-code.github.io/tactical-graphics/) — nothing here is a mock-up, it is the library rendering through the same path your code would. Both renderers draw this from the identical GeoJSON, so switching engines in the demo redraws the same grid.*
 
 ---
 
@@ -138,8 +138,11 @@ tacticalGraphic: {
     // Symbology — affects color and dash pattern.
     hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
     status: 'present',        // present | planned  (planned ⇒ dashed)
-    confidence: 'confirmed',  // rendered where doctrine shows a reliability rating
-    echelon: 'battalion',
+    confidence: 'known',      // known | suspected — rendered where doctrine shows a
+                              // reliability rating
+    echelon: 'Battalion/Squadron', // Squad | Section | Platoon/Detachment |
+                              // Company/Battery/Troop | Battalion/Squadron |
+                              // Regiment/Group | Brigade | Unknown
     direction: 'ONE_WAY',     // route graphics
     mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
     mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
@@ -308,12 +311,22 @@ renderTacticalGraphic({
 Discover what is available at run time:
 
 ```ts
-import {listTacticalGraphicNames, GRAPHIC_CATEGORIES, getDisplayName} from '@zaes/tactical-graphics';
+import {
+    listTacticalGraphicNames,
+    GRAPHIC_CATEGORIES,
+    getDisplayName,
+    TacticalGraphicName,
+} from '@zaes/tactical-graphics';
 
-listTacticalGraphicNames();                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
-GRAPHIC_CATEGORIES['PhaseLine'];                // → 'Lines'
-getDisplayName('MainAxisOfAdvance');            // → 'main axis of advance'
+listTacticalGraphicNames();                                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
+GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
+getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
 ```
+
+`TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
+at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
+`tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member
+rather than the literal, so pass the enum.
 
 ---
 
@@ -535,10 +548,10 @@ third.
 properties, or from `getLabel()` for graphics whose abbreviation is fixed by doctrine:
 
 ```ts
-import {getLabel} from '@zaes/tactical-graphics';
+import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
 
-getLabel('PhaseLine');           // → 'PL'   (doctrinal, not user-editable)
-getLabel('FinalProtectiveFire'); // → 'FPF'
+getLabel(TacticalGraphicName.PhaseLine);           // → 'PL'   (doctrinal, not user-editable)
+getLabel(TacticalGraphicName.FinalProtectiveFire); // → 'FPF'
 ```
 
 **Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain,
@@ -692,7 +705,7 @@ rendering: one registration serves whichever engine is drawing, and both read it
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
-dependency: a consumer who wants the geometry, or the other 200-odd graphics, never
+dependency: a consumer who wants the geometry, or the other 280-odd graphics, never
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
@@ -859,6 +872,7 @@ Skip the draw interaction when the geometry comes from data rather than a user's
 You build the base feature; the controller does the rest:
 
 ```ts
+import {TacticalGraphicName, TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {getController, writeGraphicProperties} from '@zaes/tactical-graphics/openlayers';
 
 const handler = getController(TacticalGraphicName.FieldsOfFire, map.getView().getResolution()!);
@@ -867,7 +881,8 @@ source.addFeatures(handler.getFeatures());     // graphic + labels + handles
 manager.watchResolution(handler);              // see below — not optional
 
 writeGraphicProperties(handler.getFeatures(), TacticalGraphicName.FieldsOfFire, {
-    label: 'A', hostility: 'Hostile/Faker',    // strokes turn red; text stays black
+    label: 'A',
+    hostility: TacticalGraphicHostility.hostileFaker,   // strokes turn red; text stays black
 });
 ```
 
@@ -906,10 +921,12 @@ counterpart to `getController` for placing graphics from data, and hands back a 
 graphic rather than mutating a holder:
 
 ```ts
+import {TacticalGraphicName, TacticalGraphicHostility} from '@zaes/tactical-graphics';
 import {buildTacticalGraphic} from '@zaes/tactical-graphics/maplibre';
 
 const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry, {
-    label: 'A', hostility: 'Hostile/Faker',
+    label: 'A',
+    hostility: TacticalGraphicHostility.hostileFaker,
 }, resolution);
 if (graphic) renderer.add(graphic);
 ```
@@ -1126,18 +1143,27 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, Alternating Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Mine Cluster | Mobility and Countermobility Control Measures |
+| Mined Area, Fenced | Mobility and Countermobility Control Measures |
+| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
+| Mineline | Mobility and Countermobility Control Measures |
 | Obstacle Belt | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
+| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
 | Obstacle Free Area | Mobility and Countermobility Control Measures |
 | Obstacle Group | Mobility and Countermobility Control Measures |
 | Obstacle Line | Mobility and Countermobility Control Measures |
 | Obstacle Restricted Area | Mobility and Countermobility Control Measures |
 | Obstacle Zone | Mobility and Countermobility Control Measures |
 | Passage Lane | Mobility and Countermobility Control Measures |
+| Raft Site | Mobility and Countermobility Control Measures |
 | Roadblock Complete (executed) | Mobility and Countermobility Control Measures |
 | Route | Mobility and Countermobility Control Measures |
 | Route - Alternating Traffic | Mobility and Countermobility Control Measures |
 | Route - One-Way Traffic | Mobility and Countermobility Control Measures |
 | Route - Two-Way Traffic | Mobility and Countermobility Control Measures |
+| Trip Wire | Mobility and Countermobility Control Measures |
 | Turn | Mobility and Countermobility Control Measures |
 | Wire, Double Apron Fence | Mobility and Countermobility Control Measures |
 | Wire, Double Fence | Mobility and Countermobility Control Measures |
@@ -1150,6 +1176,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Wire, Unspecified | Mobility and Countermobility Control Measures |
 | Airborne Or Aviation Axis Of Advance | Movement and Maneuver |
 | Attack Helicopter Axis Of Advance | Movement and Maneuver |
+| Avenue Of Approach | Movement and Maneuver |
 | Aviation Direction Of Attack | Movement and Maneuver |
 | Direction Of Main Attack | Movement and Maneuver |
 | Direction Of Main Attack Feint | Movement and Maneuver |
@@ -1165,8 +1192,10 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Turning Movement | Movement and Maneuver |
 | Advance To Contact | Offense Operations Planning |
 | Ambush | Offense Operations Planning |
+| Cordon And Knock | Offense Operations Planning |
 | Cordon And Search | Offense Operations Planning |
 | Counterattack | Offense Operations Planning |
+| Counterattack By Fire | Offense Operations Planning |
 | Exploitation | Offense Operations Planning |
 | Movement To Contact | Offense Operations Planning |
 | Pursuit | Offense Operations Planning |
@@ -1175,29 +1204,39 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Breach | Tactical Mission Tasks |
 | Bypass | Tactical Mission Tasks |
 | Canalize | Tactical Mission Tasks |
+| Capture | Tactical Mission Tasks |
 | Clear | Tactical Mission Tasks |
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
+| Demonstration | Tactical Mission Tasks |
+| Deny | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |
 | Disengage | Tactical Mission Tasks |
 | Disrupt | Tactical Mission Tasks |
+| Escort | Tactical Mission Tasks |
+| Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
+| Locate | Tactical Mission Tasks |
 | Neutralize | Tactical Mission Tasks |
 | Occupy | Tactical Mission Tasks |
+| Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
+| Artillery Maneuver Area | Target Acquisition Control Measures |
+| Artillery Reserved Area | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Circular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Irregular | Target Acquisition Control Measures |
 | Artillery Target Intelligence Zone, Rectangular | Target Acquisition Control Measures |
 | Blue Kill Box, Circular | Target Acquisition Control Measures |
 | Blue Kill Box, Irregular | Target Acquisition Control Measures |
 | Blue Kill Box, Rectangular | Target Acquisition Control Measures |
+| Bomb Area | Target Acquisition Control Measures |
 | Call For Fire Zone, Circular | Target Acquisition Control Measures |
 | Call For Fire Zone, Irregular | Target Acquisition Control Measures |
 | Call For Fire Zone, Rectangular | Target Acquisition Control Measures |
@@ -1213,8 +1252,19 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Purple Kill Box, Circular | Target Acquisition Control Measures |
 | Purple Kill Box, Irregular | Target Acquisition Control Measures |
 | Purple Kill Box, Rectangular | Target Acquisition Control Measures |
+| Target Build-Up Area, Circular | Target Acquisition Control Measures |
+| Target Build-Up Area, Irregular | Target Acquisition Control Measures |
+| Target Build-Up Area, Rectangular | Target Acquisition Control Measures |
+| Target Value Area, Circular | Target Acquisition Control Measures |
+| Target Value Area, Irregular | Target Acquisition Control Measures |
+| Target Value Area, Rectangular | Target Acquisition Control Measures |
+| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan | Target Acquisition Control Measures |
 | Weapon Or Sensor Range Fan, Circular | Target Acquisition Control Measures |
+| Zone Of Fire | Target Acquisition Control Measures |
+| Zone Of Responsibility, Circular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
+| Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |
 | Final Protective Fire | Target Control Measures |
 | Fire Support Area, Circular | Target Control Measures |
 | Fire Support Area, Irregular | Target Control Measures |
@@ -1236,44 +1286,11 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Graphic | Category |
 |---|---|
 | Halted Convoy | Mobility and Countermobility Control Measures |
-| Mine Cluster | Mobility and Countermobility Control Measures |
-| Mined Area, Fenced | Mobility and Countermobility Control Measures |
-| Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
-| Mineline | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Difficult | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Easy | Mobility and Countermobility Control Measures |
-| Obstacle Bypass Impossible | Mobility and Countermobility Control Measures |
-| Raft Site | Mobility and Countermobility Control Measures |
-| Trip Wire | Mobility and Countermobility Control Measures |
-| Avenue Of Approach | Movement and Maneuver |
 | Axis Of Attack | Movement and Maneuver |
-| Cordon And Knock | Offense Operations Planning |
-| Counterattack By Fire | Offense Operations Planning |
-| Capture | Tactical Mission Tasks |
-| Demonstration | Tactical Mission Tasks |
-| Deny | Tactical Mission Tasks |
-| Escort | Tactical Mission Tasks |
-| Evacuate | Tactical Mission Tasks |
 | Follow And Assume | Tactical Mission Tasks |
 | Follow And Support | Tactical Mission Tasks |
-| Locate | Tactical Mission Tasks |
-| Recover | Tactical Mission Tasks |
 | Seize | Tactical Mission Tasks |
-| Artillery Maneuver Area | Target Acquisition Control Measures |
-| Artillery Reserved Area | Target Acquisition Control Measures |
-| Bomb Area | Target Acquisition Control Measures |
-| Target Build-Up Area, Circular | Target Acquisition Control Measures |
-| Target Build-Up Area, Irregular | Target Acquisition Control Measures |
-| Target Build-Up Area, Rectangular | Target Acquisition Control Measures |
-| Target Value Area, Circular | Target Acquisition Control Measures |
-| Target Value Area, Irregular | Target Acquisition Control Measures |
-| Target Value Area, Rectangular | Target Acquisition Control Measures |
-| Terminally Guided Munition Footprint | Target Acquisition Control Measures |
-| Zone Of Fire | Target Acquisition Control Measures |
-| Zone Of Responsibility, Circular | Target Acquisition Control Measures |
-| Zone Of Responsibility, Irregular | Target Acquisition Control Measures |
-| Zone Of Responsibility, Rectangular | Target Acquisition Control Measures |
 
 ---
 

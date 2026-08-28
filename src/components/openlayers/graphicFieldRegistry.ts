@@ -136,8 +136,26 @@ const LINE_GENERIC = f(true, false, true, true, false);
  * map, which is the same trap "Label Plate" was.
  */
 const OBSTACLE_LINE = f(true, false, false, false, false);
-/** The two mine areas: free text plus the Table 8-24 mine type drawn inside. */
-const MINE_AREA = f(true, false, true, true, false, {mineType: true});
+/**
+ * Minefield, dynamic depiction (APP-06 270707): field H, one date-time group, and the
+ * Table 8-24 mine type.
+ *
+ * The Template carries no `T`, so there is no designation to type — the box in the middle
+ * is Sector 1, which is the mine type drawn rather than typed. `W` is a single
+ * self-destruct DTG and there is no `W1` beside it. (User's call, 2026-08-27.)
+ * @see mineFillPaint
+ */
+const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, additionalInfo: true});
+
+/**
+ * Mined area, fenced (APP-06 270801): field H and the mine type, and nothing else.
+ *
+ * The same Template as its sibling minus the date — this one is a marked minefield rather
+ * than a scatterable one, so there is no self-destruct time to post. (User's call,
+ * 2026-08-27.) A `startDate` arriving on a restored or imported graphic still draws;
+ * what is gone is the control that invites one.
+ */
+const MINE_AREA_FENCED = f(false, false, false, false, false, {mineType: true, additionalInfo: true});
 
 /**
  * Restricted terrain and severely restricted terrain (APP-06 152400, 152500).
@@ -247,6 +265,20 @@ const MOVEMENT_ARROW = f(true, false, true, true, false);
 const MOV = f(true, false, false, false, false);
 
 /**
+ * Avenue of approach (APP-06 152300): the designation, and **no date-time group**.
+ *
+ * Its Template carries `AA` with field `T` beside it, a field `H` set apart from the arrow,
+ * and field `N` twice down the tail. There is no `W` or `W1` anywhere on it — the graphic
+ * had been sharing `MOVEMENT_ARROW`, which offers both, because it is built from the same
+ * arrow as the axes of advance. (User's call, 2026-08-27.)
+ *
+ * Field H is *not* offered yet: the plate's note says it "should be movable to avoid
+ * obscuring key geographic information", and a movable amplifier is a placement decision
+ * rather than a flag. Field N is per-vertex, which this schema does not express.
+ */
+const AVENUE_OF_APPROACH = f(true, false, false, false, false);
+
+/**
  * Tactical mission task (Chapter 6).
  * FM 1-02.2 line 356: "they do not use modifiers or amplifiers."
  */
@@ -339,7 +371,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Capture]: SHAPE_ONLY,
     // Escort's own amplifier is field A, a host-injected unit symbol, not text.
     [TacticalGraphicName.Escort]: SHAPE_ONLY,
-    [TacticalGraphicName.Demonstration]: NAME_FIELD_ONLY,
+    // `DEM` is the symbol's own literal, printed by the plate, and 343300 names no other
+    // amplifier. A designation typed here had nowhere doctrinal to go. (User's call,
+    // 2026-08-27.) The paint still appends one on a restored or imported graphic.
+    [TacticalGraphicName.Demonstration]: SHAPE_ONLY,
     [TacticalGraphicName.Evacuate]: SHAPE_ONLY,
     [TacticalGraphicName.Recover]: SHAPE_ONLY,
     [TacticalGraphicName.DecisionLine]: DECISION_LINE,
@@ -351,8 +386,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
     // Free text plus the mine type the area is filled with.
-    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA,
-    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
+    [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
+    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA_FENCED,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
     [TacticalGraphicName.PsyOpsZoneRectangular]: {...PSYOPS_ZONE, width: true},
@@ -360,8 +395,16 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ObstacleBypassEasy]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.ObstacleBypassImpossible]: SHAPE_ONLY,
-    [TacticalGraphicName.Mineline]: OBSTACLE_LINE,
-    [TacticalGraphicName.MineCluster]: SHAPE_ONLY,
+    // Modifier 1 and nothing else. 290101's Template sets a `Modifier 1` box between the
+    // two `N`s and no `T`, and the modifier is what the beads are drawn from rather than
+    // a caption to type. Hostility comes from `supportsHostility`, not from here.
+    // (User's call, 2026-08-27.) @see minelinePaint
+    [TacticalGraphicName.Mineline]: f(false, false, false, false, false, {mineType: true}),
+    // Status, and nothing else. 290400 is a *"CM Status Type: Circled"* row: its own
+    // dashes are spent — the note says they show in present status too — so planned is
+    // said with a ring instead, and the operator needs the control that sets it.
+    // (User's call, 2026-08-27.) @see plannedStatusRing
+    [TacticalGraphicName.MineCluster]: f(false, false, false, false, true),
     [TacticalGraphicName.TripWire]: SHAPE_ONLY,
     [TacticalGraphicName.RaftSite]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedPosition]: SHAPE_ONLY,
@@ -390,7 +433,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
-    [TacticalGraphicName.AvenueOfApproach]: MOVEMENT_ARROW,
+    [TacticalGraphicName.AvenueOfApproach]: AVENUE_OF_APPROACH,
     [TacticalGraphicName.MainAxisOfAdvance]: MOVEMENT_ARROW,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: MOVEMENT_ARROW,
     [TacticalGraphicName.SupportingAxisOfAdvance]: MOVEMENT_ARROW,
@@ -481,7 +524,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_ONLY,
     [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_ONLY,
     // Exfiltrate (Table 6-1, Ch. 6) → no amplifiers.
-    [TacticalGraphicName.Exfiltrate]: MISSION_TASK,
+    // Hostility and nothing else, like its twin: 343700's Template carries `EX` and no
+    // amplifier box at all. (User's call, 2026-08-27.)
+    [TacticalGraphicName.Exfiltrate]: SHAPE_ONLY,
 
     // ── Mission task bubbles ─────────────────────────────────────────────────
     // Cover, Guard, Screen are Chapter 5 security operations (Table 5-13): keep identifier.
@@ -549,7 +594,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.SubmarineActionArea]: ACTION_AREA,
     [TacticalGraphicName.SubmarineGeneratedActionArea]: ACTION_AREA,
     [TacticalGraphicName.AreaGeneric]: AREA_GENERIC,
-    [TacticalGraphicName.ZoneOfFire]: AREA_SIMPLE,
+    // **No status.** `dashedOutlinePaint` breaks this outline whatever the status says —
+    // the dashes are the symbol, not a reading of `planned` — so the control changed
+    // nothing on the map, which is the same trap "Label Plate" was. (User's call,
+    // 2026-08-27.) @see dashedOutlinePaint
+    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false),
     [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and

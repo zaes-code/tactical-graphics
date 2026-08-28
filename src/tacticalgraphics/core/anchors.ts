@@ -567,3 +567,265 @@ export function anchorsForArcAndArrow(
         }).geometry.coordinates as Position;
     return [polar(arrowReach * radius, 0), polar(radius, ARC_HALF_SPAN_DEG), polar(radius, -ARC_HALF_SPAN_DEG)];
 }
+
+/**
+ * # Two parallel legs joined by a half turn — the demonstration's four points
+ *
+ * APP-06 343300: *"Point 1 defines the tip of the arrowhead. Point 2 defines the end of
+ * the straight line portion of the first arrow. [...] Points 2 and 3 shall be connected
+ * by a smooth, curved line."*
+ *
+ * Unlike every other layout here the frame's origin is **point 1 itself**, not a centre:
+ * the standard numbers the tip first and the symbol grows away from it.
+ *
+ * **The four points are one shape at one set of proportions**, and this is the only place
+ * that says so. Two straights of equal length, parallel, joined by a turn whose diameter
+ * is the gap between them — nothing in the rule invites an operator to vary those ratios,
+ * and left free they drifted: the legs splayed, the turn went oval, and the symbol stopped
+ * reading as a demonstration. So points 2, 3 and 4 are derived from point 1, the leg
+ * length and the aim, and dragging one of them individually is not a gesture this symbol
+ * offers. @see DERIVED_ANCHOR_GRAPHICS
+ *
+ * `openingShare` is the half-opening as a fraction of a leg. Measured off 343300's
+ * Template, the legs run about 265 units against an opening of about 185.
+ */
+export function anchorsForParallelLegs(
+    tip: Position,
+    size: number,
+    rotationDegrees = 0,
+    openingShare = PARALLEL_LEGS_HALF_OPENING,
+): Position[] {
+    const angle = toRadians(rotationDegrees);
+    // One origin for every point, like `anchorsForRunAndArc`: chaining translations
+    // accumulates the latitude-dependent scaling each hop applies, and the second leg
+    // lands short of the first. @see anchorsForRunAndArc
+    const at = (u: number, v: number): Position => {
+        const distance = Math.hypot(u, v);
+        if (distance === 0) return tip;
+        const bearing = 90 - toDegrees(angle + Math.atan2(v, u));
+        return turf.destination(turf.point(tip), distance, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+    };
+    const opening = 2 * size * openingShare;
+    return [tip, at(size, 0), at(size, opening), at(0, opening)];
+}
+
+/** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
+export const PARALLEL_LEGS_HALF_OPENING = 0.35;
+
+/**
+ * The inverse: point 1 is the origin and points 1 → 2 give the leg and the aim.
+ *
+ * Points 3 and 4 are **not read**. They are derived, so a set that disagrees with them —
+ * a file written while the four were drawn freehand — resolves to the canonical shape
+ * rather than to whatever the legs had drifted into.
+ */
+export function parallelLegsFromAnchors(
+    coords: Position[] | undefined,
+): {tip: Position; size: number; angle: number} | undefined {
+    if (!coords || coords.length < 2) return undefined;
+    const [tip, bend] = coords;
+    const size = turf.distance(turf.point(tip), turf.point(bend), {units: 'meters'});
+    if (!(size > 0)) return undefined;
+    // Geodesic bearing back to the planar angle the layouts take: 0 is east, growing
+    // counter-clockwise. @see anchorsForParallelLegs
+    return {tip, size, angle: toRadians(90 - turf.bearing(turf.point(tip), turf.point(bend)))};
+}
+
+/**
+ * # A rectangle from two anchor points and a width — APP-06's own definition
+ *
+ * > This symbol requires two anchor points and a width, defined in metres, to define the
+ * > boundary of the area. Points 1 and 2 will be located in the centre of two opposing
+ * > sides of the rectangle. […] The anchor points determine the length of the rectangle.
+ * > The width, defined in metres, will determine the width of the rectangle. (240202)
+ *
+ * So the axis is the user's two clicks and the width is an amplifier — the length and the
+ * orientation come from the points, and nothing about the shape is a corner the operator
+ * places. Eighteen rectangular zones say it in those words and FM 1-02.2 table 5-24 draws
+ * the same `AM` / "Width (m)" arrow down the edge.
+ *
+ * **This library used to let the user drag a box instead.** That produces the same
+ * picture, and three things followed from it: the width was derived from the ring rather
+ * than set, so it could be read but not dragged; the rectangle could not be turned,
+ * because every dimension came off the projected bounding box; and the two points APP-06
+ * numbers existed nowhere. (User's call, 2026-08-27.)
+ *
+ * `halfWidth` rather than the full figure, because that is what the generators take —
+ * `toGraphicOptions` halves the public `width` on the way in, and this is the one place
+ * the factor of two lives on the way back out.
+ */
+export function rectangleFromAxis(p1: Position, p2: Position, halfWidth: number): Position[] {
+    const axis = turf.bearing(turf.point(p1), turf.point(p2));
+    const off = (from: Position, bearing: number): Position =>
+        halfWidth > 0
+            ? (turf.destination(turf.point(from), halfWidth, bearing, {units: 'meters'}).geometry.coordinates as Position)
+            : from;
+    // Anticlockwise from point 1's left flank, closed.
+    const a = off(p1, axis - 90);
+    const b = off(p2, axis - 90);
+    const c = off(p2, axis + 90);
+    const d = off(p1, axis + 90);
+    return [a, b, c, d, a];
+}
+
+/**
+ * The inverse, for a box drawn before the conversion: the axis through the midpoints of
+ * the two **shorter** sides, and half the longer dimension across it.
+ *
+ * Point 1 is the western of the two midpoints, or the southern when the box is taller
+ * than it is wide — a drawn box records no direction, so this is a convention rather
+ * than a recovery. What it does preserve is the shape: the same rectangle comes back.
+ */
+export function axisFromRectangleRing(
+    ring: Position[] | undefined,
+): {p1: Position; p2: Position; halfWidth: number} | undefined {
+    if (!ring || ring.length < 4) return undefined;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of ring) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+    }
+    if (!isFinite(minX) || maxX <= minX || maxY <= minY) return undefined;
+
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const across = turf.distance(turf.point([midX, minY]), turf.point([midX, maxY]), {units: 'meters'});
+    const along = turf.distance(turf.point([minX, midY]), turf.point([maxX, midY]), {units: 'meters'});
+
+    // The axis runs along the longer dimension, so the two anchor points land on the
+    // shorter sides — which is the pair the standard numbers.
+    return along >= across
+        ? {p1: [minX, midY], p2: [maxX, midY], halfWidth: across / 2}
+        : {p1: [midX, minY], p2: [midX, maxY], halfWidth: along / 2};
+}
+
+/**
+ * Half-width a freshly drawn rectangular zone starts at, in screen pixels.
+ *
+ * **Wider than the library's generic 20 px drawn offset**, and deliberately its own
+ * number: a corridor's 20 px is a rail standing off a route, where this is half of a
+ * whole area — at 20 px the zone came out a letterbox and the width handle sat almost on
+ * the axis. (User's call, 2026-08-27.)
+ *
+ * Here rather than in a holder because both engines seed it, and a zone drawn with the
+ * identical two clicks has to come out the identical size on either. They disagreed by a
+ * factor of two the first time this was written down in only one of them.
+ */
+export const RECTANGLE_DEFAULT_HALF_WIDTH_PX = 55;
+
+/**
+ * A rectangle's half-width when nobody supplied one and there is no zoom to spend a
+ * screen size at — a share of its own axis.
+ *
+ * **The sample sweeps are why this exists.** Each engine draws its own sheet and then
+ * replays its own snapshot, and the comparison's whole premise is that the two start from
+ * the same base. They did until a rectangle's width became a *seeded* figure rather than
+ * one measured off a drawn box: OpenLayers seeded it from the resolution its holder was
+ * constructed at and MapLibre from the resolution its adapter was handed, and the two
+ * sheets are built at different zooms. Measured, the same graphic: 360 km against 1,005.
+ *
+ * A share of the axis is resolution-free, so both sheets reach it from the geometry alone.
+ * A twentieth either side is what the drawn defaults come to at an ordinary zoom.
+ * @see rectangleFromAxis
+ */
+export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
+    return axisLengthMeters * RECTANGLE_DEFAULT_WIDTH_FRACTION;
+}
+
+const RECTANGLE_DEFAULT_WIDTH_FRACTION = 1 / 20;
+
+/** Shortest axis a rectangle may be dragged to, in metres — below this it has no shape. */
+const RECTANGLE_MIN_LENGTH = 1;
+/** Metres in a degree of latitude, for the local flattening. @see constrainRectangleAxis */
+const DEGREE_METRES = 111_320;
+
+/**
+ * A rectangle's axis after one of its two anchor points has been dragged.
+ *
+ * **The drag sets the length, never the orientation.** APP-06 puts points 1 and 2 at the
+ * centres of the two opposing sides, so moving one is how an operator makes the zone
+ * longer or shorter — and letting the same drag swing the rectangle round meant there was
+ * no way to change the length *without* risking a turn. Rotating is the rotate gesture's
+ * job, and it still turns the whole symbol freely. (User's call, 2026-08-27.)
+ *
+ * So the moved point is projected back onto the axis the rectangle already had, measured
+ * from the point that did not move.
+ *
+ * Returns `next` untouched when it is not one endpoint moving: a rotate moves both, a
+ * translate moves both, and a rebuild moves neither. That test is the whole discriminator
+ * — there is no flag to read and no gesture name at this level.
+ */
+export function constrainRectangleAxis(previous: Position[] | undefined, next: Position[]): Position[] {
+    if (!previous || previous.length < 2 || next.length < 2) return next;
+    const movedFirst = !samePoint(previous[0], next[0]);
+    const movedLast = !samePoint(previous[1], next[1]);
+    if (movedFirst === movedLast) return next;
+
+    const anchor = movedFirst ? next[1] : next[0];
+    const moved = movedFirst ? next[0] : next[1];
+
+    /*
+     * **Projected in a local plane, not walked along a great circle.**
+     *
+     * The instruction is that a side handle changes the east-west coordinate and nothing
+     * else, and a level rectangle is the ordinary case. A great-circle bearing of 90 does
+     * not hold a latitude — over 4,500 km at 51 degrees north it drifts far enough to be
+     * a visible tilt — so walking `along` metres at the previous bearing put the zone off
+     * level on every length drag. Flattening longitude by `cos(lat)` about the anchor
+     * makes "along the axis" exact for a level zone and correct to a hair for a turned
+     * one, which is the whole range this has to cover.
+     */
+    const scale = Math.cos((anchor[1] * Math.PI) / 180) || 1e-9;
+    const from = movedFirst ? previous[1] : previous[0];
+    const to = movedFirst ? previous[0] : previous[1];
+    const dx = (to[0] - from[0]) * scale;
+    const dy = to[1] - from[1];
+    const axis = Math.hypot(dx, dy);
+    if (!(axis > 0)) return next;
+    const ux = dx / axis;
+    const uy = dy / axis;
+
+    // The component of anchor → moved along the axis. A drag past the anchor is a
+    // zero-length zone, not a flipped one, so it is held at a floor.
+    const along = (moved[0] - anchor[0]) * scale * ux + (moved[1] - anchor[1]) * uy;
+    const minimum = RECTANGLE_MIN_LENGTH / DEGREE_METRES;
+    const held: Position = [
+        anchor[0] + (ux * Math.max(minimum, along)) / scale,
+        anchor[1] + uy * Math.max(minimum, along),
+    ];
+    return movedFirst ? [held, next[1]] : [next[0], held];
+}
+
+/**
+ * A rectangle drawn with two clicks, squared up.
+ *
+ * **The first drawing is always straight**, running due east or due west from point 1 at
+ * the length the operator dragged. A zone clicked out a few pixels off level came out
+ * visibly askew, and nothing about a fire-support area is diagonal by default — so it is
+ * levelled on the draw and turned afterwards, by the gesture whose job that is.
+ * (User's call, 2026-08-27.)
+ *
+ * The direction is kept: drag east and point 2 lands east.
+ */
+export function levelRectangleAxis(coordinates: Position[]): Position[] {
+    if (coordinates.length < 2) return coordinates;
+    const [p1, p2] = [coordinates[0], coordinates[coordinates.length - 1]];
+    // **Point 2 keeps its longitude and takes point 1's latitude**, which is level by
+    // construction. Walking `length` metres due east instead is not: a great-circle
+    // bearing of 90 curves away from the parallel, and over 28 km at 51 degrees north it
+    // lands 93 m off the latitude it started at. The zone spans the east-west extent the
+    // operator dragged, which is what "make it straight" means to the person dragging.
+    if (Math.abs(p2[0] - p1[0]) < 1e-9) return coordinates;
+    return [p1, [p2[0], p1[1]]];
+}
+
+/** Two positions within a millimetre of each other, in degrees. */
+function samePoint(a: Position, b: Position): boolean {
+    return Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+}

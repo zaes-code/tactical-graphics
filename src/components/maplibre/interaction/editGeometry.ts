@@ -236,7 +236,7 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
         // OpenLayers' 431 x 51. "Resize the whole graphic as is" is the user's rule, and
         // the OpenLayers controller states it in the same words.
         // @see LineGraphicController.handleResize
-        properties: scaleDrawnSizes(description.properties, ratio),
+        properties: scaleDrawnSizes(description.geometry, description.properties, ratio),
         geometry: mapPositions(description.geometry, position => {
             const [x, y] = toMercator([position[0], position[1]]);
             return toLonLat([center[0] + (x - center[0]) * ratio, center[1] + (y - center[1]) * ratio]);
@@ -252,15 +252,31 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
  * is why each is scaled only where it is already present. `radius` is deliberately absent:
  * on this family it is the *same* number as the half-width, replayed by `setOffset` on
  * restore, and scaling both would compound. @see toGraphicOptions
+ *
+ * **A polygon's `decorationSize` does not scale, and that is not an inconsistency.**
+ * OpenLayers splits this by controller family and so does this: `LineGraphicController`
+ * scales the size along with the line, `PolygonGraphicController` transforms the base and
+ * nothing else. The base's geometry type is the same split stated in the data.
+ *
+ * It matters for exactly one graphic. A hostile Encirclement's `decorationSize` is the
+ * width of the gaps its outline is *cut* into for the `ENY` amplifiers — a hole sized to
+ * hold text, not a decoration sized to match the shape. Scaling it with a 1.5x resize
+ * opened the gaps to 293 km against OpenLayers' 196 while the text in them stayed the
+ * size it was. @see EncirclementArea.generateGraphics
  */
-function scaleDrawnSizes(properties: TacticalGraphicProperties, ratio: number): TacticalGraphicProperties {
+function scaleDrawnSizes(
+    geometry: GraphicDescription['geometry'],
+    properties: TacticalGraphicProperties,
+    ratio: number,
+): TacticalGraphicProperties {
     const scaled = (value: number | undefined): number | undefined =>
         value !== undefined && value > 0 ? value * ratio : value;
+    const isArea = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
 
     return {
         ...properties,
         ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
-        ...(properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
+        ...(isArea || properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
     };
 }
 

@@ -43,11 +43,17 @@ const RESOLUTION = 1200;
 const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 
 /**
- * Every tactical mission task, not only the ones the sweep can draw — the rule
- * is doctrinal, so it has to hold for the 13 still finishing their shapes too.
+ * Every tactical mission task that does not take an identity — not only the ones the sweep
+ * can draw, because the rule is doctrinal and has to hold for the 13 still finishing their
+ * shapes too.
+ *
+ * The exfiltration is filtered out rather than special-cased below: it is one of the two
+ * graphics that override the category rule, and the partition here is "does it take a
+ * hostility", not "is it a mission task". @see supportsHostility
  */
 const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
-    .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks);
+    .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks)
+    .filter(n => !supportsHostility(n));
 const others = PROVEN_GRAPHICS.filter(supportsHostility);
 
 /**
@@ -99,8 +105,11 @@ describe('sweeping with a hostility', () => {
         expect(stamped.length).toBeGreaterThan(0);
     });
 
-    it('skips the tactical mission tasks', () => {
+    it('skips the tactical mission tasks, bar the two that carry an identity', () => {
         expect(missionTasks.every(n => !supportsHostility(n))).toBe(true);
+        // The exception, so the filter above cannot quietly empty the list.
+        expect(supportsHostility(TacticalGraphicName.Exfiltrate)).toBe(true);
+        expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
     });
 
     it('skips line of contact, which draws both identities at once', () => {
@@ -280,10 +289,26 @@ describe('the sample sweep tells rectangles from areas', () => {
                 corners: (f.geometry as {coordinates: number[][][]}).coordinates[0].length - 1,
             }));
 
-    it('draws every rectangular variant with four corners', () => {
-        const boxes = rings().filter(r => isRectangular(r.name));
-        expect(boxes.length).toBeGreaterThan(0);
-        expect(boxes.every(r => r.corners === 4)).toBe(true);
+    /**
+     * The rectangles left this comparison on 2026-08-27: their base is the axis APP-06
+     * defines them by — two anchor points and a width — so there is no ring in the sweep
+     * to count corners on. What replaces the assertion is the same guarantee stated at
+     * the source: every one of them is a two-point line carrying a width, which is a
+     * different sample from an irregular area's five-cornered ring by construction.
+     * @see RectangularArea
+     */
+    it('draws every rectangular variant from two anchor points', () => {
+        const axes = sampleFeatureCollection().features
+            .map(f => ({
+                name: (f.properties as {tacticalGraphic: {name: TacticalGraphicName}}).tacticalGraphic.name,
+                geometry: f.geometry,
+            }))
+            .filter(f => isRectangular(f.name));
+        expect(axes.length).toBeGreaterThan(0);
+        for (const {geometry} of axes) {
+            expect(geometry.type).toBe('LineString');
+            expect((geometry as {coordinates: number[][]}).coordinates).toHaveLength(2);
+        }
     });
 
     it('draws every other area with five, so the two cannot be confused', () => {

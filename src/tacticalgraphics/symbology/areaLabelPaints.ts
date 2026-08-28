@@ -435,13 +435,26 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
  *
  * Worth fixing on its own merits, as its own change, with its own before/after.
  */
-export function areaDefaultLabelPaint(name: TacticalGraphicName): AreaLabelPaint {
+export function areaDefaultLabelPaint(
+    name: TacticalGraphicName,
+    /**
+     * Whether the centre block leads with the symbol's own abbreviation.
+     *
+     * True for almost every area, and false for the two that already write theirs into
+     * their boundary: an artillery manoeuvre area sets `AMA` at each of the four cardinal
+     * breaks, and repeating it in the middle put the same three letters on the symbol five
+     * times. The designation is what the middle is for. (User's call, 2026-08-27.)
+     * @see cardinalLabelPaint
+     */
+    withLiteral = true,
+): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
 
         const scale = scaleOf(feature, context);
-        const text = getFullLabel(name, feature.properties.label ?? '');
+        const designation = feature.properties.label ?? '';
+        const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
         const date = areaDateLabel(feature);
 
         // The two marks are separately anchored, so they are capped as **one block**: the

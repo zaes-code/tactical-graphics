@@ -366,3 +366,20 @@ describe('the sector-modifier fields, and where the Remarks column allows them',
         ].sort());
     });
 });
+
+describe('APP-06 152300 — the avenue of approach fields', () => {
+    it('offers the designation and no date-time group', () => {
+        // It had been sharing MOVEMENT_ARROW with the axes of advance, which are built from
+        // the same arrow and do carry W/W1. 152300's Template does not.
+        const fields = getGraphicFields(TacticalGraphicName.AvenueOfApproach);
+        expect(fields.identifier1).toBe(true);
+        expect(fields.dtg1).toBe(false);
+        expect(fields.dtg2).toBe(false);
+    });
+
+    it('leaves the axes of advance alone, which do carry one', () => {
+        const fields = getGraphicFields(TacticalGraphicName.MainAxisOfAdvance);
+        expect(fields.dtg1).toBe(true);
+        expect(fields.dtg2).toBe(true);
+    });
+});

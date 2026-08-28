@@ -34,7 +34,18 @@ import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
-import {GRAPHIC_CATEGORIES, TacticalGraphicCategory, TacticalGraphicHostility, TacticalGraphicName, getDisplayName, latitudeFromMercatorY, storedOrder} from '@zaes/tactical-graphics';
+import {
+    GRAPHIC_CATEGORIES,
+    TacticalGraphicCategory,
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getDisplayName,
+    groundLength,
+    isRectangular,
+    latitudeFromMercatorY,
+    rectangleDefaultHalfWidth,
+    storedOrder,
+} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import {TacticalGraphicHandler} from './openlayersAdapter';
@@ -698,6 +709,38 @@ export function applyBaseGeometry(
         const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy, half) : pentagonRing(cx, cy, half);
         handler.setBaseFeature(polygonFeature(ring, symbolId, name));
     } else if (handler instanceof LineGraphicController) {
+        // **A few line graphics number their points rather than sequencing them**, and the
+        // generic left-to-right run means something different to each. The three obstacle
+        // bypasses take points 1 and 2 as the two ends of the *opening* and point 3 as the
+        // rear, so a shallow V hands them an opening a few pixels wide and a rear off to one
+        // side — which draws as a line, and is what the samples showed.
+        if (BYPASS_POINTS.has(name)) {
+            // Points 1 and 2 stand on the cell's east edge and point 3 on its west, so the
+            // sample spans the same 2 x LINE_HALF every other line sample does. Nudging
+            // them inward reads as a bypass drawn small rather than as a narrower one.
+            const half = LINE_HALF * grow;
+            handler.setBaseFeature(lineFeature([
+                [cx + half, cy + half * 0.55],
+                [cx + half, cy - half * 0.55],
+                [cx - half, cy],
+            ] as Coordinate[], symbolId, name));
+            return;
+        }
+        // **A rectangular zone's width is stamped, not left to the holder's seed.**
+        // The holder starts one at a screen size spent at the resolution it was built
+        // with, and the two sheets are built at different zooms — so the same zone came
+        // out 360 km wide here and 1,005 km on MapLibre, and the comparison's premise
+        // that both engines start from the same base stopped being true.
+        // @see rectangleDefaultHalfWidth
+        if (isRectangular(name)) {
+            const half = LINE_HALF * grow;
+            const axis: Coordinate[] = [[cx - half, cy], [cx + half, cy]];
+            handler.setBaseFeature(lineFeature(axis, symbolId, name));
+            const metres = groundLength(half * 2, latitudeFromMercatorY(cy));
+            (handler as {setOffset?: (value: number) => void}).setOffset?.(rectangleDefaultHalfWidth(metres));
+            return;
+        }
+
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
         // **Drawn in the order the graphic files its points, so every sample still reads
         // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
@@ -709,6 +752,13 @@ export function applyBaseGeometry(
         throw new Error('unclassified controller');
     }
 }
+
+/** The graphics whose drawn points are *numbered roles*, not a path. @see applyBaseGeometry */
+const BYPASS_POINTS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]);
 
 // ── geometry synthesis ──────────────────────────────────────────────────────
 

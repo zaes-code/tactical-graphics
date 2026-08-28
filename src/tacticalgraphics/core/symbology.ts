@@ -636,7 +636,27 @@ const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
     TacticalGraphicName.SeverelyRestrictedTerrain,
 ]);
 
+/**
+ * The two mission tasks that **do** carry an identity.
+ *
+ * The category rule below switches hostility off for every tactical mission task, on FM
+ * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
+ * infiltration are the exception the user asked for (2026-08-27), and there is a reading
+ * behind it: these two are told apart by *whose* forces the arrow points toward — APP-06
+ * 343700 says "the direction of friendly forces" and 343800 "the direction of enemy forces"
+ * — so an identity is the one amplifier that means something on them.
+ *
+ * They are also categorised inconsistently: 343700 sits under Tactical Mission Tasks and
+ * 343800 under Movement and Manoeuvre, which is why one of them offered hostility and the
+ * other did not, for a pair that is one symbol with two letters.
+ */
+const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Exfiltrate,
+    TacticalGraphicName.Infiltration,
+]);
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
+    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name)) return true;
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
     if (TERRAIN_DESCRIPTIONS.has(name)) return false;
@@ -698,6 +718,31 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
  * decided in a holder: the table is portable, the controller is not.
  * @see ai/conventions.md — "A symbology fact never lives in a holder"
  */
+/**
+ * The graphics whose base points are **derived from the drop, not placed by the operator**.
+ *
+ * A base geometry with several points normally means several things to drag, and
+ * `allowedGestures` reads it that way — a `LineString` base is a modifiable one. That is
+ * the wrong reading for a symbol the standard describes by four anchor points which are
+ * nonetheless one fixed shape: APP-06 343300's demonstration is two straights of equal
+ * length, parallel, joined by a turn whose diameter is the gap between them, and none of
+ * those ratios is an input. The points still travel — they are what the base carries and
+ * what a snapshot holds — but the whole symbol moves, turns and scales together.
+ *
+ * **A table rather than a controller override.** The first version of the dropped
+ * demonstration refused the vertex drag by not having any vertices, which cost the four
+ * points the standard names; the version before that refused a *rotate* inside
+ * `PointDropController`, where only OpenLayers could see it. @see allowedGestures
+ */
+const DERIVED_ANCHOR_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Demonstration,
+]);
+
+/** @see DERIVED_ANCHOR_GRAPHICS */
+export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
+    return DERIVED_ANCHOR_GRAPHICS.has(name);
+}
+
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
@@ -764,6 +809,9 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Neutralize]: 50,
     [TacticalGraphicName.Suppress]: 50,
     [TacticalGraphicName.Airfield]: 34,
+    // The demonstration's leg. The U's opening follows from it, so this one number
+    // fixes the whole symbol. @see Demonstration
+    [TacticalGraphicName.Demonstration]: 70,
     // Twice the crossed tasks', which was only the number these were specified from
     // rather than the size they landed on.
     [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
@@ -789,7 +837,8 @@ export function dropSizePx(name: TacticalGraphicName): number | undefined {
 
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     // A point-anchored graphic has one vertex and dragging it is a move, not a
-    // reshape — so `modify` is off and `translate` covers it.
+    // reshape — so `modify` is off and `translate` covers it. So is a graphic whose
+    // several points are all derived from one. @see DERIVED_ANCHOR_GRAPHICS
     const pointAnchored = baseGeometryFor(name) === 'Point';
 
     if (ROTATE_ONLY_SYMBOLS.has(name)) {
@@ -798,6 +847,6 @@ export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     if (RESIZE_ONLY_SYMBOLS.has(name)) {
         return {translate: true, rotate: false, resize: true, modify: false};
     }
-    return {translate: true, rotate: true, resize: true, modify: !pointAnchored};
+    return {translate: true, rotate: true, resize: true, modify: !pointAnchored && !DERIVED_ANCHOR_GRAPHICS.has(name)};
 }
 

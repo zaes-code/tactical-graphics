@@ -392,6 +392,15 @@ export {normalizeDrawnBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
+// The rectangles' own construction: two anchor points and a width. @see rectangleFromAxis
+export {
+    axisFromRectangleRing,
+    constrainRectangleAxis,
+    rectangleDefaultHalfWidth,
+    levelRectangleAxis,
+    rectangleFromAxis,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+} from './core/anchors';
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
 // Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
 // panel hint needs the answer, and only one table may hold it. @see core/drawOrder
@@ -399,7 +408,7 @@ export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrd
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
-export {carriesRectangleLength, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
+export {carriesRectangleLength, groundMeters, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
 export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
@@ -410,6 +419,8 @@ export {
     MIN_SYMBOL_SIZE_PX,
     clearGraphicSecuritySymbolProviders,
     getGraphicSecuritySymbolProvider,
+    CENTER_SYMBOL_GRAPHICS,
+    escortSymbolSizePx,
     getSecuritySymbolProvider,
     getSecuritySymbolSize,
     resolveSecuritySymbol,
