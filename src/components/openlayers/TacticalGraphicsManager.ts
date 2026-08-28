@@ -99,6 +99,7 @@ const SELECT_HIT_TOLERANCE_PX = 10;
  */
 const MIRROR_PAST_AXIS_MIN_PX = 40;
 
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
