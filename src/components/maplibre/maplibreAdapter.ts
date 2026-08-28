@@ -25,6 +25,7 @@ import {
     drawnAnchors,
     axisFromRectangleRing,
     carriesRectangleLength,
+    rectangleDefaultHalfWidth,
     RECTANGLE_DEFAULT_HALF_WIDTH_PX,
     isRectangular,
     groundMeters,
@@ -239,10 +240,20 @@ function sizeDefaults(
         : baseLengthMeters(geometry) * DEFAULT_SIZE_FRACTION;
     if (meters <= 0) return {};
 
-    // **A rectangular zone starts wider than the generic drawn offset**, and states its
-    // own figure so both engines seed the identical size. @see RECTANGLE_DEFAULT_HALF_WIDTH_PX
-    if (isRectangular(name) && supplied.width === undefined && drawingResolution) {
-        return {width: RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution * 2};
+    /*
+     * **A rectangular zone's un-supplied width.**
+     *
+     * With a zoom to spend it at it is a screen size, wider than the generic drawn offset
+     * because half of it is half an *area* rather than a rail standing off a route. With
+     * no zoom — a sample sheet, a raw-GeoJSON reader — it is a share of the axis, which is
+     * the figure both engines reach from the same function and therefore the only one that
+     * makes two sheets comparable. @see rectangleDefaultHalfWidth
+     */
+    if (isRectangular(name) && supplied.width === undefined) {
+        const half = drawingResolution
+            ? RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution
+            : rectangleDefaultHalfWidth(baseLengthMeters(geometry));
+        return {width: half * 2};
     }
 
     // A stamped `radius` on a line graphic **is** its half-width: that is what

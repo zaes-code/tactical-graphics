@@ -719,6 +719,27 @@ export function axisFromRectangleRing(
  */
 export const RECTANGLE_DEFAULT_HALF_WIDTH_PX = 55;
 
+/**
+ * A rectangle's half-width when nobody supplied one and there is no zoom to spend a
+ * screen size at — a share of its own axis.
+ *
+ * **The sample sweeps are why this exists.** Each engine draws its own sheet and then
+ * replays its own snapshot, and the comparison's whole premise is that the two start from
+ * the same base. They did until a rectangle's width became a *seeded* figure rather than
+ * one measured off a drawn box: OpenLayers seeded it from the resolution its holder was
+ * constructed at and MapLibre from the resolution its adapter was handed, and the two
+ * sheets are built at different zooms. Measured, the same graphic: 360 km against 1,005.
+ *
+ * A share of the axis is resolution-free, so both sheets reach it from the geometry alone.
+ * A twentieth either side is what the drawn defaults come to at an ordinary zoom.
+ * @see rectangleFromAxis
+ */
+export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
+    return axisLengthMeters * RECTANGLE_DEFAULT_WIDTH_FRACTION;
+}
+
+const RECTANGLE_DEFAULT_WIDTH_FRACTION = 1 / 20;
+
 /** Shortest axis a rectangle may be dragged to, in metres — below this it has no shape. */
 const RECTANGLE_MIN_LENGTH = 1;
 /** Metres in a degree of latitude, for the local flattening. @see constrainRectangleAxis */
