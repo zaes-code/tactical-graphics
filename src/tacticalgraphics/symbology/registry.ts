@@ -512,8 +512,15 @@ const ROUTE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AlternateSupplyRoute,
 ];
 
-/** The eight air-coordinating corridors: one shape, eight doctrinal names. */
-const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
+/**
+ * The eight air-coordinating corridors: one shape, eight doctrinal names.
+ *
+ * Exported because it is a symbology fact rather than a paint detail — which graphics
+ * carry the corridor's rails, ACP markers and amplifier block — and anything drawing
+ * these has to agree on the membership. The catalog generator asks here rather than
+ * keeping a list of its own, which was already one name short.
+ */
+export const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirCorridor,
     TacticalGraphicName.LowLevelTransitRoute,
     TacticalGraphicName.MinimumRiskRoute,
