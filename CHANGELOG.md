@@ -37,7 +37,7 @@ the npm publish dates — when a version actually became installable.
 
   **No handles, and resize scales the whole symbol.** Every point but the two drawn ones is derived, and dragging one of those alone would break the symmetry the symbol is built on — so the generator publishes no handle points and the edit-mode resize scales the base, which is what these want. The centre symbol is capped at the same 96 px ceiling the escort and the follow tasks stop at, so zooming in does not inflate it.
 
-  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. Two deliberate departures, both the user's call after seeing them: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long — and the second arm's fold is mirrored, so one arrowhead sits above the axis and one below.
+  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. One deliberate departure, the user's call after seeing it: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long. The fold in each arm, and the mirroring of the second, are the shipped shape and the plate's, unchanged.
 
   The portable statements moved with it: `BASE_VERTEX_COUNT` says two points, `DROP_SIZE_PX` no longer names them (which is what tells a renderer to wait for the second click), and `ROTATE_ONLY_SYMBOLS` is empty — the library has no fixed-size symbol left.
 
