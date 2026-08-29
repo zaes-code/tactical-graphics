@@ -57,6 +57,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **The airfield's designation is measured off the drawn runway, not off a stamped size.** APP-06 131900's Template boxes the `T` immediately past the end of the horizontal line, and the runway is the wider of the two arms — so the graphic's own eastern edge is that end. Deriving it from `graphicSize` assumes that number is the runway's half length, which holds only on the path that stamps it: the catalog generator hands the paint the sample's `radius`, which is smaller, and the designation printed 17 px *inside* the runway it was supposed to clear. Visible on the published catalog rather than in the app, which is why no test caught it.
+
+- **`gen-catalog-svgs.js --only` no longer rewrites the catalog manifest.** It was built from whatever the run drew, so regenerating one tile left `catalog.json` and `catalog.js` holding a single entry — and the catalog page reads `catalog.js`, so the site would have listed one graphic out of 291. `--only` is the obvious way to check a thumbnail after changing its paint, which is exactly when it did the most damage.
+
 - **Setting the affiliation on a hand-drawn Cover, Guard or Screen did nothing.** The centre symbol is the largest thing these three draw and the natural place to click — and its feature belonged to the controller rather than the holder, so it was outside every write the holder makes by iterating its own features. It carried no `symbolId`, and the properties dialog identifies its graphic by exactly that: the form opened on an empty selection, showed defaults, and dropped the edit on OK. Drawn into the sample sheet the same graphic honoured its affiliation, because that path never goes through a click.
 
   The feature belongs to the holder now, so `setSymbolId`, the amplifier bag and the rotation all reach it the way they reach everything else. MapLibre had the same hole and had already closed it on its side.
