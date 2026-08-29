@@ -28,7 +28,7 @@ import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/t
 import {uprightRotation} from './decorations';
 import {getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
-import {fitLabelScale} from './labelFit';
+import {capLabelToGraphic, fitLabelScale} from './labelFit';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -42,6 +42,25 @@ function anchorOf(feature: PaintFeature): ProjectedPosition | undefined {
 
 function scaleOf(feature: PaintFeature, context: PaintContext): number {
     return labelScale(feature.drawingResolution, context.resolution);
+}
+
+/**
+ * The scale for a label drawn **outside** the shape.
+ *
+ * Inside and outside want different rules, which is why there are two functions here. A
+ * label *inside* an area is already governed by `fitLabelScale`, which shrinks it until it
+ * genuinely fits the ring — a second cap on top of that would only make a label smaller
+ * than the shape it comfortably sits in, and the user's word on those is that they read
+ * correctly. A label *outside* has no ring to be held by and nothing else stopping it, so
+ * it keeps growing relative to a shape that shrinks with the zoom: the dates above a
+ * rectangle, the `PAA` markers around a position area, a group of targets' designation on
+ * its northern edge.
+ *
+ * Those take the general rule instead — a quarter of the graphic's own on-screen size.
+ * (User's call, 2026-08-29.) @see capLabelToGraphic
+ */
+function outsideScaleOf(feature: PaintFeature, context: PaintContext): number {
+    return capLabelToGraphic(scaleOf(feature, context), feature, context);
 }
 
 /**
@@ -343,7 +362,7 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
                 align: 'right',
                 baseline: 'bottom',
                 offsetXPx: -6,
-                scale: scaleOf(feature, context),
+                scale: outsideScaleOf(feature, context),
             },
         }];
     };
@@ -378,6 +397,9 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
     return (feature, context) => {
         const bounds = feature.bounds;
         if (!bounds) return [];
+        // The four `PAA` markers ride the shape's edges rather than sitting inside it, so
+        // they take the outside rule; the centred name and dates below keep the inside one.
+        const markerScale = outsideScaleOf(feature, context);
 
         const scale = scaleOf(feature, context);
         const cx = (bounds.minX + bounds.maxX) / 2;
@@ -388,7 +410,7 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], scale));
+        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale));
 
         const at = anchorOf(feature);
         const lines = [
@@ -417,7 +439,7 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
         const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!at || !segment || !text) return [];
 
-        return [stack(feature, context, at, [text], scaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
+        return [stack(feature, context, at, [text], outsideScaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
     };
 }
 
