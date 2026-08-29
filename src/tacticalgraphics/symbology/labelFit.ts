@@ -99,12 +99,19 @@ const CAP_MAX_ASPECT = 2;
  * Absent, the desired scale passes through untouched — so a graphic whose bounds nobody
  * stamps behaves exactly as it did before.
  *
+ * **Pass the size the label is really drawn at.** A scale is a multiplier on a font, and
+ * this library renders two: `BASE_FONT_SIZE_PX` for most labels and 24 px for the
+ * ratio-locked families, which is the trap `CLAUDE.md` already warns about. The relief in
+ * place draws at 24 and was capped as though it drew at 16, so its cap sat half again too
+ * high and never bit — the graphic the user reported.
+ *
  * A cap, never a raise. @see capLabelToSpan for the same bargain against one span.
  */
 export function capLabelToGraphic(
     desired: number,
     feature: PaintFeature,
     context: PaintContext,
+    fontPx: number = BASE_FONT_SIZE_PX,
     share: number = LABEL_GRAPHIC_SHARE,
 ): number {
     const bounds = feature.bounds;
@@ -116,7 +123,7 @@ export function capLabelToGraphic(
     if (!(longer > 0)) return desired;
 
     const sizePx = Math.max(Math.min(widthPx, heightPx), longer / CAP_MAX_ASPECT);
-    return Math.min(desired, (share * sizePx) / BASE_FONT_SIZE_PX);
+    return Math.min(desired, (share * sizePx) / fontPx);
 }
 
 /**

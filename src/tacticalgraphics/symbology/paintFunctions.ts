@@ -159,7 +159,7 @@ export function axisRotation(feature: PaintFeature): number {
 }
 
 /** Zoom-anchored label scale for a paint feature. */
-export function scaleOf(feature: PaintFeature, context: PaintContext): number {
+export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: number = BASE_FONT_SIZE_PX): number {
     /*
      * **The one place the general size rule is applied.**
      *
@@ -171,7 +171,7 @@ export function scaleOf(feature: PaintFeature, context: PaintContext): number {
      *
      * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
      */
-    return capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
+    return capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context, fontPx);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
@@ -373,7 +373,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         if (center && labelPoint && radius > 0 && label) {
             const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
-                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context)
+                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
                 : scaleOf(feature, context);
             const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
             const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
@@ -444,7 +444,7 @@ export function missionTaskLabelPaint(
                 fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
-                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context)
+                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
                     : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
                 rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',

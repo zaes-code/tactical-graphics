@@ -21,6 +21,8 @@ import {capLabelToGraphic, LABEL_GRAPHIC_SHARE, capLabelToSpan, LABEL_SPAN_SHARE
 import {BASE_FONT_SIZE_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import type {PaintContext, PaintFeature} from '../core/paint';
+import {labelScale} from '../core/symbology';
+import {areaLabelStackPaint, outsideCornerDatePaint} from './areaLabelPaints';
 
 const context: PaintContext = {
     resolution: 100,
@@ -93,5 +95,42 @@ describe('capLabelToSpan', () => {
     it('passes the desired scale through when there is nothing to measure against', () => {
         expect(capLabelToSpan(context, 'AB', 'bold 16px sans-serif', 0.8, 0)).toBe(0.8);
         expect(capLabelToSpan(context, '', 'bold 16px sans-serif', 0.8, 100)).toBe(0.8);
+    });
+});
+
+/**
+ * # Outside the shape takes the cap; inside it does not
+ *
+ * A label inside an area is already held by `fitLabelScale`, which shrinks it until it
+ * genuinely fits the ring — and the user's word is that those read correctly. A label
+ * *outside* has no ring holding it and nothing else stopping it growing relative to a shape
+ * that shrinks with the zoom, so it takes the general rule. Same file, two rules, and the
+ * split is the thing that can silently collapse.
+ */
+describe('an area"s outside labels', () => {
+    const SIZE_PX = 80;
+    const dated = () =>
+        ({
+            geometry: {type: 'Point', coordinates: [0, 0]},
+            properties: {name: TacticalGraphicName.AssemblyArea, startDate: '011200ZJUL'},
+            bounds: {minX: 0, minY: 0, maxX: SIZE_PX * context.resolution, maxY: SIZE_PX * context.resolution},
+        }) as PaintFeature;
+
+    it('caps the date-time group hung off the upper-left corner', () => {
+        const paints = outsideCornerDatePaint()(dated(), context);
+        expect(paints).toHaveLength(1);
+        const drawn = paints[0].text!.scale! * BASE_FONT_SIZE_PX;
+        expect(drawn).toBeLessThanOrEqual(LABEL_GRAPHIC_SHARE * SIZE_PX + 1e-9);
+        // And the cap is what did it, rather than the zoom happening to agree.
+        expect(paints[0].text!.scale!).toBeLessThan(labelScale(undefined, context.resolution));
+    });
+
+    it('leaves the centred label to the ring fit', () => {
+        // The same graphic, labelled in the middle: the scale that reaches the ring fit is
+        // the zoom-anchored one, not the capped one.
+        const inside = areaLabelStackPaint(TacticalGraphicName.AssemblyArea)(dated(), context);
+        const centred = inside.find(paint => paint.text?.text?.includes('AA'));
+        expect(centred).toBeDefined();
+        expect(centred!.text!.scale!).toBeCloseTo(labelScale(undefined, context.resolution), 6);
     });
 });

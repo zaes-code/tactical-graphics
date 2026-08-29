@@ -167,6 +167,31 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
 
         const paints: Paint[] = [];
 
+        /*
+         * **The designation as it is drawn along the corridor, per leg.**
+         *
+         * Worked out here rather than in the drawing loop below, because the amplifier
+         * block is held to it and the block is drawn first. The block sits *outside* the
+         * graphic and the designation sits *on* it, so the designation is the one a reader
+         * measures everything else against — an amplifier larger than the symbol's own
+         * name reads as the more important of the two, which it is not. (User's call,
+         * 2026-08-29.)
+         *
+         * Each leg gets its own answer because legs differ in length; the block is capped
+         * at the largest of them, which is the designation at its most prominent. Capping
+         * at the smallest would let one short leg shrink the block to nothing.
+         */
+        const legWidthPx = (circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX) * 2;
+        const legScales: number[] = [];
+        for (let i = 0; i < coords.length - 1; i++) {
+            const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
+            legScales.push(Math.min(
+                capLabelToSpan(context, text, fontStyle, baseScale, legPx),
+                capLabelToSpan(context, text, fontStyle, baseScale, legWidthPx, LEG_LABEL_WIDTH_SHARE),
+            ));
+        }
+        const designationScale = legScales.length ? Math.max(...legScales) : baseScale;
+
         const infoLines: string[] = [];
         const corridorName = props.designation?.trim();
         if (corridorName) infoLines.push(`NAME:       ${corridorName}`);
@@ -216,13 +241,11 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
             const westEdge = feature.bounds ? feature.bounds.minX : minX - radiusPx * context.resolution;
             const anchorX = westEdge - INFO_BLOCK_GAP_PX * baseScale * context.resolution;
-            paints.push(amplifier(feature, [anchorX, anchorY], infoText, capLabelToSpan(
-                context,
-                infoText,
-                fontStyle,
-                baseScale,
-                pathLength(coords) / context.resolution,
-            ), {
+            const blockScale = Math.min(
+                designationScale,
+                capLabelToSpan(context, infoText, fontStyle, baseScale, pathLength(coords) / context.resolution),
+            );
+            paints.push(amplifier(feature, [anchorX, anchorY], infoText, blockScale, {
                 align: 'right',
                 baseline: 'middle',
             }));
@@ -251,18 +274,9 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             let rotation = -Math.atan2(y1 - y0, x1 - x0);
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
-            /*
-             * The designation runs *along* the leg, between the rails, so it is capped by
-             * both: the leg's length, which it must not overrun, and the corridor's width,
-             * which is what it must not spill out of sideways. The narrower answer wins.
-             */
-            const legPx = Math.hypot(x1 - x0, y1 - y0) / context.resolution;
-            const widthPx = (circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX) * 2;
-            const legScale = Math.min(
-                capLabelToSpan(context, text, fontStyle, baseScale, legPx),
-                capLabelToSpan(context, text, fontStyle, baseScale, widthPx, LEG_LABEL_WIDTH_SHARE),
-            );
-            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, legScale, {rotation}));
+            // Capped by the leg's length, which it must not overrun, and by the corridor's
+            // width, which it must not spill out of sideways. @see legScales
+            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, legScales[i], {rotation}));
             paints.push(acpAt(i));
         }
 
