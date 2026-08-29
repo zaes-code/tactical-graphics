@@ -96,6 +96,7 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
             geometry: {type: 'Point', coordinates: [east + INFO_GAP_PX * context.resolution, center[1]]},
             text: {
                 text: info,
+                kind: 'amplifier',
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},

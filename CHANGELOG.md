@@ -17,6 +17,14 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
+- **`hideAmplifiers`: draw a graphic and its name, and hide the rest.** A planning map carries a lot of graphics, and most of what an operator types on one is reference detail rather than something to read at a glance. Set it per graphic — it is a choice about *this* graphic on *this* map, not a property of the symbol — and dates, altitudes, widths, field H and a corridor's information block stop drawing. The properties dialog has a toggle for it.
+
+  **The symbol itself is never hidden.** A cover's `C`, a mission task's letter, a `PL` prefix and a corridor's `ACP 2` are the graphic rather than an annotation on it. `TextSpec.kind` is where a paint says which a mark is — `doctrinal`, `designation` or `amplifier` — and a mark that says nothing counts as doctrinal, because a stray date is noise and a missing letter is a different symbol.
+
+  A corridor's block goes as a unit including its own `NAME:` line, since the corridor already draws its designation along each leg. Both renderers apply the same function at the point where paints become marks (`asStyleFunction`, `paintTacticalGraphic`), so a new paint inherits the behaviour without knowing the toggle exists.
+
+  Asked for by a consumer that had been filtering our styles by *text alignment* to drop that block — a workaround that broke the moment the block moved, which is what a supported toggle is for.
+
 - **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the user typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
 
   `followTaskSymbol` is the single statement of where it goes and how big it is, exported from the root entry point and read by the paint — which cuts the body to fit and skips the text — and by both renderers, which draw the image. Placing it from a second calculation is how a symbol ends up not sitting in its own hole, which is the lesson `escortSymbolStyle` already carries.

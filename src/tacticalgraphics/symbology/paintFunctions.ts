@@ -46,6 +46,7 @@ import {
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {capLabelToGraphic} from './labelFit';
+import type {TacticalGraphicProperties} from '../core/render';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -56,6 +57,37 @@ import {
     textWidth,
     uprightRotation,
 } from './decorations';
+
+/**
+ * Blanks one amplifier line when the graphic is hiding them.
+ *
+ * The multi-line stacks — an area's name over its date-time group, a corridor's block, the
+ * sector modifiers — draw one mark from an array of lines, so dropping the *mark* would
+ * take the designation with it. Every one of those arrays is filtered for empty strings
+ * before it is joined, so returning `''` removes the line and nothing else moves.
+ *
+ * @see withHiddenAmplifiers for the marks that can be dropped whole.
+ */
+export function amplifierText(feature: PaintFeature, value: string): string {
+    return feature.properties.hideAmplifiers ? '' : value;
+}
+
+/**
+ * Drops the text a graphic has been told to hide, leaving everything else untouched.
+ *
+ * **One statement of the rule, applied by each renderer at the point where paints become
+ * marks.** OpenLayers runs every paint through `asStyleFunction` and MapLibre through
+ * `paintTacticalGraphic`; both call this, so a graphic hides the same text on either
+ * engine and a new paint inherits the behaviour without knowing the toggle exists.
+ *
+ * Only `amplifier` text goes. A mark that never said what it is counts as doctrinal and
+ * stays — the safe direction, since a stray date is noise and a missing letter is a
+ * different symbol. @see TextKind
+ */
+export function withHiddenAmplifiers(paints: Paint[], properties: TacticalGraphicProperties | undefined): Paint[] {
+    if (!properties?.hideAmplifiers) return paints;
+    return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
 
 /** A graphic's static prefix joined to the user's free text — "PL", "PL BLUE". */
 export function formatFullLabel(prefix: string, name: string): string {
@@ -625,8 +657,8 @@ export function defaultLinePaint(
         if (coords.length < 2) return [];
 
         const identifier = getFullLabel(name, feature.properties.designation ?? '');
-        const startDate = showDates ? feature.properties.startDate ?? '' : '';
-        const endDate = showDates ? feature.properties.endDate ?? '' : '';
+        const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
+        const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
 
         const start = coords[0];

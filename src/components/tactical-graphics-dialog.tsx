@@ -8,13 +8,16 @@ import {
     DialogContent,
     DialogTitle,
     FormControl,
+    FormControlLabel,
     InputLabel,
     MenuItem,
     OutlinedInput,
     Paper,
     Select,
     SelectChangeEvent,
-    Typography,} from '@mui/material';
+    Switch,
+    Typography,
+} from '@mui/material';
 import {formatDistance} from './openlayers/openlayerStyles';
 import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactical-graphics';
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
@@ -459,6 +462,31 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                         </Box>
                                     </>
                                 )}
+
+                                {/*
+                                  * **Offered for every graphic, like hostility.** Any
+                                  * graphic can carry amplifiers, and whether to show them
+                                  * is a choice about this graphic on this map rather than
+                                  * a property of the symbol — so there is no per-graphic
+                                  * field flag deciding whether the control appears.
+                                  * @see TacticalGraphicProperties.hideAmplifiers
+                                  */}
+                                <Box sx={{mt: 1}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={!!pendingChanges.labels.hideAmplifiers}
+                                                onChange={(_e, checked) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, hideAmplifiers: checked},
+                                                    }))
+                                                }
+                                            />
+                                        }
+                                        label="Name only — hide other amplifiers"
+                                    />
+                                </Box>
 
                                 {fields.hostility && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
