@@ -169,12 +169,24 @@ export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPain
         const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!center || !text) return [];
 
-        // The runway's reach is metres now, so the clearance is the only part in pixels — a
-        // gap that shrank with the zoom would close up long before the glyph did.
+        /*
+         * **Measured off the drawn runway, not off a stamped size.**
+         *
+         * The plate boxes the `T` immediately past the *end of the horizontal line*, and
+         * the runway is the wider of the two arms, so the graphic's own eastern edge is
+         * exactly that end. Reconstructing it from `graphicSize` assumes that number is the
+         * runway's half length, and it is only that on the path that stamps it: the catalog
+         * hands the paint the sample's `radius`, which is smaller, and the designation
+         * printed 17 px *inside* the runway it was supposed to sit beyond.
+         *
+         * `graphicSize` stays as the fallback for a feature that publishes no extent.
+         */
         const reach = feature.graphicSize && feature.graphicSize > 0 ? feature.graphicSize : AIRFIELD_FALLBACK_HALF_WIDTH;
-        const offset = reach + AIRFIELD_LABEL_GAP_PX * context.resolution;
+        // The runway's reach is metres, so the clearance is the only part in pixels — a gap
+        // that shrank with the zoom would close up long before the glyph did.
+        const east = feature.bounds ? feature.bounds.maxX : center[0] + reach;
         return [{
-            geometry: {type: 'Point', coordinates: [center[0] + offset, center[1]]},
+            geometry: {type: 'Point', coordinates: [east + AIRFIELD_LABEL_GAP_PX * context.resolution, center[1]]},
             text: {
                 text,
                 font: fontStyle,
