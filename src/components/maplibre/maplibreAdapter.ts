@@ -1,43 +1,44 @@
 import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {
-    getPaintFunction,
+    GLYPH_CUT_GAP_GRAPHICS,
+    RANGE_FANS,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+    SECURITY_OPERATION_HALF_EXTENT_PX,
+    TACTICAL_GRAPHIC_KEY,
+    TacticalGraphicName,
+    arrowheadMeters,
+    axisFromRectangleRing,
     boundsOf,
+    carriesRectangleLength,
+    decorationMeters,
+    drawnAnchorFrame,
+    drawnAnchors,
+    drawnSizeMeters,
+    getPaintFunction,
+    groundLength,
+    groundMeters,
+    hasBakedDecoration,
+    isMovementGraphic,
+    isRectangular,
+    normalizeDrawnBase,
+    outerRingOf,
     paintGeometryMembers,
     paintGeometryPositions,
+    ratioLockOf,
+    rectangleAmplifiers,
+    rectangleDefaultHalfWidth,
     renderTacticalGraphic,
-    TACTICAL_GRAPHIC_KEY,
+    resolveRangeFanBands,
+    toGraphicOptions,
     type Paint,
     type PaintContext,
     type PaintFeature,
     type ProjectedGeometry,
     type ProjectedInputGeometry,
     type ProjectedPosition,
-    SECURITY_OPERATION_HALF_EXTENT_PX,
-    normalizeDrawnBase,
-    GLYPH_CUT_GAP_GRAPHICS,
-    arrowheadMeters,
-    groundLength,
-    RANGE_FANS,
-    outerRingOf,
-    rectangleAmplifiers,
-    ratioLockOf,
-    drawnAnchorFrame,
-    drawnAnchors,
-    axisFromRectangleRing,
-    carriesRectangleLength,
-    rectangleDefaultHalfWidth,
-    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
-    isRectangular,
-    groundMeters,
-    usesDrawnAnchors,
-    resolveRangeFanBands,
-    toGraphicOptions,
-    decorationMeters,
-    drawnSizeMeters,
-    hasBakedDecoration,
-    isMovementGraphic,
-    TacticalGraphicName,
     type TacticalGraphicProperties,
+    usesDrawnAnchors,
+    withHiddenAmplifiers,
 } from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from './projection';
 
@@ -876,8 +877,11 @@ export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: 
     const painters = getPaintFunction(graphic.name);
     if (!painters) return [];
 
-    const paints = painters.graphic(graphic.graphic, context);
-    if (painters.label && graphic.labels) paints.push(...painters.label(graphic.labels, context));
+    // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
+    // function in `asStyleFunction`. @see withHiddenAmplifiers
+    const hide = (paints: Paint[]) => withHiddenAmplifiers(paints, graphic.properties);
+    const paints = hide(painters.graphic(graphic.graphic, context));
+    if (painters.label && graphic.labels) paints.push(...hide(painters.label(graphic.labels, context)));
     return paints;
 }
 
