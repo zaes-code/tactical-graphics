@@ -641,6 +641,9 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
 
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
+    [TacticalGraphicName.Seize]: 4,
+    [TacticalGraphicName.FollowAndAssume]: 2,
+    [TacticalGraphicName.FollowAndSupport]: 2,
     [TacticalGraphicName.Evacuate]: 4,
     [TacticalGraphicName.Recover]: 4,
     // **Not the demonstration**, though its base carries four points too. This table is a

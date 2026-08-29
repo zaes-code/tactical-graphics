@@ -266,6 +266,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ObstacleLine]:                                 BOTH,      // APP-06 290100 Obstacle Line
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:            BOTH,      // APP-06 151202 Battle Position Prepared (P) but Not Occupied
     [TacticalGraphicName.Capture]:                                      APP6_ONLY, // APP-06 343000 Capture
+    [TacticalGraphicName.Seize]:                                        BOTH,      // APP-06 342300 Seize
+    [TacticalGraphicName.FollowAndAssume]:                              BOTH,      // APP-06 341200 Follow and Assume
+    [TacticalGraphicName.FollowAndSupport]:                             BOTH,      // APP-06 341300 Follow and Support
     [TacticalGraphicName.Escort]:                                       APP6_ONLY, // APP-06 343600 Escort
     [TacticalGraphicName.Demonstration]:                                APP6_ONLY, // APP-06 343300 Demonstration/Demonstrate
     [TacticalGraphicName.Evacuate]:                                     APP6_ONLY, // APP-06 344500 Evacuate
