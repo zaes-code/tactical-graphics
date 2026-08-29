@@ -14,6 +14,7 @@ import {
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
     getLabelHaloColor,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
@@ -56,7 +57,9 @@ export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintCo
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        const scale = scaleOf(feature, context);
+        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
+        // 16 it would otherwise assume. @see capLabelToGraphic
+        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
         const halfGapPx = label
             ? textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX
             : 0;

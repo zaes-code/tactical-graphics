@@ -318,7 +318,7 @@ export {
     smokeObscurantLabelPaint,
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
-export {fitLabelScale, liftedAnchor} from './symbology/labelFit';
+export {capLabelToSpan, fitLabelScale, LABEL_SPAN_SHARE, liftedAnchor} from './symbology/labelFit';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
 export {
     fortifiedPositionPaint,

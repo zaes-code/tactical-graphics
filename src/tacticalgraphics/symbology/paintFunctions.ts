@@ -33,17 +33,19 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_MISSION_TASKS,
+    configuredLabelScale,
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
-    getLabelUsesHostilityColor,
     getLabelHaloColor,
+    getLabelUsesHostilityColor,
     labelScale,
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {capLabelToGraphic} from './labelFit';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -158,8 +160,29 @@ export function axisRotation(feature: PaintFeature): number {
 }
 
 /** Zoom-anchored label scale for a paint feature. */
-export function scaleOf(feature: PaintFeature, context: PaintContext): number {
-    return labelScale(feature.drawingResolution, context.resolution);
+export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: number = BASE_FONT_SIZE_PX): number {
+    /*
+     * **The one place the general size rule is applied.**
+     *
+     * Nearly every label paint asks here for the scale it should draw at, so capping the
+     * answer here is what makes "a label may not outgrow its own symbol" a rule rather
+     * than something each family remembers. Families with a tighter constraint — a letter
+     * inside an arrowhead, a designation between a corridor's rails — narrow it further
+     * from their own paint; nothing has to widen it.
+     *
+     * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
+     */
+    /*
+     * **The configured size, capped by the graphic — and the zoom anchor only when there
+     * is no graphic to measure.** The host says how big a label should be and the symbol
+     * says how big it may be; the zoom the operator happened to be at when they drew it is
+     * neither, and it is not saved with the graphic, so it made a label that could not be
+     * reproduced. @see configuredLabelScale
+     */
+    const desired = feature.bounds
+        ? configuredLabelScale()
+        : labelScale(feature.drawingResolution, context.resolution);
+    return capLabelToGraphic(desired, feature, context, fontPx);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
@@ -361,7 +384,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         if (center && labelPoint && radius > 0 && label) {
             const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
-                ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
+                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
                 : scaleOf(feature, context);
             const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
             const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
@@ -432,8 +455,8 @@ export function missionTaskLabelPaint(
                 fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
-                    ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
-                    : labelScale(feature.drawingResolution, context.resolution),
+                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
+                    : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
                 rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',
                 baseline: 'middle',

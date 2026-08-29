@@ -15,8 +15,9 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {RouteDirection, TacticalGraphicName} from '../core/type';
-import {offsetAbove, offsetBelow, textWidth, uprightRotation} from './decorations';
+import {offsetAbove, offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {capLabelToSpan} from './labelFit';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
 const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
@@ -172,7 +173,21 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
 
         const text = getFullLabel(name, feature.properties.designation ?? '');
         const direction = feature.properties.direction ?? RouteDirection.GENERAL;
-        const scale = scaleOf(feature, context);
+        /*
+         * **Capped against the route's own length.**
+         *
+         * The designation is drawn at *both* ends, so a route shorter than two labels
+         * reads as one blob with no line between them — `MSR 1MSR 1` — which is what the
+         * sweep shows once it is zoomed out. The zoom-anchored scale floors at 0.3 and the
+         * route does not, so the text overruns a shape that keeps shrinking.
+         */
+        const scale = capLabelToSpan(
+            context,
+            text,
+            fontStyle,
+            scaleOf(feature, context),
+            pathLength(coords) / context.resolution,
+        );
 
         const start = coords[0];
         const afterStart = coords[1];
