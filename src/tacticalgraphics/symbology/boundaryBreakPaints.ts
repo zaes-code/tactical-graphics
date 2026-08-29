@@ -23,6 +23,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
 import {lineColorOf} from './paintFunctions';
 import {textWidth} from './decorations';
+import {capLabelToGraphic} from './labelFit';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -215,7 +216,7 @@ export function contourLineBoundaryPaint(): CardinalPaint {
         const text = (feature.properties.designation ?? '').trim();
         if (!text) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
 
-        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const {runs} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
         return [{geometry: {type: 'MultiLineString', coordinates: runs}, stroke}];
     };
@@ -229,7 +230,7 @@ export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
         const text = (feature.properties.designation ?? '').trim();
         if (!ring || ring.length < 4 || !text) return paints;
 
-        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const {spots} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
         for (const at of spots) paints.push(breakLabel(at, text, lineColorOf(feature), scale));
         return paints;
@@ -255,7 +256,7 @@ export function nestedZonePaint(): CardinalPaint {
 
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
-        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const paints: Paint[] = [];
 
         geometry.coordinates.slice(0, 2).forEach((ring, index) => {
@@ -280,7 +281,7 @@ export function cardinalBoundaryPaint(label: string): CardinalPaint {
         if (!ring) return [];
 
         const center = ringCenter(ring);
-        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const half = halfBreak(context, label, scale);
 
         const breaks = CARDINALS
@@ -328,7 +329,7 @@ export function cardinalLabelPaint(label: string, base: CardinalPaint): Cardinal
         if (!ring || ring.length < 4) return paints;
 
         const center = ringCenter(ring);
-        const scale = labelScale(feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const color = lineColorOf(feature);
 
         for (const angle of CARDINALS) {

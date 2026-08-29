@@ -15,7 +15,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '
 import {TacticalGraphicName} from '../core/type';
 import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale, sampleSegments} from './symbolFit';
-import {liftedAnchor} from './labelFit';
+import {capLabelToGraphic, liftedAnchor} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
 type AirfieldPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -101,7 +101,7 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'left',
                 baseline: 'middle',
-                scale: labelScale(feature.drawingResolution, context.resolution),
+                scale: capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
             },
         });
         return paints;

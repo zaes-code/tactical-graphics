@@ -29,6 +29,7 @@ import {
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {lineColorOf, labelColorOf} from './paintFunctions';
+import {capLabelToGraphic} from './labelFit';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -117,7 +118,7 @@ export function breachPaint(label: string): BlockPaint {
 
         const outline = lines.slice(0, -1);
         const paints: Paint[] = [];
-        const scale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
+        const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context);
 
         const {before, after, middle} = cutGap(opening[0], opening[1], 0.5, FLAT_GAP_PX * context.resolution);
         outline.push(before, after);
@@ -152,7 +153,7 @@ export function clearPaint(label: string, t = 0.6): BlockPaint {
         if (!label) {
             outline.push([mid[0], mid[1]]);
         } else {
-            const scale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
+            const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context);
             const {before, after, middle} = cutGap(mid[0], mid[1], t, FLAT_GAP_PX * context.resolution);
             outline.push(before, after);
             paints.push(gapLabel(feature, middle, label, scale, uprightRotation(mid[0], mid[1]), true));
@@ -221,7 +222,7 @@ export function blockPaint(label: string): BlockPaint {
         if (!label) {
             outline.push([p1, p2]);
         } else {
-            const scale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
+            const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context);
             const halfGapMap =
                 (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GLYPH_GAP_PADDING_PX)
                 * context.resolution;

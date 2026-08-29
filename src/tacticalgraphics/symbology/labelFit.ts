@@ -58,6 +58,68 @@ const BOX_SAMPLES: readonly [number, number][] = [
 ];
 
 /**
+ * Share of a graphic's own on-screen size a label may stand.
+ *
+ * **The share is the ratio you see.** Measured against the same dimension, a cap of
+ * `share x sizePx` produces text exactly `share` as tall as the graphic — so this number is
+ * not a knob, it is the answer to "how big should a label look next to its symbol". 0.25 is
+ * what the avenue of approach and the counterattack already measure at (0.23), which are
+ * the two the user named as correct; the graphics complained about measured 0.34 to 0.80.
+ *
+ * It is a different number from {@link LABEL_SPAN_SHARE} because it is measured against a
+ * different thing — the whole graphic rather than one span inside it — and conflating the
+ * two is how a cap ends up never biting. (User's call, 2026-08-29.)
+ */
+export const LABEL_GRAPHIC_SHARE = 0.25;
+
+/**
+ * How elongated a graphic may be before its *thickness* stops being what a label is
+ * compared against.
+ *
+ * A square area is judged by its side. A route ten times longer than it is thick is judged
+ * by its run — nobody reads a designation as too big because it is taller than the line is
+ * wide. Past 2:1 the smaller dimension is therefore replaced by half the larger, which is
+ * what the shape would measure if it *were* 2:1.
+ *
+ * Without this a horizontal line, whose minor extent is zero, caps every label to nothing.
+ */
+const CAP_MAX_ASPECT = 2;
+
+/**
+ * Caps a label at a share of the on-screen size of the graphic it belongs to.
+ *
+ * The general rule behind every label size in this library: **a label may not outgrow its
+ * own symbol.** A zoom-anchored scale floors at 0.3 of the configured label size so text
+ * stays readable, and the graphic under it has no floor at all — it is ground, and ground
+ * shrinks with the zoom. Zoomed out far enough, every such label is standing on a symbol
+ * smaller than itself.
+ *
+ * Needs {@link PaintFeature.bounds}, which is the graphic's extent stamped by the holder,
+ * *because a label feature is a bare anchor point and does not know the shape it labels*.
+ * Absent, the desired scale passes through untouched — so a graphic whose bounds nobody
+ * stamps behaves exactly as it did before.
+ *
+ * A cap, never a raise. @see capLabelToSpan for the same bargain against one span.
+ */
+export function capLabelToGraphic(
+    desired: number,
+    feature: PaintFeature,
+    context: PaintContext,
+    share: number = LABEL_GRAPHIC_SHARE,
+): number {
+    const bounds = feature.bounds;
+    if (!bounds || !(desired > 0)) return desired;
+
+    const widthPx = (bounds.maxX - bounds.minX) / context.resolution;
+    const heightPx = (bounds.maxY - bounds.minY) / context.resolution;
+    const longer = Math.max(widthPx, heightPx);
+    if (!(longer > 0)) return desired;
+
+    const sizePx = Math.max(Math.min(widthPx, heightPx), longer / CAP_MAX_ASPECT);
+    return Math.min(desired, (share * sizePx) / BASE_FONT_SIZE_PX);
+}
+
+/**
  * Share of a graphic's own on-screen size a label may span before it is shrunk.
  *
  * **0.7 is not a new number.** `spanProportionalScale` has used it since the avenue of
