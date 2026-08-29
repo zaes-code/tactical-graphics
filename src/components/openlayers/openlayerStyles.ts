@@ -1816,6 +1816,13 @@ export function followTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
  * gap it sits in is cut by the same calculation, and a symbol placed from a second one does
  * not sit in its own hole. @see followTaskStyleFunc, which is the same arrangement.
  */
+/** The three the dispatcher above routes here. */
+const SECURITY_OPERATION_STYLES: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
 export function securityOperationStyleFunc(name: TacticalGraphicName): StyleFunction {
     const styled = asStyleFunction(securityOperationPaint(getLabel(name)), name);
     return (feature, resolution) => {
@@ -3051,6 +3058,11 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 }
 
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
+    // Cover, guard and screen. They were placed rather than drawn until 2026-08-29 and had
+    // no entry here at all, so a host calling `getStyle` for one got nothing back and had
+    // to reach past this function. They are ordinary drawn graphics now, and this is where
+    // a caller looks. @see securityOperationStyleFunc
+    if (SECURITY_OPERATION_STYLES.has(name)) return securityOperationStyleFunc(name)(feature, resolution);
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
     // APP-06 151202 — the same outline and echelon, broken whatever the status says.
