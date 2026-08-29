@@ -21,7 +21,7 @@ import {capLabelToGraphic, LABEL_GRAPHIC_SHARE, capLabelToSpan, LABEL_SPAN_SHARE
 import {BASE_FONT_SIZE_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import type {PaintContext, PaintFeature} from '../core/paint';
-import {labelScale} from '../core/symbology';
+import {configuredLabelScale} from '../core/symbology';
 import {areaLabelStackPaint, outsideCornerDatePaint} from './areaLabelPaints';
 
 const context: PaintContext = {
@@ -108,7 +108,9 @@ describe('capLabelToSpan', () => {
  * split is the thing that can silently collapse.
  */
 describe('an area"s outside labels', () => {
-    const SIZE_PX = 80;
+    // Small enough on screen that the outside cap genuinely bites: a quarter of 24 px is
+    // 6 px of text, well under the size the host configured.
+    const SIZE_PX = 24;
     const dated = () =>
         ({
             geometry: {type: 'Point', coordinates: [0, 0]},
@@ -122,15 +124,20 @@ describe('an area"s outside labels', () => {
         const drawn = paints[0].text!.scale! * BASE_FONT_SIZE_PX;
         expect(drawn).toBeLessThanOrEqual(LABEL_GRAPHIC_SHARE * SIZE_PX + 1e-9);
         // And the cap is what did it, rather than the zoom happening to agree.
-        expect(paints[0].text!.scale!).toBeLessThan(labelScale(undefined, context.resolution));
+        // And the cap is what did it, rather than the configured size happening to agree.
+        expect(paints[0].text!.scale!).toBeLessThan(configuredLabelScale());
     });
 
-    it('leaves the centred label to the ring fit', () => {
-        // The same graphic, labelled in the middle: the scale that reaches the ring fit is
-        // the zoom-anchored one, not the capped one.
+    it('gives the centred label a larger share than the outside one', () => {
+        // Both are capped against the graphic now; what differs is the share. A centred
+        // label is the shape's name and is meant to fill some of it; an outside label is an
+        // annotation beside it. The ring fit still has the last word on the centred one.
         const inside = areaLabelStackPaint(TacticalGraphicName.AssemblyArea)(dated(), context);
         const centred = inside.find(paint => paint.text?.text?.includes('AA'));
+        const outside = outsideCornerDatePaint()(dated(), context)[0];
         expect(centred).toBeDefined();
-        expect(centred!.text!.scale!).toBeCloseTo(labelScale(undefined, context.resolution), 6);
+        expect(centred!.text!.scale!).toBeGreaterThan(outside.text!.scale!);
+        // Capped, not merely the configured size: the graphic is 24 px across.
+        expect(centred!.text!.scale!).toBeLessThan(configuredLabelScale());
     });
 });

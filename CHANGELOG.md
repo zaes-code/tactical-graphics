@@ -33,6 +33,14 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **A label is the size the host configured, capped by the graphic — and no longer by the zoom it was drawn at.** `labelScale` multiplied the configured size by how far the map had moved since the graphic was drawn, clamped to [0.3, 1.5]. That clamp was what stopped a label swamping a small symbol, and `capLabelToGraphic` does that job properly now — against the graphic itself rather than against a moment in time.
+
+  What the old rule cost: two identical graphics could carry labels five times apart because of *when* someone drew them, and a saved map came back with different label sizes, because the drawing zoom is live view state and is deliberately not written to the file — a restore stamps whatever zoom the loading session opens at. Measured on the sample sweep, **116 of 224 labels changed size** when that remembered zoom changed. It is **0** now, at every zoom.
+
+  Nothing moves at the zoom a graphic was drawn at, where the old multiplier was 1. Zoomed out the cap was already deciding. Zoomed in, labels stop growing to 1.5x and stay the size that was asked for. `labelScale` remains as the fallback for a graphic that publishes no extent — none of the 202 labelled features in the sweep are in that position, but a consumer building features by their own path could be.
+
+- **An area's centred label is capped against its shape too, at a larger share (0.4) than an outside label's 0.25.** A centred label is the shape's name and is meant to fill some of it; an outside label is an annotation beside it. The ring fit still has the last word, because only it can keep text off a concave outline — but the ring fit stops a label *overflowing* a shape and says nothing about one that fills it, which is what the zoom anchor had quietly been doing. Measured: the rectangular fire areas held 0.41 of their box at the drawing zoom and grew to 0.52 zoomed out; they now hold **0.40 at every zoom**.
+
 - **A label may no longer outgrow its own symbol.** `labelScale` floors its zoom multiplier at 0.3 so text stays readable, and the graphic under it has no floor at all — it is ground, and ground shrinks with the zoom. Far enough out, every zoom-anchored label was standing on a symbol smaller than itself: measured on the sample sweep three levels out, the envelopment's `E` reached 0.80 of the graphic it sits on and the turning movement's `T` 0.34, against the avenue of approach's steady 0.23.
 
   Every label is now capped at **0.25 of the graphic's own on-screen size** — `LABEL_GRAPHIC_SHARE`, applied in `scaleOf` and at the handful of paints that source a scale for themselves. Against the same dimension the share *is* the ratio you see, so this number is not a knob: it is the measured ratio of the two graphics that already read correctly. It is a cap, never a raise, so nothing moves at the zoom a graphic was drawn at.
