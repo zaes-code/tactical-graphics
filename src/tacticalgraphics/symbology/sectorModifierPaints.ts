@@ -48,7 +48,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '
 import {TacticalGraphicMobility, TacticalGraphicTerrain} from '../core/type';
 import {lineColorOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
-import {fitLabelScale} from './labelFit';
+import {capLabelToGraphic, fitLabelScale} from './labelFit';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -436,7 +436,7 @@ export function sectorModifierLabelPaint(
         // literal above the glyph and the text below cannot end up at two sizes. A graphic
         // carrying no text at all still needs the plain label scale, because the glyph is
         // sized off it.
-        const base = labelScale(feature.drawingResolution, context.resolution);
+        const base = capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
         const textScale = all.length ? fitLabelScale(feature, context, at, all, fontStyle, base) : base;
 
         // The fit is a ceiling, not the answer. It reports how large the glyph *could* be

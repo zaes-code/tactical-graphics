@@ -35,7 +35,14 @@ const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
 const ACP_TEXT_FRACTION = 0.8;
 const ACP_PADDING_PX = 4;
 /** How far above the corridor's bounding box the properties block sits. */
-const INFO_BLOCK_OFFSET_PX = -60;
+/**
+ * Clear space between the corridor's westmost rail and its amplifier block, in screen
+ * pixels at the label's own scale — so the gap looks the same however large the text is.
+ *
+ * Replaces the old vertical `INFO_BLOCK_OFFSET_PX`, which lifted the block above the
+ * turning points and could not survive a corridor that bent north past it.
+ */
+const INFO_BLOCK_GAP_PX = 14;
 
 /**
  * Share of the corridor's *width* its designation may span.
@@ -171,20 +178,24 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
 
         if (infoLines.length) {
             /*
-             * **Above the north-west-most turning point, and outside the graphic.**
+             * **Beside the north-west-most turning point, and west of the whole corridor.**
              *
-             * It used to anchor on the bare bounding box of the turning points with a fixed
-             * pixel gap — but the points are the *centre line*, and the rails run half a
-             * width either side of them. Zoom in and that half width grows in pixels until
-             * it swallows the block, so the amplifiers ended up inside the corridor, which
-             * is the one place they must never be. The lift is now the corridor's own
-             * radius — the same number the rails are offset by and the circles are drawn at
-             * — plus the fixed gap, so the block clears the shape at every zoom.
-             * (User's call, 2026-08-29.)
+             * Two failed placements are worth recording, because each looked right until
+             * the shape moved. It first anchored on the bounding box of the *turning
+             * points* with a fixed pixel gap — but the points are the centre line and the
+             * rails run half a width either side of them, so zooming in grew that half
+             * width until it swallowed the block. Lifting it by the corridor's own radius
+             * fixed a *straight* corridor and not a bent one: a corridor that turns north
+             * climbs past whatever a local lift can clear. Measured at six zoom levels in,
+             * the graphic reached fifteen thousand pixels above the vertex the block hangs
+             * from.
              *
-             * The anchor is the vertex nearest the north-west corner rather than the corner
-             * itself, so on a corridor that bends the block stays attached to the start of
-             * it instead of floating off an empty corner.
+             * There is no local answer, so the block goes **west of every rail** —
+             * `minX - radius`, which is the westmost the corridor can reach — and stays
+             * level with the north-west-most turning point. Outside for any shape at any
+             * zoom, and still beside the vertex it belongs to, which is what was asked for.
+             * `align: 'right'` because the text then has to grow away from the corridor
+             * rather than back into it. (User's call, 2026-08-29.)
              */
             let minX = Infinity;
             let maxY = -Infinity;
@@ -192,21 +203,28 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 if (x < minX) minX = x;
                 if (y > maxY) maxY = y;
             }
-            const anchor = coords.reduce((best, point) =>
+            const anchorY = coords.reduce((best, point) =>
                 Math.hypot(point[0] - minX, point[1] - maxY) < Math.hypot(best[0] - minX, best[1] - maxY) ? point : best,
-            );
+            )[1];
             const infoText = infoLines.join('\n');
+            /*
+             * Measured from the graphic's own extent when the holder publishes one, which
+             * both engines now do — the turning points are the centre line, and deriving
+             * the rails' reach from them means guessing. Falls back to the vertices minus
+             * the radius, which is where the rails are, for anything that stamps no extent.
+             */
             const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
-            paints.push(amplifier(feature, anchor, infoText, capLabelToSpan(
+            const westEdge = feature.bounds ? feature.bounds.minX : minX - radiusPx * context.resolution;
+            const anchorX = westEdge - INFO_BLOCK_GAP_PX * baseScale * context.resolution;
+            paints.push(amplifier(feature, [anchorX, anchorY], infoText, capLabelToSpan(
                 context,
                 infoText,
                 fontStyle,
                 baseScale,
                 pathLength(coords) / context.resolution,
             ), {
-                align: 'left',
-                baseline: 'bottom',
-                offsetYPx: INFO_BLOCK_OFFSET_PX * baseScale - radiusPx,
+                align: 'right',
+                baseline: 'middle',
             }));
         }
 
