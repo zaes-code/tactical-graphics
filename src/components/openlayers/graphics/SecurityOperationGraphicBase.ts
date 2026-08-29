@@ -59,6 +59,21 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     leftLabelFeature: Feature<Point> = assignRole(new Feature<Point>(), 'label');
     rightLabelFeature: Feature<Point> = assignRole(new Feature<Point>(), 'label');
     graphic: Feature = createFeature();
+    /**
+     * The 2525E unit symbol between the arms.
+     *
+     * **Held here rather than on the controller, which is what installs its style.** It is
+     * a published feature of this graphic like any other: it needs the graphic's
+     * `symbolId`, the graphic's amplifiers and the graphic's current rotation, and every
+     * one of those is written by iterating `getFeatures()`. Owned by the controller, it
+     * was in none of those writes -- so it carried no id and the dialog dropped the edit
+     * of anyone who clicked the middle of a Cover, which is where the biggest thing it
+     * draws sits.
+     *
+     * It carries no `role`: it is not line work, a label or a handle, and the four
+     * `create*Feature` factories are the things that stamp one.
+     */
+    centerSymbol: Feature<Point> = new Feature<Point>();
     symbolId: string = '';
     handles: Feature = createHandleFeature();
     name: TacticalGraphicName;
@@ -104,11 +119,16 @@ export class SecurityOperationGraphicBase implements SecurityOperationGraphic {
     };
 
     getFeatures(): Feature[] {
-        return [this.leftLabelFeature, this.rightLabelFeature, this.graphic, this.handles, this.base];
+        return [this.leftLabelFeature, this.rightLabelFeature, this.graphic, this.handles, this.base, this.centerSymbol];
     }
 
     setBaseFeature = (base: Feature<Point>): void => {
         this.base = base;
+        // The centre symbol sits on the base point. Set here, where the base moves, so
+        // every path that places this graphic places the symbol -- drawing, restoring,
+        // dragging and the sample sheet alike.
+        const coordinates = base.getGeometry()?.getCoordinates();
+        if (coordinates) this.centerSymbol.setGeometry(new Point(coordinates));
         this.updateFeatures();
     };
     /**

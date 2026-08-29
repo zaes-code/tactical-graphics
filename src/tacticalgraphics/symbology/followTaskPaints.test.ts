@@ -299,3 +299,89 @@ describe('a host-supplied unit symbol', () => {
         expect(followTaskSymbol(feature, context)).toBeUndefined();
     });
 });
+
+/**
+ * # The unit symbol has to fit in the body it sits in
+ *
+ * Two ways it did not. The support variant's rear edge is a notch cut forward into the
+ * body, and the content was centred on the *whole* body — so the point of the notch ran
+ * through the middle of field T and, once a unit symbol replaced it, through the symbol.
+ * And both renderers size an icon by its width with the height following the image's own
+ * aspect, so a frame taller than it is wide overflowed a box measured as though it were
+ * square: a hostile land unit runs about 1.18 tall per unit wide, which is why nothing was
+ * visibly wrong until the affiliation became settable.
+ */
+describe('a unit symbol fits inside the body', () => {
+    /** The body ring is the first stroked line the paint emits. */
+    const bodyOf = (name: TacticalGraphicName, properties: Record<string, unknown> = {}) =>
+        (lines(paintsFor(name, properties))[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+
+    /** Distance along the axis from the rear, in metres. The axis runs due east here. */
+    const along = (p: ProjectedPosition) => p[0];
+
+    const symbolFor = (name: TacticalGraphicName) =>
+        followTaskSymbol(
+            {geometry: {type: 'LineString', coordinates: [REAR, TIP]}, properties: {name}} as PaintFeature,
+            context,
+        );
+
+    beforeEach(() => setSecuritySymbolProvider(() => 'data:image/svg+xml,<svg/>'));
+    afterEach(() => setSecuritySymbolProvider(undefined));
+
+    it.each([TacticalGraphicName.FollowAndAssume, TacticalGraphicName.FollowAndSupport])(
+        '%s keeps the symbol clear of both the rear edge and the nose',
+        name => {
+            const placed = symbolFor(name);
+            expect(placed).toBeDefined();
+
+            const body = bodyOf(name);
+            // The body's parallel sides run from the rear edge to where the nose starts.
+            const noseStart = Math.max(...body.map(along).filter(a => a < Math.max(...body.map(along))));
+            const halfWidth = (placed!.sizePx * context.resolution) / 2;
+            expect(along(placed!.at) - halfWidth).toBeGreaterThan(0);
+            expect(along(placed!.at) + halfWidth).toBeLessThan(noseStart);
+        },
+    );
+
+    it('centres the support variant"s symbol forward of the notch it would otherwise cross', () => {
+        const support = symbolFor(TacticalGraphicName.FollowAndSupport)!;
+        const assume = symbolFor(TacticalGraphicName.FollowAndAssume)!;
+        // The notch is the one body vertex sitting on the axis at the rear end.
+        const notch = Math.min(...bodyOf(TacticalGraphicName.FollowAndSupport).filter(c => c[1] === 0).map(along));
+        expect(notch).toBeGreaterThan(0);
+
+        const halfWidth = (support.sizePx * context.resolution) / 2;
+        expect(along(support.at) - halfWidth).toBeGreaterThan(notch);
+        // And it is the notch that moved it: the flat-backed variant sits further back.
+        expect(along(support.at)).toBeGreaterThan(along(assume.at));
+    });
+
+    it('asks for a width that still fits the body when the image comes back taller than it is wide', () => {
+        const placed = symbolFor(TacticalGraphicName.FollowAndAssume)!;
+        const body = bodyOf(TacticalGraphicName.FollowAndAssume);
+        const bodyHeight = Math.max(...body.map(c => c[1])) - Math.min(...body.map(c => c[1]));
+
+        // 1.23 is the tallest 2525E land-unit frame measured through milsymbol at this
+        // library's SIDC — a neutral square under its echelon marks. Fitting is not
+        // enough: the body is stroked, so a symbol that merely touches its edges reads as
+        // a collision. Daylight either side is the requirement.
+        const drawnHeight = placed.sizePx * context.resolution * 1.23;
+        expect(drawnHeight).toBeLessThan(bodyHeight * 0.85);
+    });
+
+    it('moves field T forward of the notch as well — it is the same box', () => {
+        // No provider: field T is drawn only when nothing came back to replace it.
+        setSecuritySymbolProvider(undefined);
+        // Long enough that the body has to grow for it, which is the case that bites: a
+        // designation centred on the whole body starts one padding in from the rear, and
+        // the notch reaches further than that.
+        const designation = 'TF RAIDER';
+        const withText = paintsFor(TacticalGraphicName.FollowAndSupport, {designation});
+        const drawn = withText.find(p => p.text?.text === designation)!;
+        const anchor = (drawn.geometry as {coordinates: ProjectedPosition}).coordinates;
+        const halfText =
+            (context.measureText(designation, '16px sans-serif') * (drawn.text!.scale ?? 1) * context.resolution) / 2;
+        const notch = Math.min(...bodyOf(TacticalGraphicName.FollowAndSupport, {designation}).filter(c => c[1] === 0).map(along));
+        expect(along(anchor) - halfText).toBeGreaterThan(notch);
+    });
+});

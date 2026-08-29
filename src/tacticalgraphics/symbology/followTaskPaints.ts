@@ -41,6 +41,17 @@ type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 export type FollowVariant = 'assume' | 'support';
 
 /**
+ * The variant a graphic name draws as.
+ *
+ * `followTaskPaint` is handed its variant by the registry; `layout` has to work it out,
+ * because where the content sits depends on which rear edge the body has and the symbol is
+ * placed through the same calculation the paint uses. @see followTaskSymbol
+ */
+function variantOf(name: TacticalGraphicName): FollowVariant {
+    return name === TacticalGraphicName.FollowAndSupport ? 'support' : 'assume';
+}
+
+/**
  * The body, the head, and the dash, as multiples of the graphic's decoration unit.
  *
  * Written in screen pixels **at the zoom the graphic was drawn at**, because that is
@@ -70,11 +81,30 @@ const HEAD_HALF_SPREAD_PX = 17;
 /** Thickness of the assume variant's hollow chevron. */
 const CHEVRON_THICKNESS_PX = 7;
 /**
- * Share of the body's height a host-supplied unit symbol takes.
+ * The box a host-supplied unit symbol is drawn to fit inside, as a height in plate pixels.
  *
- * Under 1 so the symbol sits *inside* the fish tail rather than touching its edges.
+ * 0.8 of the body's height, so the symbol sits *inside* the fish tail with daylight either
+ * side of it rather than riding its edges.
  */
-const SYMBOL_BODY_SHARE = 0.82;
+const SYMBOL_BOX_HEIGHT_PX = 0.8 * 2 * BODY_HALF_HEIGHT_PX;
+
+/**
+ * The tallest a unit symbol is assumed to be per unit of its width.
+ *
+ * **Both renderers size an icon by its width and let the height follow the image's own
+ * aspect** -- they have to: neither knows how tall the picture is until it has loaded, and
+ * the paint that reserves the room for it never loads it at all. So the width asked for has
+ * to be the one that fits *whatever comes back*, and a symbol that overflows the body it
+ * sits in has nowhere to overflow to.
+ *
+ * 1.25 covers every 2525E frame: measured through milsymbol at this library's SIDC, a land
+ * unit runs 0.86 (friend, a wide rectangle) to 1.23 (neutral, a square under its echelon
+ * marks) -- and the pending, unknown and hostile frames sit at 1.18, which is why the
+ * collision appeared the moment the affiliation became settable and the first hostile one
+ * was drawn. The number is a bound, not milsymbol's: a host's provider may return anything,
+ * and this says how much room the body promises it.
+ */
+const SYMBOL_MAX_ASPECT = 1.25;
 
 /** The connector's dash, which belongs to the symbol rather than to its status. */
 const CONNECTOR_DASH_PX = [10, 7];
@@ -138,7 +168,8 @@ function layout(feature: PaintFeature, context: PaintContext) {
      */
     const name = feature.properties.name as TacticalGraphicName;
     const hostility = (feature.properties.hostility as TacticalGraphicHostility) ?? TacticalGraphicHostility.pending;
-    const symbolBoxPx = (2 * BODY_HALF_HEIGHT_PX * SYMBOL_BODY_SHARE * unit) / DECORATION_UNIT_PX / context.resolution;
+    // The width that keeps the tallest frame inside the body. @see SYMBOL_MAX_ASPECT
+    const symbolBoxPx = px(SYMBOL_BOX_HEIGHT_PX / SYMBOL_MAX_ASPECT) / context.resolution;
     const image = resolveSecuritySymbol({
         name,
         graphicId: ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined,
@@ -155,7 +186,18 @@ function layout(feature: PaintFeature, context: PaintContext) {
     // hung out of both ends of a body fixed at its plate proportions, and a unit symbol is
     // square where the plate's box is wide.
     const contentMetres = image ? symbolBoxPx * context.resolution : textPx * context.resolution;
-    const bodyLength = Math.max(px(BODY_LENGTH_PX), contentMetres + px(2 * BODY_TEXT_PADDING_PX));
+
+    /*
+     * **The support variant's rear is a notch, and nothing is drawn inside it.**
+     *
+     * Its rear edge is cut forward to a point `BODY_NOTCH_PX` along the axis, so the body's
+     * usable interior starts there and not at 0. Centring on the whole body put the front
+     * of the notch through the middle of field T -- and through a unit symbol, which is
+     * squarer than the text and reaches further back. The assume variant's rear edge is
+     * flat, so its interior starts at 0 and this changes nothing for it.
+     */
+    const usableStart = variantOf(name) === 'support' ? px(BODY_NOTCH_PX) : 0;
+    const bodyLength = Math.max(px(BODY_LENGTH_PX), usableStart + contentMetres + px(2 * BODY_TEXT_PADDING_PX));
 
     return {
         rear, tip, ux, uy, at, px, bodyLength, designation, textScale, image, symbolBoxPx,
@@ -163,7 +205,8 @@ function layout(feature: PaintFeature, context: PaintContext) {
         nose: px(BODY_NOSE_PX),
         headLength: px(HEAD_LENGTH_PX),
         spread: px(HEAD_HALF_SPREAD_PX),
-        centre: at(bodyLength / 2, 0),
+        // Centred on the interior the body actually offers, which is not its full length.
+        centre: at((usableStart + bodyLength) / 2, 0),
     };
 }
 
