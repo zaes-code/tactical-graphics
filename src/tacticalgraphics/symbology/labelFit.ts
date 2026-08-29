@@ -58,6 +58,55 @@ const BOX_SAMPLES: readonly [number, number][] = [
 ];
 
 /**
+ * Share of a graphic's own on-screen size a label may span before it is shrunk.
+ *
+ * **0.7 is not a new number.** `spanProportionalScale` has used it since the avenue of
+ * approach was built, and the counterattack was moved onto it on 2026-08-27 at the user's
+ * direction, for this exact complaint: *"the zoom-anchored scale does not shrink with the
+ * arrow, so a small counterattack carried a full-size designation"*. Measured on the sample
+ * sweep, those two hold a text-to-graphic ratio of 0.23 at every zoom while everything on
+ * the zoom-anchored scale climbs from 0.26 to 0.34, and from 0.62 to 0.80 for the worst of
+ * them. So the ratio that reads correctly is already known; what was missing is applying it
+ * anywhere else.
+ */
+export const LABEL_SPAN_SHARE = 0.7;
+
+/**
+ * Caps a label's scale at a share of the on-screen size of the thing it labels.
+ *
+ * **A cap, not a scale.** It takes the scale the graphic already wanted and only ever
+ * lowers it, so nothing changes at the zoom a graphic was drawn at — the cap bites exactly
+ * when the shape has shrunk under the label, which is the case being fixed. Pair it with
+ * {@link fitLabelScale} rather than replacing it: that one keeps a label inside a *ring*,
+ * this one keeps it in proportion to a *span*, and an area wants both.
+ *
+ * Measured against the label's own width, because that is the dimension that overruns: a
+ * designation at each end of a short line is what makes the sweep read `BCLBCL` with no gap
+ * between the two, and the height was never the problem there. For a mark whose height is
+ * what has to fit — a letter inside an arrowhead — `spanProportionalScale` remains the
+ * right call, and this returns the same answer for a single character anyway.
+ *
+ * `spanPx` is whatever the label must stay in proportion to, in screen pixels: a leg's
+ * length for text along it, a corridor's width for text between its rails, an arrow's span
+ * for the letter it carries. Zero or missing means "nothing to measure against", and the
+ * desired scale passes through untouched.
+ */
+export function capLabelToSpan(
+    context: PaintContext,
+    value: string,
+    font: string,
+    desired: number,
+    spanPx: number,
+    share: number = LABEL_SPAN_SHARE,
+): number {
+    if (!(spanPx > 0) || !(desired > 0)) return desired;
+    // The widest line, so a multi-line block is capped by the line that overruns first.
+    const naturalPx = Math.max(...value.split('\n').map(line => textWidth(context, line, font, 1)));
+    if (!(naturalPx > 0)) return desired;
+    return Math.min(desired, (spanPx * share) / naturalPx);
+}
+
+/**
  * The largest scale at or below `desired` at which a text block centred on `at` still sits
  * inside the feature's ring.
  *
