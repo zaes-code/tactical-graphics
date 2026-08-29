@@ -62,7 +62,7 @@ import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 import {airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 import {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
-import {securityOperationLabelPaint} from './securityPaints';
+import {securityOperationPaint} from './securityPaints';
 import {battlePositionPaint, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
 import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
@@ -975,7 +975,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // TacticalGraphicProperties. Registered here so the paint half is done and the
     // remaining gap is the schema one alone.
     for (const name of SECURITY_OPERATIONS) {
-        registry[name] = {graphic: plainOutlinePaint(), label: securityOperationLabelPaint(getLabel(name))};
+        registry[name] = {graphic: securityOperationPaint(getLabel(name))};
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
