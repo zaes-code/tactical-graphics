@@ -247,6 +247,9 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ObstacleLine]:                                '290100',  // Obstacle Line
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:        '151202',  // Battle Position Prepared (P) but Not Occupied
     [TacticalGraphicName.Capture]:                                     '343000',  // Capture
+    [TacticalGraphicName.Seize]:                                       '342300',  // Seize
+    [TacticalGraphicName.FollowAndAssume]:                             '341200',  // Follow and Assume
+    [TacticalGraphicName.FollowAndSupport]:                            '341300',  // Follow and Support
     [TacticalGraphicName.Escort]:                                      '343600',  // Escort
     [TacticalGraphicName.Demonstration]:                               '343300',  // Demonstration/Demonstrate
     [TacticalGraphicName.Evacuate]:                                    '344500',  // Evacuate

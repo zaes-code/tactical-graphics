@@ -173,6 +173,12 @@ export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set(
     TacticalGraphicName.Guard,
     TacticalGraphicName.Screen,
     TacticalGraphicName.Escort,
+    // Both follow tasks carry a unit *in* their body, where field T would otherwise be
+    // drawn. Same provider, same reason: no renderer-agnostic description of an entity
+    // symbol exists in this package, so the space is reserved and the host fills it or
+    // does not. @see followTaskSymbol
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
 ]);
 
 /**

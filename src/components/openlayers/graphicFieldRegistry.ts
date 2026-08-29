@@ -374,6 +374,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // The decision line's two fields are drawn as `T/AS`, joined by a slash.
     // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
     [TacticalGraphicName.Capture]: SHAPE_ONLY,
+    [TacticalGraphicName.Seize]: SHAPE_ONLY,
+    [TacticalGraphicName.FollowAndAssume]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.FollowAndSupport]: NAME_FIELD_ONLY,
     // Escort's own amplifier is field A, a host-injected unit symbol, not text.
     [TacticalGraphicName.Escort]: SHAPE_ONLY,
     // `DEM` is the symbol's own literal, printed by the plate, and 343300 names no other

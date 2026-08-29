@@ -29,19 +29,19 @@ Three entry points ship, and you can use any of them on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
-| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#the-center-symbol) |
 | `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
 npm install maplibre-gl    # only for the MapLibre entry point
-npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
+npm install milsymbol      # only for the center symbol — six graphics carry one
 ```
 
 All three are peer dependencies and all are optional, so installing the package
 for its geometry alone pulls in none of them. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
-[Security operations: the center symbol](#security-operations-the-center-symbol).
+[The center symbol](#the-center-symbol).
 
 **The same names, from either subpath.** `createTacticalGraphics` and the library's own
 exports — configuration, the palette, the property key, the center-symbol controls — are
@@ -132,25 +132,26 @@ tacticalGraphic: {
     eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
     minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
     maxAltitude: 2000,
-    altitudeDatum: 'AGL',     // MSL | AGL | FL — what those numbers are measured from
+    altitudeDatum: 'AGL',     // AltitudeDatum — what those numbers are measured from
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
-    // Symbology — affects color and dash pattern.
-    hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
-    status: 'present',        // present | planned  (planned ⇒ dashed)
-    confidence: 'known',      // known | suspected — rendered where doctrine shows a
-                              // reliability rating
-    echelon: 'Battalion/Squadron', // Squad | Section | Platoon/Detachment |
-                              // Company/Battery/Troop | Battalion/Squadron |
-                              // Regiment/Group | Brigade | Unknown
-    direction: 'ONE_WAY',     // route graphics
-    mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
-    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
-                              // area or restricted terrain carries to say what kind of
-                              // movement the ground admits
-    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
-                              // and the color the area is hatched in
+    // Symbology — affects color and dash pattern. Every field below is backed by an
+    // exported enum; the table after this block lists each one's complete set of values.
+    hostility: 'Friend',      // TacticalGraphicHostility
+    status: 'present',        // TacticalGraphicStatus — planned ⇒ dashed
+    confidence: 'known',      // TacticalGraphicConfidence — rendered where doctrine
+                              // shows a reliability rating
+    echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
+    direction: 'ONE_WAY',     // RouteDirection — route graphics
+    mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the two mine
+                              // areas draw inside themselves
+    mobility: 'Tracked',      // TacticalGraphicMobility — APP-06 Table 8-24 sector 1,
+                              // the icon a limited access area or restricted terrain
+                              // carries to say what kind of movement the ground admits
+    terrain: 'Ground',        // TacticalGraphicTerrain — APP-06 Table 8-25 sector 2,
+                              // the word under that icon, and the color the area is
+                              // hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -176,6 +177,32 @@ tacticalGraphic: {
     rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 }
 ```
+
+### The selector fields, and every value they take
+
+Each of these is a **string enum**, exported from the root entry point, so the member and
+its value are the same string at run time — `TacticalGraphicHostility.friend` **is**
+`'Friend'`. Pass the member; the literal works too, and is what a saved file holds.
+
+| Field | Enum | Every accepted value |
+|---|---|---|
+| `hostility` | `TacticalGraphicHostility` | `Assumed Friend` · `Friend` · `Hostile/Faker` · `Neutral` · `Pending` · `Suspect/Joker` · `Unknown` |
+| `status` | `TacticalGraphicStatus` | `present` · `planned` |
+| `confidence` | `TacticalGraphicConfidence` | `known` · `suspected` |
+| `echelon` | `TacticalGraphicEchelon` | `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Unknown` |
+| `direction` | `RouteDirection` | `GENERAL` · `ONE_WAY` · `TWO_WAY` · `ALTERNATING` |
+| `mineType` | `TacticalGraphicMineType` | `Unspecified Mine` · `Antipersonnel Mine` · `Antipersonnel Mine with Directional Effects` · `Antitank Mine` · `Antitank Mine with Antihandling Device` · `Wide Area Antitank Mine` · `Mine Cluster` |
+| `mobility` | `TacticalGraphicMobility` | `Unspecified` · `Standard Mobility/On-Road` · `High Mobility/Off-Road` · `Tracked` · `Tracked and Wheeled Combination` · `Towed` · `Railway` · `Over-Snow (Prime Mover)` · `Sled` · `Pack Animal` · `Barge` · `Amphibious` · `No Vehicles` · `Dismounted` |
+| `terrain` | `TacticalGraphicTerrain` | `Unspecified` · `Urban` · `Water` · `Ground` · `Vegetation` · `Obstacles` |
+| `altitudeDatum` | `AltitudeDatum` | `MSL` · `AGL` · `FL` |
+
+`AltitudeUnit` (`meters` · `feet`) is not a per-graphic field — it is host configuration,
+set once with `configureTacticalGraphics({altitudeUnit})`, because a map does not mix
+units. A graphic that needs its own is free to pass a string altitude instead.
+
+**A value not in these lists is ignored rather than drawn**, so a typo shows up as a
+missing amplifier rather than an error. The table is generated from the enums by a test,
+so it cannot drift from them.
 
 **`label` and `secondId` were renamed in 3.0.0** — they are `designation` and
 `secondDesignation` now. They are fields **T** and **T1**, the standard's unique
@@ -764,12 +791,11 @@ by hand — or by an older version — arrives fully editable rather than half-d
 
 ---
 
-## Security operations: the center symbol
+## The center symbol
 
-Cover, Guard and Screen draw a single-point 2525E unit symbol between their two arms.
-That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this
-library's — so this library **never imports milsymbol**. It asks a provider, and you
-register one:
+Six graphics draw a single-point 2525E unit symbol as part of themselves. That is
+[milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this library's —
+so this library **never imports milsymbol**. It asks a provider, and you register one:
 
 ```ts
 import ms from 'milsymbol';
@@ -779,7 +805,26 @@ useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
 
 From the **root** entry point, because a center symbol is symbology rather than
-rendering: one registration serves whichever engine is drawing, and both read it.
+rendering: one registration serves whichever engine is drawing, and both read it. One
+call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
+
+| Graphic | Where the symbol goes | How big |
+|---|---|---|
+| Cover, Guard, Screen | between the two arms | `setSecuritySymbolSize` — a screen constant, like every other part of these three |
+| Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
+| Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
+
+Both of the drawn ones stop at 96 px however far the map zooms in. A framed 2525E symbol
+carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
+the screen would be a badge the size of a hand. It is the ceiling
+`setSecuritySymbolSize` is clamped to, so every centre symbol agrees on how large it ever
+draws. Zoomed *out* they keep shrinking with the graphic — a floor would leave the symbol
+bigger than the shape it sits in.
+
+The last three are *drawn* rather than placed, so their symbol scales with the graphic
+instead of holding a fixed pixel size. On the two follow tasks the symbol **replaces**
+the designation: a picture of the unit says more than its name. Type a designation and
+register no provider, and the text draws as before.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
@@ -787,8 +832,17 @@ dependency: a consumer who wants the geometry, or the other 280-odd graphics, ne
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
-hostile Screen gets a hostile-framed symbol. `securitySymbolSidc(hostility)` exposes the
-same doctrinal code if you want to build on it.
+hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
+`securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
+it. All six offer the affiliation for that reason — the escort and the two follow tasks
+are tactical mission tasks, which otherwise carry no amplifiers at all, and an entity
+symbol's frame *is* its standard identity.
+
+**Size the symbol by its width.** Both renderers draw the image at the width they are
+given and let its height follow the image's own aspect, because neither knows how tall
+the picture is until it has loaded. The follow tasks reserve room for a frame up to 1.25×
+as tall as it is wide — a 2525E land unit runs about 0.86 (friend) to 1.23 (neutral) —
+so a much taller image would overflow the body it sits in.
 
 ### Sizing the symbol
 
@@ -1025,7 +1079,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 289 supported names.
+the 292 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1047,7 +1101,9 @@ band ranges are in **kilometers**.
 
 ## Supported graphics
 
-The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
+
+**Which plate that is depends on the graphic, and each one records its own answer.** 211 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
 
@@ -1116,8 +1172,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Limited Access Area | Areas |
-| Minimum Safe Distance Zone | Areas |
-| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
 | Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
@@ -1126,7 +1180,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | PsyOps Zone, Circular | Areas |
 | PsyOps Zone, Irregular | Areas |
 | PsyOps Zone, Rectangular | Areas |
-| Radiation Dose Rate Contour Line | Areas |
 | Radiological Contaminated Area | Areas |
 | Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
@@ -1297,6 +1350,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
+| Follow And Assume | Tactical Mission Tasks |
+| Follow And Support | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
 | Locate | Tactical Mission Tasks |
@@ -1305,6 +1360,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
+| Seize | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
@@ -1361,16 +1417,15 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ## Upcoming graphics
 
-Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against FM 1-02.2, **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against the plate that defines it — FM 1-02.2, APP-06, or both — **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
 
 | Graphic | Category |
 |---|---|
+| Minimum Safe Distance Zone | Areas |
+| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
+| Radiation Dose Rate Contour Line | Areas |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Axis Of Attack | Movement and Maneuver |
-| Follow And Assume | Tactical Mission Tasks |
-| Follow And Support | Tactical Mission Tasks |
-| Seize | Tactical Mission Tasks |
 
 ---
 

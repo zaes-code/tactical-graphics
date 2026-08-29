@@ -57,6 +57,7 @@ import {directionArrowPaint} from './linePaints';
 import {routeControlMeasurePaint} from './routePaints';
 import {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './linearTargetPaints';
 import {airCorridorLabelPaint, airCorridorPaint} from './corridorPaints';
+import {followTaskPaint} from './followTaskPaints';
 import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 import {airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
@@ -651,6 +652,9 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
 
         // ── APP-06's protection lines ────────────────────────────────────────
         [TacticalGraphicName.Capture]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Capture))},
+        [TacticalGraphicName.Seize]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Seize))},
+        [TacticalGraphicName.FollowAndAssume]: {graphic: followTaskPaint('assume')},
+        [TacticalGraphicName.FollowAndSupport]: {graphic: followTaskPaint('support')},
         [TacticalGraphicName.Escort]: {graphic: escortPaint(getLabel(TacticalGraphicName.Escort))},
         [TacticalGraphicName.Demonstration]: {graphic: demonstrationPaint(getLabel(TacticalGraphicName.Demonstration))},
         [TacticalGraphicName.Evacuate]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Evacuate))},

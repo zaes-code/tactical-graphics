@@ -36,6 +36,7 @@ import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './ty
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
+import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -637,7 +638,7 @@ const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * The two mission tasks that **do** carry an identity.
+ * The mission tasks that **do** carry an identity.
  *
  * The category rule below switches hostility off for every tactical mission task, on FM
  * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
@@ -655,8 +656,22 @@ const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Infiltration,
 ]);
 
+/**
+ * A graphic that carries a unit symbol carries that unit's identity.
+ *
+ * The escort and the two follow tasks are tactical mission tasks, so the category rule
+ * switched hostility off for all three -- and all three draw a **host-supplied entity
+ * symbol**: the escort in the break in its bar, the follow tasks where field T would go.
+ * An entity symbol's frame *is* its standard identity. Offering no affiliation left the
+ * symbol stuck on `pending`, so the one amplifier that decides what the drawn symbol looks
+ * like was the one the operator could not set. (User's call, 2026-08-28.)
+ *
+ * Read from {@link CENTER_SYMBOL_GRAPHICS} rather than listed again, so a graphic that
+ * gains a centre symbol later cannot gain it without the identity that frames it.
+ */
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
-    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name)) return true;
+    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name) || CENTER_SYMBOL_GRAPHICS.has(name)) return true;
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
     if (TERRAIN_DESCRIPTIONS.has(name)) return false;

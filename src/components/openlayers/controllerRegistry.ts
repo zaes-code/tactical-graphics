@@ -450,6 +450,22 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Four anchor points, each meaning something different, so every one is draggable.
     // Handle 0 is the circle's centre and moves the whole graphic.
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.Seize]:                            vertexLine(4, 4, 0),
+    /*
+     * **`vertexLine`, so the handle moves its vertex instead of scaling the symbol.**
+     *
+     * `line(2)` stretches: `editStretches` is true for anything with a fixed vertex count,
+     * so dragging the red handle resized the whole graphic — the fish tail and the
+     * arrowhead grew with the line. These two want the other behaviour, which is what this
+     * factory is for: the handle lengthens the line, and the resize affordance is what
+     * scales the symbol.
+     *
+     * `movement()` would be wrong for a third reason — it reserves an offset handle at
+     * `handleCoords[2]` for a width these symbols do not have, leaving the feature empty.
+     * @see visiblePathHandles for why only one of the two points shows a handle.
+     */
+    [TacticalGraphicName.FollowAndAssume]:                  vertexLine(2, 2),
+    [TacticalGraphicName.FollowAndSupport]:                 vertexLine(2, 2),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
     // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
