@@ -907,6 +907,16 @@ const DRAW_SIZE_CASES = [
     // a floor that used to exist on one engine only, so the identical flick drew 100 px on
     // OpenLayers and 60 on MapLibre. @see minimumDrawnRadiusPx
     {filter: 'turn', pts: [[700, 700], [730, 700]], as: 'turn (short drag)'},
+    // The two follow tasks, whose body and head are sized from `decorationSize` rather
+    // than from the drawn run. That is what makes a resize scale the whole symbol instead
+    // of stretching its axis and leaving the body the size it was — the first version
+    // derived them from `context.resolution` and did exactly that. @see followTaskPaints
+    // Drawn tip-first *towards* the top-left, so the pivot — the last stored point, which
+    // is the rear — sits away from the bottom-right corner the affordance is grabbed from.
+    // Drawn the other way the grab lands on the pivot, where the ratio is a small number
+    // over a smaller one and OpenLayers has no span-relative guard for it.
+    {filter: 'follow and assume', pts: [[860, 600], [600, 440]]},
+    {filter: 'follow and support', pts: [[860, 600], [600, 440]]},
     // A rectangular zone, for the **amplifier** rather than the extent: its width is
     // doctrinal input that the drawn box states, and MapLibre used to derive it only
     // during a drag — so a freshly drawn zone reported the generic default, 98 km where

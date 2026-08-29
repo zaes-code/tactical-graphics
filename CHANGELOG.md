@@ -15,6 +15,40 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the user typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
+
+  `followTaskSymbol` is the single statement of where it goes and how big it is, exported from the root entry point and read by the paint — which cuts the body to fit and skips the text — and by both renderers, which draw the image. Placing it from a second calculation is how a symbol ends up not sitting in its own hole, which is the lesson `escortSymbolStyle` already carries.
+
+- **Three tactical mission tasks: seize (342300), follow and assume (341200), follow and support (341300).** All three are defined by FM 1-02.2 *and* APP-06, so they carry both specifications and their entity codes.
+
+  **Seize** is the swept arc its family already draws, lettered `S` — FM 1-02.2 draws a circled unit with an arc arrow to the objective, and APP-06 342300 agrees. It differs from capture (343000) only in that letter, which is also why capture is APP-06 only and seize is not: seize is an FM 3-90 mission task and capture is not.
+
+  **The two follow tasks** are one shape read from the rear point to the tip — a hollow body carrying field T, a connector, and a head — and they differ in exactly two ways: assume dashes its connector and ends in an open chevron, support runs solid into a filled head and notches its rear edge. Both take two anchor points with point 1 at the arrowhead, so both are in `TIP_FIRST_GRAPHICS`, and both are drawn at paint time because the rule says the symbol "varies only in length".
+
+  Two details worth recording. APP-06 341200 notes that *"the dashed lines in this symbol shall be displayed in present and anticipated status"*, so the connector's dash is its own rather than the status dash — a planned follow-and-assume dashes for both reasons and the two must not cancel. And the standards disagree on the support variant's head: FM 1-02.2 draws it open, APP-06's example fills it. The fill is drawn; the divergence is recorded in `followTaskPaints.ts` rather than resolved silently.
+
+- **The README documents every selector enum in full.** `hostility` trailed off after four of its seven values and `direction`, `mineType`, `mobility` and `terrain` named none at all — a consumer cannot guess a string enum's members, and a value outside the set is ignored rather than rejected, so an incomplete list shows up as an amplifier that silently does not draw. Each field now names its enum, a table lists every accepted value, and a test asserts the table against the enums so it cannot drift.
+
+### Changed
+
+- **The follow tasks' unit symbol stops growing at 96 px.** Everything else about these two is drawn in metres, so zooming in makes all of it bigger — right for the body and the arrowhead, wrong for the symbol inside them: measured in the browser, it reached 279 px in a 436 px body. It now stops at the ceiling the escort already used and `setSecuritySymbolSize` is clamped to, so every centre symbol agrees on how large it ever draws. The escort's *floor* is deliberately not copied: its size comes from the span of a bar that can be short while the graphic is still perfectly visible, where this one comes from the body it sits inside, and a symbol held at 8 px inside a 4 px body is bigger than its own container.
+
+- **The escort and the two follow tasks offer an affiliation.** All three are tactical mission tasks, which carry no amplifiers, so hostility was switched off for them — and all three draw a host-supplied unit symbol, whose frame *is* its standard identity. The one amplifier that decides what the symbol looks like was the one that could not be set, so it drew `pending` for ever. The exemption reads `CENTER_SYMBOL_GRAPHICS` rather than naming them again: a graphic cannot gain a centre symbol without gaining the identity that frames it. Their line work follows the affiliation too, as `Exfiltrate` already did.
+
+- **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
+
+### Fixed
+
+- **Setting the affiliation on a hand-drawn Cover, Guard or Screen did nothing.** The centre symbol is the largest thing these three draw and the natural place to click — and its feature belonged to the controller rather than the holder, so it was outside every write the holder makes by iterating its own features. It carried no `symbolId`, and the properties dialog identifies its graphic by exactly that: the form opened on an empty selection, showed defaults, and dropped the edit on OK. Drawn into the sample sheet the same graphic honoured its affiliation, because that path never goes through a click.
+
+  The feature belongs to the holder now, so `setSymbolId`, the amplifier bag and the rotation all reach it the way they reach everything else. MapLibre had the same hole and had already closed it on its side.
+
+- **`axis of attack` is gone from the tracker, and so from the Upcoming table.** It is registered in the core registry without a `TacticalGraphicName` member and is named by neither standard; the row asserted work that has no graphic to do.
+
+- The **Supported** and **Upcoming** graphics sections credit the standard that actually defines each graphic. Both said "checked against FM 1-02.2", which stopped being the whole truth when APP-06 became a first-class source: 211 graphics are defined by both, 69 by APP-06 alone, 8 by FM 1-02.2 alone.
+
 ## [3.0.0] — 2026-08-28
 
 **A major, and it earns it.** Six breaking changes, of which the three worth planning
