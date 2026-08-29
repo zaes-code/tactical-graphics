@@ -71,12 +71,19 @@ const ARM_PX = 3 * ARROW_LENGTH_PX - ARROW_DEPTH_PX - CENTER_PADDING_PX;
  * squared back to these numbers after a version measured off the Template ran the diagonal
  * outward instead of folding. The fold is the symbol; keep it. What did change is where the
  * arms start, which is `HALF_GAP_RATIO`.
+ *
+ * **The lateral runs positive, which puts the arrowhead below the letters.** The segment
+ * leaving the letter sits on the axis, the fold drops, and the barbed segment runs lower —
+ * "the lines going away from the symbol sit higher than the line with the arrowhead", which
+ * is the plate and the user's own description of it. It was negative for two commits, which
+ * stood the arrowheads above the axis instead. Check it as a number: each arm's tip should
+ * measure *south* of its inner end on an east-west graphic.
  */
 const ARM_PROFILE: readonly [number, number][] = [
     [0, 0],
     [(2 * ARROW_LENGTH_PX - CENTER_PADDING_PX) / ARM_PX, 0],
-    [(2 * ARROW_LENGTH_PX - ARROW_DEPTH_PX - CENTER_PADDING_PX) / ARM_PX, -ARROW_DEPTH_PX / ARM_PX],
-    [1, -ARROW_DEPTH_PX / ARM_PX],
+    [(2 * ARROW_LENGTH_PX - ARROW_DEPTH_PX - CENTER_PADDING_PX) / ARM_PX, ARROW_DEPTH_PX / ARM_PX],
+    [1, ARROW_DEPTH_PX / ARM_PX],
 ];
 
 /**
