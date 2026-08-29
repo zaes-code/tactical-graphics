@@ -775,9 +775,19 @@ const main = async () => {
     await page.waitForTimeout(1200);
 
     await selectGraphic(page, 'cover');
-    const coverAt = [box.x + box.width * 0.45, box.y + box.height * 0.4];
-    await page.mouse.click(coverAt[0], coverAt[1]);
+    /*
+     * **Two clicks, not one.** Cover, guard and screen were dropped on a single anchor at a
+     * fixed screen size until 2026-08-29; APP-06 gives them four anchor points, so the
+     * operator draws one arrow — point 1 at the arrowhead, point 2 at its inner end — and
+     * the other is derived. The centre of the finished symbol is past point 2, which is
+     * where the unit symbol sits and therefore where this clicks to open the dialog.
+     */
+    const armTip = [box.x + box.width * 0.3, box.y + box.height * 0.4];
+    const armInner = [box.x + box.width * 0.45, box.y + box.height * 0.4];
+    await page.mouse.click(armTip[0], armInner[1]);
+    await page.mouse.dblclick(armInner[0], armInner[1]);
     await page.waitForTimeout(DRAW_END_GUARD_MS);
+    const coverAt = [armInner[0] + (armInner[0] - armTip[0]) * 0.21, armInner[1]];
 
     const coverBefore = await readDrawnStyles(page, 'Cover');
     const symbolBefore = coverBefore.styles.find(s => s.src);

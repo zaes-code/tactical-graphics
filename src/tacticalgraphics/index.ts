@@ -374,8 +374,8 @@ export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, air
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
-export {securityOperationLabelPaint} from './symbology/securityPaints';
-export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+export {securityOperationCentre, securityOperationLabelPaint, securityOperationPaint, securityOperationSymbol} from './symbology/securityPaints';
+export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';

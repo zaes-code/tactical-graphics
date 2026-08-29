@@ -21,7 +21,6 @@ import {
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
-import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 // import {SearchArea} from './graphics/SearchArea';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
@@ -35,7 +34,6 @@ import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
-import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
 /**
  * `resolution` is the zoom the graphic is being created at; `sizing` is that same
@@ -268,8 +266,16 @@ const rangeFan = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-const securityOp = (name: TacticalGraphicName, res: number) =>
-    new SecurityOperationsController(new SecurityOperationGraphicBase(name, res));
+/**
+ * Cover, guard and screen: **two clicks and no handles.**
+ *
+ * They were placed on one anchor at a fixed screen size until 2026-08-29. APP-06 gives them
+ * four anchor points — two per arrow — and the operator now draws the first arrow while the
+ * generator derives the second, so the pair cannot disagree. `line(2)` is the ordinary
+ * fixed-vertex line controller: an edit drag scales the whole symbol, which is what these
+ * want, and the generator publishes no handle points so none are drawn. @see SecurityOperation
+ */
+const securityOp = line(2);
 
 // ─── registry ─────────────────────────────────────────────────────────────────
 

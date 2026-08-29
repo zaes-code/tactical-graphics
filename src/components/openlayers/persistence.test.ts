@@ -9,7 +9,6 @@
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import {LineString, MultiLineString, Point} from 'ol/geom';
-import type Geometry from 'ol/geom/Geometry';
 import {toLonLat} from 'ol/proj';
 import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
 
@@ -17,7 +16,6 @@ import {getController} from './controllerRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {MissionTaskController} from './controllers/MissionTaskController';
-import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {applyBaseGeometry} from './sampleGallery';
 import {readGraphicLabels} from './graphicProperties';
@@ -134,11 +132,6 @@ function roundTrip(from: TacticalGraphicsManager) {
 
 /** One graphic per holder family — the families are what differ, not the 198 names. */
 /** Cover / Guard / Screen — the fixed-on-screen family, which restores differently. */
-const handlerIsSecurityOperation = (name: TacticalGraphicName): boolean =>
-    name === TacticalGraphicName.Cover ||
-    name === TacticalGraphicName.Guard ||
-    name === TacticalGraphicName.Screen;
-
 const FAMILIES: [label: string, name: TacticalGraphicName][] = [
     ['line', TacticalGraphicName.PhaseLine],
     ['polygon', TacticalGraphicName.ObjectiveArea],
@@ -191,25 +184,6 @@ describe('every holder family round-trips', () => {
 
         expect(after?.getType()).toBe(before?.getType());
 
-        if (handlerIsSecurityOperation(name)) {
-            // A security operation is sized in screen pixels x the *live* map
-            // resolution, so restoring it at a different zoom must come back a
-            // different size in meters — that is exactly what holding a constant
-            // on-screen size means. Assert the relationship rather than equality:
-            // same center, width scaled by precisely the resolution ratio.
-            const width = (g?: Geometry) => {
-                const e = g?.getExtent() ?? [0, 0, 0, 0];
-                return e[2] - e[0];
-            };
-            const center = (g?: Geometry) => {
-                const e = g?.getExtent() ?? [0, 0, 0, 0];
-                return (e[0] + e[2]) / 2;
-            };
-            expect(width(after) / width(before)).toBeCloseTo(VIEW_RES / RES, 6);
-            expect(center(after)).toBeCloseTo(center(before), 3);
-            return;
-        }
-
         if (isRectangular(name)) {
             // **To the amplifier's own precision, which is whole metres.** A rectangle's
             // shape is derived from `width`, and that number is rounded on the way into
@@ -250,14 +224,21 @@ describe('the snapshot', () => {
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
     });
 
+    /**
+     * The security operations had a `scale` — a multiplier on screen-pixel arm lengths,
+     * meaningless without the resolution it multiplied, and the reason this file once had a
+     * `renderer` object to keep viewport state out of. They are drawn in metres as of
+     * 2026-08-29, so there is no such quantity left to leak; the guard stays because the
+     * absence is the property, not the graphic.
+     */
     it('writes no viewport quantity for a security operation either', () => {
         const from = fakeManager();
-        const handler = build(from, TacticalGraphicName.Cover) as SecurityOperationsController;
-        handler.graphic.setScale(1.9);
+        build(from, TacticalGraphicName.Cover);
 
         const [feature] = serializeTacticalGraphics(from).features;
         expect(feature.properties).not.toHaveProperty('renderer');
         expect(feature.properties?.tacticalGraphic).not.toHaveProperty('scale');
+        expect(feature.properties?.tacticalGraphic).not.toHaveProperty('drawingResolution');
     });
 
     it('writes geographic coordinates, not map meters', () => {
@@ -306,24 +287,21 @@ describe('editable state survives', () => {
         expectMetersClose(restored.graphic.center, [CX, CY]);
     });
 
-    it('keeps a security operation’s rotation — but no longer its scale', () => {
+    /**
+     * A security operation carries neither a rotation nor a scale any more: both were
+     * properties of a badge placed on one anchor. It is drawn from two points as of
+     * 2026-08-29, so its orientation *is* the axis those points define and its size is the
+     * distance between them — and a base that round-trips carries both without a field.
+     * That is the assertion: the two drawn points come back where they were.
+     */
+    it('keeps a security operation’s axis, which is now the whole of its rotation and size', () => {
         const from = fakeManager();
-        const handler = build(from, TacticalGraphicName.Cover) as SecurityOperationsController;
-        handler.graphic.setRotation(0.7);
-        handler.graphic.setScale(1.8);
+        const original = build(from, TacticalGraphicName.Cover);
 
         const {to, report} = roundTrip(from);
         expect(report.failed).toEqual([]);
 
-        const restored = to.graphicControllers[0] as SecurityOperationsController;
-        // Rotation is degrees — portable, and it lives in the doctrinal bag.
-        expect(restored.graphic.getRotation()).toBeCloseTo(0.7, 6);
-        // `scale` does not survive any more, and that is deliberate: it lived in the
-        // `renderer` bag an earlier design carried. Nothing in the app sets it
-        // (SecurityOperationsController.handleResize is a no-op), so this only costs a
-        // host that called setScale programmatically. Asserted rather than left
-        // untested so the loss is visible if that ever stops being acceptable.
-        expect(restored.graphic.getScale()).not.toBeCloseTo(1.8, 6);
+        expectMetersClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
     });
 
     it('keeps a movement graphic’s dragged width', () => {
