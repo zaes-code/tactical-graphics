@@ -20,7 +20,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
-import {escortSymbolStyle} from './securityOperationSymbol';
+import {escortSymbolStyle, followTaskSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
@@ -1790,9 +1790,21 @@ export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction 
     return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
 }
 
-/** Follow and assume, follow and support. @see followTaskPaints.ts */
+/**
+ * Follow and assume, follow and support. @see followTaskPaints.ts
+ *
+ * Each carries a host-injected unit symbol where field T would go, like the escort carries
+ * one in the break in its bar. The paint has already left the space and skipped the
+ * designation; this appends the picture. @see followTaskSymbolStyle
+ */
 export function followTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return asStyleFunction(followTaskPaint(name === TacticalGraphicName.FollowAndAssume ? 'assume' : 'support'), name);
+    const styled = asStyleFunction(followTaskPaint(name === TacticalGraphicName.FollowAndAssume ? 'assume' : 'support'), name);
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = followTaskSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
 }
 
 /** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */

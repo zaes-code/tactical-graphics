@@ -9,6 +9,8 @@
  */
 
 import {getPaintFunction} from './registry';
+import {followTaskSymbol} from './followTaskPaints';
+import {CENTER_SYMBOL_GRAPHICS, setSecuritySymbolProvider} from '../core/securitySymbol';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -241,5 +243,59 @@ describe('the designation follows the line', () => {
             const rotation = rotationFor(tip);
             expect(Math.abs(rotation)).toBeLessThanOrEqual(Math.PI / 2 + 1e-9);
         }
+    });
+});
+
+/**
+ * # A unit symbol takes the place of field T
+ *
+ * The host supplies it through the provider the security operations and the escort
+ * already use — nothing in this package imports milsymbol. When one answers, it *replaces*
+ * the designation rather than crowding it, and the body makes room for it: a picture of
+ * the unit says more than its name.
+ */
+describe('a host-supplied unit symbol', () => {
+    afterEach(() => setSecuritySymbolProvider(undefined));
+
+    const paintWithSymbol = (properties: Record<string, unknown> = {}) => {
+        setSecuritySymbolProvider(() => ({src: 'data:image/png;base64,AAA'}));
+        return paintsFor(TacticalGraphicName.FollowAndAssume, properties);
+    };
+
+    it('is offered for both follow tasks', () => {
+        expect(CENTER_SYMBOL_GRAPHICS.has(TacticalGraphicName.FollowAndAssume)).toBe(true);
+        expect(CENTER_SYMBOL_GRAPHICS.has(TacticalGraphicName.FollowAndSupport)).toBe(true);
+    });
+
+    it('takes priority over the designation', () => {
+        expect(texts(paintWithSymbol({designation: 'TF RAIDER'}))).toEqual([]);
+    });
+
+    it('leaves the designation alone when no provider answers', () => {
+        expect(texts(paintsFor(TacticalGraphicName.FollowAndAssume, {designation: 'TF RAIDER'}))).toEqual(['TF RAIDER']);
+    });
+
+    it('is placed inside the body, at the same point the text would have used', () => {
+        setSecuritySymbolProvider(() => ({src: 'data:image/png;base64,AAA'}));
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [REAR, TIP]},
+            properties: {name: TacticalGraphicName.FollowAndAssume},
+        } as PaintFeature;
+        const placement = followTaskSymbol(feature, context);
+        expect(placement).toBeDefined();
+
+        const body = (lines(paintWithSymbol())[0].geometry as {coordinates: ProjectedPosition[]}).coordinates;
+        const maxX = Math.max(...body.map(p => p[0]));
+        expect(placement!.at[0]).toBeGreaterThan(0);
+        expect(placement!.at[0]).toBeLessThan(maxX);
+        expect(placement!.sizePx).toBeGreaterThan(0);
+    });
+
+    it('gives nothing back when no provider is registered', () => {
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [REAR, TIP]},
+            properties: {name: TacticalGraphicName.FollowAndAssume},
+        } as PaintFeature;
+        expect(followTaskSymbol(feature, context)).toBeUndefined();
     });
 });
