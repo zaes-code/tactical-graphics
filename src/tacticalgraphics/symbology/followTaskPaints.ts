@@ -29,7 +29,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {textWidth} from './decorations';
+import {textWidth, uprightRotation} from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -199,6 +199,12 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
                     align: 'center',
                     baseline: 'middle',
                     scale: textScale,
+                    // **Field T lies along the symbol.** It sits *inside* the body, so it
+                    // has to turn with it: left horizontal, a designation in a graphic
+                    // drawn north-south ran across the body and out of both sides.
+                    // `uprightRotation` adds the half turn that stops a westward graphic
+                    // reading its label upside down. @see uprightFlipped
+                    rotation: uprightRotation(rear, tip),
                 },
             });
         }

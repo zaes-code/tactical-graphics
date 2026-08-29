@@ -201,3 +201,45 @@ describe('lengthening the line leaves the symbol alone', () => {
         expect(double.head / single.head).toBeCloseTo(2, 1);
     });
 });
+
+/**
+ * # Field T lies along the symbol
+ *
+ * The designation sits *inside* the body, so it turns with it. Drawn horizontal, a
+ * designation on a graphic pointing north-south ran across the body and out of both
+ * sides of the shape it is supposed to be within.
+ */
+describe('the designation follows the line', () => {
+    const rotationFor = (tip: ProjectedPosition) => {
+        const paint = getPaintFunction(TacticalGraphicName.FollowAndAssume)!.graphic;
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [REAR, tip]},
+            properties: {name: TacticalGraphicName.FollowAndAssume, designation: 'TF RAIDER'},
+        } as PaintFeature;
+        return paint(feature, context).find(p => p.text)?.text?.rotation ?? 0;
+    };
+
+    it('lies flat on an eastward graphic', () => {
+        expect(rotationFor([8000, 0])).toBeCloseTo(0, 6);
+    });
+
+    it('turns with a graphic drawn north', () => {
+        // Map angles run counter-clockwise from east, screen rotations clockwise.
+        expect(rotationFor([0, 8000])).toBeCloseTo(-Math.PI / 2, 6);
+    });
+
+    it('turns with a diagonal', () => {
+        expect(rotationFor([8000, 8000])).toBeCloseTo(-Math.PI / 4, 6);
+    });
+
+    /**
+     * A westward graphic reads upside down without the half turn — the defect the
+     * movement labels already had once. @see uprightRotation
+     */
+    it('never renders upside down, whichever way the graphic points', () => {
+        for (const tip of [[-8000, 0], [-8000, -3000], [-3000, 8000], [8000, -8000]] as ProjectedPosition[]) {
+            const rotation = rotationFor(tip);
+            expect(Math.abs(rotation)).toBeLessThanOrEqual(Math.PI / 2 + 1e-9);
+        }
+    });
+});
