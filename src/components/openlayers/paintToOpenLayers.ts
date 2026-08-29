@@ -250,7 +250,27 @@ function readBounds(feature: FeatureLike): PaintFeature['bounds'] {
     if (minX !== undefined && minY !== undefined && maxX !== undefined && maxY !== undefined) {
         return {minX, minY, maxX, maxY};
     }
-    return holderBounds(feature);
+    return ownBounds(feature) ?? holderBounds(feature);
+}
+
+/**
+ * The feature's own extent, when the feature *is* the shape.
+ *
+ * Most paints are handed the drawn geometry rather than a label anchor — the relief in
+ * place carves its own gap, the block family draws its letter into its own arrow — and a
+ * feature carrying real line or area geometry is the most reliable statement of its size
+ * there is. Asked before the holder, which is bookkeeping and can be missing; a bare
+ * `Point` or `MultiPoint` is an anchor rather than a shape and answers nothing, so those
+ * fall through.
+ */
+function ownBounds(feature: FeatureLike): PaintFeature['bounds'] {
+    const geometry = feature.getGeometry();
+    const type = geometry?.getType();
+    if (!geometry || !type || type === 'Point' || type === 'MultiPoint') return undefined;
+    const extent = geometry.getExtent();
+    if (!extent || !extent.every((n: number) => Number.isFinite(n))) return undefined;
+    const [minX, minY, maxX, maxY] = extent;
+    return {minX, minY, maxX, maxY};
 }
 
 /**
