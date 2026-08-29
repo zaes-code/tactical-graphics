@@ -17,6 +17,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
+- **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the user typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
+
+  `followTaskSymbol` is the single statement of where it goes and how big it is, exported from the root entry point and read by the paint — which cuts the body to fit and skips the text — and by both renderers, which draw the image. Placing it from a second calculation is how a symbol ends up not sitting in its own hole, which is the lesson `escortSymbolStyle` already carries.
+
 - **Three tactical mission tasks: seize (342300), follow and assume (341200), follow and support (341300).** All three are defined by FM 1-02.2 *and* APP-06, so they carry both specifications and their entity codes.
 
   **Seize** is the swept arc its family already draws, lettered `S` — FM 1-02.2 draws a circled unit with an arc arrow to the objective, and APP-06 342300 agrees. It differs from capture (343000) only in that letter, which is also why capture is APP-06 only and seize is not: seize is an FM 3-90 mission task and capture is not.

@@ -31,6 +31,9 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {resolveSecuritySymbol, securitySymbolSidc} from '../core/securitySymbol';
+import type {GraphicLabels} from '../core/render';
+import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -66,6 +69,13 @@ const HEAD_LENGTH_PX = 26;
 const HEAD_HALF_SPREAD_PX = 17;
 /** Thickness of the assume variant's hollow chevron. */
 const CHEVRON_THICKNESS_PX = 7;
+/**
+ * Share of the body's height a host-supplied unit symbol takes.
+ *
+ * Under 1 so the symbol sits *inside* the fish tail rather than touching its edges.
+ */
+const SYMBOL_BODY_SHARE = 0.82;
+
 /** The connector's dash, which belongs to the symbol rather than to its status. */
 const CONNECTOR_DASH_PX = [10, 7];
 
@@ -73,63 +83,112 @@ const CONNECTOR_DASH_PX = [10, 7];
 const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedPosition =>
     [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
+/**
+ * Everything both the paint and the renderers need to agree on: the axis frame, the
+ * sizes, and whether a host-supplied unit symbol is taking the place of field T.
+ *
+ * Lifted out of the paint because a symbol placed from one calculation and a hole cut
+ * from another do not line up — the lesson `escortSymbolStyle` records in the same words.
+ */
+function layout(feature: PaintFeature, context: PaintContext) {
+    const geometry = feature.geometry;
+    if (geometry.type !== 'LineString' || geometry.coordinates.length < 2) return undefined;
+
+    const path = geometry.coordinates;
+    const rear = path[0];
+    const tip = path[path.length - 1];
+    const dx = tip[0] - rear[0];
+    const dy = tip[1] - rear[1];
+    const span = Math.hypot(dx, dy);
+    if (span === 0) return undefined;
+
+    // Along the axis, and square to it. Projected metres throughout — no turf here.
+    const ux = dx / span;
+    const uy = dy / span;
+    const nx = -uy;
+    const ny = ux;
+
+    /*
+     * **The body and the head are sized by `decorationSize` and by nothing else.**
+     *
+     * Not by the run between the points. Dragging the vertex handle is the user lengthening
+     * the *line*, and it must leave the fish tail and the arrowhead the size they were —
+     * only the resize gesture changes those, by scaling `decorationSize`.
+     *
+     * One "pixel" of the plate, in metres on the ground: the stamped size divided by the
+     * unit it was stamped in. Absent, it falls back to the drawing zoom, which is the same
+     * number the holder would have stamped.
+     */
+    const unit = feature.properties.decorationSize ?? DECORATION_UNIT_PX * context.resolution;
+    const px = (n: number) => (n * unit) / DECORATION_UNIT_PX;
+
+    /** A point `along` metres from the rear and `across` metres to its left. */
+    const at = (along: number, across: number): ProjectedPosition => [
+        rear[0] + ux * along + nx * across,
+        rear[1] + uy * along + ny * across,
+    ];
+
+    /*
+     * **A unit symbol takes the place of field T, and the body makes room for it.**
+     *
+     * The host supplies it through the same provider the security operations and the escort
+     * use; nothing here imports milsymbol, and a host that registers nothing gets the
+     * designation the user typed. The symbol wins when both are available — a picture of the
+     * unit says more than its name, which is the user's rule for this pair.
+     */
+    const name = feature.properties.name as TacticalGraphicName;
+    const hostility = (feature.properties.hostility as TacticalGraphicHostility) ?? TacticalGraphicHostility.pending;
+    const symbolBoxPx = (2 * BODY_HALF_HEIGHT_PX * SYMBOL_BODY_SHARE * unit) / DECORATION_UNIT_PX / context.resolution;
+    const image = resolveSecuritySymbol({
+        name,
+        graphicId: ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined,
+        hostility,
+        sidc: securitySymbolSidc(hostility),
+        sizePx: symbolBoxPx,
+        labels: feature.properties as unknown as GraphicLabels,
+    });
+
+    const designation = image ? undefined : feature.properties.designation?.trim();
+    const textScale = scaleOf(feature, context);
+    const textPx = designation ? textWidth(context, designation, fontStyle, textScale) : 0;
+    // The body holds whichever it carries, so it is as long as that needs: a `TF RAIDER`
+    // hung out of both ends of a body fixed at its plate proportions, and a unit symbol is
+    // square where the plate's box is wide.
+    const contentMetres = image ? symbolBoxPx * context.resolution : textPx * context.resolution;
+    const bodyLength = Math.max(px(BODY_LENGTH_PX), contentMetres + px(2 * BODY_TEXT_PADDING_PX));
+
+    return {
+        rear, tip, ux, uy, at, px, bodyLength, designation, textScale, image, symbolBoxPx,
+        half: px(BODY_HALF_HEIGHT_PX),
+        nose: px(BODY_NOSE_PX),
+        headLength: px(HEAD_LENGTH_PX),
+        spread: px(HEAD_HALF_SPREAD_PX),
+        centre: at(bodyLength / 2, 0),
+    };
+}
+
+/**
+ * The host-supplied unit symbol for this graphic, placed and sized — or nothing.
+ *
+ * Each renderer draws the image itself, because a renderer-neutral paint cannot speak one
+ * engine's image handling. What it must not do is work out *where* on its own.
+ */
+export function followTaskSymbol(
+    feature: PaintFeature,
+    context: PaintContext,
+): {at: ProjectedPosition; sizePx: number; src: string} | undefined {
+    const l = layout(feature, context);
+    if (!l?.image) return undefined;
+    return {at: l.centre, sizePx: l.image.sizePx ?? l.symbolBoxPx, src: l.image.src};
+}
+
 export function followTaskPaint(variant: FollowVariant): TaskPaint {
     return (feature, context) => {
-        const geometry = feature.geometry;
-        if (geometry.type !== 'LineString' || geometry.coordinates.length < 2) return [];
-
-        const path = geometry.coordinates;
-        const rear = path[0];
-        const tip = path[path.length - 1];
-        const dx = tip[0] - rear[0];
-        const dy = tip[1] - rear[1];
-        const span = Math.hypot(dx, dy);
-        if (span === 0) return [];
-
-        // Along the axis, and square to it. Projected metres throughout — no turf here.
-        const ux = dx / span;
-        const uy = dy / span;
+        const l = layout(feature, context);
+        if (!l) return [];
+        const {tip, ux, uy, at, px, bodyLength, half, nose, headLength, spread} = l;
         const nx = -uy;
         const ny = ux;
-
-        /*
-         * **The body and the head are sized by `decorationSize` and by nothing else.**
-         *
-         * Not by the run between the points. Dragging the vertex handle is the user
-         * lengthening the *line*, and it must leave the fish tail and the arrowhead the
-         * size they were — only the resize gesture changes those, by scaling
-         * `decorationSize`. An earlier version put the sizes through `endMarkScale`, the
-         * shape-relative cap the repeating decorations use, which ties them to the line's
-         * own length: every drag of the red handle resized the symbol with it, which is
-         * exactly what the two gestures are supposed to keep apart.
-         *
-         * One "pixel" of the plate, in metres on the ground: the stamped size divided by
-         * the unit it was stamped in. Absent — a base built by a caller that never went
-         * through a holder — it falls back to the drawing zoom, which is the same number
-         * the holder would have stamped.
-         */
-        const unit = feature.properties.decorationSize ?? DECORATION_UNIT_PX * context.resolution;
-        const px = (n: number) => (n * unit) / DECORATION_UNIT_PX;
-
-        /** A point `along` metres from the rear and `across` metres to its left. */
-        const at = (along: number, across: number): ProjectedPosition => [
-            rear[0] + ux * along + nx * across,
-            rear[1] + uy * along + ny * across,
-        ];
-
-        // **The body holds field T, so it is as long as the text needs.** The plates draw
-        // a short designation in a small box; a real one is `TF RAIDER`, and a body fixed
-        // at its plate proportions had the text hanging out of both ends of the shape it
-        // is supposed to sit inside. The minimum keeps an unnamed graphic looking like the
-        // plate. @see escortPaint, which sizes its own break the same way.
-        const designation = feature.properties.designation?.trim();
-        const textScale = scaleOf(feature, context);
-        const textPx = designation ? textWidth(context, designation, fontStyle, textScale) : 0;
-        const bodyLength = Math.max(px(BODY_LENGTH_PX), textPx * context.resolution + px(2 * BODY_TEXT_PADDING_PX));
-        const half = px(BODY_HALF_HEIGHT_PX);
-        const nose = px(BODY_NOSE_PX);
-        const headLength = px(HEAD_LENGTH_PX);
-        const spread = px(HEAD_HALF_SPREAD_PX);
 
         const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const paints: Paint[] = [];
@@ -187,24 +246,24 @@ export function followTaskPaint(variant: FollowVariant): TaskPaint {
             });
         }
 
-        // ── Field T, inside the body ────────────────────────────────────────────
-        if (designation) {
+        // ── Field T, inside the body — unless a unit symbol has taken its place ──
+        if (l.designation) {
             paints.push({
-                geometry: {type: 'Point', coordinates: lerp(at(0, 0), at(bodyLength, 0), 0.5)},
+                geometry: {type: 'Point', coordinates: l.centre},
                 text: {
-                    text: designation,
+                    text: l.designation,
                     font: fontStyle,
                     fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                     align: 'center',
                     baseline: 'middle',
-                    scale: textScale,
+                    scale: l.textScale,
                     // **Field T lies along the symbol.** It sits *inside* the body, so it
                     // has to turn with it: left horizontal, a designation in a graphic
                     // drawn north-south ran across the body and out of both sides.
                     // `uprightRotation` adds the half turn that stops a westward graphic
                     // reading its label upside down. @see uprightFlipped
-                    rotation: uprightRotation(rear, tip),
+                    rotation: uprightRotation(l.rear, tip),
                 },
             });
         }

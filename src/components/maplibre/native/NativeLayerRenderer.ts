@@ -14,6 +14,7 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
+    followTaskSymbol,
     hasBakedDecoration,
     CENTER_SYMBOL_GRAPHICS,
     escortSymbolSizePx,
@@ -24,7 +25,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {buildTacticalGraphic, paintTacticalGraphic, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
@@ -702,6 +703,8 @@ export class NativeLayerRenderer {
             // bar's span. @see escortSymbolSizePx
             const placed = graphic.name === TacticalGraphicName.Escort
                 ? escortCenter(graphic, resolution)
+                : graphic.name === TacticalGraphicName.FollowAndAssume || graphic.name === TacticalGraphicName.FollowAndSupport
+                ? followTaskCenter(graphic, {resolution, measureText: this.measureText})
                 : graphic.base.geometry.type === 'Point'
                     ? {at: graphic.base.geometry.coordinates as number[], sizePx: getSecuritySymbolSize()}
                     : undefined;
@@ -1103,6 +1106,27 @@ function escortCenter(
         at: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2],
         sizePx: escortSymbolSizePx(spanPx),
     };
+}
+
+/**
+ * The unit symbol's place inside a follow task's body.
+ *
+ * Asked of the library rather than worked out here: the paint cuts the body to the same
+ * answer, and a symbol placed from a second calculation does not sit in its own hole.
+ * @see followTaskSymbol
+ */
+function followTaskCenter(
+    graphic: MapLibreTacticalGraphic,
+    context: PaintContext,
+): {at: number[]; sizePx: number} | undefined {
+    const geometry = projectGeometry(graphic.graphic?.geometry ?? graphic.base.geometry);
+    if (!geometry) return undefined;
+    const placement = followTaskSymbol(
+        {geometry, properties: {...graphic.properties, symbolId: graphic.id}} as never,
+        context,
+    );
+    if (!placement) return undefined;
+    return {at: toLonLat([placement.at[0], placement.at[1]]), sizePx: placement.sizePx};
 }
 
 function isScreenSized(name: TacticalGraphicName): boolean {
