@@ -124,3 +124,5 @@ export type {ResolvedRangeFanBand} from './boundaryPaints';
 export {securityOperationCentre, securityOperationLabelPaint, securityOperationPaint, securityOperationSymbol} from './securityPaints';
 export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './movementPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
+
+export {amplifierText, withHiddenAmplifiers} from './paintFunctions';
