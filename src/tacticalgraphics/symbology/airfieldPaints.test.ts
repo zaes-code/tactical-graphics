@@ -121,6 +121,41 @@ describe('APP-06 131900 — airfield', () => {
         expect(at[0] - center[0]).toBeGreaterThan(SIZE);
         expect(at[1]).toBeCloseTo(center[1], 6);
     });
+
+    /**
+     * The plate boxes the `T` immediately past the **end of the horizontal line**, and the
+     * runway is the wider of the two arms — so the graphic's own eastern edge is that end.
+     *
+     * Deriving it from `graphicSize` instead assumes that number is the runway's half
+     * length, which holds only on the path that stamps it. The catalog hands the paint the
+     * sample's `radius`, which is smaller, and the designation printed 17 px *inside* the
+     * runway it is supposed to sit beyond — visible on zaes.com rather than in the app,
+     * which is why no test caught it.
+     */
+    it('measures from the drawn runway rather than from a stamped size', () => {
+        const center = project(CENTER);
+        const arms = built().coordinates.map(arm => arm.map(project));
+        const east = Math.max(...arms.flat().map(([x]) => x));
+
+        const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
+            geometry: {type: 'Point', coordinates: center},
+            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
+            // Deliberately wrong for this graphic, the way the catalog's is: a size that
+            // would put the label well inside the runway.
+            graphicSize: SIZE * 0.6,
+            bounds: {
+                minX: Math.min(...arms.flat().map(([x]) => x)),
+                minY: Math.min(...arms.flat().map(([, y]) => y)),
+                maxX: east,
+                maxY: Math.max(...arms.flat().map(([, y]) => y)),
+            },
+        } as PaintFeature, context(200));
+
+        const at = (label.geometry as {coordinates: ProjectedPosition}).coordinates;
+        expect(at[0]).toBeGreaterThan(east);
+        // And by the clearance, not by whatever the stamped size happened to be.
+        expect(at[0] - east).toBeCloseTo(8 * 200, 6);
+    });
 });
 
 describe('APP-06 120400 — airfield zone', () => {
