@@ -100,6 +100,7 @@ export {
     getHandleColor,
     getInertHandleColor,
 } from './openlayerStyles';
+export {securityOperationStyleFunc} from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
 // the base — and `restoreTacticalGraphics` rebuilds them editable. A record carries one
