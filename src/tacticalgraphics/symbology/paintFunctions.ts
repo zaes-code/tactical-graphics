@@ -33,11 +33,12 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_MISSION_TASKS,
+    configuredLabelScale,
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
-    getLabelUsesHostilityColor,
     getLabelHaloColor,
+    getLabelUsesHostilityColor,
     labelScale,
     ratioLockedLabelScale,
     supportsHostility,
@@ -171,7 +172,17 @@ export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: nu
      *
      * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
      */
-    return capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context, fontPx);
+    /*
+     * **The configured size, capped by the graphic — and the zoom anchor only when there
+     * is no graphic to measure.** The host says how big a label should be and the symbol
+     * says how big it may be; the zoom the operator happened to be at when they drew it is
+     * neither, and it is not saved with the graphic, so it made a label that could not be
+     * reproduced. @see configuredLabelScale
+     */
+    const desired = feature.bounds
+        ? configuredLabelScale()
+        : labelScale(feature.drawingResolution, context.resolution);
+    return capLabelToGraphic(desired, feature, context, fontPx);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
