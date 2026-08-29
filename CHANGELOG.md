@@ -33,6 +33,18 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **The escort and the two follow tasks offer an affiliation.** All three are tactical mission tasks, which carry no amplifiers, so hostility was switched off for them — and all three draw a host-supplied unit symbol, whose frame *is* its standard identity. The one amplifier that decides what the symbol looks like was the one that could not be set, so it drew `pending` for ever. The exemption reads `CENTER_SYMBOL_GRAPHICS` rather than naming them again: a graphic cannot gain a centre symbol without gaining the identity that frames it. Their line work follows the affiliation too, as `Exfiltrate` already did.
+
+- **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
+
+### Fixed
+
+- **Setting the affiliation on a hand-drawn Cover, Guard or Screen did nothing.** The centre symbol is the largest thing these three draw and the natural place to click — and its feature belonged to the controller rather than the holder, so it was outside every write the holder makes by iterating its own features. It carried no `symbolId`, and the properties dialog identifies its graphic by exactly that: the form opened on an empty selection, showed defaults, and dropped the edit on OK. Drawn into the sample sheet the same graphic honoured its affiliation, because that path never goes through a click.
+
+  The feature belongs to the holder now, so `setSymbolId`, the amplifier bag and the rotation all reach it the way they reach everything else. MapLibre had the same hole and had already closed it on its side.
+
+- **`axis of attack` is gone from the tracker, and so from the Upcoming table.** It is registered in the core registry without a `TacticalGraphicName` member and is named by neither standard; the row asserted work that has no graphic to do.
+
 - The **Supported** and **Upcoming** graphics sections credit the standard that actually defines each graphic. Both said "checked against FM 1-02.2", which stopped being the whole truth when APP-06 became a first-class source: 211 graphics are defined by both, 69 by APP-06 alone, 8 by FM 1-02.2 alone.
 
 ## [3.0.0] — 2026-08-28

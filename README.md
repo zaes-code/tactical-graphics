@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**286 graphics** are implemented and verified today, covering **299 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**288 graphics** are implemented and verified today, covering **301 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
@@ -29,19 +29,19 @@ Three entry points ship, and you can use any of them on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
-| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#the-center-symbol) |
 | `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
 npm install maplibre-gl    # only for the MapLibre entry point
-npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
+npm install milsymbol      # only for the center symbol — six graphics carry one
 ```
 
 All three are peer dependencies and all are optional, so installing the package
 for its geometry alone pulls in none of them. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
-[Security operations: the center symbol](#security-operations-the-center-symbol).
+[The center symbol](#the-center-symbol).
 
 **The same names, from either subpath.** `createTacticalGraphics` and the library's own
 exports — configuration, the palette, the property key, the center-symbol controls — are
@@ -791,12 +791,11 @@ by hand — or by an older version — arrives fully editable rather than half-d
 
 ---
 
-## Security operations: the center symbol
+## The center symbol
 
-Cover, Guard and Screen draw a single-point 2525E unit symbol between their two arms.
-That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this
-library's — so this library **never imports milsymbol**. It asks a provider, and you
-register one:
+Six graphics draw a single-point 2525E unit symbol as part of themselves. That is
+[milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this library's —
+so this library **never imports milsymbol**. It asks a provider, and you register one:
 
 ```ts
 import ms from 'milsymbol';
@@ -806,7 +805,19 @@ useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
 
 From the **root** entry point, because a center symbol is symbology rather than
-rendering: one registration serves whichever engine is drawing, and both read it.
+rendering: one registration serves whichever engine is drawing, and both read it. One
+call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
+
+| Graphic | Where the symbol goes | How big |
+|---|---|---|
+| Cover, Guard, Screen | between the two arms | `setSecuritySymbolSize` — a screen constant, like every other part of these three |
+| Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
+| Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
+
+The last three are *drawn* rather than placed, so their symbol scales with the graphic
+instead of holding a fixed pixel size. On the two follow tasks the symbol **replaces**
+the designation: a picture of the unit says more than its name. Type a designation and
+register no provider, and the text draws as before.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
@@ -814,8 +825,17 @@ dependency: a consumer who wants the geometry, or the other 280-odd graphics, ne
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
-hostile Screen gets a hostile-framed symbol. `securitySymbolSidc(hostility)` exposes the
-same doctrinal code if you want to build on it.
+hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
+`securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
+it. All six offer the affiliation for that reason — the escort and the two follow tasks
+are tactical mission tasks, which otherwise carry no amplifiers at all, and an entity
+symbol's frame *is* its standard identity.
+
+**Size the symbol by its width.** Both renderers draw the image at the width they are
+given and let its height follow the image's own aspect, because neither knows how tall
+the picture is until it has loaded. The follow tasks reserve room for a frame up to 1.25×
+as tall as it is wide — a 2525E land unit runs about 0.86 (friend) to 1.23 (neutral) —
+so a much taller image would overflow the body it sits in.
 
 ### Sizing the symbol
 
@@ -1323,6 +1343,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
+| Follow And Assume | Tactical Mission Tasks |
+| Follow And Support | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
 | Locate | Tactical Mission Tasks |
@@ -1397,9 +1419,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 | Radiation Dose Rate Contour Line | Areas |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Axis Of Attack | Movement and Maneuver |
-| Follow And Assume | Tactical Mission Tasks |
-| Follow And Support | Tactical Mission Tasks |
 
 ---
 

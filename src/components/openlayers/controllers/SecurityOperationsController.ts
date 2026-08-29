@@ -10,6 +10,8 @@ import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 
 export interface SecurityOperationGraphic extends TacticalGraphic {
     base: Feature<Point>;
+    /** The centre symbol's feature. The holder publishes it; this controller styles it. */
+    centerSymbol: Feature<Point>;
     primaryLabel: string;
     /** Which of Cover / Guard / Screen this is — passed to the center-symbol provider. */
     name: TacticalGraphicName;
@@ -25,7 +27,17 @@ export interface SecurityOperationGraphic extends TacticalGraphic {
 
 export class SecurityOperationsController implements TacticalGraphicHandler {
     graphic: SecurityOperationGraphic;
-    milSymbolFeature: Feature<Point> = new Feature<Point>();
+    /**
+     * The centre symbol's feature, which belongs to the holder.
+     *
+     * This controller installs its *style* and nothing else. It used to own the feature
+     * too, and that put it outside every write the holder makes by iterating its own
+     * features: it carried no `symbolId`, no amplifier bag and a rotation frozen at
+     * whatever it held when the graphic was placed. @see SecurityOperationGraphicBase
+     */
+    get milSymbolFeature(): Feature<Point> {
+        return this.graphic.centerSymbol;
+    }
     geomHandleType: TacticalGraphicShape = 'Point';
     type: TacticalGraphicShape = 'Point';
     drawStyleFunc?: StyleFunction | undefined;
@@ -94,9 +106,23 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
     setSymbolId(symbolId: string): void {
         this.symbolId = symbolId;
         this.graphic.setSymbolId(symbolId);
+        /*
+         * **The centre symbol is a feature too, and it has to answer for its graphic.**
+         *
+         * `this.graphic.setSymbolId` stamps the holder's features and cannot stamp this
+         * one, which the controller owns. So the icon carried no `symbolId` -- and it is
+         * the largest thing a security operation draws and the obvious place to click.
+         * The hit test found it, the dialog opened on an empty selection, and `apply`
+         * dropped the edit at its `if (!selection.id) return`: hostility set on a
+         * hand-drawn Cover did nothing, while the same graphic drawn from the sample
+         * sheet -- which never goes through a click -- honoured it.
+         *
+         * MapLibre had the same hole and closed it by putting the graphic's id on the
+         * icon feature; this is that fix on this side. @see NativeLayerRenderer, hitTest
+         */
         // This controller never registered at all, so `getFromFeature` returned nothing
         // for a Cover / Guard / Screen graphic and the dialog could not reach its holder.
-        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
+        GraphicLinkRegistry.registerAll(this.getFeatures(), this.graphic, symbolId);
     }
 
     getBaseGeometry(): number[] {
@@ -108,7 +134,7 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
     }
 
     getFeatures(): Feature<Geometry>[] {
-        return [this.milSymbolFeature, ...this.graphic.getFeatures()];
+        return this.graphic.getFeatures();
     }
 
     handleTranslate(deltaX: number, deltaY: number): void {
@@ -183,8 +209,6 @@ export class SecurityOperationsController implements TacticalGraphicHandler {
      */
     setBaseFeature(base: Feature<Point>): void {
         this.graphic.setBaseFeature(base);
-        const coordinates = this.graphic.base.getGeometry()?.getCoordinates();
-        if (coordinates) this.milSymbolFeature.setGeometry(new Point(coordinates));
     }
 
 }
