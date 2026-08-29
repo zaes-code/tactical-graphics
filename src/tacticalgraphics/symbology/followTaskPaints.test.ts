@@ -10,7 +10,7 @@
 
 import {getPaintFunction} from './registry';
 import {followTaskSymbol} from './followTaskPaints';
-import {CENTER_SYMBOL_GRAPHICS, setSecuritySymbolProvider} from '../core/securitySymbol';
+import {CENTER_SYMBOL_GRAPHICS, MAX_SYMBOL_SIZE_PX, escortSymbolSizePx, setSecuritySymbolProvider} from '../core/securitySymbol';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -19,6 +19,9 @@ const context: PaintContext = {
     resolution: 40,
     measureText: (text, font) => text.length * parseFloat(/([0-9.]+)px/.exec(font)?.[1] ?? '16') * 0.6,
 };
+
+/** The metres one plate pixel is worth at this file's resolution. @see DECORATION_PX */
+const DECORATION_UNIT_METRES = 20 * 40;
 
 /** Rear at the origin, tip 8 km east — the generator order, rear to tip. */
 const REAR: ProjectedPosition = [0, 0];
@@ -383,5 +386,77 @@ describe('a unit symbol fits inside the body', () => {
             (context.measureText(designation, '16px sans-serif') * (drawn.text!.scale ?? 1) * context.resolution) / 2;
         const notch = Math.min(...bodyOf(TacticalGraphicName.FollowAndSupport, {designation}).filter(c => c[1] === 0).map(along));
         expect(along(anchor) - halfText).toBeGreaterThan(notch);
+    });
+});
+
+/**
+ * # The unit symbol stops growing when the graphic is zoomed into
+ *
+ * Every other part of these two is drawn in metres, so zooming in makes it bigger. That is
+ * right for the body and wrong for the symbol inside it: a framed 2525E symbol carries a
+ * fixed amount of information, and one that keeps pace with a body zoomed to fill the
+ * screen is a badge the size of a hand. The escort already stops at the same ceiling.
+ *
+ * The size only varies with the zoom once `decorationSize` is stamped -- a drawn graphic
+ * always has one. Without it the fallback is the drawing zoom itself, which cancels out.
+ */
+describe('the symbol is capped when zoomed in', () => {
+    /** A drawn graphic's stamped size: the default unit at resolution 40. */
+    const DECORATION_SIZE = DECORATION_UNIT_METRES;
+
+    const symbolPxAt = (resolution: number, decorationSize = DECORATION_SIZE) =>
+        followTaskSymbol(
+            {
+                geometry: {type: 'LineString', coordinates: [REAR, TIP]},
+                properties: {name: TacticalGraphicName.FollowAndAssume, decorationSize},
+            } as PaintFeature,
+            {...context, resolution},
+        )?.sizePx;
+
+    beforeEach(() => setSecuritySymbolProvider(() => 'data:image/svg+xml,<svg/>'));
+    afterEach(() => setSecuritySymbolProvider(undefined));
+
+    it('grows with the graphic until it reaches the ceiling', () => {
+        const far = symbolPxAt(40)!;
+        expect(far).toBeLessThan(MAX_SYMBOL_SIZE_PX);
+        // Half the metres per pixel is twice the pixels, which is what "drawn in metres"
+        // means and what the cap is there to interrupt.
+        expect(symbolPxAt(20)).toBeCloseTo(far * 2, 6);
+    });
+
+    it('stops at the ceiling however far in the user zooms', () => {
+        expect(symbolPxAt(1)).toBe(MAX_SYMBOL_SIZE_PX);
+        expect(symbolPxAt(0.25)).toBe(MAX_SYMBOL_SIZE_PX);
+        expect(symbolPxAt(0.01)).toBe(MAX_SYMBOL_SIZE_PX);
+    });
+
+    it('shares the ceiling with the escort, rather than naming a second one', () => {
+        // An escort long enough to want more than the ceiling gets the ceiling too.
+        expect(escortSymbolSizePx(100_000)).toBe(MAX_SYMBOL_SIZE_PX);
+    });
+
+    it('keeps shrinking on the way out — the escort"s floor does not transfer', () => {
+        // The escort sizes from its bar, which can be short while the graphic is still
+        // visible, so a floor keeps its symbol identifiable. This one sizes from the body
+        // it sits inside: held at a floor it would be bigger than its own container.
+        expect(symbolPxAt(4000)!).toBeLessThan(1);
+    });
+
+    it('still sits inside the body at the zoom that caps it', () => {
+        const resolution = 1;
+        const zoomed = {...context, resolution};
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [REAR, TIP]},
+            properties: {name: TacticalGraphicName.FollowAndAssume, decorationSize: DECORATION_SIZE},
+        } as PaintFeature;
+
+        const placed = followTaskSymbol(feature, zoomed)!;
+        const body = (getPaintFunction(TacticalGraphicName.FollowAndAssume)!.graphic!(feature, zoomed).find(
+            paint => paint.stroke && paint.geometry.type === 'LineString',
+        )!.geometry as {coordinates: ProjectedPosition[]}).coordinates;
+
+        const halfW = (placed.sizePx * resolution) / 2;
+        expect(placed.at[0] - halfW).toBeGreaterThan(Math.min(...body.map(c => c[0])));
+        expect(placed.sizePx * resolution).toBeLessThan(Math.max(...body.map(c => c[1])) - Math.min(...body.map(c => c[1])));
     });
 });

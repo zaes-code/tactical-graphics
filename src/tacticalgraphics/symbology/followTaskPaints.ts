@@ -31,7 +31,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
-import {resolveSecuritySymbol, securitySymbolSidc} from '../core/securitySymbol';
+import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc} from '../core/securitySymbol';
 import type {GraphicLabels} from '../core/render';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 
@@ -106,6 +106,28 @@ const SYMBOL_BOX_HEIGHT_PX = 0.8 * 2 * BODY_HALF_HEIGHT_PX;
  */
 const SYMBOL_MAX_ASPECT = 1.25;
 
+/**
+ * **The symbol stops growing once it is big enough to read.**
+ *
+ * Everything else about these two is drawn in metres, so zooming in makes all of it
+ * bigger -- which is right for the body and the arrowhead, and wrong for the unit symbol.
+ * A framed 2525E symbol carries a fixed amount of information; past a point, more pixels
+ * of it say nothing new, and a symbol that keeps pace with a body zoomed to fill the
+ * screen is a badge the size of a hand.
+ *
+ * `MAX_SYMBOL_SIZE_PX` is the escort's ceiling, and the same one a host's
+ * `setSecuritySymbolSize` is clamped to, so all three agree on how big a unit symbol ever
+ * draws.
+ *
+ * **The escort's floor is deliberately not copied.** Its size comes from the span of its
+ * bar, which can be short while the graphic is still perfectly visible, so a minimum keeps
+ * the symbol identifiable. This symbol's size comes from the body it sits *inside*: a
+ * symbol too small to read means a body too small to see, and holding it at 8 px inside a
+ * 4 px body would break the one rule this placement has. Zoomed out, it shrinks with
+ * everything else.
+ */
+const capSymbolPx = (wantedPx: number): number => Math.min(wantedPx, MAX_SYMBOL_SIZE_PX);
+
 /** The connector's dash, which belongs to the symbol rather than to its status. */
 const CONNECTOR_DASH_PX = [10, 7];
 
@@ -168,8 +190,9 @@ function layout(feature: PaintFeature, context: PaintContext) {
      */
     const name = feature.properties.name as TacticalGraphicName;
     const hostility = (feature.properties.hostility as TacticalGraphicHostility) ?? TacticalGraphicHostility.pending;
-    // The width that keeps the tallest frame inside the body. @see SYMBOL_MAX_ASPECT
-    const symbolBoxPx = px(SYMBOL_BOX_HEIGHT_PX / SYMBOL_MAX_ASPECT) / context.resolution;
+    // The width that keeps the tallest frame inside the body, capped once it is large
+    // enough to read. @see SYMBOL_MAX_ASPECT, capSymbolPx
+    const symbolBoxPx = capSymbolPx(px(SYMBOL_BOX_HEIGHT_PX / SYMBOL_MAX_ASPECT) / context.resolution);
     const image = resolveSecuritySymbol({
         name,
         graphicId: ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined,
