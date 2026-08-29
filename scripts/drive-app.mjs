@@ -883,6 +883,67 @@ const main = async () => {
         check(`${name} draws the symbol instead of field T, not as well as`, !drawn.styles.some(s => s.text));
     }
 
+    // Zooming in must not inflate the symbol with the graphic. Everything else about a
+    // follow task is drawn in metres and gets bigger; a framed unit symbol carries a fixed
+    // amount of information, so it stops at the same ceiling the escort uses. Only a
+    // browser can answer this -- the size is the width the icon was actually built at.
+    const measureFollow = async () => {
+        // An Icon rebuilt at a new size reports no width until its image has loaded, and
+        // changing the zoom rebuilds it. Poll rather than sleep once: a fixed wait is how a
+        // measurement of zero gets reported as a symbol that vanished.
+        let drawn = await readDrawnStyles(page, 'FollowAndAssume');
+        for (let i = 0; i < 20 && !(drawn.styles.find(s => s.src)?.imageWidth > 0); i++) {
+            await page.waitForTimeout(250);
+            drawn = await readDrawnStyles(page, 'FollowAndAssume');
+        }
+        const symbol = drawn.styles.find(s => s.src);
+        const body = drawn.styles.find(
+            s => s.ownGeometry && s.geometryType === 'LineString' && Array.isArray(s.coordinates) && s.coordinates.length >= 5,
+        )?.coordinates;
+        const ys = body?.map(c => c[1]) ?? [];
+        return {
+            symbolPx: symbol?.imageWidth ?? 0,
+            bodyPx: body ? (Math.max(...ys) - Math.min(...ys)) / drawn.resolution : 0,
+        };
+    };
+
+    const before = await measureFollow();
+    // Centre on the graphic before zooming. `Icon.getWidth()` is undefined until the image
+    // has loaded, and an icon rebuilt at a new size only loads if the map actually draws
+    // it -- zooming past the graphic leaves it off-screen and reports a symbol of zero,
+    // which reads exactly like one that vanished.
+    await page.evaluate(() => {
+        const {map, manager} = window.__tacticalGraphics;
+        const view = map.getView();
+        // On the symbol itself, so the capture shows the thing being measured.
+        let centre;
+        for (const f of manager.renderingVectorSource.getFeatures()) {
+            if (f.get('graphicName') !== 'FollowAndAssume' || typeof f.getStyle() !== 'function') continue;
+            const result = f.getStyle()(f, view.getResolution());
+            for (const style of Array.isArray(result) ? result : result ? [result] : []) {
+                if (style.getImage?.()?.getSrc?.()) centre = style.getGeometry?.()?.getCoordinates?.();
+            }
+        }
+        if (centre) view.setCenter(centre);
+        view.setZoom((view.getZoom() ?? 4) + 4);
+    });
+    await page.waitForTimeout(1200);
+    const zoomed = await measureFollow();
+
+    check('zooming in grows the follow task itself', zoomed.bodyPx > before.bodyPx * 4, `${before.bodyPx.toFixed(0)}px -> ${zoomed.bodyPx.toFixed(0)}px tall`);
+    check(
+        'and stops its unit symbol at the shared ceiling',
+        zoomed.symbolPx <= 96 && zoomed.symbolPx > before.symbolPx,
+        `${before.symbolPx.toFixed(1)}px -> ${zoomed.symbolPx.toFixed(1)}px, ceiling 96px`,
+    );
+    check('so the symbol no longer fills its body', zoomed.symbolPx < zoomed.bodyPx / 2, `symbol ${zoomed.symbolPx.toFixed(0)}px in a ${zoomed.bodyPx.toFixed(0)}px body`);
+    await page.screenshot({path: join(SHOTS, '08-center-symbol-zoomed.png')});
+    await page.evaluate(() => {
+        const view = window.__tacticalGraphics.map.getView();
+        view.setZoom((view.getZoom() ?? 8) - 4);
+    });
+    await page.waitForTimeout(800);
+
     await page.screenshot({path: join(SHOTS, '08-center-symbol.png')});
 
     // ── 9. No console errors ────────────────────────────────────────────────────
