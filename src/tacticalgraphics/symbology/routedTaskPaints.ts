@@ -18,6 +18,7 @@ import {
     HALO_WIDTH,
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
     fontStyle,
     getLabelHaloColor,
 } from '../core/symbology';
@@ -87,6 +88,7 @@ export function turnPaint(label: string): TaskPaint {
         const stroke = {color, widthPx: LINE_WIDTH()};
         const members = paintGeometryMembers(feature.geometry);
 
+        // `fontStyle`, not the ratio-locked font — so the cap keeps its 16 px default here.
         const scale = scaleOf(feature, context);
         const halfGap = label
             ? (textWidth(context, label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * context.resolution
@@ -149,7 +151,9 @@ export function reliefInPlacePaint(label: string): TaskPaint {
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        const scale = scaleOf(feature, context);
+        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
+        // 16 it would otherwise assume. @see capLabelToGraphic
+        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
         const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX;
         const gapRatio = (halfGapPx * context.resolution) / segLen;
         const t = RELIEF_IN_PLACE_GAP_POSITION;
@@ -204,7 +208,9 @@ export function exfiltratePaint(label: string): TaskPaint {
         const dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        const scale = scaleOf(feature, context);
+        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
+        // 16 it would otherwise assume. @see capLabelToGraphic
+        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
         const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX;
         const gapRatio = segLen > 0 ? (halfGapPx * context.resolution) / segLen : 0;
 

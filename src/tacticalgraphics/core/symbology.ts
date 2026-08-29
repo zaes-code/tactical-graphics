@@ -236,7 +236,39 @@ export function maxGraphicLabelScale(): number {
 }
 
 /**
- * Zoom-anchored label scale — the default.
+ * The scale that renders a label at exactly the size the host configured.
+ *
+ * **The plain reading of `labelSize`, with no memory in it.** A label's size used to be
+ * this multiplied by how far the map had moved since the graphic was drawn, clamped to
+ * [0.3, 1.5] — so two identical graphics could carry labels five times apart because of
+ * *when* someone clicked, and a saved map came back different because the drawing zoom is
+ * live view state and is deliberately not in the file. Measured on the sweep, 116 of 224
+ * labels moved when that remembered zoom moved.
+ *
+ * What kept the label from swamping a small graphic was that same clamp, and
+ * `capLabelToGraphic` does that job properly now — against the graphic itself rather than
+ * against a moment in time. So the size is the configured one, capped by the symbol.
+ * (User's call, 2026-08-29.)
+ *
+ * Divided by `BASE_FONT_SIZE_PX` rather than by the font a family happens to render with,
+ * which keeps every graphic at exactly the size it draws today at its own drawing zoom.
+ * That the 24 px families therefore render half again larger than `labelSize` is older than
+ * this change and left alone. @see BASE_FONT_SIZE_PX
+ */
+export function configuredLabelScale(): number {
+    return getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+}
+
+/**
+ * Zoom-anchored label scale — **the fallback**, for a graphic that publishes no extent.
+ *
+ * Nothing in the sample sweep is in that position: all 202 labelled features publish one,
+ * 123 stamped by their holder, 55 from their own geometry and 24 through the registry. It
+ * is kept for a consumer building features by some path of their own, where a label with
+ * neither a cap nor a zoom relationship would sit at a fixed pixel size however far out the
+ * map goes.
+ *
+ * Was the default.
  *
  * At the drawing zoom the text is exactly `labelSize` px; zoomed out it shrinks
  * proportionally, clamped to [0.3, 1.5] of `labelSize` so it stays readable at
