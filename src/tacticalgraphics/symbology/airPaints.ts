@@ -131,10 +131,14 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.designation?.trim()) names.push(props.designation.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
-        if (props.startDate) values.push(column('TIME FROM:', props.startDate));
-        if (props.endDate) values.push(column('TIME TO:', props.endDate));
+        // The altitudes and times are reference detail and go as a unit, the way the
+        // corridor's information block does. The names above are the graphic's own.
+        if (!props.hideAmplifiers) {
+            if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+            if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
+            if (props.startDate) values.push(column('TIME FROM:', props.startDate));
+            if (props.endDate) values.push(column('TIME TO:', props.endDate));
+        }
 
         /*
          * **Fitted, as of 2026-08-21.** These eleven are drawn as circles, rectangles and
@@ -172,9 +176,12 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         if (props.secondDesignation?.trim()) names.push(props.secondDesignation.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
-        if (props.grid) values.push(column('GRID:', props.grid));
+        // Same rule as the block above: altitudes, grid and effective time are reference
+        // detail; the names stay. @see TacticalGraphicProperties.hideAmplifiers
+        const detail = !props.hideAmplifiers;
+        if (detail && props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+        if (detail && props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
+        if (detail && props.grid) values.push(column('GRID:', props.grid));
         // The effective time is the two date-time groups joined, and it **replaces** any
         // `eff` the caller set rather than falling back to it: the OpenLayers dispatcher
         // assigns `labels.eff = dateLabel` before calling the style, so an `eff` typed by
@@ -182,7 +189,7 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         // block on any graphic carrying one, which widened it, which tightened the
         // fit-to-polygon cap — visible in the gallery as an ACA whose designation shrank.
         const effective = dateRange(props.startDate, props.endDate);
-        if (effective) values.push(column('EFF', effective));
+        if (detail && effective) values.push(column('EFF', effective));
 
         return labelBlock(names, values, feature, context, true);
     };
