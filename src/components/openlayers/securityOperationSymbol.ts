@@ -46,6 +46,7 @@ import {
     securitySymbolSidc,
     useMilsymbolSecuritySymbols,
     followTaskSymbol,
+    securityOperationSymbol,
 } from '@zaes/tactical-graphics';
 import {paintContext, toPaintFeature} from './paintToOpenLayers';
 import {readGraphicLabels} from './graphicProperties';
@@ -407,6 +408,45 @@ export function followTaskSymbolStyle(feature: FeatureLike, resolution: number):
 
     // Cached per request and therefore shared, so this one gets its own geometry rather
     // than mutating the cached style's. @see escortSymbolStyle
+    const placed = style.clone();
+    placed.setGeometry(new Point(placement.at as number[]));
+    return placed;
+}
+
+/**
+ * The unit symbol between a security operation's two arms.
+ *
+ * Placed and sized by the library — `securityOperationSymbol` cuts the gap from the same
+ * numbers — so this is only the OpenLayers half: turning the answer into a `Style`.
+ * @see followTaskSymbolStyle, which is the same arrangement for the follow tasks.
+ */
+export function securityOperationCentreSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
+    const paintFeature = toPaintFeature(feature as Feature);
+    if (!paintFeature) return undefined;
+
+    const placement = securityOperationSymbol(paintFeature, paintContext(resolution));
+    if (!placement) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: feature.get('graphicName') as TacticalGraphicName,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: placement.sizePx,
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
     const placed = style.clone();
     placed.setGeometry(new Point(placement.at as number[]));
     return placed;

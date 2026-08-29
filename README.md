@@ -810,11 +810,11 @@ call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
 
 | Graphic | Where the symbol goes | How big |
 |---|---|---|
-| Cover, Guard, Screen | between the two arms | `setSecuritySymbolSize` — a screen constant, like every other part of these three |
+| Cover, Guard, Screen | between the two arms | a share of the gap between them, so a resize scales it with the symbol |
 | Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
 | Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
 
-Both of the drawn ones stop at 96 px however far the map zooms in. A framed 2525E symbol
+All of them stop at 96 px however far the map zooms in. A framed 2525E symbol
 carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
 the screen would be a badge the size of a hand. It is the ceiling
 `setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
@@ -845,6 +845,10 @@ as tall as it is wide — a 2525E land unit runs about 0.86 (friend) to 1.23 (ne
 so a much taller image would overflow the body it sits in.
 
 ### Sizing the symbol
+
+**Every one of the six sizes itself from the graphic it sits in**, and stops at 96 px so
+zooming in cannot inflate it. `setSecuritySymbolSize` no longer governs any of them — it
+is the size for a symbol a host places itself, and the ceiling the six share:
 
 ```ts
 import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
@@ -1024,13 +1028,16 @@ Two rules apply to anything built this way:
 `ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
 keep drawing the old label.
 
-**`manager.watchResolution(handler)` is not optional.** Some graphics — every
-security operation — have geometry that is a screen-pixel constant times the map
-resolution, so without a `change:resolution` subscription they are pinned in meters
-and grow and shrink as you zoom. The manager does this for you when the user draws,
-and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
-with `unwatchResolution` when you remove the graphic, or the listener outlives its
-features.
+**`manager.watchResolution(handler)` costs nothing today, and is still the contract.**
+It subscribes a handler to `change:resolution` so a graphic whose geometry is a
+screen-pixel constant times the resolution can re-derive itself. **No graphic in the
+library is built that way any more** — the security operations were the last, and
+they are drawn from two points as of 3.1.0 — so every live controller's
+`onResolutionChangeFunc` is empty and the subscription drives nothing. The manager
+still does it when the user draws and `restore` still does it on load; a graphic you
+build yourself should too, because the hook is what a screen-sized graphic would need
+and the alternative is finding out later. Pair it with `unwatchResolution` when you
+remove the graphic, or the listener outlives its features.
 
 #### When you need the restore report
 
@@ -1103,9 +1110,9 @@ band ranges are in **kilometers**.
 
 The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
 
-**Which plate that is depends on the graphic, and each one records its own answer.** 211 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
+**Which plate that is depends on the graphic, and each one records its own answer.** 214 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
-*Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
+*Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation. Cover, Guard and Screen were in that group until 3.1.0; APP-06 gives them four anchor points, so they are drawn now — one arrow, with the other derived — and they take both gestures.*
 
 (The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 

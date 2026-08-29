@@ -20,7 +20,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
-import {escortSymbolStyle, followTaskSymbolStyle} from './securityOperationSymbol';
+import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
@@ -120,6 +120,7 @@ import {
     passageLanePaint,
     barSymbolPaint,
     securityOperationLabelPaint,
+    securityOperationPaint,
     boundaryPaint,
     rangeFanLabelPaint,
     battlePositionPaint,
@@ -1803,6 +1804,24 @@ export function followTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
         const drawn = styled(feature, resolution);
         const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
         const symbol = followTaskSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
+}
+
+/**
+ * Cover, guard and screen: the arms, the two letters, and the host's unit symbol between
+ * them.
+ *
+ * The symbol is placed by `securityOperationSymbol` rather than from anything here — the
+ * gap it sits in is cut by the same calculation, and a symbol placed from a second one does
+ * not sit in its own hole. @see followTaskStyleFunc, which is the same arrangement.
+ */
+export function securityOperationStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const styled = asStyleFunction(securityOperationPaint(getLabel(name)), name);
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = securityOperationCentreSymbolStyle(feature, resolution);
         return symbol ? [...styles, symbol] : styles;
     };
 }
