@@ -82,7 +82,6 @@ import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
-import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 import {
     GraphicGeometryState,
     readGraphicGeometryState,
@@ -344,19 +343,6 @@ export function applyRestoredGeometry(
         return;
     }
 
-    if (handler instanceof SecurityOperationsController) {
-        handler.setBaseFeature(base as Feature<Point>);
-        if (state.rotation !== undefined) handler.graphic.setRotation(state.rotation);
-        // The center symbol needs nothing here any more. `setBaseFeature` positions
-        // it, and its style is a StyleFunction installed in the controller's
-        // constructor. This used to place the icon by hand and rebuild the symbol
-        // inside a try/catch, because the symbol was built at `drawend` only — a
-        // restore never draws — and milsymbol's canvas path needs a DOM that Node
-        // and jsdom do not have. A provider that fails now costs the glyph, not the
-        // graphic, so the guard has nothing left to guard.
-        return;
-    }
-
     if (handler instanceof PolygonGraphicController) {
         handler.setBaseFeature(base as Feature<Polygon>);
         // Encirclement's triangles are sized from a stamped distance. Without this the
@@ -515,13 +501,6 @@ export function restoreTacticalGraphics(
             // happens to zoom and a `change:resolution` fires. Restoring at a different
             // zoom than the graphic was drawn at is the normal case, not the exception.
             //
-            // After `applyRestoredGeometry`, not before: `updateResolution` rebuilds from
-            // the base geometry and the scale, and neither is on the holder until then.
-            if (handler instanceof SecurityOperationsController) {
-                const current = manager.map.getView().getResolution();
-                if (current && current > 0) handler.graphic.updateResolution(current);
-            }
-
             // Re-read: the offset handle only exists once there is geometry.
             added = handler.getFeatures();
             manager.renderingVectorSource.addFeatures(added);

@@ -134,7 +134,6 @@ export {MovementGraphicBase} from './graphics/MovementGraphicBase';
 export {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 export {ReliefInPlace} from './graphics/ReliefInPlace';
 export {RetrogradeTask} from './graphics/RetrogradeTask';
-export {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 
 // The controllers: they translate pointer events into translate / rotate /
 // resize calls on a holder.
@@ -145,7 +144,6 @@ export {LineGraphicController, SAME_POINT_EPSILON_M} from './controllers/LineGra
 // own graphic needs to be able to name the controller it routes through.
 export {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
-export {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
 // The center symbol a security operation draws between its arms. A single-point
 // 2525E icon, which is milsymbol's job — so this package asks a provider for it
