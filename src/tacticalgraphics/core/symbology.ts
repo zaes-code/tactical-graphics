@@ -737,14 +737,16 @@ export interface AllowedGestures {
 }
 
 /**
- * The security operations. They rotate — the arms point somewhere — but they are
- * badges and do not resize; every dimension is a screen constant.
+ * The point-anchored symbols that turn but do not resize.
+ *
+ * **Empty since 2026-08-29**, when cover, guard and screen — the only members — stopped
+ * being badges. They are drawn from two points now, so they turn by being drawn along a
+ * different axis and resize by being drawn longer; neither is a gesture on a dropped
+ * symbol any more. Kept rather than deleted because the *category* is real: a symbol whose
+ * size is fixed by doctrine but whose orientation is the operator's would belong here.
+ * @see SecurityOperation
  */
-const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
+const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
 
 /**
  * The point-anchored symbols the operator **scales but does not turn**.
@@ -804,8 +806,13 @@ const SECURITY_OPERATION_REACH_PX =
     SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
 
 /**
- * Half of a security operation's own width, in screen pixels — the figure it files as its
- * `radius`, and the size its generator lays every arm out from.
+ * Half of a security operation's own width, in screen pixels.
+ *
+ * **Re-exported from the generator, not computed here.** It used to be
+ * `labelPadding + labelGap + 2 x arrowLength` — 220 — while the arm the generator actually
+ * built reached `3 x arrowLength - arrowDepth`, 205. Two statements of one symbol's size,
+ * fifteen pixels apart, which is the drift this repository keeps finding. The generator
+ * owns the shape, so it owns the number.
  *
  * **It is not an amplifier.** These three refuse a resize because their size is not a user
  * input: it is this constant times the live resolution, so the symbol holds 410 x 29 px at
@@ -828,8 +835,7 @@ const SECURITY_OPERATION_REACH_PX =
  * these symbols are placed in projected space and hold their pixel size at any latitude.
  * @see placeOriginCentered
  */
-export const SECURITY_OPERATION_HALF_EXTENT_PX =
-    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + 2 * SECURITY_OPERATION_PX.arrowLength;
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from '../graphics/SecurityOperation';
 
 /**
  * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by
@@ -862,14 +868,10 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // Twice the crossed tasks', which was only the number these were specified from
     // rather than the size they landed on.
     [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
-    // The security operations, whose arms reach label padding + gap + arrow. Computed
-    // from the table the generator lays them out with rather than restated, so the drop
-    // cannot drift away from the symbol. They are pinned, so nothing *renders* from this
-    // — but a stored size that means something beats `DEFAULT_RADIUS_METERS`, which is
-    // what they were getting.
-    [TacticalGraphicName.Cover]: SECURITY_OPERATION_REACH_PX,
-    [TacticalGraphicName.Guard]: SECURITY_OPERATION_REACH_PX,
-    [TacticalGraphicName.Screen]: SECURITY_OPERATION_REACH_PX,
+    // The security operations are **not dropped** as of 2026-08-29: the operator draws one
+    // arrow and the other is derived, so there is no one-click size to state. Removing
+    // them from here is what tells a renderer to wait for the second point instead of
+    // finishing on the first. @see SecurityOperation, BASE_VERTEX_COUNT
 };
 
 /**

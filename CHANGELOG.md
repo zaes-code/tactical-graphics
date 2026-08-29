@@ -33,6 +33,18 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **Cover, guard and screen are drawn, not dropped.** APP-06 342201/342202/342203 are four-point symbols — *"Point 1 and Point 2 define the ends of one arrow and Point 3 and Point 4 define the ends of the other"* — and these were placed on a single anchor at a fixed screen size, marking a point on the display rather than a span of ground. The operator now draws **one arrow**, point 1 at the arrowhead and point 2 at its inner end, and the second arrow is derived from it: the standard's own symmetry, so the pair always agree in length and lie on one axis, which four hand-placed points cannot be relied on to do.
+
+  **No handles, and resize scales the whole symbol.** Every point but the two drawn ones is derived, and dragging one of those alone would break the symmetry the symbol is built on — so the generator publishes no handle points and the edit-mode resize scales the base, which is what these want. The centre symbol is capped at the same 96 px ceiling the escort and the follow tasks stop at, so zooming in does not inflate it.
+
+  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. One deliberate departure, the user's call after seeing it: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long. The fold in each arm, and the mirroring of the second, are the shipped shape and the plate's, unchanged.
+
+  The portable statements moved with it: `BASE_VERTEX_COUNT` says two points, `DROP_SIZE_PX` no longer names them (which is what tells a renderer to wait for the second click), and `ROTATE_ONLY_SYMBOLS` is empty — the library has no fixed-size symbol left.
+
+### Removed
+
+- **`SecurityOperationsController` and `SecurityOperationGraphicBase`** (`/openlayers`). They placed a security operation on one anchor and sized it from the live map resolution; with the graphic drawn from two points there is nothing for them to do, and the generator they depend on no longer accepts a point base — so they could not work, not merely go unused. The three graphics are ordinary line holders now. A host that referenced either directly needs `getController(name, resolution)`, which is what the app has always used.
+
 - **A label is the size the host configured, capped by the graphic — and no longer by the zoom it was drawn at.** `labelScale` multiplied the configured size by how far the map had moved since the graphic was drawn, clamped to [0.3, 1.5]. That clamp was what stopped a label swamping a small symbol, and `capLabelToGraphic` does that job properly now — against the graphic itself rather than against a moment in time.
 
   What the old rule cost: two identical graphics could carry labels five times apart because of *when* someone drew them, and a saved map came back with different label sizes, because the drawing zoom is live view state and is deliberately not written to the file — a restore stamps whatever zoom the loading session opens at. Measured on the sample sweep, **116 of 224 labels changed size** when that remembered zoom changed. It is **0** now, at every zoom.
