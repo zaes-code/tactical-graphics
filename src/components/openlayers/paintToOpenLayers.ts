@@ -3,7 +3,13 @@ import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
 import RenderFeature from 'ol/render/Feature';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName, hatchTileSegments} from '@zaes/tactical-graphics';
+import {
+    TACTICAL_GRAPHIC_KEY,
+    TacticalGraphicEchelon,
+    TacticalGraphicName,
+    hatchTileSegments,
+    withHiddenAmplifiers,
+} from '@zaes/tactical-graphics';
 import type {
     FillSpec,
     HatchSpec,
@@ -363,7 +369,11 @@ export function asStyleFunction(
     return (feature: FeatureLike, resolution: number): Style[] => {
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
-        return paintToOlStyles(paint(paintFeature, paintContext(resolution)));
+        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle is
+        // applied once rather than per family. @see withHiddenAmplifiers
+        return paintToOlStyles(
+            withHiddenAmplifiers(paint(paintFeature, paintContext(resolution)), paintFeature.properties),
+        );
     };
 }
 

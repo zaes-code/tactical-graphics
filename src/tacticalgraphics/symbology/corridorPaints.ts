@@ -13,7 +13,7 @@
  * Table 5-3's enemy boundary is the reference: red line, black labels.
  */
 
-import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {paintGeometryMembers} from '../core/paint';
 import {
     HALO_WIDTH,
@@ -120,6 +120,7 @@ function amplifier(
         align?: 'left' | 'center' | 'right';
         baseline?: 'top' | 'middle' | 'bottom';
         offsetYPx?: number;
+        kind?: TextKind;
     } = {},
 ): Paint {
     return {
@@ -133,6 +134,7 @@ function amplifier(
             baseline: extra.baseline ?? 'middle',
             rotation: extra.rotation,
             offsetYPx: extra.offsetYPx,
+            kind: extra.kind,
             scale,
         },
     };
@@ -248,6 +250,10 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             paints.push(amplifier(feature, [anchorX, anchorY], infoText, blockScale, {
                 align: 'right',
                 baseline: 'middle',
+                // The whole block, `NAME:` line included: the corridor already carries its
+                // designation along each leg, so hiding the block loses nothing but the
+                // reference detail. (User's call, 2026-08-29.)
+                kind: 'amplifier',
             }));
         }
 

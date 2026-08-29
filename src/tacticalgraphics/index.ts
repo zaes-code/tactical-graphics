@@ -214,7 +214,7 @@ export {
  * @see ai/maplibre-renderer.md
  */
 export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
-export type {
+export type {TextKind, 
     CircleSpec,
     FillSpec,
     HatchSpec,
@@ -440,3 +440,5 @@ export type {AllowedGestures} from './core/symbology';
 export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
+
+export {amplifierText, withHiddenAmplifiers} from './symbology/paintFunctions';

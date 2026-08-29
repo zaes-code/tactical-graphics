@@ -153,6 +153,15 @@ tacticalGraphic: {
                               // the word under that icon, and the color the area is
                               // hatched in
 
+    // Display, not doctrine.
+    hideAmplifiers: true,     // draw the graphic and its designation, and hide every
+                              // other amplifier: dates, altitudes, widths, field H, a
+                              // corridor's information block. The symbol's own text is
+                              // never hidden — a cover's C, a mission task's letter, a
+                              // PL prefix, an ACP number — so a graphic still reads as
+                              // itself. Per graphic, because it is a choice about this
+                              // graphic on this map.
+
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
