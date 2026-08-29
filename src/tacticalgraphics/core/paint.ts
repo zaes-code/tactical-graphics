@@ -174,8 +174,27 @@ export interface FillSpec {
  * by measuring a gap with one font string and rendering the glyph with another, so
  * anything that measures **must** pass this same `font`. @see PaintContext.measureText
  */
+/**
+ * What a piece of text *is*, which decides whether a host may hide it.
+ *
+ * - `doctrinal` — part of the symbol. The `C` on a cover, a mission task's letter, the
+ *   `PL` prefix, `ACP 3`. Hide these and the graphic stops being the graphic it is, so
+ *   nothing hides them. **This is the default**, because a mark nobody classified is more
+ *   safely drawn than dropped: a stray date is noise, a missing letter is a wrong symbol.
+ * - `designation` — the name the operator gave this graphic, alone or joined to a
+ *   doctrinal prefix (`PL BLUE`, `CATK 3`). Kept when amplifiers are hidden; it is what
+ *   the toggle exists to leave behind.
+ * - `amplifier` — everything else the operator typed or set: dates, altitudes, widths,
+ *   field H, status, a corridor's information block.
+ *
+ * @see hidesAmplifiers, and `TacticalGraphicProperties.hideAmplifiers`
+ */
+export type TextKind = 'doctrinal' | 'designation' | 'amplifier';
+
 export interface TextSpec {
     text: string;
+    /** What this text is, for the hide-amplifiers toggle. Defaults to `doctrinal`. */
+    kind?: TextKind;
     /** CSS font shorthand, e.g. `'bold 24px sans-serif'`. */
     font: string;
     fill: PaintColor;
