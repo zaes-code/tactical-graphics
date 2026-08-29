@@ -23,12 +23,13 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
+import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
 import {getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -40,8 +41,29 @@ function anchorOf(feature: PaintFeature): ProjectedPosition | undefined {
     return feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
 }
 
+/**
+ * Share of an area's own size its **centred** label may stand.
+ *
+ * Larger than the general share because this label is *meant* to sit in the middle of the
+ * shape and be read as its name, where an outside label is an annotation beside it. 0.4 is
+ * what these already measured at the zoom they were drawn at (0.41 on the rectangular fire
+ * areas), so the shapes keep the size that reads correctly today — and stop growing to 0.52
+ * of the box on the way out, which they did while the zoom anchor was the only thing
+ * holding them.
+ */
+const CENTRED_LABEL_SHARE = 0.4;
+
+/**
+ * The scale an area's centred labels start from.
+ *
+ * The ring fit still has the last word — it is what keeps text off a concave outline, and
+ * no share can do that. This is the other half: the ring fit stops a label *overflowing*
+ * the shape, and says nothing about a label that fills it. Without something that does, an
+ * area label grew until the outline stopped it; measured on the sweep, the rectangular fire
+ * areas reached 0.68 of their box. @see fitLabelScale, outsideScaleOf
+ */
 function scaleOf(feature: PaintFeature, context: PaintContext): number {
-    return labelScale(feature.drawingResolution, context.resolution);
+    return capLabelToGraphic(configuredLabelScale(), feature, context, BASE_FONT_SIZE_PX, CENTRED_LABEL_SHARE);
 }
 
 /**
@@ -60,7 +82,11 @@ function scaleOf(feature: PaintFeature, context: PaintContext): number {
  * (User's call, 2026-08-29.) @see capLabelToGraphic
  */
 function outsideScaleOf(feature: PaintFeature, context: PaintContext): number {
-    return capLabelToGraphic(scaleOf(feature, context), feature, context);
+    // The configured size rather than the anchored one: outside the shape there is no ring
+    // holding the label, so the graphic cap is what bounds it and the anchor adds only the
+    // zoom the operator happened to be at. @see configuredLabelScale
+    const desired = feature.bounds ? configuredLabelScale() : scaleOf(feature, context);
+    return capLabelToGraphic(desired, feature, context);
 }
 
 /**
