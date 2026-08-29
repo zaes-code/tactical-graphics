@@ -25,8 +25,9 @@ import {
     graphicLabelScale,
 } from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
-import {textWidth} from './decorations';
+import {pathLength, textWidth} from './decorations';
 import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {capLabelToSpan} from './labelFit';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
 const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
@@ -35,6 +36,16 @@ const ACP_TEXT_FRACTION = 0.8;
 const ACP_PADDING_PX = 4;
 /** How far above the corridor's bounding box the properties block sits. */
 const INFO_BLOCK_OFFSET_PX = -60;
+
+/**
+ * Share of the corridor's *width* its designation may span.
+ *
+ * Wider than the general share because this label is measured across the rails rather than
+ * along the leg: the text is drawn rotated along the corridor, so what has to fit between
+ * the rails is its height, and capping its width at 1.4 of the width leaves the height
+ * comfortably inside. Anything larger and the designation prints over its own rails.
+ */
+const LEG_LABEL_WIDTH_SHARE = 1.4;
 
 /**
  * Scale for an "ACP n" label — two competing sizes, and the larger wins.
@@ -159,19 +170,43 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         if (props.endDate) infoLines.push(`DTG END:    ${props.endDate}`);
 
         if (infoLines.length) {
-            // Anchored at the NW corner of the turning points' bounding box. The pixel
-            // gap scales with the label so the clearance stays proportional to both the
-            // text and the circles at every zoom.
+            /*
+             * **Above the north-west-most turning point, and outside the graphic.**
+             *
+             * It used to anchor on the bare bounding box of the turning points with a fixed
+             * pixel gap — but the points are the *centre line*, and the rails run half a
+             * width either side of them. Zoom in and that half width grows in pixels until
+             * it swallows the block, so the amplifiers ended up inside the corridor, which
+             * is the one place they must never be. The lift is now the corridor's own
+             * radius — the same number the rails are offset by and the circles are drawn at
+             * — plus the fixed gap, so the block clears the shape at every zoom.
+             * (User's call, 2026-08-29.)
+             *
+             * The anchor is the vertex nearest the north-west corner rather than the corner
+             * itself, so on a corridor that bends the block stays attached to the start of
+             * it instead of floating off an empty corner.
+             */
             let minX = Infinity;
             let maxY = -Infinity;
             for (const [x, y] of coords) {
                 if (x < minX) minX = x;
                 if (y > maxY) maxY = y;
             }
-            paints.push(amplifier(feature, [minX, maxY], infoLines.join('\n'), baseScale, {
+            const anchor = coords.reduce((best, point) =>
+                Math.hypot(point[0] - minX, point[1] - maxY) < Math.hypot(best[0] - minX, best[1] - maxY) ? point : best,
+            );
+            const infoText = infoLines.join('\n');
+            const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
+            paints.push(amplifier(feature, anchor, infoText, capLabelToSpan(
+                context,
+                infoText,
+                fontStyle,
+                baseScale,
+                pathLength(coords) / context.resolution,
+            ), {
                 align: 'left',
                 baseline: 'bottom',
-                offsetYPx: INFO_BLOCK_OFFSET_PX * baseScale,
+                offsetYPx: INFO_BLOCK_OFFSET_PX * baseScale - radiusPx,
             }));
         }
 
@@ -198,7 +233,18 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             let rotation = -Math.atan2(y1 - y0, x1 - x0);
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
-            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, baseScale, {rotation}));
+            /*
+             * The designation runs *along* the leg, between the rails, so it is capped by
+             * both: the leg's length, which it must not overrun, and the corridor's width,
+             * which is what it must not spill out of sideways. The narrower answer wins.
+             */
+            const legPx = Math.hypot(x1 - x0, y1 - y0) / context.resolution;
+            const widthPx = (circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX) * 2;
+            const legScale = Math.min(
+                capLabelToSpan(context, text, fontStyle, baseScale, legPx),
+                capLabelToSpan(context, text, fontStyle, baseScale, widthPx, LEG_LABEL_WIDTH_SHARE),
+            );
+            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, legScale, {rotation}));
             paints.push(acpAt(i));
         }
 
