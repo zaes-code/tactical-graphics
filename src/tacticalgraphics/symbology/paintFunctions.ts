@@ -44,6 +44,7 @@ import {
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {capLabelToGraphic} from './labelFit';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -159,7 +160,18 @@ export function axisRotation(feature: PaintFeature): number {
 
 /** Zoom-anchored label scale for a paint feature. */
 export function scaleOf(feature: PaintFeature, context: PaintContext): number {
-    return labelScale(feature.drawingResolution, context.resolution);
+    /*
+     * **The one place the general size rule is applied.**
+     *
+     * Nearly every label paint asks here for the scale it should draw at, so capping the
+     * answer here is what makes "a label may not outgrow its own symbol" a rule rather
+     * than something each family remembers. Families with a tighter constraint — a letter
+     * inside an arrowhead, a designation between a corridor's rails — narrow it further
+     * from their own paint; nothing has to widen it.
+     *
+     * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
+     */
+    return capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
@@ -361,7 +373,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         if (center && labelPoint && radius > 0 && label) {
             const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
-                ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
+                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context)
                 : scaleOf(feature, context);
             const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
             const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
@@ -432,8 +444,8 @@ export function missionTaskLabelPaint(
                 fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
-                    ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
-                    : labelScale(feature.drawingResolution, context.resolution),
+                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context)
+                    : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
                 rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',
                 baseline: 'middle',

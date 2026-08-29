@@ -18,6 +18,7 @@ import type {
 } from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
 import {getTextWidth} from './textMeasure';
+import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 
 /**
  * # Paint lists → OpenLayers styles
@@ -246,7 +247,34 @@ function readBounds(feature: FeatureLike): PaintFeature['bounds'] {
     const minY = feature.get('polygonMinY') as number | undefined;
     const maxX = feature.get('polygonMaxX') as number | undefined;
     const maxY = feature.get('polygonMaxY') as number | undefined;
-    if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return undefined;
+    if (minX !== undefined && minY !== undefined && maxX !== undefined && maxY !== undefined) {
+        return {minX, minY, maxX, maxY};
+    }
+    return holderBounds(feature);
+}
+
+/**
+ * The extent of the graphic this feature belongs to, found through its holder.
+ *
+ * **MapLibre has always had this and OpenLayers has not.** Its adapter derives
+ * `bounds` from the graphic's own geometry for every graphic; here it came from four keys
+ * that only `AreaGraphicBase` stamps, so every general rule measured against a graphic's
+ * size worked on one engine and quietly did nothing on the other — and the label size cap
+ * is exactly such a rule.
+ *
+ * A label feature is a bare anchor point, so the extent has to come from somewhere else.
+ * The registry already maps every feature to its holder for the properties dialog, and the
+ * holder publishes the drawn feature. Nothing to stamp, nothing for a new holder to
+ * remember, and a graphic that is not registered simply gets no bounds — the same as
+ * before.
+ */
+function holderBounds(feature: FeatureLike): PaintFeature['bounds'] {
+    if (!(feature instanceof Feature)) return undefined;
+    const holder = GraphicLinkRegistry.getFromFeature(feature);
+    const drawn = holder?.getFeatures?.().find((f: Feature) => f.get('role') === 'graphic') ?? undefined;
+    const extent = drawn?.getGeometry()?.getExtent();
+    if (!extent || !extent.every((n: number) => Number.isFinite(n))) return undefined;
+    const [minX, minY, maxX, maxY] = extent;
     return {minX, minY, maxX, maxY};
 }
 
