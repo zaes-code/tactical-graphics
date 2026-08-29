@@ -817,7 +817,7 @@ call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
 Both of the drawn ones stop at 96 px however far the map zooms in. A framed 2525E symbol
 carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
 the screen would be a badge the size of a hand. It is the ceiling
-`setSecuritySymbolSize` is clamped to, so every centre symbol agrees on how large it ever
+`setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
 draws. Zoomed *out* they keep shrinking with the graphic — a floor would leave the symbol
 bigger than the shape it sits in.
 
