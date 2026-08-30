@@ -879,9 +879,10 @@ export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: 
 
     // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
     // function in `asStyleFunction`. @see withHiddenAmplifiers
-    const hide = (paints: Paint[]) => withHiddenAmplifiers(paints, graphic.properties);
-    const paints = hide(painters.graphic(graphic.graphic, context));
-    if (painters.label && graphic.labels) paints.push(...hide(painters.label(graphic.labels, context)));
+    const paints = withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers);
+    if (painters.label && graphic.labels) {
+        paints.push(...withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers));
+    }
     return paints;
 }
 
