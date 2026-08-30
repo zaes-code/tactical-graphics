@@ -91,6 +91,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **A label's size no longer depends on who built the feature.** `scaleOf` asks the host how big a label should be and the symbol how big it may be — and it used to ask a third thing whenever the graphic's extent was missing: the zoom the operator happened to be at when they drew it.
+
+  That fallback made the answer depend on the *renderer's bookkeeping*. A holder-backed feature carries bounds, which the OpenLayers layer recovers through the registry that maps features to holders; a host that builds its own features carries none. So the same corridor at the same zoom drew its designation at **1.00** in this library's own app and **0.55** in a consuming one, with nothing in the configuration to explain the difference.
+
+  The zoom anchor is the thing `scaleOf` was changed to stop using — it is not saved with the graphic, so a label sized by it cannot be reproduced — and leaving it as the fallback kept it in use for exactly the consumers who had no way to see why. A missing extent now means **no cap**, not a different rule.
+
 - **The ambush's arrowhead line kinked where the hashes ended.** APP-06 141700's Draw Rules make it one line — *"the rear of the arrowhead line shall connect to the midpoint of the line between points 2 and 3"* — and on a 120 degree arc that midpoint is `r·cos(60°)` = 0.5r out along the axis, exactly where the hashes start. The generator emitted it as two: a seventh hash from 0.5r to r, then an arrow from the bulge at r out to the tip.
 
   Both halves are walked from the centre on the same bearing, so they are collinear in the plane the generator works in and every measurement of *its* numbers agreed. But each was emitted as a bare pair of endpoints, and a chord does not follow the great circle it subtends — so the whole of the curvature landed on the join, as a corner. Drawn at the demo's opening zoom the two halves met at **7.1 degrees**, plainly at different angles; the pieces that read as one line have to be one line for the corner to have nowhere to go.

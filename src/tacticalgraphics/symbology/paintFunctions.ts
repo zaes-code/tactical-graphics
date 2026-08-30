@@ -250,16 +250,21 @@ export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: nu
      * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
      */
     /*
-     * **The configured size, capped by the graphic — and the zoom anchor only when there
-     * is no graphic to measure.** The host says how big a label should be and the symbol
-     * says how big it may be; the zoom the operator happened to be at when they drew it is
-     * neither, and it is not saved with the graphic, so it made a label that could not be
-     * reproduced. @see configuredLabelScale
+     * **The configured size, capped by the graphic.** The host says how big a label should
+     * be and the symbol says how big it may be; the zoom the operator happened to be at
+     * when they drew it is neither, and it is not saved with the graphic, so it made a
+     * label that could not be reproduced. @see configuredLabelScale
+     *
+     * **No bounds means no cap, not a different rule.** This used to fall back to the zoom
+     * anchor whenever the graphic's extent was missing, which quietly made the size depend
+     * on *who built the feature*. A holder-backed feature has bounds — the renderer finds
+     * them through its registry — while a host that builds its own features has none, so
+     * the same corridor at the same zoom drew its designation at 1.00 in this library's own
+     * app and 0.55 in a consuming one. The anchor is the thing this function was changed to
+     * stop using; keeping it as the fallback kept it in use for exactly the consumers who
+     * could not see why. (User's call, 2026-08-30.)
      */
-    const desired = feature.bounds
-        ? configuredLabelScale()
-        : labelScale(feature.drawingResolution, context.resolution);
-    return capLabelToGraphic(desired, feature, context, fontPx);
+    return capLabelToGraphic(configuredLabelScale(), feature, context, fontPx);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
