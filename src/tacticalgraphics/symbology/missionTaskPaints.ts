@@ -25,7 +25,7 @@ import {
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {BAR_SYMBOL_DASHES} from '../graphics/ExplosivesReadiness';
 import {textWidth} from './decorations';
-import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {groundPixels, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -77,7 +77,7 @@ const CROSSED_LABEL_CLEARANCE_PX = 7;
 function crossedLabelHalfWidthPx(feature: PaintFeature, context: PaintContext): number {
     const size = feature.graphicSize;
     if (!size || size <= 0) return CROSSED_HALF_WIDTH_PX;
-    return Math.min(size / context.resolution, CROSSED_HALF_WIDTH_PX);
+    return Math.min(groundPixels(size, feature, context), CROSSED_HALF_WIDTH_PX);
 }
 
 /**
@@ -414,7 +414,7 @@ export function baseDefenseZoneLabelPaint(): MissionTaskPaint {
     return (feature, context) => {
         if (feature.geometry.type !== 'Point') return [];
         const size = feature.graphicSize;
-        const radiusPx = size && size > 0 ? size / context.resolution : 0;
+        const radiusPx = size && size > 0 ? groundPixels(size, feature, context) : 0;
         const scale = Math.min(maxGraphicLabelScale(), Math.max(BDZ_MIN_SCALE, radiusPx / BDZ_SCALE_DIVISOR));
         return [{
             geometry: feature.geometry,
