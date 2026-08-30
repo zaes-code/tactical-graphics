@@ -91,6 +91,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
+- **`prepareFeatures(rendered)` on the `/openlayers` entry point — one call from rendered GeoJSON to features you can put on a map.** Three steps had to happen in the right order: project the GeoJSON, ask `stylesFor` which style functions draw this graphic, and publish the shape's extent to the label feature. Miss the second and a designation is drawn twice; miss the third and every fitted symbol comes out at a fixed size in metres.
+
+  Missing the third fails **silently** — nothing throws, nothing warns, and the map looks plausible until somebody notices a symbol that does not grow with its shape. A host should not have to know a checklist to avoid that, so this is the checklist. No new capability: the same three calls, in the order they have to happen, and every part stays exported for a host that wants to do it by hand.
+
 - **`publishGraphicExtent(labels, graphic)` on the `/openlayers` entry point.** Several symbols are *fitted to the area they land in* rather than drawn at a fixed size — the CBRN triangle, the airfield zone's crossed runways, the sector-1 modifier glyphs, and every label held to a share of its own shape. The fit reads `bounds` and `ring`, and those ride the **label** feature, which is a bare anchor point with no shape of its own to measure.
 
   A holder built by this package publishes them as a side effect of drawing. A host that builds its own features — the shape `stylesFor` exists to serve — published nothing, so `fitSymbolScale` fell back to its no-bounds answer and every fitted symbol came out at a fixed size in metres. Measured in a consuming app, a CBRN triangle drew **12 px across** at a zoom where its area was over 500: right while the graphic was being drawn, because the draw is holder-backed, and tiny the moment it was committed.

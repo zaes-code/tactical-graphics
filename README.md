@@ -672,35 +672,36 @@ yours — your layer, your ids, your selection model. `stylesFor(name)` gives yo
 style pair the library's own holders draw that graphic with.
 
 ```ts
-import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {publishGraphicExtent, stylesFor} from '@zaes/tactical-graphics/openlayers';
-import GeoJSON from 'ol/format/GeoJSON';
-import type Feature from 'ol/Feature';
+import {renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {prepareFeatures} from '@zaes/tactical-graphics/openlayers';
 
-const name = TacticalGraphicName.ChemicalContaminatedArea;
-const format = new GeoJSON({featureProjection: 'EPSG:3857'});
 const rendered = renderTacticalGraphic(feature);
-const {graphic, labels} = stylesFor(name);
+const {graphic, labels} = prepareFeatures(rendered);
 
-// `readFeature` is typed `Feature | Feature[]`; these outputs are always single.
-const graphicFeature = format.readFeature(rendered.graphic) as Feature;
-graphicFeature.setStyle(graphic);
-source.addFeature(graphicFeature);
+source.addFeature(graphic);
 
 // `labels` is undefined for 104 of the 291 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
-// Styling their label geometry as well draws the designation twice.
-if (rendered.labels && labels) {
-    const labelFeature = format.readFeature(rendered.labels) as Feature;
-    // How big the shape underneath is. Several symbols are fitted to the area they
-    // land in — the CBRN triangle, the airfield's runways, the sector-1 modifier
-    // glyphs — and the fit reads that off the label feature, which is a bare anchor
-    // point. Skip this and they fall back to a fixed size in meters.
-    publishGraphicExtent(labelFeature, graphicFeature);
-    labelFeature.setStyle(labels);
-    source.addFeature(labelFeature);
-}
+// Adding a label feature for one of those draws its designation twice.
+if (labels) source.addFeature(labels);
 ```
+
+They are your features: stamp your own ids, selection state and layer keys on them
+before you add them. `prepareFeatures` takes `{featureProjection}` if your map is not
+Web Mercator, and `{hideAmplifiers: true}` to draw a graphic name-only.
+
+**What it does, in case you want to do it yourself.** Three steps that have to happen in
+order, and all three parts stay exported:
+
+1. Read the GeoJSON into OpenLayers features, projecting 4326 → your map's projection.
+2. `stylesFor(name)` — the style pair the library's own holders draw that graphic with.
+   A `labels` of `undefined` is the signal above.
+3. `publishGraphicExtent(labels, graphic)` — how big the shape is. Several symbols are
+   *fitted* to the area they land in: the CBRN triangle, the airfield zone's crossed
+   runways, the sector-1 modifier glyphs. The fit reads the extent off the **label**
+   feature, which is a bare anchor point with no shape of its own, so skipping this
+   leaves them at a fixed size in meters — **silently**. Nothing throws and the map
+   looks plausible until you notice a symbol that does not grow with its shape.
 
 **Do not reach for `getStyle` here.** It is exported, it takes a name and it returns
 styles, which makes it look like this answer — but it is the *area outline*
