@@ -3,36 +3,39 @@ import {LineString, MultiPoint} from "ol/geom";
 import {Coordinate} from "ol/coordinate";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {
+    abatisStyleFunc,
+    antiTankDitchStyleFunc,
     coordinatedFireLineStyle,
     createBaseFeature,
     createFeature,
     createHandleFeature,
+    defaultLineStyle,
     directionArrowStyleFunc,
+    endGlyphLineStyleFunc,
+    engineerWorkLineStyle,
+    escortOrDemonstrationStyleFunc,
     ferryCrossingStyleFunc,
     fieldOfFireStyleFunc,
-    defaultLineStyle,
     finalProtectiveFireStyleFunc,
-    abatisStyleFunc,
+    followTaskStyleFunc,
     fortifiedLineStyleFunc,
-    endGlyphLineStyleFunc,
-    nestedZoneStyleFunc,
-    obstacleBypassStyleFunc,
-    escortOrDemonstrationStyleFunc,
-    sweptArcTaskStyleFunc,
-    protectionLineStyleFunc,
-    wireObstacleStyleFunc,
-    antiTankDitchStyleFunc,
     forwardLineOfOwnTroopsStyleFunc,
     lineOfContactStyleFunc,
     linearSmokeTargetStyleFunc,
     linearTargetStyleFunc,
     munitionFlightPathStyleFunc,
+    nestedZoneStyleFunc,
+    obstacleBypassStyleFunc,
     obstacleLineStyle,
     passageLaneGraphicStyle,
-    probableLineOfDeploymentStyleFunc,
-    routeControlMeasureStyle, engineerWorkLineStyle,
-    tacticalFixStyleFunc,
     phaseLineStyleFunc,
+    probableLineOfDeploymentStyleFunc,
+    protectionLineStyleFunc,
+    routeControlMeasureStyle,
+    securityOperationStyleFunc,
+    sweptArcTaskStyleFunc,
+    tacticalFixStyleFunc,
+    wireObstacleStyleFunc,
 } from '../openlayerStyles';
 import {getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
@@ -109,9 +112,17 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.Demonstration:
                     return escortOrDemonstrationStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.Capture:
+                case TacticalGraphicName.Seize:
                 case TacticalGraphicName.Evacuate:
                 case TacticalGraphicName.Recover:
                     return sweptArcTaskStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.FollowAndAssume:
+                case TacticalGraphicName.FollowAndSupport:
+                    return followTaskStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.Cover:
+                case TacticalGraphicName.Guard:
+                case TacticalGraphicName.Screen:
+                    return securityOperationStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.DecisionLine:
                 case TacticalGraphicName.MobilityCorridor:
                     return endGlyphLineStyleFunc(name)(feature, resolution);
@@ -284,7 +295,7 @@ export class LineGraphicBase implements LineGraphic {
      * line and not its symbol. @see LineGraphicController.handleResize
      */
     graphicSize(): number {
-        // Per-name, because this holder serves 41 graphics and they do not all bake a
+        // Per-name, because this holder serves 80 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
         //
         // **At this graphic's own latitude**, which is why the derivation is here rather

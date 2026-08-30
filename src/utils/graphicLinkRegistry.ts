@@ -6,7 +6,6 @@ import {
     RouteDirection
 } from '@zaes/tactical-graphics';
 import {MissionTaskGraphic} from "../components/openlayers/controllers/MissionTaskController";
-import type {SecurityOperationGraphic} from "../components/openlayers/controllers/SecurityOperationsController";
 
 export interface LabelableGraphic {
     setLabel?(labels: GraphicLabels): void;
@@ -34,9 +33,11 @@ export type {RangeFanConfig} from '@zaes/tactical-graphics';
  */
 export type {GraphicLabels};
 
-// SecurityOperationGraphic joined the union when its controller started registering;
-// it holds rotation/scale rather than size/rotation/updateGeom, so it is its own arm.
-export type GraphicObject = (LineGraphic | PolygonGraphic | MissionTaskGraphic | SecurityOperationGraphic) & LabelableGraphic;
+// `SecurityOperationGraphic` was an arm of this union until 2026-08-29: it held
+// rotation/scale rather than size/rotation/updateGeom, because a security operation was a
+// badge placed on one anchor. They are drawn two-point lines now and register as
+// `LineGraphic` like every other one. @see SecurityOperation
+export type GraphicObject = (LineGraphic | PolygonGraphic | MissionTaskGraphic) & LabelableGraphic;
 
 // WeakMap: runtime live mapping (auto-GC)
 const featureToGraphic = new WeakMap<Feature, GraphicObject>();

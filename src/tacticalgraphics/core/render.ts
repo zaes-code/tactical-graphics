@@ -358,8 +358,44 @@ export function applyAmplifierAliases<T extends object>(bag: T): T {
         out = out ?? {...source};
         out[current] = source[legacy];
     }
+    for (const [field, table] of RECASED_AMPLIFIER_VALUES) {
+        const stored = (out ?? source)[field];
+        if (typeof stored !== 'string') continue;
+        const current = table[stored];
+        if (current === undefined) continue;
+        out = out ?? {...source};
+        out[field] = current;
+    }
     return (out as T) ?? bag;
 }
+
+/**
+ * Amplifier **values** 3.0.0 recased, and what a file written before it calls them.
+ *
+ * The sibling of {@link RENAMED_AMPLIFIERS}, one level down: those keys changed name,
+ * these keys kept theirs and changed the words they hold. Four enums used to spell their
+ * values in three different ways — `'present'`, `'GENERAL'`, `'Hostile/Faker'` — and a
+ * host reading a saved bag saw all three side by side. @see TacticalGraphicStatus
+ *
+ * Only the four that moved are listed. An enum already spelled the way the operator
+ * reads it never changed, so there is nothing here to translate it from.
+ *
+ * The same one-direction rule applies: an old value is evidence about a file's age, and
+ * nothing writes one back.
+ */
+const RECASED_AMPLIFIER_VALUES: ReadonlyArray<readonly [field: keyof TacticalGraphicProperties, was: Readonly<Record<string, string>>]> = [
+    ['status', {present: TacticalGraphicStatus.present, planned: TacticalGraphicStatus.planned}],
+    ['confidence', {known: TacticalGraphicConfidence.known, suspected: TacticalGraphicConfidence.suspected}],
+    [
+        'direction',
+        {
+            GENERAL: RouteDirection.general,
+            ONE_WAY: RouteDirection.oneWay,
+            TWO_WAY: RouteDirection.twoWay,
+            ALTERNATING: RouteDirection.alternating,
+        },
+    ],
+];
 
 /** Reads a feature's tactical graphic config, or `undefined` if it has none. */
 export function readTacticalGraphicProperties(feature: Feature): TacticalGraphicProperties | undefined {
@@ -379,7 +415,7 @@ export function isTacticalGraphicFeature(feature: Feature): boolean {
  * What a **draw tool** needs to know before it starts collecting clicks: whether
  * this graphic wants one point, an open path, or a closed ring. Exported for that
  * reason; without it a renderer implementing draw has to keep its own table of
- * 215 names beside this one and watch the two drift.
+ * 292 names beside this one and watch the two drift.
  *
  * `undefined` for an unknown name, and for the handful of generators whose kind is
  * not in the table below — those accept any base rather than being rejected, so a

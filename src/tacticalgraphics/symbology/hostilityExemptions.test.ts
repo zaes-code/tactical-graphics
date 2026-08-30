@@ -22,6 +22,7 @@ import {
     getColorByHostility,
     GRAPHIC_CATEGORIES,
     supportsHostility,
+    CENTER_SYMBOL_GRAPHICS,
 } from '../index';
 import type {PaintFeature} from '../core/paint';
 import {hostilityOf, lineColorOf} from './paintFunctions';
@@ -39,7 +40,7 @@ const HOSTILE_RED = getColorByHostility(TacticalGraphicHostility.hostileFaker);
 const UNAFFILIATED = getColorByHostility(TacticalGraphicHostility.unknown);
 
 describe('supportsHostility', () => {
-    it('is false for every Chapter 6 tactical mission task but the exfiltration', () => {
+    it('is false for every Chapter 6 tactical mission task but the exfiltration and the three that carry a unit symbol', () => {
         const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
             .filter(name => GRAPHIC_CATEGORIES[name] === TacticalGraphicCategory.TacticalMissionTasks);
 
@@ -50,8 +51,26 @@ describe('supportsHostility', () => {
         // in this list only because it is filed under Movement and Manoeuvre — the pair is
         // categorised inconsistently, which is how one of them offered hostility all along
         // and the other did not.
-        expect(missionTasks.filter(supportsHostility)).toEqual([TacticalGraphicName.Exfiltrate]);
+        // The escort and the two follow tasks join it on a different reading: each draws a
+        // host-supplied entity symbol, and an entity symbol's frame *is* its standard
+        // identity, so the affiliation decides what is drawn rather than merely tinting it.
+        // (User's call, 2026-08-28.) @see CENTER_SYMBOL_GRAPHICS
+        expect(new Set(missionTasks.filter(supportsHostility))).toEqual(
+            new Set([
+                TacticalGraphicName.Exfiltrate,
+                TacticalGraphicName.Escort,
+                TacticalGraphicName.FollowAndAssume,
+                TacticalGraphicName.FollowAndSupport,
+            ]),
+        );
         expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
+    });
+
+    it('is true for every graphic that carries a host-supplied centre symbol', () => {
+        // Not listed twice: the rule reads the set, so a graphic cannot gain a unit symbol
+        // without gaining the identity that frames it.
+        CENTER_SYMBOL_GRAPHICS.forEach(name => expect(supportsHostility(name)).toBe(true));
+        expect(CENTER_SYMBOL_GRAPHICS.size).toBe(6);
     });
 
     it('is false for every CBRN contaminated area, subtypes included', () => {

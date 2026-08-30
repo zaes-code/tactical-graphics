@@ -90,6 +90,46 @@ const readRenderedStyle = (page, graphicName) =>
         };
     }, graphicName);
 
+/**
+ * Every style a graphic's features actually produced, flattened.
+ *
+ * Reaches for the *evaluated* styles rather than the features, because what this file
+ * checks about the centre symbol -- that an image drew, how wide the browser made it,
+ * and where it landed -- exists only after the style function has run and the image has
+ * loaded. `Icon.getWidth()` is documented to return `undefined` until then, and jsdom
+ * never loads one, which is why the assertion lives here and not in a unit test.
+ */
+const readDrawnStyles = (page, graphicName) =>
+    page.evaluate(name => {
+        const {map, manager} = window.__tacticalGraphics;
+        const resolution = map.getView().getResolution();
+        const out = [];
+        for (const f of manager.renderingVectorSource.getFeatures()) {
+            if (f.get('graphicName') !== name) continue;
+            const style = f.getStyle();
+            if (typeof style !== 'function') continue;
+            const result = style(f, resolution);
+            for (const s of Array.isArray(result) ? result : result ? [result] : []) {
+                const img = s.getImage?.();
+                const own = s.getGeometry?.();
+                const geom = own ?? f.getGeometry();
+                out.push({
+                    symbolId: f.get('symbolId') ?? null,
+                    hostility: f.get('tacticalGraphic')?.hostility ?? null,
+                    stroke: s.getStroke?.()?.getColor?.() ?? null,
+                    text: s.getText?.()?.getText?.() ?? null,
+                    src: img?.getSrc?.() ?? null,
+                    imageWidth: img?.getWidth?.() ?? null,
+                    imageHeight: img?.getHeight?.() ?? null,
+                    ownGeometry: !!own,
+                    geometryType: geom?.getType?.() ?? null,
+                    coordinates: geom?.getCoordinates?.() ?? null,
+                });
+            }
+        }
+        return {resolution, styles: out};
+    }, graphicName);
+
 const selectGraphic = async (page, displayName) => {
     await page.getByPlaceholder('Filter graphics').fill(displayName);
     await page.getByText(displayName, {exact: true}).first().click();
@@ -723,8 +763,201 @@ const main = async () => {
 
     await page.screenshot({path: join(SHOTS, '07-imported.png')});
 
-    // ── 8. No console errors ────────────────────────────────────────────────
-    console.log('\n8. Console is clean');
+    // ── 8. The centre symbol ─────────────────────────────────────────────────────
+    //
+    // Six graphics draw a host-supplied unit symbol as part of themselves. Two things
+    // about it are only true in a browser: the image has to load before anything can
+    // measure it, and the affiliation has to survive a *click* -- the dialog identifies
+    // its graphic by the `symbolId` on the feature the hit test returned, and the symbol
+    // is the biggest thing a security operation draws.
+    console.log('\n8. The centre symbol');
+    await page.getByRole('button', {name: /clear all/i}).click();
+    await page.waitForTimeout(1200);
+
+    await selectGraphic(page, 'cover');
+    /*
+     * **Two clicks, not one.** Cover, guard and screen were dropped on a single anchor at a
+     * fixed screen size until 2026-08-29; APP-06 gives them four anchor points, so the
+     * operator draws one arrow — point 1 at the arrowhead, point 2 at its inner end — and
+     * the other is derived. The centre of the finished symbol is past point 2, which is
+     * where the unit symbol sits and therefore where this clicks to open the dialog.
+     */
+    const armTip = [box.x + box.width * 0.3, box.y + box.height * 0.4];
+    const armInner = [box.x + box.width * 0.45, box.y + box.height * 0.4];
+    await page.mouse.click(armTip[0], armInner[1]);
+    await page.mouse.dblclick(armInner[0], armInner[1]);
+    await page.waitForTimeout(DRAW_END_GUARD_MS);
+    const coverAt = [armInner[0] + (armInner[0] - armTip[0]) * 0.21, armInner[1]];
+
+    const coverBefore = await readDrawnStyles(page, 'Cover');
+    const symbolBefore = coverBefore.styles.find(s => s.src);
+    check('a Cover draws its centre symbol', !!symbolBefore, symbolBefore ? `${symbolBefore.imageWidth}px wide` : 'none');
+    check(
+        'the centre symbol carries its graphic symbolId',
+        !!symbolBefore?.symbolId,
+        'without one the dialog opens on an empty selection and drops the edit',
+    );
+
+    // Click the symbol itself, which is what an operator aims at. Cover has no
+    // identifier field, so there is no #name-input to wait on here.
+    await page.mouse.click(coverAt[0], coverAt[1]);
+    await page.waitForSelector('[role="dialog"]', {timeout: 5000});
+    await chooseSelectOption(page, 'Hostility', 'Hostile/Faker');
+    await page.getByRole('button', {name: 'OK'}).click();
+    await page.waitForSelector('[role="dialog"]', {state: 'detached', timeout: 5000});
+    await page.waitForTimeout(600);
+
+    const coverAfter = await readDrawnStyles(page, 'Cover');
+    const symbolAfter = coverAfter.styles.find(s => s.src);
+    check(
+        'an affiliation set by clicking the symbol reaches the graphic',
+        coverAfter.styles.some(s => s.hostility === 'Hostile/Faker'),
+        JSON.stringify([...new Set(coverAfter.styles.map(s => s.hostility))]),
+    );
+    check('and redraws the symbol at the new identity', !!symbolAfter && symbolAfter.src !== symbolBefore?.src);
+    check('and turns the arms hostile red', coverAfter.styles.some(s => isRed(String(s.stroke))));
+
+    // The escort takes the same provider through a different path: its symbol goes in
+    // the break in its own bar, sized from the bar rather than from the global setting.
+    // It is a tactical mission task, so it offered no affiliation at all until the rule
+    // changed -- and an entity symbol with no identity is stuck on `pending`.
+    await selectGraphic(page, 'escort');
+    const escortY = box.y + box.height * 0.5;
+    await page.mouse.click(box.x + box.width * 0.3, escortY);
+    await page.mouse.dblclick(box.x + box.width * 0.62, escortY);
+    await page.waitForTimeout(DRAW_END_GUARD_MS);
+
+    const escortBefore = (await readDrawnStyles(page, 'Escort')).styles.find(s => s.src);
+    check('an Escort draws a symbol in its bar', !!escortBefore, escortBefore ? `${escortBefore.imageWidth?.toFixed(1)}px wide` : 'none');
+
+    await page.mouse.click(box.x + box.width * 0.46, escortY);
+    await page.waitForSelector('[role="dialog"]', {timeout: 5000});
+    await chooseSelectOption(page, 'Hostility', 'Hostile/Faker');
+    await page.getByRole('button', {name: 'OK'}).click();
+    await page.waitForSelector('[role="dialog"]', {state: 'detached', timeout: 5000});
+    await page.waitForTimeout(600);
+
+    const escortAfter = (await readDrawnStyles(page, 'Escort')).styles.find(s => s.src);
+    check('the Escort offers an affiliation and redraws its symbol at it', !!escortAfter && escortAfter.src !== escortBefore?.src);
+
+    // The follow tasks put their symbol *inside* the body, in place of field T, so it
+    // has to fit there -- and both renderers size an icon by its width and let the height
+    // follow the image, so a taller-than-wide frame is the case that overflows.
+    for (const [name, display, yFraction] of [
+        ['FollowAndAssume', 'follow and assume', 0.62],
+        ['FollowAndSupport', 'follow and support', 0.82],
+    ]) {
+        await selectGraphic(page, display);
+        await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * yFraction);
+        await page.mouse.dblclick(box.x + box.width * 0.72, box.y + box.height * yFraction);
+        await page.waitForTimeout(DRAW_END_GUARD_MS);
+
+        const drawn = await readDrawnStyles(page, name);
+        const symbol = drawn.styles.find(s => s.src);
+        check(
+            `${name} draws a unit symbol`,
+            !!symbol,
+            symbol ? `${symbol.imageWidth?.toFixed(1)}x${symbol.imageHeight?.toFixed(1)}px` : 'none',
+        );
+        // The body is the closed ring: a stroked LineString of its own with 5+ points.
+        const body = drawn.styles.find(
+            s => s.ownGeometry && s.geometryType === 'LineString' && Array.isArray(s.coordinates) && s.coordinates.length >= 5,
+        )?.coordinates;
+        const at = drawn.styles.find(s => s.geometryType === 'Point' && s.src)?.coordinates;
+        check(`${name} draws its body`, !!body && !!at);
+        if (!symbol || !body || !at) continue;
+
+        const res = drawn.resolution;
+        const halfW = ((symbol.imageWidth ?? 0) * res) / 2;
+        const halfH = ((symbol.imageHeight ?? 0) * res) / 2;
+        const xs = body.map(c => c[0]);
+        const ys = body.map(c => c[1]);
+        check(
+            `${name} keeps the symbol inside its body`,
+            at[0] - halfW > Math.min(...xs) &&
+                at[0] + halfW < Math.max(...xs) &&
+                at[1] - halfH > Math.min(...ys) &&
+                at[1] + halfH < Math.max(...ys),
+            `symbol ${((halfH * 2) / res).toFixed(1)}px tall, body ${((Math.max(...ys) - Math.min(...ys)) / res).toFixed(1)}px`,
+        );
+        // Specifically clear of the rear point: the support variant's rear edge is a
+        // notch cut forward into the body, and the content is centred past it.
+        const axisY = (Math.max(...ys) + Math.min(...ys)) / 2;
+        const onAxis = body.filter(c => Math.abs(c[1] - axisY) < res);
+        const rearX = Math.min(...(onAxis.length ? onAxis : body).map(c => c[0]));
+        check(
+            `${name} keeps the symbol clear of the rear edge`,
+            at[0] - halfW > rearX,
+            `${((at[0] - halfW - rearX) / res).toFixed(1)}px past it`,
+        );
+        check(`${name} draws the symbol instead of field T, not as well as`, !drawn.styles.some(s => s.text));
+    }
+
+    // Zooming in must not inflate the symbol with the graphic. Everything else about a
+    // follow task is drawn in metres and gets bigger; a framed unit symbol carries a fixed
+    // amount of information, so it stops at the same ceiling the escort uses. Only a
+    // browser can answer this -- the size is the width the icon was actually built at.
+    const measureFollow = async () => {
+        // An Icon rebuilt at a new size reports no width until its image has loaded, and
+        // changing the zoom rebuilds it. Poll rather than sleep once: a fixed wait is how a
+        // measurement of zero gets reported as a symbol that vanished.
+        let drawn = await readDrawnStyles(page, 'FollowAndAssume');
+        for (let i = 0; i < 20 && !(drawn.styles.find(s => s.src)?.imageWidth > 0); i++) {
+            await page.waitForTimeout(250);
+            drawn = await readDrawnStyles(page, 'FollowAndAssume');
+        }
+        const symbol = drawn.styles.find(s => s.src);
+        const body = drawn.styles.find(
+            s => s.ownGeometry && s.geometryType === 'LineString' && Array.isArray(s.coordinates) && s.coordinates.length >= 5,
+        )?.coordinates;
+        const ys = body?.map(c => c[1]) ?? [];
+        return {
+            symbolPx: symbol?.imageWidth ?? 0,
+            bodyPx: body ? (Math.max(...ys) - Math.min(...ys)) / drawn.resolution : 0,
+        };
+    };
+
+    const before = await measureFollow();
+    // Centre on the graphic before zooming. `Icon.getWidth()` is undefined until the image
+    // has loaded, and an icon rebuilt at a new size only loads if the map actually draws
+    // it -- zooming past the graphic leaves it off-screen and reports a symbol of zero,
+    // which reads exactly like one that vanished.
+    await page.evaluate(() => {
+        const {map, manager} = window.__tacticalGraphics;
+        const view = map.getView();
+        // On the symbol itself, so the capture shows the thing being measured.
+        let centre;
+        for (const f of manager.renderingVectorSource.getFeatures()) {
+            if (f.get('graphicName') !== 'FollowAndAssume' || typeof f.getStyle() !== 'function') continue;
+            const result = f.getStyle()(f, view.getResolution());
+            for (const style of Array.isArray(result) ? result : result ? [result] : []) {
+                if (style.getImage?.()?.getSrc?.()) centre = style.getGeometry?.()?.getCoordinates?.();
+            }
+        }
+        if (centre) view.setCenter(centre);
+        view.setZoom((view.getZoom() ?? 4) + 4);
+    });
+    await page.waitForTimeout(1200);
+    const zoomed = await measureFollow();
+
+    check('zooming in grows the follow task itself', zoomed.bodyPx > before.bodyPx * 4, `${before.bodyPx.toFixed(0)}px -> ${zoomed.bodyPx.toFixed(0)}px tall`);
+    check(
+        'and stops its unit symbol at the shared ceiling',
+        zoomed.symbolPx <= 96 && zoomed.symbolPx > before.symbolPx,
+        `${before.symbolPx.toFixed(1)}px -> ${zoomed.symbolPx.toFixed(1)}px, ceiling 96px`,
+    );
+    check('so the symbol no longer fills its body', zoomed.symbolPx < zoomed.bodyPx / 2, `symbol ${zoomed.symbolPx.toFixed(0)}px in a ${zoomed.bodyPx.toFixed(0)}px body`);
+    await page.screenshot({path: join(SHOTS, '08-center-symbol-zoomed.png')});
+    await page.evaluate(() => {
+        const view = window.__tacticalGraphics.map.getView();
+        view.setZoom((view.getZoom() ?? 8) - 4);
+    });
+    await page.waitForTimeout(800);
+
+    await page.screenshot({path: join(SHOTS, '08-center-symbol.png')});
+
+    // ── 9. No console errors ────────────────────────────────────────────────────
+    console.log('\n9. Console is clean');
     const realErrors = consoleErrors.filter(e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e));
     check('no console/page errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 

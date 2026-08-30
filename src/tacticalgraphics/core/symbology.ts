@@ -36,6 +36,7 @@ import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './ty
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
+import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -235,7 +236,40 @@ export function maxGraphicLabelScale(): number {
 }
 
 /**
- * Zoom-anchored label scale — the default.
+ * The scale that renders a label at exactly the size the host configured.
+ *
+ * **The plain reading of `labelSize`, with no memory in it.** A label's size used to be
+ * this multiplied by how far the map had moved since the graphic was drawn, clamped to
+ * [0.3, 1.5] — so two identical graphics could carry labels five times apart because of
+ * *when* someone clicked, and a saved map came back different because the drawing zoom is
+ * live view state and is deliberately not in the file. Measured on the sweep, 116 of 224
+ * labels moved when that remembered zoom moved.
+ *
+ * What kept the label from swamping a small graphic was that same clamp, and
+ * `capLabelToGraphic` does that job properly now — against the graphic itself rather than
+ * against a moment in time. So the size is the configured one, capped by the symbol.
+ * (User's call, 2026-08-29.)
+ *
+ * Divided by `BASE_FONT_SIZE_PX` rather than by the font a family happens to render with,
+ * which keeps every graphic at exactly the size it draws today at its own drawing zoom.
+ * That the 24 px families therefore render half again larger than `labelSize` is older than
+ * this change and left alone. @see BASE_FONT_SIZE_PX
+ */
+export function configuredLabelScale(): number {
+    return getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+}
+
+/**
+ * Zoom-anchored label scale.
+ *
+ * **No longer a fallback.** `scaleOf` used to reach for this whenever a feature carried no
+ * extent, which made a label's size depend on who built the feature: a holder-backed one
+ * has bounds, a host-built one does not, so the same graphic at the same zoom drew its
+ * designation at two different sizes with nothing in the config to account for it. A
+ * missing extent now means no cap, not a different rule. @see scaleOf
+ *
+ * What still uses it is the mission-task letter, which is genuinely anchored to the zoom
+ * the task was dropped at rather than to any extent.
  *
  * At the drawing zoom the text is exactly `labelSize` px; zoomed out it shrinks
  * proportionally, clamped to [0.3, 1.5] of `labelSize` so it stays readable at
@@ -637,7 +671,7 @@ const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * The two mission tasks that **do** carry an identity.
+ * The mission tasks that **do** carry an identity.
  *
  * The category rule below switches hostility off for every tactical mission task, on FM
  * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
@@ -655,8 +689,22 @@ const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Infiltration,
 ]);
 
+/**
+ * A graphic that carries a unit symbol carries that unit's identity.
+ *
+ * The escort and the two follow tasks are tactical mission tasks, so the category rule
+ * switched hostility off for all three -- and all three draw a **host-supplied entity
+ * symbol**: the escort in the break in its bar, the follow tasks where field T would go.
+ * An entity symbol's frame *is* its standard identity. Offering no affiliation left the
+ * symbol stuck on `pending`, so the one amplifier that decides what the drawn symbol looks
+ * like was the one the operator could not set. (User's call, 2026-08-28.)
+ *
+ * Read from {@link CENTER_SYMBOL_GRAPHICS} rather than listed again, so a graphic that
+ * gains a centre symbol later cannot gain it without the identity that frames it.
+ */
+
 export function supportsHostility(name: TacticalGraphicName): boolean {
-    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name)) return true;
+    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name) || CENTER_SYMBOL_GRAPHICS.has(name)) return true;
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
     if (TERRAIN_DESCRIPTIONS.has(name)) return false;
@@ -677,9 +725,13 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * gesture that silently does nothing.
  *
  * The OpenLayers side enforces the same thing by choosing a controller —
- * `PointDropController` no-ops both for the crossed tasks and keeps resize for the
- * readiness states; `SecurityOperationsController` no-ops resize and keeps rotate.
- * This is that knowledge as a table any renderer can read.
+ * `PointDropController` no-ops the rotate for the crossed tasks and keeps resize for
+ * the readiness states. This is that knowledge as a table any renderer can read.
+ *
+ * There was a third case here, `SecurityOperationsController`, which no-opped resize
+ * and kept rotate for cover, guard and screen. Those three stopped being fixed-size
+ * badges on 2026-08-29 and the controller was deleted with them; they are ordinary
+ * two-point line graphics now and take every gesture.
  */
 export interface AllowedGestures {
     translate: boolean;
@@ -690,14 +742,16 @@ export interface AllowedGestures {
 }
 
 /**
- * The security operations. They rotate — the arms point somewhere — but they are
- * badges and do not resize; every dimension is a screen constant.
+ * The point-anchored symbols that turn but do not resize.
+ *
+ * **Empty since 2026-08-29**, when cover, guard and screen — the only members — stopped
+ * being badges. They are drawn from two points now, so they turn by being drawn along a
+ * different axis and resize by being drawn longer; neither is a gesture on a dropped
+ * symbol any more. Kept rather than deleted because the *category* is real: a symbol whose
+ * size is fixed by doctrine but whose orientation is the operator's would belong here.
+ * @see SecurityOperation
  */
-const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
+const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
 
 /**
  * The point-anchored symbols the operator **scales but does not turn**.
@@ -709,8 +763,9 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
  *
  * **All four crossed tasks are here as of 2026-08-17.** They were fixed-size badges,
  * pinned to a constant 100 px so a stored size was divided straight back out. The
- * security operations still are, and stay out of this set: they mark a screening force,
- * not an extent of ground. @see ROTATE_ONLY_SYMBOLS
+ * security operations were the same kind of thing and were the last of them: APP-06's
+ * four anchor points made them two-point drawn graphics on 2026-08-29, so nothing in
+ * the library is a fixed-size badge any more and `ROTATE_ONLY_SYMBOLS` is empty.
  *
  * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
  * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
@@ -757,13 +812,24 @@ const SECURITY_OPERATION_REACH_PX =
     SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
 
 /**
- * Half of a security operation's own width, in screen pixels — the figure it files as its
- * `radius`, and the size its generator lays every arm out from.
+ * Half of a security operation's own width, in screen pixels.
  *
- * **It is not an amplifier.** These three refuse a resize because their size is not a user
- * input: it is this constant times the live resolution, so the symbol holds 410 x 29 px at
- * every zoom. What the number does is tell the generator how big to build, and tell a
- * saved file what the graphic's size was when it was last realised.
+ * **Re-exported from the generator, not computed here.** It used to be
+ * `labelPadding + labelGap + 2 x arrowLength` — 220 — while the arm the generator actually
+ * built reached `3 x arrowLength - arrowDepth`, 205. Two statements of one symbol's size,
+ * fifteen pixels apart, which is the drift this repository keeps finding. The generator
+ * owns the shape, so it owns the number.
+ *
+ * **It is not an amplifier**, and it is no longer how these three are sized either. It
+ * was the half-extent of a fixed-size badge — 163.35, so 326.7 px across at every zoom —
+ * back when the symbol's dimensions were this constant times the live resolution. Since
+ * 2026-08-29 cover, guard and screen are drawn from two anchor points and the generator
+ * builds the arms from the *base*, ignoring `radius` entirely; a renderer that forces
+ * this number in gets byte-identical geometry for its trouble.
+ *
+ * It stays exported because it shipped, and because it is still the figure a host needs
+ * to place one of these three from a single point plus a size — which is how a symbol
+ * dropped on an existing unit is positioned.
  *
  * It is here because the two engines were saying different things about it. MapLibre
  * computed this expression inline and re-derived it on every build; OpenLayers filed
@@ -781,8 +847,7 @@ const SECURITY_OPERATION_REACH_PX =
  * these symbols are placed in projected space and hold their pixel size at any latitude.
  * @see placeOriginCentered
  */
-export const SECURITY_OPERATION_HALF_EXTENT_PX =
-    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + 2 * SECURITY_OPERATION_PX.arrowLength;
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from '../graphics/SecurityOperation';
 
 /**
  * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by
@@ -815,14 +880,10 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // Twice the crossed tasks', which was only the number these were specified from
     // rather than the size they landed on.
     [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
-    // The security operations, whose arms reach label padding + gap + arrow. Computed
-    // from the table the generator lays them out with rather than restated, so the drop
-    // cannot drift away from the symbol. They are pinned, so nothing *renders* from this
-    // — but a stored size that means something beats `DEFAULT_RADIUS_METERS`, which is
-    // what they were getting.
-    [TacticalGraphicName.Cover]: SECURITY_OPERATION_REACH_PX,
-    [TacticalGraphicName.Guard]: SECURITY_OPERATION_REACH_PX,
-    [TacticalGraphicName.Screen]: SECURITY_OPERATION_REACH_PX,
+    // The security operations are **not dropped** as of 2026-08-29: the operator draws one
+    // arrow and the other is derived, so there is no one-click size to state. Removing
+    // them from here is what tells a renderer to wait for the second point instead of
+    // finishing on the first. @see SecurityOperation, BASE_VERTEX_COUNT
 };
 
 /**

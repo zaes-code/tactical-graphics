@@ -19,7 +19,7 @@ import {TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **280 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
+ * **283 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -247,6 +247,9 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ObstacleLine]:                                '290100',  // Obstacle Line
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]:        '151202',  // Battle Position Prepared (P) but Not Occupied
     [TacticalGraphicName.Capture]:                                     '343000',  // Capture
+    [TacticalGraphicName.Seize]:                                       '342300',  // Seize
+    [TacticalGraphicName.FollowAndAssume]:                             '341200',  // Follow and Assume
+    [TacticalGraphicName.FollowAndSupport]:                            '341300',  // Follow and Support
     [TacticalGraphicName.Escort]:                                      '343600',  // Escort
     [TacticalGraphicName.Demonstration]:                               '343300',  // Demonstration/Demonstrate
     [TacticalGraphicName.Evacuate]:                                    '344500',  // Evacuate

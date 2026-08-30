@@ -298,9 +298,10 @@ export class PointDropController extends MissionTaskController {
     private readonly fixedSize: number;
 
     /**
-     * `resizable` opts back into the inherited resize. The crossed tasks are fixed-size
-     * symbols and leave it off; the explosives readiness states are dropped the same way
-     * but the user scales them afterwards, which is the only difference between them.
+     * `resizable` opts back into the inherited resize. Both the crossed tasks and the
+     * explosives readiness states are dropped whole on one click and scaled afterwards;
+     * what the crossed tasks refuse is the rotate, which is a different switch.
+     * @see allowedGestures, the portable table both engines read.
      */
     constructor(
         graphic: MissionTaskGraphic,

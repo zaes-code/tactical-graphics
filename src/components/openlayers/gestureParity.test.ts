@@ -107,13 +107,16 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         });
         expect(refusing.length).toBeGreaterThan(5);
 
-        // The two kinds of refusal, named so a change to either is deliberate.
+        // The refusal that remains, named so a change to it is deliberate.
         //
-        // The security operations are the library's only remaining fixed-size symbols:
-        // they mark a screening force rather than an extent of ground, so they turn but do
-        // not scale. Every crossed mission task left that group on 2026-08-17.
-        expect(allowedGestures(TacticalGraphicName.Cover).rotate).toBe(true);
-        expect(allowedGestures(TacticalGraphicName.Cover).resize).toBe(false);
+        // The security operations used to be the other kind — turned but not scaled,
+        // because a badge has no extent to scale. They are drawn from two points as of
+        // 2026-08-29 and take both gestures like any other drawn graphic; the library has
+        // no fixed-size symbol left. Every crossed mission task left that group on
+        // 2026-08-17.
+        for (const name of [TacticalGraphicName.Cover, TacticalGraphicName.Guard, TacticalGraphicName.Screen]) {
+            expect(allowedGestures(name).resize).toBe(true);
+        }
         for (const name of [
             TacticalGraphicName.Airfield,
             TacticalGraphicName.Destroy,

@@ -149,10 +149,33 @@ describe('buildTacticalGraphic', () => {
         ]) {
             expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(4, 2);
         }
-        // The security operations are the last fixed-size symbols, and are here so that
-        // unpinning the crossed tasks cannot quietly take them too.
+        /*
+         * **There is no pinned symbol left to check.** The security operations were the
+         * last, and they are drawn from two points as of 2026-08-29 — so they scale with
+         * the map like everything else here, from a line base rather than a point.
+         *
+         * They stay in this test because the property still matters, only the other way
+         * round: a graphic that quietly went back to a screen constant would show up as a
+         * ratio of 1.
+         */
         for (const name of [TacticalGraphicName.Cover, TacticalGraphicName.Screen]) {
-            expect(widthPx(name, 100) / widthPx(name, 400)).toBeCloseTo(1, 2);
+            const drawn = (resolution: number) => {
+                const built = buildTacticalGraphic(
+                    name,
+                    {type: 'LineString', coordinates: [[0, 0], [0.2, 0]]},
+                    {rotation: 0},
+                    resolution,
+                );
+                const xs: number[] = [];
+                for (const paint of paintTacticalGraphic(built!, {...context, resolution})) {
+                    const geometry = paint.geometry;
+                    if (geometry.type === 'MultiLineString') {
+                        for (const line of geometry.coordinates) xs.push(...line.map(c => c[0]));
+                    }
+                }
+                return (Math.max(...xs) - Math.min(...xs)) / resolution;
+            };
+            expect(drawn(100) / drawn(400)).toBeCloseTo(4, 2);
         }
     });
 
