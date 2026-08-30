@@ -14,6 +14,7 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
 import {TacticalGraphicHostility, TacticalGraphicName, getColorByHostility} from '@zaes/tactical-graphics';
+import {hiddenAmplifierIds, setAmplifiersHidden} from '../amplifierVisibility';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './graphicProperties';
@@ -176,5 +177,35 @@ export function createOpenLayersPropertiesSource(
                 });
             }
         },
+
+        setAmplifiersHidden(selection, hidden) {
+            if (!selection.id) return;
+            setAmplifiersHidden(selection.id, hidden);
+            stampAmplifierVisibility(map, selection.id, hidden);
+        },
     };
+}
+
+/**
+ * Puts the host's choice onto the features the renderer reads.
+ *
+ * `feature.set` alone dispatches `propertychange` without moving the revision counter, so
+ * `changed()` is what actually redraws — the same reason `writeGraphicProperties` calls it.
+ */
+export function stampAmplifierVisibility(map: OlMap, symbolId: string, hidden: boolean): void {
+    for (const layer of map.getLayers().getArray()) {
+        if (!(layer instanceof VectorLayer)) continue;
+        const source = layer.getSource();
+        if (!source) continue;
+        for (const feature of source.getFeatures()) {
+            if (feature.get('symbolId') !== symbolId) continue;
+            feature.set('hideAmplifiers', hidden || undefined);
+            feature.changed();
+        }
+    }
+}
+
+/** Re-applies every remembered choice — call after restoring a saved map. */
+export function restampAmplifierVisibility(map: OlMap): void {
+    hiddenAmplifierIds().forEach(id => stampAmplifierVisibility(map, id, true));
 }

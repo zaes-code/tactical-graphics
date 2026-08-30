@@ -321,6 +321,10 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
     return {
         geometry,
         properties: {...bag, name: resolvedName},
+        // A host's view state, stamped on the feature rather than stored in the bag —
+        // saving a graphic must not save someone's display preference with it.
+        // @see PaintFeature.hideAmplifiers
+        hideAmplifiers: feature.get('hideAmplifiers') as boolean | undefined,
         graphicSize: feature.get('graphicSize') as number | undefined,
         drawingResolution: feature.get('drawingResolution') as number | undefined,
         graphicCenter: feature.get('graphicCenter') as ProjectedPosition | undefined,
@@ -372,7 +376,7 @@ export function asStyleFunction(
         // Every OpenLayers paint passes through here, so the hide-amplifiers toggle is
         // applied once rather than per family. @see withHiddenAmplifiers
         return paintToOlStyles(
-            withHiddenAmplifiers(paint(paintFeature, paintContext(resolution)), paintFeature.properties),
+            withHiddenAmplifiers(paint(paintFeature, paintContext(resolution)), paintFeature.hideAmplifiers),
         );
     };
 }

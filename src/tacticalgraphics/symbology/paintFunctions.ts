@@ -47,7 +47,6 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {capLabelToGraphic} from './labelFit';
-import type {TacticalGraphicProperties} from '../core/render';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -70,7 +69,7 @@ import {
  * @see withHiddenAmplifiers for the marks that can be dropped whole.
  */
 export function amplifierText(feature: PaintFeature, value: string): string {
-    return feature.properties.hideAmplifiers ? '' : value;
+    return feature.hideAmplifiers ? '' : value;
 }
 
 /**
@@ -85,8 +84,8 @@ export function amplifierText(feature: PaintFeature, value: string): string {
  * stays — the safe direction, since a stray date is noise and a missing letter is a
  * different symbol. @see TextKind
  */
-export function withHiddenAmplifiers(paints: Paint[], properties: TacticalGraphicProperties | undefined): Paint[] {
-    if (!properties?.hideAmplifiers) return paints;
+export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
+    if (!hidden) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
 }
 

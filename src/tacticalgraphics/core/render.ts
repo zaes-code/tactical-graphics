@@ -120,24 +120,6 @@ export interface TacticalGraphicProperties {
     /** Weapon designation. Today only FinalProtectiveFire renders this. */
     weapon?: string;
 
-    /**
-     * Draw only the graphic and its name, hiding every other amplifier.
-     *
-     * A planning map carries a lot of graphics, and most of what an operator types on one
-     * is reference detail rather than something to read at a glance: dates, altitudes,
-     * widths, field H, a corridor's information block. This hides those and leaves the
-     * symbol and its designation — which is what a reader identifies a graphic by.
-     *
-     * **The symbol itself is never hidden.** A cover's `C`, a mission task's letter, a
-     * `PL` prefix and a corridor's `ACP n` are the graphic rather than an annotation on it;
-     * `TextKind` is what separates the two, and only `amplifier` text goes.
-     *
-     * Per graphic, because it is a display choice about *this* graphic on *this* map, not
-     * a property of the symbol — two corridors side by side may reasonably differ.
-     * (User's call, 2026-08-29.)
-     */
-    hideAmplifiers?: boolean;
-
     // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
     status?: TacticalGraphicStatus;
@@ -276,12 +258,6 @@ export interface TacticalGraphicProperties {
 export interface GraphicLabels {
     /** Field T. @see TacticalGraphicProperties.designation */
     designation: string;
-    /**
-     * Show the graphic and its designation only. **A display choice, not an amplifier** —
-     * it is here because this is the bag the dialog edits and the renderers read.
-     * @see TacticalGraphicProperties.hideAmplifiers
-     */
-    hideAmplifiers?: boolean;
     countryCode?: string;
     /** Field T1. @see TacticalGraphicProperties.secondDesignation */
     secondDesignation?: string;

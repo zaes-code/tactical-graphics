@@ -153,15 +153,6 @@ tacticalGraphic: {
                               // the word under that icon, and the color the area is
                               // hatched in
 
-    // Display, not doctrine.
-    hideAmplifiers: true,     // draw the graphic and its designation, and hide every
-                              // other amplifier: dates, altitudes, widths, field H, a
-                              // corridor's information block. The symbol's own text is
-                              // never hidden — a cover's C, a mission task's letter, a
-                              // PL prefix, an ACP number — so a graphic still reads as
-                              // itself. Per graphic, because it is a choice about this
-                              // graphic on this map.
-
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
@@ -640,6 +631,28 @@ const features = new GeoJSON().readFeatures(
 );
 source.addFeatures(features);
 ```
+
+### Showing a graphic's name only
+
+Set `hideAmplifiers` on the **feature**, not in the `tacticalGraphic` bag, and the graphic
+draws its symbol and designation while every annotation — dates, altitudes, widths, field
+H, a corridor's information block — goes:
+
+```ts
+graphicFeature.set('hideAmplifiers', true);
+labelFeature.set('hideAmplifiers', true);
+```
+
+**The symbol's own text is never hidden.** A cover's `C`, a mission task's letter, a `PL`
+prefix, an `ACP` number: hide those and the reader is looking at a different graphic.
+`TextKind` is what separates the two, and a mark that never says which it is counts as part
+of the symbol — a stray date is noise, a missing letter is wrong.
+
+It is deliberately **not** part of the portable description. It says nothing about what the
+symbol is: two identical corridors side by side may reasonably differ, and none of it
+should travel in a file another operator opens. So the host keeps the choice wherever its
+other view state lives — a store, a URL, local storage — and supplies it at render time,
+the way it supplies `graphicSize`. On MapLibre the same flag goes on the `PaintFeature`.
 
 ### Your own features, our styling
 
