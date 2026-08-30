@@ -58,6 +58,9 @@ export {stylesFor} from './stylesFor';
 // The other half of what a host building its own features needs: `stylesFor` says how a
 // graphic is drawn, this says how big the shape it is drawn against is. @see publishGraphicExtent
 export {publishGraphicExtent} from './publishGraphicExtent';
+// Both of the above in the order they have to happen. @see prepareFeatures
+export {prepareFeatures} from './prepareFeatures';
+export type {PreparedFeatures, PrepareOptions} from './prepareFeatures';
 export type {GraphicStyles} from './stylesFor';
 
 // Configuration — label size, line width, colors. These are **re-exports**: the config
