@@ -20,6 +20,7 @@
 
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import {setAmplifiersHidden} from '../amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {buildTacticalGraphic} from './maplibreAdapter';
@@ -117,6 +118,23 @@ export function createMapLibrePropertiesSource(
             // refuses the new amplifiers. Leaving the old graphic up is better than
             // removing it, since the user has just been told the edit applied.
             if (rebuilt) renderer.replace(selection.id, {...rebuilt, id: selection.id});
+        },
+
+        setAmplifiersHidden(selection, hidden) {
+            if (!selection.id) return;
+            setAmplifiersHidden(selection.id, hidden);
+
+            // MapLibre bakes each paint result into a GeoJSON source, so a flag that only
+            // the paints read has to be put on the paint features and the graphic
+            // re-realized. The OpenLayers half stamps the OL feature instead; both end up
+            // handing the same `PaintFeature.hideAmplifiers` to the same paint function.
+            const current = renderer.find(selection.id);
+            if (!current) return;
+            renderer.replace(selection.id, {
+                ...current,
+                graphic: {...current.graphic, hideAmplifiers: hidden || undefined},
+                labels: current.labels ? {...current.labels, hideAmplifiers: hidden || undefined} : current.labels,
+            });
         },
     };
 }

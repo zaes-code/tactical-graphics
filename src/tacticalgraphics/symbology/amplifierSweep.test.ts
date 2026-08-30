@@ -112,7 +112,8 @@ function linesFor(name: TacticalGraphicName, extra: Record<string, unknown>): st
     const painters = getPaintFunction(name);
     if (!painters) return [];
 
-    const properties = {name, ...BAG, ...extra} as never;
+    const {hideAmplifiers, ...bag} = {...BAG, ...extra} as Record<string, unknown>;
+    const properties = {name, ...bag} as never;
     const rendered = renderTacticalGraphic({
         type: 'Feature',
         geometry: baseFor(name) as never,
@@ -124,6 +125,7 @@ function linesFor(name: TacticalGraphicName, extra: Record<string, unknown>): st
             geometry: project(geometry as never),
             properties,
             graphicSize: 20_000,
+            hideAmplifiers,
             bounds: {minX: -3e6, minY: -3e6, maxX: 3e6, maxY: 3e6},
         }) as unknown as PaintFeature;
 
@@ -132,7 +134,7 @@ function linesFor(name: TacticalGraphicName, extra: Record<string, unknown>): st
     if (rendered.labels) drawn.push(...(painters.label?.(featureFor(rendered.labels.geometry), context) ?? []));
 
     const out: string[] = [];
-    for (const paint of withHiddenAmplifiers(drawn, properties)) {
+    for (const paint of withHiddenAmplifiers(drawn, hideAmplifiers as boolean | undefined)) {
         if (!paint.text?.text) continue;
         for (const line of String(paint.text.text).split(/\r?\n/)) {
             const trimmed = line.replace(/\s+/g, ' ').trim();

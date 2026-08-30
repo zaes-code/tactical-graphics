@@ -30,21 +30,28 @@ const context: PaintContext = {
 
 const LEG: ProjectedPosition[] = [[0, 0], [40_000, 0], [80_000, 0]];
 
-/** Every string a graphic draws, with the toggle either way. */
-function textsFor(name: TacticalGraphicName, properties: Record<string, unknown>): string[] {
+/**
+ * Every string a graphic draws, with the toggle either way.
+ *
+ * `hideAmplifiers` is a field on the **feature**, not in its properties: it is a view input
+ * the host supplies at render time, the way `graphicSize` is, and never part of the
+ * portable description. @see PaintFeature.hideAmplifiers
+ */
+function textsFor(name: TacticalGraphicName, {hideAmplifiers, ...properties}: Record<string, unknown>): string[] {
     const painters = getPaintFunction(name);
     if (!painters) return [];
     const feature = {
         geometry: {type: 'MultiPoint', coordinates: LEG},
         properties: {name, ...properties},
         graphicSize: 8_000,
+        hideAmplifiers: hideAmplifiers as boolean | undefined,
     } as unknown as PaintFeature;
 
     const drawn: Paint[] = [
         ...(painters.graphic?.(feature, context) ?? []),
         ...(painters.label?.(feature, context) ?? []),
     ];
-    return withHiddenAmplifiers(drawn, feature.properties)
+    return withHiddenAmplifiers(drawn, feature.hideAmplifiers)
         .map(paint => paint.text?.text)
         .filter((text): text is string => typeof text === 'string');
 }
@@ -87,24 +94,24 @@ describe('withHiddenAmplifiers', () => {
 
     it('changes nothing when the graphic is not hiding anything', () => {
         const paints = [mark('C'), mark('011200ZJUL', 'amplifier')];
-        expect(withHiddenAmplifiers(paints, {name: TacticalGraphicName.Cover} as never)).toHaveLength(2);
+        expect(withHiddenAmplifiers(paints, false)).toHaveLength(2);
     });
 
     it('drops amplifier text and keeps everything else', () => {
         const paints = [mark('C'), mark('TF RAIDER', 'designation'), mark('011200ZJUL', 'amplifier')];
-        const kept = withHiddenAmplifiers(paints, {hideAmplifiers: true} as never).map(p => p.text!.text);
+        const kept = withHiddenAmplifiers(paints, true).map(p => p.text!.text);
         expect(kept).toEqual(['C', 'TF RAIDER']);
     });
 
     it('keeps a mark that never said what it was', () => {
         // The safe direction: an unclassified mark is more likely to be part of the symbol
         // than an annotation, and drawing one too many beats drawing a different symbol.
-        const kept = withHiddenAmplifiers([mark('ACP 2')], {hideAmplifiers: true} as never);
+        const kept = withHiddenAmplifiers([mark('ACP 2')], true);
         expect(kept).toHaveLength(1);
     });
 
     it('leaves marks that carry no text at all', () => {
         const line: Paint = {geometry: {type: 'LineString', coordinates: LEG}, stroke: {color: '#000', widthPx: 2}};
-        expect(withHiddenAmplifiers([line], {hideAmplifiers: true} as never)).toEqual([line]);
+        expect(withHiddenAmplifiers([line], true)).toEqual([line]);
     });
 });
