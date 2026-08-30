@@ -270,7 +270,7 @@ export function humanTerrainLabelPaint(): AreaLabelPaint {
 
         const lines = [
             getLabel(TacticalGraphicName.HumanTerrain),
-            (feature.properties.additionalInfo ?? '').trim(),
+            amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()),
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
 

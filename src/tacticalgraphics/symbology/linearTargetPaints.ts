@@ -12,7 +12,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {offsetAbove, offsetBelow, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, amplifierText, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Half-height of the end caps, in screen pixels **at the drawing resolution**. */
 const BAR_HALF_PX = 14;
@@ -134,7 +134,9 @@ export function linearSmokeTargetPaint(name: TacticalGraphicName): (f: PaintFeat
 export function finalProtectiveFirePaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
         const {designation, secondDesignation, weapon} = feature.properties;
-        const belowLines = ['FPF', secondDesignation ?? '', weapon ?? ''].filter(s => s.length > 0);
+        // 'FPF' is the symbol and the second designation names the target; the weapon is
+        // an annotation on both, so only it goes when the graphic is showing its name only.
+        const belowLines = ['FPF', secondDesignation ?? '', amplifierText(feature, weapon ?? '')].filter(s => s.length > 0);
         // Not trimmed: matching the original exactly, so the port cannot change what
         // a user's trailing space does.
         return linearTargetPaints(feature, context, designation ?? '', belowLines);
