@@ -203,19 +203,33 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * At least one leg always draws: the size is capped by the widest leg's own
          * allowance, so that leg passes the test by construction.
          */
-        const legWidthPx = (circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX) * 2;
+        const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
+        const legWidthPx = radiusPx * 2;
         // Two dimensions, two caps: the label's length against the leg it runs along --
         // per leg, since legs differ -- and its height against the gap between the rails,
         // which is one number for the whole corridor.
         const heightCap = (legWidthPx * LEG_LABEL_HEIGHT_SHARE) / BASE_FONT_SIZE_PX;
-        const legSpanCaps: number[] = [];
+        /*
+         * **The run between the circles, not the whole leg.**
+         *
+         * A leg's endpoints are turning points, and every turning point carries an `ACP n`
+         * circle of `radiusPx`. The label is centred on the leg's midpoint, so measuring
+         * it against the *whole* leg let it grow straight through the circles at either
+         * end -- the closer the circles were to each other, the more of the label they
+         * covered. What is actually available is the clear span between them.
+         *
+         * Zero for a leg whose circles already meet or overlap. `capLabelToSpan` returns
+         * the desired scale unchanged for a non-positive span -- reasonable for it, wrong
+         * here -- so that case is answered before it is asked: no room means this leg
+         * cannot carry the label at any size, which is what a zero says.
+         */
+        const legClearCaps: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
-            legSpanCaps.push(capLabelToSpan(context, text, fontStyle, baseScale, legPx));
+            const clearPx = legPx - legWidthPx;
+            legClearCaps.push(clearPx > 0 ? capLabelToSpan(context, text, fontStyle, baseScale, clearPx) : 0);
         }
-        const designationScale = legSpanCaps.length
-            ? Math.min(heightCap, Math.max(...legSpanCaps))
-            : baseScale;
+        const designationScale = legClearCaps.length ? Math.min(heightCap, Math.max(...legClearCaps)) : baseScale;
 
         const infoLines: string[] = [];
         const corridorName = props.designation?.trim();
@@ -263,11 +277,18 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
              * the rails' reach from them means guessing. Falls back to the vertices minus
              * the radius, which is where the rails are, for anything that stamps no extent.
              */
-            const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
             const westEdge = feature.bounds ? feature.bounds.minX : minX - radiusPx * context.resolution;
             const anchorX = westEdge - INFO_BLOCK_GAP_PX * baseScale * context.resolution;
+            /*
+             * Held to the designation so the block never reads as the more important of
+             * the two -- but not to a *zero* designation. When the circles leave no leg
+             * able to carry the name, no name is drawn, and the block is the only thing
+             * still saying what the corridor is. It sits outside the graphic and cannot
+             * collide with anything, so it keeps its own cap instead.
+             */
+            const blockCeiling = designationScale > 0 ? designationScale : Math.min(heightCap, baseScale);
             const blockScale = Math.min(
-                designationScale,
+                blockCeiling,
                 capLabelToSpan(context, infoText, fontStyle, baseScale, pathLength(coords) / context.resolution),
             );
             paints.push(amplifier(feature, [anchorX, anchorY], infoText, blockScale, {
@@ -303,9 +324,9 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             let rotation = -Math.atan2(y1 - y0, x1 - x0);
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
-            // One size for the whole corridor, and only on the legs that can hold it.
-            // @see designationScale
-            if (legSpanCaps[i] >= designationScale) {
+            // One size for the whole corridor, and only on the legs that can hold it
+            // clear of their own ACP circles. @see designationScale
+            if (designationScale > 0 && legClearCaps[i] >= designationScale) {
                 paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, designationScale, {rotation}));
             }
             paints.push(acpAt(i));
