@@ -44,6 +44,7 @@ import {
     supportsHostility,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
+import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {capLabelToGraphic} from './labelFit';
 import type {TacticalGraphicProperties} from '../core/render';
@@ -87,6 +88,51 @@ export function amplifierText(feature: PaintFeature, value: string): string {
 export function withHiddenAmplifiers(paints: Paint[], properties: TacticalGraphicProperties | undefined): Paint[] {
     if (!properties?.hideAmplifiers) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * A representative latitude for the feature, in degrees.
+ *
+ * Any point on the graphic will do: the scale factor changes slowly enough over a symbol's
+ * own extent that which one is picked cannot matter, and the alternative — reprojecting
+ * through a map library — is exactly what the paint layer exists not to do.
+ * @see latitudeFromMercatorY
+ */
+export function featureLatitude(feature: PaintFeature): number {
+    if (feature.bounds) return latitudeFromMercatorY((feature.bounds.minY + feature.bounds.maxY) / 2);
+    const firstY = (function find(node: unknown): number | undefined {
+        if (Array.isArray(node)) {
+            if (typeof node[0] === 'number') return node[1] as number;
+            for (const child of node) {
+                const y = find(child);
+                if (y !== undefined) return y;
+            }
+            return undefined;
+        }
+        const geometry = node as {coordinates?: unknown; geometries?: unknown[]};
+        if (geometry?.geometries) return find(geometry.geometries);
+        return geometry?.coordinates === undefined ? undefined : find(geometry.coordinates);
+    })(feature.geometry);
+    return firstY === undefined ? 0 : latitudeFromMercatorY(firstY);
+}
+
+/**
+ * How many screen pixels a **ground** distance covers where this graphic is drawn.
+ *
+ * `metres / resolution` is the answer only on the equator. The portable description states
+ * real distances — a radius, a width, a corridor's half-width — while the resolution is
+ * projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. So
+ * dividing one by the other under-reports the symbol's on-screen size by that factor:
+ * 1.6x at 50 degrees, 5.8x at 80.
+ *
+ * That is not a rounding error where the result feeds a cap. A corridor 40 px wide at 80
+ * degrees north measured as 7 px, and its designation was shrunk to fit the 7 — a
+ * four-pixel label on a corridor with room for a legible one. `mercator.ts` already states
+ * this rule for the generators, which convert the other way when a symbol is drawn; this
+ * is the same rule on the way back out.
+ */
+export function groundPixels(metres: number, feature: PaintFeature, context: PaintContext): number {
+    return projectedLength(metres, featureLatitude(feature)) / context.resolution;
 }
 
 /** A graphic's static prefix joined to the user's free text — "PL", "PL BLUE". */
