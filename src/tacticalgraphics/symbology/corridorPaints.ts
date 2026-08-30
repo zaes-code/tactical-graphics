@@ -231,14 +231,35 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         }
         const designationScale = legClearCaps.length ? Math.min(heightCap, Math.max(...legClearCaps)) : baseScale;
 
-        const infoLines: string[] = [];
+        /*
+         * **`WIDTH` is not on its own a reason to draw the block.**
+         *
+         * The other five lines are things somebody typed. `width` is not: the holder
+         * mirrors the corridor's drawn half-width into the amplifier on every rebuild,
+         * and typing a width resizes the corridor to match — so the value can never
+         * disagree with the shape, and a block containing nothing else says nothing the
+         * corridor does not already say. A freshly drawn corridor got one anyway,
+         * reading `WIDTH: 391 km` back at the person who had just dragged it.
+         *
+         * So the width is counted as a *supporting* line: printed whenever the block is
+         * drawn, never the cause of it. Enter a name, an altitude or a DTG and the block
+         * appears with the width alongside. (User's call, 2026-08-30.)
+         */
         const corridorName = props.designation?.trim();
-        if (corridorName) infoLines.push(`NAME:       ${corridorName}`);
-        if (props.width) infoLines.push(`WIDTH:      ${formatWidthAmplifier(String(props.width))}`);
-        if (props.minAltitude) infoLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude, props.altitudeDatum)}`);
-        if (props.maxAltitude) infoLines.push(`MAX ALT:    ${formatAltitude(props.maxAltitude, props.altitudeDatum)}`);
-        if (props.startDate) infoLines.push(`DTG START:  ${props.startDate}`);
-        if (props.endDate) infoLines.push(`DTG END:    ${props.endDate}`);
+        /** The lines somebody typed. One of these is what makes the block worth drawing. */
+        const authoredLines: string[] = [];
+        if (corridorName) authoredLines.push(`NAME:       ${corridorName}`);
+        if (props.minAltitude) authoredLines.push(`MIN ALT:    ${formatAltitude(props.minAltitude, props.altitudeDatum)}`);
+        if (props.maxAltitude) authoredLines.push(`MAX ALT:    ${formatAltitude(props.maxAltitude, props.altitudeDatum)}`);
+        if (props.startDate) authoredLines.push(`DTG START:  ${props.startDate}`);
+        if (props.endDate) authoredLines.push(`DTG END:    ${props.endDate}`);
+
+        // Width keeps its doctrinal place under the name, so the block reads in the same
+        // order it always did — it just no longer brings the block into being on its own.
+        const infoLines = authoredLines.length ? [...authoredLines] : [];
+        if (props.width && infoLines.length) {
+            infoLines.splice(corridorName ? 1 : 0, 0, `WIDTH:      ${formatWidthAmplifier(String(props.width))}`);
+        }
 
         if (infoLines.length) {
             /*

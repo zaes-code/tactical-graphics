@@ -209,3 +209,47 @@ describe('the designation keeps clear of the ACP circles', () => {
         expect(block!.text!.scale).toBeGreaterThan(0);
     });
 });
+
+/**
+ * # `WIDTH` alone is not a reason to draw the amplifier block
+ *
+ * The other five lines are things somebody typed. `width` is not: the holder mirrors the
+ * corridor's drawn half-width into the amplifier on every rebuild, and typing a width
+ * resizes the corridor to match — so the value can never disagree with the shape. A
+ * freshly drawn corridor still got a block, reading `WIDTH: 391 km` back at the person
+ * who had just dragged it.
+ */
+describe('the amplifier block on a corridor nobody has annotated', () => {
+    const withProps = (extra: Record<string, unknown>) =>
+        ({
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [600 * context.resolution, 0]]},
+            properties: {name: TacticalGraphicName.AirCorridor, width: 60_000, ...extra},
+            graphicSize: 30_000,
+        }) as unknown as PaintFeature;
+
+    const block = (feature: PaintFeature) =>
+        airCorridorLabelPaint(TacticalGraphicName.AirCorridor)(feature, context).find(p => p.text?.text.includes(':'))?.text?.text;
+
+    it('is not drawn when the width is all there is to say', () => {
+        expect(block(withProps({}))).toBeUndefined();
+    });
+
+    it('appears as soon as something authored is set', () => {
+        expect(block(withProps({designation: 'BLUE'}))).toContain('NAME:');
+        expect(block(withProps({minAltitude: '1500'}))).toContain('MIN ALT:');
+        expect(block(withProps({startDate: '011200ZJAN25'}))).toContain('DTG START:');
+    });
+
+    it('still prints the width once the block exists, under the name', () => {
+        const lines = (block(withProps({designation: 'BLUE', maxAltitude: '20000'})) ?? '').split('\n');
+        expect(lines[0]).toContain('NAME:');
+        expect(lines[1]).toContain('WIDTH:');
+        expect(lines[2]).toContain('MAX ALT:');
+    });
+
+    it('puts the width first when there is no name above it', () => {
+        const lines = (block(withProps({maxAltitude: '20000'})) ?? '').split('\n');
+        expect(lines[0]).toContain('WIDTH:');
+        expect(lines[1]).toContain('MAX ALT:');
+    });
+});
