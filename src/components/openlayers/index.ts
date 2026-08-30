@@ -55,6 +55,9 @@ export * from './openlayerStyles';
 // graphics into its own layer needs the pairing the holders make, and `getStyle` — the
 // one that looks like this answer — is the area outline alone. @see stylesFor
 export {stylesFor} from './stylesFor';
+// The other half of what a host building its own features needs: `stylesFor` says how a
+// graphic is drawn, this says how big the shape it is drawn against is. @see publishGraphicExtent
+export {publishGraphicExtent} from './publishGraphicExtent';
 export type {GraphicStyles} from './stylesFor';
 
 // Configuration — label size, line width, colors. These are **re-exports**: the config
