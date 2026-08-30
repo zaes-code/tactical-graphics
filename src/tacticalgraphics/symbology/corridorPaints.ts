@@ -186,22 +186,36 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * name reads as the more important of the two, which it is not. (User's call,
          * 2026-08-29.)
          *
-         * Each leg gets its own answer because legs differ in length; the block is capped
-         * at the largest of them, which is the designation at its most prominent. Capping
-         * at the smallest would let one short leg shrink the block to nothing.
+         * **One size for the whole corridor, and only on the legs that can hold it.**
+         *
+         * Each leg used to get its own answer, because legs differ in length and a label
+         * must not overrun the one it lies along. That drew a corridor's own name at as
+         * many sizes as it had legs -- measured in the field, one four-leg corridor
+         * rendered `AC CORRIDOR BLUE` at 53, 78, 121 and 163 px at a single zoom, which
+         * reads as a rendering fault rather than as four labels each politely fitting.
+         *
+         * A corridor has one name, so it gets one size: the largest any leg can carry,
+         * held to the corridor's width. A leg that cannot hold the label at that size is
+         * **skipped**, the way a road name appears only where the road has room for it.
+         * Sizing to the *shortest* leg instead would be worse -- one stub would shrink
+         * the name along the whole corridor. (User's call, 2026-08-30.)
+         *
+         * At least one leg always draws: the size is capped by the widest leg's own
+         * allowance, so that leg passes the test by construction.
          */
         const legWidthPx = (circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX) * 2;
-        const legScales: number[] = [];
+        // Two dimensions, two caps: the label's length against the leg it runs along --
+        // per leg, since legs differ -- and its height against the gap between the rails,
+        // which is one number for the whole corridor.
+        const heightCap = (legWidthPx * LEG_LABEL_HEIGHT_SHARE) / BASE_FONT_SIZE_PX;
+        const legSpanCaps: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
-            // Two dimensions, two caps: the label's length against the leg it runs along,
-            // and its height against the gap between the rails it runs between.
-            legScales.push(Math.min(
-                capLabelToSpan(context, text, fontStyle, baseScale, legPx),
-                (legWidthPx * LEG_LABEL_HEIGHT_SHARE) / BASE_FONT_SIZE_PX,
-            ));
+            legSpanCaps.push(capLabelToSpan(context, text, fontStyle, baseScale, legPx));
         }
-        const designationScale = legScales.length ? Math.max(...legScales) : baseScale;
+        const designationScale = legSpanCaps.length
+            ? Math.min(heightCap, Math.max(...legSpanCaps))
+            : baseScale;
 
         const infoLines: string[] = [];
         const corridorName = props.designation?.trim();
@@ -289,9 +303,11 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             let rotation = -Math.atan2(y1 - y0, x1 - x0);
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
-            // Capped by the leg's length, which it must not overrun, and by the corridor's
-            // width, which it must not spill out of sideways. @see legScales
-            paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, legScales[i], {rotation}));
+            // One size for the whole corridor, and only on the legs that can hold it.
+            // @see designationScale
+            if (legSpanCaps[i] >= designationScale) {
+                paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, designationScale, {rotation}));
+            }
             paints.push(acpAt(i));
         }
 
