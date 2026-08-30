@@ -89,6 +89,14 @@ the npm publish dates — when a version actually became installable.
 
 - **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
 
+### Added
+
+- **`publishGraphicExtent(labels, graphic)` on the `/openlayers` entry point.** Several symbols are *fitted to the area they land in* rather than drawn at a fixed size — the CBRN triangle, the airfield zone's crossed runways, the sector-1 modifier glyphs, and every label held to a share of its own shape. The fit reads `bounds` and `ring`, and those ride the **label** feature, which is a bare anchor point with no shape of its own to measure.
+
+  A holder built by this package publishes them as a side effect of drawing. A host that builds its own features — the shape `stylesFor` exists to serve — published nothing, so `fitSymbolScale` fell back to its no-bounds answer and every fitted symbol came out at a fixed size in metres. Measured in a consuming app, a CBRN triangle drew **12 px across** at a zoom where its area was over 500: right while the graphic was being drawn, because the draw is holder-backed, and tiny the moment it was committed.
+
+  The keys therefore stop being private to the holders. This is the same stamp `AreaGraphicBase` makes, exported so a host can make it too, and so that what the keys are called stays this package's business rather than something a consumer reverse-engineers. A graphic with no interior — a line, a point — publishes an extent and no ring, because a ring invented from a bounding box reports room that is not there.
+
 ### Changed
 
 - **`WIDTH` alone no longer brings a corridor's amplifier block into being.** The block's other five lines are things somebody typed. `width` is not: the holder mirrors the corridor's drawn half-width into the amplifier on every rebuild, and typing a width resizes the corridor to match, so the value can never disagree with the shape. A freshly drawn corridor got a block anyway, reading `WIDTH: 391 km` back at the person who had just dragged it — the only thing in it, on the preview and after the draw finished.
