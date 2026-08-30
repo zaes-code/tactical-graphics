@@ -5,26 +5,16 @@
  * this what draws a graphic; `isPaintable` is how it finds out whether the answer
  * exists yet.
  *
- * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The three
- * OpenLayers registries are exhaustive so the compiler walks you through adding a
- * graphic, and this one will be too once every style function is ported. Making it
- * exhaustive now would mean 190-odd entries pointing at a placeholder, which reads
- * as "done" and is the opposite of what a partial port should leave behind.
+ * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done —
+ * `isPaintable` is true for 291 of the 292 registered names — but the one exception is
+ * real: `AxisOfAttack` is a generator with no enum member, no controller and no UI path.
+ * An exhaustive record would have to name it, and naming it would mean either a
+ * placeholder that reads as "done" or a member the enum does not have.
  *
- * ## This is not yet the single dispatch point, and that is the next job
- *
- * OpenLayers still decides which style a graphic gets from a `switch` inside
- * `LineGraphicBase` and its sibling holders, and this table restates the same
- * routing. Two places to keep in step is one too many — the end state is that the
- * holders consult this, so the routing lives beside the paint functions. Until
- * then, **a graphic added here must match what the OpenLayers holder does**, and
- * the list below was derived from that switch rather than written by hand:
- *
- * ```
- * line() entries in controllerRegistry:        52
- *   with a bespoke style function:             35   ← still to port
- *   falling through to defaultLineStyle:       17   ← DEFAULT_LINE_GRAPHICS
- * ```
+ * **Registering a paint takes two edits**, and this is the trap: the entry here, and the
+ * routing on the OpenLayers side. A holder that still chooses its style itself will not
+ * consult this table however complete the table is, so a paint can be registered, tested,
+ * and never drawn. @see ai/conventions.md — "A symbology fact never lives in a holder"
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
@@ -967,13 +957,15 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         registry[name] = {graphic: plainOutlinePaint(), label: rangeFanLabelPaint(name)};
     }
 
-    // Cover, guard and screen. The line work paints; the center symbol does not,
-    // because it is injected by the host and no renderer-agnostic description of it
-    // exists. A MapLibre view also cannot yet *build* one of these through the
-    // public API — the generator wants centerPadding, arrowLength, arrowDepth,
-    // arrowHeadLength and arrowHeadDegree, and none of the five is in
-    // TacticalGraphicProperties. Registered here so the paint half is done and the
-    // remaining gap is the schema one alone.
+    // Cover, guard and screen. The line work paints; the center symbol does not, because
+    // it is injected by the host and no renderer-agnostic description of it exists.
+    //
+    // Building one through the public API used to need five options that are not on
+    // `TacticalGraphicProperties` — centerPadding, arrowLength, arrowDepth,
+    // arrowHeadLength, arrowHeadDegree. It does not any more: APP-06 gives these three
+    // four anchor points, so a two-point LineString base is the whole input and the
+    // generator derives the rest. `renderTacticalGraphic` with a bare `{name}` and such a
+    // base returns the full symbol.
     for (const name of SECURITY_OPERATIONS) {
         registry[name] = {graphic: securityOperationPaint(getLabel(name))};
     }

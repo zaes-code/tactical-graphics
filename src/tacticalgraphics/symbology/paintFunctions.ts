@@ -1,27 +1,28 @@
 /**
- * # Three graphics, painted without a renderer
+ * # The paint layer's core — what a symbol looks like, as data
  *
- * The spike from `ai/maplibre-renderer.md`: one plain line, one screen-pixel
- * decoration, one point-anchored letter with a glyph-measured gap. They were
- * picked because they are the three *kinds* of work the other 66 style functions
- * are made of, not because they are the easiest three.
+ * Both shipping renderers draw through here. A paint is a plain object: geometry, stroke,
+ * fill, text. No `ol`, no `maplibre-gl`, no canvas — the inputs arrive as
+ * `feature.properties` and `context.measureText`, so the same description can be realised
+ * as an OpenLayers `Style` or as MapLibre layers without either engine owning a symbology
+ * fact of its own.
  *
- * | | ported from | what it proves |
- * |---|---|---|
- * | {@link phaseLinePaint} | `phaseLineStyle` | rotation, upright flip, a gap measured off the glyph |
- * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesized per frame, `decorationScale` against the shape |
- * | {@link arcMissionTaskPaint} | `arcMissionTaskStyleFunc` | a gap cut from the *rendered* letter, projected onto a tangent |
+ * This file holds the general rules and the shared helpers: label sizing ({@link scaleOf}),
+ * the label colour and halo, dash patterns for a planned or suspected graphic, the
+ * screen-pixel decoration cap, and the default line and area paints that most graphics
+ * fall back to. A family with a shape of its own has its own module beside this one.
  *
- * Each is a transcription of its OpenLayers original — the arithmetic is
- * unchanged, so a difference between the two renderings is a porting bug and not
- * a redesign. What changed is only where the inputs come from: amplifiers off
- * `feature.properties` instead of `feature.get()`, text widths through
- * `context.measureText` instead of a module-level canvas.
+ * **It began as a three-graphic spike** — one plain line, one screen-pixel decoration, one
+ * point-anchored letter with a glyph-measured gap — chosen because they are the three
+ * *kinds* of work the style functions are made of. The finding that spike existed to
+ * produce still holds and is the reason this layer is a data description rather than a set
+ * of MapLibre expressions: none of the three could be expressed as a paint/layout
+ * expression, because all three build geometry that is not in the source and two of them
+ * size it from a text measurement. `ai/maplibre-renderer.md` has the write-up.
  *
- * **The finding this spike exists to produce**: none of the three could be
- * expressed as a MapLibre paint/layout expression. All three build geometry that
- * is not in the source, and two of them size it from a text measurement. See the
- * write-up in `ai/maplibre-renderer.md`.
+ * **Coordinates here are projected metres (EPSG:3857), never degrees.** turf and
+ * `GeometryService` expect geographic coordinates and will quietly give wrong answers;
+ * use plain Euclidean vector maths. Anything that wants a bearing belongs in a generator.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -236,7 +237,7 @@ export function axisRotation(feature: PaintFeature): number {
     return uprightRotation([0, 0], [Math.cos(theta), Math.sin(theta)]);
 }
 
-/** Zoom-anchored label scale for a paint feature. */
+/** The size the host configured, capped by the graphic the label belongs to. */
 export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: number = BASE_FONT_SIZE_PX): number {
     /*
      * **The one place the general size rule is applied.**
@@ -762,14 +763,14 @@ export function defaultLinePaint(
     };
 }
 
-// ── 5. Areas — the plain outline behind 60 of the 75 area graphics ────────────
+// ── 5. Areas — the plain outline behind 79 of the 94 area graphics ────────────
 
 /**
  * An area's outline: one stroke in the affiliation's color, dashed when the
  * status is `planned`.
  *
  * Unremarkable, and the highest-coverage paint function in the library — 60 of
- * the 75 `polygon` / `polygonRect` registry entries have no bespoke style and
+ * the 94 `polygon` / `polygonRect` registry entries have no bespoke style and
  * reach this. The other 15 draw something structural (StrongPoint's cross ties,
  * an obstacle belt's teeth, Encirclement's hostility-dependent form) and are
  * ported separately.

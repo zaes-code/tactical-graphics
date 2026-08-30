@@ -199,16 +199,6 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
 };
 
 /**
- * The crossed mission tasks: one click drops a fixed-size badge. `res * 50` is
- * `CROSSED_HALF_WIDTH_PX` worth at the placing zoom — which the style function
- * then divides straight back out, since these render at a constant screen size
- * whatever the zoom. Passing a sane value anyway keeps the stored geometry
- * meaningful to a renderer that does not pin it, and matches the floor
- * `MIN_SIZED_MISSION_TASKS` applies.
- *
- * `editStretches` stays off: there is nothing to stretch.
- */
-/**
  * Every one-click graphic: the crossed mission tasks, the airfield, the completed
  * roadblock. One click plants it whole, and whether it may then be scaled or turned is
  * the portable table's business rather than this factory's.
@@ -655,7 +645,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FollowAndAssume]:  block,
     // [TacticalGraphicName.FollowAndSupport]: block,
 
-    // ── Crossed-line mission tasks (one click drops a fixed-size badge) ─────
+    // ── Crossed-line mission tasks (one click plants it; resize yes, rotate no) ──
     [TacticalGraphicName.Destroy]:    pointDrop,
     [TacticalGraphicName.Interdict]:  pointDrop,
     [TacticalGraphicName.Neutralize]: pointDrop,

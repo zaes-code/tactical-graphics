@@ -26,7 +26,7 @@
  *
  * ## `labels` is optional, and the absence is information
  *
- * 84 of the 292 registered graphics draw every glyph they have on the graphic feature —
+ * 104 of the 291 constructible graphics draw every glyph they have on the graphic feature —
  * a phase line's `PL ALPHA` end labels, an anti-tank ditch's teeth, the direction
  * arrows. Their holders create no label feature, so `labels` is `undefined` and a host
  * should not add one: `renderTacticalGraphic` still returns a `labels` geometry for

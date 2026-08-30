@@ -63,7 +63,7 @@ export const SAME_POINT_EPSILON_M = 1e-3;
  * The end of a drawn line an edit turns, scales and stacks its label about.
  *
  * `coords[0]` for an ordinary line -- where the user started drawing -- and the **last**
- * coordinate for the thirty-two graphics that store their points tip-first, whose first
+ * coordinate for the thirty-four graphics that store their points tip-first, whose first
  * point is the arrowhead. It is the same physical end in both cases; only the index it
  * lives at moved when the bases were renumbered into APP-06's order.
  *

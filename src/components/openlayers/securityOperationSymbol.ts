@@ -9,11 +9,12 @@
  * Why not just import milsymbol here
  * ---------------------------------
  * `milsymbol` is declared an OPTIONAL peer dependency, and it used not to be one
- * in fact. `SecurityOperationsController` carried a static top-level
- * `import ms from 'milsymbol'`, and that controller is reachable from the
- * `/openlayers` barrel through `getController`. So importing the entry point at
- * all — for any of the two hundred graphics, not just these three — threw
- * `MODULE_NOT_FOUND` unless milsymbol was installed. The declared optionality was
+ * in fact. The security-operation controller — since deleted, along with the
+ * fixed-size badge it drew — carried a static top-level `import ms from 'milsymbol'`,
+ * and that controller was reachable from the `/openlayers` barrel through
+ * `getController`. So importing the entry point at all — for any of the nearly three
+ * hundred graphics, not just these three — threw `MODULE_NOT_FOUND` unless milsymbol
+ * was installed. The declared optionality was
  * a fiction. Injection is what makes it true: nothing in this package names
  * milsymbol, so a consumer who wants the geometry pays for nothing else.
  *
@@ -72,7 +73,7 @@ export interface SecurityOperationSymbolRequest {
      * carry **hostility and nothing else** — no user identifier, since the letter
      * between the arms is `getLabel(name)` and fixed by doctrine. Two Screens are
      * therefore indistinguishable here. Per-graphic symbols come from
-     * `SecurityOperationsController.setSymbolProvider`.
+     * `setGraphicSecuritySymbolProvider`, on the root entry.
      *
      * It is passed anyway because a provider is a host's code and may key on
      * whatever it likes, and because the set of amplifiers a graphic carries is

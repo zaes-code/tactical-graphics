@@ -120,9 +120,11 @@ export function arrowheadMeters(name: TacticalGraphicName, resolution: number): 
 /**
  * Half-extent of a crossed mission task, in screen pixels.
  *
- * Destroy, Interdict, Neutralize and Suppress are **fixed-size symbols**: they refuse
- * resize, so their size is never a number the user chose — it is a screen constant
- * times the resolution they were drawn at, exactly like a security operation's.
+ * Destroy, Interdict, Neutralize and Suppress are dropped whole on one click, at a screen
+ * constant times the resolution they were placed at. They are **not** fixed-size any more
+ * — they carry a real size and resize, and what they refuse is the *rotate*, because a
+ * crossed symbol turned 45 degrees is a different symbol. `allowedGestures` is the
+ * authority; this constant is only what they are dropped at.
  *
  * It lived as `res * 50` inside a factory in the OpenLayers controller registry, so
  * MapLibre had no way to know it and fell back to the generic 40 km default. Measured

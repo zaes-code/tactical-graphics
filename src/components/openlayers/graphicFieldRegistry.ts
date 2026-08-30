@@ -299,7 +299,7 @@ const TARGET_ACQUISITION_AREA = f(true, false, true, true, false);
 const ECH = f(true, false, false, false, true, {echelon: true});
 
 /**
- * The 13 rectangular zones carry a **width in meters** on top of their family's
+ * The 18 rectangular zones carry a **width in meters** on top of their family's
  * amplifiers. FM 1-02.2 table 5-24 draws it as an `AM` arrow down the edge labelled
  * "Width (M)", and APP-06 states it in words. It is an input rather than a printed
  * label: FM's own construct examples show only the designation and the DTGs.
