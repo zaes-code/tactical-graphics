@@ -28,7 +28,8 @@ import {drawsTipFirst} from './drawOrder';
  * - `reach` — sets both size and bearing from one cursor position: the far end of
  *   a chord carries how long it is and which way it points.
  * - `band` — sets one range-fan band's range, by index.
- * - `center` — moves the graphic. Found by position, not by index. @see NativeLayerRenderer
+ * - `mirror` — turns the symbol over, without moving a vertex. Dragging it must not
+ *   resize: it is a reflection, not a dimension. @see MIRROR_HANDLE_AT_0
  */
 export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band' | 'mirror';
 

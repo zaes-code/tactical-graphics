@@ -9,7 +9,6 @@
  *   - PolygonGraphicController   → a Polygon (5-sided ring)
  *   - RectangularAreaGraphicController → a Polygon box (4 corners)
  *   - MissionTaskController      → a center point + radius, via updateGeom()
- *   - SecurityOperationsController → a center point, via setBaseFeature()
  *
  * A generator that throws (a genuinely broken graphic) is caught and reported,
  * not fatal — the rest of the sweep still renders.
