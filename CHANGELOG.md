@@ -85,6 +85,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **Thirteen graphics kept an amplifier when told to show their name only.** `hideAmplifiers` is enforced per *mark* — `withHiddenAmplifiers` drops a paint whose `text.kind` is `amplifier` — but several paints stack an annotation and a designation into one mark, which cannot be filtered apart. The amplifier line has to be emptied inside the stack instead, which is what `amplifierText` is for, and nothing made a paint author choose between the two.
+
+  So the date range survived under a coordinated fire line, a munition flight path and a passage lane; field H survived on human terrain, both restricted terrains, all three psyops zones and the limited access area; the start date survived under the dynamic minefield and the fenced mined area; and the weapon survived under a final protective fire.
+
+  Found by sweeping all 291 paintable graphics at once rather than checking them one at a time — each looked right on its own, because the toggle was never asked about it. `amplifierSweep.test.ts` is that sweep, kept: it paints every graphic twice with every amplifier the schema offers, and asserts that nothing an amplifier could have written survives while the doctrinal abbreviation and the designation both do. The sweep also caught the helper in `midLabelLinePaints.ts` named `amplifier` that set no kind at all; it is `textMark` now, and takes one.
+
 - **The airfield's designation is measured off the drawn runway, not off a stamped size.** APP-06 131900's Template boxes the `T` immediately past the end of the horizontal line, and the runway is the wider of the two arms — so the graphic's own eastern edge is that end. Deriving it from `graphicSize` assumes that number is the runway's half length, which holds only on the path that stamps it: the catalog generator hands the paint the sample's `radius`, which is smaller, and the designation printed 17 px *inside* the runway it was supposed to clear. Visible on the published catalog rather than in the app, which is why no test caught it.
 
 - **`gen-catalog-svgs.js --only` no longer rewrites the catalog manifest.** It was built from whatever the run drew, so regenerating one tile left `catalog.json` and `catalog.js` holding a single entry — and the catalog page reads `catalog.js`, so the site would have listed one graphic out of 291. `--only` is the obvious way to check a thumbnail after changing its paint, which is exactly when it did the most damage.
