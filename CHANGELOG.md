@@ -93,6 +93,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **Thirteen graphics kept an amplifier when told to show their name only.** `hideAmplifiers` is enforced per *mark* — `withHiddenAmplifiers` drops a paint whose `text.kind` is `amplifier` — but several paints stack an annotation and a designation into one mark, which cannot be filtered apart. The amplifier line has to be emptied inside the stack instead, which is what `amplifierText` is for, and nothing made a paint author choose between the two.
+
+  So the date range survived under a coordinated fire line, a munition flight path and a passage lane; field H survived on human terrain, both restricted terrains, all three psyops zones and the limited access area; the start date survived under the dynamic minefield and the fenced mined area; and the weapon survived under a final protective fire.
+
+  Found by sweeping all 291 paintable graphics at once rather than checking them one at a time — each looked right on its own, because the toggle was never asked about it. `amplifierSweep.test.ts` is that sweep, kept: it paints every graphic twice with every amplifier the schema offers, and asserts that nothing an amplifier could have written survives while the doctrinal abbreviation and the designation both do. The sweep also caught the helper in `midLabelLinePaints.ts` named `amplifier` that set no kind at all; it is `textMark` now, and takes one.
+
 - **A corridor's designation shrank with every character typed.** The label runs along a leg, rotated, so two things bound it: its length against the leg, and its **height** against the gap between the rails. The height bound was applied as a *width* cap — the label's natural width held to 1.4 of the corridor's width — on the reasoning that a bounded aspect ratio makes one a proxy for the other.
 
   It is not. A width cap divides by the text's natural width, so the answer falls as the name grows. `AC BLUE` came out at scale 0.79 and `AC CORRIDOR ONE`, on the same corridor at the same zoom, at 0.36 — and on a corridor 25 px wide, at 0.23, which is a four-pixel-tall label: correctly inside its rails and impossible to read.

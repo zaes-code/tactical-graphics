@@ -320,7 +320,8 @@ export function mineFillPaint(): MinePaint {
             paints.push(areaText(feature, [midX, top], above, textScale, 'bottom'));
         }
 
-        const below = (feature.properties.startDate ?? '').trim();
+        // The date below the boundary, an annotation like the free text above it.
+        const below = amplifierText(feature, (feature.properties.startDate ?? '').trim());
         if (below && bounds) {
             paints.push(areaText(feature, [midX, bounds.minY - gap], below, textScale, 'top'));
         }

@@ -46,7 +46,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicMobility, TacticalGraphicTerrain} from '../core/type';
-import {labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierText, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 import { fitLabelScale} from './labelFit';
 
@@ -426,7 +426,7 @@ export function sectorModifierLabelPaint(
         const above = options.literal ? [options.literal] : [];
         const below = [
             options.sectorTwo ? terrainWord(feature.properties.terrain) : '',
-            (feature.properties.additionalInfo ?? '').trim(),
+            amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()),
         ].filter(line => line.length > 0);
 
         const all = [...above, ...below];
