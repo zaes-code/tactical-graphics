@@ -57,6 +57,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Removed
 
+- **The MapLibre half's last two beliefs that cover, guard and screen are screen-sized.** They were fixed-size badges pinned to a screen constant until the four-anchor change above. Two pieces survived it: `securityOperationSize`, which overwrote the caller's `radius` with `SECURITY_OPERATION_HALF_EXTENT_PX × drawingResolution`, and their entry in `isScreenSized`, which rebuilt their geometry on every zoom.
+
+  Neither changed the picture — the generator builds the arms from the base and ignores `radius`, so rendering a cover with the override and without gives byte-identical geometry, and the per-zoom rebuild re-derived exactly what was already there. **Inert rather than wrong, which is worse in one way:** they put a bogus ground distance in the saved bag, spent work on every zoom for nothing, and left this half of the codebase asserting that MapLibre treats these three as screen-sized while OpenLayers routes them through `line(2)`. Read side by side, the two engines appeared to disagree about what a cover is. They did not.
+
+  `securityOperationsAreNotScreenSized.test.ts` pins the property that made the removal safe rather than the removal itself: a radius is ignored, and the size follows the base. Nothing in the library is screen-sized *geometry* now; what `isScreenSized` still answers for is a baked decoration, which is a decoration size and not the shape.
+
 - **`SecurityOperationsController` and `SecurityOperationGraphicBase`** (`/openlayers`). They placed a security operation on one anchor and sized it from the live map resolution; with the graphic drawn from two points there is nothing for them to do, and the generator they depend on no longer accepts a point base — so they could not work, not merely go unused. The three graphics are ordinary line holders now. A host that referenced either directly needs `getController(name, resolution)`, which is what the app has always used.
 
 - **A label is the size the host configured, capped by the graphic — and no longer by the zoom it was drawn at.** `labelScale` multiplied the configured size by how far the map had moved since the graphic was drawn, clamped to [0.3, 1.5]. That clamp was what stopped a label swamping a small symbol, and `capLabelToGraphic` does that job properly now — against the graphic itself rather than against a moment in time.
