@@ -85,6 +85,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **A corridor's designation shrank with every character typed.** The label runs along a leg, rotated, so two things bound it: its length against the leg, and its **height** against the gap between the rails. The height bound was applied as a *width* cap — the label's natural width held to 1.4 of the corridor's width — on the reasoning that a bounded aspect ratio makes one a proxy for the other.
+
+  It is not. A width cap divides by the text's natural width, so the answer falls as the name grows. `AC BLUE` came out at scale 0.79 and `AC CORRIDOR ONE`, on the same corridor at the same zoom, at 0.36 — and on a corridor 25 px wide, at 0.23, which is a four-pixel-tall label: correctly inside its rails and impossible to read.
+
+  The height is what the rule was always about, so it is what is measured now. A long name and a short one get the same scale on a corridor that has room for either, and both give way together when it does not.
+
 - **The airfield's designation is measured off the drawn runway, not off a stamped size.** APP-06 131900's Template boxes the `T` immediately past the end of the horizontal line, and the runway is the wider of the two arms — so the graphic's own eastern edge is that end. Deriving it from `graphicSize` assumes that number is the runway's half length, which holds only on the path that stamps it: the catalog generator hands the paint the sample's `radius`, which is smaller, and the designation printed 17 px *inside* the runway it was supposed to clear. Visible on the published catalog rather than in the app, which is why no test caught it.
 
 - **`gen-catalog-svgs.js --only` no longer rewrites the catalog manifest.** It was built from whatever the run drew, so regenerating one tile left `catalog.json` and `catalog.js` holding a single entry — and the catalog page reads `catalog.js`, so the site would have listed one graphic out of 291. `--only` is the obvious way to check a thumbnail after changing its paint, which is exactly when it did the most damage.
