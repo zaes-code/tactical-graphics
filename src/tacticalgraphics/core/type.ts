@@ -1216,9 +1216,14 @@ export enum TacticalGraphicHostility {
     unknown = 'Unknown',
 }
 
+/**
+ * FM 1-02.2's status: whether the thing the symbol describes exists yet.
+ *
+ * Not drawn as a word — it decides whether the line work is solid or dashed.
+ */
 export enum TacticalGraphicStatus {
-    present = 'present',
-    planned = 'planned',
+    present = 'Present',
+    planned = 'Planned',
 }
 
 /**
@@ -1246,16 +1251,27 @@ export enum AltitudeDatum {
     flightLevel = 'FL',
 }
 
+/**
+ * How sure the reporter is of a hostile contact — offered only for `hostileFaker`,
+ * and drawn, like status, as a dash rather than a word.
+ */
 export enum TacticalGraphicConfidence {
-    known = 'known',
-    suspected = 'suspected',
+    known = 'Known',
+    suspected = 'Suspected',
 }
 
+/**
+ * Which way traffic runs on a route, main supply route or alternate supply route.
+ *
+ * Chooses the arrows drawn in the route's designation box — none, one, two opposed, or
+ * one beside the word `ALT`. That word is a literal in `routePaints`, not this value:
+ * nothing here is printed.
+ */
 export enum RouteDirection {
-    GENERAL = 'GENERAL',
-    ONE_WAY = 'ONE_WAY',
-    TWO_WAY = 'TWO_WAY',
-    ALTERNATING = 'ALTERNATING',
+    general = 'General',
+    oneWay = 'One Way',
+    twoWay = 'Two Way',
+    alternating = 'Alternating',
 }
 
 export interface TacticalGraphicConfig {

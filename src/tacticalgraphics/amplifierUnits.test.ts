@@ -72,23 +72,23 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
     });
 
     it('writes the number in whichever unit the host configured', () => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         expect(formatAltitude('1500')).toBe('1500M');
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Feet}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.feet}));
         expect(formatAltitude('1500')).toBe('1500FT');
     });
 
     it('interprets the value in that unit rather than converting it', () => {
         // 1500 under Meters is 1500 meters, not 457 — the setting says what the number
         // already meant. Converting would silently restate every altitude on the map.
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         expect(formatAltitude('1500')).toBe('1500M');
     });
 
     it('takes a number, which is what the property now is', () => {
         expect(formatAltitude(1500)).toBe('1500FT');
         expect(formatAltitude(0)).toBe('0FT');
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         expect(formatAltitude(1500)).toBe('1500M');
     });
 
@@ -115,7 +115,7 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
     it('writes the datum after the unit, as the plates print it', () => {
         expect(formatAltitude(1500, AltitudeDatum.aboveGroundLevel)).toBe('1500FT AGL');
         expect(formatAltitude(20000, AltitudeDatum.meanSeaLevel)).toBe('20000FT MSL');
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         expect(formatAltitude(450, AltitudeDatum.aboveGroundLevel)).toBe('450M AGL');
     });
 
@@ -124,7 +124,7 @@ describe('fields X and X1 — altitude, in the configured unit', () => {
         // number written is the level itself. A unit suffix would say it is a distance,
         // and the configured unit has nothing to do with it — hence the separate branch.
         expect(formatAltitude(150, AltitudeDatum.flightLevel)).toBe('FL150');
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         expect(formatAltitude(150, AltitudeDatum.flightLevel)).toBe('FL150');
     });
 
@@ -172,7 +172,7 @@ describe('every graphic that renders an altitude', () => {
     });
 
     it('includes the corridors, which label a MultiPoint', () => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         const painters = getPaintFunction(TacticalGraphicName.AirCorridor);
         const paints = painters!.label!(
             {
@@ -187,7 +187,7 @@ describe('every graphic that renders an altitude', () => {
     });
 
     it.each(withAltitude)('%s writes its altitudes in the configured unit', name => {
-        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.Meters}));
+        configureTacticalGraphics(new TacticalGraphicsConfig({altitudeUnit: AltitudeUnit.meters}));
         const text = labelText(name, {minAltitude: '1500', maxAltitude: '20000'});
         expect(text).toContain('1500M');
         expect(text).toContain('20000M');
