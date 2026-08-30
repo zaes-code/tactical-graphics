@@ -139,11 +139,11 @@ tacticalGraphic: {
     // Symbology — affects color and dash pattern. Every field below is backed by an
     // exported enum; the table after this block lists each one's complete set of values.
     hostility: 'Friend',      // TacticalGraphicHostility
-    status: 'present',        // TacticalGraphicStatus — planned ⇒ dashed
-    confidence: 'known',      // TacticalGraphicConfidence — rendered where doctrine
+    status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
+    confidence: 'Known',      // TacticalGraphicConfidence — rendered where doctrine
                               // shows a reliability rating
     echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
-    direction: 'ONE_WAY',     // RouteDirection — route graphics
+    direction: 'One Way',     // RouteDirection — route graphics
     mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the two mine
                               // areas draw inside themselves
     mobility: 'Tracked',      // TacticalGraphicMobility — APP-06 Table 8-24 sector 1,
@@ -187,16 +187,16 @@ its value are the same string at run time — `TacticalGraphicHostility.friend` 
 | Field | Enum | Every accepted value |
 |---|---|---|
 | `hostility` | `TacticalGraphicHostility` | `Assumed Friend` · `Friend` · `Hostile/Faker` · `Neutral` · `Pending` · `Suspect/Joker` · `Unknown` |
-| `status` | `TacticalGraphicStatus` | `present` · `planned` |
-| `confidence` | `TacticalGraphicConfidence` | `known` · `suspected` |
+| `status` | `TacticalGraphicStatus` | `Present` · `Planned` |
+| `confidence` | `TacticalGraphicConfidence` | `Known` · `Suspected` |
 | `echelon` | `TacticalGraphicEchelon` | `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Unknown` |
-| `direction` | `RouteDirection` | `GENERAL` · `ONE_WAY` · `TWO_WAY` · `ALTERNATING` |
+| `direction` | `RouteDirection` | `General` · `One Way` · `Two Way` · `Alternating` |
 | `mineType` | `TacticalGraphicMineType` | `Unspecified Mine` · `Antipersonnel Mine` · `Antipersonnel Mine with Directional Effects` · `Antitank Mine` · `Antitank Mine with Antihandling Device` · `Wide Area Antitank Mine` · `Mine Cluster` |
 | `mobility` | `TacticalGraphicMobility` | `Unspecified` · `Standard Mobility/On-Road` · `High Mobility/Off-Road` · `Tracked` · `Tracked and Wheeled Combination` · `Towed` · `Railway` · `Over-Snow (Prime Mover)` · `Sled` · `Pack Animal` · `Barge` · `Amphibious` · `No Vehicles` · `Dismounted` |
 | `terrain` | `TacticalGraphicTerrain` | `Unspecified` · `Urban` · `Water` · `Ground` · `Vegetation` · `Obstacles` |
 | `altitudeDatum` | `AltitudeDatum` | `MSL` · `AGL` · `FL` |
 
-`AltitudeUnit` (`meters` · `feet`) is not a per-graphic field — it is host configuration,
+`AltitudeUnit` (`Meters` · `Feet`) is not a per-graphic field — it is host configuration,
 set once with `configureTacticalGraphics({altitudeUnit})`, because a map does not mix
 units. A graphic that needs its own is free to pass a string altitude instead.
 

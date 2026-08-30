@@ -96,14 +96,14 @@ export const MAX_LABEL_SIZE = 26;
  * `'FL150'` and `'1500MSL'` still render exactly as doctrine writes them.
  */
 export enum AltitudeUnit {
-    Meters = 'meters',
-    Feet = 'feet',
+    meters = 'Meters',
+    feet = 'Feet',
 }
 
 /** What each unit is written as on a label. Matches the plates: `1500FT`, not `1500 ft`. */
 export const ALTITUDE_UNIT_SUFFIX: Readonly<Record<AltitudeUnit, string>> = Object.freeze({
-    [AltitudeUnit.Meters]: 'M',
-    [AltitudeUnit.Feet]: 'FT',
+    [AltitudeUnit.meters]: 'M',
+    [AltitudeUnit.feet]: 'FT',
 });
 
 /**
@@ -143,7 +143,7 @@ export interface TacticalGraphicsConfigOptions {
     labelUsesHostilityColor?: boolean;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
-    /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.Feet}. @see AltitudeUnit */
+    /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.feet}. @see AltitudeUnit */
     altitudeUnit?: AltitudeUnit;
 
     // ── Editor chrome ────────────────────────────────────────────────────────
@@ -350,7 +350,7 @@ export function getHandleColorOverride(): string | undefined {
  * amplifiers annotate, is flown in feet almost everywhere.
  */
 export function getAltitudeUnit(): AltitudeUnit {
-    return _config.altitudeUnit ?? AltitudeUnit.Feet;
+    return _config.altitudeUnit ?? AltitudeUnit.feet;
 }
 
 export function getInertHandleColorOverride(): string | undefined {
