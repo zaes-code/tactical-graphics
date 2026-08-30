@@ -89,6 +89,16 @@ the npm publish dates — when a version actually became installable.
 
 - **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
 
+### Changed
+
+- **Every enum value a host can store is spelled one way.** Thirteen exported enums held their values in three conventions at once, and a single saved property bag could read `{hostility: 'Hostile/Faker', status: 'present', direction: 'ONE_WAY'}` — Title Case, lower case and UPPER_SNAKE in three adjacent fields. The dialogs print `Object.values(...)` straight into the menu, so the operator was shown all three side by side.
+
+  An enum value is either **what the operator reads** or **a literal somebody else wrote**, and there is no third kind. `TacticalGraphicStatus`, `TacticalGraphicConfidence`, `RouteDirection` and `AltitudeUnit` were the four holding neither, and now read as the words in the list: `Present`, `Planned`, `Known`, `Suspected`, `General`, `One Way`, `Two Way`, `Alternating`, `Meters`, `Feet`. Their members are `lowerCamel` like the other nine, so `RouteDirection.ONE_WAY` is `RouteDirection.oneWay` and `AltitudeUnit.Meters` is `AltitudeUnit.meters`.
+
+  Three enums are deliberately exempt, each for a stated reason. `TacticalGraphicName` is the dispatch key, a PascalCase identifier equal to its own key, with `getDisplayName()` as the label — the rule this library already followed. `AltitudeDatum` and `TacticalGraphicSpecification` hold someone else's literal: `MSL` / `AGL` / `FL` are printed on the plate exactly so, and `'FM 1-02.2'` is a document number.
+
+  **A graphic saved before this still loads.** `applyAmplifierAliases` gained `RECASED_AMPLIFIER_VALUES`, the sibling of the key-rename table one level down, applied at the same three read points. One direction only: nothing writes an old value back. `enumValueCasing.test.ts` asserts the rule by shape rather than by listing today's values, so a new enum is covered the day it is added.
+
 ### Fixed
 
 - **A label's size no longer depends on who built the feature.** `scaleOf` asks the host how big a label should be and the symbol how big it may be — and it used to ask a third thing whenever the graphic's extent was missing: the zoom the operator happened to be at when they drew it.

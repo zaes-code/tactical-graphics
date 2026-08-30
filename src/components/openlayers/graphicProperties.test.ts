@@ -138,7 +138,7 @@ describe('route traffic arrows scale with the configured line width', () => {
         const f = new Feature(new MultiPoint([[0, 0], [40000, 0]]));
         writeGraphicProperties([f], TacticalGraphicName.Route, {
             designation: 'MSR1',
-            direction: RouteDirection.TWO_WAY,
+            direction: RouteDirection.twoWay,
         });
         return f;
     };
