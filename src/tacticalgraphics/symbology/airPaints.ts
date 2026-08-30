@@ -133,7 +133,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         const values: string[] = [];
         // The altitudes and times are reference detail and go as a unit, the way the
         // corridor's information block does. The names above are the graphic's own.
-        if (!props.hideAmplifiers) {
+        if (!feature.hideAmplifiers) {
             if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
             if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
             if (props.startDate) values.push(column('TIME FROM:', props.startDate));
@@ -178,7 +178,7 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         const values: string[] = [];
         // Same rule as the block above: altitudes, grid and effective time are reference
         // detail; the names stay. @see TacticalGraphicProperties.hideAmplifiers
-        const detail = !props.hideAmplifiers;
+        const detail = !feature.hideAmplifiers;
         if (detail && props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
         if (detail && props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
         if (detail && props.grid) values.push(column('GRID:', props.grid));

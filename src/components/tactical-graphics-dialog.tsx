@@ -23,6 +23,7 @@ import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactic
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
+import {amplifiersHidden} from './amplifierVisibility';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
@@ -81,13 +82,6 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const labels: GraphicLabels = {
         designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
-        // **Unconditional, because the switch is.** Every field below is copied only when
-        // its `fields` flag says the dialog offers it, and the name-only switch is offered
-        // for every graphic — so gating it on a flag would drop it. Leaving it out entirely
-        // is what made it look like it never saved: the value was stored and applied, and
-        // the dialog rebuilt its view without it, so reopening showed the switch off over a
-        // graphic that was hiding. Same shape as the `mineType` omission below.
-        hideAmplifiers: stored.hideAmplifiers,
     };
 
     if (fields.identifier2) {
@@ -177,6 +171,14 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
         labels: {designation: '', hostility: TacticalGraphicHostility.unknown}
     };
     const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
+    /**
+     * Whether the selected graphic is drawn name-only.
+     *
+     * Held apart from `pendingChanges` because it is not one of the amplifiers `OK` writes
+     * back — the library keeps it off the graphic entirely, so this app owns it and applies
+     * it the moment it is switched. @see amplifierVisibility
+     */
+    const [nameOnly, setNameOnly] = useState(false);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
@@ -201,6 +203,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             };
             setCurrentProperties(curr);
             setPendingChanges(curr);
+            // View state, not an amplifier: it comes from this app's store rather than
+            // from the graphic. @see amplifierVisibility
+            setNameOnly(amplifiersHidden(next.id));
             setDialogPosition({x: 0, y: 0});
         });
     }, [source]);
@@ -482,13 +487,14 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     <FormControlLabel
                                         control={
                                             <Switch
-                                                checked={!!pendingChanges.labels.hideAmplifiers}
-                                                onChange={(_e, checked) =>
-                                                    setPendingChanges(prev => ({
-                                                        ...prev,
-                                                        labels: {...prev.labels, hideAmplifiers: checked},
-                                                    }))
-                                                }
+                                                checked={nameOnly}
+                                                onChange={(_e, checked) => {
+                                                    // Applied immediately, and to this app's
+                                                    // own store — it is not one of the
+                                                    // amplifiers `OK` writes back.
+                                                    setNameOnly(checked);
+                                                    if (selection) source.setAmplifiersHidden(selection, checked);
+                                                }}
                                             />
                                         }
                                         label="Name only — hide other amplifiers"
