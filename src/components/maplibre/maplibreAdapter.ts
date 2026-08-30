@@ -3,7 +3,6 @@ import {
     GLYPH_CUT_GAP_GRAPHICS,
     RANGE_FANS,
     RECTANGLE_DEFAULT_HALF_WIDTH_PX,
-    SECURITY_OPERATION_HALF_EXTENT_PX,
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicName,
     arrowheadMeters,
@@ -499,28 +498,23 @@ function ratioLockedSize(
 }
 
 /**
- * The size a security operation is drawn at, in meters.
+ * **Gone too, and for the reason the block below already teaches.**
  *
- * These are badges: the OpenLayers holder builds every dimension as a pixel
- * constant times the live map resolution, so the symbol is the same size on screen
- * at every zoom. Passing a ground distance instead — which is what `radius` is
- * everywhere else — makes it a different symbol at every zoom, and a tiny one at
- * the sizes a sweep uses.
+ * `securityOperationSize` overwrote `radius` with
+ * `SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution` for cover, guard and screen,
+ * correctly, while those three were fixed-size badges pinned to a screen constant.
  *
- * `SECURITY_OPERATION_PX` is the generator's own table, so this reproduces the
- * OpenLayers rule rather than approximating it. The renderer re-runs this on every
- * zoom. @see NativeLayerRenderer.rebuildScreenSized
+ * They stopped being badges on 2026-08-29 — APP-06 gives them four anchor points, so
+ * they are drawn from two and the generator builds the arms from the *base*, ignoring
+ * `radius` entirely. Measured: rendering a cover with the override applied and without
+ * gives byte-identical geometry.
+ *
+ * So it was inert rather than wrong, which is worse in one way — it survived the change
+ * that retired it, put a bogus ground distance in the saved bag, and told every reader of
+ * this file that MapLibre still treats these three as screen-sized when OpenLayers routes
+ * them through `line(2)`. A reviewer reading the two files side by side would reasonably
+ * conclude the engines disagree about what a cover is. They do not.
  */
-function securityOperationSize(
-    name: TacticalGraphicName,
-    drawingResolution?: number,
-): Partial<TacticalGraphicProperties> {
-    if (!drawingResolution || !SECURITY_OPERATIONS.has(name)) return {};
-
-    // The library's figure, not this file's arithmetic — OpenLayers files the same one,
-    // and the generator builds the arms from it. @see SECURITY_OPERATION_HALF_EXTENT_PX
-    return {radius: SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution};
-}
 
 /**
  * **Gone, and deliberately not replaced.** This used to overwrite the caller's `radius`
@@ -539,13 +533,6 @@ function securityOperationSize(
  * 2.0.0 and removing them is a consumer's breaking change, not a tidy-up.
  * @see dropSizePx, which is what a renderer should ask now.
  */
-
-/** @see securityOperationSize */
-const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
 
 /**
  * A base's drawn length in meters.
@@ -750,7 +737,6 @@ export function buildTacticalGraphic(
         // projected metres rather than walked out geodesically — @see placeOriginCentered
         // — so their pixel size is already latitude-invariant and correcting it would
         // shrink them by cos(latitude) instead.
-        ...securityOperationSize(name, drawingResolution),
         ...bakedDecorationSize(name, properties, sizingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
