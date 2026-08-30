@@ -641,6 +641,46 @@ const features = new GeoJSON().readFeatures(
 source.addFeatures(features);
 ```
 
+### Your own features, our styling
+
+Between the two: you want the symbols to look right, but the features have to be
+yours — your layer, your ids, your selection model. `stylesFor(name)` gives you the
+style pair the library's own holders draw that graphic with.
+
+```ts
+import {renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {stylesFor} from '@zaes/tactical-graphics/openlayers';
+import GeoJSON from 'ol/format/GeoJSON';
+
+const format = new GeoJSON({featureProjection: 'EPSG:3857'});
+const rendered = renderTacticalGraphic(feature);
+const {graphic, labels} = stylesFor(name);
+
+const graphicFeature = format.readFeature(rendered.graphic);
+graphicFeature.setStyle(graphic);
+source.addFeature(graphicFeature);
+
+// `labels` is undefined for the graphics that keep every glyph on the graphic
+// feature — a phase line's "PL ALPHA" rides its own line work. Styling their label
+// geometry as well draws the designation twice.
+if (rendered.labels && labels) {
+    const labelFeature = format.readFeature(rendered.labels);
+    labelFeature.setStyle(labels);
+    source.addFeature(labelFeature);
+}
+```
+
+**Do not reach for `getStyle` here.** It is exported, it takes a name and it returns
+styles, which makes it look like this answer — but it is the *area outline*
+dispatcher. It draws no text, and for the graphics that are not areas it is the wrong
+function. An integration that used it for both features shipped with every area
+unlabelled and every arc mission task missing the letter that identifies it.
+
+Amplifiers still come off the feature, so stamp `properties.tacticalGraphic` on
+anything you build by hand — `renderTacticalGraphic` already does it for its own
+output. Sizes that a style reads, such as a corridor's `graphicSize`, are set the
+same way.
+
 ### Any GeoJSON renderer
 
 `toFeatureCollection()` flattens a render into a standard `FeatureCollection`, so any
