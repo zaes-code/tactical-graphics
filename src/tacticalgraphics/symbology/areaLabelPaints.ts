@@ -23,12 +23,13 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, fontStyle, getLabelHaloColor, labelScale} from '../core/symbology';
+import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
+import {amplifierText, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
-import {fitLabelScale} from './labelFit';
+import {capLabelToGraphic, fitLabelScale} from './labelFit';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -40,8 +41,52 @@ function anchorOf(feature: PaintFeature): ProjectedPosition | undefined {
     return feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
 }
 
+/**
+ * Share of an area's own size its **centred** label may stand.
+ *
+ * Larger than the general share because this label is *meant* to sit in the middle of the
+ * shape and be read as its name, where an outside label is an annotation beside it. 0.4 is
+ * what these already measured at the zoom they were drawn at (0.41 on the rectangular fire
+ * areas), so the shapes keep the size that reads correctly today — and stop growing to 0.52
+ * of the box on the way out, which they did while the zoom anchor was the only thing
+ * holding them.
+ */
+const CENTRED_LABEL_SHARE = 0.4;
+
+/**
+ * The scale an area's centred labels start from.
+ *
+ * The ring fit still has the last word — it is what keeps text off a concave outline, and
+ * no share can do that. This is the other half: the ring fit stops a label *overflowing*
+ * the shape, and says nothing about a label that fills it. Without something that does, an
+ * area label grew until the outline stopped it; measured on the sweep, the rectangular fire
+ * areas reached 0.68 of their box. @see fitLabelScale, outsideScaleOf
+ */
 function scaleOf(feature: PaintFeature, context: PaintContext): number {
-    return labelScale(feature.drawingResolution, context.resolution);
+    return capLabelToGraphic(configuredLabelScale(), feature, context, BASE_FONT_SIZE_PX, CENTRED_LABEL_SHARE);
+}
+
+/**
+ * The scale for a label drawn **outside** the shape.
+ *
+ * Inside and outside want different rules, which is why there are two functions here. A
+ * label *inside* an area is already governed by `fitLabelScale`, which shrinks it until it
+ * genuinely fits the ring — a second cap on top of that would only make a label smaller
+ * than the shape it comfortably sits in, and the user's word on those is that they read
+ * correctly. A label *outside* has no ring to be held by and nothing else stopping it, so
+ * it keeps growing relative to a shape that shrinks with the zoom: the dates above a
+ * rectangle, the `PAA` markers around a position area, a group of targets' designation on
+ * its northern edge.
+ *
+ * Those take the general rule instead — a quarter of the graphic's own on-screen size.
+ * (User's call, 2026-08-29.) @see capLabelToGraphic
+ */
+function outsideScaleOf(feature: PaintFeature, context: PaintContext): number {
+    // The configured size rather than the anchored one: outside the shape there is no ring
+    // holding the label, so the graphic cap is what bounds it and the anchor adds only the
+    // zoom the operator happened to be at. @see configuredLabelScale
+    const desired = feature.bounds ? configuredLabelScale() : scaleOf(feature, context);
+    return capLabelToGraphic(desired, feature, context);
 }
 
 /**
@@ -85,8 +130,10 @@ function stack(
  * "W" as often as a "W - W1" pair.
  */
 export function areaDateLabel(feature: PaintFeature): string {
-    const start = (feature.properties.startDate ?? '').trim();
-    const end = (feature.properties.endDate ?? '').trim();
+    // Blanked when the graphic is showing its name only, which removes the line from
+    // every stack that joins this in — the empty-string filter does the rest.
+    const start = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+    const end = amplifierText(feature, (feature.properties.endDate ?? '').trim());
     if (start && end) return `${start} - ${end}`;
     return start || end || '';
 }
@@ -163,7 +210,9 @@ export function actionAreaLabelPaint(
         const designation = (feature.properties.designation ?? '').trim();
         const literal = getLabel(name);
         const titled = literal && designation ? `${literal} - ${designation}` : literal || designation;
-        const info = options.withAdditionalInfo ? (feature.properties.additionalInfo ?? '').trim() : '';
+        const info = options.withAdditionalInfo
+            ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
+            : '';
         const first = [info, titled].filter(Boolean).join('  ');
 
         const lines = [first, areaDateLabel(feature)].filter(line => line.length > 0);
@@ -221,7 +270,7 @@ export function humanTerrainLabelPaint(): AreaLabelPaint {
 
         const lines = [
             getLabel(TacticalGraphicName.HumanTerrain),
-            (feature.properties.additionalInfo ?? '').trim(),
+            amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()),
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
 
@@ -243,8 +292,8 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
         if (!at) return [];
 
         const userName = (feature.properties.designation ?? '').trim();
-        const dtg1 = (feature.properties.startDate ?? '').trim();
-        const dtg2 = (feature.properties.endDate ?? '').trim();
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
 
         const lines: string[] = [];
         if (userName) lines.push(userName);
@@ -281,8 +330,8 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const nameLines = [getLabel(name), (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
         if (at && nameLines.length) paints.push(stack(feature, context, at, nameLines, scale));
 
-        const dtg1 = (feature.properties.startDate ?? '').trim();
-        const dtg2 = (feature.properties.endDate ?? '').trim();
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
         if (!dtg1 && !dtg2) return paints;
 
         const dtgAnchor = irregular ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
@@ -318,8 +367,8 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
  */
 export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
     return (feature, context) => {
-        const dtg1 = (feature.properties.startDate ?? '').trim();
-        const dtg2 = (feature.properties.endDate ?? '').trim();
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
         if (!dtg1 && !dtg2) return [];
 
         /*
@@ -337,13 +386,14 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: [dtg1, dtg2].filter(line => line.length > 0).join(' - '),
+                kind: 'amplifier',
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'right',
                 baseline: 'bottom',
                 offsetXPx: -6,
-                scale: scaleOf(feature, context),
+                scale: outsideScaleOf(feature, context),
             },
         }];
     };
@@ -378,6 +428,9 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
     return (feature, context) => {
         const bounds = feature.bounds;
         if (!bounds) return [];
+        // The four `PAA` markers ride the shape's edges rather than sitting inside it, so
+        // they take the outside rule; the centred name and dates below keep the inside one.
+        const markerScale = outsideScaleOf(feature, context);
 
         const scale = scaleOf(feature, context);
         const cx = (bounds.minX + bounds.maxX) / 2;
@@ -388,7 +441,7 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], scale));
+        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale));
 
         const at = anchorOf(feature);
         const lines = [
@@ -417,7 +470,7 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
         const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!at || !segment || !text) return [];
 
-        return [stack(feature, context, at, [text], scaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
+        return [stack(feature, context, at, [text], outsideScaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
     };
 }
 

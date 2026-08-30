@@ -1,43 +1,43 @@
 import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {
-    getPaintFunction,
+    GLYPH_CUT_GAP_GRAPHICS,
+    RANGE_FANS,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+    TACTICAL_GRAPHIC_KEY,
+    TacticalGraphicName,
+    arrowheadMeters,
+    axisFromRectangleRing,
     boundsOf,
+    carriesRectangleLength,
+    decorationMeters,
+    drawnAnchorFrame,
+    drawnAnchors,
+    drawnSizeMeters,
+    getPaintFunction,
+    groundLength,
+    groundMeters,
+    hasBakedDecoration,
+    isMovementGraphic,
+    isRectangular,
+    normalizeDrawnBase,
+    outerRingOf,
     paintGeometryMembers,
     paintGeometryPositions,
+    ratioLockOf,
+    rectangleAmplifiers,
+    rectangleDefaultHalfWidth,
     renderTacticalGraphic,
-    TACTICAL_GRAPHIC_KEY,
+    resolveRangeFanBands,
+    toGraphicOptions,
     type Paint,
     type PaintContext,
     type PaintFeature,
     type ProjectedGeometry,
     type ProjectedInputGeometry,
     type ProjectedPosition,
-    SECURITY_OPERATION_HALF_EXTENT_PX,
-    normalizeDrawnBase,
-    GLYPH_CUT_GAP_GRAPHICS,
-    arrowheadMeters,
-    groundLength,
-    RANGE_FANS,
-    outerRingOf,
-    rectangleAmplifiers,
-    ratioLockOf,
-    drawnAnchorFrame,
-    drawnAnchors,
-    axisFromRectangleRing,
-    carriesRectangleLength,
-    rectangleDefaultHalfWidth,
-    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
-    isRectangular,
-    groundMeters,
-    usesDrawnAnchors,
-    resolveRangeFanBands,
-    toGraphicOptions,
-    decorationMeters,
-    drawnSizeMeters,
-    hasBakedDecoration,
-    isMovementGraphic,
-    TacticalGraphicName,
     type TacticalGraphicProperties,
+    usesDrawnAnchors,
+    withHiddenAmplifiers,
 } from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from './projection';
 
@@ -354,11 +354,14 @@ function bakedDecorationSize(
 /**
  * Moves an origin-centered graphic onto its base point.
  *
- * Three graphics need it — Cover, Guard and Screen. Their generator emits arms and
- * label anchors as offsets from `[0, 0]` and never looks at the base, so whatever
- * consumes it has to do the placing. `SecurityOperationGraphicBase.placeCoordinates`
- * is the OpenLayers half; this is the same arithmetic, kept deliberately identical
- * rather than re-derived.
+ * Cover, Guard and Screen needed it while they were placed from a single anchor: their
+ * generator emitted arms and label anchors as offsets from `[0, 0]` and never looked at
+ * the base, so whatever consumed it had to do the placing. Since 2026-08-29 they are
+ * drawn from a two-point base and the generator returns coordinates already in place,
+ * so the ordinary path serves them and the OpenLayers half of this arithmetic is gone.
+ *
+ * Kept for the placement API that remains — a symbol dropped on an existing unit, given
+ * a point and a size rather than two anchors.
  *
  * The offsets are added in **lon/lat**, because that is the space the generator
  * built them in — `getSearchAreaArrow` converts its meter inputs to degrees on the
@@ -498,28 +501,23 @@ function ratioLockedSize(
 }
 
 /**
- * The size a security operation is drawn at, in meters.
+ * **Gone too, and for the reason the block below already teaches.**
  *
- * These are badges: the OpenLayers holder builds every dimension as a pixel
- * constant times the live map resolution, so the symbol is the same size on screen
- * at every zoom. Passing a ground distance instead — which is what `radius` is
- * everywhere else — makes it a different symbol at every zoom, and a tiny one at
- * the sizes a sweep uses.
+ * `securityOperationSize` overwrote `radius` with
+ * `SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution` for cover, guard and screen,
+ * correctly, while those three were fixed-size badges pinned to a screen constant.
  *
- * `SECURITY_OPERATION_PX` is the generator's own table, so this reproduces the
- * OpenLayers rule rather than approximating it. The renderer re-runs this on every
- * zoom. @see NativeLayerRenderer.rebuildScreenSized
+ * They stopped being badges on 2026-08-29 — APP-06 gives them four anchor points, so
+ * they are drawn from two and the generator builds the arms from the *base*, ignoring
+ * `radius` entirely. Measured: rendering a cover with the override applied and without
+ * gives byte-identical geometry.
+ *
+ * So it was inert rather than wrong, which is worse in one way — it survived the change
+ * that retired it, put a bogus ground distance in the saved bag, and told every reader of
+ * this file that MapLibre still treats these three as screen-sized when OpenLayers routes
+ * them through `line(2)`. A reviewer reading the two files side by side would reasonably
+ * conclude the engines disagree about what a cover is. They do not.
  */
-function securityOperationSize(
-    name: TacticalGraphicName,
-    drawingResolution?: number,
-): Partial<TacticalGraphicProperties> {
-    if (!drawingResolution || !SECURITY_OPERATIONS.has(name)) return {};
-
-    // The library's figure, not this file's arithmetic — OpenLayers files the same one,
-    // and the generator builds the arms from it. @see SECURITY_OPERATION_HALF_EXTENT_PX
-    return {radius: SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution};
-}
 
 /**
  * **Gone, and deliberately not replaced.** This used to overwrite the caller's `radius`
@@ -538,13 +536,6 @@ function securityOperationSize(
  * 2.0.0 and removing them is a consumer's breaking change, not a tidy-up.
  * @see dropSizePx, which is what a renderer should ask now.
  */
-
-/** @see securityOperationSize */
-const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
 
 /**
  * A base's drawn length in meters.
@@ -739,17 +730,10 @@ export function buildTacticalGraphic(
         // must arrive unbroken. @see GLYPH_CUT_GAP_GRAPHICS
         ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) && properties.labelGap === undefined ? {labelGap: 0} : {}),
         ...properties,
-        // **After** the caller's properties, unlike every other default here. A
-        // security operation's size is not a ground distance a caller may set — it is
-        // a screen constant, and these graphics refuse a resize for exactly that
-        // reason. A `radius` arriving from a saved snapshot or a sweep is a number in
-        // meters from some other zoom, and honoring it draws the symbol at the wrong
-        // size. @see allowedGestures
-        // **The raw resolution, unlike everything else here.** These three are placed in
-        // projected metres rather than walked out geodesically — @see placeOriginCentered
-        // — so their pixel size is already latitude-invariant and correcting it would
-        // shrink them by cos(latitude) instead.
-        ...securityOperationSize(name, drawingResolution),
+        // **After** the caller's properties, unlike most defaults here: a baked decoration's
+        // size is not a ground distance a caller may set. A value arriving from a saved
+        // snapshot is a number in metres from some other zoom, and honouring it draws the
+        // decoration at the wrong size.
         ...bakedDecorationSize(name, properties, sizingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize
@@ -876,8 +860,12 @@ export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: 
     const painters = getPaintFunction(graphic.name);
     if (!painters) return [];
 
-    const paints = painters.graphic(graphic.graphic, context);
-    if (painters.label && graphic.labels) paints.push(...painters.label(graphic.labels, context));
+    // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
+    // function in `asStyleFunction`. @see withHiddenAmplifiers
+    const paints = withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers);
+    if (painters.label && graphic.labels) {
+        paints.push(...withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers));
+    }
     return paints;
 }
 

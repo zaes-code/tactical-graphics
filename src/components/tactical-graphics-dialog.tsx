@@ -8,18 +8,22 @@ import {
     DialogContent,
     DialogTitle,
     FormControl,
+    FormControlLabel,
     InputLabel,
     MenuItem,
     OutlinedInput,
     Paper,
     Select,
     SelectChangeEvent,
-    Typography,} from '@mui/material';
+    Switch,
+    Typography,
+} from '@mui/material';
 import {formatDistance} from './openlayers/openlayerStyles';
 import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactical-graphics';
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
+import {amplifiersHidden} from './amplifierVisibility';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
@@ -71,7 +75,7 @@ function defaultRangeFanConfig(): RangeFanConfig {
  * - **`status` defaults to `present`**, which is what `amplifierDash` already
  *   assumed for an unset status.
  */
-function shownLabels(selection: SelectedGraphic): GraphicLabels {
+export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const stored = selection.labels;
     const fields = getGraphicFields(selection.graphicName);
 
@@ -167,6 +171,14 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
         labels: {designation: '', hostility: TacticalGraphicHostility.unknown}
     };
     const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
+    /**
+     * Whether the selected graphic is drawn name-only.
+     *
+     * Held apart from `pendingChanges` because it is not one of the amplifiers `OK` writes
+     * back — the library keeps it off the graphic entirely, so this app owns it and applies
+     * it the moment it is switched. @see amplifierVisibility
+     */
+    const [nameOnly, setNameOnly] = useState(false);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
@@ -191,6 +203,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             };
             setCurrentProperties(curr);
             setPendingChanges(curr);
+            // View state, not an amplifier: it comes from this app's store rather than
+            // from the graphic. @see amplifierVisibility
+            setNameOnly(amplifiersHidden(next.id));
             setDialogPosition({x: 0, y: 0});
         });
     }, [source]);
@@ -459,6 +474,32 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                         </Box>
                                     </>
                                 )}
+
+                                {/*
+                                  * **Offered for every graphic, like hostility.** Any
+                                  * graphic can carry amplifiers, and whether to show them
+                                  * is a choice about this graphic on this map rather than
+                                  * a property of the symbol — so there is no per-graphic
+                                  * field flag deciding whether the control appears.
+                                  * @see TacticalGraphicProperties.hideAmplifiers
+                                  */}
+                                <Box sx={{mt: 1}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={nameOnly}
+                                                onChange={(_e, checked) => {
+                                                    // Applied immediately, and to this app's
+                                                    // own store — it is not one of the
+                                                    // amplifiers `OK` writes back.
+                                                    setNameOnly(checked);
+                                                    if (selection) source.setAmplifiersHidden(selection, checked);
+                                                }}
+                                            />
+                                        }
+                                        label="Name only — hide other amplifiers"
+                                    />
+                                </Box>
 
                                 {fields.hostility && (
                                     <Box sx={{minWidth: 180, mt: 1}}>

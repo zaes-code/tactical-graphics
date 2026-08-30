@@ -65,6 +65,15 @@ export interface FeaturePropertiesSource {
     apply(selection: SelectedGraphic, labels: GraphicLabels, echelon: string): void;
 
     /**
+     * Draw this graphic name-only, or stop.
+     *
+     * Separate from `apply` because it is not an amplifier: the library keeps it off the
+     * portable description entirely, so a host holds the choice itself and stamps it as a
+     * renderer input. @see amplifierVisibility, `PaintFeature.hideAmplifiers`
+     */
+    setAmplifiersHidden(selection: SelectedGraphic, hidden: boolean): void;
+
+    /**
      * Whether a click should be ignored right now — mid-draw, most often.
      *
      * Asked before selection rather than folded into `onSelect` so the reason stays

@@ -21,7 +21,6 @@ import {
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
-import {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 // import {SearchArea} from './graphics/SearchArea';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
@@ -35,7 +34,6 @@ import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 // import {SearchAreaController} from './controllers/SearchAreaController';
-import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
 /**
  * `resolution` is the zoom the graphic is being created at; `sizing` is that same
@@ -201,16 +199,6 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
 };
 
 /**
- * The crossed mission tasks: one click drops a fixed-size badge. `res * 50` is
- * `CROSSED_HALF_WIDTH_PX` worth at the placing zoom — which the style function
- * then divides straight back out, since these render at a constant screen size
- * whatever the zoom. Passing a sane value anyway keeps the stored geometry
- * meaningful to a renderer that does not pin it, and matches the floor
- * `MIN_SIZED_MISSION_TASKS` applies.
- *
- * `editStretches` stays off: there is nothing to stretch.
- */
-/**
  * Every one-click graphic: the crossed mission tasks, the airfield, the completed
  * roadblock. One click plants it whole, and whether it may then be scaled or turned is
  * the portable table's business rather than this factory's.
@@ -268,8 +256,16 @@ const rangeFan = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
-const securityOp = (name: TacticalGraphicName, res: number) =>
-    new SecurityOperationsController(new SecurityOperationGraphicBase(name, res));
+/**
+ * Cover, guard and screen: **two clicks and no handles.**
+ *
+ * They were placed on one anchor at a fixed screen size until 2026-08-29. APP-06 gives them
+ * four anchor points — two per arrow — and the operator now draws the first arrow while the
+ * generator derives the second, so the pair cannot disagree. `line(2)` is the ordinary
+ * fixed-vertex line controller: an edit drag scales the whole symbol, which is what these
+ * want, and the generator publishes no handle points so none are drawn. @see SecurityOperation
+ */
+const securityOp = line(2);
 
 // ─── registry ─────────────────────────────────────────────────────────────────
 
@@ -450,6 +446,22 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Four anchor points, each meaning something different, so every one is draggable.
     // Handle 0 is the circle's centre and moves the whole graphic.
     [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.Seize]:                            vertexLine(4, 4, 0),
+    /*
+     * **`vertexLine`, so the handle moves its vertex instead of scaling the symbol.**
+     *
+     * `line(2)` stretches: `editStretches` is true for anything with a fixed vertex count,
+     * so dragging the red handle resized the whole graphic — the fish tail and the
+     * arrowhead grew with the line. These two want the other behaviour, which is what this
+     * factory is for: the handle lengthens the line, and the resize affordance is what
+     * scales the symbol.
+     *
+     * `movement()` would be wrong for a third reason — it reserves an offset handle at
+     * `handleCoords[2]` for a width these symbols do not have, leaving the feature empty.
+     * @see visiblePathHandles for why only one of the two points shows a handle.
+     */
+    [TacticalGraphicName.FollowAndAssume]:                  vertexLine(2, 2),
+    [TacticalGraphicName.FollowAndSupport]:                 vertexLine(2, 2),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
     // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
@@ -633,7 +645,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FollowAndAssume]:  block,
     // [TacticalGraphicName.FollowAndSupport]: block,
 
-    // ── Crossed-line mission tasks (one click drops a fixed-size badge) ─────
+    // ── Crossed-line mission tasks (one click plants it; resize yes, rotate no) ──
     [TacticalGraphicName.Destroy]:    pointDrop,
     [TacticalGraphicName.Interdict]:  pointDrop,
     [TacticalGraphicName.Neutralize]: pointDrop,

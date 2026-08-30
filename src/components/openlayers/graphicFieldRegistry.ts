@@ -299,7 +299,7 @@ const TARGET_ACQUISITION_AREA = f(true, false, true, true, false);
 const ECH = f(true, false, false, false, true, {echelon: true});
 
 /**
- * The 13 rectangular zones carry a **width in meters** on top of their family's
+ * The 18 rectangular zones carry a **width in meters** on top of their family's
  * amplifiers. FM 1-02.2 table 5-24 draws it as an `AM` arrow down the edge labelled
  * "Width (M)", and APP-06 states it in words. It is an input rather than a printed
  * label: FM's own construct examples show only the designation and the DTGs.
@@ -374,6 +374,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // The decision line's two fields are drawn as `T/AS`, joined by a slash.
     // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
     [TacticalGraphicName.Capture]: SHAPE_ONLY,
+    [TacticalGraphicName.Seize]: SHAPE_ONLY,
+    [TacticalGraphicName.FollowAndAssume]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.FollowAndSupport]: NAME_FIELD_ONLY,
     // Escort's own amplifier is field A, a host-injected unit symbol, not text.
     [TacticalGraphicName.Escort]: SHAPE_ONLY,
     // `DEM` is the symbol's own literal, printed by the plate, and 343300 names no other

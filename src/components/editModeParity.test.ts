@@ -113,10 +113,11 @@ describe('the affordances a graphic offers', () => {
      * rather than an accident. @see ai/decisions.md
      */
     it.each([
-        // Security operations mark a screening force, not an extent of ground.
-        [TacticalGraphicName.Cover, {rotate: true, resize: false}],
-        [TacticalGraphicName.Guard, {rotate: true, resize: false}],
-        [TacticalGraphicName.Screen, {rotate: true, resize: false}],
+        // The security operations are drawn from two points as of 2026-08-29, so they take
+        // both gestures — the arms are an extent now, not a badge. @see SecurityOperation
+        [TacticalGraphicName.Cover, {rotate: true, resize: true}],
+        [TacticalGraphicName.Guard, {rotate: true, resize: true}],
+        [TacticalGraphicName.Screen, {rotate: true, resize: true}],
         // One doctrinal orientation each: an X turned 45° is a different symbol.
         [TacticalGraphicName.Destroy, {rotate: false, resize: true}],
         [TacticalGraphicName.Interdict, {rotate: false, resize: true}],
@@ -124,7 +125,7 @@ describe('the affordances a graphic offers', () => {
         [TacticalGraphicName.Suppress, {rotate: false, resize: true}],
         [TacticalGraphicName.Airfield, {rotate: false, resize: true}],
         [TacticalGraphicName.RoadblockCompleteExecuted, {rotate: false, resize: true}],
-    ] as const)('refuses what %s has always refused', (name, expected) => {
+    ] as const)('offers %s exactly the gestures its symbol allows', (name, expected) => {
         const gestures = allowedGestures(name);
         expect({rotate: gestures.rotate, resize: gestures.resize}).toEqual(expected);
     });

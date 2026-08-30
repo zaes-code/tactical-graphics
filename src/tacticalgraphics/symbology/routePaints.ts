@@ -15,8 +15,9 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {RouteDirection, TacticalGraphicName} from '../core/type';
-import {offsetAbove, offsetBelow, textWidth, uprightRotation} from './decorations';
+import {offsetAbove, offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {capLabelToSpan} from './labelFit';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
 const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
@@ -110,12 +111,12 @@ function routeEndPaints(
         paints.push({geometry: {type: 'Polygon', coordinates: [[tip, left, right, tip]]}, fill: {color}});
     };
 
-    const rows = direction === RouteDirection.TWO_WAY ? 2 : direction === RouteDirection.GENERAL ? 0 : 1;
+    const rows = direction === RouteDirection.twoWay ? 2 : direction === RouteDirection.general ? 0 : 1;
     const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * scale;
 
     if (rows > 0) {
         const labelWidthPx = textWidth(context, text, fontStyle, scale);
-        const altWidthPx = direction === RouteDirection.ALTERNATING ? textWidth(context, 'ALT', fontStyle, scale) : 0;
+        const altWidthPx = direction === RouteDirection.alternating ? textWidth(context, 'ALT', fontStyle, scale) : 0;
         // An alternating row has to hold ALT plus a full arrow either side, so its
         // floor is that content, never the label, which may be shorter.
         const minSpanPx = altWidthPx > 0
@@ -126,9 +127,9 @@ function routeEndPaints(
         const inward: ProjectedPosition = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
         shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
 
-        if (direction === RouteDirection.ONE_WAY) {
+        if (direction === RouteDirection.oneWay) {
             arrow(row(0), -halfPx, halfPx);
-        } else if (direction === RouteDirection.TWO_WAY) {
+        } else if (direction === RouteDirection.twoWay) {
             arrow(row(0), halfPx, -halfPx);   // lower row points back
             arrow(row(1), -halfPx, halfPx);   // upper row points forward
         } else {
@@ -171,8 +172,22 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         if (coords.length < 2) return [];
 
         const text = getFullLabel(name, feature.properties.designation ?? '');
-        const direction = feature.properties.direction ?? RouteDirection.GENERAL;
-        const scale = scaleOf(feature, context);
+        const direction = feature.properties.direction ?? RouteDirection.general;
+        /*
+         * **Capped against the route's own length.**
+         *
+         * The designation is drawn at *both* ends, so a route shorter than two labels
+         * reads as one blob with no line between them — `MSR 1MSR 1` — which is what the
+         * sweep shows once it is zoomed out. The zoom-anchored scale floors at 0.3 and the
+         * route does not, so the text overruns a shape that keeps shrinking.
+         */
+        const scale = capLabelToSpan(
+            context,
+            text,
+            fontStyle,
+            scaleOf(feature, context),
+            pathLength(coords) / context.resolution,
+        );
 
         const start = coords[0];
         const afterStart = coords[1];

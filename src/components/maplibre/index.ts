@@ -1,18 +1,25 @@
 /**
  * `@zaes/tactical-graphics/maplibre` — the MapLibre renderer.
  *
- * ## Status: a spike, not a finished renderer
+ * ## Status: shipped in 2.0.0
  *
- * Three of the library's 69 style functions are ported. Anything else draws
- * nothing at all — ask {@link isPaintable} before you rely on a graphic, and read
- * `ai/maplibre-renderer.md` before planning around this entry point. It is wired
- * into the build so the entry-point isolation is asserted rather than assumed,
- * and so the shape of the finished thing is fixed; it is not release-ready.
+ * A complete renderer, not a spike. It paints **291 of the 292 registered
+ * graphics** — the exception, `AxisOfAttack`, is a generator with no enum member
+ * and no UI path anywhere in the package — and it carries draw, modify and all
+ * four handle gestures. Both engines read one shared paint layer, so what a
+ * symbol looks like is the same fact on each rather than two implementations
+ * that can drift.
+ *
+ * Ask `isPaintable(name)` (from the **root** entry, `@zaes/tactical-graphics`)
+ * if you want the answer for a specific graphic in code rather than trusting
+ * this paragraph.
  *
  * ## Two renderers, deliberately
  *
- * The spike built both candidate architectures and measured them, and both are
- * exported because the choice is a real trade rather than a solved question:
+ * Both candidate architectures were built and measured, and both are exported
+ * because the choice is a real trade rather than a solved question.
+ * {@link createTacticalGraphics} uses {@link NativeLayerRenderer} unless you hand
+ * it another one:
  *
  * - {@link CanvasOverlayRenderer} — a 2D canvas synced to MapLibre's camera.
  *   Style functions port 1:1 and text is measured with the same ruler that draws

@@ -63,11 +63,18 @@ export interface RouteOptions extends BaseGraphicOptions {
 /**
  * Options for security-operation fan graphics (Cover/Guard/Screen).
  *
- * **Every dimension is optional**, because they are fixed ratios of one another
- * and of `size`. These graphics are badges: not resized, describing no ground
- * extent. A renderer with a map resolution to hand (the OpenLayers holder) passes
- * them explicitly so the symbol holds a constant on-screen size; one without
- * passes `size` alone and gets the same proportions.
+ * **Every dimension is optional**, because they are fixed ratios of one another and of
+ * `size`. Pass `size` alone and the proportions follow.
+ *
+ * These were badges until 2026-08-29 — not resized, describing no ground extent, sized
+ * by a screen constant times the live map resolution. APP-06 gives them four anchor
+ * points, so they are drawn from two now and the generator builds the arms from the
+ * **base**: a two-point `LineString` of `[the arrowhead, that arm's inner end]`. Given
+ * such a base the generator ignores these options, which is why a renderer that still
+ * forces a `radius` in gets exactly the geometry it would have got without one.
+ *
+ * They remain for the other way round — placing one of these three from a single point
+ * and a size, which is how a symbol dropped on an existing unit is positioned.
  * @see SecurityOperation.dimensions
  */
 export interface SecurityOperationOptions extends BaseGraphicOptions {
@@ -397,6 +404,8 @@ export function getLabel(name: TacticalGraphicName) {
             return 'N';
         case TacticalGraphicName.Capture:
             return 'C';
+        case TacticalGraphicName.Seize:
+            return 'S';
         case TacticalGraphicName.AvenueOfApproach:
             return 'AA';
         case TacticalGraphicName.Deny:
@@ -932,6 +941,9 @@ export enum TacticalGraphicName {
     BattlePositionPreparedButNotOccupied = 'BattlePositionPreparedButNotOccupied',  // APP-06 151202 / FM 1-02.2 table 5-5
     // The three that share one four-point construction. @see graphics/SweptArcTask.ts
     Capture = 'Capture',                          // APP-06 343000 Capture
+    Seize = 'Seize',                              // APP-06 342300 Seize
+    FollowAndAssume = 'FollowAndAssume',          // APP-06 341200 Follow and Assume
+    FollowAndSupport = 'FollowAndSupport',        // APP-06 341300 Follow and Support
     Deny = 'Deny',                                // APP-06 343400 Deny
     Escort = 'Escort',                            // APP-06 343600 Escort
     Demonstration = 'Demonstration',              // APP-06 343300 Demonstration/Demonstrate
@@ -1211,9 +1223,14 @@ export enum TacticalGraphicHostility {
     unknown = 'Unknown',
 }
 
+/**
+ * FM 1-02.2's status: whether the thing the symbol describes exists yet.
+ *
+ * Not drawn as a word — it decides whether the line work is solid or dashed.
+ */
 export enum TacticalGraphicStatus {
-    present = 'present',
-    planned = 'planned',
+    present = 'Present',
+    planned = 'Planned',
 }
 
 /**
@@ -1241,16 +1258,27 @@ export enum AltitudeDatum {
     flightLevel = 'FL',
 }
 
+/**
+ * How sure the reporter is of a hostile contact — offered only for `hostileFaker`,
+ * and drawn, like status, as a dash rather than a word.
+ */
 export enum TacticalGraphicConfidence {
-    known = 'known',
-    suspected = 'suspected',
+    known = 'Known',
+    suspected = 'Suspected',
 }
 
+/**
+ * Which way traffic runs on a route, main supply route or alternate supply route.
+ *
+ * Chooses the arrows drawn in the route's designation box — none, one, two opposed, or
+ * one beside the word `ALT`. That word is a literal in `routePaints`, not this value:
+ * nothing here is printed.
+ */
 export enum RouteDirection {
-    GENERAL = 'GENERAL',
-    ONE_WAY = 'ONE_WAY',
-    TWO_WAY = 'TWO_WAY',
-    ALTERNATING = 'ALTERNATING',
+    general = 'General',
+    oneWay = 'One Way',
+    twoWay = 'Two Way',
+    alternating = 'Alternating',
 }
 
 export interface TacticalGraphicConfig {

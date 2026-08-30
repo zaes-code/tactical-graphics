@@ -1,12 +1,12 @@
 /**
- * # Capture, evacuate and recover
+ * # Seize, capture, evacuate and recover
  *
- * The paint half of APP-06 343000 / 344500 / 344600. @see SweptArcTask.ts for the circle
- * and the arc, which are geometry — the user places all four points, so both scale with
- * the graphic and survive a zoom.
+ * The paint half of APP-06 342300 / 343000 / 344500 / 344600. @see SweptArcTask.ts for the
+ * circle and the arc, which are geometry — the user places all four points, so both scale
+ * with the graphic and survive a zoom.
  *
  * What is left here is what does *not* scale: the arrowhead at the end of the sweep, and
- * the letter that tells the three tasks apart.
+ * the letter that tells the four tasks apart.
  *
  * ## Both marks were read off the wrong arrows
  *
@@ -37,7 +37,7 @@ const LETTER_PADDING_PX = 5;
 /**
  * The letter set in the arc's break, plus the arrowhead at its end.
  *
- * @param letter `C`, `E` or `R`, straight off the plate.
+ * @param letter `S`, `C`, `E` or `R`, straight off the plate.
  */
 export function sweptArcTaskPaint(letter: string): SweptArcPaint {
     return (feature, context) => {

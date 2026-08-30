@@ -214,7 +214,7 @@ export {
  * @see ai/maplibre-renderer.md
  */
 export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
-export type {
+export type {TextKind, 
     CircleSpec,
     FillSpec,
     HatchSpec,
@@ -318,7 +318,7 @@ export {
     smokeObscurantLabelPaint,
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
-export {fitLabelScale, liftedAnchor} from './symbology/labelFit';
+export {capLabelToSpan, fitLabelScale, LABEL_SPAN_SHARE, liftedAnchor} from './symbology/labelFit';
 export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
 export {
     fortifiedPositionPaint,
@@ -329,6 +329,8 @@ export {
 } from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
+export {followTaskPaint, followTaskSymbol} from './symbology/followTaskPaints';
+export type {FollowVariant} from './symbology/followTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
@@ -372,8 +374,8 @@ export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, air
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
 export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
-export {securityOperationLabelPaint} from './symbology/securityPaints';
-export {SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+export {securityOperationCentre, securityOperationLabelPaint, securityOperationPaint, securityOperationSymbol} from './symbology/securityPaints';
+export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
@@ -438,3 +440,5 @@ export type {AllowedGestures} from './core/symbology';
 export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
+
+export {amplifierText, withHiddenAmplifiers} from './symbology/paintFunctions';

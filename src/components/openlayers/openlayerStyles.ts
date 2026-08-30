@@ -20,7 +20,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicLabels} from './graphicProperties';
-import {escortSymbolStyle} from './securityOperationSymbol';
+import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
@@ -120,6 +120,7 @@ import {
     passageLanePaint,
     barSymbolPaint,
     securityOperationLabelPaint,
+    securityOperationPaint,
     boundaryPaint,
     rangeFanLabelPaint,
     battlePositionPaint,
@@ -166,6 +167,7 @@ import {
     obstacleBypassPaint,
     demonstrationPaint,
     escortPaint,
+    followTaskPaint,
     sweptArcTaskPaint,
     mineClusterPaint,
     minelinePaint,
@@ -1789,6 +1791,48 @@ export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction 
     return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
 }
 
+/**
+ * Follow and assume, follow and support. @see followTaskPaints.ts
+ *
+ * Each carries a host-injected unit symbol where field T would go, like the escort carries
+ * one in the break in its bar. The paint has already left the space and skipped the
+ * designation; this appends the picture. @see followTaskSymbolStyle
+ */
+export function followTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const styled = asStyleFunction(followTaskPaint(name === TacticalGraphicName.FollowAndAssume ? 'assume' : 'support'), name);
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = followTaskSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
+}
+
+/**
+ * Cover, guard and screen: the arms, the two letters, and the host's unit symbol between
+ * them.
+ *
+ * The symbol is placed by `securityOperationSymbol` rather than from anything here — the
+ * gap it sits in is cut by the same calculation, and a symbol placed from a second one does
+ * not sit in its own hole. @see followTaskStyleFunc, which is the same arrangement.
+ */
+/** The three the dispatcher above routes here. */
+const SECURITY_OPERATION_STYLES: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
+export function securityOperationStyleFunc(name: TacticalGraphicName): StyleFunction {
+    const styled = asStyleFunction(securityOperationPaint(getLabel(name)), name);
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = securityOperationCentreSymbolStyle(feature, resolution);
+        return symbol ? [...styles, symbol] : styles;
+    };
+}
+
 /** The two APP-06 lines that stand a glyph on each anchor point. @see endGlyphLinePaints.ts */
 export function endGlyphLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(
@@ -3014,6 +3058,11 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 }
 
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
+    // Cover, guard and screen. They were placed rather than drawn until 2026-08-29 and had
+    // no entry here at all, so a host calling `getStyle` for one got nothing back and had
+    // to reach past this function. They are ordinary drawn graphics now, and this is where
+    // a caller looks. @see securityOperationStyleFunc
+    if (SECURITY_OPERATION_STYLES.has(name)) return securityOperationStyleFunc(name)(feature, resolution);
     if (name === TacticalGraphicName.StrongPoint) return railroadStyleFunction(feature, resolution);
     if (name === TacticalGraphicName.BattlePosition) return battlePositionStyleFunction(labels, feature, resolution);
     // APP-06 151202 — the same outline and echelon, broken whatever the status says.

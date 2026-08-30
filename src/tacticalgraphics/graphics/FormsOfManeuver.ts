@@ -956,11 +956,12 @@ export class InfiltrationLane extends MovementGraphicBase {
 // Infiltrate lives beside the exfiltration now: they are one symbol with two letters.
 // @see RetrogradeTask.ts, `Infiltration`
 
-// ─── Ambush — 1/3-circle arc with 7 horizontal hashes + right-pointing arrow ──
+// ─── Ambush — 1/3-circle arc with 6 horizontal hashes + right-pointing arrow ──
 // Point-based. At rotation = 0 the arc bulges right (convex facing right, concave
-// opening facing left); 7 horizontal hashes fill the half-moon interior between
-// the chord and the arc; the arrow emerges from the convex outer bulge pointing
-// east. `rotation` rotates the whole graphic; `size` is the circle radius.
+// opening facing left); 6 horizontal hashes fill the half-moon interior between
+// the chord and the arc, three either side of the axis; the arrowhead line runs
+// along the axis from the chord's midpoint out through the bulge, pointing east.
+// `rotation` rotates the whole graphic; `size` is the circle radius.
 
 export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Ambush;
@@ -975,6 +976,12 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
      * two radii. @see core/anchors.ts, ai/app-6.md "F3"
      */
     type: string = 'LineString';
+
+    /**
+     * Which of the seven evenly spaced hash slots falls on the axis, and is therefore
+     * not a hash at all — the arrowhead line runs through it. @see generateGraphics
+     */
+    private static readonly ARROWHEAD_LINE_HASH = 4;
 
     /** The circle behind the arc, read off the drawn points or from the options. */
     private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} {
@@ -1006,13 +1013,16 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // Arc: 1/3 circle (120°) bulging right — planar −60° → +60°.
         const arc: Position[] = geometryService.createCircularArc(center, rotation, r, -60, 60, 48);
 
-        // 7 horizontal hashes evenly spaced in y, each running from the chord
+        // 6 horizontal hashes evenly spaced in y, each running from the chord
         // (x = +0.5r) rightward to the arc (x = +sqrt(r² − y²)). y endpoints at
-        // ±r·sin(60°) = ±0.866r; 8 intervals → 7 interior lines.
+        // ±r·sin(60°) = ±0.866r; 8 intervals → 7 interior lines, of which the
+        // middle one is skipped: y = 0 is not a hash, it is the rear half of the
+        // arrowhead line below. @see ARROWHEAD_LINE_HASH
         const yMax = r * Math.sin((60 * Math.PI) / 180);
         const chordX = 0.5 * r;
         const lines: Position[][] = [];
         for (let i = 1; i <= 7; i++) {
+            if (i === Ambush.ARROWHEAD_LINE_HASH) continue;
             const y = -yMax + (i * (2 * yMax)) / 8;
             const startDeg = (Math.atan2(y, chordX) * 180) / Math.PI;
             const endDeg = (Math.atan2(y, Math.sqrt(Math.max(0, r * r - y * y))) * 180) / Math.PI;
@@ -1020,13 +1030,23 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
             lines.push([polar(startDist, startDeg), polar(r, endDeg)]);
         }
 
-        // Arrow: emerges from the convex bulge (planar 0°, distance r) and
-        // extends one radius further outward (tip at planar 0°, distance 2r).
-        const arrowBase = polar(r, 0);
+        // **The arrowhead line is one line.** APP-06 141700: "The rear of the
+        // arrowhead line shall connect to the midpoint of the line between points 2
+        // and 3" — and on a 120° arc that midpoint is r·cos(60°) = 0.5r out along the
+        // axis, which is exactly where the hashes start. So the run from the chord to
+        // the tip is a single stroke, not a hash meeting an arrow at the bulge.
+        //
+        // It was emitted as two: a hash from 0.5r to r, then a shaft from r to the tip.
+        // Both are sampled off the same great circle by `polar`, so they are collinear
+        // in the plane the generator thinks in — but each was a bare pair of endpoints,
+        // which puts the whole of the geodesic's curvature on the join as a corner.
+        // Drawn at the demo's opening zoom that corner measured **7.1°**, with the two
+        // halves visibly at different angles. One run, one bearing, no corner.
+        const arrowRear = polar(chordX, 0);
         const arrowTip = polar(reach * r, 0);
-        const arrowHead = geometryService.computeArrowheadPoints(arrowBase, arrowTip, r * 0.25, 30);
+        const arrowHead = geometryService.computeArrowheadPoints(arrowRear, arrowTip, r * 0.25, 30);
 
-        return this.asMultiLineStringFeature([arc, ...lines, [arrowBase, arrowTip], arrowHead]);
+        return this.asMultiLineStringFeature([arc, ...lines, [arrowRear, arrowTip], arrowHead]);
     }
 
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {

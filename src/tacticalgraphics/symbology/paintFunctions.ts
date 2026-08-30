@@ -1,27 +1,28 @@
 /**
- * # Three graphics, painted without a renderer
+ * # The paint layer's core — what a symbol looks like, as data
  *
- * The spike from `ai/maplibre-renderer.md`: one plain line, one screen-pixel
- * decoration, one point-anchored letter with a glyph-measured gap. They were
- * picked because they are the three *kinds* of work the other 66 style functions
- * are made of, not because they are the easiest three.
+ * Both shipping renderers draw through here. A paint is a plain object: geometry, stroke,
+ * fill, text. No `ol`, no `maplibre-gl`, no canvas — the inputs arrive as
+ * `feature.properties` and `context.measureText`, so the same description can be realised
+ * as an OpenLayers `Style` or as MapLibre layers without either engine owning a symbology
+ * fact of its own.
  *
- * | | ported from | what it proves |
- * |---|---|---|
- * | {@link phaseLinePaint} | `phaseLineStyle` | rotation, upright flip, a gap measured off the glyph |
- * | {@link obstacleLinePaint} | `obstacleLineStyleFromLabels` | geometry synthesized per frame, `decorationScale` against the shape |
- * | {@link arcMissionTaskPaint} | `arcMissionTaskStyleFunc` | a gap cut from the *rendered* letter, projected onto a tangent |
+ * This file holds the general rules and the shared helpers: label sizing ({@link scaleOf}),
+ * the label colour and halo, dash patterns for a planned or suspected graphic, the
+ * screen-pixel decoration cap, and the default line and area paints that most graphics
+ * fall back to. A family with a shape of its own has its own module beside this one.
  *
- * Each is a transcription of its OpenLayers original — the arithmetic is
- * unchanged, so a difference between the two renderings is a porting bug and not
- * a redesign. What changed is only where the inputs come from: amplifiers off
- * `feature.properties` instead of `feature.get()`, text widths through
- * `context.measureText` instead of a module-level canvas.
+ * **It began as a three-graphic spike** — one plain line, one screen-pixel decoration, one
+ * point-anchored letter with a glyph-measured gap — chosen because they are the three
+ * *kinds* of work the style functions are made of. The finding that spike existed to
+ * produce still holds and is the reason this layer is a data description rather than a set
+ * of MapLibre expressions: none of the three could be expressed as a paint/layout
+ * expression, because all three build geometry that is not in the source and two of them
+ * size it from a text measurement. `ai/maplibre-renderer.md` has the write-up.
  *
- * **The finding this spike exists to produce**: none of the three could be
- * expressed as a MapLibre paint/layout expression. All three build geometry that
- * is not in the source, and two of them size it from a text measurement. See the
- * write-up in `ai/maplibre-renderer.md`.
+ * **Coordinates here are projected metres (EPSG:3857), never degrees.** turf and
+ * `GeometryService` expect geographic coordinates and will quietly give wrong answers;
+ * use plain Euclidean vector maths. Anything that wants a bearing belongs in a generator.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -33,17 +34,20 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_MISSION_TASKS,
+    configuredLabelScale,
     fontStyle,
     getColorByHostility,
     getLabelFillColor,
-    getLabelUsesHostilityColor,
     getLabelHaloColor,
+    getLabelUsesHostilityColor,
     labelScale,
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
+import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {capLabelToGraphic} from './labelFit';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -54,6 +58,82 @@ import {
     textWidth,
     uprightRotation,
 } from './decorations';
+
+/**
+ * Blanks one amplifier line when the graphic is hiding them.
+ *
+ * The multi-line stacks — an area's name over its date-time group, a corridor's block, the
+ * sector modifiers — draw one mark from an array of lines, so dropping the *mark* would
+ * take the designation with it. Every one of those arrays is filtered for empty strings
+ * before it is joined, so returning `''` removes the line and nothing else moves.
+ *
+ * @see withHiddenAmplifiers for the marks that can be dropped whole.
+ */
+export function amplifierText(feature: PaintFeature, value: string): string {
+    return feature.hideAmplifiers ? '' : value;
+}
+
+/**
+ * Drops the text a graphic has been told to hide, leaving everything else untouched.
+ *
+ * **One statement of the rule, applied by each renderer at the point where paints become
+ * marks.** OpenLayers runs every paint through `asStyleFunction` and MapLibre through
+ * `paintTacticalGraphic`; both call this, so a graphic hides the same text on either
+ * engine and a new paint inherits the behaviour without knowing the toggle exists.
+ *
+ * Only `amplifier` text goes. A mark that never said what it is counts as doctrinal and
+ * stays — the safe direction, since a stray date is noise and a missing letter is a
+ * different symbol. @see TextKind
+ */
+export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
+    if (!hidden) return paints;
+    return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * A representative latitude for the feature, in degrees.
+ *
+ * Any point on the graphic will do: the scale factor changes slowly enough over a symbol's
+ * own extent that which one is picked cannot matter, and the alternative — reprojecting
+ * through a map library — is exactly what the paint layer exists not to do.
+ * @see latitudeFromMercatorY
+ */
+export function featureLatitude(feature: PaintFeature): number {
+    if (feature.bounds) return latitudeFromMercatorY((feature.bounds.minY + feature.bounds.maxY) / 2);
+    const firstY = (function find(node: unknown): number | undefined {
+        if (Array.isArray(node)) {
+            if (typeof node[0] === 'number') return node[1] as number;
+            for (const child of node) {
+                const y = find(child);
+                if (y !== undefined) return y;
+            }
+            return undefined;
+        }
+        const geometry = node as {coordinates?: unknown; geometries?: unknown[]};
+        if (geometry?.geometries) return find(geometry.geometries);
+        return geometry?.coordinates === undefined ? undefined : find(geometry.coordinates);
+    })(feature.geometry);
+    return firstY === undefined ? 0 : latitudeFromMercatorY(firstY);
+}
+
+/**
+ * How many screen pixels a **ground** distance covers where this graphic is drawn.
+ *
+ * `metres / resolution` is the answer only on the equator. The portable description states
+ * real distances — a radius, a width, a corridor's half-width — while the resolution is
+ * projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. So
+ * dividing one by the other under-reports the symbol's on-screen size by that factor:
+ * 1.6x at 50 degrees, 5.8x at 80.
+ *
+ * That is not a rounding error where the result feeds a cap. A corridor 40 px wide at 80
+ * degrees north measured as 7 px, and its designation was shrunk to fit the 7 — a
+ * four-pixel label on a corridor with room for a legible one. `mercator.ts` already states
+ * this rule for the generators, which convert the other way when a symbol is drawn; this
+ * is the same rule on the way back out.
+ */
+export function groundPixels(metres: number, feature: PaintFeature, context: PaintContext): number {
+    return projectedLength(metres, featureLatitude(feature)) / context.resolution;
+}
 
 /** A graphic's static prefix joined to the user's free text — "PL", "PL BLUE". */
 export function formatFullLabel(prefix: string, name: string): string {
@@ -157,9 +237,35 @@ export function axisRotation(feature: PaintFeature): number {
     return uprightRotation([0, 0], [Math.cos(theta), Math.sin(theta)]);
 }
 
-/** Zoom-anchored label scale for a paint feature. */
-export function scaleOf(feature: PaintFeature, context: PaintContext): number {
-    return labelScale(feature.drawingResolution, context.resolution);
+/** The size the host configured, capped by the graphic the label belongs to. */
+export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: number = BASE_FONT_SIZE_PX): number {
+    /*
+     * **The one place the general size rule is applied.**
+     *
+     * Nearly every label paint asks here for the scale it should draw at, so capping the
+     * answer here is what makes "a label may not outgrow its own symbol" a rule rather
+     * than something each family remembers. Families with a tighter constraint — a letter
+     * inside an arrowhead, a designation between a corridor's rails — narrow it further
+     * from their own paint; nothing has to widen it.
+     *
+     * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
+     */
+    /*
+     * **The configured size, capped by the graphic.** The host says how big a label should
+     * be and the symbol says how big it may be; the zoom the operator happened to be at
+     * when they drew it is neither, and it is not saved with the graphic, so it made a
+     * label that could not be reproduced. @see configuredLabelScale
+     *
+     * **No bounds means no cap, not a different rule.** This used to fall back to the zoom
+     * anchor whenever the graphic's extent was missing, which quietly made the size depend
+     * on *who built the feature*. A holder-backed feature has bounds — the renderer finds
+     * them through its registry — while a host that builds its own features has none, so
+     * the same corridor at the same zoom drew its designation at 1.00 in this library's own
+     * app and 0.55 in a consuming one. The anchor is the thing this function was changed to
+     * stop using; keeping it as the fallback kept it in use for exactly the consumers who
+     * could not see why. (User's call, 2026-08-30.)
+     */
+    return capLabelToGraphic(configuredLabelScale(), feature, context, fontPx);
 }
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
@@ -361,7 +467,7 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         if (center && labelPoint && radius > 0 && label) {
             const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
             const scale = ratioLocked
-                ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
+                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
                 : scaleOf(feature, context);
             const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
             const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
@@ -432,8 +538,8 @@ export function missionTaskLabelPaint(
                 fill: labelColorOf(feature),
                 halo: halo(),
                 scale: ratioLocked
-                    ? ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution)
-                    : labelScale(feature.drawingResolution, context.resolution),
+                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
+                    : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
                 rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',
                 baseline: 'middle',
@@ -602,8 +708,8 @@ export function defaultLinePaint(
         if (coords.length < 2) return [];
 
         const identifier = getFullLabel(name, feature.properties.designation ?? '');
-        const startDate = showDates ? feature.properties.startDate ?? '' : '';
-        const endDate = showDates ? feature.properties.endDate ?? '' : '';
+        const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
+        const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
 
         const start = coords[0];
@@ -657,14 +763,14 @@ export function defaultLinePaint(
     };
 }
 
-// ── 5. Areas — the plain outline behind 60 of the 75 area graphics ────────────
+// ── 5. Areas — the plain outline behind 79 of the 94 area graphics ────────────
 
 /**
  * An area's outline: one stroke in the affiliation's color, dashed when the
  * status is `planned`.
  *
  * Unremarkable, and the highest-coverage paint function in the library — 60 of
- * the 75 `polygon` / `polygonRect` registry entries have no bespoke style and
+ * the 94 `polygon` / `polygonRect` registry entries have no bespoke style and
  * reach this. The other 15 draw something structural (StrongPoint's cross ties,
  * an obstacle belt's teeth, Encirclement's hostility-dependent form) and are
  * ported separately.

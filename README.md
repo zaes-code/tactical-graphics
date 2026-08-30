@@ -29,24 +29,29 @@ Three entry points ship, and you can use any of them on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
-| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#security-operations-the-center-symbol) |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#the-center-symbol) |
 | `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
 npm install maplibre-gl    # only for the MapLibre entry point
-npm install milsymbol      # only for the center symbol on Cover / Guard / Screen
+npm install milsymbol      # only for the center symbol — six graphics carry one
 ```
 
 All three are peer dependencies and all are optional, so installing the package
 for its geometry alone pulls in none of them. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
-[Security operations: the center symbol](#security-operations-the-center-symbol).
+[The center symbol](#the-center-symbol).
 
 **The same names, from either subpath.** `createTacticalGraphics` and the library's own
-exports — configuration, the palette, the property key, the center-symbol controls — are
-offered by both entry points, so moving a program from one engine to the other changes
-the import path and nothing else. A test asserts the two keep matching.
+exports — configuration, the palette, the property key — are offered by both entry points,
+so moving a program from one engine to the other changes the import path and nothing else.
+A test asserts the two keep matching.
+
+The **center-symbol controls are the exception**, and they are not a subpath's to offer:
+`setSecuritySymbolProvider` and `useMilsymbolSecuritySymbols` live on the **root** entry,
+because which symbol a graphic draws is symbology rather than rendering. Import them from
+`@zaes/tactical-graphics` whichever engine you use. @see [The center symbol](#the-center-symbol)
 
 **The two renderers paint through the same code.** Colors, label placement,
 screen-sized decorations, the radius read-out, which handle does what, how a
@@ -110,8 +115,12 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-Only `name` is required. Each graphic ignores the fields that don't apply to it, so
-there is no per-graphic options type to look up:
+`name` is always required, and **51 of the 292 graphics need a geometry input as well**:
+the point-anchored ones (mission tasks, range fans, fighting positions, the circular
+areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
+`decorationSize`. Without them you get a turf error rather than a default — see
+[Errors](#errors). Every other field is optional, and each graphic ignores the ones that
+do not apply to it, so there is no per-graphic options type to look up:
 
 ```ts
 tacticalGraphic: {
@@ -132,25 +141,26 @@ tacticalGraphic: {
     eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
     minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
     maxAltitude: 2000,
-    altitudeDatum: 'AGL',     // MSL | AGL | FL — what those numbers are measured from
+    altitudeDatum: 'AGL',     // AltitudeDatum — what those numbers are measured from
     weapon: 'M252 81mm',      // FinalProtectiveFire only
     grid: '18SUJ2345',
 
-    // Symbology — affects color and dash pattern.
-    hostility: 'Friend',      // Friend | Hostile/Faker | Neutral | Unknown | ...
-    status: 'present',        // present | planned  (planned ⇒ dashed)
-    confidence: 'known',      // known | suspected — rendered where doctrine shows a
-                              // reliability rating
-    echelon: 'Battalion/Squadron', // Squad | Section | Platoon/Detachment |
-                              // Company/Battery/Troop | Battalion/Squadron |
-                              // Regiment/Group | Brigade | Unknown
-    direction: 'ONE_WAY',     // route graphics
-    mineType: 'Antitank Mine', // which mine the two mine areas draw inside themselves
-    mobility: 'Tracked',      // APP-06 Table 8-24 sector 1 — the icon a limited access
-                              // area or restricted terrain carries to say what kind of
-                              // movement the ground admits
-    terrain: 'Ground',        // APP-06 Table 8-25 sector 2 — the word under that icon,
-                              // and the color the area is hatched in
+    // Symbology — affects color and dash pattern. Every field below is backed by an
+    // exported enum; the table after this block lists each one's complete set of values.
+    hostility: 'Friend',      // TacticalGraphicHostility
+    status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
+    confidence: 'Known',      // TacticalGraphicConfidence — rendered where doctrine
+                              // shows a reliability rating
+    echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
+    direction: 'One Way',     // RouteDirection — route graphics
+    mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the two mine
+                              // areas draw inside themselves
+    mobility: 'Tracked',      // TacticalGraphicMobility — APP-06 Table 8-24 sector 1,
+                              // the icon a limited access area or restricted terrain
+                              // carries to say what kind of movement the ground admits
+    terrain: 'Ground',        // TacticalGraphicTerrain — APP-06 Table 8-25 sector 2,
+                              // the word under that icon, and the color the area is
+                              // hatched in
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
@@ -177,6 +187,32 @@ tacticalGraphic: {
 }
 ```
 
+### The selector fields, and every value they take
+
+Each of these is a **string enum**, exported from the root entry point, so the member and
+its value are the same string at run time — `TacticalGraphicHostility.friend` **is**
+`'Friend'`. Pass the member; the literal works too, and is what a saved file holds.
+
+| Field | Enum | Every accepted value |
+|---|---|---|
+| `hostility` | `TacticalGraphicHostility` | `Assumed Friend` · `Friend` · `Hostile/Faker` · `Neutral` · `Pending` · `Suspect/Joker` · `Unknown` |
+| `status` | `TacticalGraphicStatus` | `Present` · `Planned` |
+| `confidence` | `TacticalGraphicConfidence` | `Known` · `Suspected` |
+| `echelon` | `TacticalGraphicEchelon` | `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Unknown` |
+| `direction` | `RouteDirection` | `General` · `One Way` · `Two Way` · `Alternating` |
+| `mineType` | `TacticalGraphicMineType` | `Unspecified Mine` · `Antipersonnel Mine` · `Antipersonnel Mine with Directional Effects` · `Antitank Mine` · `Antitank Mine with Antihandling Device` · `Wide Area Antitank Mine` · `Mine Cluster` |
+| `mobility` | `TacticalGraphicMobility` | `Unspecified` · `Standard Mobility/On-Road` · `High Mobility/Off-Road` · `Tracked` · `Tracked and Wheeled Combination` · `Towed` · `Railway` · `Over-Snow (Prime Mover)` · `Sled` · `Pack Animal` · `Barge` · `Amphibious` · `No Vehicles` · `Dismounted` |
+| `terrain` | `TacticalGraphicTerrain` | `Unspecified` · `Urban` · `Water` · `Ground` · `Vegetation` · `Obstacles` |
+| `altitudeDatum` | `AltitudeDatum` | `MSL` · `AGL` · `FL` |
+
+`AltitudeUnit` (`Meters` · `Feet`) is not a per-graphic field — it is host configuration,
+set once with `configureTacticalGraphics({altitudeUnit})`, because a map does not mix
+units. A graphic that needs its own is free to pass a string altitude instead.
+
+**A value not in these lists is ignored rather than drawn**, so a typo shows up as a
+missing amplifier rather than an error. The table is generated from the enums by a test,
+so it cannot drift from them.
+
 **`label` and `secondId` were renamed in 3.0.0** — they are `designation` and
 `secondDesignation` now. They are fields **T** and **T1**, the standard's unique
 designations, and the old names said neither what they were nor which was which. `label`
@@ -197,7 +233,7 @@ opens with its designations intact; you migrate when you next save.
 
 **Altitudes are numbers**, in whichever unit the host configured — feet by default. The
 renderer appends it, so `500` draws as `500FT`, or `500M` under
-`configureTacticalGraphics({altitudeUnit: AltitudeUnit.Meters})`.
+`configureTacticalGraphics({altitudeUnit: AltitudeUnit.meters})`.
 
 `altitudeDatum` says what they are measured **from**, and it is a property rather than a
 setting because two zones on one map can honestly differ: 1500 AGL over a 3000 ft ridge
@@ -317,7 +353,7 @@ rather than a broken shape.
 |---|---|---|
 | `LineString` | arrows, phase lines, boundaries, corridors | `MainAxisOfAdvance`, `PhaseLine` |
 | `LineString` **+ `width`** | the eighteen rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
-| `Point` | mission tasks, range fans, fighting positions | `Secure`, `Contain`, `BaseDefenseZone` |
+| `Point` | mission tasks, range fans, fighting positions | `Secure`, `Occupy`, `BaseDefenseZone` |
 | `Polygon` | areas | `ObjectiveArea`, `NamedAreaOfInterest` |
 
 ```ts
@@ -359,19 +395,20 @@ import {
     TacticalGraphicName,
 } from '@zaes/tactical-graphics';
 
-listTacticalGraphicNames();                                     // → ['MainAxisOfAdvance', 'PhaseLine', ...]
+listTacticalGraphicNames();                                     // → ['Abatis', 'WireUnspecified', ...]
 GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
 getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
-getEntityCode(TacticalGraphicName.PhaseLine);                   // → 140300
+getEntityCode(TacticalGraphicName.PhaseLine);                   // → '140300'
 getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06']
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard
-gives it.** `getSpecifications(name)` answers with one or both — 211 graphics are in both
+gives it.** `getSpecifications(name)` answers with one or both — 214 graphics are in both
 FM 1-02.2 and APP-06, 69 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
-returns APP-06's six-digit entity code as a number, or `null` for those 8, since FM 1-02.2
-publishes no identifiers of its own. `getNameByEntityCode(140300)` goes the other way, for
-reading a symbol out of a feed that addresses graphics by code.
+returns APP-06's six-digit entity code **as a string**, or `undefined` for those 8, since
+FM 1-02.2 publishes no identifiers of its own. `getNameByEntityCode('140300')` goes the
+other way, for reading a symbol out of a feed that addresses graphics by code — it takes
+the code as a string too.
 
 `TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
 at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
@@ -380,19 +417,19 @@ rather than the literal, so pass the enum.
 
 ### Which end is the arrowhead?
 
-**Thirty-two graphics number their points from the tip**, because APP-06 does: *"Point 1
+**Thirty-four graphics number their points from the tip**, because APP-06 does: *"Point 1
 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol."* So on an
 axis of advance the **first** coordinate is the head and the last is the tail. The list is
-the axis-of-advance family, avenue of approach, both counterattacks, advance to contact,
-frontal attack, turning movement, mobile defense, the seven retrograde canes, exploit,
-both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and
-fields of fire.
+the axis-of-advance family, avenue of approach, both follow tasks, both counterattacks,
+advance to contact, frontal attack, turning movement, mobile defense, the seven retrograde
+canes, exploit, both fixes, breach, bypass, canalize, clear, both blocks, penetrate,
+relief in place, and fields of fire.
 
 ```ts
 import {TIP_FIRST_GRAPHICS, drawsTipFirst} from '@zaes/tactical-graphics';
 
 drawsTipFirst(TacticalGraphicName.MainAxisOfAdvance);   // → true
-TIP_FIRST_GRAPHICS.length;                              // → 32 — the whole list, if you need to migrate
+TIP_FIRST_GRAPHICS.length;                              // → 34 — the whole list, if you need to migrate
 ```
 
 Nothing about the rendered symbol changes — the shape, its decorations, its handles and
@@ -424,7 +461,8 @@ import {TacticalGraphicName} from '@zaes/tactical-graphics';
 const graphics = createTacticalGraphics(map);
 
 graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);  // then the user clicks
-graphics.setInteractionMode('modify');                         // rotate | resize | translate | modify | view
+graphics.setInteractionMode('edit');                           // edit | view — or a single gesture:
+                                                               // translate | rotate | resize | modify | drawing
 
 const saved = graphics.snapshot();     // portable GeoJSON, one feature per graphic
 graphics.restore(saved);               // rebuilt editable — in either engine
@@ -605,6 +643,77 @@ const features = new GeoJSON().readFeatures(
 source.addFeatures(features);
 ```
 
+### Showing a graphic's name only
+
+Set `hideAmplifiers` on the **feature**, not in the `tacticalGraphic` bag, and the graphic
+draws its symbol and designation while every annotation — dates, altitudes, widths, field
+H, a corridor's information block — goes:
+
+```ts
+graphicFeature.set('hideAmplifiers', true);
+labelFeature.set('hideAmplifiers', true);
+```
+
+**The symbol's own text is never hidden.** A cover's `C`, a mission task's letter, a `PL`
+prefix, an `ACP` number: hide those and the reader is looking at a different graphic.
+`TextKind` is what separates the two, and a mark that never says which it is counts as part
+of the symbol — a stray date is noise, a missing letter is wrong.
+
+It is deliberately **not** part of the portable description. It says nothing about what the
+symbol is: two identical corridors side by side may reasonably differ, and none of it
+should travel in a file another operator opens. So the host keeps the choice wherever its
+other view state lives — a store, a URL, local storage — and supplies it at render time,
+the way it supplies `graphicSize`. On MapLibre the same flag goes on the `PaintFeature`.
+
+### Your own features, our styling
+
+Between the two: you want the symbols to look right, but the features have to be
+yours — your layer, your ids, your selection model. `stylesFor(name)` gives you the
+style pair the library's own holders draw that graphic with.
+
+```ts
+import {renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {prepareFeatures} from '@zaes/tactical-graphics/openlayers';
+
+const rendered = renderTacticalGraphic(feature);
+const {graphic, labels} = prepareFeatures(rendered);
+
+source.addFeature(graphic);
+
+// `labels` is undefined for 104 of the 291 graphics — the ones that keep every glyph
+// on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
+// Adding a label feature for one of those draws its designation twice.
+if (labels) source.addFeature(labels);
+```
+
+They are your features: stamp your own ids, selection state and layer keys on them
+before you add them. `prepareFeatures` takes `{featureProjection}` if your map is not
+Web Mercator, and `{hideAmplifiers: true}` to draw a graphic name-only.
+
+**What it does, in case you want to do it yourself.** Three steps that have to happen in
+order, and all three parts stay exported:
+
+1. Read the GeoJSON into OpenLayers features, projecting 4326 → your map's projection.
+2. `stylesFor(name)` — the style pair the library's own holders draw that graphic with.
+   A `labels` of `undefined` is the signal above.
+3. `publishGraphicExtent(labels, graphic)` — how big the shape is. Several symbols are
+   *fitted* to the area they land in: the CBRN triangle, the airfield zone's crossed
+   runways, the sector-1 modifier glyphs. The fit reads the extent off the **label**
+   feature, which is a bare anchor point with no shape of its own, so skipping this
+   leaves them at a fixed size in meters — **silently**. Nothing throws and the map
+   looks plausible until you notice a symbol that does not grow with its shape.
+
+**Do not reach for `getStyle` here.** It is exported, it takes a name and it returns
+styles, which makes it look like this answer — but it is the *area outline*
+dispatcher. It draws no text, and for the graphics that are not areas it is the wrong
+function. An integration that used it for both features shipped with every area
+unlabelled and every arc mission task missing the letter that identifies it.
+
+Amplifiers still come off the feature, so stamp `properties.tacticalGraphic` on
+anything you build by hand — `renderTacticalGraphic` already does it for its own
+output. Sizes that a style reads, such as a corridor's `graphicSize`, are set the
+same way.
+
 ### Any GeoJSON renderer
 
 `toFeatureCollection()` flattens a render into a standard `FeatureCollection`, so any
@@ -634,7 +743,8 @@ getLabel(TacticalGraphicName.FinalProtectiveFire); // → 'FPF'
 
 **Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain,
 Occupy, Control, Contain, Cordon and Search and Area Defense are two arcs of one
-circle with a one-letter label in the hole between them. The generator leaves 15° of
+circle with a one- or two-character label in the hole between them — `AD`, `C/S` and `S`
+all occur. The generator leaves 15° of
 arc either side of the label, which is the best it can do with no glyph to measure —
 so on a large circle the hole is bigger than the letter needs.
 
@@ -749,7 +859,7 @@ else:
     // The portable description of the symbol — what renderTacticalGraphic consumes.
     // Meters, degrees and text: meaningful to any renderer, in any language.
     "tacticalGraphic": {"name": "MovementToContact", "radius": 30600, "rotation": 45,
-                        "label": "", "hostility": "Pending"},
+                        "designation": "", "hostility": "Pending"},
 
     "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
 }
@@ -764,12 +874,11 @@ by hand — or by an older version — arrives fully editable rather than half-d
 
 ---
 
-## Security operations: the center symbol
+## The center symbol
 
-Cover, Guard and Screen draw a single-point 2525E unit symbol between their two arms.
-That is [milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this
-library's — so this library **never imports milsymbol**. It asks a provider, and you
-register one:
+Six graphics draw a single-point 2525E unit symbol as part of themselves. That is
+[milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this library's —
+so this library **never imports milsymbol**. It asks a provider, and you register one:
 
 ```ts
 import ms from 'milsymbol';
@@ -779,7 +888,26 @@ useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
 
 From the **root** entry point, because a center symbol is symbology rather than
-rendering: one registration serves whichever engine is drawing, and both read it.
+rendering: one registration serves whichever engine is drawing, and both read it. One
+call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
+
+| Graphic | Where the symbol goes | How big |
+|---|---|---|
+| Cover, Guard, Screen | between the two arms | a share of the gap between them, so a resize scales it with the symbol |
+| Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
+| Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
+
+All of them stop at 96 px however far the map zooms in. A framed 2525E symbol
+carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
+the screen would be a badge the size of a hand. It is the ceiling
+`setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
+draws. Zoomed *out* they keep shrinking with the graphic — a floor would leave the symbol
+bigger than the shape it sits in.
+
+On the two follow tasks the symbol **replaces** the designation: a picture of the unit
+says more than its name. Type a designation and register no provider, and the text draws
+as before. Every one of the six sizes its symbol from the graphic it sits in — none of
+them holds a fixed pixel size — and all six stop growing at the same 96 px ceiling.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
@@ -787,10 +915,23 @@ dependency: a consumer who wants the geometry, or the other 280-odd graphics, ne
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
-hostile Screen gets a hostile-framed symbol. `securitySymbolSidc(hostility)` exposes the
-same doctrinal code if you want to build on it.
+hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
+`securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
+it. All six offer the affiliation for that reason — the escort and the two follow tasks
+are tactical mission tasks, which otherwise carry no amplifiers at all, and an entity
+symbol's frame *is* its standard identity.
+
+**Size the symbol by its width.** Both renderers draw the image at the width they are
+given and let its height follow the image's own aspect, because neither knows how tall
+the picture is until it has loaded. The follow tasks reserve room for a frame up to 1.25×
+as tall as it is wide — a 2525E land unit runs about 0.86 (friend) to 1.23 (neutral) —
+so a much taller image would overflow the body it sits in.
 
 ### Sizing the symbol
+
+**Every one of the six sizes itself from the graphic it sits in**, and stops at 96 px so
+zooming in cannot inflate it. `setSecuritySymbolSize` no longer governs any of them — it
+is the size for a symbol a host places itself, and the ceiling the six share:
 
 ```ts
 import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
@@ -884,9 +1025,13 @@ setSecuritySymbolProvider(({name, sidc}) => {
 // Placed from data rather than drawn. `hostility` is the only amplifier these three
 // take: the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S,
 // so there is no user label to set.
-const at = (name, coordinates, hostility = TacticalGraphicHostility.friend) => ({
+//
+// **Two points, not one.** APP-06 gives these four anchors — one arm's ends, then the
+// other's — and the library derives the second arm from the first, so the base is
+// `[the arrowhead, that arm's inner end]`. A Point base throws.
+const at = (name, [lon, lat], arm, hostility = TacticalGraphicHostility.friend) => ({
     type: 'Feature',
-    geometry: {type: 'Point', coordinates},
+    geometry: {type: 'LineString', coordinates: [[lon, lat], [lon + arm, lat]]},
     properties: {tacticalGraphic: {name, hostility}},
 });
 
@@ -895,9 +1040,9 @@ const at = (name, coordinates, hostility = TacticalGraphicHostility.friend) => (
 graphics.restore({
     type: 'FeatureCollection',
     features: [
-        at(TacticalGraphicName.Screen, [-77.10, 38.89]),
-        at(TacticalGraphicName.Guard, [-77.04, 38.89], TacticalGraphicHostility.hostileFaker),
-        at(TacticalGraphicName.Cover, [-76.98, 38.89]),
+        at(TacticalGraphicName.Screen, [-77.10, 38.89], 0.04),
+        at(TacticalGraphicName.Guard, [-77.04, 38.89], 0.04, TacticalGraphicHostility.hostileFaker),
+        at(TacticalGraphicName.Cover, [-76.98, 38.89], 0.04),
     ],
 });
 ```
@@ -905,10 +1050,11 @@ graphics.restore({
 The entity codes are illustrative — FM 1-02.2 does not prescribe which unit performs
 which security task, so substitute your own.
 
-Note what you do **not** do here. These three are sized in screen pixels rather than
-meters, so their geometry has to be re-derived whenever the map zooms; the façade
-subscribes for you. Reaching past it to place graphics yourself is where that becomes
-your job — see [Placing graphics from data](#placing-graphics-from-data).
+Note that these three are **drawn from two points in meters**, like every other graphic
+in the library — they were the last screen-sized symbols and stopped being so in 2.0.0.
+Nothing here has to be re-derived when the map zooms. The façade still subscribes a
+resolution handler for you, because that hook is what a screen-sized graphic *would* need;
+see [Placing graphics from data](#placing-graphics-from-data) for why the hook is kept.
 
 ---
 
@@ -970,13 +1116,16 @@ Two rules apply to anything built this way:
 `ol/Object.set` fires `propertychange` without calling `changed()`, so the map can
 keep drawing the old label.
 
-**`manager.watchResolution(handler)` is not optional.** Some graphics — every
-security operation — have geometry that is a screen-pixel constant times the map
-resolution, so without a `change:resolution` subscription they are pinned in meters
-and grow and shrink as you zoom. The manager does this for you when the user draws,
-and `restore` does it on load; a graphic you build yourself needs it doing. Pair it
-with `unwatchResolution` when you remove the graphic, or the listener outlives its
-features.
+**`manager.watchResolution(handler)` costs nothing today, and is still the contract.**
+It subscribes a handler to `change:resolution` so a graphic whose geometry is a
+screen-pixel constant times the resolution can re-derive itself. **No graphic in the
+library is built that way any more** — the security operations were the last, and
+they are drawn from two points as of 2.0.0 — so every live controller's
+`onResolutionChangeFunc` is empty and the subscription drives nothing. The manager
+still does it when the user draws and `restore` still does it on load; a graphic you
+build yourself should too, because the hook is what a screen-sized graphic would need
+and the alternative is finding out later. Pair it with `unwatchResolution` when you
+remove the graphic, or the listener outlives its features.
 
 #### When you need the restore report
 
@@ -1025,7 +1174,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 289 supported names.
+the 292 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1047,9 +1196,11 @@ band ranges are in **kilometers**.
 
 ## Supported graphics
 
-The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against FM 1-02.2. This is the library's real, proven capability.
+The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
 
-*Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) are dropped at one size and one orientation, and Cover, Guard and Screen hold a constant on-screen size while still rotating to face the threat.*
+**Which plate that is depends on the graphic, and each one records its own answer.** 214 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
+
+*Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) resize, but refuse to **rotate** — their X turned 45° is a different symbol. Cover, Guard and Screen were fixed-size badges until 2.0.0; APP-06 gives them four anchor points, so they are drawn from two now — one arrow, with the other derived — and they take every gesture. Ask `allowedGestures(name)` rather than guessing.*
 
 (The [gallery at the top](#tactical-graphics) covers every graphic whose shape and labels are verified, so it shows a few still finishing their edit handles — slightly more than the table below lists. `listTacticalGraphicNames()` returns more again — the registry also carries variants still being finished, listed under [Upcoming graphics](#upcoming-graphics). The table below is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
@@ -1116,8 +1267,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Limited Access Area | Areas |
-| Minimum Safe Distance Zone | Areas |
-| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
 | Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
@@ -1126,7 +1275,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | PsyOps Zone, Circular | Areas |
 | PsyOps Zone, Irregular | Areas |
 | PsyOps Zone, Rectangular | Areas |
-| Radiation Dose Rate Contour Line | Areas |
 | Radiological Contaminated Area | Areas |
 | Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
@@ -1297,6 +1445,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Evacuate | Tactical Mission Tasks |
 | Exfiltrate | Tactical Mission Tasks |
 | Fix | Tactical Mission Tasks |
+| Follow And Assume | Tactical Mission Tasks |
+| Follow And Support | Tactical Mission Tasks |
 | Interdict | Tactical Mission Tasks |
 | Isolate | Tactical Mission Tasks |
 | Locate | Tactical Mission Tasks |
@@ -1305,6 +1455,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Recover | Tactical Mission Tasks |
 | Retain | Tactical Mission Tasks |
 | Secure | Tactical Mission Tasks |
+| Seize | Tactical Mission Tasks |
 | Support By Fire | Tactical Mission Tasks |
 | Suppress | Tactical Mission Tasks |
 | Turn | Tactical Mission Tasks |
@@ -1361,16 +1512,15 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ## Upcoming graphics
 
-Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against FM 1-02.2, **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against the plate that defines it — FM 1-02.2, APP-06, or both — **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
 
 | Graphic | Category |
 |---|---|
+| Minimum Safe Distance Zone | Areas |
+| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
+| Radiation Dose Rate Contour Line | Areas |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
-| Axis Of Attack | Movement and Maneuver |
-| Follow And Assume | Tactical Mission Tasks |
-| Follow And Support | Tactical Mission Tasks |
-| Seize | Tactical Mission Tasks |
 
 ---
 
@@ -1438,7 +1588,8 @@ the graphic into the demo app you also need entries in
 
 A graphic is "done" when a user can draw it, label it, reposition and modify it,
 and rotate and resize it wherever those gestures mean something for that symbol —
-a fixed-size badge like Destroy has no resize to offer.
+a crossed task like Destroy resizes, but has no rotation to offer, because its X turned
+45° is a different symbol. `allowedGestures(name)` is the authority.
 
 ---
 
