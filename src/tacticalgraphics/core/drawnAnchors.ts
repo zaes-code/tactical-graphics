@@ -23,7 +23,7 @@ import {clampEnvelopmentBend, ENVELOPMENT_DEFAULT_BEND} from '../graphics/FormsO
 /**
  * # Where a drawn-anchor graphic's points go, stated once for both renderers
  *
- * The six graphics in `DRAWN_ANCHOR_GRAPHICS` are described by points rather than by a
+ * The seven graphics in `DRAWN_ANCHOR_GRAPHICS` are described by points rather than by a
  * dropped centre, and no two of them lay those points out the same way: Turn spends three
  * on a bow, Envelop four on a run and a half circle, Pursue three on a hook, Ambush three
  * on an arc and an arrow, Contain two on a semicircle's opening.

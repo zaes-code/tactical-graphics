@@ -1,12 +1,13 @@
 /**
  * # The paint list — what a symbol looks like, with no renderer in it
  *
- * `renderTacticalGraphic` answers "where is this graphic". It does not answer
- * "what does it look like", and today nothing map-agnostic does: the teeth on an
- * obstacle line, the gap cut around a mission task's letter, the arrowhead held
- * at a constant screen size — all of that is synthesized inside an OpenLayers
- * `StyleFunction`, in 128 separate places. A consumer reading the raw GeoJSON
- * gets a skeleton.
+ * `renderTacticalGraphic` answers "where is this graphic". **This module is the
+ * other half**: what it looks like. The teeth on an obstacle line, the gap cut
+ * around a mission task's letter, the arrowhead held at a constant screen size —
+ * all of it used to be synthesized inside an OpenLayers `StyleFunction`, in 128
+ * separate places, so a consumer reading the raw GeoJSON got a skeleton and a
+ * second renderer had 128 things to reimplement. Both shipping renderers now draw
+ * through the types declared here.
  *
  * A **paint list** is that missing half, expressed as data. One `Paint` is one
  * mark: a geometry plus how to stroke, fill, letter or dot it. A paint function

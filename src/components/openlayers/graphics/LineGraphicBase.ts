@@ -295,7 +295,7 @@ export class LineGraphicBase implements LineGraphic {
      * line and not its symbol. @see LineGraphicController.handleResize
      */
     graphicSize(): number {
-        // Per-name, because this holder serves 41 graphics and they do not all bake a
+        // Per-name, because this holder serves 80 graphics and they do not all bake a
         // decoration of the same size. @see decorationMeters
         //
         // **At this graphic's own latitude**, which is why the derivation is here rather

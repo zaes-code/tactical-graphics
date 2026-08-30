@@ -38,9 +38,11 @@ const NO_LABELS: GraphicLabels = Object.freeze({designation: ''});
  * editable rather than merely visible.
  *
  * Every member is portable: meters and degrees, meaningful to any renderer. Values that
- * only mean something to *this* renderer — the drawing resolution, and the
- * security-operation `scale` that is only interpretable when multiplied by it — are not
- * here. They live under the snapshot's `renderer` object; see `persistence.ts`.
+ * only mean something to *this* renderer are not here — and no longer travel at all. A
+ * snapshot once carried a sibling `renderer` object holding the drawing resolution and a
+ * security-operation `scale`, so a graphic was only reconstructible together with the zoom
+ * it was drawn at. Holders stamp the resulting **metre** value instead; see
+ * `persistence.ts`.
  *
  * **Moved to `components/graphicAmplifiers.ts`** and re-exported here. It is a
  * description of a graphic's shape inputs, which both renderers need, and this
