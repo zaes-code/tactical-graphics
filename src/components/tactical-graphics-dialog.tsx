@@ -74,13 +74,20 @@ function defaultRangeFanConfig(): RangeFanConfig {
  * - **`status` defaults to `present`**, which is what `amplifierDash` already
  *   assumed for an unset status.
  */
-function shownLabels(selection: SelectedGraphic): GraphicLabels {
+export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const stored = selection.labels;
     const fields = getGraphicFields(selection.graphicName);
 
     const labels: GraphicLabels = {
         designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
+        // **Unconditional, because the switch is.** Every field below is copied only when
+        // its `fields` flag says the dialog offers it, and the name-only switch is offered
+        // for every graphic — so gating it on a flag would drop it. Leaving it out entirely
+        // is what made it look like it never saved: the value was stored and applied, and
+        // the dialog rebuilt its view without it, so reopening showed the switch off over a
+        // graphic that was hiding. Same shape as the `mineType` omission below.
+        hideAmplifiers: stored.hideAmplifiers,
     };
 
     if (fields.identifier2) {
