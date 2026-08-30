@@ -9,7 +9,6 @@
  *   - PolygonGraphicController   → a Polygon (5-sided ring)
  *   - RectangularAreaGraphicController → a Polygon box (4 corners)
  *   - MissionTaskController      → a center point + radius, via updateGeom()
- *   - SecurityOperationsController → a center point, via setBaseFeature()
  *
  * A generator that throws (a genuinely broken graphic) is caught and reported,
  * not fatal — the rest of the sweep still renders.
@@ -35,7 +34,9 @@ import {Coordinate} from 'ol/coordinate';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import {
+    CENTER_SYMBOL_GRAPHICS,
     GRAPHIC_CATEGORIES,
+    SecuritySymbolProvider,
     TacticalGraphicCategory,
     TacticalGraphicHostility,
     TacticalGraphicName,
@@ -44,6 +45,7 @@ import {
     isRectangular,
     latitudeFromMercatorY,
     rectangleDefaultHalfWidth,
+    setGraphicSecuritySymbolProvider,
     storedOrder,
 } from '@zaes/tactical-graphics';
 
@@ -51,7 +53,6 @@ import {getController} from './controllerRegistry';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {MissionTaskController} from './controllers/MissionTaskController';
-import {SecurityOperationsController} from './controllers/SecurityOperationsController';
 import {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {PROVEN_GRAPHICS} from './provenGraphics';
@@ -61,7 +62,6 @@ import {getColorByHostility} from './openlayerStyles';
 import {clearAllGraphics} from './persistence';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import ms from 'milsymbol';
-import {SecurityOperationSymbolProvider} from './securityOperationSymbol';
 
 /**
  * A different unit symbol in the center of each security operation.
@@ -102,7 +102,7 @@ const SAMPLE_UNIT_SIZE_PX = 50;
  * derived from this graphic's hostility, symbol set — is kept, so a hostile sample
  * still frames as hostile.
  */
-function sampleUnitProvider(name: TacticalGraphicName): SecurityOperationSymbolProvider | undefined {
+function sampleUnitProvider(name: TacticalGraphicName): SecuritySymbolProvider | undefined {
     const functionId = SAMPLE_UNIT_FUNCTION_ID[name];
     if (!functionId) return undefined;
     return ({sidc}) => {
@@ -343,8 +343,11 @@ export function drawProvenSamples(
         const handler = getController(name, layout.resolution, latitudeFromMercatorY(cy));
         const symbolId = crypto.randomUUID();
         handler.setSymbolId(symbolId);
-        if (handler instanceof SecurityOperationsController) {
-            handler.setSymbolProvider(sampleUnitProvider(name));
+        // The sample's own unit symbol, per graphic. Through the shared registry rather
+        // than a controller method: these are ordinary line graphics now, and the
+        // per-graphic provider reaches both engines. @see setGraphicSecuritySymbolProvider
+        if (CENTER_SYMBOL_GRAPHICS.has(name)) {
+            setGraphicSecuritySymbolProvider(symbolId, sampleUnitProvider(name));
         }
         handler.getFeatures().forEach(f => {
             f.set('graphicName', name);
@@ -683,7 +686,7 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     //
     // ×3.5 of the symbol's half-width measures 13px, enough headroom that a reflow
     // cannot eat it. Re-measure if the symbol size or the layout constants change.
-    if (handler instanceof SecurityOperationsController) {
+    if (CENTER_SYMBOL_GRAPHICS.has(name)) {
         const half = SAMPLE_UNIT_SIZE_PX * 1.75 * resolution;
         extend(extent, [-half, -half, half, half]);
     }
@@ -702,8 +705,6 @@ export function applyBaseGeometry(
     const grow = DECORATED_GRAPHICS.has(name) ? DECORATED_SAMPLE_SCALE : 1;
     if (handler instanceof MissionTaskController) {
         handler.graphic.updateGeom({size: HALF * grow, center: [cx, cy], rotation: 0});
-    } else if (handler instanceof SecurityOperationsController) {
-        handler.setBaseFeature(pointFeature([cx, cy], symbolId, name));
     } else if (handler instanceof PolygonGraphicController) {
         const half = HALF * grow;
         const ring = handler instanceof RectangularAreaGraphicController ? rectRing(cx, cy, half) : pentagonRing(cx, cy, half);

@@ -99,6 +99,7 @@ const SELECT_HIT_TOLERANCE_PX = 10;
  */
 const MIRROR_PAST_AXIS_MIN_PX = 40;
 
+
 export class TacticalGraphicsManager {
     // Sample vector source/layer to add tactical graphics to, this can be changed based on implementation.
     renderingVectorSource = new VectorSource();
@@ -252,10 +253,19 @@ export class TacticalGraphicsManager {
     private floorSuspendedOn: TacticalGraphicHandler | undefined;
     lastDrawEndedAt: number = 0;
     private escKeyHandler: ((e: KeyboardEvent) => void) | undefined = undefined;
-    /** The map's DoubleClickZoom while it is pulled off for a draw; undefined when installed. */
-    private dblClickZoom: DoubleClickZoom | undefined = undefined;
-    /** Tears down the listener armed to put DoubleClickZoom back. */
-    private unlistenDblClickZoomRestore: (() => void) | undefined = undefined;
+    /**
+     * The DoubleClickZoom suspension is **per map, not per manager.**
+     *
+     * A host may build more than one manager on the same map — a fresh engine for each
+     * draw, another for an edit session — and the interaction they are contending over
+     * belongs to the map. Held per instance, the second manager looked for a
+     * `DoubleClickZoom` the first had already removed, found none, and recorded that it had
+     * nothing to restore; meanwhile the first manager's armed restore was still on the
+     * viewport and put the zoom back on the next press — which, for a host that destroys
+     * its engine after every draw, is the first click of the *next* draw. The draw then
+     * ended on a double-click with the zoom installed, and the map jumped.
+     */
+    private static readonly zoomSuspensions = new WeakMap<Map, {zoom: DoubleClickZoom; unlisten?: () => void}>();
 
     // add layer and pointer interactions to an openlayers map reference.
     constructor(map: Map) {
@@ -392,13 +402,14 @@ export class TacticalGraphicsManager {
     /**
      * Which graphic a controller is drawing, by scanning its features for the stamp.
      *
-     * **Not `controller.graphic.base.get('graphicName')`, which is not reliable.** Some
-     * holders replace their base feature with the one OpenLayers' `Draw` produced —
-     * `SecurityOperationsController.setBaseFeature` does, on both draw start and draw
-     * end — and that feature never carried the stamp `startDrawing` put on the holder's
-     * own features. Reading the base alone therefore returned `undefined` for the
-     * security operations, and `allowedGestures(undefined)` falls through to its
-     * permissive default: a Screen offered a resize it refuses.
+     * **Not `controller.graphic.base.get('graphicName')`, which is not reliable.** A
+     * holder that replaces its base feature with the one OpenLayers' `Draw` produced
+     * hands over a feature that never carried the stamp `startDrawing` put on the
+     * holder's own features. Reading the base alone then returns `undefined`, and
+     * `allowedGestures(undefined)` falls through to its permissive default — which is
+     * how a graphic came to be offered a gesture it refuses. The security-operation
+     * controller was the case that found this; it has since been deleted, and the
+     * reason for scanning has not changed.
      *
      * `collectProperties` in `persistence.ts` sweeps every feature for the same reason.
      */
@@ -1513,13 +1524,35 @@ export class TacticalGraphicsManager {
      * restore armed by the previous draw so that one can't fire mid-draw.
      */
     private suspendDoubleClickZoom = () => {
-        this.unlistenDblClickZoomRestore?.();
-        this.unlistenDblClickZoomRestore = undefined;
-        if (this.dblClickZoom) return;
+        const existing = TacticalGraphicsManager.zoomSuspensions.get(this.map);
+        if (existing) {
+            // Already off for this map — cancel any restore armed by a previous draw so it
+            // cannot fire mid-draw, whichever manager armed it.
+            existing.unlisten?.();
+            existing.unlisten = undefined;
+            return;
+        }
 
-        this.dblClickZoom = this.map.getInteractions().getArray()
+        const zoom = this.map.getInteractions().getArray()
             .find((i): i is DoubleClickZoom => i instanceof DoubleClickZoom);
-        if (this.dblClickZoom) this.map.removeInteraction(this.dblClickZoom);
+        if (!zoom) return;
+        this.map.removeInteraction(zoom);
+        TacticalGraphicsManager.zoomSuspensions.set(this.map, {zoom});
+    };
+
+    /**
+     * Put double-click zoom back now, cancelling any pending restore.
+     *
+     * For teardown, where there is no draw left to protect and no later press to wait for.
+     * A manager that is going away must not leave the map's zoom detached, and must not
+     * leave a listener behind that re-attaches it at some arbitrary later moment.
+     */
+    restoreDoubleClickZoomNow = () => {
+        const suspension = TacticalGraphicsManager.zoomSuspensions.get(this.map);
+        if (!suspension) return;
+        suspension.unlisten?.();
+        TacticalGraphicsManager.zoomSuspensions.delete(this.map);
+        this.map.addInteraction(suspension.zoom);
     };
 
     /**
@@ -1550,19 +1583,19 @@ export class TacticalGraphicsManager {
      * dialog already ignores stray clicks in.
      */
     private resumeDoubleClickZoomOnNextClick = () => {
-        const zoom = this.dblClickZoom;
-        if (!zoom || this.unlistenDblClickZoomRestore) return;
+        const suspension = TacticalGraphicsManager.zoomSuspensions.get(this.map);
+        if (!suspension || suspension.unlisten) return;
 
-        const viewport = this.map.getViewport();
+        const map = this.map;
+        const viewport = map.getViewport();
         const onMouseDown = (e: MouseEvent) => {
             if (e.detail > 1 || Date.now() < this.lastDrawEndedAt) return;
-            this.unlistenDblClickZoomRestore?.();
-            this.unlistenDblClickZoomRestore = undefined;
-            this.dblClickZoom = undefined;
-            this.map.addInteraction(zoom);
+            viewport.removeEventListener('mousedown', onMouseDown);
+            TacticalGraphicsManager.zoomSuspensions.delete(map);
+            map.addInteraction(suspension.zoom);
         };
         viewport.addEventListener('mousedown', onMouseDown);
-        this.unlistenDblClickZoomRestore = () => viewport.removeEventListener('mousedown', onMouseDown);
+        suspension.unlisten = () => viewport.removeEventListener('mousedown', onMouseDown);
     };
 
     private stopDrawing = (tacticalGraphicHandler: TacticalGraphicHandler, canceled: boolean) => {

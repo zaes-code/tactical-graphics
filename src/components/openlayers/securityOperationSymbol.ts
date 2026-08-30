@@ -9,11 +9,12 @@
  * Why not just import milsymbol here
  * ---------------------------------
  * `milsymbol` is declared an OPTIONAL peer dependency, and it used not to be one
- * in fact. `SecurityOperationsController` carried a static top-level
- * `import ms from 'milsymbol'`, and that controller is reachable from the
- * `/openlayers` barrel through `getController`. So importing the entry point at
- * all — for any of the two hundred graphics, not just these three — threw
- * `MODULE_NOT_FOUND` unless milsymbol was installed. The declared optionality was
+ * in fact. The security-operation controller — since deleted, along with the
+ * fixed-size badge it drew — carried a static top-level `import ms from 'milsymbol'`,
+ * and that controller was reachable from the `/openlayers` barrel through
+ * `getController`. So importing the entry point at all — for any of the nearly three
+ * hundred graphics, not just these three — threw `MODULE_NOT_FOUND` unless milsymbol
+ * was installed. The declared optionality was
  * a fiction. Injection is what makes it true: nothing in this package names
  * milsymbol, so a consumer who wants the geometry pays for nothing else.
  *
@@ -45,7 +46,10 @@ import {
     getSecuritySymbolProvider,
     securitySymbolSidc,
     useMilsymbolSecuritySymbols,
+    followTaskSymbol,
+    securityOperationSymbol,
 } from '@zaes/tactical-graphics';
+import {paintContext, toPaintFeature} from './paintToOpenLayers';
 import {readGraphicLabels} from './graphicProperties';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -69,7 +73,7 @@ export interface SecurityOperationSymbolRequest {
      * carry **hostility and nothing else** — no user identifier, since the letter
      * between the arms is `getLabel(name)` and fixed by doctrine. Two Screens are
      * therefore indistinguishable here. Per-graphic symbols come from
-     * `SecurityOperationsController.setSymbolProvider`.
+     * `setGraphicSecuritySymbolProvider`, on the root entry.
      *
      * It is passed anyway because a provider is a host's code and may key on
      * whatever it likes, and because the set of amplifiers a graphic carries is
@@ -368,6 +372,87 @@ export function securityOperationSymbolStyle(
  * The size is `escortSymbolSizePx`, which is also what the paint layer sizes the hole in
  * the bar from. Reading it from anywhere else is how a symbol ends up not fitting its gap.
  */
+/**
+ * The unit symbol inside a follow task's body, where field T would otherwise be drawn.
+ *
+ * Placed and sized by the library, not here: `followTaskSymbol` is what the paint reads to
+ * cut the body to fit and to know it must not also draw the designation, and a symbol
+ * placed from a second calculation does not sit in its own hole. This function is only the
+ * OpenLayers half — turning the library's answer into a `Style`.
+ */
+export function followTaskSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
+    const paintFeature = toPaintFeature(feature as Feature);
+    if (!paintFeature) return undefined;
+
+    const placement = followTaskSymbol(paintFeature, paintContext(resolution));
+    if (!placement) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: feature.get('graphicName') as TacticalGraphicName,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: placement.sizePx,
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
+    // Cached per request and therefore shared, so this one gets its own geometry rather
+    // than mutating the cached style's. @see escortSymbolStyle
+    const placed = style.clone();
+    placed.setGeometry(new Point(placement.at as number[]));
+    return placed;
+}
+
+/**
+ * The unit symbol between a security operation's two arms.
+ *
+ * Placed and sized by the library — `securityOperationSymbol` cuts the gap from the same
+ * numbers — so this is only the OpenLayers half: turning the answer into a `Style`.
+ * @see followTaskSymbolStyle, which is the same arrangement for the follow tasks.
+ */
+export function securityOperationCentreSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
+    const paintFeature = toPaintFeature(feature as Feature);
+    if (!paintFeature) return undefined;
+
+    const placement = securityOperationSymbol(paintFeature, paintContext(resolution));
+    if (!placement) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: feature.get('graphicName') as TacticalGraphicName,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: placement.sizePx,
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
+    const placed = style.clone();
+    placed.setGeometry(new Point(placement.at as number[]));
+    return placed;
+}
+
 export function escortSymbolStyle(feature: FeatureLike, resolution: number): Style | undefined {
     const geometry = feature.getGeometry();
     if (!geometry || geometry.getType() !== 'LineString') return undefined;

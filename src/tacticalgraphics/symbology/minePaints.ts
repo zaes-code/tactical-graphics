@@ -36,7 +36,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {fitSymbolScale} from './symbolFit';
 
 type MinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -314,13 +314,14 @@ export function mineFillPaint(): MinePaint {
         // peak near its base. It was lifted clear of the apex for a while, and that read
         // as a caption on the marker rather than on the minefield. (User's call,
         // 2026-08-27.)
-        const above = (feature.properties.additionalInfo ?? '').trim();
+        const above = amplifierText(feature, (feature.properties.additionalInfo ?? '').trim());
         if (above) {
             const top = bounds ? bounds.maxY + gap : center[1] + room.height * scale * TEXT_OFFSET;
             paints.push(areaText(feature, [midX, top], above, textScale, 'bottom'));
         }
 
-        const below = (feature.properties.startDate ?? '').trim();
+        // The date below the boundary, an annotation like the free text above it.
+        const below = amplifierText(feature, (feature.properties.startDate ?? '').trim());
         if (below && bounds) {
             paints.push(areaText(feature, [midX, bounds.minY - gap], below, textScale, 'top'));
         }

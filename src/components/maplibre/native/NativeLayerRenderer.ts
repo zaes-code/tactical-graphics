@@ -14,6 +14,7 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
+    followTaskSymbol,
     hasBakedDecoration,
     CENTER_SYMBOL_GRAPHICS,
     escortSymbolSizePx,
@@ -24,7 +25,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {buildTacticalGraphic, paintTacticalGraphic, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
@@ -702,6 +703,8 @@ export class NativeLayerRenderer {
             // bar's span. @see escortSymbolSizePx
             const placed = graphic.name === TacticalGraphicName.Escort
                 ? escortCenter(graphic, resolution)
+                : graphic.name === TacticalGraphicName.FollowAndAssume || graphic.name === TacticalGraphicName.FollowAndSupport
+                ? followTaskCenter(graphic, {resolution, measureText: this.measureText})
                 : graphic.base.geometry.type === 'Point'
                     ? {at: graphic.base.geometry.coordinates as number[], sizePx: getSecuritySymbolSize()}
                     : undefined;
@@ -1042,18 +1045,6 @@ function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
 const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
 
 /**
- * The three graphics whose **geometry** is a screen size.
- *
- * Not the same question as "which graphics carry a centre symbol", though the two sets
- * coincided until the escort joined the second one. @see CENTER_SYMBOL_GRAPHICS
- */
-const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
-
-/**
  * Whether a graphic's **geometry** is a screen size rather than a ground distance,
  * and so has to be regenerated when the zoom changes.
  *
@@ -1105,8 +1096,40 @@ function escortCenter(
     };
 }
 
+/**
+ * The unit symbol's place inside a follow task's body.
+ *
+ * Asked of the library rather than worked out here: the paint cuts the body to the same
+ * answer, and a symbol placed from a second calculation does not sit in its own hole.
+ * @see followTaskSymbol
+ */
+function followTaskCenter(
+    graphic: MapLibreTacticalGraphic,
+    context: PaintContext,
+): {at: number[]; sizePx: number} | undefined {
+    const geometry = projectGeometry(graphic.graphic?.geometry ?? graphic.base.geometry);
+    if (!geometry) return undefined;
+    const placement = followTaskSymbol(
+        {geometry, properties: {...graphic.properties, symbolId: graphic.id}} as never,
+        context,
+    );
+    if (!placement) return undefined;
+    return {at: toLonLat([placement.at[0], placement.at[1]]), sizePx: placement.sizePx};
+}
+
 function isScreenSized(name: TacticalGraphicName): boolean {
-    return SECURITY_OPERATIONS.has(name) || hasBakedDecoration(name);
+    /*
+     * Cover, guard and screen were in here until 2026-08-30, and had stopped belonging on
+     * 2026-08-29: APP-06 gives them four anchor points, so they are drawn from two and
+     * their geometry is a ground distance like everything else. The rebuild they were
+     * getting on every zoom re-derived byte-identical geometry -- wasted work rather than
+     * a wrong picture, and a standing claim in this file that these three are screen-sized
+     * when OpenLayers draws them as plain two-point lines.
+     *
+     * Nothing in the library is screen-sized *geometry* any more; what remains here is a
+     * baked decoration, which is a decoration size and not the shape itself.
+     */
+    return hasBakedDecoration(name);
 }
 
 /**

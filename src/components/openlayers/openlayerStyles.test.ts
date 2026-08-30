@@ -679,14 +679,29 @@ describe('obstacle line', () => {
     });
 
     it('stands the label off by the same pixel distance at every zoom', () => {
-        // Both terms are screen-sized now, so the offset in pixels is a constant. It was
-        // a scan of the rendered geometry while the teeth were map-unit sized.
-        const offsets = [40, 10, 2, 0.5].map(res => {
+        // Both terms are screen-sized, so the offset in pixels is a constant. It was a
+        // scan of the rendered geometry while the teeth were map-unit sized.
+        //
+        // **While the line is big enough to carry a full-size label.** These resolutions
+        // put a 1 km line at 250 px and wider; zoom out past that and `capLabelToGraphic`
+        // starts shrinking the label, and the standoff follows it down — which is the next
+        // test, and the point of the cap.
+        const offsets = [4, 2, 0.5].map(res => {
             const label = labelPointFor(WEST_TO_EAST, res);
             return Math.abs(label[1]) / res;
         });
         offsets.forEach(px => expect(px).toBeCloseTo(offsets[0], 6));
         expect(offsets[0]).toBeGreaterThan(8);
+    });
+
+    it('brings the standoff in with the label once the line is small on screen', () => {
+        // At resolution 40 the kilometre is 25 px of screen, and a full-size designation
+        // on it would be most of what the reader sees. The label is capped to a quarter of
+        // the graphic and the standoff, which is measured from the label, comes with it.
+        const roomy = Math.abs(labelPointFor(WEST_TO_EAST, 4)[1]) / 4;
+        const cramped = Math.abs(labelPointFor(WEST_TO_EAST, 40)[1]) / 40;
+        expect(cramped).toBeLessThan(roomy);
+        expect(cramped).toBeGreaterThan(0);
     });
 
     it('stays with its own segment on a line that doubles back', () => {

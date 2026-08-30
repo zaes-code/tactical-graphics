@@ -8,9 +8,11 @@
  * and wiring draw/modify interactions. This entry point is that part, extracted
  * from the demo app.
  *
- * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one
- * copy the rest of your map already uses. `milsymbol` is peer for the same
- * reason — one controller renders a unit symbol with it.
+ * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one copy the
+ * rest of your map already uses. `milsymbol` is peer too, and **optional in a stronger
+ * sense**: nothing in this package imports it. Six graphics draw a centre symbol, and a
+ * host supplies it by registering a provider — register nothing and the centre is simply
+ * empty. @see setSecuritySymbolProvider, on the root entry
  *
  * ```ts
  * import {TacticalGraphicName} from '@zaes/tactical-graphics';
@@ -50,6 +52,18 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 
 // Every style function, plus the color and width constants they share.
 export * from './openlayerStyles';
+
+// **Which** of those style functions draws a given graphic. A host rendering saved
+// graphics into its own layer needs the pairing the holders make, and `getStyle` — the
+// one that looks like this answer — is the area outline alone. @see stylesFor
+export {stylesFor} from './stylesFor';
+// The other half of what a host building its own features needs: `stylesFor` says how a
+// graphic is drawn, this says how big the shape it is drawn against is. @see publishGraphicExtent
+export {publishGraphicExtent} from './publishGraphicExtent';
+// Both of the above in the order they have to happen. @see prepareFeatures
+export {prepareFeatures} from './prepareFeatures';
+export type {PreparedFeatures, PrepareOptions} from './prepareFeatures';
+export type {GraphicStyles} from './stylesFor';
 
 // Configuration — label size, line width, colors. These are **re-exports**: the config
 // is defined in the root entry point (`@zaes/tactical-graphics`), because none of it is
@@ -100,6 +114,7 @@ export {
     getHandleColor,
     getInertHandleColor,
 } from './openlayerStyles';
+export {securityOperationStyleFunc} from './openlayerStyles';
 
 // Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
 // the base — and `restoreTacticalGraphics` rebuilds them editable. A record carries one
@@ -134,7 +149,6 @@ export {MovementGraphicBase} from './graphics/MovementGraphicBase';
 export {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 export {ReliefInPlace} from './graphics/ReliefInPlace';
 export {RetrogradeTask} from './graphics/RetrogradeTask';
-export {SecurityOperationGraphicBase} from './graphics/SecurityOperationGraphicBase';
 
 // The controllers: they translate pointer events into translate / rotate /
 // resize calls on a holder.
@@ -145,7 +159,6 @@ export {LineGraphicController, SAME_POINT_EPSILON_M} from './controllers/LineGra
 // own graphic needs to be able to name the controller it routes through.
 export {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
-export {SecurityOperationsController} from './controllers/SecurityOperationsController';
 
 // The center symbol a security operation draws between its arms. A single-point
 // 2525E icon, which is milsymbol's job — so this package asks a provider for it

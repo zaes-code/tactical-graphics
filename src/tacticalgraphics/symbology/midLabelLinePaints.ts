@@ -13,7 +13,7 @@
  * the middle of the symbol.
  */
 
-import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
@@ -44,19 +44,31 @@ function plannedDash(feature: PaintFeature): number[] | undefined {
     return feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined;
 }
 
-/** A text amplifier with the usual halo. */
-function amplifier(
-    feature: PaintFeature, at: ProjectedPosition,
+/**
+ * A text mark with the usual halo.
+ *
+ * **`kind` is not decoration.** It is what `hideAmplifiers` filters on, and the default —
+ * doctrinal — is deliberately the safe one: a mark that never said what it is stays,
+ * because a stray date is noise and a missing letter is a different symbol. This helper
+ * used to set none at all, which meant the date range below a coordinated fire line was
+ * indistinguishable from the designation above it and survived a hide. The name of the
+ * function is not the kind of the mark.
+ */
+function textMark(
+    feature: PaintFeature,
+    at: ProjectedPosition,
     text: string,
     scale: number,
     rotation: number,
     align: 'left' | 'center' | 'right',
     baseline: 'top' | 'middle' | 'bottom',
+    kind: TextKind = 'doctrinal',
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
+            kind,
             font: fontStyle,
             fill: labelColorOf(feature),
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
@@ -100,15 +112,24 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const rotation = uprightRotation(p1, p2);
 
         return [
-            amplifier(feature, 
+            textMark(
+                feature,
                 offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
                 getFullLabel(name, feature.properties.designation ?? ''),
-                scale, rotation, 'center', 'bottom',
+                scale,
+                rotation,
+                'center',
+                'bottom',
             ),
-            amplifier(feature, 
+            textMark(
+                feature,
                 offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
                 dateRangeLabel(feature.properties),
-                scale, rotation, 'center', 'top',
+                scale,
+                rotation,
+                'center',
+                'top',
+                'amplifier',
             ),
             {
                 geometry: {type: 'LineString', coordinates: coords},
@@ -144,7 +165,8 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const beforeEnd = coords[coords.length - 2];
 
         const paints: Paint[] = [
-            amplifier(feature, 
+            textMark(
+                feature,
                 offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
                 endLabel,
                 scale,
@@ -152,7 +174,8 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
                 afterStart[0] >= start[0] ? 'left' : 'right',
                 'bottom',
             ),
-            amplifier(feature, 
+            textMark(
+                feature,
                 offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
                 endLabel,
                 scale,
@@ -166,16 +189,14 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         const rotation = uprightRotation(p1, p2);
 
         if (midTop) {
-            paints.push(amplifier(feature, 
-                offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                midTop, scale, rotation, 'center', 'bottom',
-            ));
+            paints.push(
+                textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midTop, scale, rotation, 'center', 'bottom'),
+            );
         }
         if (midBottom) {
-            paints.push(amplifier(feature, 
-                offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                midBottom, scale, rotation, 'center', 'top',
-            ));
+            paints.push(
+                textMark(feature, offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midBottom, scale, rotation, 'center', 'top'),
+            );
         }
 
         paints.push({
@@ -187,12 +208,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
 }
 
 /** Offsets `from` to the right of the direction `from`→`to`, by screen pixels. */
-function travelRightOffset(
-    from: ProjectedPosition,
-    to: ProjectedPosition,
-    resolution: number,
-    offsetPx: number,
-): ProjectedPosition {
+function travelRightOffset(from: ProjectedPosition, to: ProjectedPosition, resolution: number, offsetPx: number): ProjectedPosition {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
     const len = Math.hypot(dx, dy);
@@ -247,10 +263,7 @@ export function munitionFlightPathPaint(): LinePaint {
         const afterStart = coords[1];
 
         return [
-            amplifier(feature, 
-                [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2],
-                'MFP', scale, uprightRotation(p1, p2), 'center', 'middle',
-            ),
+            textMark(feature, [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2], 'MFP', scale, uprightRotation(p1, p2), 'center', 'middle'),
             // Left-aligned so the DTG begins exactly at the line's start, which is
             // the convention this symbol is drawn with.
             //
@@ -259,10 +272,15 @@ export function munitionFlightPathPaint(): LinePaint {
             // a path drawn eastward and to the left of one drawn westward. That is
             // what the symbol has always done, so it is preserved rather than
             // quietly normalized — but it is an inconsistency, not a doctrine.
-            amplifier(feature, 
+            textMark(
+                feature,
                 travelRightOffset(start, afterStart, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
                 dateRangeLabel(feature.properties),
-                scale, uprightRotation(start, afterStart), 'left', 'middle',
+                scale,
+                uprightRotation(start, afterStart),
+                'left',
+                'middle',
+                'amplifier',
             ),
             {
                 geometry: {type: 'MultiLineString', coordinates: outline},

@@ -2,7 +2,7 @@
  * # The air-coordinating areas' label blocks
  *
  * Fourteen graphics whose amplifiers are a **block of labeled lines** rather than a
- * designation: the eleven air-coordinating zones, and the three airspace coordination
+ * designation: the twelve air-coordinating zones, and the three airspace coordination
  * areas. They were the last families whose layout lived only in `openlayerStyles.ts`,
  * and the registry said so — they fell through to the default area label, which draws
  * a centered designation and nothing else.
@@ -118,7 +118,7 @@ function fitScale(feature: PaintFeature, context: PaintContext, widest: number):
 }
 
 /**
- * The eleven air-coordinating zones: the doctrinal prefix over the user's
+ * The twelve air-coordinating zones: the doctrinal prefix over the user's
  * designation, a blank line, then whichever of the four altitude and time lines are
  * set.
  */
@@ -131,13 +131,17 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         if (props.designation?.trim()) names.push(props.designation.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
-        if (props.startDate) values.push(column('TIME FROM:', props.startDate));
-        if (props.endDate) values.push(column('TIME TO:', props.endDate));
+        // The altitudes and times are reference detail and go as a unit, the way the
+        // corridor's information block does. The names above are the graphic's own.
+        if (!feature.hideAmplifiers) {
+            if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+            if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
+            if (props.startDate) values.push(column('TIME FROM:', props.startDate));
+            if (props.endDate) values.push(column('TIME TO:', props.endDate));
+        }
 
         /*
-         * **Fitted, as of 2026-08-21.** These eleven are drawn as circles, rectangles and
+         * **Fitted, as of 2026-08-21.** These twelve are drawn as circles, rectangles and
          * irregular areas like any other zone, and their block is the longest in the
          * library — a two-line name over four `MIN ALT: / MAX ALT: / TIME FROM: / TIME TO:`
          * columns. Unfitted it ran 4.6x the width of the zone it belongs to at gallery
@@ -172,9 +176,12 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         if (props.secondDesignation?.trim()) names.push(props.secondDesignation.trim());
 
         const values: string[] = [];
-        if (props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
-        if (props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
-        if (props.grid) values.push(column('GRID:', props.grid));
+        // Same rule as the block above: altitudes, grid and effective time are reference
+        // detail; the names stay. @see PaintFeature.hideAmplifiers
+        const detail = !feature.hideAmplifiers;
+        if (detail && props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
+        if (detail && props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
+        if (detail && props.grid) values.push(column('GRID:', props.grid));
         // The effective time is the two date-time groups joined, and it **replaces** any
         // `eff` the caller set rather than falling back to it: the OpenLayers dispatcher
         // assigns `labels.eff = dateLabel` before calling the style, so an `eff` typed by
@@ -182,7 +189,7 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         // block on any graphic carrying one, which widened it, which tightened the
         // fit-to-polygon cap — visible in the gallery as an ACA whose designation shrank.
         const effective = dateRange(props.startDate, props.endDate);
-        if (effective) values.push(column('EFF', effective));
+        if (detail && effective) values.push(column('EFF', effective));
 
         return labelBlock(names, values, feature, context, true);
     };

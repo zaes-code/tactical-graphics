@@ -1,12 +1,13 @@
 /**
  * # The paint list — what a symbol looks like, with no renderer in it
  *
- * `renderTacticalGraphic` answers "where is this graphic". It does not answer
- * "what does it look like", and today nothing map-agnostic does: the teeth on an
- * obstacle line, the gap cut around a mission task's letter, the arrowhead held
- * at a constant screen size — all of that is synthesized inside an OpenLayers
- * `StyleFunction`, in 128 separate places. A consumer reading the raw GeoJSON
- * gets a skeleton.
+ * `renderTacticalGraphic` answers "where is this graphic". **This module is the
+ * other half**: what it looks like. The teeth on an obstacle line, the gap cut
+ * around a mission task's letter, the arrowhead held at a constant screen size —
+ * all of it used to be synthesized inside an OpenLayers `StyleFunction`, in 128
+ * separate places, so a consumer reading the raw GeoJSON got a skeleton and a
+ * second renderer had 128 things to reimplement. Both shipping renderers now draw
+ * through the types declared here.
  *
  * A **paint list** is that missing half, expressed as data. One `Paint` is one
  * mark: a geometry plus how to stroke, fill, letter or dot it. A paint function
@@ -174,8 +175,27 @@ export interface FillSpec {
  * by measuring a gap with one font string and rendering the glyph with another, so
  * anything that measures **must** pass this same `font`. @see PaintContext.measureText
  */
+/**
+ * What a piece of text *is*, which decides whether a host may hide it.
+ *
+ * - `doctrinal` — part of the symbol. The `C` on a cover, a mission task's letter, the
+ *   `PL` prefix, `ACP 3`. Hide these and the graphic stops being the graphic it is, so
+ *   nothing hides them. **This is the default**, because a mark nobody classified is more
+ *   safely drawn than dropped: a stray date is noise, a missing letter is a wrong symbol.
+ * - `designation` — the name the operator gave this graphic, alone or joined to a
+ *   doctrinal prefix (`PL BLUE`, `CATK 3`). Kept when amplifiers are hidden; it is what
+ *   the toggle exists to leave behind.
+ * - `amplifier` — everything else the operator typed or set: dates, altitudes, widths,
+ *   field H, status, a corridor's information block.
+ *
+ * @see PaintFeature.hideAmplifiers
+ */
+export type TextKind = 'doctrinal' | 'designation' | 'amplifier';
+
 export interface TextSpec {
     text: string;
+    /** What this text is, for the hide-amplifiers toggle. Defaults to `doctrinal`. */
+    kind?: TextKind;
     /** CSS font shorthand, e.g. `'bold 24px sans-serif'`. */
     font: string;
     fill: PaintColor;
@@ -282,6 +302,23 @@ export interface PaintFeature {
      * same object `renderTacticalGraphic` consumes and persistence saves.
      */
     properties: TacticalGraphicProperties;
+
+    /**
+     * Draw the symbol and its designation only — no dates, altitudes, widths, field H or
+     * a corridor's information block.
+     *
+     * **A view state the host owns, not a property of the graphic.** It says nothing about
+     * what the symbol *is*: two identical corridors side by side may reasonably differ, the
+     * same corridor may be annotated on one map and bare on another, and nothing about it
+     * should survive into a file that another operator opens. So it is a renderer input
+     * like `graphicSize` and `bounds` rather than a field on the portable description, and
+     * a host keeps it wherever its other view state lives — a store, a URL, local storage.
+     * It was on the bag until 2026-08-30, which meant saving a graphic saved a preference
+     * with it. (User's call.)
+     *
+     * The symbol never goes. @see TextKind, `withHiddenAmplifiers`
+     */
+    hideAmplifiers?: boolean;
 
     /**
      * The graphic's own size in **meters**, when it has one: a circle's radius, a

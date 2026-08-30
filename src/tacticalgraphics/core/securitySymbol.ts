@@ -140,12 +140,17 @@ export function getSecuritySymbolSize(): number {
 /**
  * Share of an escort's bar its unit symbol may span.
  *
- * **The escort's symbol is not a fixed screen size, and the security operations' is.**
- * Cover, guard and screen are badges: every dimension of them is a screen constant, so a
- * constant symbol beside a constant symbol stays in proportion at any zoom. An escort is
- * drawn — the operator sets its length, and *"the escort symbol appears above the convoy or
- * escorted unit symbol"*, so the two have to read as one group. A 25 px unit symbol on a
- * bar the width of the screen looks like a speck; on a short one it swallows the bar.
+ * **An escort's symbol is sized from the escort.** The operator sets its length, and *"the
+ * escort symbol appears above the convoy or escorted unit symbol"*, so the two have to read
+ * as one group: a 25 px unit symbol on a bar the width of the screen looks like a speck, and
+ * on a short one it swallows the bar.
+ *
+ * This used to be what set the escort apart from cover, guard and screen — badges whose
+ * every dimension was a screen constant, where a constant symbol stayed in proportion at any
+ * zoom. They are drawn from two points as of 2026-08-29 and take a share of the gap between
+ * their arms, so all four now size from the graphic and stop at `MAX_SYMBOL_SIZE_PX`.
+ * `setSecuritySymbolSize` no longer governs any of them; it remains the size for a symbol a
+ * host places itself.
  */
 const ESCORT_SYMBOL_SHARE = 0.16;
 
@@ -173,6 +178,12 @@ export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set(
     TacticalGraphicName.Guard,
     TacticalGraphicName.Screen,
     TacticalGraphicName.Escort,
+    // Both follow tasks carry a unit *in* their body, where field T would otherwise be
+    // drawn. Same provider, same reason: no renderer-agnostic description of an entity
+    // symbol exists in this package, so the space is reserved and the host fills it or
+    // does not. @see followTaskSymbol
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
 ]);
 
 /**

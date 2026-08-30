@@ -7,7 +7,7 @@
  *
  * **No longer a spike.** This began as three ported style functions, to measure what
  * the rest would cost and whether a declarative renderer could take them at all. The
- * port is done: `isPaintable` is true for **215 of the 216 registered names**, and both
+ * port is done: `isPaintable` is true for **291 of the 292 registered names**, and both
  * shipping renderers paint through here rather than owning any symbology of their own.
  * `ai/maplibre-renderer.md` has the original estimate and how it turned out.
  *
@@ -121,6 +121,8 @@ export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, air
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';
 export type {ResolvedRangeFanBand} from './boundaryPaints';
-export {securityOperationLabelPaint} from './securityPaints';
+export {securityOperationCentre, securityOperationLabelPaint, securityOperationPaint, securityOperationSymbol} from './securityPaints';
 export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './movementPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
+
+export {amplifierText, withHiddenAmplifiers} from './paintFunctions';

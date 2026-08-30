@@ -3,7 +3,13 @@ import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
 import {Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon} from 'ol/geom';
 import RenderFeature from 'ol/render/Feature';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicEchelon, TacticalGraphicName, hatchTileSegments} from '@zaes/tactical-graphics';
+import {
+    TACTICAL_GRAPHIC_KEY,
+    TacticalGraphicEchelon,
+    TacticalGraphicName,
+    hatchTileSegments,
+    withHiddenAmplifiers,
+} from '@zaes/tactical-graphics';
 import type {
     FillSpec,
     HatchSpec,
@@ -18,6 +24,7 @@ import type {
 } from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
 import {getTextWidth} from './textMeasure';
+import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 
 /**
  * # Paint lists → OpenLayers styles
@@ -32,8 +39,8 @@ import {getTextWidth} from './textMeasure';
  * first bug fix that only landed in one.
  *
  * It also makes the port **self-verifying**, which is the real reason to do it
- * this way. There are ~1,600 existing tests that assert on what the OpenLayers
- * style functions produce, plus a sample gallery of 216 graphics. Route OpenLayers
+ * this way. There are ~4,000 existing tests that assert on what the OpenLayers
+ * style functions produce, plus a sample gallery covering the registry. Route OpenLayers
  * through the paint functions and every one of those becomes a parity test for
  * the ported code, for free. A port that keeps the two renderers separate has
  * nothing checking that the new function still draws what the old one did.
@@ -246,7 +253,54 @@ function readBounds(feature: FeatureLike): PaintFeature['bounds'] {
     const minY = feature.get('polygonMinY') as number | undefined;
     const maxX = feature.get('polygonMaxX') as number | undefined;
     const maxY = feature.get('polygonMaxY') as number | undefined;
-    if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return undefined;
+    if (minX !== undefined && minY !== undefined && maxX !== undefined && maxY !== undefined) {
+        return {minX, minY, maxX, maxY};
+    }
+    return ownBounds(feature) ?? holderBounds(feature);
+}
+
+/**
+ * The feature's own extent, when the feature *is* the shape.
+ *
+ * Most paints are handed the drawn geometry rather than a label anchor — the relief in
+ * place carves its own gap, the block family draws its letter into its own arrow — and a
+ * feature carrying real line or area geometry is the most reliable statement of its size
+ * there is. Asked before the holder, which is bookkeeping and can be missing; a bare
+ * `Point` or `MultiPoint` is an anchor rather than a shape and answers nothing, so those
+ * fall through.
+ */
+function ownBounds(feature: FeatureLike): PaintFeature['bounds'] {
+    const geometry = feature.getGeometry();
+    const type = geometry?.getType();
+    if (!geometry || !type || type === 'Point' || type === 'MultiPoint') return undefined;
+    const extent = geometry.getExtent();
+    if (!extent || !extent.every((n: number) => Number.isFinite(n))) return undefined;
+    const [minX, minY, maxX, maxY] = extent;
+    return {minX, minY, maxX, maxY};
+}
+
+/**
+ * The extent of the graphic this feature belongs to, found through its holder.
+ *
+ * **MapLibre has always had this and OpenLayers has not.** Its adapter derives
+ * `bounds` from the graphic's own geometry for every graphic; here it came from four keys
+ * that only `AreaGraphicBase` stamps, so every general rule measured against a graphic's
+ * size worked on one engine and quietly did nothing on the other — and the label size cap
+ * is exactly such a rule.
+ *
+ * A label feature is a bare anchor point, so the extent has to come from somewhere else.
+ * The registry already maps every feature to its holder for the properties dialog, and the
+ * holder publishes the drawn feature. Nothing to stamp, nothing for a new holder to
+ * remember, and a graphic that is not registered simply gets no bounds — the same as
+ * before.
+ */
+function holderBounds(feature: FeatureLike): PaintFeature['bounds'] {
+    if (!(feature instanceof Feature)) return undefined;
+    const holder = GraphicLinkRegistry.getFromFeature(feature);
+    const drawn = holder?.getFeatures?.().find((f: Feature) => f.get('role') === 'graphic') ?? undefined;
+    const extent = drawn?.getGeometry()?.getExtent();
+    if (!extent || !extent.every((n: number) => Number.isFinite(n))) return undefined;
+    const [minX, minY, maxX, maxY] = extent;
     return {minX, minY, maxX, maxY};
 }
 
@@ -267,6 +321,10 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
     return {
         geometry,
         properties: {...bag, name: resolvedName},
+        // A host's view state, stamped on the feature rather than stored in the bag —
+        // saving a graphic must not save someone's display preference with it.
+        // @see PaintFeature.hideAmplifiers
+        hideAmplifiers: feature.get('hideAmplifiers') as boolean | undefined,
         graphicSize: feature.get('graphicSize') as number | undefined,
         drawingResolution: feature.get('drawingResolution') as number | undefined,
         graphicCenter: feature.get('graphicCenter') as ProjectedPosition | undefined,
@@ -315,7 +373,11 @@ export function asStyleFunction(
     return (feature: FeatureLike, resolution: number): Style[] => {
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
-        return paintToOlStyles(paint(paintFeature, paintContext(resolution)));
+        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle is
+        // applied once rather than per family. @see withHiddenAmplifiers
+        return paintToOlStyles(
+            withHiddenAmplifiers(paint(paintFeature, paintContext(resolution)), paintFeature.hideAmplifiers),
+        );
     };
 }
 

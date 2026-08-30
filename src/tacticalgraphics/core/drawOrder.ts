@@ -16,7 +16,7 @@ import {TacticalGraphicName} from './type';
  * `coordinates[coordinates.length - 1]`, so the arrow landed on the user's *last* click
  * and the stored base ran rear to tip. Nothing rendered wrong -- an arrow points where it
  * was aimed either way -- but the saved point list was the reverse of the one the standard
- * describes, and the app contradicted itself: the six graphics converted to drawn anchors
+ * describes, and the app contradicted itself: the graphics converted to drawn anchors
  * in 2026-08 (Turn, Ambush, Pursuit, Envelopment, Contain, Tactical Turn) *do* follow
  * APP-06's numbering, so a Turn took its arrowhead from the first click while an Avenue of
  * Approach drawn with the identical drag took it from the last.
@@ -45,7 +45,7 @@ import {TacticalGraphicName} from './type';
  * point 4 -- are conformant as they stand and are **not** listed here.
  *
  * @see ai/app-6.md, "the eight point-anchored conversions"
- * @see drawnAnchors.ts, which is the same rule for the six graphics that store anchors
+ * @see drawnAnchors.ts, which is the same rule for the seven graphics that store anchors
  */
 
 /**
@@ -67,6 +67,8 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // Registered without an enum member -- the axis family's fifth variant, reachable
     // through the registry but not through the UI. @see ai/context.md, "Counts"
     'AxisOfAttack',
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
     TacticalGraphicName.Counterattack,                    // 340600 Counter-Attack
     TacticalGraphicName.CounterattackByFire,              // 340700 Counter-Attack by Fire
     TacticalGraphicName.AdvanceToContact,                 // 342900

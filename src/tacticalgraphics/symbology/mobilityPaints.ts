@@ -95,6 +95,7 @@ export function passageLanePaint(): LinePaint {
                 geometry: {type: 'Point', coordinates: at},
                 text: {
                     text: dateRangeLabel(feature.properties),
+                    kind: 'amplifier',
                     font: fontStyle,
                     fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
