@@ -1045,18 +1045,6 @@ function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
 const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
 
 /**
- * The three graphics whose **geometry** is a screen size.
- *
- * Not the same question as "which graphics carry a centre symbol", though the two sets
- * coincided until the escort joined the second one. @see CENTER_SYMBOL_GRAPHICS
- */
-const SECURITY_OPERATIONS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Cover,
-    TacticalGraphicName.Guard,
-    TacticalGraphicName.Screen,
-]);
-
-/**
  * Whether a graphic's **geometry** is a screen size rather than a ground distance,
  * and so has to be regenerated when the zoom changes.
  *
@@ -1130,7 +1118,18 @@ function followTaskCenter(
 }
 
 function isScreenSized(name: TacticalGraphicName): boolean {
-    return SECURITY_OPERATIONS.has(name) || hasBakedDecoration(name);
+    /*
+     * Cover, guard and screen were in here until 2026-08-30, and had stopped belonging on
+     * 2026-08-29: APP-06 gives them four anchor points, so they are drawn from two and
+     * their geometry is a ground distance like everything else. The rebuild they were
+     * getting on every zoom re-derived byte-identical geometry -- wasted work rather than
+     * a wrong picture, and a standing claim in this file that these three are screen-sized
+     * when OpenLayers draws them as plain two-point lines.
+     *
+     * Nothing in the library is screen-sized *geometry* any more; what remains here is a
+     * baked decoration, which is a decoration size and not the shape itself.
+     */
+    return hasBakedDecoration(name);
 }
 
 /**
