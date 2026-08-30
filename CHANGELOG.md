@@ -93,6 +93,14 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **A stored metre is a ground metre, and the paints were treating it as a projected one.** The portable description states *real* distances — a radius, a corridor's half-width — while a map resolution is projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. `metres / resolution` is therefore the symbol's on-screen size only on the equator; everywhere else it under-reports, by 1.6x at 50 degrees and **5.8x at 80**.
+
+  `mercator.ts` already states this rule for the generators, which convert the other way when a symbol is drawn — a corridor dragged out at 60 degrees came out 79 px wide instead of 40 until they did. The paints had the same defect on the way back out, at the three sites that read a stored size: a corridor's ACP circle radius, the crossed mission tasks' label width, and the base defence zone's radius.
+
+  The consequence was a cap fed a wrong number. On a plan near 80 degrees north a corridor 40 px wide measured as 7, and its designation was shrunk to fit the 7 — scale 0.30 where the same corridor on the equator got 1.50.
+
+  **It was invisible because every test and every demo screenshot was taken near the equator.** `paintLatitude.test.ts` now draws the same graphic at 0, 35, 60 and 80 degrees and asserts the on-screen size does not move; `groundPixels` is the one conversion, beside `featureLatitude`, which recovers the latitude from the geometry rather than reprojecting through a map library.
+
 - **Thirteen graphics kept an amplifier when told to show their name only.** `hideAmplifiers` is enforced per *mark* — `withHiddenAmplifiers` drops a paint whose `text.kind` is `amplifier` — but several paints stack an annotation and a designation into one mark, which cannot be filtered apart. The amplifier line has to be emptied inside the stack instead, which is what `amplifierText` is for, and nothing made a paint author choose between the two.
 
   So the date range survived under a coordinated fire line, a munition flight path and a passage lane; field H survived on human terrain, both restricted terrains, all three psyops zones and the limited access area; the start date survived under the dynamic minefield and the fenced mined area; and the weapon survived under a final protective fire.

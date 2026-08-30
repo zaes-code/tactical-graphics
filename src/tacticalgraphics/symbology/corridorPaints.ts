@@ -27,7 +27,7 @@ import {
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import {pathLength, textWidth} from './decorations';
-import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {getFullLabel, groundPixels, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
@@ -171,7 +171,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         // circle's rendered pixel radius, and the size-proportional scale grows the
         // text from that same number.
         const circleRadiusPx =
-            feature.graphicSize && feature.graphicSize > 0 ? feature.graphicSize / context.resolution : undefined;
+            feature.graphicSize && feature.graphicSize > 0 ? groundPixels(feature.graphicSize, feature, context) : undefined;
         const acpScale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
 
         const paints: Paint[] = [];
