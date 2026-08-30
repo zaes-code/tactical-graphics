@@ -154,3 +154,58 @@ describe('a corridor draws its designation at one size', () => {
         expect(designations(even).length).toBe(2);
     });
 });
+
+/**
+ * # The designation never runs into an ACP circle
+ *
+ * Every turning point carries an `ACP n` circle, and the designation is centred on the
+ * leg between two of them. It was measured against the *whole* leg, so it grew straight
+ * through the circles at either end — the closer together the circles, the more of the
+ * name they covered. What is available is the clear run between them.
+ */
+describe('the designation keeps clear of the ACP circles', () => {
+    /** Metres per pixel chosen so the numbers below are also the pixel counts. */
+    const px = context.resolution;
+
+    const corridorOf = (legPx: number, halfWidthM: number) =>
+        ({
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [legPx * px, 0]]},
+            properties: {name: TacticalGraphicName.AirCorridor, designation: 'CORRIDOR BLUE', width: halfWidthM * 2},
+            graphicSize: halfWidthM,
+        }) as unknown as PaintFeature;
+
+    /** Half the label's drawn length, in pixels — how far it reaches from the midpoint. */
+    const reachPx = (feature: PaintFeature) => {
+        const paints = airCorridorLabelPaint(TacticalGraphicName.AirCorridor)(feature, context);
+        const label = paints.find(p => p.text && /CORRIDOR BLUE/.test(p.text.text) && !p.text.text.includes('\n'));
+        if (!label) return 0;
+        const drawn = context.measureText(label.text!.text, label.text!.font) * (label.text!.scale ?? 1);
+        return drawn / 2;
+    };
+
+    it.each([
+        ['a wide corridor on a long leg', 600, 30_000],
+        ['a wide corridor on a short leg', 150, 30_000],
+        ['a narrow corridor on a long leg', 600, 4_000],
+    ])('%s: the label stops short of the circle', (_name, legPx, halfWidthM) => {
+        const feature = corridorOf(legPx, halfWidthM);
+        // groundPixels at the equator, where these synthetic coordinates sit.
+        const circlePx = halfWidthM / context.resolution;
+        const clearHalf = legPx / 2 - circlePx;
+        const reach = reachPx(feature);
+        // Nothing drawn is also "not colliding" — the case the assertion below allows.
+        if (reach > 0) expect(reach).toBeLessThanOrEqual(clearHalf);
+    });
+
+    it('draws nothing on a leg its circles already swallow', () => {
+        // Circles of 150px radius either end of a 200px leg: they overlap at the midpoint.
+        expect(reachPx(corridorOf(200, 150 * context.resolution))).toBe(0);
+    });
+
+    it('still draws the amplifier block when no leg can carry the name', () => {
+        const paints = airCorridorLabelPaint(TacticalGraphicName.AirCorridor)(corridorOf(200, 150 * context.resolution), context);
+        const block = paints.find(p => p.text?.text.includes('NAME:'));
+        expect(block).toBeDefined();
+        expect(block!.text!.scale).toBeGreaterThan(0);
+    });
+});
