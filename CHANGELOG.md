@@ -91,6 +91,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **The ambush's arrowhead line kinked where the hashes ended.** APP-06 141700's Draw Rules make it one line — *"the rear of the arrowhead line shall connect to the midpoint of the line between points 2 and 3"* — and on a 120 degree arc that midpoint is `r·cos(60°)` = 0.5r out along the axis, exactly where the hashes start. The generator emitted it as two: a seventh hash from 0.5r to r, then an arrow from the bulge at r out to the tip.
+
+  Both halves are walked from the centre on the same bearing, so they are collinear in the plane the generator works in and every measurement of *its* numbers agreed. But each was emitted as a bare pair of endpoints, and a chord does not follow the great circle it subtends — so the whole of the curvature landed on the join, as a corner. Drawn at the demo's opening zoom the two halves met at **7.1 degrees**, plainly at different angles; the pieces that read as one line have to be one line for the corner to have nowhere to go.
+
+  It is now a single run from the chord to the tip, and the hash on the axis is gone with it — which is also what APP-06's Template and Example draw, six hashes with none on the axis and the arrowhead line passing between them. The arrowhead's barbs now lean off the run as rendered rather than off the shorter piece. `Ambush.generateGraphics` emits nine sub-lines where it emitted ten.
+
 - **A draw's double-click zoomed the map for a host that builds an engine per draw.** The map's `DoubleClickZoom` is pulled off for the duration of a draw and put back on the next press that is not the second half of the double-click that ended it. That state was held **per manager**, and a host may build more than one manager on one map — a fresh engine for each draw, another for an edit session.
 
   So the second manager looked for a `DoubleClickZoom`, found none because the first had already removed it, and recorded that it had nothing to restore — while the first manager's armed listener was still on the viewport and reinstalled the zoom on the next press. For a host that destroys its engine at `drawend`, that press is the first click of the *next* draw, which then ran with the zoom installed and jumped when the double-click ended it.
