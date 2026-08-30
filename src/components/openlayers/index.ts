@@ -51,6 +51,12 @@ export type {GraphicFieldSet} from './graphicFieldRegistry';
 // Every style function, plus the color and width constants they share.
 export * from './openlayerStyles';
 
+// **Which** of those style functions draws a given graphic. A host rendering saved
+// graphics into its own layer needs the pairing the holders make, and `getStyle` — the
+// one that looks like this answer — is the area outline alone. @see stylesFor
+export {stylesFor} from './stylesFor';
+export type {GraphicStyles} from './stylesFor';
+
 // Configuration — label size, line width, colors. These are **re-exports**: the config
 // is defined in the root entry point (`@zaes/tactical-graphics`), because none of it is
 // specific to OpenLayers. Pixel sizes and affiliation colors mean the same thing to any
