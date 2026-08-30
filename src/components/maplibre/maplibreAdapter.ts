@@ -354,11 +354,14 @@ function bakedDecorationSize(
 /**
  * Moves an origin-centered graphic onto its base point.
  *
- * Three graphics need it — Cover, Guard and Screen. Their generator emits arms and
- * label anchors as offsets from `[0, 0]` and never looks at the base, so whatever
- * consumes it has to do the placing. `SecurityOperationGraphicBase.placeCoordinates`
- * is the OpenLayers half; this is the same arithmetic, kept deliberately identical
- * rather than re-derived.
+ * Cover, Guard and Screen needed it while they were placed from a single anchor: their
+ * generator emitted arms and label anchors as offsets from `[0, 0]` and never looked at
+ * the base, so whatever consumed it had to do the placing. Since 2026-08-29 they are
+ * drawn from a two-point base and the generator returns coordinates already in place,
+ * so the ordinary path serves them and the OpenLayers half of this arithmetic is gone.
+ *
+ * Kept for the placement API that remains — a symbol dropped on an existing unit, given
+ * a point and a size rather than two anchors.
  *
  * The offsets are added in **lon/lat**, because that is the space the generator
  * built them in — `getSearchAreaArrow` converts its meter inputs to degrees on the
@@ -727,16 +730,10 @@ export function buildTacticalGraphic(
         // must arrive unbroken. @see GLYPH_CUT_GAP_GRAPHICS
         ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) && properties.labelGap === undefined ? {labelGap: 0} : {}),
         ...properties,
-        // **After** the caller's properties, unlike every other default here. A
-        // security operation's size is not a ground distance a caller may set — it is
-        // a screen constant, and these graphics refuse a resize for exactly that
-        // reason. A `radius` arriving from a saved snapshot or a sweep is a number in
-        // meters from some other zoom, and honoring it draws the symbol at the wrong
-        // size. @see allowedGestures
-        // **The raw resolution, unlike everything else here.** These three are placed in
-        // projected metres rather than walked out geodesically — @see placeOriginCentered
-        // — so their pixel size is already latitude-invariant and correcting it would
-        // shrink them by cos(latitude) instead.
+        // **After** the caller's properties, unlike most defaults here: a baked decoration's
+        // size is not a ground distance a caller may set. A value arriving from a saved
+        // snapshot is a number in metres from some other zoom, and honouring it draws the
+        // decoration at the wrong size.
         ...bakedDecorationSize(name, properties, sizingResolution),
         // Also after the caller's properties: a ratio-locked graphic's size is not a
         // size the caller may set. @see ratioLockedSize

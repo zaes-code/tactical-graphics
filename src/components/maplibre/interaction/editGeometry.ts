@@ -406,7 +406,7 @@ export function setOffset(
     options: {offsetScale?: number; resolution: number},
 ): GraphicDescription {
     // **Measured along the line the *generator* saw, not the line as stored.** Which
-    // side is "the mirrored one" is decided by a segment's left normal, and thirty-two
+    // side is "the mirrored one" is decided by a segment's left normal, and thirty-four
     // graphics store their points tip-first now, so their stored line runs the opposite
     // way from the one their symbol was built along. Reading the stored order would
     // invert the sign for exactly those graphics: a corridor would flip the instant it

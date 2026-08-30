@@ -39,8 +39,8 @@ import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
  * first bug fix that only landed in one.
  *
  * It also makes the port **self-verifying**, which is the real reason to do it
- * this way. There are ~1,600 existing tests that assert on what the OpenLayers
- * style functions produce, plus a sample gallery of 216 graphics. Route OpenLayers
+ * this way. There are ~4,000 existing tests that assert on what the OpenLayers
+ * style functions produce, plus a sample gallery covering the registry. Route OpenLayers
  * through the paint functions and every one of those becomes a parity test for
  * the ported code, for free. A port that keeps the two renderers separate has
  * nothing checking that the new function still draws what the old one did.

@@ -59,7 +59,7 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
     /**
      * Draws the area *while* it is being drawn, not only once it is finished.
      *
-     * This was empty, so the 87 graphics in the area family showed OpenLayers' plain
+     * This was empty, so the 94 graphics in the area family showed OpenLayers' plain
      * sketch outline until the last click and only then became a symbol: no hatching, no
      * fill, no designation, no obstacle marks. The line family has rebuilt itself from
      * the sketch on every pointer move since the beginning — `LineGraphicController` does
