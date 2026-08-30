@@ -57,6 +57,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Removed
 
+- **The MapLibre half's last two beliefs that cover, guard and screen are screen-sized.** They were fixed-size badges pinned to a screen constant until the four-anchor change above. Two pieces survived it: `securityOperationSize`, which overwrote the caller's `radius` with `SECURITY_OPERATION_HALF_EXTENT_PX × drawingResolution`, and their entry in `isScreenSized`, which rebuilt their geometry on every zoom.
+
+  Neither changed the picture — the generator builds the arms from the base and ignores `radius`, so rendering a cover with the override and without gives byte-identical geometry, and the per-zoom rebuild re-derived exactly what was already there. **Inert rather than wrong, which is worse in one way:** they put a bogus ground distance in the saved bag, spent work on every zoom for nothing, and left this half of the codebase asserting that MapLibre treats these three as screen-sized while OpenLayers routes them through `line(2)`. Read side by side, the two engines appeared to disagree about what a cover is. They did not.
+
+  `securityOperationsAreNotScreenSized.test.ts` pins the property that made the removal safe rather than the removal itself: a radius is ignored, and the size follows the base. Nothing in the library is screen-sized *geometry* now; what `isScreenSized` still answers for is a baked decoration, which is a decoration size and not the shape.
+
 - **`SecurityOperationsController` and `SecurityOperationGraphicBase`** (`/openlayers`). They placed a security operation on one anchor and sized it from the live map resolution; with the graphic drawn from two points there is nothing for them to do, and the generator they depend on no longer accepts a point base — so they could not work, not merely go unused. The three graphics are ordinary line holders now. A host that referenced either directly needs `getController(name, resolution)`, which is what the app has always used.
 
 - **A label is the size the host configured, capped by the graphic — and no longer by the zoom it was drawn at.** `labelScale` multiplied the configured size by how far the map had moved since the graphic was drawn, clamped to [0.3, 1.5]. That clamp was what stopped a label swamping a small symbol, and `capLabelToGraphic` does that job properly now — against the graphic itself rather than against a moment in time.
@@ -90,6 +96,10 @@ the npm publish dates — when a version actually became installable.
 - **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
 
 ### Added
+
+- **`prepareFeatures(rendered)` on the `/openlayers` entry point — one call from rendered GeoJSON to features you can put on a map.** Three steps had to happen in the right order: project the GeoJSON, ask `stylesFor` which style functions draw this graphic, and publish the shape's extent to the label feature. Miss the second and a designation is drawn twice; miss the third and every fitted symbol comes out at a fixed size in metres.
+
+  Missing the third fails **silently** — nothing throws, nothing warns, and the map looks plausible until somebody notices a symbol that does not grow with its shape. A host should not have to know a checklist to avoid that, so this is the checklist. No new capability: the same three calls, in the order they have to happen, and every part stays exported for a host that wants to do it by hand.
 
 - **`publishGraphicExtent(labels, graphic)` on the `/openlayers` entry point.** Several symbols are *fitted to the area they land in* rather than drawn at a fixed size — the CBRN triangle, the airfield zone's crossed runways, the sector-1 modifier glyphs, and every label held to a share of its own shape. The fit reads `bounds` and `ring`, and those ride the **label** feature, which is a bare anchor point with no shape of its own to measure.
 
