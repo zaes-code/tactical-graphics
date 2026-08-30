@@ -24,6 +24,7 @@ import {
     getLabelHaloColor,
     graphicLabelScale,
 } from '../core/symbology';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import {pathLength, textWidth} from './decorations';
 import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
@@ -45,14 +46,20 @@ const ACP_PADDING_PX = 4;
 const INFO_BLOCK_GAP_PX = 14;
 
 /**
- * Share of the corridor's *width* its designation may span.
+ * Share of the corridor's width the designation's **height** may take.
  *
- * Wider than the general share because this label is measured across the rails rather than
- * along the leg: the text is drawn rotated along the corridor, so what has to fit between
- * the rails is its height, and capping its width at 1.4 of the width leaves the height
- * comfortably inside. Anything larger and the designation prints over its own rails.
+ * The text is drawn rotated along the corridor, so the dimension that has to fit between
+ * the rails is its height — the length is held by the leg instead. This used to cap the
+ * label's *width* at 1.4 of the corridor width and call that a proxy for the height, which
+ * only works while the label's aspect ratio is bounded: a width cap divides by the text's
+ * natural width, so the answer shrinks with every character added.
+ *
+ * At 7 characters (`AC BLUE`) the proxy gave a legible 0.79. At 15 (`AC CORRIDOR ONE`) on
+ * a corridor 25 px wide it gave **0.23** — a four-pixel-tall label, correctly inside its
+ * rails and impossible to read. The height is what the rule was always about, so it is
+ * what is measured; the result no longer depends on how long the name is.
  */
-const LEG_LABEL_WIDTH_SHARE = 1.4;
+const LEG_LABEL_HEIGHT_SHARE = 0.7;
 
 /**
  * Scale for an "ACP n" label — two competing sizes, and the larger wins.
@@ -187,9 +194,11 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const legScales: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
+            // Two dimensions, two caps: the label's length against the leg it runs along,
+            // and its height against the gap between the rails it runs between.
             legScales.push(Math.min(
                 capLabelToSpan(context, text, fontStyle, baseScale, legPx),
-                capLabelToSpan(context, text, fontStyle, baseScale, legWidthPx, LEG_LABEL_WIDTH_SHARE),
+                (legWidthPx * LEG_LABEL_HEIGHT_SHARE) / BASE_FONT_SIZE_PX,
             ));
         }
         const designationScale = legScales.length ? Math.max(...legScales) : baseScale;
