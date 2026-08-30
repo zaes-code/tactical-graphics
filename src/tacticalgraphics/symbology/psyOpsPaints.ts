@@ -20,7 +20,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {fitSymbolScale, sampleSegments} from './symbolFit';
 import {TacticalGraphicName} from '../core/type';
-import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type PsyOpsPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -144,8 +144,10 @@ export function psyOpsMarkPaint(base: PsyOpsPaint): PsyOpsPaint {
         // **H over T**, which is the Template's arrangement: the free text above the
         // designation, both to the right of the speaker. Either may be empty; two empty
         // lines draw nothing at all.
+        // Field H is an annotation and the designation is not, but they share one text
+        // mark — so the *line* is dropped rather than the mark. @see amplifierText
         const lines = [
-            (feature.properties.additionalInfo ?? '').trim(),
+            amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()),
             (feature.properties.designation ?? '').trim(),
         ].filter(line => line.length > 0);
         if (!lines.length) return paints;
