@@ -17,6 +17,14 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
+- **`stylesFor(name)`: which style functions draw a graphic.** A host that renders saved graphics into its own layer — its own features, its own ids — needed the style pair each graphic uses, and that fact lived only in the holder classes, which are internal. So consumers guessed, and the guess is always `getStyle`, because it is exported, takes a name and returns styles.
+
+  `getStyle` is the **area outline** dispatcher. Its fallback is `areaOutlinePaint`, it draws no text at all, and for the two hundred graphics that are not areas it is simply the wrong function. A downstream integration shipped with every area unlabelled and every arc mission task missing the letter that identifies it — `R`, `I`, `AD` — because `getStyle` was applied to the label feature too. Nothing errored; the symbols were quietly wrong, which is the failure mode a missing API produces.
+
+  `stylesFor(name)` returns `{graphic, labels}`, read off the holder the controller registry would build rather than restated in a second table that would drift from it. **`labels` is `undefined` for the 84 graphics that keep every glyph on the graphic feature** — a phase line's `PL ALPHA` rides its own line work — so a host knows not to style their label geometry and draw the designation twice.
+
+  Exported from `@zaes/tactical-graphics/openlayers`. `getStyle` is unchanged and still correct for what it always was.
+
 - **`hideAmplifiers`: draw a graphic and its name, and hide the rest.** A planning map carries a lot of graphics, and most of what an operator types on one is reference detail rather than something to read at a glance. Set it per graphic — it is a choice about *this* graphic on *this* map, not a property of the symbol — and dates, altitudes, widths, field H and a corridor's information block stop drawing. The properties dialog has a toggle for it.
 
   **The symbol itself is never hidden.** A cover's `C`, a mission task's letter, a `PL` prefix and a corridor's `ACP 2` are the graphic rather than an annotation on it. `TextSpec.kind` is where a paint says which a mark is — `doctrinal`, `designation` or `amplifier` — and a mark that says nothing counts as doctrinal, because a stray date is noise and a missing letter is a different symbol.
@@ -90,6 +98,12 @@ the npm publish dates — when a version actually became installable.
   So the date range survived under a coordinated fire line, a munition flight path and a passage lane; field H survived on human terrain, both restricted terrains, all three psyops zones and the limited access area; the start date survived under the dynamic minefield and the fenced mined area; and the weapon survived under a final protective fire.
 
   Found by sweeping all 291 paintable graphics at once rather than checking them one at a time — each looked right on its own, because the toggle was never asked about it. `amplifierSweep.test.ts` is that sweep, kept: it paints every graphic twice with every amplifier the schema offers, and asserts that nothing an amplifier could have written survives while the doctrinal abbreviation and the designation both do. The sweep also caught the helper in `midLabelLinePaints.ts` named `amplifier` that set no kind at all; it is `textMark` now, and takes one.
+
+- **A corridor's designation shrank with every character typed.** The label runs along a leg, rotated, so two things bound it: its length against the leg, and its **height** against the gap between the rails. The height bound was applied as a *width* cap — the label's natural width held to 1.4 of the corridor's width — on the reasoning that a bounded aspect ratio makes one a proxy for the other.
+
+  It is not. A width cap divides by the text's natural width, so the answer falls as the name grows. `AC BLUE` came out at scale 0.79 and `AC CORRIDOR ONE`, on the same corridor at the same zoom, at 0.36 — and on a corridor 25 px wide, at 0.23, which is a four-pixel-tall label: correctly inside its rails and impossible to read.
+
+  The height is what the rule was always about, so it is what is measured now. A long name and a short one get the same scale on a corridor that has room for either, and both give way together when it does not.
 
 - **The airfield's designation is measured off the drawn runway, not off a stamped size.** APP-06 131900's Template boxes the `T` immediately past the end of the horizontal line, and the runway is the wider of the two arms — so the graphic's own eastern edge is that end. Deriving it from `graphicSize` assumes that number is the runway's half length, which holds only on the path that stamps it: the catalog generator hands the paint the sample's `radius`, which is smaller, and the designation printed 17 px *inside* the runway it was supposed to clear. Visible on the published catalog rather than in the app, which is why no test caught it.
 
