@@ -19,7 +19,7 @@ import {TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **280 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
+ * **283 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.

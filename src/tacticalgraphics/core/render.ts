@@ -415,7 +415,7 @@ export function isTacticalGraphicFeature(feature: Feature): boolean {
  * What a **draw tool** needs to know before it starts collecting clicks: whether
  * this graphic wants one point, an open path, or a closed ring. Exported for that
  * reason; without it a renderer implementing draw has to keep its own table of
- * 215 names beside this one and watch the two drift.
+ * 292 names beside this one and watch the two drift.
  *
  * `undefined` for an unknown name, and for the handful of generators whose kind is
  * not in the table below — those accept any base rather than being rejected, so a

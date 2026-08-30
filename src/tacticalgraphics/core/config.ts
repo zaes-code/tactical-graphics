@@ -91,9 +91,11 @@ export const MAX_LABEL_SIZE = 26;
  * unit.
  *
  * So the datum belongs on the **graphic**, not here: two zones on one map can honestly
- * be one AGL and one MSL, which a host-level setting could never express. Until such a
- * field exists, `formatAltitude` passes a non-numeric string through untouched, so
- * `'FL150'` and `'1500MSL'` still render exactly as doctrine writes them.
+ * be one AGL and one MSL, which a host-level setting could never express. It is
+ * {@link AltitudeDatum}, carried on `TacticalGraphicProperties.altitudeDatum`.
+ * `formatAltitude` also passes a non-numeric string through untouched, so a bag written
+ * before that field existed still renders `'FL150'` and `'1500MSL'` as doctrine writes
+ * them.
  */
 export enum AltitudeUnit {
     meters = 'Meters',

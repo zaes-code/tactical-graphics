@@ -63,11 +63,18 @@ export interface RouteOptions extends BaseGraphicOptions {
 /**
  * Options for security-operation fan graphics (Cover/Guard/Screen).
  *
- * **Every dimension is optional**, because they are fixed ratios of one another
- * and of `size`. These graphics are badges: not resized, describing no ground
- * extent. A renderer with a map resolution to hand (the OpenLayers holder) passes
- * them explicitly so the symbol holds a constant on-screen size; one without
- * passes `size` alone and gets the same proportions.
+ * **Every dimension is optional**, because they are fixed ratios of one another and of
+ * `size`. Pass `size` alone and the proportions follow.
+ *
+ * These were badges until 2026-08-29 — not resized, describing no ground extent, sized
+ * by a screen constant times the live map resolution. APP-06 gives them four anchor
+ * points, so they are drawn from two now and the generator builds the arms from the
+ * **base**: a two-point `LineString` of `[the arrowhead, that arm's inner end]`. Given
+ * such a base the generator ignores these options, which is why a renderer that still
+ * forces a `radius` in gets exactly the geometry it would have got without one.
+ *
+ * They remain for the other way round — placing one of these three from a single point
+ * and a size, which is how a symbol dropped on an existing unit is positioned.
  * @see SecurityOperation.dimensions
  */
 export interface SecurityOperationOptions extends BaseGraphicOptions {

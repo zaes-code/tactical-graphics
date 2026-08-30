@@ -260,15 +260,16 @@ export function configuredLabelScale(): number {
 }
 
 /**
- * Zoom-anchored label scale — **the fallback**, for a graphic that publishes no extent.
+ * Zoom-anchored label scale.
  *
- * Nothing in the sample sweep is in that position: all 202 labelled features publish one,
- * 123 stamped by their holder, 55 from their own geometry and 24 through the registry. It
- * is kept for a consumer building features by some path of their own, where a label with
- * neither a cap nor a zoom relationship would sit at a fixed pixel size however far out the
- * map goes.
+ * **No longer a fallback.** `scaleOf` used to reach for this whenever a feature carried no
+ * extent, which made a label's size depend on who built the feature: a holder-backed one
+ * has bounds, a host-built one does not, so the same graphic at the same zoom drew its
+ * designation at two different sizes with nothing in the config to account for it. A
+ * missing extent now means no cap, not a different rule. @see scaleOf
  *
- * Was the default.
+ * What still uses it is the mission-task letter, which is genuinely anchored to the zoom
+ * the task was dropped at rather than to any extent.
  *
  * At the drawing zoom the text is exactly `labelSize` px; zoomed out it shrinks
  * proportionally, clamped to [0.3, 1.5] of `labelSize` so it stays readable at
@@ -724,9 +725,13 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * gesture that silently does nothing.
  *
  * The OpenLayers side enforces the same thing by choosing a controller —
- * `PointDropController` no-ops both for the crossed tasks and keeps resize for the
- * readiness states; `SecurityOperationsController` no-ops resize and keeps rotate.
- * This is that knowledge as a table any renderer can read.
+ * `PointDropController` no-ops the rotate for the crossed tasks and keeps resize for
+ * the readiness states. This is that knowledge as a table any renderer can read.
+ *
+ * There was a third case here, `SecurityOperationsController`, which no-opped resize
+ * and kept rotate for cover, guard and screen. Those three stopped being fixed-size
+ * badges on 2026-08-29 and the controller was deleted with them; they are ordinary
+ * two-point line graphics now and take every gesture.
  */
 export interface AllowedGestures {
     translate: boolean;
@@ -758,8 +763,9 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
  *
  * **All four crossed tasks are here as of 2026-08-17.** They were fixed-size badges,
  * pinned to a constant 100 px so a stored size was divided straight back out. The
- * security operations still are, and stay out of this set: they mark a screening force,
- * not an extent of ground. @see ROTATE_ONLY_SYMBOLS
+ * security operations were the same kind of thing and were the last of them: APP-06's
+ * four anchor points made them two-point drawn graphics on 2026-08-29, so nothing in
+ * the library is a fixed-size badge any more and `ROTATE_ONLY_SYMBOLS` is empty.
  *
  * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
  * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
@@ -814,10 +820,16 @@ const SECURITY_OPERATION_REACH_PX =
  * fifteen pixels apart, which is the drift this repository keeps finding. The generator
  * owns the shape, so it owns the number.
  *
- * **It is not an amplifier.** These three refuse a resize because their size is not a user
- * input: it is this constant times the live resolution, so the symbol holds 410 x 29 px at
- * every zoom. What the number does is tell the generator how big to build, and tell a
- * saved file what the graphic's size was when it was last realised.
+ * **It is not an amplifier**, and it is no longer how these three are sized either. It
+ * was the half-extent of a fixed-size badge — 163.35, so 326.7 px across at every zoom —
+ * back when the symbol's dimensions were this constant times the live resolution. Since
+ * 2026-08-29 cover, guard and screen are drawn from two anchor points and the generator
+ * builds the arms from the *base*, ignoring `radius` entirely; a renderer that forces
+ * this number in gets byte-identical geometry for its trouble.
+ *
+ * It stays exported because it shipped, and because it is still the figure a host needs
+ * to place one of these three from a single point plus a size — which is how a symbol
+ * dropped on an existing unit is positioned.
  *
  * It is here because the two engines were saying different things about it. MapLibre
  * computed this expression inline and re-derived it on every build; OpenLayers filed

@@ -402,13 +402,14 @@ export class TacticalGraphicsManager {
     /**
      * Which graphic a controller is drawing, by scanning its features for the stamp.
      *
-     * **Not `controller.graphic.base.get('graphicName')`, which is not reliable.** Some
-     * holders replace their base feature with the one OpenLayers' `Draw` produced —
-     * `SecurityOperationsController.setBaseFeature` does, on both draw start and draw
-     * end — and that feature never carried the stamp `startDrawing` put on the holder's
-     * own features. Reading the base alone therefore returned `undefined` for the
-     * security operations, and `allowedGestures(undefined)` falls through to its
-     * permissive default: a Screen offered a resize it refuses.
+     * **Not `controller.graphic.base.get('graphicName')`, which is not reliable.** A
+     * holder that replaces its base feature with the one OpenLayers' `Draw` produced
+     * hands over a feature that never carried the stamp `startDrawing` put on the
+     * holder's own features. Reading the base alone then returns `undefined`, and
+     * `allowedGestures(undefined)` falls through to its permissive default — which is
+     * how a graphic came to be offered a gesture it refuses. The security-operation
+     * controller was the case that found this; it has since been deleted, and the
+     * reason for scanning has not changed.
      *
      * `collectProperties` in `persistence.ts` sweeps every feature for the same reason.
      */
