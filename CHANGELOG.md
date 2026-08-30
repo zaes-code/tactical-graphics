@@ -91,6 +91,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **A corridor's name never runs into an `ACP n` circle.** Every turning point carries one, and the designation is centred on the leg between two of them — but it was measured against the *whole* leg, so it grew straight through the circles at either end, and the closer together they were the more of the name they covered. It is now measured against the clear run between them, `leg − 2 × radius`.
+
+  A leg whose circles already meet carries no label at all, which is the only honest answer: there is no size at which the name would not collide. The amplifier block is deliberately exempt from that zero — it sits outside the graphic, cannot collide with anything, and when no leg can carry the name it is the only thing left saying what the corridor is.
+
 - **A corridor draws its name at one size, on the legs that can hold it.** Each leg was sized independently, because legs differ in length and a label must not overrun the one it lies along. The consequence was that a corridor's own name rendered at as many sizes as it had legs: measured in a consuming app at a single zoom, one four-leg corridor drew `AC CORRIDOR BLUE` at 53, 78, 121 and 163 px. Four labels each politely fitting reads, on the map, as a rendering fault.
 
   A corridor has one name, so it gets one size — the largest any leg can carry, held to the corridor's width — and a leg that cannot hold the label at that size is **skipped**, the way a road name appears only where the road has room for it. Sizing to the *shortest* leg was the alternative and it is worse: one stub leg would shrink the name along the whole corridor.
