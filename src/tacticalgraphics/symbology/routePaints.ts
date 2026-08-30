@@ -111,12 +111,12 @@ function routeEndPaints(
         paints.push({geometry: {type: 'Polygon', coordinates: [[tip, left, right, tip]]}, fill: {color}});
     };
 
-    const rows = direction === RouteDirection.TWO_WAY ? 2 : direction === RouteDirection.GENERAL ? 0 : 1;
+    const rows = direction === RouteDirection.twoWay ? 2 : direction === RouteDirection.general ? 0 : 1;
     const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * scale;
 
     if (rows > 0) {
         const labelWidthPx = textWidth(context, text, fontStyle, scale);
-        const altWidthPx = direction === RouteDirection.ALTERNATING ? textWidth(context, 'ALT', fontStyle, scale) : 0;
+        const altWidthPx = direction === RouteDirection.alternating ? textWidth(context, 'ALT', fontStyle, scale) : 0;
         // An alternating row has to hold ALT plus a full arrow either side, so its
         // floor is that content, never the label, which may be shorter.
         const minSpanPx = altWidthPx > 0
@@ -127,9 +127,9 @@ function routeEndPaints(
         const inward: ProjectedPosition = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
         shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
 
-        if (direction === RouteDirection.ONE_WAY) {
+        if (direction === RouteDirection.oneWay) {
             arrow(row(0), -halfPx, halfPx);
-        } else if (direction === RouteDirection.TWO_WAY) {
+        } else if (direction === RouteDirection.twoWay) {
             arrow(row(0), halfPx, -halfPx);   // lower row points back
             arrow(row(1), -halfPx, halfPx);   // upper row points forward
         } else {
@@ -172,7 +172,7 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         if (coords.length < 2) return [];
 
         const text = getFullLabel(name, feature.properties.designation ?? '');
-        const direction = feature.properties.direction ?? RouteDirection.GENERAL;
+        const direction = feature.properties.direction ?? RouteDirection.general;
         /*
          * **Capped against the route's own length.**
          *

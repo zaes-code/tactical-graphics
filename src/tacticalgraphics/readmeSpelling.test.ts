@@ -25,7 +25,7 @@ describe('README spelling', () => {
         const prose = md
             .slice(0, md.indexOf('## Supported graphics'))
             // Code is not prose. A fenced block is someone's program and an inline span
-            // is usually an identifier — `AltitudeUnit.Meters` is the name of a thing, and
+            // is usually an identifier — `AltitudeUnit.meters` is the name of a thing, and
             // respelling it would make the documentation wrong rather than American.
             .replace(/```[\s\S]*?```/g, '')
             .replace(/`[^`]*`/g, '');
