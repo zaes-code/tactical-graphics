@@ -14,6 +14,7 @@ import {
     TacticalGraphicMineType,
     TacticalGraphicMobility,
     TacticalGraphicName,
+    TacticalGraphicStatus,
     TacticalGraphicTerrain,
 } from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
@@ -49,7 +50,7 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     if (f.dtg1) labels.startDate = '021200ZJUN26';
     if (f.dtg2) labels.endDate = '021800ZJUN26';
     if (f.hostility) labels.hostility = TacticalGraphicHostility.hostileFaker;
-    if (f.status) labels.status = 'planned';
+    if (f.status) labels.status = TacticalGraphicStatus.planned;
     if (f.echelon) labels.echelon = 'battalion';
     if (f.altitude1) labels.minAltitude = '500';
     if (f.altitude2) labels.maxAltitude = '2000';
@@ -61,7 +62,7 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     if (f.mineType) labels.mineType = TacticalGraphicMineType.antitank;
     if (f.mobility) labels.mobility = TacticalGraphicMobility.tracked;
     if (f.terrain) labels.terrain = TacticalGraphicTerrain.ground;
-    if (f.direction) labels.direction = RouteDirection.ONE_WAY;
+    if (f.direction) labels.direction = RouteDirection.oneWay;
     return labels as unknown as GraphicLabels;
 }
 
