@@ -91,6 +91,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **`WIDTH` alone no longer brings a corridor's amplifier block into being.** The block's other five lines are things somebody typed. `width` is not: the holder mirrors the corridor's drawn half-width into the amplifier on every rebuild, and typing a width resizes the corridor to match, so the value can never disagree with the shape. A freshly drawn corridor got a block anyway, reading `WIDTH: 391 km` back at the person who had just dragged it — the only thing in it, on the preview and after the draw finished.
+
+  The width is now a *supporting* line: printed in its doctrinal place under the name whenever the block is drawn, never the cause of it. Enter a name, an altitude or a DTG and the block appears with the width alongside.
+
 - **A corridor's name never runs into an `ACP n` circle.** Every turning point carries one, and the designation is centred on the leg between two of them — but it was measured against the *whole* leg, so it grew straight through the circles at either end, and the closer together they were the more of the name they covered. It is now measured against the clear run between them, `leg − 2 × radius`.
 
   A leg whose circles already meet carries no label at all, which is the only honest answer: there is no size at which the name would not collide. The amplifier block is deliberately exempt from that zero — it sits outside the graphic, cannot collide with anything, and when no leg can carry the name it is the only thing left saying what the corridor is.
