@@ -187,7 +187,7 @@ export interface FillSpec {
  * - `amplifier` — everything else the operator typed or set: dates, altitudes, widths,
  *   field H, status, a corridor's information block.
  *
- * @see hidesAmplifiers, and `TacticalGraphicProperties.hideAmplifiers`
+ * @see PaintFeature.hideAmplifiers
  */
 export type TextKind = 'doctrinal' | 'designation' | 'amplifier';
 
@@ -301,6 +301,23 @@ export interface PaintFeature {
      * same object `renderTacticalGraphic` consumes and persistence saves.
      */
     properties: TacticalGraphicProperties;
+
+    /**
+     * Draw the symbol and its designation only — no dates, altitudes, widths, field H or
+     * a corridor's information block.
+     *
+     * **A view state the host owns, not a property of the graphic.** It says nothing about
+     * what the symbol *is*: two identical corridors side by side may reasonably differ, the
+     * same corridor may be annotated on one map and bare on another, and nothing about it
+     * should survive into a file that another operator opens. So it is a renderer input
+     * like `graphicSize` and `bounds` rather than a field on the portable description, and
+     * a host keeps it wherever its other view state lives — a store, a URL, local storage.
+     * It was on the bag until 2026-08-30, which meant saving a graphic saved a preference
+     * with it. (User's call.)
+     *
+     * The symbol never goes. @see TextKind, `withHiddenAmplifiers`
+     */
+    hideAmplifiers?: boolean;
 
     /**
      * The graphic's own size in **meters**, when it has one: a circle's radius, a
