@@ -1,7 +1,7 @@
 /**
  * # The area graphics that draw something structural
  *
- * `areaOutlinePaint` covers 59 of the 75 area graphics with a plain stroke. These
+ * `areaOutlinePaint` covers 79 of the 94 area graphics with a plain stroke. These
  * are the rest: the ones whose *shape* carries meaning beyond the ring the user
  * drew — teeth, merlons, a hatch, a gap cut for a designation, an amplifier that
  * only appears when the graphic is hostile.

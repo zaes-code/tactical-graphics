@@ -8,9 +8,11 @@
  * and wiring draw/modify interactions. This entry point is that part, extracted
  * from the demo app.
  *
- * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one
- * copy the rest of your map already uses. `milsymbol` is peer for the same
- * reason — one controller renders a unit symbol with it.
+ * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one copy the
+ * rest of your map already uses. `milsymbol` is peer too, and **optional in a stronger
+ * sense**: nothing in this package imports it. Six graphics draw a centre symbol, and a
+ * host supplies it by registering a provider — register nothing and the centre is simply
+ * empty. @see setSecuritySymbolProvider, on the root entry
  *
  * ```ts
  * import {TacticalGraphicName} from '@zaes/tactical-graphics';

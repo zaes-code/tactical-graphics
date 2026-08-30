@@ -37,8 +37,9 @@
  * *modify base geometry* against a screen-pixel constant. Right on a draw, wrong on a
  * restore — suspended for the rebuild, see `suspendMinimumLength`.
  *
- * Security operations are the deliberate exception: they hold a constant on-screen size,
- * so restore re-anchors them to the **live** view resolution.
+ * There is no exception left. The security operations were one — they held a constant
+ * on-screen size, so restore re-anchored them to the live view resolution — and APP-06's
+ * four anchor points made them ordinary two-point graphics on 2026-08-29.
  *
  * Pass `includeDerived` to additionally emit the rendered `graphic` and `label`
  * features. Restore ignores them; they are there for consumers that only want to draw
@@ -491,22 +492,20 @@ export function restoreTacticalGraphics(
 
             applyRestoredGeometry(handler, handler.graphic.base, state);
 
-            // Re-anchor a security operation to the *current* zoom.
-            //
-            // Every size in that holder is a screen-pixel constant times the live map
-            // resolution, and `updateResolution` recomputes all of them together — which
-            // is why it holds a constant on-screen size while you zoom. The resolution it
-            // was drawn at therefore means nothing to it, and seeding the controller with
-            // the saved one leaves the graphic at the wrong on-screen size until the user
-            // happens to zoom and a `change:resolution` fires. Restoring at a different
-            // zoom than the graphic was drawn at is the normal case, not the exception.
-            //
             // Re-read: the offset handle only exists once there is geometry.
+            //
+            // A security operation used to be re-anchored to the current zoom here, because
+            // every size in its holder was a screen-pixel constant times the live map
+            // resolution. They are drawn from two points in metres now, so there is nothing
+            // to re-anchor and the ordinary path serves them.
             added = handler.getFeatures();
             manager.renderingVectorSource.addFeatures(added);
             manager.graphicControllers.push(handler);
-            // Without this a restored graphic never reacts to zoom — the security
-            // operation fans in particular resize on every resolution change.
+            // Kept because it is the contract, not because anything uses it: no graphic in
+            // the library derives its geometry from the resolution any more, so every live
+            // controller's `onResolutionChangeFunc` is empty. A host building a
+            // screen-sized graphic of its own needs the hook, and the failure it prevents
+            // is silent.
             manager.watchResolution(handler);
             // The holder satisfies one arm of the GraphicObject union; which arm depends on
             // the controller, and the handler interface is deliberately narrower than all of them.
