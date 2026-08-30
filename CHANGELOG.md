@@ -91,6 +91,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **A corridor draws its name at one size, on the legs that can hold it.** Each leg was sized independently, because legs differ in length and a label must not overrun the one it lies along. The consequence was that a corridor's own name rendered at as many sizes as it had legs: measured in a consuming app at a single zoom, one four-leg corridor drew `AC CORRIDOR BLUE` at 53, 78, 121 and 163 px. Four labels each politely fitting reads, on the map, as a rendering fault.
+
+  A corridor has one name, so it gets one size — the largest any leg can carry, held to the corridor's width — and a leg that cannot hold the label at that size is **skipped**, the way a road name appears only where the road has room for it. Sizing to the *shortest* leg was the alternative and it is worse: one stub leg would shrink the name along the whole corridor.
+
+  At least one leg always draws, by construction: the size is capped by the widest leg's own allowance, so that leg passes the test. The amplifier block is unaffected — it was already held to the largest of the per-leg answers, which is the same number this now draws with.
+
 - **Every enum value a host can store is spelled one way.** Thirteen exported enums held their values in three conventions at once, and a single saved property bag could read `{hostility: 'Hostile/Faker', status: 'present', direction: 'ONE_WAY'}` — Title Case, lower case and UPPER_SNAKE in three adjacent fields. The dialogs print `Object.values(...)` straight into the menu, so the operator was shown all three side by side.
 
   An enum value is either **what the operator reads** or **a literal somebody else wrote**, and there is no third kind. `TacticalGraphicStatus`, `TacticalGraphicConfidence`, `RouteDirection` and `AltitudeUnit` were the four holding neither, and now read as the words in the list: `Present`, `Planned`, `Known`, `Suspected`, `General`, `One Way`, `Two Way`, `Alternating`, `Meters`, `Feet`. Their members are `lowerCamel` like the other nine, so `RouteDirection.ONE_WAY` is `RouteDirection.oneWay` and `AltitudeUnit.Meters` is `AltitudeUnit.meters`.
