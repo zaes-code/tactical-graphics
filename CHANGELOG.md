@@ -93,6 +93,12 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **A draw's double-click zoomed the map for a host that builds an engine per draw.** The map's `DoubleClickZoom` is pulled off for the duration of a draw and put back on the next press that is not the second half of the double-click that ended it. That state was held **per manager**, and a host may build more than one manager on one map — a fresh engine for each draw, another for an edit session.
+
+  So the second manager looked for a `DoubleClickZoom`, found none because the first had already removed it, and recorded that it had nothing to restore — while the first manager's armed listener was still on the viewport and reinstalled the zoom on the next press. For a host that destroys its engine at `drawend`, that press is the first click of the *next* draw, which then ran with the zoom installed and jumped when the double-click ended it.
+
+  The suspension is keyed on the map now, so every manager on it sees the same one, and `destroy()` gives the interaction back rather than leaving it detached with a listener behind to reattach it at some later moment. `doubleClickZoom.test.ts` walks the reported sequence — draw, destroy, draw again — and three of its five fail against the old code.
+
 - **A stored metre is a ground metre, and the paints were treating it as a projected one.** The portable description states *real* distances — a radius, a corridor's half-width — while a map resolution is projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. `metres / resolution` is therefore the symbol's on-screen size only on the equator; everywhere else it under-reports, by 1.6x at 50 degrees and **5.8x at 80**.
 
   `mercator.ts` already states this rule for the generators, which convert the other way when a symbol is drawn — a corridor dragged out at 60 degrees came out 79 px wide instead of 40 until they did. The paints had the same defect on the way back out, at the three sites that read a stored size: a corridor's ACP circle radius, the crossed mission tasks' label width, and the base defence zone's radius.

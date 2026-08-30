@@ -163,6 +163,11 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
             clearAllGraphics(manager);
             manager.releaseAllGraphics?.();
             manager.removeModifyInteraction();
+            // Give the map its double-click zoom back. A host that destroys its engine after
+            // every draw would otherwise leave the map's own interaction detached, and leave
+            // a listener behind to re-attach it partway through the *next* draw — which is
+            // what made a draw end on a double-click that also zoomed the map.
+            manager.restoreDoubleClickZoomNow();
             map.removeLayer(manager.renderingVectorLayer);
         },
     };
