@@ -53,8 +53,9 @@ import {getGraphicFields} from './openlayers/graphicFieldRegistry';
  * the geometry generator multiplies by 1000 when calling turf.
  */
 function defaultRangeFanConfig(): RangeFanConfig {
+    // Metres, matching RangeFanBand.range as of 4.0.0 — this was 1 (km).
     return {
-        bands: [{range: 1}],
+        bands: [{range: 1000}],
     };
 }
 
@@ -990,7 +991,8 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                             // "extend the same wedge to a longer range" flow
                                             // needs zero typing.
                                             const nextBand: RangeFanBand = {
-                                                range: Math.max(1, (last?.range ?? 0) + 1),
+                                                // A kilometre step, in metres — bands are metres as of 4.0.0.
+                                                range: Math.max(1000, (last?.range ?? 0) + 1000),
                                                 ...(isSector && last
                                                     ? {
                                                           leftAzimuthDeg: last.leftAzimuthDeg,
@@ -1026,12 +1028,12 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                     >
                                                         <Box sx={{display: 'flex', gap: 1, alignItems: 'flex-start'}}>
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                                <InputLabel htmlFor={`band-range-${i}`}>Range (km)</InputLabel>
+                                                                <InputLabel htmlFor={`band-range-${i}`}>Range (m)</InputLabel>
                                                                 <OutlinedInput
                                                                     id={`band-range-${i}`}
-                                                                    label="Range (km)"
+                                                                    label="Range (m)"
                                                                     type="number"
-                                                                    inputProps={{step: 0.1, min: 0, inputMode: 'decimal'}}
+                                                                    inputProps={{step: 100, min: 0, inputMode: 'numeric'}}
                                                                     value={band.range ?? ''}
                                                                     onChange={e => {
                                                                         const v = e.target.value;
@@ -1039,9 +1041,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                             updateBand(i, {range: 0});
                                                                             return;
                                                                         }
-                                                                        const km = parseFloat(v);
-                                                                        if (Number.isFinite(km)) {
-                                                                            updateBand(i, {range: km});
+                                                                        const metres = parseFloat(v);
+                                                                        if (Number.isFinite(metres)) {
+                                                                            updateBand(i, {range: metres});
                                                                         }
                                                                     }}
                                                                 />

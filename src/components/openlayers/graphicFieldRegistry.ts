@@ -235,8 +235,18 @@ const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
  * `secondDesignation` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
  */
 const DECISION_LINE = f(true, false, false, false, false);
-/** Mobility corridor: free text plus the echelon its own note makes mandatory. */
-const MOBILITY_CORRIDOR = f(true, false, false, false, false, {echelon: true});
+/**
+ * Mobility corridor (APP-06 142100): field **H** plus the echelon its own note makes mandatory.
+ *
+ * The Template is `H` over `B` with no `T`, and the example is "SMALL DITCHES" — a
+ * description of the going rather than a name, which is field H's job. It offered
+ * `identifier1` instead; the paint read `designation` while its own comment called the
+ * amplifier H. (User's call, 2026-08-31.)
+ *
+ * Strong point has the same two amplifiers the other way round — a real `T` with `B` under
+ * it — so the two look alike here and are not. @see mobilityCorridorPaint
+ */
+const MOBILITY_CORRIDOR = f(false, false, false, false, false, {additionalInfo: true, echelon: true});
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
@@ -279,16 +289,51 @@ const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
  */
 const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
-const FIRE_SUPPORT_AREA = f(true, false, true, true, true);
+/**
+ * Free fire / no fire / restrictive fire area (APP-06 2402xx, 2403xx, 2404xx).
+ *
+ * The plate template is `T2 ( AS )` — the establishing formation and its country, with no
+ * plain `T` at all: `FFA / 2AD (DEU)`, `NFA / 52ID (GBR)`, `RFA / 1ID (FRA)`. A second
+ * designation with no first makes no sense to an operator, so the text goes in
+ * `identifier1` and the country beside it, the same way field `AP` already routes to the
+ * designation on the target graphics. (User's call, 2026-08-31.)
+ *
+ * Position area for artillery looks identical on this side of the registry but is *not*
+ * this shape — its plate really is a plain `T` (`3BCT`) with no country field. It has its
+ * own constant so the two cannot drift back together.
+ */
+const FIRE_SUPPORT_AREA = f(true, false, true, true, true, {countryCodes: true});
+
+/** Position area for artillery (APP-06 2405xx): `T` over `W - W1`, no country code. */
+const POSITION_AREA_ARTILLERY = f(true, false, true, true, true);
+
+/**
+ * Airspace coordination area (APP-06 240101/240102/240103) — **two designations**.
+ *
+ * Both publications give this symbol a second name field; they simply letter it differently,
+ * APP-06 as `T2` and FM 1-02.2 as `T1`. Either way the operator gets two boxes, so it is
+ * `identifier1` + `identifier2` here. (User's call, 2026-08-31.)
+ *
+ * An earlier comment on the engagement-zone constant claimed the FM template listed no
+ * second identifier for ACAs. That was wrong, and it was attached to a constant the ACAs
+ * do not even use. Takes its extras as an argument because the rectangular variant is the
+ * only one with a width.
+ */
+const AIRSPACE_COORDINATION_AREA = (extra: {width: boolean; altitude1: boolean; altitude2: boolean; grids: boolean}) =>
+    f(true, true, true, true, true, extra);
 
 /** Air corridor: identifier + dates (operationally time-bounded). */
 const AIR_CORRIDOR = f(true, false, true, true, false, {width: true, altitude1: true, altitude2: true});
 /**
- * Airspace coordination area / engagement zone: identifier + dates + altitude.
- * FM 1-02.2 Table 5-23 template lists T, X, X1, W, W1 only — no second
- * identifier (Field AS is not specified for engagement zones or ACAs).
+ * Engagement and control zones — FEZ, JEZ, MEZ, HIMEZ, LOMEZ, SHORADEZ, WEZ, WFZ, ROZ,
+ * UA-ROZ, HIDACZ, AAR-ROZ: identifier + dates + altitude.
+ *
+ * **Despite the name, the airspace coordination areas do not use this** — they carry a
+ * second designation and are declared individually below. Every plate in this group was
+ * checked against APP-06 Chapter 8 and shows `T`, `X`, `X1`, `W`, `W1` and nothing else,
+ * which is what the name once claimed on the ACAs' behalf and got wrong.
  */
-const AIRSPACE_COORDINATION_AREA = f(true, false, true, true, true, {width: false, altitude1: true, altitude2: true});
+const ENGAGEMENT_ZONE = f(true, false, true, true, true, {width: false, altitude1: true, altitude2: true});
 
 /**
  * Movement arrow (axis of advance, direction of attack) and retrograde task.
@@ -659,7 +704,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BrigadeSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DivisionSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.CorpsSupportArea]: AREA_SIMPLE,
-    [TacticalGraphicName.FighterEngagementZone]: AIRSPACE_COORDINATION_AREA,
+    [TacticalGraphicName.FighterEngagementZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
     [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
@@ -681,9 +726,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RestrictiveFireAreaRectangular]: {...FIRE_SUPPORT_AREA, width: true},
     [TacticalGraphicName.RestrictiveFireAreaCircular]: FIRE_SUPPORT_AREA,
     // Table 5-24 (fire support coordination): para 5-42 requires T and W/W1.
-    [TacticalGraphicName.PositionAreaArtilleryIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...FIRE_SUPPORT_AREA, width: true},
-    [TacticalGraphicName.PositionAreaArtilleryCircular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.PositionAreaArtilleryIrregular]: POSITION_AREA_ARTILLERY,
+    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...POSITION_AREA_ARTILLERY, width: true},
+    [TacticalGraphicName.PositionAreaArtilleryCircular]: POSITION_AREA_ARTILLERY,
     // Table 5-26 template: T, AM (width), W, W1.
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: {...TARGET_ACQUISITION_AREA, width: true},
@@ -723,30 +768,30 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.HighDensityAirspaceControlZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.RestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.WeaponEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.JointEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.MissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.LowAltitudeMissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.HighAltitudeMissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.WeaponsFreeZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.HighDensityAirspaceControlZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.RestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.WeaponEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.JointEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.MissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.LowAltitudeMissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.HighAltitudeMissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.WeaponsFreeZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: AIRSPACE_COORDINATION_AREA({
         width: false,
         altitude1: true,
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: AIRSPACE_COORDINATION_AREA({
         width: true,
         altitude1: true,
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: AIRSPACE_COORDINATION_AREA({
         width: false,
         altitude1: true,
         altitude2: true,

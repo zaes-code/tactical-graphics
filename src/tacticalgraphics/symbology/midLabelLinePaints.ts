@@ -17,7 +17,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} fro
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
-import {PLANNED_DASH_PX, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -154,9 +154,8 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
 
         const props = feature.properties;
         const endLabel = getFullLabel(name, '');
-        const joinParts = (a?: string, b?: string) => [a?.trim(), b?.trim()].filter(Boolean).join(' ');
-        const midTop = joinParts(props.designation, props.countryCode);
-        const midBottom = joinParts(props.secondDesignation, props.secondCountryCode);
+        const midTop = formatDesignationWithCountry(props.designation, props.countryCode);
+        const midBottom = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
 
         const scale = scaleOf(feature, context);
         const start = coords[0];
