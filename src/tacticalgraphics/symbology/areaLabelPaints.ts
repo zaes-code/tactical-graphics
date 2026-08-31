@@ -26,7 +26,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
+import {amplifierText, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX} from '../core/config';
@@ -166,9 +166,15 @@ export function areaLabelStackPaint(
          * stacks them: "EPW" over "HOLDING AREA" over the designation, which is a
          * different arrangement and not one a prefix can express.
          */
-        const designation = options.literalLines
-            ? (feature.properties.designation ?? '').trim()
-            : getFullLabel(name, feature.properties.designation ?? '').trim();
+        /*
+         * The country code rides on the designation line, in parentheses — "FFA 2AD (DEU)".
+         * The free / no / restrictive fire areas are the ones that carry it (APP-06 letters
+         * the pair `T2 ( AS )`); every other graphic here has no `countryCode` to read, and
+         * `formatDesignationWithCountry` then returns the designation untouched, so this is
+         * inert for them.
+         */
+        const named = formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode);
+        const designation = options.literalLines ? named : getFullLabel(name, named).trim();
 
         const lines = [
             ...(options.before ?? []),

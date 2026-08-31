@@ -25,9 +25,6 @@ import {writeGraphicProperties} from "../graphicProperties";
  * Wired through MissionTaskController via the `rangeFan` factory in
  * controllerRegistry.
  */
-/** `RangeFanBand.range` is kilometers; `size` and turf distances are meters. */
-const KM_TO_M = 1000;
-
 /**
  * Minimum gap between two rings when one is dragged towards the other, as a
  * fraction of the outermost band's range — proportional so the rings stay
@@ -145,11 +142,15 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         const center = this.centerCoordinate();
         if (!center) return;
 
-        const km = openlayersAdapter.getTurfDistance(
-            openlayersAdapter.coordinateToTurfPoint(center),
-            openlayersAdapter.coordinateToTurfPoint(coordinate),
-        );
-        if (!Number.isFinite(km) || km <= 0) return;
+        // `getTurfDistance` is kilometers by contract and stays that way — it is a general
+        // adapter method. Bands are metres as of 4.0.0, so the conversion is explicit here
+        // rather than hidden in the adapter. @see RangeFanBand.range
+        const metres =
+            openlayersAdapter.getTurfDistance(
+                openlayersAdapter.coordinateToTurfPoint(center),
+                openlayersAdapter.coordinateToTurfPoint(coordinate),
+            ) * 1000;
+        if (!Number.isFinite(metres) || metres <= 0) return;
 
         const configBands = this.graphicLabels?.rangeFan?.bands;
         const sorted = resolveBands(this.currentOptions());
@@ -157,16 +158,17 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
 
         // Keep rings visibly apart, proportional to the fan so the gap holds up
         // at any size.
-        const gapKm = sorted[sorted.length - 1].range * BAND_SEPARATION_FRACTION;
-        const min = bandIndex === 0 ? gapKm : sorted[bandIndex - 1].range + gapKm;
-        const max = bandIndex === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[bandIndex + 1].range - gapKm;
-        const clamped = Math.min(Math.max(km, min), Math.max(min, max));
+        const gap = sorted[sorted.length - 1].range * BAND_SEPARATION_FRACTION;
+        const min = bandIndex === 0 ? gap : sorted[bandIndex - 1].range + gap;
+        const max = bandIndex === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[bandIndex + 1].range - gap;
+        const clamped = Math.min(Math.max(metres, min), Math.max(min, max));
 
         // No user-entered bands: the fan is rendering `resolveBands`' fallback
         // single band derived from `size`, so drive `size` and leave the
         // amplifiers alone rather than inventing a band the user never typed.
         if (!configBands || configBands.length === 0) {
-            this.size = clamped * KM_TO_M;
+            // Both metres as of 4.0.0 — this used to scale a kilometer band up to `size`.
+            this.size = clamped;
             this.updateGeometry();
             return;
         }

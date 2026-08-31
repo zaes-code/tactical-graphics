@@ -292,7 +292,16 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
             if (arms.length) paints.push({geometry: {type: 'MultiLineString', coordinates: arms}, stroke});
         }
 
-        const text = (feature.properties.designation ?? '').trim();
+        /*
+         * **Field H, not field T.** The Template carries `H` over `B` and no `T` at all, and
+         * the worked example reads "SMALL DITCHES" — a description of the going, not a name.
+         * This read `designation` while the comment below already called it field H.
+         *
+         * `designation` is still honoured as a fallback so corridors saved before the field
+         * moved keep their text. Nothing writes it any more.
+         */
+        const props = feature.properties;
+        const text = (props.additionalInfo ?? props.designation ?? '').trim();
         if (!text) return paints;
 
         /*
