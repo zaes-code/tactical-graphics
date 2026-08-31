@@ -13,14 +13,23 @@ import type {StyleSpecification} from 'maplibre-gl';
  * Same tiles means the same obligation. The OSM Foundation's Tile Usage Policy
  * permits *modest* use and requires the attribution to stay visible — hence the
  * `attribution` field below, and `AttributionControl` in the map constructor.
- * **Don't remove either while trimming controls.** `BASEMAP_ENABLED` is the
+ * **Don't remove either while trimming controls.** `basemapEnabled` is the
  * escape hatch if traffic ever stops being modest, matching the OpenLayers side.
  *
  * @see ai/decisions.md — the keyless alternatives that were compared
  */
 
-/** Matches `BASEMAP_ENABLED` in `openlayerStyles.ts`: `REACT_APP_BASEMAP=off` drops the tiles. */
-const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
+/** Matches `basemapEnabled` in `openlayerStyles.ts`: `REACT_APP_BASEMAP=off` drops the tiles. */
+const basemapEnabled = () => {
+    // Read here rather than at module load, for the reason given in openlayerStyles.ts:
+    // `createBasemapStyle` is exported from this entry point, and a top-level `process`
+    // read made the whole module unimportable in a browser bundle.
+    try {
+        return process.env.REACT_APP_BASEMAP !== 'off';
+    } catch {
+        return true;
+    }
+};
 
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
@@ -82,7 +91,7 @@ export function basemapPaint(dark: boolean): BasemapPaint {
 export const BASEMAP_LAYER_ID = 'osm';
 
 export function createBasemapStyle(dark = true): StyleSpecification {
-    if (!BASEMAP_ENABLED) {
+    if (!basemapEnabled()) {
         return {
             version: 8,
             sources: {},
