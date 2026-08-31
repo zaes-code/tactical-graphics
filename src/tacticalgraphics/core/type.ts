@@ -39,6 +39,26 @@ export interface CorridorOptions extends BaseGraphicOptions {
     width?: number;
 }
 
+/**
+ * Options for the rectangular target (APP-06 240802), the one rectangle built entirely
+ * from amplifiers rather than from anchor points.
+ *
+ * Its plate takes **one** anchor point and states the shape outright: "the target length
+ * (AM1) in metres and target width (AM) in metres", plus a target attitude (AN). Every
+ * other rectangle in the set is two points and a width, which is why this bag exists
+ * rather than a `length` on `BaseGraphicOptions` that nothing else would read.
+ *
+ * `rotation` carries the attitude. The plate quotes AN in mils and this is degrees, like
+ * every other angle in the schema — one rotation rather than a parallel field for the same
+ * physical quantity, converted for display if a host wants mils.
+ */
+export interface RectangularTargetOptions extends BaseGraphicOptions {
+    /** Full length in metres, along the attitude bearing — amplifier AM1. */
+    length?: number;
+    /** Half the full width in metres, across the attitude — amplifier AM, halved on the way in. */
+    radius?: number;
+}
+
 /** Options for area graphics that carry an echelon modifier (e.g. BattlePosition). */
 export interface EchelonAreaOptions extends BaseGraphicOptions {
     echelon?: TacticalGraphicEchelon;
@@ -212,6 +232,7 @@ export type GraphicOptions =
     | EchelonAreaOptions
     | CircularAreaOptions
     | EncirclementOptions
+    | RectangularTargetOptions
     | RouteOptions
     | SecurityOperationOptions
     | RangeFanOptions;

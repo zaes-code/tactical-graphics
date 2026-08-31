@@ -76,6 +76,16 @@ export type GraphicFieldSet = {
     width: boolean;
     /** Rectangle length in meters — only the rectangular target carries one. */
     length: boolean;
+    /**
+     * Target attitude — amplifier `AN`, the bearing the rectangle's long axis lies along.
+     *
+     * Only the rectangular target, whose plate builds the whole box from amplifiers rather
+     * than from anchor points, so the orientation has nowhere else to come from. Backed by
+     * `rotation` in degrees rather than a field of its own: the plate quotes AN in mils,
+     * but it is the same physical quantity, and a parallel field for it would be the
+     * mistake `isDarkMode` was. @see RectangularTarget
+     */
+    attitude: boolean;
     /** Circle radius in meters — the graphics a user resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
@@ -113,6 +123,7 @@ function f(
             | 'altitude2'
             | 'width'
             | 'length'
+            | 'attitude'
             | 'radius'
             | 'grids'
             | 'weapon'
@@ -140,6 +151,7 @@ function f(
         altitude2: false,
         width: false,
         length: false,
+        attitude: false,
         radius: false,
         grids: false,
         weapon: false,
@@ -766,7 +778,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FireSupportAreaRectangular]: {...f(true, false, true, true, false), width: true},
     [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true},
+    /**
+     * One anchor point plus length, width and attitude — the plate builds the box outright.
+     * `AP` is its designation letter, which routes to `identifier1` the way it already does
+     * on the other target graphics. @see RectangularTarget
+     */
+    [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true, attitude: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.HighDensityAirspaceControlZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.RestrictedOperationsZone]: ENGAGEMENT_ZONE,

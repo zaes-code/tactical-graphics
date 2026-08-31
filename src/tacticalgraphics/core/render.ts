@@ -468,6 +468,10 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
         // Public `width` is a full width; the generators' `radius` is the half-width
         // offset from the centerline. This is the only place the factor of two lives.
         radius: props.width !== undefined ? props.width / 2 : undefined,
+        // The rectangular target is the one graphic that files a length rather than
+        // deriving it from two anchor points, and it never reached the generator — the
+        // dialog accepted a number that changed nothing. @see RectangularTargetOptions
+        length: props.length,
         rotation: props.rotation,
         mirrored: props.mirrored,
         bend: props.bend,

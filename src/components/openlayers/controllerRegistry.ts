@@ -12,6 +12,7 @@ import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
 import {
     CircularAreaGraphicBase,
+    RectangularTargetGraphicBase,
     EnvelopmentGraphicBase,
     AmbushGraphicBase,
     ContainGraphicBase,
@@ -244,6 +245,20 @@ const dropped = (
     );
 };
 
+/**
+ * The rectangular target: one anchor point, and a box made of amplifiers.
+ *
+ * Point-anchored rather than `polygonRect`, because its plate gives it one anchor point and
+ * not two. That puts it on the mission-task controller like every other point-anchored
+ * graphic — `editStretches` for the same reason the circles have it, so an edit-mode drag
+ * resizes instead of panning the map. @see RectangularTargetGraphicBase
+ */
+const rectangularTarget = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new RectangularTargetGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
     controller.editStretches = true;
@@ -385,7 +400,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.DeadSpaceAreaRectangular]:              polygonRect,
     [TacticalGraphicName.BlueKillBoxRectangular]:                polygonRect,
     [TacticalGraphicName.PurpleKillBoxRectangular]:              polygonRect,
-    [TacticalGraphicName.TargetAreaRectangular]:                 polygonRect,
+    [TacticalGraphicName.TargetAreaRectangular]:                 rectangularTarget,
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 
