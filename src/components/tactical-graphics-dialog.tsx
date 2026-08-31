@@ -36,9 +36,9 @@ import {
     TacticalGraphicMobility,
     TacticalGraphicTerrain,
     TacticalGraphicName,
-    TacticalGraphicStatus
+    TacticalGraphicStatus,
 } from '@zaes/tactical-graphics';
-import {getGraphicFields} from "./openlayers/graphicFieldRegistry";
+import {getGraphicFields} from './openlayers/graphicFieldRegistry';
 
 /**
  * Sensible starter config when a user opens the range-fan editor on a
@@ -84,9 +84,9 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
     };
 
-    if (fields.identifier2) {
+    if (fields.identifier2) labels.secondDesignation = stored.secondDesignation ?? '';
+    if (fields.countryCodes) {
         labels.countryCode = stored.countryCode ?? '';
-        labels.secondDesignation = stored.secondDesignation ?? '';
         labels.secondCountryCode = stored.secondCountryCode ?? '';
     }
     if (fields.additionalInfo) labels.additionalInfo = stored.additionalInfo ?? '';
@@ -115,9 +115,9 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
         // radius so pressing OK does not snap the geometry to the 1 km fallback.
         // `graphicSize` is projected meters; the editor works in kilometers.
         labels.rangeFan = stored.rangeFan ?? {
-            bands: [{range: selection.graphicSize && selection.graphicSize > 0
-                ? Math.max(0.1, Math.round((selection.graphicSize / 1000) * 10) / 10)
-                : 1}],
+            bands: [
+                {range: selection.graphicSize && selection.graphicSize > 0 ? Math.max(0.1, Math.round((selection.graphicSize / 1000) * 10) / 10) : 1},
+            ],
         };
     }
 
@@ -168,7 +168,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
     const defaultProperties = {
         echelon: TacticalGraphicEchelon.brigade,
         identifier: '',
-        labels: {designation: '', hostility: TacticalGraphicHostility.unknown}
+        labels: {designation: '', hostility: TacticalGraphicHostility.unknown},
     };
     const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
     /**
@@ -285,22 +285,21 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
     };
 
     const DraggablePaper = useMemo(
-        () => (props: any) =>
-            (
-                <Draggable
-                    nodeRef={paperRef}
-                    handle="#draggable-dialog-title"
-                    position={dialogPosition}
-                    onStart={() => setIsDragging(true)}
-                    onStop={(e, data) => {
-                        setIsDragging(false);
-                        setDialogPosition({x: data.x, y: data.y});
-                        requestAnimationFrame(updateLine);
-                    }}
-                >
-                    <Paper ref={paperRef} {...props} />
-                </Draggable>
-            ),
+        () => (props: any) => (
+            <Draggable
+                nodeRef={paperRef}
+                handle="#draggable-dialog-title"
+                position={dialogPosition}
+                onStart={() => setIsDragging(true)}
+                onStop={(e, data) => {
+                    setIsDragging(false);
+                    setDialogPosition({x: data.x, y: data.y});
+                    requestAnimationFrame(updateLine);
+                }}
+            >
+                <Paper ref={paperRef} {...props} />
+            </Draggable>
+        ),
         [dialogPosition],
     );
 
@@ -324,42 +323,51 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             >
                 <defs>
                     <linearGradient id="coneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="gray" stopOpacity="0.6"/>
-                        <stop offset="100%" stopColor="gray" stopOpacity="0"/>
+                        <stop offset="0%" stopColor="gray" stopOpacity="0.6" />
+                        <stop offset="100%" stopColor="gray" stopOpacity="0" />
                     </linearGradient>
                 </defs>
 
-                <polygon ref={lineRef as any} fill="url(#coneGradient)"/>
+                <polygon ref={lineRef as any} fill="url(#coneGradient)" />
             </svg>
 
             {/*
-              * **The container must not eat the map.**
-              *
-              * `hideBackdrop` hides the scrim but not the full-viewport
-              * `.MuiDialog-container` behind it, which keeps `pointer-events: auto` and
-              * sits at z-index 1300 — over everything. So while this dialog was open the
-              * map underneath took no clicks at all: no drawing, no selecting, and none
-              * of the edit affordances, which is how this surfaced. A non-modal dialog
-              * that deliberately leaves its host usable has to say so; the paper opts
-              * back in so the form itself still works.
-              */}
-            <Dialog open hideBackdrop keepMounted PaperComponent={DraggablePaper} disableEnforceFocus
-                    sx={{
-                        '& .MuiDialog-container': {pointerEvents: 'none'},
-                        '& .MuiDialog-paper': {pointerEvents: 'auto'},
-                    }}
-                    onClose={cancelChanges}>
+             * **The container must not eat the map.**
+             *
+             * `hideBackdrop` hides the scrim but not the full-viewport
+             * `.MuiDialog-container` behind it, which keeps `pointer-events: auto` and
+             * sits at z-index 1300 — over everything. So while this dialog was open the
+             * map underneath took no clicks at all: no drawing, no selecting, and none
+             * of the edit affordances, which is how this surfaced. A non-modal dialog
+             * that deliberately leaves its host usable has to say so; the paper opts
+             * back in so the form itself still works.
+             */}
+            <Dialog
+                open
+                hideBackdrop
+                keepMounted
+                PaperComponent={DraggablePaper}
+                disableEnforceFocus
+                sx={{
+                    '& .MuiDialog-container': {pointerEvents: 'none'},
+                    '& .MuiDialog-paper': {pointerEvents: 'auto'},
+                }}
+                onClose={cancelChanges}
+            >
                 <DialogTitle id="draggable-dialog-title" sx={{cursor: 'move'}}>
                     Feature Properties
                     {selection.graphicName && (
-                        <Box component="span" sx={{
-                            display: 'block',
-                            fontSize: '0.75rem',
-                            fontWeight: 400,
-                            color: 'text.secondary',
-                            mt: 0.25,
-                            textTransform: 'capitalize',
-                        }}>
+                        <Box
+                            component="span"
+                            sx={{
+                                display: 'block',
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                                color: 'text.secondary',
+                                mt: 0.25,
+                                textTransform: 'capitalize',
+                            }}
+                        >
                             {getDisplayName(selection.graphicName)}
                         </Box>
                     )}
@@ -375,11 +383,28 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     them; now that hostility follows FM 1-02.2 Field N and is on for every
                                     control measure, leaving them out would print "no editable fields"
                                     above a hostility dropdown on most of the catalog. */}
-                                {!fields.identifier1 && !fields.identifier2 && !fields.additionalInfo && !fields.dtg1 && !fields.dtg2 && !fields.hostility && !fields.status && !fields.echelon && !fields.direction && !fields.width && !fields.altitude1 && !fields.altitude2 && !fields.grids && !fields.weapon && !fields.rangeFan && !fields.mineType && !fields.mobility && !fields.terrain && (
-                                    <Box sx={{minWidth: 180, mt: 1}}>
-                                        <InputLabel>No editable fields for this graphic type.</InputLabel>
-                                    </Box>
-                                )}
+                                {!fields.identifier1 &&
+                                    !fields.identifier2 &&
+                                    !fields.additionalInfo &&
+                                    !fields.dtg1 &&
+                                    !fields.dtg2 &&
+                                    !fields.hostility &&
+                                    !fields.status &&
+                                    !fields.echelon &&
+                                    !fields.direction &&
+                                    !fields.width &&
+                                    !fields.altitude1 &&
+                                    !fields.altitude2 &&
+                                    !fields.grids &&
+                                    !fields.weapon &&
+                                    !fields.rangeFan &&
+                                    !fields.mineType &&
+                                    !fields.mobility &&
+                                    !fields.terrain && (
+                                        <Box sx={{minWidth: 180, mt: 1}}>
+                                            <InputLabel>No editable fields for this graphic type.</InputLabel>
+                                        </Box>
+                                    )}
 
                                 {fields.identifier1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
@@ -422,67 +447,76 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {/*
+                                 * **Two flags, not one.** The country codes are their own field: each pairs with a
+                                 * designation — `designation + countryCode` on the top line, `secondDesignation +
+                                 * secondCountryCode` on the bottom — and only boundary and engineer work line paint
+                                 * them. Final protective fire takes a second designation and no code at all, and
+                                 * while the two shared `identifier2` it was offered two boxes nothing would draw.
+                                 */}
+                                {fields.countryCodes && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="country-code-input">Country Code</InputLabel>
+                                            <OutlinedInput
+                                                id="country-code-input"
+                                                label="Country Code"
+                                                value={pendingChanges.labels.countryCode ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, countryCode: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
                                 {fields.identifier2 && (
-                                    <>
-                                        <Box sx={{minWidth: 180, mt: 1}}>
-                                            <FormControl fullWidth variant="outlined">
-                                                <InputLabel htmlFor="country-code-input">Country Code</InputLabel>
-                                                <OutlinedInput
-                                                    id="country-code-input"
-                                                    label="Country Code"
-                                                    value={pendingChanges.labels.countryCode ?? ''}
-                                                    onChange={e =>
-                                                        setPendingChanges(prev => ({
-                                                            ...prev,
-                                                            labels: {...prev.labels, countryCode: e.target.value},
-                                                        }))
-                                                    }
-                                                />
-                                            </FormControl>
-                                        </Box>
-                                        <Box sx={{minWidth: 180, mt: 1}}>
-                                            <FormControl fullWidth variant="outlined">
-                                                <InputLabel htmlFor="second-id-input">Second ID</InputLabel>
-                                                <OutlinedInput
-                                                    id="second-id-input"
-                                                    label="Second ID"
-                                                    value={pendingChanges.labels.secondDesignation ?? ''}
-                                                    onChange={e =>
-                                                        setPendingChanges(prev => ({
-                                                            ...prev,
-                                                            labels: {...prev.labels, secondDesignation: e.target.value},
-                                                        }))
-                                                    }
-                                                />
-                                            </FormControl>
-                                        </Box>
-                                        <Box sx={{minWidth: 180, mt: 1}}>
-                                            <FormControl fullWidth variant="outlined">
-                                                <InputLabel htmlFor="second-country-code-input">Other Country Code</InputLabel>
-                                                <OutlinedInput
-                                                    id="second-country-code-input"
-                                                    label="Other Country Code"
-                                                    value={pendingChanges.labels.secondCountryCode ?? ''}
-                                                    onChange={e =>
-                                                        setPendingChanges(prev => ({
-                                                            ...prev,
-                                                            labels: {...prev.labels, secondCountryCode: e.target.value},
-                                                        }))
-                                                    }
-                                                />
-                                            </FormControl>
-                                        </Box>
-                                    </>
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="second-id-input">Second ID</InputLabel>
+                                            <OutlinedInput
+                                                id="second-id-input"
+                                                label="Second ID"
+                                                value={pendingChanges.labels.secondDesignation ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, secondDesignation: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+                                {fields.countryCodes && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="second-country-code-input">Other Country Code</InputLabel>
+                                            <OutlinedInput
+                                                id="second-country-code-input"
+                                                label="Other Country Code"
+                                                value={pendingChanges.labels.secondCountryCode ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, secondCountryCode: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
                                 )}
 
                                 {/*
-                                  * **Offered for every graphic, like hostility.** Any
-                                  * graphic can carry amplifiers, and whether to show them
-                                  * is a choice about this graphic on this map rather than
-                                  * a property of the symbol — so there is no per-graphic
-                                  * field flag deciding whether the control appears.
-                                  * @see TacticalGraphicProperties.hideAmplifiers
-                                  */}
+                                 * **Offered for every graphic, like hostility.** Any
+                                 * graphic can carry amplifiers, and whether to show them
+                                 * is a choice about this graphic on this map rather than
+                                 * a property of the symbol — so there is no per-graphic
+                                 * field flag deciding whether the control appears.
+                                 * @see TacticalGraphicProperties.hideAmplifiers
+                                 */}
                                 <Box sx={{mt: 1}}>
                                     <FormControlLabel
                                         control={
@@ -516,7 +550,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {hostilityOptions.map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -544,7 +580,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {confidenceOptions.map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -566,7 +604,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {statusOptions.map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -585,7 +625,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {echelonOptions.map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -608,7 +650,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {Object.values(RouteDirection).map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -631,7 +675,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {(Object.values(TacticalGraphicMineType) as TacticalGraphicMineType[]).map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -656,7 +702,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {(Object.values(TacticalGraphicMobility) as TacticalGraphicMobility[]).map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -681,7 +729,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 }
                                             >
                                                 {(Object.values(TacticalGraphicTerrain) as TacticalGraphicTerrain[]).map(h => (
-                                                    <MenuItem key={h} value={h}>{h}</MenuItem>
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
                                                 ))}
                                             </Select>
                                         </FormControl>
@@ -691,7 +741,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.dtg1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="starttime-input" shrink>Start Time (UTC)</InputLabel>
+                                            <InputLabel htmlFor="starttime-input" shrink>
+                                                Start Time (UTC)
+                                            </InputLabel>
                                             <OutlinedInput
                                                 id="starttime-input"
                                                 label="Start Time (UTC)"
@@ -713,7 +765,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.dtg2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="endtime-input" shrink>End Time (UTC)</InputLabel>
+                                            <InputLabel htmlFor="endtime-input" shrink>
+                                                End Time (UTC)
+                                            </InputLabel>
                                             <OutlinedInput
                                                 id="endtime-input"
                                                 label="End Time (UTC)"
@@ -733,38 +787,52 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 )}
 
                                 {/*
-                                  * Width and radius are read-outs, not inputs: the user
-                                  * sizes a graphic by dragging it, and the hashed measure
-                                  * line reports the number live while they do. Showing
-                                  * them here as text closes the loop — you can check the
-                                  * figure you dragged to — without a second way to set it
-                                  * that would have to be kept in step with the geometry.
-                                  */}
+                                 * Width and radius are read-outs, not inputs: the user
+                                 * sizes a graphic by dragging it, and the hashed measure
+                                 * line reports the number live while they do. Showing
+                                 * them here as text closes the loop — you can check the
+                                 * figure you dragged to — without a second way to set it
+                                 * that would have to be kept in step with the geometry.
+                                 */}
                                 {fields.width && measured.width !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
-                                        <Typography variant="caption" color="text.secondary">Width</Typography>
-                                        <Typography id="width-readout" variant="body2">{formatDistance(measured.width)}</Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Width
+                                        </Typography>
+                                        <Typography id="width-readout" variant="body2">
+                                            {formatDistance(measured.width)}
+                                        </Typography>
                                     </Box>
                                 )}
 
                                 {fields.length && measured.length !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
-                                        <Typography variant="caption" color="text.secondary">Length</Typography>
-                                        <Typography id="length-readout" variant="body2">{formatDistance(measured.length)}</Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Length
+                                        </Typography>
+                                        <Typography id="length-readout" variant="body2">
+                                            {formatDistance(measured.length)}
+                                        </Typography>
                                     </Box>
                                 )}
 
                                 {fields.radius && measured.radius !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
-                                        <Typography variant="caption" color="text.secondary">Radius</Typography>
-                                        <Typography id="radius-readout" variant="body2">{formatDistance(measured.radius)}</Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Radius
+                                        </Typography>
+                                        <Typography id="radius-readout" variant="body2">
+                                            {formatDistance(measured.radius)}
+                                        </Typography>
                                     </Box>
                                 )}
 
                                 {fields.altitude1 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="min-altitude-input">{altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}</InputLabel>
+                                            <InputLabel htmlFor="min-altitude-input">
+                                                {altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
+                                            </InputLabel>
                                             <OutlinedInput
                                                 id="min-altitude-input"
                                                 label={altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
@@ -790,7 +858,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.altitude2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
-                                            <InputLabel htmlFor="max-altitude-input">{altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}</InputLabel>
+                                            <InputLabel htmlFor="max-altitude-input">
+                                                {altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
+                                            </InputLabel>
                                             <OutlinedInput
                                                 id="max-altitude-input"
                                                 label={altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
@@ -896,167 +966,177 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </>
                                 )}
 
-                                {fields.rangeFan && (() => {
-                                    const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
-                                    const bands = config.bands ?? [];
-                                    const isSector = selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector;
+                                {fields.rangeFan &&
+                                    (() => {
+                                        const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
+                                        const bands = config.bands ?? [];
+                                        const isSector = selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector;
 
-                                    const updateConfig = (next: RangeFanConfig) => {
-                                        setPendingChanges(prev => ({
-                                            ...prev,
-                                            labels: {...prev.labels, rangeFan: next},
-                                        }));
-                                    };
-                                    const updateBand = (index: number, patch: Partial<RangeFanBand>) => {
-                                        const nextBands = bands.map((b, i) => i === index ? {...b, ...patch} : b);
-                                        updateConfig({...config, bands: nextBands});
-                                    };
-                                    const addBand = () => {
-                                        const last = bands.length > 0 ? bands[bands.length - 1] : undefined;
-                                        // Step up by 1 km from the last band so the new ring
-                                        // is visibly outside the existing one. Carry over the
-                                        // last band's azimuths (sector) so the typical
-                                        // "extend the same wedge to a longer range" flow
-                                        // needs zero typing.
-                                        const nextBand: RangeFanBand = {
-                                            range: Math.max(1, (last?.range ?? 0) + 1),
-                                            ...(isSector && last
-                                                ? {
-                                                      leftAzimuthDeg: last.leftAzimuthDeg,
-                                                      rightAzimuthDeg: last.rightAzimuthDeg,
-                                                  }
-                                                : {}),
+                                        const updateConfig = (next: RangeFanConfig) => {
+                                            setPendingChanges(prev => ({
+                                                ...prev,
+                                                labels: {...prev.labels, rangeFan: next},
+                                            }));
                                         };
-                                        updateConfig({...config, bands: [...bands, nextBand]});
-                                    };
-                                    const removeBand = (index: number) => {
-                                        if (bands.length <= 1) return; // keep at least one band
-                                        updateConfig({...config, bands: bands.filter((_, i) => i !== index)});
-                                    };
-                                    const parseAzimuthInput = (raw: string): number | undefined => {
-                                        const v = raw.replace(/[^0-9.\-]/g, '');
-                                        if (v === '' || v === '-' || v === '.') return undefined;
-                                        const n = parseFloat(v);
-                                        return Number.isFinite(n) ? n : undefined;
-                                    };
+                                        const updateBand = (index: number, patch: Partial<RangeFanBand>) => {
+                                            const nextBands = bands.map((b, i) => (i === index ? {...b, ...patch} : b));
+                                            updateConfig({...config, bands: nextBands});
+                                        };
+                                        const addBand = () => {
+                                            const last = bands.length > 0 ? bands[bands.length - 1] : undefined;
+                                            // Step up by 1 km from the last band so the new ring
+                                            // is visibly outside the existing one. Carry over the
+                                            // last band's azimuths (sector) so the typical
+                                            // "extend the same wedge to a longer range" flow
+                                            // needs zero typing.
+                                            const nextBand: RangeFanBand = {
+                                                range: Math.max(1, (last?.range ?? 0) + 1),
+                                                ...(isSector && last
+                                                    ? {
+                                                          leftAzimuthDeg: last.leftAzimuthDeg,
+                                                          rightAzimuthDeg: last.rightAzimuthDeg,
+                                                      }
+                                                    : {}),
+                                            };
+                                            updateConfig({...config, bands: [...bands, nextBand]});
+                                        };
+                                        const removeBand = (index: number) => {
+                                            if (bands.length <= 1) return; // keep at least one band
+                                            updateConfig({...config, bands: bands.filter((_, i) => i !== index)});
+                                        };
+                                        const parseAzimuthInput = (raw: string): number | undefined => {
+                                            const v = raw.replace(/[^0-9.\-]/g, '');
+                                            if (v === '' || v === '-' || v === '.') return undefined;
+                                            const n = parseFloat(v);
+                                            return Number.isFinite(n) ? n : undefined;
+                                        };
 
-                                    return (
-                                        <>
-                                            <Box sx={{minWidth: 180, mt: 2, mb: 1, fontWeight: 'bold'}}>Range Bands</Box>
-                                            {bands.map((band, i) => (
-                                                <Box key={i} sx={{
-                                                    mt: 1,
-                                                    p: 1,
-                                                    border: '1px solid rgba(255,255,255,0.12)',
-                                                    borderRadius: 1,
-                                                }}>
-                                                    <Box sx={{display: 'flex', gap: 1, alignItems: 'flex-start'}}>
-                                                        <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                            <InputLabel htmlFor={`band-range-${i}`}>Range (km)</InputLabel>
-                                                            <OutlinedInput
-                                                                id={`band-range-${i}`}
-                                                                label="Range (km)"
-                                                                type="number"
-                                                                inputProps={{step: 0.1, min: 0, inputMode: 'decimal'}}
-                                                                value={band.range ?? ''}
-                                                                onChange={e => {
-                                                                    const v = e.target.value;
-                                                                    if (v === '') {
-                                                                        updateBand(i, {range: 0});
-                                                                        return;
-                                                                    }
-                                                                    const km = parseFloat(v);
-                                                                    if (Number.isFinite(km)) {
-                                                                        updateBand(i, {range: km});
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </FormControl>
-                                                        <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                            <InputLabel htmlFor={`band-alt-${i}`}>Altitude</InputLabel>
-                                                            <OutlinedInput
-                                                                id={`band-alt-${i}`}
-                                                                label="Altitude"
-                                                                value={band.altitude ?? ''}
-                                                                onChange={e => {
-                                                                    // Digits in, a number out — the same edge
-                                                                    // conversion the graphic's own altitudes get.
-                                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
-                                                                    updateBand(i, {altitude: digits === '' ? undefined : Number(digits)});
-                                                                }}
-                                                            />
-                                                        </FormControl>
-                                                        <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                            <InputLabel htmlFor={`band-label-${i}`}>Label</InputLabel>
-                                                            <OutlinedInput
-                                                                id={`band-label-${i}`}
-                                                                label="Label"
-                                                                value={band.label ?? ''}
-                                                                onChange={e => updateBand(i, {label: e.target.value})}
-                                                            />
-                                                        </FormControl>
-                                                        <Button
-                                                            size="small"
-                                                            color="inherit"
-                                                            onClick={() => removeBand(i)}
-                                                            disabled={bands.length <= 1}
-                                                            sx={{minWidth: 40, mt: 1}}
-                                                        >
-                                                            ×
-                                                        </Button>
-                                                    </Box>
-                                                    {isSector && (
-                                                        <Box sx={{display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start'}}>
+                                        return (
+                                            <>
+                                                <Box sx={{minWidth: 180, mt: 2, mb: 1, fontWeight: 'bold'}}>Range Bands</Box>
+                                                {bands.map((band, i) => (
+                                                    <Box
+                                                        key={i}
+                                                        sx={{
+                                                            mt: 1,
+                                                            p: 1,
+                                                            border: '1px solid rgba(255,255,255,0.12)',
+                                                            borderRadius: 1,
+                                                        }}
+                                                    >
+                                                        <Box sx={{display: 'flex', gap: 1, alignItems: 'flex-start'}}>
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                                <InputLabel htmlFor={`band-left-az-${i}`}>Left Az (° from N)</InputLabel>
+                                                                <InputLabel htmlFor={`band-range-${i}`}>Range (km)</InputLabel>
                                                                 <OutlinedInput
-                                                                    id={`band-left-az-${i}`}
-                                                                    label="Left Az (° from N)"
-                                                                    inputProps={{inputMode: 'decimal'}}
-                                                                    value={band.leftAzimuthDeg !== undefined ? String(band.leftAzimuthDeg) : ''}
-                                                                    onChange={e => updateBand(i, {leftAzimuthDeg: parseAzimuthInput(e.target.value)})}
+                                                                    id={`band-range-${i}`}
+                                                                    label="Range (km)"
+                                                                    type="number"
+                                                                    inputProps={{step: 0.1, min: 0, inputMode: 'decimal'}}
+                                                                    value={band.range ?? ''}
+                                                                    onChange={e => {
+                                                                        const v = e.target.value;
+                                                                        if (v === '') {
+                                                                            updateBand(i, {range: 0});
+                                                                            return;
+                                                                        }
+                                                                        const km = parseFloat(v);
+                                                                        if (Number.isFinite(km)) {
+                                                                            updateBand(i, {range: km});
+                                                                        }
+                                                                    }}
                                                                 />
                                                             </FormControl>
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                                <InputLabel htmlFor={`band-right-az-${i}`}>Right Az (° from N)</InputLabel>
+                                                                <InputLabel htmlFor={`band-alt-${i}`}>Altitude</InputLabel>
                                                                 <OutlinedInput
-                                                                    id={`band-right-az-${i}`}
-                                                                    label="Right Az (° from N)"
-                                                                    inputProps={{inputMode: 'decimal'}}
-                                                                    value={band.rightAzimuthDeg !== undefined ? String(band.rightAzimuthDeg) : ''}
-                                                                    onChange={e => updateBand(i, {rightAzimuthDeg: parseAzimuthInput(e.target.value)})}
+                                                                    id={`band-alt-${i}`}
+                                                                    label="Altitude"
+                                                                    value={band.altitude ?? ''}
+                                                                    onChange={e => {
+                                                                        // Digits in, a number out — the same edge
+                                                                        // conversion the graphic's own altitudes get.
+                                                                        const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                                        updateBand(i, {altitude: digits === '' ? undefined : Number(digits)});
+                                                                    }}
                                                                 />
                                                             </FormControl>
+                                                            <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                <InputLabel htmlFor={`band-label-${i}`}>Label</InputLabel>
+                                                                <OutlinedInput
+                                                                    id={`band-label-${i}`}
+                                                                    label="Label"
+                                                                    value={band.label ?? ''}
+                                                                    onChange={e => updateBand(i, {label: e.target.value})}
+                                                                />
+                                                            </FormControl>
+                                                            <Button
+                                                                size="small"
+                                                                color="inherit"
+                                                                onClick={() => removeBand(i)}
+                                                                disabled={bands.length <= 1}
+                                                                sx={{minWidth: 40, mt: 1}}
+                                                            >
+                                                                ×
+                                                            </Button>
                                                         </Box>
-                                                    )}
+                                                        {isSector && (
+                                                            <Box sx={{display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start'}}>
+                                                                <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                    <InputLabel htmlFor={`band-left-az-${i}`}>Left Az (° from N)</InputLabel>
+                                                                    <OutlinedInput
+                                                                        id={`band-left-az-${i}`}
+                                                                        label="Left Az (° from N)"
+                                                                        inputProps={{inputMode: 'decimal'}}
+                                                                        value={band.leftAzimuthDeg !== undefined ? String(band.leftAzimuthDeg) : ''}
+                                                                        onChange={e =>
+                                                                            updateBand(i, {leftAzimuthDeg: parseAzimuthInput(e.target.value)})
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                                <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                    <InputLabel htmlFor={`band-right-az-${i}`}>Right Az (° from N)</InputLabel>
+                                                                    <OutlinedInput
+                                                                        id={`band-right-az-${i}`}
+                                                                        label="Right Az (° from N)"
+                                                                        inputProps={{inputMode: 'decimal'}}
+                                                                        value={band.rightAzimuthDeg !== undefined ? String(band.rightAzimuthDeg) : ''}
+                                                                        onChange={e =>
+                                                                            updateBand(i, {rightAzimuthDeg: parseAzimuthInput(e.target.value)})
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                            </Box>
+                                                        )}
+                                                    </Box>
+                                                ))}
+                                                <Box sx={{mt: 1}}>
+                                                    <Button size="small" variant="outlined" onClick={addBand}>
+                                                        + Add Band
+                                                    </Button>
                                                 </Box>
-                                            ))}
-                                            <Box sx={{mt: 1}}>
-                                                <Button size="small" variant="outlined" onClick={addBand}>
-                                                    + Add Band
-                                                </Button>
-                                            </Box>
 
-                                            {isSector && (
-                                                <Box sx={{minWidth: 180, mt: 2}}>
-                                                    <FormControl fullWidth variant="outlined">
-                                                        <InputLabel htmlFor="center-azimuth-input">Center Azimuth (° from N)</InputLabel>
-                                                        <OutlinedInput
-                                                            id="center-azimuth-input"
-                                                            label="Center Azimuth (° from N)"
-                                                            inputProps={{inputMode: 'decimal'}}
-                                                            value={config.centerAzimuthDeg !== undefined ? String(config.centerAzimuthDeg) : ''}
-                                                            onChange={e => updateConfig({
-                                                                ...config,
-                                                                centerAzimuthDeg: parseAzimuthInput(e.target.value),
-                                                            })}
-                                                        />
-                                                    </FormControl>
-                                                </Box>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+                                                {isSector && (
+                                                    <Box sx={{minWidth: 180, mt: 2}}>
+                                                        <FormControl fullWidth variant="outlined">
+                                                            <InputLabel htmlFor="center-azimuth-input">Center Azimuth (° from N)</InputLabel>
+                                                            <OutlinedInput
+                                                                id="center-azimuth-input"
+                                                                label="Center Azimuth (° from N)"
+                                                                inputProps={{inputMode: 'decimal'}}
+                                                                value={config.centerAzimuthDeg !== undefined ? String(config.centerAzimuthDeg) : ''}
+                                                                onChange={e =>
+                                                                    updateConfig({
+                                                                        ...config,
+                                                                        centerAzimuthDeg: parseAzimuthInput(e.target.value),
+                                                                    })
+                                                                }
+                                                            />
+                                                        </FormControl>
+                                                    </Box>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                             </>
                         );
                     })()}
