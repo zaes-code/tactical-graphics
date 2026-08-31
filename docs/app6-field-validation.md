@@ -44,14 +44,26 @@ below"*, so its amplifiers have to be read from that table instead.
 | W / W1 | `startDate` / `endDate` | |
 | X / X1 | `minAltitude` / `maxAltitude` | |
 | AM / AM1 | `width` / `length` | metres |
-| AN | *(none)* | target attitude, mils — we have no field for it |
+| AN | `rotation` | target attitude. The plate quotes mils; we carry degrees, like every other angle |
 | B | `echelon` | |
 | H | `additionalInfo` | |
 | Sector 1 / Sector 2 | `mineType` / `mobility` / `terrain` | which one depends on the graphic |
 
+## Status
+
+**All six defects are fixed**, on `feature/app6-field-conformance`, targeting 4.0.0. The
+decisions that shaped the fixes were the user's, 2026-08-31, and are recorded inline below.
+The sections that follow describe each defect as found; what shipped is noted under it.
+
 ## Defects
 
 ### 1. Nine fire-support areas offer the wrong designation field
+
+**Fixed.** The nine now offer `countryCodes` and keep `identifier1`. Where a plate letters a
+lone `T2` with no `T1`, the text goes in the *first* designation: a second designation with no
+first makes no sense to an operator, and field `AP` already routes to the designation on the
+target graphics, so this is the existing convention rather than a new one. `FIRE_SUPPORT_AREA`
+was split — position area for artillery has its own constant and keeps its plain `T`.
 
 `FIRE_SUPPORT_AREA` (`graphicFieldRegistry.ts:282`) is `f(true, false, true, true, true)` —
 `identifier1` on, `identifier2` and `countryCodes` off. Twelve graphics share it. The plates
@@ -74,6 +86,10 @@ plain `T` (`FSA / GREEN`). The constant is misnamed for what it serves.
 
 ### 2. Country codes render without their parentheses
 
+**Fixed.** `formatDesignationWithCountry` adds the brackets, passes through a code that
+already carries them, and contributes nothing when there is no code. Exported from both
+barrels, since a host composing its own labels needs the same rule.
+
 APP-06 draws the parentheses **as part of the template** — the box is `T2` and the literal
 glyphs `(` `)` sit outside the `AS` box — and every example follows:
 
@@ -87,6 +103,9 @@ render `326 EN BN USA`. Four independent plates agree on the parentheses.
 
 ### 3. Circular range fan repeats `MIN RG` on every band
 
+**Fixed.** The innermost band is `MIN RG`; each band outside it is `MAX RG(n)`. The test that
+pinned the old behaviour states the new rule and cites the plate.
+
 242100 labels the innermost band `MIN RG` and each band outside it `MAX RG(1)`, `MAX RG(2)`, …
 `boundaryPaints.ts:298` prints `MIN RG` for every band on a circular fan, which
 `rangeFanLabelPaints.test.ts:113` currently pins as expected
@@ -94,6 +113,13 @@ render `326 EN BN USA`. Four independent plates agree on the parentheses.
 plate and is fine.
 
 ### 4. Range fan ranges are kilometres; APP-06 says metres
+
+**Fixed — metres, with no migration.** The user's call: a fan saved before 4.0.0 carries a
+kilometre number and will draw a thousand times too small, taken deliberately rather than
+carrying a schema version for one field. The label groups thousands (`5,000`), which answers
+the argument the old comment made for kilometres. Four call sites carried the conversion — the
+generator, both engines' band drags, and the demo's editor — plus a dead duplicate formatter in
+`openlayerStyles.ts`.
 
 Both range fan plates state it outright — 242200 (sector) *"All ranges in metres"*, 242100
 (circular) *"All units in metres"* — and the examples read `RG 5000`, `MAX RG(1) 28,500`,
@@ -107,6 +133,11 @@ also carry thousands separators, which we do not emit.
 
 ### 5. Mobility corridor maps its free text to the wrong letter
 
+**Fixed.** The field is `additionalInfo` now. `designation` is still read as a fallback so
+saved corridors keep their text. The paint also routes it through `amplifierText`, which it
+should always have done: a designation survives "show name only" because it is the graphic's
+name, and field H is an annotation that has to drop with the rest.
+
 142100's template is `H` over `B` with **no `T`**; the example renders `SMALL DITCHES` (a
 description) beside an echelon. `MOBILITY_CORRIDOR` is `f(true, …, {echelon: true})` —
 `identifier1` + `echelon`, no `additionalInfo`.
@@ -117,6 +148,13 @@ Worth noting that `StrongPoint` (151203) has the **identical field set** and its
 is `T` + `B` (`TWO` + echelon), so the two are indistinguishable in the registry today.
 
 ### 6. Rectangular target: length unwired, attitude absent
+
+**Fixed, and rebuilt.** The user's call was to follow the plate fully: one anchor point.
+`RectangularTarget` takes a `Point` base and builds the box from length, width and attitude, so
+it is no longer `isRectangular` and **a saved two-point target will not restore**. `length` now
+reaches the generator and persists. The attitude is `rotation` in degrees rather than a field of
+its own — the plate quotes AN in mils, but it is the same angle, and a parallel field would be
+the mistake `isDarkMode` was. `AP` maps to `identifier1`, as it already did elsewhere.
 
 240802 defines the target by an anchor point plus **AM1** (length, m), **AM** (width, m) and
 **AN** (target attitude, mils).
@@ -150,7 +188,10 @@ sizes the circle and is not painted.
 
 ## Constraints worth pinning in tests
 
-The plates state these in prose; none is currently asserted.
+**Done** — these are now enforced by `validateTacticalGraphic(name, properties)`, which reports
+what a graphic still needs to be doctrinally complete and cites the plate each rule came from.
+Sparse rather than exhaustive: most of the standard requires nothing, so a graphic absent from
+the table is reported complete, and adding one is a deliberate act with a citation attached.
 
 | Graphic | Constraint |
 | --- | --- |
@@ -181,11 +222,13 @@ The remaining plates match the registry field-for-field. Grouped by the pattern 
   country-code removal was right), TargetAreaCircular (`AP` + `AM`), Control, CordonAndSearch,
   Isolate, Occupy, Secure, Retain (no amplifier boxes)
 
-## Suggested order of work
+## What is left
 
-1. **Defect 1** — nine graphics, a registry-only change, and the one that makes labels wrong today
-2. **Defect 2** — one formatting helper, four plates of evidence
-3. **Defect 3** — one label branch plus the test that pins it
-4. **Defect 5** — one constant; decide `additionalInfo` vs keeping `identifier1`
-5. **Defect 6** — wire `length`, then decide whether `AN` earns a field
-6. **Defect 4** — needs a call from you, not a patch: it rescales saved data
+Nothing from this sweep. Two things it deliberately did not cover:
+
+- **Placement.** This audit asks whether the right *fields* are offered and drawn, not whether
+  each amplifier sits where the plate puts it. The free fire areas are the visible example: their
+  plate stacks `FFA` on its own line above the designation, and we render the literal as a prefix
+  on the same line. That is a layout question across the whole area family, not a field one.
+- **The seven graphics with no APP-06 counterpart.** FM 1-02.2 only; nothing in Chapter 8 to read
+  them against. @see `ai/app-6.md`
