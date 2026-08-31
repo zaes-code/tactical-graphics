@@ -145,6 +145,31 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
 }
 
 /**
+ * A designation followed by its country code in parentheses — "326 EN BN (USA)".
+ *
+ * APP-06 draws the brackets as part of the *template*: the box holds field AS and the
+ * bracket glyphs sit outside it, so they are the standard's punctuation rather than
+ * something the operator types. Four plates agree — 110300 `326 EN BN (USA)`, 240203
+ * `2AD (DEU)`, 240303 `52ID (GBR)`, 240403 `1ID (FRA)`.
+ *
+ * The brackets are therefore added here, not required of the input. A code that already
+ * carries them is passed through untouched, so an operator who types `(USA)` out of habit
+ * does not get `((USA))`. An absent code contributes nothing at all — no stray brackets,
+ * no trailing space.
+ *
+ * Deliberately *not* `formatFullLabel`, which joins a graphic's static prefix to free text
+ * ("PL" + "BLUE") and has no business bracketing anything. Boundary was calling it for this
+ * and getting a bare space.
+ */
+export function formatDesignationWithCountry(designation?: string, countryCode?: string): string {
+    const name = designation?.trim() ?? '';
+    const code = countryCode?.trim() ?? '';
+    if (!code) return name;
+    const bracketed = code.startsWith('(') && code.endsWith(')') ? code : `(${code})`;
+    return name ? `${name} ${bracketed}` : bracketed;
+}
+
+/**
  * The affiliation a feature draws in. `unknown` resolves to the default line color.
  *
  * **A graphic whose symbol does not take a standard identity always reads

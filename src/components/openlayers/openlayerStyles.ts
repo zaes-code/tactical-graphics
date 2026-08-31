@@ -2579,12 +2579,6 @@ function formatAzimuth(deg: number): string {
     return String(n).padStart(3, '0');
 }
 
-/** Range bands are stored in km; print them dropping a trailing .0. */
-function formatKm(km: number): string {
-    if (!Number.isFinite(km)) return '0';
-    return Number.isInteger(km) ? String(km) : km.toFixed(1);
-}
-
 function getOffset(distance: number, rotation: number): [number, number] {
     const offsetX = Math.cos(rotation) * distance;
     const offsetY = Math.sin(rotation) * distance;

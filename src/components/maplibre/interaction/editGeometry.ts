@@ -609,14 +609,11 @@ export function setReach(description: GraphicDescription, cursor: Position): Gra
     };
 }
 
-/** Meters in a kilometer — range bands are stored in km. */
-const KM = 1000;
-
 /**
  * How far apart two range-fan rings are kept, as a share of the outermost.
  *
- * Proportional so the gap holds up at any size: a fixed number of kilometers is
- * invisible on a 500 km fan and larger than the whole of a 2 km one.
+ * Proportional so the gap holds up at any size: a fixed distance is invisible on a
+ * 500 km fan and larger than the whole of a 2 km one.
  */
 const BAND_SEPARATION_FRACTION = 0.05;
 
@@ -634,12 +631,14 @@ const BAND_SEPARATION_FRACTION = 0.05;
 export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
     const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
-    const km = Math.hypot(at[0] - center[0], at[1] - center[1]) / KM;
-    if (!isFinite(km) || km <= 0) return description;
+    // Mercator metres, which is the unit a band stores as of 4.0.0 — the conversion to
+    // kilometers that used to sit here is gone, not merely inlined. @see RangeFanBand.range
+    const metres = Math.hypot(at[0] - center[0], at[1] - center[1]);
+    if (!isFinite(metres) || metres <= 0) return description;
 
     const bands = description.properties.rangeFan?.bands;
     if (!bands || !bands.length) {
-        return {...description, properties: {...description.properties, radius: km * KM}};
+        return {...description, properties: {...description.properties, radius: metres}};
     }
 
     const sorted = [...bands].sort((a, b) => a.range - b.range);
@@ -649,7 +648,7 @@ export function setBandRange(description: GraphicDescription, index: number, cur
     const min = index === 0 ? gap : sorted[index - 1].range + gap;
     const max = index === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[index + 1].range - gap;
 
-    const next = sorted.map((band, i) => (i === index ? {...band, range: Math.min(Math.max(km, min), Math.max(min, max))} : band));
+    const next = sorted.map((band, i) => (i === index ? {...band, range: Math.min(Math.max(metres, min), Math.max(min, max))} : band));
     return {
         ...description,
         properties: {...description.properties, rangeFan: {...description.properties.rangeFan, bands: next}},

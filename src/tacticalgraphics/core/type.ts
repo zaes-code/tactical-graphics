@@ -115,13 +115,21 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  */
 export interface RangeFanBand {
     /**
-     * How far the band reaches, in **kilometers**.
+     * How far the band reaches, in **meters** — like `radius`, `width` and `decorationSize`.
      *
-     * The one distance in this schema that is not meters — `radius`, `width` and
-     * `decorationSize` all are. It is kilometers because a weapon or sensor envelope is
-     * quoted that way and the label prints the number bare, so meters here would put
-     * three zeroes on every ring. Kept rather than corrected: changing it would silently
-     * rescale every range fan already saved by a factor of a thousand.
+     * **This was kilometers before 4.0.0.** Both APP-06 range fan plates say otherwise in
+     * as many words — 242200 (sector) *"All ranges in metres"*, 242100 (circular) *"All
+     * units in metres"* — and their examples read `RG 5000`, `MAX RG(1) 28,500`. A 5 km
+     * band used to render `RG 5` where the standard renders `RG 5000`.
+     *
+     * The earlier note here defended kilometers on the grounds that an envelope is quoted
+     * that way and metres would put three zeroes on every ring. The label answers that by
+     * grouping thousands (`5,000`) rather than by changing the unit. (User's call,
+     * 2026-08-31.)
+     *
+     * **There is no migration.** A fan saved before 4.0.0 carries a kilometer number and
+     * will render a thousand times too small; that break was taken deliberately rather
+     * than carrying a schema version for one field. @see formatRange
      */
     range: number;
     /** Optional user-entered name shown above the auto-generated range line. */
