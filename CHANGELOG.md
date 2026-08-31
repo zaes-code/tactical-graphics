@@ -13,6 +13,49 @@ the npm publish dates — when a version actually became installable.
 
 ---
 
+## [Unreleased]
+
+## [3.1.0] — 2026-08-31
+
+**Two fixes a consumer could not work around, and a field that was offered where nothing
+would draw it.** Additive throughout: nothing renamed, nothing removed.
+
+### Fixed
+
+- **`process` is no longer read at module load.** `const BASEMAP_ENABLED =
+  process.env.REACT_APP_BASEMAP !== 'off'` sat at module scope in the OpenLayers and
+  MapLibre entry points. `process` does not exist in a browser bundle, so importing either
+  one threw `process is not defined` for any consumer whose bundler does not shim it — and
+  `createBasemapStyle` is exported from the MapLibre barrel, so that half was unimportable
+  outright. Both reads are lazy and guarded now.
+
+  It survived nineteen releases because every check we run has a `process`: the consumer
+  tarball install, the build's smoke loads and the whole suite all pass in Node. The build
+  now asserts that no emitted file reads `process` at module scope.
+
+- **A lone range band's label stayed inside its ring.** The block was measured against its
+  neighbour's anchor, so a fan with one band was measured against nothing and held its size
+  while the ring shrank under it. Two or more bands never showed the bug, because the second
+  band is what holds the first one in.
+
+- **A sector's bearings stay on their arc.** They were anchored at `radius * 1.05` — a
+  metric offset baked into the geometry, so 5% of a 180 km band is 9 km of ground and the
+  bearing crept further off its edge the further you zoomed in. Anchored on the arc; the
+  clearance is the paint's own pixel nudge, which is constant at every zoom. Their scale is
+  capped against that arc too, where before it was not capped at all.
+
+### Added
+
+- **`countryCodes` on `GraphicFieldSet`.** `identifier2` meant "second identifier *and*
+  country codes", which is two different things: only boundary and engineer work line paint
+  a country code, and each pairs the **first** designation with `countryCode` and the second
+  with `secondCountryCode`. Final protective fire takes a second designation and no code at
+  all, so it was offered two inputs nothing would ever draw.
+
+  Read it from `getGraphicFields(name)` as before. If you *construct* a `GraphicFieldSet`
+  yourself — a mock, a fixture — it now needs the new key; every other consumer only
+  receives one and is unaffected.
+
 ## [3.0.0] — 2026-08-30
 
 **A major, and it earns it.** Eight breaking changes, of which the four that reach data
@@ -597,6 +640,7 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 ---
 
 [Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...develop
+[3.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.13.0...v2.0.0
