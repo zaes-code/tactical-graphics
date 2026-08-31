@@ -289,6 +289,7 @@ export {
     areaOutlinePaint,
     defaultLinePaint,
     amplifierDash,
+    formatDesignationWithCountry,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
