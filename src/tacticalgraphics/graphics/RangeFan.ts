@@ -254,7 +254,13 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
             const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
             const radiusM = band.range * KM_TO_M;
             const midKm = (prevKm + band.range) / 2;
-            const azLabelR = radiusM * 1.05;
+            // On the arc, not past it. This used to be `radiusM * 1.05`, which is a metric
+            // offset baked into the geometry: 5% of a 180 km band is 9 km of ground, a few
+            // pixels when the whole fan fits the screen and tens of pixels once you zoom
+            // in, so the bearing crept away from the edge it marks the further in you went.
+            // The clearance is a screen quantity and belongs in the paint, which already
+            // nudges these outward by a fixed pixel gap. @see AZIMUTH_LABEL_GAP_PX
+            const azLabelR = radiusM;
             points.push(pointAtAzimuth(center, centerAz, midKm * KM_TO_M));
             points.push(pointAtAzimuth(center, leftAz, azLabelR));
             points.push(pointAtAzimuth(center, rightAz, azLabelR));
