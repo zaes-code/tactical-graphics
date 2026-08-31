@@ -15,6 +15,69 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+**A plate-by-plate audit of the amplifier fields against APP-06 Chapter 8, and the
+corrections it turned up.** All 84 graphics that carry a distinctive field were read
+against their Chapter 8 row — name, template, draw rules and worked example — and compared
+with `graphicFieldRegistry`. The method and the full findings are in
+`docs/app6-field-validation.md`.
+
+Breaking, so this is a major. Two changes alter stored data and one alters a symbol's
+anchor count; everything else is additive.
+
+### Breaking
+
+- **`RangeFanBand.range` is metres, not kilometres.** Both range fan plates say so in as
+  many words — 242200 "All ranges in metres", 242100 "All units in metres" — and their
+  examples read `RG 5000` and `MAX RG(1) 28,500`. A 5 km band used to render `RG 5`. The
+  label now groups thousands, which answers the argument the old schema comment made for
+  kilometres without keeping the divergence. **There is no migration:** a fan saved before
+  4.0.0 carries a kilometre number and will draw a thousand times too small.
+- **The rectangular target is built from one anchor point.** APP-06 240802 "requires one
+  (1) anchor point" and states the shape outright — target length (AM1), target width (AM)
+  and target attitude (AN). It was a two-point drawn rectangle, so **a saved rectangular
+  target will not restore as the same shape.** It is no longer `isRectangular`, and the
+  new `RectangularTarget` generator takes a `Point` base.
+- **Mobility corridor's free text moved from `identifier1` to `additionalInfo`.** Its
+  template is `H` over `B` with no `T`, and its example is a description of the going
+  rather than a name. The paint already called it field H in a comment while reading
+  `designation`, which is kept as a read fallback so saved corridors keep their text — but
+  the dialog now offers the additional-info input instead of a designation.
+
+### Added
+
+- **`validateTacticalGraphic(name, properties)`** reports what a graphic still needs to be
+  doctrinally complete, with the plate each rule came from. A mobility corridor without its
+  echelon, restricted terrain without the cause of the restriction, a minefield whose field
+  H is neither `S` nor `+S`. `isTacticalGraphicComplete` is the boolean form, and
+  `getDoctrinalRequirements` exposes the rules. Deliberately sparse rather than an
+  exhaustive record: most of the standard requires nothing.
+- **The free, no and restrictive fire areas offer a country code.** Their plates letter the
+  pair `T2 ( AS )`, e.g. `FFA / 2AD (DEU)`. Nine graphics.
+- **The airspace coordination areas offer a second designation.** Both publications give
+  them two name fields and merely letter them differently — APP-06 `T2`, FM `T1`.
+- **The rectangular target offers an attitude** (amplifier AN), backed by `rotation` in
+  degrees, and its **`length` now reaches the generator** — it was offered and accepted a
+  value that changed nothing.
+
+### Fixed
+
+- **Country codes render in parentheses** — `326 EN BN (USA)`, not `326 EN BN USA`. APP-06
+  draws the brackets as part of the template, so they are the standard's punctuation rather
+  than something the operator types; a code that already carries them is passed through
+  unchanged. New `formatDesignationWithCountry` replaces two call sites that joined with a
+  bare space, one of them misusing `formatFullLabel`.
+- **The circular range fan stops printing `MIN RG` on every ring.** 242100 labels the
+  innermost band `MIN RG` and each band outside it `MAX RG(1)`, `MAX RG(2)`. The sector's
+  bare `RG` matches its own plate and is unchanged.
+- **`length` survives a save and restore.** It was missing from the persisted geometry keys.
+
+### Changed
+
+- `FIRE_SUPPORT_AREA` and `AIRSPACE_COORDINATION_AREA` were both named for graphics they do
+  not serve — the first is the fire *coordination* areas and not position area for
+  artillery, the second the engagement zones and not the ACAs. Split and renamed; position
+  area for artillery keeps a plain `T`, which its plate does show.
+
 ## [3.1.0] — 2026-08-31
 
 **Two fixes a consumer could not work around, and a field that was offered where nothing

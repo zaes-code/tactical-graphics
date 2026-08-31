@@ -45,14 +45,19 @@ describe('a drawn rectangular zone', () => {
         expect(built!.properties.width).not.toBeCloseTo(2 * 20 * RES, -3);
     });
 
-    /** The rectangular target is the one that carries a length as well. */
-    it('files a length only where the symbol has one', () => {
-        const withLength = buildTacticalGraphic(TacticalGraphicName.TargetAreaRectangular, polygon(), {}, RES);
-        expect(withLength!.properties.length).toBe(rectangleAmplifiers(TacticalGraphicName.TargetAreaRectangular, box()).length);
-        expect(withLength!.properties.length).toBeGreaterThan(0);
-
-        const without = buildTacticalGraphic(TacticalGraphicName.CensorZoneRectangular, polygon(), {}, RES);
-        expect(without!.properties.length).toBeUndefined();
+    /**
+     * **No drawn rectangle derives a length any more.**
+     *
+     * The rectangular target was the one that did, and in 4.0.0 it stopped being a drawn
+     * rectangle at all: APP-06 240802 gives it one anchor point and *states* the length, so
+     * the number is an input rather than something read back off a box. The two-point zones
+     * never carried one. @see RECTANGLE_LENGTH_GRAPHICS, RectangularTarget
+     */
+    it('derives a length for no drawn rectangle', () => {
+        for (const name of [TacticalGraphicName.CensorZoneRectangular, TacticalGraphicName.FreeFireAreaRectangular]) {
+            expect(buildTacticalGraphic(name, polygon(), {}, RES)!.properties.length).toBeUndefined();
+            expect(rectangleAmplifiers(name, box()).length).toBeUndefined();
+        }
     });
 
     /**
