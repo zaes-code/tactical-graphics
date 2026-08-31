@@ -17,6 +17,7 @@
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
+import {renderTacticalGraphic} from '../core/render';
 import {rangeFanLabelPaint} from './boundaryPaints';
 
 const CHAR_WIDTH_SHARE = 0.6;
@@ -116,12 +117,48 @@ describe('a multi-band circular fan', () => {
     });
 });
 
+describe('the sector generator', () => {
+    it('anchors each bearing on its arc, not a share of the way past it', () => {
+        // The clearance between a bearing and its arc is a screen quantity, and the paint
+        // already nudges it outward by a fixed pixel gap. Anchoring at `radius * 1.05`
+        // instead put 5% of the band — 9 km on a 180 km fan — into the geometry, which is a
+        // few pixels zoomed out and tens of pixels zoomed in, so the number crept off its
+        // own edge the further you went in. This is the rule in CLAUDE.md: a zoom-invariant
+        // gap is computed in the paint, never baked into the GeoJSON.
+        const out = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [10, 50]},
+            properties: {
+                tacticalGraphic: {
+                    name: TacticalGraphicName.WeaponSensorRangeFanSector,
+                    rotation: 0,
+                    rangeFan: {bands: [{range: 180}], centerAzimuthDeg: 90},
+                },
+            },
+        } as never) as unknown as {labels: {geometry: {coordinates: number[][]}}};
+
+        const [centre, , left, right] = out.labels.geometry.coordinates;
+        // Equirectangular is plenty at this scale, and isotropic unlike raw degrees.
+        const metres = (a: number[], b: number[]) => {
+            const rad = (d: number) => (d * Math.PI) / 180;
+            const x = rad(b[0] - a[0]) * Math.cos(rad((a[1] + b[1]) / 2));
+            return Math.hypot(x, rad(b[1] - a[1])) * 6378137;
+        };
+
+        for (const edge of [left, right]) {
+            expect(metres(centre, edge) / 180_000).toBeCloseTo(1, 2);
+        }
+    });
+});
+
 describe('a sector fan', () => {
     it('caps its bearings instead of letting them outgrow the arc', () => {
         const near = marks(sectorFan(180), TacticalGraphicName.WeaponSensorRangeFanSector, 4000);
         const far = marks(sectorFan(180), TacticalGraphicName.WeaponSensorRangeFanSector, 40000);
 
-        const bearing = (m: {text: string}[]) => m.filter(x => /^\d{3}$/.test(x.text));
+        // Generic, so filtering keeps the scale: annotating the parameter as `{text: string}[]`
+        // narrowed the *return* to that too, and the assertions below read `.scale` off it.
+        const bearing = <T extends {text: string}>(m: T[]) => m.filter(x => /^\d{3}$/.test(x.text));
         expect(bearing(near).map(b => b.text)).toEqual(['045', '135']);
         for (const b of bearing(far)) {
             expect(b.scale).toBeLessThan(bearing(near)[0].scale);
