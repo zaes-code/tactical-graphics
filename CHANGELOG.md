@@ -52,7 +52,11 @@ anchor count; everything else is additive.
   `getDoctrinalRequirements` exposes the rules. Deliberately sparse rather than an
   exhaustive record: most of the standard requires nothing.
 - **The free, no and restrictive fire areas offer a country code.** Their plates letter the
-  pair `T2 ( AS )`, e.g. `FFA / 2AD (DEU)`. Nine graphics.
+  pair `T2 ( AS )`, e.g. `FFA / 2AD (DEU)`. Nine graphics. **One** code, not two: a country
+  code pairs with a designation, so a host renders `countryCode` on `countryCodes` and
+  `secondCountryCode` on `countryCodes && identifier2`. Only boundary and the engineer work
+  line have two names to attach codes to. `countryCodePairing.test.ts` pins this for every
+  graphic.
 - **The airspace coordination areas offer a second designation.** Both publications give
   them two name fields and merely letter them differently — APP-06 `T2`, FM `T1`.
 - **The rectangular target offers an attitude** (amplifier AN), backed by `rotation` in
