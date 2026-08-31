@@ -88,7 +88,9 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.identifier2) labels.secondDesignation = stored.secondDesignation ?? '';
     if (fields.countryCodes) {
         labels.countryCode = stored.countryCode ?? '';
-        labels.secondCountryCode = stored.secondCountryCode ?? '';
+        // The second code belongs to the second designation, so it only exists where there
+        // is one. @see the Country Code inputs below
+        if (fields.identifier2) labels.secondCountryCode = stored.secondCountryCode ?? '';
     }
     if (fields.additionalInfo) labels.additionalInfo = stored.additionalInfo ?? '';
     // The three selectors that carry a stored value into the dialog rather than a string.
@@ -449,11 +451,18 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 )}
 
                                 {/*
-                                 * **Two flags, not one.** The country codes are their own field: each pairs with a
-                                 * designation — `designation + countryCode` on the top line, `secondDesignation +
-                                 * secondCountryCode` on the bottom — and only boundary and engineer work line paint
-                                 * them. Final protective fire takes a second designation and no code at all, and
-                                 * while the two shared `identifier2` it was offered two boxes nothing would draw.
+                                 * **Two flags, not one, and the second code follows the second designation.**
+                                 *
+                                 * The country codes are their own field because they do not travel with
+                                 * `identifier2`: final protective fire takes a second designation and no code at
+                                 * all, and while the two shared a flag it was offered two boxes nothing would draw.
+                                 *
+                                 * But a code still *pairs* with a designation — `designation + countryCode` on the
+                                 * top line, `secondDesignation + secondCountryCode` on the bottom — so a graphic
+                                 * with one designation has one code. The fire-support areas are the case that
+                                 * proves it: they carry `T2 ( AS )` and no second name, and rendering both boxes
+                                 * put an "Other Country Code" on them that nothing would ever draw. Which is the
+                                 * same defect the country-code split was made to fix, one level down.
                                  */}
                                 {fields.countryCodes && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
@@ -491,7 +500,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                         </FormControl>
                                     </Box>
                                 )}
-                                {fields.countryCodes && (
+                                {fields.countryCodes && fields.identifier2 && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
                                             <InputLabel htmlFor="second-country-code-input">Other Country Code</InputLabel>

@@ -26,16 +26,29 @@ export type GraphicFieldSet = {
     /** Second identifier — the graphic's lower/second designation. */
     identifier2: boolean;
     /**
-     * Country code inputs, one per designation.
+     * Country code inputs — **one per designation this graphic offers.**
      *
-     * Separate from `identifier2` because the two do not travel together. Only
-     * `boundaryPaint` and `engineerWorkLinePaint` read them, and each composes
-     * `designation + countryCode` and `secondDesignation + secondCountryCode` — so the
-     * first code belongs to the *first* designation, not the second.
+     * Separate from `identifier2` because the two do not travel together. Final protective
+     * fire is the graphic that proves the split: it takes a second designation and no
+     * country code at all, and while the two shared a flag it was offered two boxes nothing
+     * would ever draw.
      *
-     * Final protective fire is the graphic that proves the split: it takes a second
-     * designation and no country code at all, and while the two shared a flag it was
-     * offered two boxes nothing would ever draw.
+     * ## How many boxes to render
+     *
+     * A code pairs with a designation — the paints compose `designation + countryCode` and
+     * `secondDesignation + secondCountryCode` — so the count follows the designations:
+     *
+     * ```
+     * countryCode        countryCodes
+     * secondCountryCode  countryCodes && identifier2
+     * ```
+     *
+     * The first code belongs to the *first* designation, not the second. A host that renders
+     * both boxes off this one flag puts an "other country code" on the fire-support areas,
+     * which carry `T2 ( AS )` and no second name and would never draw it — the same defect
+     * the split was made to fix, one level down.
+     *
+     * @see countryCodePairing.test.ts, which pins the pairing for every graphic
      */
     countryCodes: boolean;
     /**
