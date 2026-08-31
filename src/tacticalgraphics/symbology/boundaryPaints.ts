@@ -272,12 +272,19 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
          * The same reasoning as `acpLabelScale`: a label that has to fit inside something
          * is measured against that thing.
          */
-        const bandScale = (block: string, from: ProjectedPosition, to: ProjectedPosition | undefined): number => {
-            if (!to) return scale;
-            const spacingPx = Math.hypot(to[0] - from[0], to[1] - from[1]) / context.resolution;
+        /** The largest scale at which `block` still fits inside `roomPx` of screen. */
+        const fitToPx = (block: string, roomPx: number): number => {
             const widest = Math.max(...block.split('\n').map(row => textWidth(context, row, fontStyle, 1)));
             if (!(widest > 0)) return scale;
-            return Math.min(scale, (spacingPx * BAND_LABEL_FIT_SHARE) / widest);
+            return Math.min(scale, (roomPx * BAND_LABEL_FIT_SHARE) / widest);
+        };
+
+        const bandScale = (block: string, from: ProjectedPosition, to: ProjectedPosition | undefined): number => {
+            // No neighbour means a lone band, which measures against its own ring: the
+            // anchor sits at mid-radius, so twice the distance back to the centre is the
+            // radius the label has to fit inside.
+            const spacing = to ? Math.hypot(to[0] - from[0], to[1] - from[1]) : Math.hypot(from[0] - coords[0][0], from[1] - coords[0][1]) * 2;
+            return fitToPx(block, spacing / context.resolution);
         };
 
         for (let i = 0; i < bands.length; i++) {
@@ -308,10 +315,13 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             if (lines.length) {
                 const block = lines.join('\n');
                 // Measured against the next band's anchor, or the previous one for the
-                // outermost. **A lone band has no neighbor and takes no cap** — its
-                // fallback would be the fan's own center, which is not something the
-                // label can collide with, and capping against it shrank the one-band
-                // sample to an unreadable speck. @see bandScale
+                // outermost. **A lone band measures against its own ring.** It has no
+                // neighbour, and taking no cap at all let the block outgrow the circle it
+                // names as the fan shrank on screen — reported as labels leaving the circle
+                // when zooming out, and only ever with one band, because every other band is
+                // held in by its neighbour. Capping against the centre was tried first and
+                // was too tight: the anchor is at mid-radius, so the centre is half the room
+                // the label actually has. @see bandScale
                 const neighbor = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
                 const fitted = bandScale(block, coords[midIndex], neighbor);
                 paints.push(
@@ -328,25 +338,36 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             // ray, so each moves away from the block rather than in some fixed direction
             // that would be wrong at half the bearings.
             const center = coords[0];
-            const outward = (at: ProjectedPosition): {offsetXPx: number; offsetYPx: number} => {
+            const outward = (at: ProjectedPosition, textScale: number): {offsetXPx: number; offsetYPx: number} => {
                 const dx = at[0] - center[0];
                 const dy = at[1] - center[1];
                 const length = Math.hypot(dx, dy);
                 if (length === 0) return {offsetXPx: 0, offsetYPx: 0};
+                const gap = AZIMUTH_LABEL_GAP_PX * textScale;
                 // Screen y grows downward while projected y grows north, hence the flip.
                 return {
-                    offsetXPx: (dx / length) * AZIMUTH_LABEL_GAP_PX,
-                    offsetYPx: (-dy / length) * AZIMUTH_LABEL_GAP_PX,
+                    offsetXPx: (dx / length) * gap,
+                    offsetYPx: (-dy / length) * gap,
                 };
             };
 
+            // **Capped and nudged together.** These took the raw scale, so they were the
+            // one label on the fan that nothing held: the bearing outgrew the arc it marks
+            // while the fixed 16px nudge stayed put, which reads as it drifting off its own
+            // edge as the fan fills the screen. Fitted against the arm it sits on, with the
+            // nudge scaled to the text so the clearance holds at any size — the same
+            // treatment the range block above already gets.
+            const azimuthAt = (at: ProjectedPosition, value: string): Paint => {
+                const armPx = Math.hypot(at[0] - center[0], at[1] - center[1]) / context.resolution;
+                const fitted = fitToPx(value, armPx);
+                return text(at, value, outward(at, fitted), fitted);
+            };
+
             if (midIndex + 1 < coords.length && band.resolvedLeftAz !== undefined) {
-                const at = coords[midIndex + 1];
-                paints.push(text(at, formatAzimuth(band.resolvedLeftAz), outward(at)));
+                paints.push(azimuthAt(coords[midIndex + 1], formatAzimuth(band.resolvedLeftAz)));
             }
             if (midIndex + 2 < coords.length && band.resolvedRightAz !== undefined) {
-                const at = coords[midIndex + 2];
-                paints.push(text(at, formatAzimuth(band.resolvedRightAz), outward(at)));
+                paints.push(azimuthAt(coords[midIndex + 2], formatAzimuth(band.resolvedRightAz)));
             }
         }
 
