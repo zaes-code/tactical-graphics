@@ -817,6 +817,24 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {/*
+                                  * Amplifier AN. Shown alongside the other shape read-outs
+                                  * and for the same reason: the attitude is what the edge
+                                  * handle swings, so a typed box here would need keeping in
+                                  * step with the gesture. Degrees, where the plate quotes
+                                  * mils — the same angle, converted where a host wants it.
+                                  */}
+                                {fields.attitude && measured.rotation !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Attitude
+                                        </Typography>
+                                        <Typography id="attitude-readout" variant="body2">
+                                            {`${Math.round(((measured.rotation % 360) + 360) % 360)}°`}
+                                        </Typography>
+                                    </Box>
+                                )}
+
                                 {fields.radius && measured.radius !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <Typography variant="caption" color="text.secondary">

@@ -24,7 +24,7 @@ import {
     uprightRotation,
     walkPath,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type EndGlyphPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -301,7 +301,13 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
          * moved keep their text. Nothing writes it any more.
          */
         const props = feature.properties;
-        const text = (props.additionalInfo ?? props.designation ?? '').trim();
+        /*
+         * **Through `amplifierText`, unlike the designation this replaced.** A designation
+         * survives "show name only" — it is the graphic's name. Field H is an annotation
+         * and has to drop with the rest, and reading it raw leaked "TYPE II" onto a corridor
+         * that was meant to be showing nothing but its symbol.
+         */
+        const text = amplifierText(feature, (props.additionalInfo ?? props.designation ?? '').trim());
         if (!text) return paints;
 
         /*

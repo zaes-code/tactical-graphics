@@ -541,7 +541,6 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaRectangular,
     TacticalGraphicName.BlueKillBoxRectangular,
     TacticalGraphicName.PurpleKillBoxRectangular,
-    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.PsyOpsZoneRectangular,
@@ -635,10 +634,16 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Exfiltrate]: 3,
     [TacticalGraphicName.Infiltration]: 3,
 
-    // The eighteen rectangular zones: point 1 and point 2, at the centres of the two
+    // The seventeen rectangular zones: point 1 and point 2, at the centres of the two
     // opposing sides. The width is an amplifier, not a third click.
     // @see RectangularArea, rectangleFromAxis
     ...Object.fromEntries(RECTANGULAR_GRAPHICS.map(name => [name, 2])),
+
+    // **The rectangular target is not here, and that is the point.** APP-06 240802 requires
+    // one anchor point, and a one-point base is a `Point` draw — there is no second click to
+    // cap, which is why every other point-anchored graphic is absent too. This table caps
+    // *line* draws; `geomHandleType` is what says a graphic is point-anchored.
+    // @see RectangularTarget
 
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
@@ -712,12 +717,14 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
  * The rectangular graphics that also file a **length** — the dimension *along* the
  * rectangle, as opposed to the width across it.
  *
- * Only the rectangular target. FM 1-02.2 table 5-25 draws it as `AM1` across the top and
- * APP-06 240802 names it "the target length (AM1) in metres". Every other rectangle here
- * takes its length from its two anchor points, so filing one would be a number nothing
- * set.
+ * Empty as of 4.0.0 — kept because the distinction is real and may return.
+ *
+ * This held the rectangular target, the one rectangle that files a length rather than
+ * deriving it from two anchor points. It is now built from a single anchor point and its
+ * amplifiers outright, so there is no drawn geometry to read a length *back* from: the
+ * amplifier is the source, not the derivation. @see RectangularTarget
  */
-const RECTANGLE_LENGTH_GRAPHICS: readonly TacticalGraphicName[] = [TacticalGraphicName.TargetAreaRectangular];
+const RECTANGLE_LENGTH_GRAPHICS: readonly TacticalGraphicName[] = [];
 
 /** @see RECTANGLE_LENGTH_GRAPHICS */
 export function carriesRectangleLength(name: TacticalGraphicName): boolean {
@@ -820,6 +827,9 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BlueKillBoxCircular,
     TacticalGraphicName.CallForFireZoneCircular,
     TacticalGraphicName.TargetBuildUpAreaCircular,
+    // Not a circle, but point-anchored and sized by the same rim drag, which is exactly
+    // what this list is for. @see RectangularTarget
+    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.TargetValueAreaCircular,
     TacticalGraphicName.ZoneOfResponsibilityCircular,
     TacticalGraphicName.CensorZoneCircular,

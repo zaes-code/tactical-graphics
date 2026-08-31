@@ -446,6 +446,14 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.TargetBuildUpAreaCircular,
     TacticalGraphicName.TargetValueAreaCircular,
     TacticalGraphicName.ZoneOfResponsibilityCircular,
+    /*
+     * Not a circle, but sized by the same gesture. The rectangular target became
+     * point-anchored in 4.0.0 — one anchor point, with the length swung and set by dragging
+     * the edge handle — so it resizes exactly the way the entries above do, and would
+     * otherwise be the one graphic in the family that reports nothing while you drag it.
+     * The number under the cursor is its half-length. @see RectangularTarget
+     */
+    TacticalGraphicName.TargetAreaRectangular,
 ]);
 
 /**

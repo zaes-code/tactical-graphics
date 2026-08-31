@@ -1196,3 +1196,83 @@ export class PursuitGraphicBase extends MissionTaskGraphicBase {
         return true;
     }
 }
+
+/**
+ * A freshly-placed target's half-width, as a share of its half-length.
+ *
+ * The plate's own example is a box roughly half again as wide as it is deep, which is what
+ * this reproduces. Proportional rather than a screen size because the length is already a
+ * ground figure — mixing the two would make the shape depend on the zoom it was placed at.
+ */
+const DEFAULT_TARGET_WIDTH_RATIO = 0.66;
+
+/**
+ * Rectangular target (APP-06 240802) — **point-anchored, and sized by its amplifiers**.
+ *
+ * The other seventeen rectangles are `RectangularAreaGraphicBase`: two anchor points give
+ * the length and the orientation, and only the width is typed. This one's plate "requires
+ * one (1) anchor point" and names the whole shape — "the target length (AM1) in metres and
+ * target width (AM) in metres", plus a target attitude (AN) — so it belongs to the
+ * point-anchored family instead, and shares its `[edge, centre]` handle contract.
+ *
+ * - `size` is the **half-length**: the distance from the centre to the middle of the leading
+ *   short side, which is exactly where handle 0 sits. Dragging it sets the length and swings
+ *   the attitude in one gesture, the way every other point-anchored graphic resizes.
+ * - `halfWidth` is typed, never dragged. There is no third handle because the plate gives it
+ *   no second point to hang one off.
+ *
+ * @see RectangularTarget for the geometry, and `docs/app6-field-validation.md` for the sweep
+ * that found the length amplifier accepted but unwired.
+ */
+export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
+    graphicLabels: GraphicLabels = {designation: ''};
+
+    /** Half the full width in ground metres — the generators' own unit. @see toGraphicOptions */
+    private halfWidth: number;
+
+    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
+        super(name, size, drawingResolution);
+        // A target placed with one click carries no width yet, so it starts proportional to
+        // its own length rather than at a screen size: the plate's example is a wide, squat
+        // box, and a screen-derived default would make a freshly-placed target a sliver at
+        // one zoom and a slab at another.
+        this.halfWidth = size * DEFAULT_TARGET_WIDTH_RATIO;
+        this.label.setStyle(getAreaLabelStylesFn(name));
+        writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);
+    }
+
+    protected generatorOptions(): Record<string, unknown> {
+        // `length` is the full figure and `radius` the half-width, which is the split
+        // `toGraphicOptions` makes for every other graphic. @see RectangularTargetOptions
+        return {length: this.size * 2, radius: this.halfWidth};
+    }
+
+    protected persistedGeometryState(): GraphicGeometryState {
+        return {length: this.size * 2, width: this.halfWidth * 2};
+    }
+
+    /**
+     * Restore's way back to the typed width.
+     *
+     * Takes the **half**-width, which is the number every other `setOffset` here takes —
+     * persistence stores the full figure and halves it on the way in. @see restoreGeometry
+     */
+    setOffset = (halfWidth: number): void => {
+        if (!Number.isFinite(halfWidth) || halfWidth <= 0) return;
+        this.halfWidth = halfWidth;
+        this.updateGeometry();
+    };
+
+    setLabel = (labels: GraphicLabels) => {
+        this.graphicLabels = labels;
+        // A typed width is the only way this graphic's width changes, so it is adopted here
+        // rather than derived from a drag the way the two-point rectangles do it.
+        const typed = labels.width;
+        if (typeof typed === 'number' && Number.isFinite(typed) && typed > 0) this.halfWidth = typed / 2;
+        this.updateGeometry();
+        writeGraphicProperties(this.getFeatures(), this.name, labels, {
+            ...this.persistedGeometryState(),
+            rotation: this.rotation,
+        });
+    };
+}

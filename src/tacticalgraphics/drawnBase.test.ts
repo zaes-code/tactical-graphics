@@ -93,14 +93,29 @@ describe('normalizeDrawnBase', () => {
 describe('isRectangular', () => {
     const names = Object.values(TacticalGraphicName);
 
-    it('is every rectangular area variant and nothing else', () => {
+    it('is every rectangular area variant except the target, which is not one', () => {
+        /*
+         * The name is not the rule, and this is the one place the two part company. A
+         * "Rectangular" suffix says the *shape* is a box; `isRectangular` says the **base
+         * is an axis** — two anchor points and a width across them. APP-06 240802 gives the
+         * rectangular target one anchor point and states its length, width and attitude as
+         * amplifiers, so it draws a box without being built like one.
+         *
+         * Spelled out rather than relaxed to a subset check: an accidental drop-out of this
+         * set is exactly the sort of thing this test exists to catch, so the exception has
+         * to be named to pass. @see RectangularTarget
+         */
         const flagged = names.filter(isRectangular);
-        const named = names.filter(name => String(name).endsWith('Rectangular'));
+        const named = names.filter(name => String(name).endsWith('Rectangular') && name !== TacticalGraphicName.TargetAreaRectangular);
         expect([...flagged].sort()).toEqual([...named].sort());
     });
 
-    it('covers the eighteen the registry draws as boxes', () => {
-        expect(names.filter(isRectangular)).toHaveLength(18);
+    it('covers the seventeen the registry draws as boxes', () => {
+        // Seventeen, not eighteen: the rectangular target left this set in 4.0.0. Its plate
+        // takes one anchor point and builds the box from its length, width and attitude, so
+        // it is not "two anchor points and a width" like the rest. @see RectangularTarget
+        expect(names.filter(isRectangular)).toHaveLength(17);
+        expect(isRectangular(TacticalGraphicName.TargetAreaRectangular)).toBe(false);
     });
 
     it('does not catch the irregular or circular variants of the same areas', () => {

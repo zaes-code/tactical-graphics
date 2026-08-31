@@ -9,6 +9,7 @@ import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
 import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
 import {AreaGraphic, RectangularArea, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {RectangularTarget} from "../graphics/RectangularTarget";
 import {isRectangular} from "./handles";
 import {
     AreaDefense,
@@ -276,7 +277,6 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.FireSupportAreaIrregular,
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.TargetAreaIrregular,
-    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.HighDensityAirspaceControlZone,
     TacticalGraphicName.RestrictedOperationsZone,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
@@ -300,6 +300,12 @@ areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(
     // base *is* its outline. @see RectangularArea, isRectangular
     isRectangular(name) ? new RectangularArea(name) : new AreaGraphic(name),
 ))
+
+/**
+ * **One anchor point, not two.** Its plate builds the box from amplifiers, so it shares
+ * neither a base shape nor a generator with the rectangles above. @see RectangularTarget
+ */
+TacticalGraphicsRegistry.register(new RectangularTarget(TacticalGraphicName.TargetAreaRectangular));
 
 //Mission Task Graphics
 TacticalGraphicsRegistry.register(new Control());
