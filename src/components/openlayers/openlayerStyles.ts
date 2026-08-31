@@ -400,9 +400,27 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
  * The dark/light toggle in `OpenLayers.tsx` bails out when the layers are
  * absent, so the off path needs nothing else.
  */
-const BASEMAP_ENABLED = process.env.REACT_APP_BASEMAP !== 'off';
+const basemapEnabled = () => {
+    // Read here rather than at module load. `process` is a Node and bundler-time global
+    // with no equivalent in a plain browser bundle, and this module is published, so a
+    // top-level read threw `process is not defined` on import for any consumer whose
+    // bundler does not shim it. Same rule as the DOM access that moved into measureCtx().
+    //
+    // Caught rather than guarded with `typeof process`. A bundler replaces `process.env`
+    // (CRA) or `process.env.REACT_APP_BASEMAP` (a Vite `define`) with a literal, so this
+    // is normally constant-folded and no global is read at all — but neither of them
+    // substitutes a bare `typeof process`, so guarding that way would depend on a
+    // `process` shim the demo build is not guaranteed to have, and `off` would silently
+    // stop working. The expression below is left exactly as a bundler expects to match it:
+    // an index or an optional chain is not replaced.
+    try {
+        return process.env.REACT_APP_BASEMAP !== 'off';
+    } catch {
+        return true; // no bundler substitution and no `process`: a plain browser bundle
+    }
+};
 
-const createBasemapLayers = () => BASEMAP_ENABLED ? [
+const createBasemapLayers = () => basemapEnabled() ? [
     new TileLayer({
         properties: {name: 'darkBaseMap'},
         source: new OSM({wrapX: false}),

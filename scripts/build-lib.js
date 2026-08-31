@@ -313,6 +313,47 @@ assertNoImport(rootDirs, 'maplibre-gl', 'the root entry point');
 assertNoImport(mlbDirs, 'ol', 'the MapLibre entry point');
 assertNoImport(olDirs, 'maplibre-gl', 'the OpenLayers entry point');
 
+/**
+ * No published module may touch `process` unguarded.
+ *
+ * `process` is a Node and bundler-time global with no equivalent in a plain browser
+ * bundle. A read at module scope makes the whole module unimportable for a consumer
+ * whose bundler does not shim it, which is what `REACT_APP_BASEMAP` did to both
+ * renderer entry points: importing them threw `process is not defined`. The smoke
+ * loads below cannot catch it, because Node always has a `process`.
+ *
+ * Same family as the DOM rule that moved `measureCtx()` inside a function, and asserted
+ * the same way: the read has to be inside something, not at module scope.
+ *
+ * "At module scope" is read off the indentation. `tsc` emits a module's own statements
+ * flush left and indents everything nested, so a `process.` on an unindented line is a
+ * read that runs on import. That is the rule itself rather than a proxy for it — a
+ * `typeof process` test would have been the proxy, and it is the wrong one here, since
+ * no bundler substitutes a bare `typeof process` and guarding that way would quietly
+ * break the demo's own REACT_APP_BASEMAP flag.
+ */
+const assertNoTopLevelProcess = (dirs, what) => {
+    const offenders = dirs
+        .flatMap(dir => (fs.existsSync(dir) ? [...walk(dir)] : []))
+        .filter(f => f.endsWith('.js'))
+        .flatMap(f =>
+            fs
+                .readFileSync(f, 'utf8')
+                .split('\n')
+                .map((line, i) => ({f, line, n: i + 1}))
+                .filter(({line}) => /^\S.*\bprocess\s*[.[]/.test(line)),
+        );
+    if (offenders.length) {
+        const list = offenders.map(({f, line, n}) => `${path.relative(dist, f)}:${n}  ${line.trim()}`).join('\n  ');
+        throw new Error(`\`process\` read at module load in ${what} — a browser bundle has none:\n  ${list}`);
+    }
+    console.log(`  verified: ${what} reads no process at module load`);
+};
+
+assertNoTopLevelProcess(rootDirs, 'the root entry point');
+assertNoTopLevelProcess(olDirs, 'the OpenLayers entry point');
+assertNoTopLevelProcess(mlbDirs, 'the MapLibre entry point');
+
 // Load every emitted entry the way a consumer would. Static checks missed a
 // whole broken build once: 1.3.0's ESM output imported `ol/source/Vector`
 // without the extension, which CJS and bundlers resolve and Node's ESM loader
