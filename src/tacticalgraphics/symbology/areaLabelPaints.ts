@@ -138,6 +138,49 @@ export function areaDateLabel(feature: PaintFeature): string {
     return start || end || '';
 }
 
+/** Screen-pixel clearance between the shape's lower edge and the literal under it. */
+const BELOW_SHAPE_GAP_PX = 10;
+
+/**
+ * A fixed literal set **below** the shape, centred on it.
+ *
+ * The airhead line is the case: its plate labels the enclosure with the words "AIRHEAD
+ * LINE" under it and offers no name box at all, so there is nothing for the operator to
+ * type and nothing for a designation-driven label to draw. (User's call, 2026-09-01.)
+ *
+ * Below the *painted* outline rather than at the label anchor, because the anchor sits in
+ * the middle of the shape and this word belongs outside it. The gap is in screen pixels so
+ * it holds at every zoom, which is the standing rule for any clearance.
+ */
+export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
+    return (feature, context) => {
+        const box = feature.bounds;
+        if (!box) return [];
+        /*
+         * **Emitted directly, not through `stack`.** That helper runs the text through
+         * `fitLabelScale`, which shrinks a label until it fits *inside* the outline — right
+         * for a centred name and wrong for anything hung outside, where it collapses the
+         * text to nothing. The engine reported the mark and the map showed no words. The
+         * outside labels here all bypass it for the same reason. @see zoneLabelPaint
+         */
+        return [{
+            geometry: {
+                type: 'Point',
+                coordinates: [(box.minX + box.maxX) / 2, box.minY - BELOW_SHAPE_GAP_PX * context.resolution],
+            },
+            text: {
+                text: literal,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'top',
+                scale: outsideScaleOf(feature, context),
+            },
+        }];
+    };
+}
+
 /**
  * The area graphics whose plate carries a country code beside the designation.
  *

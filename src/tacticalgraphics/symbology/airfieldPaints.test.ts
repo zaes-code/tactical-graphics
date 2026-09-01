@@ -106,11 +106,11 @@ describe('APP-06 131900 — airfield', () => {
         expect(painted0).toEqual(arms);
     });
 
-    it('sets its designation beside the runway, not through the crossing', () => {
+    it('sets field H beside the runway, not through the crossing', () => {
         const center = project(CENTER);
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
-            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
+            properties: {name: TacticalGraphicName.Airfield, additionalInfo: 'JOINT'},
             graphicSize: SIZE,
         } as PaintFeature, context(200));
 
@@ -128,7 +128,7 @@ describe('APP-06 131900 — airfield', () => {
      *
      * Deriving it from `graphicSize` instead assumes that number is the runway's half
      * length, which holds only on the path that stamps it. The catalog hands the paint the
-     * sample's `radius`, which is smaller, and the designation printed 17 px *inside* the
+     * sample's `radius`, which is smaller, and the label printed 17 px *inside* the
      * runway it is supposed to sit beyond — visible on zaes.com rather than in the app,
      * which is why no test caught it.
      */
@@ -139,7 +139,7 @@ describe('APP-06 131900 — airfield', () => {
 
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
-            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
+            properties: {name: TacticalGraphicName.Airfield, additionalInfo: 'JOINT'},
             // Deliberately wrong for this graphic, the way the catalog's is: a size that
             // would put the label well inside the runway.
             graphicSize: SIZE * 0.6,
