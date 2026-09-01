@@ -370,6 +370,21 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (RECTANGULAR_GRAPHICS.includes(name)) {
         return {roles: ['shape', 'shape', 'offset'], offsetScale: 1};
     }
+    /**
+     * **The rectangular target: a length grip, then a width grip.**
+     *
+     * It is not in `RECTANGULAR_GRAPHICS` above — its base is one anchor point, not an
+     * axis — so it needs its own line here. Grip 0 sets the length and the attitude
+     * together, grip 1 sets the width across them, which is the `offset` role every
+     * widthed graphic uses.
+     *
+     * `offsetScale` is 1 for the same reason the two-point rectangles use 1: the grip sits
+     * exactly one half-width off the axis, so it has to track the cursor 1:1 or it runs
+     * away from it. @see RectangularTarget.generateHandles
+     */
+    if (name === TacticalGraphicName.TargetAreaRectangular) {
+        return {roles: ['shape', 'offset'], offsetScale: 1};
+    }
     if (RANGE_FANS.includes(name)) {
         return {roles: [], repeating: 'band'};
     }

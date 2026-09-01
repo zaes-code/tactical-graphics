@@ -609,9 +609,17 @@ export const createMeasureFeature = () => {
 
         const [a, b] = coords;
         const stated = f.get('measureMeters') as number | undefined;
-        const text = formatDistance(
+        const distance = formatDistance(
             typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
         );
+        /*
+         * **A graphic with more than one dimension has to say which one this is.** A radius
+         * read-out needs no caption — a circle has one number — but the rectangular target
+         * has a length and a width on two separate grips, and an unlabelled figure beside
+         * one of them does not say which the drag is changing. @see measureCaption
+         */
+        const caption = f.get('measureLabel') as string | undefined;
+        const text = caption ? `${caption} ${distance}` : distance;
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the

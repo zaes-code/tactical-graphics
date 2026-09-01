@@ -81,6 +81,16 @@ export interface TacticalGraphicHandler {
 
     setOffset?(offset: number): void;
 
+    /**
+     * A width drag expressed as a cursor position rather than a distance.
+     *
+     * For the holders whose frame is not in their base: a point-anchored graphic has one
+     * anchor point, so there is no axis for the manager to measure a perpendicular
+     * against and the holder works the width out from its own centre and attitude.
+     * @see TacticalGraphicsManager.handleOffset
+     */
+    setOffsetFromPoint?(coordinate: Coordinate): void;
+
     // Multiplier applied to the width-handle drag distance before it reaches
     // setOffset. Omitted means the shared default (see handleOffset).
     offsetScale?: number;
