@@ -81,21 +81,21 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const fields = getGraphicFields(selection.graphicName);
 
     /*
-     * **Everything stored, then the fields this dialog manages on top.**
+     * **Only the fields this graphic supports, and an edit drops the rest.** (User's call,
+     * 2026-08-31.)
      *
-     * `writeGraphicProperties` replaces the amplifier bag rather than merging it, so an
-     * amplifier the dialog does not offer has nowhere to survive: building the bag from
-     * the offered fields alone destroyed it on the next OK. Measured on a forward edge of
-     * battle area, which paints a date-time pair and offers no box for one — dates set by
-     * an import, a restore or a host through the public API were gone the moment the
-     * operator renamed it.
+     * `writeGraphicProperties` replaces the amplifier bag rather than merging it, so a
+     * value outside `getGraphicFields` does not survive a save. That is deliberate: the
+     * registry is what a graphic carries, so a date on a symbol that declares none is
+     * out-of-spec data, and normalising it away on the next edit is better than carrying
+     * invisible state no control manages. A stale value nobody can see is exactly what
+     * made the country code draw on four graphics whose plate has none.
      *
-     * The explicit blanking below still wins, so a field this dialog *does* manage can
-     * still be cleared, and a designation on a graphic that no longer takes one is still
-     * dropped rather than lingering.
+     * **Shape inputs are not at risk.** Every holder re-supplies its geometry state —
+     * `radius`, `rotation`, `width`, `length` — as the fourth argument on the same call,
+     * so replacing the label bag never touches the shape. @see writeGraphicProperties
      */
     const labels: GraphicLabels = {
-        ...stored,
         designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
     };
