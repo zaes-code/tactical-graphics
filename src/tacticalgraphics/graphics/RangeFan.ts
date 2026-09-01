@@ -216,17 +216,36 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
     }
 
     /**
-     * `[center, ...one handle per band]` — each band's handle sits on its own arc
-     * along the *global* center bearing (the same anchor the band's mid-label
-     * uses), so every band's range can be dragged independently. Handles follow
-     * the **sorted** band order from `resolveBands`.
+     * `[center, ...one rim per band, ...each band's two arc ends]`.
+     *
+     * **Three handles per band, and the order is an interface.** The renderer strips the
+     * center and hands what is left to the holder as a bare index, so this order is the
+     * only thing that says which handle means what:
+     *
+     * | index (after the center) | meaning |
+     * |---|---|
+     * | `0 .. N-1` | band *i*'s **range** — its rim, on the global center bearing |
+     * | `N + 2i` | band *i*'s **left azimuth** — the left end of its outer arc |
+     * | `N + 2i + 1` | band *i*'s **right azimuth** |
+     *
+     * The rim sits where the band's own mid-label is anchored, so the two read as the same
+     * place. The arc ends are the points the operator sees the bearing printed beside, which
+     * is where they reach for when they want to change it — a fan with three bands drawn at
+     * 020/070, 035/085 and 045/100 had a handle for none of those six numbers before this.
+     *
+     * Handles follow the **sorted** band order from `resolveBands`, which is what the
+     * holder's index arithmetic assumes.
      */
     generateHandles(base: Feature<Point>, opts?: RangeFanOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
         const centerAz = resolveCenterAzimuth(opts);
         const rims = bands.map(band => pointAtAzimuth(center, centerAz, band.range));
-        return this.asMultiPointFeature([center, ...rims]);
+        const arcEnds = bands.flatMap(band => {
+            const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
+            return [pointAtAzimuth(center, leftAz, band.range), pointAtAzimuth(center, rightAz, band.range)];
+        });
+        return this.asMultiPointFeature([center, ...rims, ...arcEnds]);
     }
 
     /**

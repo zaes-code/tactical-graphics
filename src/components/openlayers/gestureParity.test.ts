@@ -41,12 +41,23 @@ function reaches(name: TacticalGraphicName, gesture: 'handleRotate' | 'handleRes
     const controller = getController(name, 100) as unknown as Record<string, ((v: number) => void) | undefined>;
     if (typeof controller?.[gesture] !== 'function') return false;
 
+    /*
+     * **Which method to watch differs by gesture, and the difference is the point.**
+     *
+     * A rotate is refused the old way, by an override that does not call through, so the
+     * base's own `handleRotate` is the boundary. A resize is refused by the base itself
+     * reading `allowedGestures` — a stronger arrangement, because nothing can disagree
+     * with the table — so `handleResize` is now the *gate* and `applyResize` is the work.
+     * Watching the gate there would record every call as reaching the implementation and
+     * this test would pass on a graphic that never resizes.
+     */
+    const watch = gesture === 'handleResize' ? 'applyResize' : gesture;
     const base = MissionTaskController.prototype as unknown as Record<string, (v: number) => void>;
-    const original = base[gesture];
+    const original = base[watch];
     if (typeof original !== 'function') return true;
 
     let called = false;
-    base[gesture] = function patched(this: unknown, value: number) {
+    base[watch] = function patched(this: unknown, value: number) {
         called = true;
         // Deliberately not calling through: the holders touch OpenLayers geometry, and
         // the only question here is whether the override let the call past.
@@ -59,7 +70,7 @@ function reaches(name: TacticalGraphicName, gesture: 'handleRotate' | 'handleRes
         // A holder that throws on a synthetic drag still answers the question — the call
         // got past the override, which is what is being measured.
     } finally {
-        base[gesture] = original;
+        base[watch] = original;
     }
     return called;
 }
