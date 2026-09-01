@@ -402,7 +402,7 @@ describe('setBandRange — the range-fan handles', () => {
 
     it('sets the band it was given, in metres', () => {
         // One degree of longitude is about 111 km — 111,000 metres, which is the unit a
-        // band stores as of 4.0.0. Both range fan plates say so outright.
+        // band stores as of 3.2.0. Both range fan plates say so outright.
         // @see RangeFanBand.range
         const edited = setBandRange(fan([10_000, 200_000, 400_000]), 1, [1, 0]);
         expect(edited.properties.rangeFan!.bands[1].range / 1000).toBeCloseTo(111, 0);

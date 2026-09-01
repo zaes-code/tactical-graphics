@@ -35,7 +35,7 @@ function along(from: Position, metres: number, bearingDeg: number): Position {
  * whole reason it needs its own generator rather than a flag on the rectangular area: the
  * two disagree about what a base *is*, not about how to draw a box.
  *
- * **This is a breaking change for saved targets.** A rectangular target stored before 4.0.0
+ * **This is a breaking change for saved targets.** A rectangular target stored before 3.2.0
  * carries a two-point `LineString` base and will not restore as the same shape; the anchor
  * count is part of the symbol's definition, so there is no reading of the old geometry that
  * is also correct under the plate. (User's call, 2026-08-31.)

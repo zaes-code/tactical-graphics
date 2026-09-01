@@ -734,7 +734,7 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
  * The rectangular graphics that also file a **length** — the dimension *along* the
  * rectangle, as opposed to the width across it.
  *
- * Empty as of 4.0.0 — kept because the distinction is real and may return.
+ * Empty as of 3.2.0 — kept because the distinction is real and may return.
  *
  * This held the rectangular target, the one rectangle that files a length rather than
  * deriving it from two anchor points. It is now built from a single anchor point and its

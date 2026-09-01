@@ -448,7 +448,7 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.ZoneOfResponsibilityCircular,
     /*
      * Not a circle, but sized by the same gesture. The rectangular target became
-     * point-anchored in 4.0.0 — one anchor point, with the length swung and set by dragging
+     * point-anchored in 3.2.0 — one anchor point, with the length swung and set by dragging
      * the edge handle — so it resizes exactly the way the entries above do, and would
      * otherwise be the one graphic in the family that reports nothing while you drag it.
      * The number under the cursor is its half-length. @see RectangularTarget
@@ -817,7 +817,7 @@ export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
  *
  * So the affordance is not offered, and the two ways left are the two that mean something:
  * type a range into the dialog's band editor, or drag that band's own rim handle, which
- * moves one ring and writes the metres it landed on. (User's call, 2026-09-02.)
+ * moves one ring and writes the metres it landed on. (User's call, 2026-09-01.)
  *
  * **This is not `ROTATE_ONLY_SYMBOLS`.** That set is for symbols with no size input at all;
  * these have several, and the point is which control reaches them.

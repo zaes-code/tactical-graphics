@@ -64,7 +64,7 @@ describe('country codes pair with designations', () => {
          * ruling, and the decision line letters `T` beside `AS` and sets the two apart with
          * a slash rather than brackets.
          *
-         * Three more on 2026-09-02. The no fire line and the restrictive fire line carry the
+         * Three more on 2026-09-01. The no fire line and the restrictive fire line carry the
          * same `T2 ( AS )` plate as the first three and had simply been left out; the named
          * area of interest **line** letters `NAI T/AS`, the slash form. Its *area* twin
          * (120200) letters no country code and is deliberately not here.

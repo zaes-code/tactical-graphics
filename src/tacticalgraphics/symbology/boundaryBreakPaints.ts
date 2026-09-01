@@ -225,7 +225,7 @@ export function contourLineBoundaryPaint(): CardinalPaint {
  * The dose that goes in the break, from field **H**.
  *
  * 272200's Template carries one lettered box and it is `H`; the Example fills it with
- * `30 CGH`. It read `designation` until 2026-09-02, which put an amplifier on the symbol
+ * `30 CGH`. It read `designation` until 2026-09-01, which put an amplifier on the symbol
  * that no plate asks for and left the one it does ask for with nowhere to go.
  *
  * **Both halves of the symbol read this**, because one sizes the gap in the outline and the
