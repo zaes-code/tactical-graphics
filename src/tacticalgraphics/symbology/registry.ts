@@ -5,11 +5,11 @@
  * this what draws a graphic; `isPaintable` is how it finds out whether the answer
  * exists yet.
  *
- * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done —
- * `isPaintable` is true for 291 of the 292 registered names — but the one exception is
- * real: `AxisOfAttack` is a generator with no enum member, no controller and no UI path.
- * An exhaustive record would have to name it, and naming it would mean either a
- * placeholder that reads as "done" or a member the enum does not have.
+ * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done and
+ * `isPaintable` is now true for every registered name — the lone exception, `AxisOfAttack`,
+ * was removed in 3.2.0 for appearing in neither publication and having no UI path. The
+ * record stays partial anyway: a graphic can legitimately have no paint of its own, and an
+ * exhaustive one would force a placeholder that reads as "done".
  *
  * **Registering a paint takes two edits**, and this is the trap: the entry here, and the
  * routing on the OpenLayers side. A holder that still chooses its style itself will not
@@ -58,6 +58,7 @@ import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
+import {overheadWirePaint, safeLaneOrGapPaint} from './overheadWirePaints';
 import {
     barSymbolPaint,
     baseDefenseZoneLabelPaint,
@@ -93,6 +94,7 @@ import {
     humanTerrainLabelPaint,
     outsideCornerDatePaint,
     areaLabelStackPaint,
+    belowShapeLiteralPaint,
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     smokeObscurantLabelPaint,
@@ -161,6 +163,15 @@ const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
  * on purpose (`ai/excluded-graphics.md`, 2026-08-02, "for now"), so their enum
  * members are commented out. Reviving them means uncommenting seven sites, of
  * which this list is now one.
+ */
+/**
+ * Per-graphic options for the lines that share `defaultLinePaint`.
+ *
+ * Only the ones that take a country code beside the designation. The fire-support family
+ * letters it `T2 ( AS )` and renders `FSCL MND(USA)`; the battlefield handover and delay
+ * lines are the same shape by the user's call, their examples carrying a designation and a
+ * date range at each end. Everything else in the list below takes the plain default.
+ * (User's call, 2026-09-01.)
  */
 const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BattlefieldHandoverLine,
@@ -428,6 +439,13 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (ZONE_GRAPHICS_IRREGULAR.includes(name)) return zoneLabelPaint(name, true);
     if (STACK_LABEL_GRAPHICS.includes(name)) return areaLabelStackPaint(name);
     if (name === TacticalGraphicName.ObstacleFreeArea) return areaLabelStackPaint(name, {before: ['FREE']});
+    // Its plate names the enclosure under the shape and offers no designation box, so there
+    // is nothing to type and the default centred label had nothing to draw.
+    if (name === TacticalGraphicName.AirheadLine) return belowShapeLiteralPaint('AIRHEAD LINE');
+    // 310800 boxes an `N` at the west and east crossings, which the other support areas do
+    // not. Everything else about its block is the default: CSA over the designation, dates
+    // beneath. (User's call, 2026-09-01.)
+    if (name === TacticalGraphicName.CorpsSupportArea) return areaDefaultLabelPaint(name, true, true);
     // 310200's Template stacks its literal on two lines with the designation **under** it,
     // where every other prefixed area sets the two side by side. @see areaLabelStackPaint
     if (name === TacticalGraphicName.EnemyPrisonerOfWarHoldingArea) {
@@ -849,6 +867,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.LineOfContact] = {graphic: lineOfContactPaint()};
     registry[TacticalGraphicName.FieldsOfFire] = {graphic: fieldsOfFirePaint()};
     registry[TacticalGraphicName.PassageLane] = {graphic: passageLanePaint()};
+    /*
+     * The safe lane calls the passage lane's own paint for its line work, so the outline
+     * stays literally the same function -- two copies of one construction do not stay the
+     * same shape -- and adds the amplifier column APP-06 letters and the FM does not.
+     */
+    registry[TacticalGraphicName.SafeLaneOrGap] = {graphic: safeLaneOrGapPaint()};
+    registry[TacticalGraphicName.OverheadWire] = {graphic: overheadWirePaint()};
     // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
     registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
     registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};

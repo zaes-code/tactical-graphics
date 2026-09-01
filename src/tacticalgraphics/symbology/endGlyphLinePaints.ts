@@ -24,7 +24,7 @@ import {
     uprightRotation,
     walkPath,
 } from './decorations';
-import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type EndGlyphPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -162,7 +162,15 @@ export function decisionLinePaint(): EndGlyphPaint {
         const stroke = {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const paints: Paint[] = [];
 
-        const text = [feature.properties.designation, feature.properties.secondDesignation]
+        /*
+         * **`T/AS` — the designation and its country code**, not a second designation.
+         *
+         * 110500's template letters the pair `T/AS`, and the slash is the separator the plate
+         * draws. This composed `designation/secondDesignation`, which put a field the graphic
+         * does not offer into the star and left the country code with nowhere to go.
+         * (User's call, 2026-09-01.)
+         */
+        const text = [feature.properties.designation, feature.properties.countryCode]
             .map(part => (part ?? '').trim())
             .filter(Boolean)
             .join('/');
@@ -292,7 +300,22 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
             if (arms.length) paints.push({geometry: {type: 'MultiLineString', coordinates: arms}, stroke});
         }
 
-        const text = (feature.properties.designation ?? '').trim();
+        /*
+         * **Field H, not field T.** The Template carries `H` over `B` and no `T` at all, and
+         * the worked example reads "SMALL DITCHES" — a description of the going, not a name.
+         * This read `designation` while the comment below already called it field H.
+         *
+         * `designation` is still honoured as a fallback so corridors saved before the field
+         * moved keep their text. Nothing writes it any more.
+         */
+        const props = feature.properties;
+        /*
+         * **Through `amplifierText`, unlike the designation this replaced.** A designation
+         * survives "show name only" — it is the graphic's name. Field H is an annotation
+         * and has to drop with the rest, and reading it raw leaked "TYPE II" onto a corridor
+         * that was meant to be showing nothing but its symbol.
+         */
+        const text = amplifierText(feature, (props.additionalInfo ?? props.designation ?? '').trim());
         if (!text) return paints;
 
         /*
