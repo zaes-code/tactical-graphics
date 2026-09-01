@@ -357,7 +357,6 @@ describe('the sector-modifier fields, and where the Remarks column allows them',
 
     it('offers Sector 1 on exactly the three graphics the Remarks column names', () => {
         const offered = (listTacticalGraphicNames() as TacticalGraphicName[])
-            .filter(n => String(n) !== 'AxisOfAttack')
             .filter(n => getGraphicFields(n).mobility);
         expect(offered.sort()).toEqual([
             TacticalGraphicName.LimitedAccessArea,

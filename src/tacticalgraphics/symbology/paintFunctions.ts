@@ -145,6 +145,31 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
 }
 
 /**
+ * A designation followed by its country code in parentheses — "326 EN BN (USA)".
+ *
+ * APP-06 draws the brackets as part of the *template*: the box holds field AS and the
+ * bracket glyphs sit outside it, so they are the standard's punctuation rather than
+ * something the operator types. Four plates agree — 110300 `326 EN BN (USA)`, 240203
+ * `2AD (DEU)`, 240303 `52ID (GBR)`, 240403 `1ID (FRA)`.
+ *
+ * The brackets are therefore added here, not required of the input. A code that already
+ * carries them is passed through untouched, so an operator who types `(USA)` out of habit
+ * does not get `((USA))`. An absent code contributes nothing at all — no stray brackets,
+ * no trailing space.
+ *
+ * Deliberately *not* `formatFullLabel`, which joins a graphic's static prefix to free text
+ * ("PL" + "BLUE") and has no business bracketing anything. Boundary was calling it for this
+ * and getting a bare space.
+ */
+export function formatDesignationWithCountry(designation?: string, countryCode?: string): string {
+    const name = designation?.trim() ?? '';
+    const code = countryCode?.trim() ?? '';
+    if (!code) return name;
+    const bracketed = code.startsWith('(') && code.endsWith(')') ? code : `(${code})`;
+    return name ? `${name} ${bracketed}` : bracketed;
+}
+
+/**
  * The affiliation a feature draws in. `unknown` resolves to the default line color.
  *
  * **A graphic whose symbol does not take a standard identity always reads
@@ -695,19 +720,94 @@ export interface DefaultLineOptions {
      * showing dates the moment a user filled the field in.
      */
     showDates?: boolean;
+    /**
+     * How this line sets its country code beside the designation, if it takes one.
+     *
+     * `'parentheses'` is the fire-support family's — APP-06 letters them `T2 ( AS )` and the
+     * example reads `FSCL MND(USA)`. `'slash'` is the decision line's, whose plate writes
+     * `T/AS`. Absent means the line takes no country code, which is most of them.
+     * (User's call, 2026-09-01.)
+     */
+    countryCode?: 'parentheses' | 'slash';
+}
+
+/**
+ * The lines that set a country code beside their designation, and how.
+ *
+ * **This lives here, beside the paint, and not in the registry.** It started in
+ * `registry.ts`, which meant MapLibre -- which builds its styles from the registry -- drew
+ * `FSCL ALPHA (GBR)` while OpenLayers, whose line style calls `defaultLinePaint(name)` with
+ * no options at all, drew `FSCL ALPHA` and dropped the code on the floor. Nothing failed:
+ * the country code round-tripped through save and restore, the dialog offered it, and one
+ * of the two engines simply never painted it. Making it the paint's own default is what
+ * stops an engine having an opinion about a symbology fact.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parentheses' | 'slash'>> = {
+    // `T2 ( AS )` on the plate, `FSCL MND(USA)` in the worked example.
+    [TacticalGraphicName.FireSupportCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldHandoverLine]: 'parentheses',
+    [TacticalGraphicName.DelayLine]: 'parentheses',
+    // The no fire line and the restrictive fire line carry the same `T2 ( AS )` plate as the
+    // four above; they were left out of the first ruling and swept in by the second.
+    [TacticalGraphicName.NoFireLine]: 'parentheses',
+    [TacticalGraphicName.RestrictiveFireLine]: 'parentheses',
+    // 142000 writes `NAI T/AS` -- the slash form. (The *area* named area of interest,
+    // 120200, letters no country code at all and is not here.)
+    [TacticalGraphicName.NamedAreaOfInterestLine]: 'slash',
+    // The decision line writes `T/AS` too, but it has its own paint -- the star at each end
+    // -- and never reaches this one, so listing it would be a second statement of a fact
+    // that lives in `decisionLinePaint`.
+};
+
+/**
+ * The default lines whose plate boxes `H` beside `T` at each end.
+ *
+ * Only `line, generic` so far. 110400's Template sets `H` and `T` side by side above each
+ * end with `W - W1` below, and its Example reads `IDR METH` — two boxes, one line of text.
+ * Everything else in this family has no `H` box, so this is a list rather than a default.
+ */
+const DEFAULT_LINE_ADDITIONAL_INFO: ReadonlySet<TacticalGraphicName> = new Set([TacticalGraphicName.LineGeneric]);
+
+/**
+ * How a line sets its country code, if it takes one at all.
+ *
+ * Exported so a renderer that assembles its own options can start from the same answer
+ * rather than restating it -- and so a test can assert the two engines agree.
+ */
+export function defaultLineCountryCodeStyle(name: TacticalGraphicName): 'parentheses' | 'slash' | undefined {
+    return DEFAULT_LINE_COUNTRY_CODES[name];
 }
 
 export function defaultLinePaint(
     name: TacticalGraphicName,
     options: DefaultLineOptions = {},
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
-    const {alwaysDashed = false, showDates = true} = options;
+    const {alwaysDashed = false, showDates = true, countryCode = defaultLineCountryCodeStyle(name)} = options;
     return (feature, context) => {
         if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const identifier = getFullLabel(name, feature.properties.designation ?? '');
+        const designation = feature.properties.designation ?? '';
+        const country = (feature.properties.countryCode ?? '').trim();
+        const named =
+            countryCode === undefined || !country
+                ? designation.trim()
+                : countryCode === 'slash'
+                  ? [designation.trim(), country].filter(Boolean).join('/')
+                  : formatDesignationWithCountry(designation, country);
+        /*
+         * **Field H leads the line, ahead of the designation.** 110400 boxes them in that
+         * order, `H` then `T`, and the Example runs them together as one line of text with
+         * a space between. It is free text the operator typed, so "name only" takes it away
+         * and leaves the designation standing.
+         */
+        const free = DEFAULT_LINE_ADDITIONAL_INFO.has(name)
+            ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
+            : '';
+        const identifier = [free, getFullLabel(name, named)].filter(Boolean).join(' ');
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';

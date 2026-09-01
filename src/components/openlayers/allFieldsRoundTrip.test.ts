@@ -66,8 +66,7 @@ function labelsFor(name: TacticalGraphicName): GraphicLabels {
     return labels as unknown as GraphicLabels;
 }
 
-const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
-    .filter(n => String(n) !== 'AxisOfAttack');
+const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[]);
 
 describe(`every field a graphic offers survives a round trip (${NAMES.length} names)`, () => {
     it.each(NAMES.map(n => [String(n), n] as const))('%s', (_label, name) => {

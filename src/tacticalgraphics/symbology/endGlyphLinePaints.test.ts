@@ -69,14 +69,16 @@ beforeEach(() => resetTacticalGraphicsConfig());
 
 describe('APP-06 110500 — decision line', () => {
     const paint = decisionLinePaint();
-    const props = {designation: '1X', secondDesignation: '007'};
+    // Field T and the country code, not a second designation: 110500's Template pairs the
+    // name with `AS`, and the dialog offers exactly that pair. (User's call, 2026-09-01.)
+    const props = {designation: '1X', countryCode: 'GBR'};
     const starOf = (paints: Paint[]) => lines(paints).find(path => path.length === 11)!;
 
     // "The end-of line information will typically be posted at the ends of the line within
     //  the stars as it is displayed on the screen."
     it('sets the information inside a star at each end', () => {
         const paints = paint(feature(TacticalGraphicName.DecisionLine, props), context());
-        expect(texts(paints)).toEqual(['1X/007', '1X/007']);
+        expect(texts(paints)).toEqual(['1X/GBR', '1X/GBR']);
 
         const spots = paints.filter(p => p.text).map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
         expect(spots).toEqual(EAST);
@@ -84,9 +86,11 @@ describe('APP-06 110500 — decision line', () => {
 
     it('joins the two fields with a slash, and shows a lone one alone', () => {
         expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {designation: '1X'}), context()))[0]).toBe('1X');
-        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {secondDesignation: '007'}), context()))[0]).toBe('007');
+        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {countryCode: 'GBR'}), context()))[0]).toBe('GBR');
         // No dangling separator either way round.
-        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, props), context()))[0]).toBe('1X/007');
+        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, props), context()))[0]).toBe('1X/GBR');
+        // The second designation has no home on this symbol and must not sneak back in.
+        expect(texts(paint(feature(TacticalGraphicName.DecisionLine, {secondDesignation: '007'}), context()))).toEqual([]);
     });
 
     it('draws a pentagram rather than a ten-sided cog', () => {
