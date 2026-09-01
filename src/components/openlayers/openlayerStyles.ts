@@ -178,6 +178,8 @@ import {
     zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
+    overheadWirePaint,
+    safeLaneOrGapPaint,
     encirclementPaint,
     CARDINAL_LABEL_AREAS,
     CBRN_AREAS,
@@ -952,6 +954,16 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
 /** **Ported.** @see mobilityPaints.ts, `passageLanePaint`. */
 export function passageLaneGraphicStyle(): StyleFunction {
     return asStyleFunction(passageLanePaint());
+}
+
+/** **Ported.** @see overheadWirePaints.ts, `safeLaneOrGapPaint`. */
+export function safeLaneOrGapStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(safeLaneOrGapPaint(), name);
+}
+
+/** **Ported.** @see overheadWirePaints.ts, `overheadWirePaint`. */
+export function overheadWireStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(overheadWirePaint(), name);
 }
 
 
