@@ -957,24 +957,19 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {/*
+                                  * **Grids only.** This block used to carry a "Unit Name" box as well,
+                                  * bound to `secondDesignation` — the airspace coordination areas were
+                                  * the only graphics with grids, and that was the sole way to type their
+                                  * second name.
+                                  *
+                                  * They now declare `identifier2` outright, because both publications
+                                  * give them two name fields and merely letter it differently (APP-06
+                                  * `T2`, FM `T1`). Keeping this one would put the same value on screen
+                                  * twice under two labels, each overwriting the other.
+                                  */}
                                 {fields.grids && (
                                     <>
-                                        <Box sx={{minWidth: 180, mt: 1}}>
-                                            <FormControl fullWidth variant="outlined">
-                                                <InputLabel htmlFor="unit-input">Unit Name</InputLabel>
-                                                <OutlinedInput
-                                                    id="unit-input"
-                                                    label="Unit Name"
-                                                    value={pendingChanges.labels.secondDesignation ?? ''}
-                                                    onChange={e =>
-                                                        setPendingChanges(prev => ({
-                                                            ...prev,
-                                                            labels: {...prev.labels, secondDesignation: e.target.value},
-                                                        }))
-                                                    }
-                                                />
-                                            </FormControl>
-                                        </Box>
                                         <Box sx={{minWidth: 180, mt: 1}}>
                                             <FormControl fullWidth variant="outlined">
                                                 <InputLabel htmlFor="grid-input">Grids</InputLabel>

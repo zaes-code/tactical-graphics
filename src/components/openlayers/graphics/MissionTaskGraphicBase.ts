@@ -1198,11 +1198,10 @@ export class PursuitGraphicBase extends MissionTaskGraphicBase {
 }
 
 /**
- * A freshly-placed target's half-width, as a share of its half-length.
+ * An untyped target's half-width, as a share of its half-length.
  *
  * The plate's own example is a box roughly half again as wide as it is deep, which is what
- * this reproduces. Proportional rather than a screen size because the length is already a
- * ground figure — mixing the two would make the shape depend on the zoom it was placed at.
+ * this reproduces. @see RectangularTargetGraphicBase.halfWidth
  */
 const DEFAULT_TARGET_WIDTH_RATIO = 0.66;
 
@@ -1227,18 +1226,33 @@ const DEFAULT_TARGET_WIDTH_RATIO = 0.66;
 export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
     graphicLabels: GraphicLabels = {designation: ''};
 
-    /** Half the full width in ground metres — the generators' own unit. @see toGraphicOptions */
-    private halfWidth: number;
+    /**
+     * A typed half-width in ground metres, or undefined while the width still follows the
+     * length. @see halfWidth, which is what the generator actually gets
+     */
+    private typedHalfWidth?: number;
 
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
         super(name, size, drawingResolution);
-        // A target placed with one click carries no width yet, so it starts proportional to
-        // its own length rather than at a screen size: the plate's example is a wide, squat
-        // box, and a screen-derived default would make a freshly-placed target a sliver at
-        // one zoom and a slab at another.
-        this.halfWidth = size * DEFAULT_TARGET_WIDTH_RATIO;
         this.label.setStyle(getAreaLabelStylesFn(name));
         writeGraphicProperties(this.getFeatures(), name, this.graphicLabels);
+    }
+
+    /**
+     * Half the full width in ground metres — the generators' own unit.
+     *
+     * **Derived from the current `size`, not seeded once.** The constructor is handed the
+     * *initial* size, which is a resolution; the size a user actually drew arrives later
+     * through `updateGeom`. Fixing the width at construction time therefore left a target
+     * whose length grew to thousands of kilometres and whose width stayed at about one, and
+     * it drew as a hairline rather than a box.
+     *
+     * Proportional rather than a screen size for the same reason the length is a ground
+     * figure: mixing the two would make a freshly-placed target a sliver at one zoom and a
+     * slab at another. A typed width wins outright. @see toGraphicOptions
+     */
+    private get halfWidth(): number {
+        return this.typedHalfWidth ?? this.size * DEFAULT_TARGET_WIDTH_RATIO;
     }
 
     protected generatorOptions(): Record<string, unknown> {
@@ -1248,6 +1262,8 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
     }
 
     protected persistedGeometryState(): GraphicGeometryState {
+        // The effective metres, not the typed-or-nothing field: a restore has to rebuild
+        // the box that is on the screen. @see the stamping rule in CLAUDE.md
         return {length: this.size * 2, width: this.halfWidth * 2};
     }
 
@@ -1259,7 +1275,7 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
      */
     setOffset = (halfWidth: number): void => {
         if (!Number.isFinite(halfWidth) || halfWidth <= 0) return;
-        this.halfWidth = halfWidth;
+        this.typedHalfWidth = halfWidth;
         this.updateGeometry();
     };
 
@@ -1268,7 +1284,7 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
         // A typed width is the only way this graphic's width changes, so it is adopted here
         // rather than derived from a drag the way the two-point rectangles do it.
         const typed = labels.width;
-        if (typeof typed === 'number' && Number.isFinite(typed) && typed > 0) this.halfWidth = typed / 2;
+        if (typeof typed === 'number' && Number.isFinite(typed) && typed > 0) this.typedHalfWidth = typed / 2;
         this.updateGeometry();
         writeGraphicProperties(this.getFeatures(), this.name, labels, {
             ...this.persistedGeometryState(),
