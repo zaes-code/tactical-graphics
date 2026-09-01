@@ -323,6 +323,28 @@ describe('the rectangular target states its length and width', () => {
         expect(getDistance(toLonLat(r[0]), toLonLat(r[3]))).toBeCloseTo(4000, -2);
     });
 
+    it('keeps its proportions through a uniform resize', () => {
+        /*
+         * A circle has one number, so a resize is just `size × factor`. This graphic has
+         * two, and once a width is typed it stops following the length — so a resize that
+         * moved only `size` stretched the box instead of scaling it. Driven through the
+         * controller, which is where the gesture applies the factor, beside the arrowhead
+         * scaling it mirrors. @see MissionTaskController.handleResize
+         */
+        const holder = pointHolderFor(TARGET);
+        const typed = 6000;
+        holder.graphic.setLabel({...readGraphicLabels(holder.graphic.graphic), width: typed});
+
+        const before = readGraphicLabels(holder.graphic.graphic);
+        const ratio = before.width! / before.length!;
+        holder.handleResize(2);
+        const after = readGraphicLabels(holder.graphic.graphic);
+
+        expect(after.length).toBeCloseTo(before.length! * 2, -1);
+        expect(after.width).toBeCloseTo(typed * 2, -1);
+        expect(after.width! / after.length!).toBeCloseTo(ratio, 5);
+    });
+
     it('is still the only rectangle that files a length', () => {
         // The two-point zones derive both dimensions from their anchor points, so a length
         // on one of them would be a number nothing set. @see RECTANGLE_LENGTH_GRAPHICS
