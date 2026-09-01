@@ -32,27 +32,27 @@ const context = (resolution: number): PaintContext => ({
 
 /**
  * `[centre, ...one anchor per band at mid-radius]`, which is what `generateLabels` emits.
- * Ranges are km; the projected units here are metres, matching EPSG:3857 closely enough
- * for a scale comparison.
+ * Ranges are metres, and so are the projected units here — close enough to EPSG:3857 for
+ * a scale comparison.
  */
-function circularFan(rangesKm: number[]): PaintFeature {
+function circularFan(rangesM: number[]): PaintFeature {
     const coords: ProjectedPosition[] = [[0, 0]];
     let prev = 0;
-    for (const range of rangesKm) {
-        coords.push([((prev + range) / 2) * 1000, 0]);
+    for (const range of rangesM) {
+        coords.push([(prev + range) / 2, 0]);
         prev = range;
     }
     return {
         geometry: {type: 'MultiPoint', coordinates: coords},
         properties: {name: TacticalGraphicName.WeaponSensorRangeFanCircular},
         rangeFanShape: 'circular',
-        rangeFanBands: rangesKm.map(range => ({range})),
+        rangeFanBands: rangesM.map(range => ({range})),
     };
 }
 
 /** The sector packs three points per band: mid-radius, then the two arc edges. */
-function sectorFan(rangeKm: number): PaintFeature {
-    const r = rangeKm * 1000;
+function sectorFan(rangeM: number): PaintFeature {
+    const r = rangeM;
     return {
         geometry: {
             type: 'MultiPoint',
@@ -65,7 +65,7 @@ function sectorFan(rangeKm: number): PaintFeature {
         },
         properties: {name: TacticalGraphicName.WeaponSensorRangeFanSector},
         rangeFanShape: 'sector',
-        rangeFanBands: [{range: rangeKm, resolvedLeftAz: 45, resolvedRightAz: 135}],
+        rangeFanBands: [{range: rangeM, resolvedLeftAz: 45, resolvedRightAz: 135}],
     };
 }
 
@@ -83,18 +83,18 @@ beforeEach(() => resetTacticalGraphicsConfig());
 describe('a one-band circular fan', () => {
     it('shrinks its block as the ring shrinks on screen', () => {
         // The bug exactly: same fan, further out, and the label used to hold its size.
-        const near = marks(circularFan([200]), TacticalGraphicName.WeaponSensorRangeFanCircular, 200)[0];
-        const far = marks(circularFan([200]), TacticalGraphicName.WeaponSensorRangeFanCircular, 4000)[0];
+        const near = marks(circularFan([200_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, 200)[0];
+        const far = marks(circularFan([200_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, 4000)[0];
 
-        expect(near.text).toBe('MIN RG 200');
+        expect(near.text).toBe('MIN RG 200,000');
         expect(far.scale).toBeLessThan(near.scale);
     });
 
     it('keeps the block inside the ring it names', () => {
         // The ring is what the label has to fit in, so that is what it is measured against.
         for (const resolution of [200, 800, 2000, 6000]) {
-            const [mark] = marks(circularFan([200]), TacticalGraphicName.WeaponSensorRangeFanCircular, resolution);
-            const radiusPx = (200 * 1000) / resolution;
+            const [mark] = marks(circularFan([200_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, resolution);
+            const radiusPx = 200_000 / resolution;
             expect(widestRowPx(mark.text) * mark.scale).toBeLessThanOrEqual(radiusPx);
         }
     });
@@ -102,15 +102,17 @@ describe('a one-band circular fan', () => {
     it('is not punished for being alone when there is room', () => {
         // Capping against the centre was the first attempt and halved the room, because the
         // anchor sits at mid-radius. Zoomed in, a lone band should draw at full size.
-        const [mark] = marks(circularFan([200]), TacticalGraphicName.WeaponSensorRangeFanCircular, 20);
+        const [mark] = marks(circularFan([200_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, 20);
         expect(mark.scale).toBeCloseTo(1, 5);
     });
 });
 
 describe('a multi-band circular fan', () => {
     it('still measures each block against its neighbour', () => {
-        const bands = marks(circularFan([100, 200, 300]), TacticalGraphicName.WeaponSensorRangeFanCircular, 4000);
-        expect(bands.map(b => b.text)).toEqual(['MIN RG 100', 'MIN RG 200', 'MIN RG 300']);
+        const bands = marks(circularFan([100_000, 200_000, 300_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, 4000);
+        // The innermost ring is the minimum range; the ones outside it are maximums, which
+        // is how 242100 letters them. This used to read "MIN RG" three times.
+        expect(bands.map(b => b.text)).toEqual(['MIN RG 100,000', 'MAX RG(1) 200,000', 'MAX RG(2) 300,000']);
         // Three blocks 50 km apart at 4000 m/px is 12.5px of room — far too little for ten
         // characters, so every one of them is held well under full size.
         for (const band of bands) expect(band.scale).toBeLessThan(0.5);
@@ -132,7 +134,7 @@ describe('the sector generator', () => {
                 tacticalGraphic: {
                     name: TacticalGraphicName.WeaponSensorRangeFanSector,
                     rotation: 0,
-                    rangeFan: {bands: [{range: 180}], centerAzimuthDeg: 90},
+                    rangeFan: {bands: [{range: 180_000}], centerAzimuthDeg: 90},
                 },
             },
         } as never) as unknown as {labels: {geometry: {coordinates: number[][]}}};
@@ -153,8 +155,8 @@ describe('the sector generator', () => {
 
 describe('a sector fan', () => {
     it('caps its bearings instead of letting them outgrow the arc', () => {
-        const near = marks(sectorFan(180), TacticalGraphicName.WeaponSensorRangeFanSector, 4000);
-        const far = marks(sectorFan(180), TacticalGraphicName.WeaponSensorRangeFanSector, 40000);
+        const near = marks(sectorFan(180_000), TacticalGraphicName.WeaponSensorRangeFanSector, 4000);
+        const far = marks(sectorFan(180_000), TacticalGraphicName.WeaponSensorRangeFanSector, 40000);
 
         // Generic, so filtering keeps the scale: annotating the parameter as `{text: string}[]`
         // narrowed the *return* to that too, and the assertions below read `.scale` off it.
@@ -168,7 +170,7 @@ describe('a sector fan', () => {
     it('scales the outward nudge with the bearing it is clearing', () => {
         // At a resolution where the cap actually bites, so a fixed 16px nudge under a
         // shrunken label fails this rather than passing by coincidence at scale 1.
-        const paints = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanSector)(sectorFan(180), context(40_000));
+        const paints = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanSector)(sectorFan(180_000), context(40_000));
         const bearings = paints.filter(p => /^\d{3}$/.test(p.text?.text ?? ''));
         expect(bearings.length).toBe(2);
         for (const b of bearings) {

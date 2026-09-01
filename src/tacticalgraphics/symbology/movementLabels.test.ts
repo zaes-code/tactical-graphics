@@ -21,7 +21,7 @@
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
-import {TacticalGraphicName} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {getPaintFunction} from './registry';
 import {spanProportionalScale} from './movementPaints';
 
@@ -135,6 +135,81 @@ describe('the counterattacks label just behind the arrowhead', () => {
         // first version of this assertion actually measured.
         expect(scaleFor(400)).toBeLessThan(scaleFor(900));
         expect(scaleFor(SPAN)).toBeLessThanOrEqual(maxGraphicLabelScale());
+    });
+});
+
+/**
+ * The other two boxes on 152300's Template: `H` outside the casing, and an `N` on each rail
+ * at the rear.
+ *
+ * Both are placed from anchors the generator publishes rather than from anything the paint
+ * works out for itself, so the tests here are about *placement against the arrow* -- clear
+ * of the casing for H, one per rail for N -- and about H and N appearing only when there is
+ * something to show.
+ */
+describe('APP-06 152300 — the avenue of approach carries field H and the hostile marks', () => {
+    const paint = getPaintFunction(TacticalGraphicName.AvenueOfApproach)!.label!;
+
+    /** Head span running west to east, then the rear of each rail, one half-width out. */
+    const HALF_WIDTH = 400;
+    const RAILS: ProjectedPosition[] = [
+        [-4000, HALF_WIDTH],
+        [-4000, -HALF_WIDTH],
+    ];
+    const withRails = (props: Record<string, unknown>): PaintFeature =>
+        ({
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [HALF_WIDTH, 0], ...RAILS]},
+            properties: {name: TacticalGraphicName.AvenueOfApproach, ...props},
+        }) as unknown as PaintFeature;
+
+    const textsOf = (f: PaintFeature) => paint(f, context).filter(p => p.text?.text).map(p => p.text!.text);
+    const spotOf = (f: PaintFeature, value: string) => {
+        const mark = paint(f, context).find(p => p.text?.text === value);
+        return mark ? (mark.geometry as {coordinates: ProjectedPosition}).coordinates : undefined;
+    };
+
+    it('paints field H beside AA, and nothing when it is empty', () => {
+        expect(textsOf(withRails({designation: '3'}))).toEqual(['AA 3']);
+        expect(textsOf(withRails({designation: '3', additionalInfo: 'STEEP-SIDED WADIS'}))).toEqual([
+            'AA 3',
+            'STEEP-SIDED WADIS',
+        ]);
+    });
+
+    it('sets field H outside the casing, level with AA', () => {
+        const f = withRails({designation: '3', additionalInfo: 'WADIS'});
+        const aa = spotOf(f, 'AA 3')!;
+        const h = spotOf(f, 'WADIS')!;
+        // Straight out from the label, on the up-screen side, past the rail rather than on it.
+        expect(h[0]).toBeCloseTo(aa[0], 6);
+        expect(h[1] - aa[1]).toBeGreaterThan(HALF_WIDTH);
+        // ...and not so far that it reads as a separate symbol: exactly the half-width plus a
+        // fixed screen gap, so it stays put against the casing at every zoom. (The fixture's
+        // 40 m/px makes that gap look large in metres; on screen it is 12 px.)
+        expect(h[1] - aa[1]).toBeCloseTo(HALF_WIDTH + 12 * context.resolution, 6);
+    });
+
+    it('marks ENY on each rail, and only for a hostile graphic', () => {
+        expect(textsOf(withRails({designation: '3'}))).not.toContain('ENY');
+        expect(textsOf(withRails({designation: '3', hostility: TacticalGraphicHostility.friend}))).not.toContain('ENY');
+
+        const hostile = withRails({designation: '3', hostility: TacticalGraphicHostility.hostileFaker});
+        expect(textsOf(hostile).filter(t => t === 'ENY')).toHaveLength(2);
+
+        // One per rail, pushed clear of the centreline on its own side.
+        const spots = paint(hostile, context)
+            .filter(p => p.text?.text === 'ENY')
+            .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
+        expect(spots[0][1]).toBeGreaterThan(HALF_WIDTH);
+        expect(spots[1][1]).toBeLessThan(-HALF_WIDTH);
+    });
+
+    it('paints nothing extra for a symbol whose labels feature predates the rail anchors', () => {
+        const old = {
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [HALF_WIDTH, 0]]},
+            properties: {name: TacticalGraphicName.AvenueOfApproach, designation: '3', hostility: TacticalGraphicHostility.hostileFaker},
+        } as unknown as PaintFeature;
+        expect(textsOf(old)).toEqual(['AA 3']);
     });
 });
 

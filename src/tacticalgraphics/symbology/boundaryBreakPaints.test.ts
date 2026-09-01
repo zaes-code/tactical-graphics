@@ -118,9 +118,11 @@ describe('the cardinal-label boundary', () => {
 });
 
 describe('APP-06 272200 — the radiation dose rate contour line', () => {
-    const doseFeature = (designation?: string): PaintFeature => ({
+    // Field **H**, not a designation: 272200's only lettered box is H, and its Example
+    // fills it with `30 CGH` -- a dose rate, which is exactly what a name is not.
+    const doseFeature = (additionalInfo?: string): PaintFeature => ({
         geometry: {type: 'Polygon', coordinates: [RING]},
-        properties: {name: TacticalGraphicName.RadiationDoseRateContourLine, designation},
+        properties: {name: TacticalGraphicName.RadiationDoseRateContourLine, additionalInfo},
         ring: RING,
     });
 
