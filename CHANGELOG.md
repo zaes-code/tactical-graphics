@@ -26,6 +26,14 @@ anchor count; everything else is additive.
 
 ### Breaking
 
+- **`AxisOfAttack` is removed.** It was a generator registered under a hardcoded string with
+  no `TacticalGraphicName` member, no category, no controller and no field set — reachable
+  only by passing the raw name, and drawable in neither renderer. It appears in **neither
+  publication**: no APP-06 entity code, and nothing under that name in FM 1-02.2. The
+  registry and the enum now agree at **291**, where `listTacticalGraphicNames()` used to
+  return 292 against 291 members. A consumer passing `"AxisOfAttack"` will now get the
+  unknown-graphic error.
+
 - **`RangeFanBand.range` is metres, not kilometres.** Both range fan plates say so in as
   many words — 242200 "All ranges in metres", 242100 "All units in metres" — and their
   examples read `RG 5000` and `MAX RG(1) 28,500`. A 5 km band used to render `RG 5`. The

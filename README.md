@@ -115,7 +115,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **51 of the 292 graphics need a geometry input as well**:
+`name` is always required, and **51 of the 291 graphics need a geometry input as well**:
 the point-anchored ones (mission tasks, range fans, fighting positions, the circular
 areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
 `decorationSize`. Without them you get a turf error rather than a default — see
@@ -1174,7 +1174,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 292 supported names.
+the 291 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 

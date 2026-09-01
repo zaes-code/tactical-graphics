@@ -22,12 +22,13 @@ import {ROLE_KEY} from './graphicProperties';
 import {resetTacticalGraphicsConfig} from '@zaes/tactical-graphics';
 
 /**
- * `listTacticalGraphicNames()` reports one name the OpenLayers layer cannot draw:
- * `AxisOfAttack` is registered as a generator with no enum member and no controller, so it
- * has no UI path on this engine. It is pinned below rather than filtered silently.
+ * Every registered name, all of which this engine can draw.
+ *
+ * `AxisOfAttack` used to be the exception — a generator with no enum member, no controller
+ * and no UI path — and was pinned here rather than filtered silently. It was removed in
+ * 4.0.0 for appearing in neither publication.
  */
-const UNDRAWABLE = 'AxisOfAttack';
-const ALL = (listTacticalGraphicNames() as TacticalGraphicName[]).filter(n => String(n) !== UNDRAWABLE);
+const ALL = listTacticalGraphicNames() as TacticalGraphicName[];
 
 /** A base big enough that nothing collapses to a minimum, away from the poles. */
 const LINE: [number, number][] = [[0, 0], [0.4, 0], [0.8, 0]];
@@ -115,8 +116,14 @@ describe('stylesFor', () => {
         }
     });
 
-    it('refuses the one registered name this engine cannot draw', () => {
-        expect(() => stylesFor(UNDRAWABLE as TacticalGraphicName)).toThrow(/No controller registered/);
+    it('draws every registered name — there is no longer one it cannot', () => {
+        /*
+         * This used to assert the opposite: that `AxisOfAttack` threw, being registered with
+         * no enum member and so no controller. Removing it in 4.0.0 makes the registry and
+         * the enum agree, and the stronger claim is now true — every name a consumer can list
+         * is a name this engine can style.
+         */
+        for (const name of ALL) expect(() => stylesFor(name)).not.toThrow();
     });
 
     it('reports no label style for the graphics that keep their text on the graphic feature', () => {
