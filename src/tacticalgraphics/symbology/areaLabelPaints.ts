@@ -139,6 +139,32 @@ export function areaDateLabel(feature: PaintFeature): string {
 }
 
 /**
+ * The area graphics whose plate carries a country code beside the designation.
+ *
+ * APP-06 letters the pair `T2 ( AS )` on the free, no and restrictive fire areas — the
+ * establishing formation and its country — and on nothing else that routes through the
+ * centred stack. Fire support area, the obstacle areas and the EPW holding area take a
+ * designation and no country at all.
+ *
+ * **A list rather than "render it whenever one is set".** Composing the code
+ * unconditionally made four graphics draw a country they have no field for, which is
+ * invisible while nothing can set one and wrong the moment a restore or an import carries
+ * it. Which symbols take a country is a fact about the symbology, so it lives here rather
+ * than being inferred from whichever renderer happens to offer an input.
+ */
+const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.FreeFireAreaIrregular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.NoFireAreaIrregular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.RestrictiveFireAreaIrregular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+];
+
+/**
  * The default: designation over date-time group, centered on the anchor.
  *
  * What every area graphic gets when its family has no bespoke layout, and the
@@ -173,7 +199,9 @@ export function areaLabelStackPaint(
          * `formatDesignationWithCountry` then returns the designation untouched, so this is
          * inert for them.
          */
-        const named = formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode);
+        const named = COUNTRY_CODE_AREAS.includes(name)
+            ? formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode)
+            : (feature.properties.designation ?? '').trim();
         const designation = options.literalLines ? named : getFullLabel(name, named).trim();
 
         const lines = [
