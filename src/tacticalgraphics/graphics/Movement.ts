@@ -233,6 +233,27 @@ export class MainAttack extends MovementGraphicBase {
  */
 export class AvenueOfApproach extends MainAttack {
     name: string = TacticalGraphicName.AvenueOfApproach;
+
+    /**
+     * Four anchors, not two: the head span the family publishes, then the **rear end of
+     * each rail**.
+     *
+     * 152300's Template boxes an `N` on both rails at the back of the symbol, and an `H`
+     * outside it. Neither can be placed from the head span alone, and a paint cannot go
+     * looking for the rails -- it is handed one feature. The generator already computes
+     * both parallels to draw the arrow, so publishing where they start costs nothing and
+     * keeps the placement a fact of the geometry rather than a guess in a renderer.
+     *
+     * `anchors()` in the paint layer reads the first two for rotation and scale exactly as
+     * before, so the axis-of-advance placement is unchanged.
+     */
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        const left = geometryService.computeParallelLineString(centerline, radius);
+        const right = geometryService.computeParallelLineString(centerline, -radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0]]);
+    }
 }
 
 export class MainAttackFeint extends MovementGraphicBase {

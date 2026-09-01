@@ -2209,6 +2209,11 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.SubmarineActionArea,
     TacticalGraphicName.SubmarineGeneratedActionArea,
     TacticalGraphicName.AreaGeneric,
+    // 310800's Template boxes an `N` on each flank beside `CSA T` and `W - W1`. Only the
+    // paint layer draws those; without this line OpenLayers fell through to the legacy
+    // switch and drew the name and dates with no hostile marks, while MapLibre drew all
+    // three. Registering a paint takes two edits — the registry, and this list.
+    TacticalGraphicName.CorpsSupportArea,
     TacticalGraphicName.HumanTerrain,
     TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
     // The Sector 1 / Sector 2 / field H stack. @see sectorModifierPaints

@@ -115,7 +115,13 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
             textMark(
                 feature,
                 offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                getFullLabel(name, feature.properties.designation ?? ''),
+                // `T2 ( AS )` on the plate: the designation carries its country code in
+                // brackets, as the rest of the fire-support family does.
+                // (User's call, 2026-09-01.)
+                getFullLabel(
+                    name,
+                    formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode),
+                ),
                 scale,
                 rotation,
                 'center',

@@ -217,7 +217,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ForwardLineOfOwnTroops]:                      '140100',  // Forward Line of Troops
     [TacticalGraphicName.Bridge]:                                      '271100',  // Bridge
     [TacticalGraphicName.AssaultCrossing]:                             '271300',  // Assault Crossing
-    [TacticalGraphicName.Gap]:                                         '290600',  // Safe Lane or Gap
+    [TacticalGraphicName.Gap]:                                         null,      // FM only; APP-06's 290600 is a different symbol
     [TacticalGraphicName.FordEasy]:                                    '271500',  // Ford Easy
     [TacticalGraphicName.FordDifficult]:                               '271600',  // Ford Difficult
     [TacticalGraphicName.FerryCrossing]:                               '290700',  // Ferry
