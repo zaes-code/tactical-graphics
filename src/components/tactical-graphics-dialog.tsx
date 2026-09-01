@@ -197,6 +197,15 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
      * it the moment it is switched. @see amplifierVisibility
      */
     const [nameOnly, setNameOnly] = useState(false);
+    /**
+     * What it was when the dialog opened, so the toggle counts as a change.
+     *
+     * `nameOnly` is applied the moment it is switched, so comparing it against the store
+     * says nothing — the store already agrees with it. Without this, flipping the toggle and
+     * nothing else left `OK` disabled: the only way out of the dialog was Cancel, which
+     * looks like it should undo the very thing that had already happened.
+     */
+    const [openedNameOnly, setOpenedNameOnly] = useState(false);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
@@ -224,6 +233,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             // View state, not an amplifier: it comes from this app's store rather than
             // from the graphic. @see amplifierVisibility
             setNameOnly(amplifiersHidden(next.id));
+            setOpenedNameOnly(amplifiersHidden(next.id));
             setDialogPosition({x: 0, y: 0});
         });
     }, [source]);
@@ -299,6 +309,12 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
 
     const cancelChanges = () => {
         setPendingChanges({...currentProperties});
+        // The toggle took effect immediately, so cancelling has to undo it — otherwise the
+        // one control that applied on the spot is also the one Cancel cannot take back.
+        if (selection && nameOnly !== openedNameOnly) {
+            source.setAmplifiersHidden(selection, openedNameOnly);
+            setNameOnly(openedNameOnly);
+        }
         setSelection(null);
     };
 
@@ -323,7 +339,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
 
     if (!selection) return null;
 
-    const hasChanges = JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties);
+    // The toggle is a change like any other, even though it applies on the spot: `OK` has to
+    // be reachable after switching it, and `Cancel` has to put it back.
+    const hasChanges =
+        JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties) || nameOnly !== openedNameOnly;
 
     return (
         <>
