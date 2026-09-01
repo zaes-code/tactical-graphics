@@ -45,6 +45,23 @@ anchor count; everything else is additive.
   and target attitude (AN). It was a two-point drawn rectangle, so **a saved rectangular
   target will not restore as the same shape.** It is no longer `isRectangular`, and the
   new `RectangularTarget` generator takes a `Point` base.
+- **The radiation dose rate contour line's dose moved from `identifier1` to
+  `additionalInfo`.** APP-06 272200's Template carries one lettered box and it is `H`; its
+  Example fills it with `30 CGH`, a dose rate, which is exactly what a designation is not.
+  The dialog no longer offers a name. **A contour line saved before 4.0.0 keeps its dose in
+  `designation` and will draw without one** until the text is moved to additional
+  information — there is no read fallback here, because a name and a dose rate are
+  different things and silently promoting one to the other would be a guess.
+
+- **`Gap` is FM 1-02.2 only.** It carried APP-06 entity code `290600`, which is a different
+  symbol: *safe lane or gap* is a lane **through** an obstacle, lettered `T` / `AM` / `W` /
+  `W1` over two anchor points that set its length. FM 1-02.2 Table 5-16's `gap` is "an area
+  free of obstacles that enables forces to maneuver in a tactical formation" — two facing
+  brackets with `T` between them and no width amplifier at all. Both plates were read at
+  900 dpi. So `GRAPHIC_ENTITY_CODES.Gap` is now `null`, `GRAPHIC_SPECIFICATIONS.Gap` is
+  `FM 1-02.2` alone, and `getNameByEntityCode('290600')` returns the new `SafeLaneOrGap`
+  rather than `Gap`.
+
 - **Mobility corridor's free text moved from `identifier1` to `additionalInfo`.** Its
   template is `H` over `B` with no `T`, and its example is a description of the going
   rather than a name. The paint already called it field H in a comment while reading
@@ -52,6 +69,47 @@ anchor count; everything else is additive.
   the dialog now offers the additional-info input instead of a designation.
 
 ### Added
+
+- **Two graphics, taking the registry from 291 to 293.**
+  - **`OverheadWire`** (APP-06 282003) — a line with a pylon standing on every anchor point,
+    not just the two ends: "additional points can be defined to extend the line". The pylon
+    is a screen-sized glyph, upright whatever the wire's direction, because the plate says
+    the symbol "varies only in length". It letters nothing at all.
+  - **`SafeLaneOrGap`** (APP-06 290600) — the lane through an obstacle described above, with
+    `T` / `AM` / `W` / `W1` stacked beside its entry. **It draws the same outline as the
+    FM's passage lane**, from the same function; the amplifiers are the whole of the
+    difference, so a lane carrying a name or a stated width can only be this one.
+
+- **Nine more lines offer a country code**, each from its own plate. The fire support
+  coordination, battlefield coordination, coordinated fire, battlefield handover, delay, no
+  fire and restrictive fire lines letter `T2 ( AS )` and bracket the code after the
+  designation; the decision line and the named area of interest **line** letter `T/AS` and
+  set the two apart with a slash. Field `T` stays the designation throughout — a second
+  designation with no first means nothing to an operator. The named area of interest *area*
+  (120200) letters no country code and is unchanged.
+
+- **The avenue of approach carries all three of its boxes.** Field `H` outside the casing
+  level with the `AA` label, and `ENY` at the rear of each rail when the graphic is hostile.
+  The generator now publishes the rail ends alongside the head span, so the placement is a
+  fact of the geometry rather than a guess in a renderer.
+
+- **Field `H` on `line, generic`** (110400), which boxes `H` beside `T` above each end and
+  runs the pair together as one line of text.
+
+- **Second date-time groups** on the assault crossing and the gap, and on the corps support
+  area — which also gains the two `ENY` flank marks its template boxes.
+
+- **The sector range fan has a handle for every bearing it prints.** Three per band now: the
+  rim on the centre bearing, and both ends of that band's arc. Dragging an arc end sets its
+  left or right azimuth, clamped so the wedge cannot close or invert.
+
+- **A width that nothing measures can be typed.** The dialog shows width as a read-out
+  because it is normally derived from the geometry — but the safe lane's `AM` is a *stated*
+  number on a symbol that is a single line, so nothing measured it and the field the plate
+  asks for could not be filled in. An input appears when there is no measurement to show.
+
+- New exports: `overheadWirePaint`, `safeLaneOrGapPaint`, `formatLaneWidth`,
+  `defaultLineCountryCodeStyle`, `rotationToAzimuth`.
 
 - **`validateTacticalGraphic(name, properties)`** reports what a graphic still needs to be
   doctrinally complete, with the plate each rule came from. A mobility corridor without its
@@ -89,12 +147,44 @@ anchor count; everything else is additive.
   bare `RG` matches its own plate and is unchanged.
 - **`length` survives a save and restore.** It was missing from the persisted geometry keys.
 
+- **The country code reached MapLibre and not OpenLayers.** The table saying which lines take
+  one lived in the symbology registry, which MapLibre reads and OpenLayers does not — its
+  line style calls `defaultLinePaint(name)` with no options at all. One engine drew
+  `FSCL ALPHA (GBR)` and the other silently drew `FSCL ALPHA`, with the code round-tripping
+  correctly through save and restore the whole time. The table is now the paint's own
+  default, so neither engine has an opinion about it.
+
+- **The corps support area drew no hostile flank marks on OpenLayers.** Registering an area
+  label takes two edits — the symbology registry and `PAINT_LAYER_AREA_LABELS` — and only
+  the first had been made, so that engine fell through to the legacy switch while MapLibre
+  drew all three amplifiers.
+
+- **Rotating a sector range fan left its bearings behind.** They are absolute compass
+  bearings, and `resolveCenterAzimuth` prefers a stated centre azimuth over `rotation`
+  outright — so on a fan whose bearings had been typed, a rotate moved the axis arrow and
+  nothing else: the wedges stayed put, the printed bearings kept their old values, and the
+  arrow ended up pointing out of its own fan. Every stated bearing now turns with the
+  symbol.
+
 ### Changed
 
 - `FIRE_SUPPORT_AREA` and `AIRSPACE_COORDINATION_AREA` were both named for graphics they do
   not serve — the first is the fire *coordination* areas and not position area for
   artillery, the second the engagement zones and not the ACAs. Split and renamed; position
   area for artillery keeps a plain `T`, which its plate does show.
+
+- **The weapon/sensor range fans no longer offer a drag-resize.** A fan's size is not one
+  number — it is a list of bands, each with a stated range in metres and its own label — and
+  a whole-graphic resize can only multiply them all by the same factor, which turns a set of
+  real ranges into arbitrary ones and leaves the labels reading numbers nobody chose.
+  `allowedGestures` now returns `resize: false` for both, so a host draws no resize
+  affordance; the band editor and the per-band rim handles are unchanged.
+
+- **Thirty differences between a plate and the registry are recorded as deliberate.** Every
+  graphic has now been read against a publication. Most are a designation APP-06 does not
+  box where FM 1-02.2 does, and this library follows the FM. They are listed as differences
+  rather than reconciled, because "a person read this and chose it" is a different claim
+  from "these match".
 
 ## [3.1.0] — 2026-08-31
 
