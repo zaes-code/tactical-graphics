@@ -36,8 +36,8 @@ below"*, so its amplifiers have to be read from that table instead.
 | APP-06 | ours | notes |
 | --- | --- | --- |
 | T | `designation` | |
-| T1 | `secondDesignation` | |
-| T2 | `secondDesignation` | on the fire-support areas, which carry T2 *instead of* T |
+| T1 | `designation`, or `secondDesignation` **when T is present too** | boundary and the engineer work line pair `T/AS` over `T1/AS1`; the intelligence coordination line uses `T1` alone. (User's call, 2026-09-01.) |
+| T2 | `secondDesignation` | on the fire-support areas and lines, which carry T2 *instead of* T |
 | AP | `designation` | on the target graphics, where APP-06 uses AP rather than T |
 | AS / AS1 | `countryCode` / `secondCountryCode` | rendered **in parentheses** after its designation |
 | V | `weapon` | |
@@ -169,6 +169,13 @@ the mistake `isDarkMode` was. `AP` maps to `identifier1`, as it already did else
 confirmed non-1:1 shared symbol. This confirms it at field level.
 
 ## Deliberate divergences — confirmed, no action
+
+**Boundary is settled, and the standard states the bracket rule outright.** APP-06 §8.2.1
+letters the parts in prose — the echelon is *Field B*, the abbreviated echelon designator is
+*Field T*, and the country code is *Field AS*, **"shown in parenthesis behind or below the unit
+designation"**. Figure 8-5 and Table 8-1 give the template: `T/AS` above the line, `B` in the
+break, `T1/AS1` below, `N` at each end. That is exactly `identifier1 + countryCode`, `echelon`,
+`identifier2 + secondCountryCode`, with `N` coming from the hostility rather than a field.
 
 **Airspace coordination areas ×3 (240101/240102/240103) omit `T2`.** The APP-06 template carries
 it; we do not offer `identifier2`. This is not an oversight — `graphicFieldRegistry.ts:286-291`
