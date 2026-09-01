@@ -27,10 +27,16 @@
  * ## Usage
  *
  *   npm run build                      # dist/ must be current — this reads it
- *   node scripts/gen-catalog-svgs.js [--out DIR] [--only Name] [--size WxH]
+ *   npm run gen:catalog                # the zaes.com catalog
+ *   npm run gen:thumbnails             # the picker thumbnails that SHIP in the package
+ *   node scripts/gen-catalog-svgs.js [--profile catalog|thumbnail]
+ *                                     [--out DIR] [--only Name] [--size WxH] [--check]
  *
- * Default --out is ../zaes.com/img/catalog, because the site is the only
- * consumer. The script lives here because the library does.
+ * Two profiles, because two consumers ask different questions of the same symbol.
+ * @see PROFILE — it is the first thing to read before changing anything below.
+ *
+ * `--check` regenerates in memory and reports whether the committed output is stale,
+ * writing nothing. Run it after touching a paint or adding a graphic.
  *
  * ## Two things to know before changing it
  *
@@ -57,8 +63,42 @@ const argOf = (flag, dflt) => {
     return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 const REPO = path.resolve(__dirname, '..');
-const OUT = path.resolve(REPO, argOf('--out', path.join('..', 'zaes.com', 'img', 'catalog')));
+
+/**
+ * **Two consumers, two jobs, one renderer.**
+ *
+ * `catalog` feeds the page on zaes.com, whose question is "does my symbol look right?".
+ * It is read at a few hundred pixels beside a plate, so it fills every amplifier the
+ * schema carries — that is the thing being checked. @see AMPLIFIERS
+ *
+ * `thumbnail` feeds a picker — today the tactical-graphic dropdown in Spearhead UI —
+ * whose question is "which one is this?". It is read at a few dozen pixels next to a
+ * label that already spells the name out, so text is a smudge that costs the shape its
+ * room. The profile answers by drawing shape and dropping most of the words:
+ *
+ *   • areas  — a free-form bean rather than a rectangle, because a rectangle is a
+ *     *different symbol* in this standard (@see isRectangular) and the picker was
+ *     showing seventeen real rectangles and ninety-four fake ones. Amplifiers stay,
+ *     inset off the boundary. @see LABEL_INSET_PX
+ *   • points — the designation alone; the rest is annotation, not identity
+ *   • lines  — no text at all. A line's identity is its dashes, ticks and arrowheads
+ *
+ * The split is by how the operator PLACES the graphic, not by what comes out — the
+ * rectangular zones are drawn from an axis and a width, so they arrive here as
+ * LineStrings while being every inch areas. @see kindOf
+ */
+const PROFILE = argOf('--profile', 'catalog');
+if (PROFILE !== 'catalog' && PROFILE !== 'thumbnail') {
+    console.error(`Unknown --profile "${PROFILE}" — expected "catalog" or "thumbnail".`);
+    process.exit(1);
+}
+const IS_THUMB = PROFILE === 'thumbnail';
+
+const DEFAULT_OUT = IS_THUMB ? path.join('src', 'tacticalgraphics', 'assets') : path.join('..', 'zaes.com', 'img', 'catalog');
+const OUT = path.resolve(REPO, argOf('--out', DEFAULT_OUT));
 const ONLY = argOf('--only', null);
+/** Report whether regenerating would change anything, and write nothing. @see main */
+const CHECK = argv.includes('--check');
 /**
  * The tile a thumbnail is composed against. A graphic may be painted into a multiple
  * of it — @see ZOOM_STEPS — and the page scales whatever comes out to its own grid, so
@@ -209,6 +249,38 @@ const SHAPED_BASES = {
     [TacticalGraphicName.FordDifficult]: straightBase(0.85),
 };
 
+/**
+ * **The swept-arc tasks, drawn to the plate's proportions.**
+ *
+ * Capture, seize, evacuate and recover take four points — centre, radius, arc middle,
+ * arrow tip — and the harness's default line base spaces them EVENLY along its run. That
+ * makes the radius a third of the whole graphic, so all four came out as a fat circle
+ * with a stub hanging off it. The construction was right and the picture was wrong.
+ *
+ * These ratios are read off the Template column of APP-06 Table 8-A-1, CAPTURE (343000):
+ * against the horizontal reach from the circle's centre to the arrowhead, the radius is
+ * about 0.17, the arc's middle sits ~0.66 along and below the chord, and the tip lands a
+ * full reach right and ~0.71 down. A small circle and a long swept arrow, which is what
+ * the standard draws and what the picker needs to be recognisable at 72px.
+ *
+ * Thumbnail-only, deliberately. The catalog tile has the same stubby arrow and would be
+ * improved by the same base, but the catalog's output is pinned — @see PROFILE.
+ */
+const SWEPT_ARC_TASKS = ['Capture', 'Seize', 'Evacuate', 'Recover'];
+function sweptArcBase() {
+    const W = D * 2.6;
+    const m = Math.cos((LAT * Math.PI) / 180); // @see beanRing — vertical offsets are metres
+    const x0 = LON - W * 0.5;
+    const y0 = LAT + W * 0.3 * m;
+    const at = (rx, ry) => [x0 + W * rx, y0 - W * ry * m];
+    return [
+        at(0, 0), //          PT.1 — the circle's centre
+        at(0.168, -0.055), // PT.2 — its radius, taken up and to the right as the plate has it
+        at(0.655, 0.168), //  PT.3 — the middle of the arc
+        at(1, 0.714), //      PT.4 — the arrowhead
+    ];
+}
+
 /** Amplifiers that put text on the symbol. Dropped wholesale for the corridors. */
 const TEXT_AMPLIFIERS = [
     'designation',
@@ -256,12 +328,77 @@ const RECTANGLE_WIDTH_M = 2600;
 /** A ford's rails are ±width/2 off the base. @see SHAPED_BASES for the matching run. */
 const FORD_WIDTH_M = 700;
 
+/**
+ * **Which of the three the operator thinks they are placing.**
+ *
+ * Derived from the library rather than listed here, because a list of 293 names goes
+ * stale the first time one is added and nothing complains.
+ *
+ * The one thing a caller must not do is read `baseGeometryFor` and stop. It answers
+ * "what does the user draw", which agrees with the operator's mental model twice out
+ * of three:
+ *
+ *   • the seventeen rectangular zones are drawn as an AXIS with a width, so their base
+ *     is a LineString while the symbol is an area — the thing a line's rules would
+ *     strip the designation off, when a rectangular NFA exists to carry one
+ *   • the nineteen circular zones are drawn from a CENTRE, so their base is a Point.
+ *     Those stay points here on purpose: a picker entry for a circular NFA is a circle
+ *     with its designation in it, which is exactly what the point rule gives
+ *
+ * @returns 'area' | 'point' | 'line'
+ */
+function kindOf(name) {
+    if (isRectangular && isRectangular(name)) return 'area';
+    const type = baseGeometryFor ? baseGeometryFor(name) : 'LineString';
+    if (type === 'Polygon') return 'area';
+    if (type === 'Point') return 'point';
+    return 'line';
+}
+
+/**
+ * **A traced area is a blob, and a rectangle means something else.**
+ *
+ * The catalog draws every polygon base as a rectangle, which is fine beside a plate —
+ * the reader is checking the line work, not the outline. In a picker it is a lie twice
+ * over: it makes ninety-four free-form areas look like the seventeen the standard
+ * actually defines as rectangular, and it makes them all look like each other.
+ *
+ * So: a closed radial curve with two low-frequency harmonics. `cos(2θ)` sets the waist
+ * that makes it a bean rather than an egg, `sin(3θ)` breaks the remaining symmetry so
+ * it reads as traced rather than generated. Both are bounded by the amplifier stack
+ * that has to fit *inside* the result — a deeper waist pinches the room it needs and
+ * only pushes the ladder out. @see LABEL_INSET_PX
+ *
+ * **The aspect is written in metres, not degrees.** A first cut asked for 1.4 × 0.92 in
+ * degrees and drew a circle: at 38.9°N a degree of latitude is `1/cos(lat)` — about 1.29
+ * — more projected metres than a degree of longitude, which ate the whole difference.
+ * Everything downstream works in metres, so the latitude term is scaled to match and
+ * the ratio below is the one that reaches the tile.
+ *
+ * Enough vertices to look smooth at any tile size, few enough that the generators
+ * which offset or buffer their ring are not handed a thousand-point path.
+ */
+const BEAN_VERTICES = 48;
+const BEAN_ASPECT = 1.45; // width : height, as drawn
+function beanRing() {
+    const mercator = Math.cos((LAT * Math.PI) / 180);
+    const ring = [];
+    for (let i = 0; i < BEAN_VERTICES; i++) {
+        const t = (i / BEAN_VERTICES) * Math.PI * 2;
+        const r = 1 + 0.17 * Math.cos(2 * t) + 0.08 * Math.sin(3 * t);
+        ring.push([LON + D * BEAN_ASPECT * r * Math.cos(t), LAT + D * r * Math.sin(t) * mercator]);
+    }
+    ring.push(ring[0].slice());
+    return ring;
+}
+
 function makeBase(name) {
     const type = baseGeometryFor ? baseGeometryFor(name) : 'LineString';
-    const shaped = SHAPED_BASES[name];
+    const shaped = IS_THUMB && SWEPT_ARC_TASKS.includes(name) ? sweptArcBase : SHAPED_BASES[name];
     if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};
     if (type === 'Polygon') {
+        if (IS_THUMB) return {type: 'Polygon', coordinates: [beanRing()]};
         const w = D * 1.35;
         const h = D * 0.9;
         return {
@@ -353,11 +490,57 @@ function paintPropsFor(name, props) {
  */
 const AMPLIFIER_FALLBACKS = [[], ['endDate'], ['endDate', 'startDate', 'eff']];
 
+/**
+ * **Two more rungs, for the areas no zoom can rescue.**
+ *
+ * The ladder's whole mechanism is that a label is a fixed number of screen pixels while
+ * the shape is fitted to the tile, so widening the canvas shrinks one against the other.
+ * The artillery areas break that assumption: their designation is sized FROM the area,
+ * so the ratio is identical at every rung and the text crosses the boundary at 1 and at
+ * 4.5 alike. @see ZOOM_PROGRESS, which exists because of the same three symbols.
+ *
+ * What is left is to say less. Down to the designation, then — for a shape that cannot
+ * hold even that — to nothing, which still leaves a correct picture of the symbol with
+ * its name spelled out beside it in the picker.
+ *
+ * Catalog keeps the three rungs it had. There the text IS the subject, and an artillery
+ * area whose designation touches its own edge is a true rendering of a real symbol.
+ */
+const THUMBNAIL_AMPLIFIER_FALLBACKS = AMPLIFIER_FALLBACKS.concat([
+    TEXT_AMPLIFIERS.filter(f => f !== 'designation'),
+    TEXT_AMPLIFIERS,
+]);
+
+/**
+ * What the `thumbnail` profile keeps of each kind's text. @see PROFILE, kindOf
+ *
+ * Only `TEXT_AMPLIFIERS` is filtered. Everything else in the bag is shape rather than
+ * words about it, and stays whatever the kind:
+ *
+ *   • `radius`, `width`, `rotation`, `rangeFan` are geometry inputs
+ *   • `direction` and `mineType` select a GLYPH — the route's traffic arrows, the mine
+ *     row's symbol. They are the picture, and on a route the arrows are most of what
+ *     separates it from a phase line
+ *
+ * `echelon` is the one that looks like a glyph and is not: it is a text amplifier here,
+ * so a line loses it. That is the right side to fall on — its ticks sit ON the line at
+ * a fixed screen size and at picker scale they cover the dash pattern underneath.
+ */
+const THUMBNAIL_TEXT_BY_KIND = {
+    area: TEXT_AMPLIFIERS,
+    point: ['designation'],
+    line: [],
+};
+
 /** The bag this graphic is drawn with. @see the presentation overrides above. */
 function amplifiersFor(name, drop) {
     const amp = Object.assign({}, AMPLIFIERS);
     for (const field of drop || []) delete amp[field];
     if (isCorridor(name)) for (const field of TEXT_AMPLIFIERS) delete amp[field];
+    if (IS_THUMB) {
+        const keep = THUMBNAIL_TEXT_BY_KIND[kindOf(name)];
+        for (const field of TEXT_AMPLIFIERS) if (!keep.includes(field)) delete amp[field];
+    }
 
     if (isRectangular && isRectangular(name)) amp.width = RECTANGLE_WIDTH_M;
     if (name === TacticalGraphicName.FordEasy || name === TacticalGraphicName.FordDifficult) amp.width = FORD_WIDTH_M;
@@ -365,12 +548,18 @@ function amplifiersFor(name, drop) {
 }
 
 // ── Paint collection ────────────────────────────────────────────────────────
+/**
+ * @returns `{paints, ring}` — the marks, and the closed boundary they were fitted
+ * around in projected metres, or `undefined` for a symbol that has no boundary. The
+ * ring is already computed here for the painters that need it; the thumbnail profile's
+ * inset check is the second caller. @see labelInsetViolation
+ */
 function paintsFor(name, resolution, drop) {
     const props = Object.assign({name}, amplifiersFor(name, drop));
     const baseGeom = makeBase(name);
     const render = renderTacticalGraphic({type: 'Feature', geometry: baseGeom, properties: {tacticalGraphic: props}});
     const painters = getPaintFunction(name);
-    if (!painters) return [];
+    if (!painters) return {paints: [], ring: undefined};
 
     const paintProps = paintPropsFor(name, props);
     const ctx = {resolution, measureText};
@@ -440,7 +629,7 @@ function paintsFor(name, resolution, drop) {
     }
     if (l) out.push(...l);
 
-    return out;
+    return {paints: out, ring};
 }
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
@@ -663,6 +852,82 @@ function textOverlap(boxes) {
     return worst > TEXT_OVERLAP_SHARE ? worst : 0;
 }
 
+/**
+ * **How far a label intrudes on the boundary it sits inside.**
+ *
+ * An area stacks its amplifiers at the centroid, at a size fixed in screen pixels. The
+ * shape is fitted to the tile. So whether "021200ZJUN26" clears the outline is decided
+ * by the RATIO of the two, and at picker scale the text wins — a designation and a DTG
+ * pair ran straight through the boundary on a third of the areas.
+ *
+ * The fix is the ladder that already exists for label-on-label overlap: painting into a
+ * `k`-times canvas leaves the shape filling the frame and makes every label `k` times
+ * smaller against it. This function is just the other question to ask of a rung.
+ *
+ * **Only labels that are actually INSIDE are judged, and "inside" is stricter than it
+ * sounds.** Two kinds of text are near an area's boundary without intruding on it:
+ *
+ *   • the ones anchored OUTSIDE — a designation set above or beside the shape. Ruled
+ *     out by the containment test
+ *   • the ones anchored ON it, which is the trap. The artillery areas repeat `AMA` /
+ *     `PAA` at four points ASTRIDE their own outline, and a position area's `PAA` is
+ *     the symbol: that is what the plate draws, so a check that called it an intrusion
+ *     would zoom three symbols out to nothing chasing doctrine
+ *
+ * So a box counts as interior only when its CENTRE clears the ring by more than its own
+ * half-height. A centroid-anchored amplifier stack passes that by a mile; a mark sitting
+ * on the line has a centre distance near zero and is left alone.
+ *
+ * @returns 0 when every inner label clears the boundary by `LABEL_INSET_PX`, otherwise
+ * the worst shortfall in px — so a caller can prefer the rung that intrudes least.
+ */
+const LABEL_INSET_PX = 4;
+function labelInsetViolation(ringPx, boxes) {
+    if (!ringPx || ringPx.length < 4) return 0;
+    let worst = 0;
+    for (const b of boxes) {
+        const cx = (b.x0 + b.x1) / 2;
+        const cy = (b.y0 + b.y1) / 2;
+        if (!pointInRing(ringPx, cx, cy)) continue;
+        if (distanceToRing(ringPx, cx, cy) <= (b.y1 - b.y0) / 2) continue;
+        // The corner nearest the boundary decides it, and a corner that has crossed
+        // counts as a full inset's worth of shortfall plus how far out it went.
+        for (const [x, y] of [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]) {
+            const d = distanceToRing(ringPx, x, y);
+            const shortfall = pointInRing(ringPx, x, y) ? LABEL_INSET_PX - d : LABEL_INSET_PX + d;
+            if (shortfall > worst) worst = shortfall;
+        }
+    }
+    return worst > 0 ? worst : 0;
+}
+
+/** Ray casting. The ring may be open or closed; both are handled by the wrap. */
+function pointInRing(ring, x, y) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
+
+/** Shortest distance from a point to the ring's edges, sign-free. */
+function distanceToRing(ring, x, y) {
+    let best = Infinity;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        const dx = xj - xi;
+        const dy = yj - yi;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / len2));
+        const d = Math.hypot(x - (xi + t * dx), y - (yi + t * dy));
+        if (d < best) best = d;
+    }
+    return best;
+}
+
 // ── One graphic ─────────────────────────────────────────────────────────────
 /**
  * **Zooming out is how two labels stop overlapping.**
@@ -687,6 +952,17 @@ function textOverlap(boxes) {
 const ZOOM_STEPS = [1, 1.3, 1.7, 2.2];
 
 /**
+ * The thumbnail profile climbs further, because it asks the ladder a second question.
+ * An amplifier stack has to clear the boundary AROUND it rather than just the other
+ * label across the tile, and a centred stack in a bean needs more room than two ends of
+ * a line need to separate. Sixteen areas were still touching at 2.2 and clear by 4.5.
+ *
+ * The extra rungs cost nothing on a symbol that never needed them: the ladder returns
+ * the first rung that clears, and most areas clear at 1. @see buildSvg
+ */
+const THUMBNAIL_ZOOM_STEPS = [1, 1.3, 1.7, 2.2, 2.9, 3.6, 4.5];
+
+/**
  * A wider canvas has to cut the overlap to this share of the best seen so far before it
  * is worth the room it costs. Ties keep the smallest canvas, which is what leaves a
  * symbol whose labels scale WITH it — an artillery area's designation does — at its
@@ -701,13 +977,19 @@ function buildSvg(name) {
     // widens and only stops once its scale clamps, so several symbols get worse at 1.3
     // and clear completely at 3.5. Stopping early left two dozen of them overlapping.
     let best = null;
-    for (const drop of AMPLIFIER_FALLBACKS) {
-        for (const k of zoomable ? ZOOM_STEPS : [1]) {
+    const steps = IS_THUMB ? THUMBNAIL_ZOOM_STEPS : ZOOM_STEPS;
+    for (const drop of IS_THUMB ? THUMBNAIL_AMPLIFIER_FALLBACKS : AMPLIFIER_FALLBACKS) {
+        for (const k of zoomable ? steps : [1]) {
             const attempt = buildAt(name, k, drop);
             if (!attempt) continue;
-            if (process.env.TG_DEBUG) console.error(`  ${name} k=${k} drop=[${drop}] overlap=${attempt.overlap.toFixed(3)}`);
-            if (attempt.overlap === 0) return attempt;
-            if (!best || attempt.overlap < best.overlap * ZOOM_PROGRESS) best = attempt;
+            if (process.env.TG_DEBUG) console.error(`  ${name} k=${k} drop=[${drop}] overlap=${attempt.overlap.toFixed(3)} inset=${attempt.inset.toFixed(2)}`);
+            // Two failures with one budget. They are not comparable in their own units —
+            // an overlap is a share, an intrusion is pixels — so the rung is scored on
+            // the share, and an intrusion is folded in as one: any amount of it is a
+            // failure, and a rung that clears both is taken immediately.
+            const cost = attempt.overlap + (attempt.inset > 0 ? 1 : 0);
+            if (cost === 0) return attempt;
+            if (!best || cost < best.cost * ZOOM_PROGRESS) best = Object.assign({cost}, attempt);
         }
     }
     return best;
@@ -718,7 +1000,7 @@ function buildAt(name, zoom, drop) {
     const TILE_H = Math.round(BASE_TILE_H * zoom);
     const PAD = BASE_PAD * zoom;
     // Pass 1 — learn the metre extent at a guessed resolution.
-    let paints = paintsFor(name, 4, drop);
+    let paints = paintsFor(name, 4, drop).paints;
     let ext = extentOf(paints);
     if (!ext) return null;
 
@@ -731,7 +1013,8 @@ function buildAt(name, zoom, drop) {
 
     // Pass 2 — repaint at the solved resolution so screen-sized decorations are
     // correct for the size they will actually be shown at.
-    paints = paintsFor(name, resolution, drop);
+    const second = paintsFor(name, resolution, drop);
+    paints = second.paints;
     ext = extentOf(paints) || ext;
 
     const w = (ext.maxX - ext.minX) / resolution;
@@ -743,6 +1026,11 @@ function buildAt(name, zoom, drop) {
 
     const {body, defs, bounds, textBoxes} = emitPaints(paints, toPx);
     if (!body.length) return null;
+
+    // Measured in the pre-wrap px space, alongside the overlap check and for the same
+    // reason: the wrap below is a uniform scale, so it moves the label and the boundary
+    // together and cannot turn a clearance into an intrusion.
+    const inset = IS_THUMB && kindOf(name) === 'area' ? labelInsetViolation(second.ring && second.ring.map(toPx), textBoxes) : 0;
 
     // Fit the *emitted* extent — labels and dots included — into the tile.
     // Everything is already in px, so this is one wrapping transform rather
@@ -770,17 +1058,21 @@ function buildAt(name, zoom, drop) {
         body.join('') +
         wrapClose +
         `</svg>\n`;
-    return {svg, overlap: textOverlap(textBoxes)};
+    return {svg, overlap: textOverlap(textBoxes), inset};
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
-fs.mkdirSync(OUT, {recursive: true});
+if (!CHECK) fs.mkdirSync(OUT, {recursive: true});
 
 const names = listTacticalGraphicNames().filter(n => !ONLY || n === ONLY);
 const manifest = [];
 const skipped = [];
 /** Graphics whose labels still touch at the widest canvas the ladder offers. */
 const collided = [];
+/** Thumbnail profile: areas whose amplifiers still cross the boundary at 4.5. */
+const intruded = [];
+/** name → svg, in generation order. The thumbnail profile's whole output. @see writeModule */
+const svgs = new Map();
 
 for (const name of names) {
     if (!isPaintable(name)) {
@@ -792,6 +1084,7 @@ for (const name of names) {
         const built = buildSvg(name);
         svg = built && built.svg;
         if (built && built.overlap) collided.push(name);
+        if (built && built.inset) intruded.push(name);
     } catch (e) {
         skipped.push([name, e.message.slice(0, 80)]);
         continue;
@@ -801,7 +1094,8 @@ for (const name of names) {
         continue;
     }
     const file = `${name}.svg`;
-    fs.writeFileSync(path.join(OUT, file), svg, 'utf8');
+    svgs.set(name, svg);
+    if (!IS_THUMB && !CHECK) fs.writeFileSync(path.join(OUT, file), svg, 'utf8');
     manifest.push({
         name,
         display: getDisplayName ? getDisplayName(name) : name,
@@ -823,7 +1117,7 @@ manifest.sort((a, b) => a.display.localeCompare(b.display));
  * because the site's `git status` was read afterwards, and not by anything here.
  */
 if (ONLY) console.log('manifest    : left alone (--only regenerates tiles, not the catalog)');
-else fs.writeFileSync(path.join(OUT, 'catalog.json'), JSON.stringify(manifest, null, 1), 'utf8');
+else if (!IS_THUMB && !CHECK) fs.writeFileSync(path.join(OUT, 'catalog.json'), JSON.stringify(manifest, null, 1), 'utf8');
 
 /**
  * The same manifest as a classic script.
@@ -837,15 +1131,112 @@ else fs.writeFileSync(path.join(OUT, 'catalog.json'), JSON.stringify(manifest, n
  * The .json stays because it is the useful artefact for anything else that wants
  * the list.
  */
-if (!ONLY) fs.writeFileSync(
+if (!ONLY && !IS_THUMB && !CHECK) fs.writeFileSync(
     path.join(OUT, 'catalog.js'),
     '/* GENERATED by scripts/gen-catalog-svgs.js — do not edit. */\n' + 'window.TG_CATALOG = ' + JSON.stringify(manifest) + ';\n',
     'utf8',
 );
 
+// ── The thumbnail profile's output ──────────────────────────────────────────
+/**
+ * **One TypeScript module, not 293 files.**
+ *
+ * The thumbnails ship inside the npm package, so they have to survive being imported
+ * by a consumer's bundler. A directory of `.svg` files does not: `import x from
+ * '@zaes/tactical-graphics/thumbnails/Foo.svg'` needs a loader `tsc` cannot provide,
+ * and picking one by name at run time needs a `require.context` that is webpack's alone.
+ * This is the same rule the route-direction arrows already live under — @see
+ * `assets/routeDirectionIcons.ts`, and the "No bundler-only imports" note in CLAUDE.md.
+ *
+ * The module is deliberately NOT re-exported from `index.ts`. It is reachable only
+ * through the `./thumbnails` subpath, so the half-megabyte of markup lands solely on a
+ * consumer that asked for pictures — someone importing the geometry never pays for it.
+ */
+const THUMB_MODULE = 'graphicThumbnails.ts';
+
+/**
+ * A single-quoted TS string literal, because SVG attributes are double-quoted.
+ * `JSON.stringify` would escape every one of them — about 15% of the file spent on
+ * backslashes, and a diff nobody can read.
+ */
+const tsString = s => "'" + s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n') + "'";
+
+function thumbnailModule() {
+    const entries = [...svgs.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, svg]) => `    ${name}: ${tsString(svg.trim())},`)
+        .join('\n');
+    return (
+        `/**\n` +
+        ` * GENERATED by \`npm run gen:thumbnails\` — do not edit by hand.\n` +
+        ` *\n` +
+        ` * One small SVG per graphic, for a picker that has to show what the user is about\n` +
+        ` * to add. Drawn by the library's own paint layer, so a symbol and its thumbnail\n` +
+        ` * cannot disagree. @see scripts/gen-catalog-svgs.js, and its PROFILE note for why\n` +
+        ` * these carry so much less text than the catalog tiles on zaes.com.\n` +
+        ` *\n` +
+        ` * Reachable as \`@zaes/tactical-graphics/thumbnails\`; not part of the root barrel.\n` +
+        ` */\n` +
+        `import type {TacticalGraphicName} from '../core/type';\n\n` +
+        `/** The viewBox every thumbnail is composed against, before its own zoom multiple. */\n` +
+        `export const GRAPHIC_THUMBNAIL_ASPECT = ${n2(BASE_TILE_W / BASE_TILE_H)};\n\n` +
+        `/** Raw SVG markup, keyed by graphic name. @see getGraphicThumbnailUrl for an \`<img src>\`. */\n` +
+        `export const GRAPHIC_THUMBNAIL_SVGS: Partial<Record<TacticalGraphicName, string>> = {\n${entries}\n};\n\n` +
+        `/** The markup for one graphic, or \`undefined\` for a name nothing paints. */\n` +
+        `export function getGraphicThumbnailSvg(name: TacticalGraphicName | string): string | undefined {\n` +
+        `    return GRAPHIC_THUMBNAIL_SVGS[name as TacticalGraphicName];\n` +
+        `}\n\n` +
+        `const urlCache = new Map<string, string>();\n\n` +
+        `/**\n` +
+        ` * The same thumbnail as a \`data:\` URI, ready for \`<img src>\`.\n` +
+        ` *\n` +
+        ` * Percent-encoded rather than base64 — it is a third smaller and stays readable in\n` +
+        ` * devtools. Built on first ask and cached, so a picker that renders the same option\n` +
+        ` * on every keystroke encodes each one once.\n` +
+        ` */\n` +
+        `export function getGraphicThumbnailUrl(name: TacticalGraphicName | string): string | undefined {\n` +
+        `    const cached = urlCache.get(name as string);\n` +
+        `    if (cached) return cached;\n` +
+        `    const svg = getGraphicThumbnailSvg(name);\n` +
+        `    if (!svg) return undefined;\n` +
+        `    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);\n` +
+        `    urlCache.set(name as string, url);\n` +
+        `    return url;\n` +
+        `}\n`
+    );
+}
+
+let stale = false;
+if (IS_THUMB) {
+    // `--only` rebuilds one tile to look at, and the module is written from whatever this
+    // run drew — so writing it would drop the other 292. The same trap the manifest note
+    // above describes, one directory over.
+    if (ONLY) {
+        console.log(svgs.get(ONLY) || '(nothing drawn)');
+        console.log('module    : left alone (--only draws one tile, it does not regenerate the module)');
+    } else {
+        const target = path.join(OUT, THUMB_MODULE);
+        const next = thumbnailModule();
+        const current = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
+        stale = current !== next;
+        if (CHECK) console.log(`module    : ${stale ? 'STALE — run `npm run gen:thumbnails`' : 'up to date'}`);
+        else if (stale) {
+            fs.writeFileSync(target, next, 'utf8');
+            console.log(`module    : written (${(Buffer.byteLength(next) / 1024).toFixed(0)} KB)`);
+        } else console.log('module    : unchanged');
+    }
+}
+
+console.log(`profile   : ${PROFILE}`);
 console.log(`out       : ${OUT}`);
 console.log(`generated : ${manifest.length}`);
 console.log(`skipped   : ${skipped.length}`);
 for (const s of skipped.slice(0, 30)) console.log(`   - ${s[0]} => ${s[1]}`);
 console.log(`labels still touching : ${collided.length}`);
 for (const n of collided) console.log(`   - ${n}`);
+if (IS_THUMB) {
+    console.log(`labels still crossing a boundary : ${intruded.length}`);
+    for (const n of intruded) console.log(`   - ${n}`);
+}
+
+if (CHECK && stale) process.exit(1);

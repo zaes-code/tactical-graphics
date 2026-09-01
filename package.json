@@ -1,6 +1,6 @@
 {
   "name": "@zaes/tactical-graphics",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "MIL-STD-2525E / FM 1-02.2 / APP-06 tactical graphics as plain GeoJSON. Renders axis-of-advance arrows, phase lines, mission tasks, and range fans for OpenLayers or any GeoJSON consumer.",
   "keywords": [
     "mil-std-2525",
@@ -66,6 +66,11 @@
       "import": "./dist/mlb/esm/components/maplibre/index.js",
       "require": "./dist/mlb/cjs/components/maplibre/index.js"
     },
+    "./thumbnails": {
+      "types": "./dist/types/assets/graphicThumbnails.d.ts",
+      "import": "./dist/esm/assets/graphicThumbnails.js",
+      "require": "./dist/cjs/assets/graphicThumbnails.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -91,6 +96,10 @@
     "drive:edit": "node scripts/drive-edit-mode.mjs",
     "compare:engines": "node scripts/compare-engines.mjs",
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
+    "gen:catalog": "node scripts/gen-catalog-svgs.js --profile catalog",
+    "gen:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail",
+    "postgen:thumbnails": "node scripts/build-lib.js",
+    "check:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail --check",
     "typecheck": "tsc --noEmit",
     "check:readme-samples": "node scripts/check-readme-samples.mjs",
     "lint": "eslint . --ext .ts,.tsx --fix",
