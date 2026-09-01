@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [3.3.0] — 2026-09-01
+
 ### Added
 
 - **A fourth entry point, `@zaes/tactical-graphics/thumbnails`** — one small SVG per
@@ -859,7 +861,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...develop
+[3.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...v3.0.0
