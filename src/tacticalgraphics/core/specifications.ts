@@ -236,7 +236,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ForwardLineOfOwnTroops]:                       BOTH,      // APP-06 140100 Forward Line of Troops
     [TacticalGraphicName.Bridge]:                                       BOTH,      // APP-06 271100 Bridge
     [TacticalGraphicName.AssaultCrossing]:                              BOTH,      // APP-06 271300 Assault Crossing
-    [TacticalGraphicName.Gap]:                                          BOTH,      // APP-06 290600 Safe Lane or Gap
+    [TacticalGraphicName.Gap]:                                          FM_ONLY,   // 290600 'safe lane or gap' is a different symbol -- see the note in specifications.test.ts
     [TacticalGraphicName.FordEasy]:                                     BOTH,      // APP-06 271500 Ford Easy
     [TacticalGraphicName.FordDifficult]:                                BOTH,      // APP-06 271600 Ford Difficult
     [TacticalGraphicName.FerryCrossing]:                                BOTH,      // APP-06 290700 Ferry

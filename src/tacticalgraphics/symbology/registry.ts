@@ -163,6 +163,15 @@ const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
  * members are commented out. Reviving them means uncommenting seven sites, of
  * which this list is now one.
  */
+/**
+ * Per-graphic options for the lines that share `defaultLinePaint`.
+ *
+ * Only the ones that take a country code beside the designation. The fire-support family
+ * letters it `T2 ( AS )` and renders `FSCL MND(USA)`; the battlefield handover and delay
+ * lines are the same shape by the user's call, their examples carrying a designation and a
+ * date range at each end. Everything else in the list below takes the plain default.
+ * (User's call, 2026-09-01.)
+ */
 const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BattlefieldHandoverLine,
     TacticalGraphicName.BridgeheadLine,
@@ -432,6 +441,10 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     // Its plate names the enclosure under the shape and offers no designation box, so there
     // is nothing to type and the default centred label had nothing to draw.
     if (name === TacticalGraphicName.AirheadLine) return belowShapeLiteralPaint('AIRHEAD LINE');
+    // 310800 boxes an `N` at the west and east crossings, which the other support areas do
+    // not. Everything else about its block is the default: CSA over the designation, dates
+    // beneath. (User's call, 2026-09-01.)
+    if (name === TacticalGraphicName.CorpsSupportArea) return areaDefaultLabelPaint(name, true, true);
     // 310200's Template stacks its literal on two lines with the designation **under** it,
     // where every other prefixed area sets the two side by side. @see areaLabelStackPaint
     if (name === TacticalGraphicName.EnemyPrisonerOfWarHoldingArea) {

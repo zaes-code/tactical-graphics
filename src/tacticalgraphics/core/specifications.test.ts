@@ -11,6 +11,19 @@ const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.CommonSensorBoundary,
     TacticalGraphicName.DelayLine,
     TacticalGraphicName.FightingPosition,
+    /*
+     * **Not APP-06 290600, despite the name.** 290600 is "safe lane or gap" -- a lane
+     * *through* an obstacle, drawn as a bar with a splayed cross at each end, lettered
+     * T / AM / W / W1 and requiring two anchor points that set its length.
+     *
+     * FM 1-02.2 Table 5-16's `gap` is "an area free of obstacles that enables forces to
+     * maneuver in a tactical formation": two facing brackets with T between them and
+     * W / W1 beneath, and no width amplifier at all. The two are different symbols
+     * meaning different things, and the shared word in the title is the whole of the
+     * resemblance. We draw the FM one; the NATO lane is not implemented.
+     * (User's call, 2026-09-01: "we need to differentiate".)
+     */
+    TacticalGraphicName.Gap,
     TacticalGraphicName.KillZone,
     // FM's movement to contact and APP-06's advance to contact name the same operation
     // and are drawn differently enough to be two graphics: a dropped badge with two
