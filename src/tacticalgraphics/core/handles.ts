@@ -591,6 +591,8 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Abatis]: 2,
     [TacticalGraphicName.FerryCrossing]: 2,
     [TacticalGraphicName.PassageLane]: 2,
+    // 290600: "Point 1 defines the entry point and Point 2 defines the exit point."
+    [TacticalGraphicName.SafeLaneOrGap]: 2,
     [TacticalGraphicName.TacticalFix]: 2,
     [TacticalGraphicName.Fix]: 2,
     [TacticalGraphicName.LinearTarget]: 2,

@@ -241,12 +241,14 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.FordDifficult]:                                BOTH,      // APP-06 271600 Ford Difficult
     [TacticalGraphicName.FerryCrossing]:                                BOTH,      // APP-06 290700 Ferry
     [TacticalGraphicName.PassageLane]:                                  FM_ONLY,
+    [TacticalGraphicName.SafeLaneOrGap]:                                APP6_ONLY, // APP-06 290600 Safe Lane or Gap
     [TacticalGraphicName.ObstacleBelt]:                                 BOTH,      // APP-06 270100 Obstacle Belt
     [TacticalGraphicName.ObstacleGroup]:                                FM_ONLY,
     [TacticalGraphicName.ObstacleZone]:                                 BOTH,      // APP-06 270200 Obstacle Zone
     [TacticalGraphicName.ObstacleFreeArea]:                             BOTH,      // APP-06 270300 Obstacle Free Zone
     [TacticalGraphicName.ObstacleRestrictedArea]:                       BOTH,      // APP-06 270400 Obstacle Restricted Zone
     [TacticalGraphicName.Abatis]:                                       BOTH,      // APP-06 280100 Abatis
+    [TacticalGraphicName.OverheadWire]:                                 APP6_ONLY, // APP-06 282003 Overhead Wire
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:            BOTH,      // APP-06 271201 Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:              BOTH,      // APP-06 271202 Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]:  BOTH,      // APP-06 271203 Explosives, State of Readiness 2 (Armed but Passable)

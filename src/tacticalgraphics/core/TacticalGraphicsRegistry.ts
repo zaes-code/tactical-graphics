@@ -40,6 +40,8 @@ import {Bridge} from "../graphics/Bridge";
 import {Ford, FordHard} from "../graphics/Ford";
 import {FerryCrossing} from "../graphics/FerryCrossing";
 import {PassageLane} from "../graphics/PassageLane";
+import {SafeLaneOrGap} from "../graphics/SafeLaneOrGap";
+import {OverheadWire} from "../graphics/OverheadWire";
 import {Fix} from "../graphics/Fix";
 import {Turn} from "../graphics/Turn";
 import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackFeint, DirectionOfSupportingAttack} from "../graphics/Direction";
@@ -188,6 +190,8 @@ TacticalGraphicsRegistry.register(new FordHard());
 TacticalGraphicsRegistry.register(new FerryCrossing());
 
 TacticalGraphicsRegistry.register(new PassageLane());
+TacticalGraphicsRegistry.register(new SafeLaneOrGap());
+TacticalGraphicsRegistry.register(new OverheadWire());
 
 let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AttackPosition,

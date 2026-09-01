@@ -178,6 +178,17 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
+
+/**
+ * Safe lane or gap (APP-06 290600): `T` / `AM` / `W` / `W1`, stacked beside the lane.
+ *
+ * The width is the amplifier `AM` and is a *stated* number, not something a drag
+ * produces -- the plate's Example reads `4.5M` beside a lane whose drawn width is
+ * nothing at all, because the symbol is a single line. This is the whole of what
+ * separates it from the passage lane, which shares its outline and letters only the two
+ * dates. @see SafeLaneOrGap
+ */
+const SAFE_LANE = f(true, false, true, true, false, {width: true});
 /** The plain lines that carry a designation and a status, and no dates. */
 const GENERIC_LINE = f(true, false, false, false, true);
 
@@ -489,6 +500,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
+    [TacticalGraphicName.OverheadWire]: SHAPE_ONLY,
     // Only the mineline takes a modifier; the other four carry no amplifier at all.
     // The decision line's two fields are drawn as `T/AS`, joined by a slash.
     // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
@@ -547,6 +559,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FerryCrossing]: SHAPE_ONLY,
     // Passage lane (Table 5-16): FM example shows a DTG ("at 0600 Zulu 12 FEB 2007").
     [TacticalGraphicName.PassageLane]: SHAPE_AND_DTG,
+    [TacticalGraphicName.SafeLaneOrGap]: SAFE_LANE,
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
     // Second designation but no country code: finalProtectiveFirePaint reads only
     // designation, secondDesignation and weapon.

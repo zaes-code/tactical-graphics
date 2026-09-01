@@ -46,7 +46,7 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
  * move, and the clearance above stays valid, because it is still the glyph's
  * *height* that overhangs toward the symbol.
  */
-export function passageLanePaint(): LinePaint {
+export function passageLanePaint(showDates = true): LinePaint {
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
@@ -90,6 +90,19 @@ export function passageLanePaint(): LinePaint {
         if (labelRotation > Math.PI / 2) labelRotation -= Math.PI;
         else if (labelRotation <= -Math.PI / 2) labelRotation += Math.PI;
 
+        /*
+         * **The safe lane borrows the line work and not the label.** APP-06 290600 draws
+         * this exact outline but stacks its dates in a column of four amplifiers beside the
+         * lane, so drawing them here as well would print the range twice, in two places, on
+         * one symbol. It is the same shape either way -- which is the point of sharing the
+         * function rather than copying the construction. @see safeLaneOrGapPaint
+         */
+        const lineWork: Paint = {
+            geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+        };
+        if (!showDates) return [lineWork];
+
         return [
             {
                 geometry: {type: 'Point', coordinates: at},
@@ -105,10 +118,7 @@ export function passageLanePaint(): LinePaint {
                     scale,
                 },
             },
-            {
-                geometry,
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
-            },
+            lineWork,
         ];
     };
 }

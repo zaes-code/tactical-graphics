@@ -849,6 +849,52 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     </Box>
                                 )}
 
+                                {/*
+                                 * **A width the geometry cannot supply is typed instead.**
+                                 * The read-out above exists because width is normally
+                                 * derived — the corridor is that wide on the map, and a
+                                 * second way to set it would have to be kept in step. The
+                                 * safe lane is the exception the rule did not anticipate:
+                                 * APP-06 290600 letters `AM`, the symbol is a single line,
+                                 * and the plate's Example prints `4.5M` beside a lane with
+                                 * no drawn width at all. Nothing measures it, so the
+                                 * read-out never rendered and the field the plate asks for
+                                 * could not be filled in.
+                                 *
+                                 * Gated on the measurement being absent rather than on a
+                                 * graphic name, so it stays one control: a graphic that
+                                 * measures its width still shows the read-out and no input,
+                                 * and the two can never both appear.
+                                 */}
+                                {fields.width && measured.width === undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="width-input">Width (m)</InputLabel>
+                                            <OutlinedInput
+                                                id="width-input"
+                                                label="Width (m)"
+                                                inputProps={{inputMode: 'decimal'}}
+                                                value={pendingChanges.labels.width ?? ''}
+                                                onChange={e => {
+                                                    // A width may be fractional -- the plate
+                                                    // writes 4.5M -- so this keeps one
+                                                    // decimal point rather than digits only.
+                                                    const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                                                    const [whole, ...rest] = cleaned.split('.');
+                                                    const text = rest.length ? `${whole}.${rest.join('')}` : whole;
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {
+                                                            ...prev.labels,
+                                                            width: text === '' || text === '.' ? undefined : Number(text),
+                                                        },
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
                                 {fields.length && measured.length !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <Typography variant="caption" color="text.secondary">
