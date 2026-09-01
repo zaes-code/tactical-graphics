@@ -67,3 +67,7 @@ tmp/spreadsheet-inspect/
 
 # Plate crops, regenerated on demand by tmp/plate.py — 8 MB of derived PNGs.
 tmp/plates/
+
+# What `tmp/verify-artifact.mjs` writes beside the page it is checking: the same file
+# wrapped in the skeleton the artifact host adds at publish time. Build output.
+*.wrapped.html
