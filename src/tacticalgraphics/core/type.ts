@@ -937,6 +937,14 @@ export enum TacticalGraphicName {
     FordDifficult = 'FordDifficult',
     FerryCrossing = 'FerryCrossing',
     PassageLane = 'PassageLane',
+    /*
+     * **The same picture as `PassageLane`, and that is what the publications draw.**
+     * APP-06 290600's Template and FM 1-02.2 Table 5-16's passage lane are both a lane with
+     * a two-armed splay at each end; what separates them is the amplifiers. The passage
+     * lane letters `W` and `W1` and nothing else; the safe lane adds `T` and `AM`, so a
+     * named lane with a stated width can only be this one.
+     */
+    SafeLaneOrGap = 'SafeLaneOrGap',
 
     ObstacleBelt = 'ObstacleBelt',
     ObstacleGroup = 'ObstacleGroup',
@@ -946,6 +954,8 @@ export enum TacticalGraphicName {
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
     Abatis = 'Abatis',
+    /** A plain line with a pylon standing at every anchor point. Carries no amplifiers. */
+    OverheadWire = 'OverheadWire',
     ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
     ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
     ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',

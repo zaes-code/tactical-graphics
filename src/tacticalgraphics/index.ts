@@ -377,6 +377,7 @@ export {
 export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
 export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
+export {formatLaneWidth, overheadWirePaint, safeLaneOrGapPaint} from './symbology/overheadWirePaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';

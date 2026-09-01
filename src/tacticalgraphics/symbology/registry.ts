@@ -58,6 +58,7 @@ import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
+import {overheadWirePaint, safeLaneOrGapPaint} from './overheadWirePaints';
 import {
     barSymbolPaint,
     baseDefenseZoneLabelPaint,
@@ -866,6 +867,13 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.LineOfContact] = {graphic: lineOfContactPaint()};
     registry[TacticalGraphicName.FieldsOfFire] = {graphic: fieldsOfFirePaint()};
     registry[TacticalGraphicName.PassageLane] = {graphic: passageLanePaint()};
+    /*
+     * The safe lane calls the passage lane's own paint for its line work, so the outline
+     * stays literally the same function -- two copies of one construction do not stay the
+     * same shape -- and adds the amplifier column APP-06 letters and the FM does not.
+     */
+    registry[TacticalGraphicName.SafeLaneOrGap] = {graphic: safeLaneOrGapPaint()};
+    registry[TacticalGraphicName.OverheadWire] = {graphic: overheadWirePaint()};
     // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
     registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
     registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};

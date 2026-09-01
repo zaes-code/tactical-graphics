@@ -45,6 +45,12 @@ const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
  */
 const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.AdvanceToContact,
+    // 282003. Neither "overhead wire" nor any of power line / pylon / transmission
+    // line appears anywhere in the FM's text.
+    TacticalGraphicName.OverheadWire,
+    // 290600. The FM's only "safe lane" is the air corridor (170400), which we draw
+    // separately; its lane through an obstacle is `passage lane`, lettered differently.
+    TacticalGraphicName.SafeLaneOrGap,
     TacticalGraphicName.BattlefieldCoordinationLine,
     TacticalGraphicName.ExtractionZone,
     TacticalGraphicName.FighterEngagementZone,

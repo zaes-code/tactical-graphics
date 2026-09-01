@@ -175,6 +175,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Mobility and Countermobility Control Measures ─────────────────────────
     [TacticalGraphicName.Abatis]:                           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.OverheadWire]:                     TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: TacticalGraphicCategory.MobilityAndCountermobility,
@@ -266,6 +267,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.FordEasy]:                             TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.Gap]:                              TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.PassageLane]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.SafeLaneOrGap]:                    TacticalGraphicCategory.MobilityAndCountermobility,
 
     // Route Control Measures OK
     [TacticalGraphicName.AlternateSupplyRoute]:             TacticalGraphicCategory.MobilityAndCountermobility,
