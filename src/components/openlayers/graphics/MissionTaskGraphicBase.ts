@@ -22,6 +22,7 @@ import {
     createFeature,
     createHandleFeature,
     createMeasureFeature,
+    createOffsetHandleFeature,
     createInertHandleFeature,
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
@@ -441,7 +442,8 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // The label states the ground distance, not the length of the line drawn to say
         // it: the line lives in projected metres, which are 1.56x too long at 50 degrees.
         // @see createMeasureFeature, which reads this
-        this.measure.set('measureMeters', this.size);
+        this.measure.set('measureMeters', this.measureStated());
+        this.measure.set('measureLabel', this.measureCaption());
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -462,7 +464,33 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * circle it was measuring by `cos(latitude)` — 65% of the way at 50 degrees north,
      * which is what "the line only reaches halfway" turned out to be. @see mercator.ts
      */
-    private measureEdge(): Coordinate | undefined {
+    /**
+     * The ground distance the read-out states, in metres.
+     *
+     * The radius for everything with one number to drag. Overridden where a graphic has
+     * more than one — the rectangular target reports whichever of its length and width the
+     * grip under the cursor sets. @see RectangularTargetGraphicBase
+     */
+    protected measureStated(): number {
+        return this.size;
+    }
+
+    /**
+     * A word naming what is being measured, or nothing.
+     *
+     * Nothing for a circle, whose single figure needs no explaining. A graphic with two
+     * dimensions has to say which is moving. @see createMeasureFeature
+     */
+    protected measureCaption(): string | undefined {
+        return undefined;
+    }
+
+    /** Where the gesture is, for a subclass deciding which dimension it names. */
+    protected get gestureAnchor(): Coordinate | undefined {
+        return this.measureAnchor;
+    }
+
+    protected measureEdge(): Coordinate | undefined {
         const handles = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
         const anchor = this.measureAnchor;
         if (!anchor || !this.center || !this.size) return handles[0];
@@ -1278,6 +1306,116 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
         this.typedHalfWidth = halfWidth;
         this.updateGeometry();
     };
+
+    /**
+     * The width grip, in a feature of its own.
+     *
+     * **Not a second point in `handles`.** The manager decides a drag is a width drag by
+     * asking which *feature* was grabbed — `offsetHandler` — and everything inside the
+     * handles feature is a shape handle. The two-point rectangles keep their width grip
+     * apart for exactly this reason. @see createOffsetHandleFeature
+     */
+    offsetHandle: Feature = <Feature>createOffsetHandleFeature();
+
+    /** The grip sits exactly one half-width out, so the drag tracks the cursor 1:1. */
+    offsetScale = 1;
+
+    getFeatures(): Feature[] {
+        return [this.graphic, this.label, this.handles, this.offsetHandle, this.centerHandle, this.measure, this.base];
+    }
+
+    /**
+     * `[length grip]` in the handles feature, the width grip on its own.
+     *
+     * The generator emits `[length, width, centre]`; the base class splits the centre off
+     * by position, and this takes the width out of what is left. @see generateHandles
+     */
+    protected publishHandles(handles: MultiPoint): void {
+        super.publishHandles(handles);
+        const draggable = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates() ?? [];
+        if (draggable.length < 2) {
+            this.offsetHandle.setGeometry(undefined);
+            return;
+        }
+        this.handles.setGeometry(new MultiPoint([draggable[0]]));
+        this.offsetHandle.setGeometry(new Point(draggable[1]));
+    }
+
+    /**
+     * The long axis as a unit vector in projected space, and the one across it.
+     *
+     * **Planar, not compass.** `rotation` on this family is a trigonometric angle — 0 is
+     * east, counter-clockwise positive — so the axis is the plain `(cos, sin)` and its
+     * normal `(-sin, cos)`. Reading it as a bearing put both of this graphic's grips on
+     * the same line and made the width drag measure along the length.
+     * @see RectangularTarget, which converts the same angle for turf
+     */
+    private frameAxes(): {along: [number, number]; across: [number, number]} {
+        const radians = (this.rotation * Math.PI) / 180;
+        return {along: [Math.cos(radians), Math.sin(radians)], across: [-Math.sin(radians), Math.cos(radians)]};
+    }
+
+    /**
+     * Sets the width from a cursor position, for a graphic whose base carries no axis.
+     *
+     * The generic `handleOffset` measures a perpendicular against the *base line* — two
+     * anchor points — and this graphic's base is a single point, so there is no axis in it
+     * to measure against. The frame is this holder's: the centre and the attitude.
+     *
+     * Takes the component across the attitude rather than the raw distance, so a drag that
+     * wanders up the long axis widens the box by what it moved sideways and no more.
+     */
+    setOffsetFromPoint(coordinate: Coordinate): void {
+        const center = this.centerCoordinate();
+        if (!center) return;
+        const {across} = this.frameAxes();
+        const projected = Math.abs((coordinate[0] - center[0]) * across[0] + (coordinate[1] - center[1]) * across[1]);
+        const ground = groundLength(projected, latitudeFromMercatorY(center[1]));
+        if (!Number.isFinite(ground) || ground <= 0) return;
+        this.typedHalfWidth = ground;
+        this.updateGeometry();
+    }
+
+    /**
+     * Whether the gesture in progress is on the width grip rather than the length grip.
+     *
+     * Decided from where the cursor is relative to the two axes, which is the one test that
+     * works for a drag *and* for the moment before one starts. Ties go to the length, which
+     * is the grip that also swings the attitude.
+     */
+    private measuringWidth(): boolean {
+        const anchor = this.gestureAnchor;
+        const center = this.centerCoordinate();
+        if (!anchor || !center) return false;
+        const {along, across} = this.frameAxes();
+        const dx = anchor[0] - center[0];
+        const dy = anchor[1] - center[1];
+        return Math.abs(dx * across[0] + dy * across[1]) > Math.abs(dx * along[0] + dy * along[1]);
+    }
+
+    /** The **full** dimension, matching the figure the dialog shows for it. */
+    protected measureStated(): number {
+        return this.measuringWidth() ? this.halfWidth * 2 : this.size * 2;
+    }
+
+    protected measureCaption(): string | undefined {
+        return this.measuringWidth() ? 'WIDTH' : 'LENGTH';
+    }
+
+    /**
+     * The grip itself, which is **on** the outline.
+     *
+     * The inherited version projects `size` along centre→cursor, which is right for a
+     * circle — every direction is one radius out — and wrong for a rectangle, where the
+     * distance to the edge depends on the direction: a half-length laid out across the box
+     * runs well past the long side. Both grips sit exactly on the edge they name, so the
+     * line ends there by construction rather than by an approximation that overshoots.
+     */
+    protected measureEdge(): Coordinate | undefined {
+        const width = (this.offsetHandle.getGeometry() as Point | undefined)?.getCoordinates();
+        const length = (this.handles.getGeometry() as MultiPoint | undefined)?.getCoordinates()[0];
+        return this.measuringWidth() ? (width ?? length) : (length ?? width);
+    }
 
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
