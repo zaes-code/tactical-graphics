@@ -249,6 +249,23 @@ export class MissionTaskController implements TacticalGraphicHandler {
             holder.headSize *= deltaSize;
         }
 
+        /*
+         * **A filed width scales with the graphic too**, for the same reason `headSize`
+         * does and in the same place.
+         *
+         * The rectangular target is the only holder here with a second dimension of its
+         * own. Until a width is set it follows the length and needs nothing; once it is
+         * set it stops following, and a resize that moved only `size` stretched the box
+         * rather than scaling it — measured, a 1.16 width-to-length ratio came out at 0.68
+         * after one drag on the Resize affordance.
+         *
+         * In the gesture rather than inside `updateGeom`, because restore calls that too
+         * — with the *final* size against an already-correct width — and a ratio taken
+         * there would rescale it a second time.
+         */
+        const widthed = this.graphic as unknown as {scaleWidth?: (factor: number) => void};
+        widthed.scaleWidth?.(deltaSize);
+
         const size = this.graphic.size * deltaSize;
         this.graphic.updateGeom({size});
     }

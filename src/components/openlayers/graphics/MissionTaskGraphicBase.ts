@@ -1308,6 +1308,19 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
     };
 
     /**
+     * Scales a *typed* width with a uniform resize, so the box keeps its proportions.
+     *
+     * No-op while the width still follows the length — that case scales itself. Called from
+     * the resize gesture, beside the arrowhead scaling it mirrors.
+     * @see MissionTaskController.handleResize
+     */
+    scaleWidth(factor: number): void {
+        if (this.typedHalfWidth === undefined) return;
+        if (!Number.isFinite(factor) || factor <= 0) return;
+        this.typedHalfWidth *= factor;
+    }
+
+    /**
      * The width grip, in a feature of its own.
      *
      * **Not a second point in `handles`.** The manager decides a drag is a width drag by
