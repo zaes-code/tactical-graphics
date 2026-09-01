@@ -24,13 +24,14 @@ npm install @zaes/tactical-graphics
 
 The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 34 packages — 32 MIT, one Unlicense, one 0BSD. No copyleft, and every one of them declares a license.
 
-Three entry points ship, and you can use any of them on its own:
+Four entry points ship, and you can use any of them on its own:
 
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
 | `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](#the-center-symbol) |
 | `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
+| `@zaes/tactical-graphics/thumbnails` | One small SVG per graphic, for a menu or picker that has to show what the user is about to add. Inline markup or a `data:` URI — no network, no loader. | nothing |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
@@ -38,8 +39,9 @@ npm install maplibre-gl    # only for the MapLibre entry point
 npm install milsymbol      # only for the center symbol — six graphics carry one
 ```
 
-All three are peer dependencies and all are optional, so installing the package
-for its geometry alone pulls in none of them. Nothing in this package imports
+`ol`, `maplibre-gl` and `milsymbol` are peer dependencies and all are optional, so
+installing the package for its geometry alone pulls in none of them. The thumbnails
+subpath has no dependency at all — it is inline markup. Nothing in this package imports
 `milsymbol` — you hand it in, once, if you want it. See
 [The center symbol](#the-center-symbol).
 
@@ -664,6 +666,70 @@ symbol is: two identical corridors side by side may reasonably differ, and none 
 should travel in a file another operator opens. So the host keeps the choice wherever its
 other view state lives — a store, a URL, local storage — and supplies it at render time,
 the way it supplies `graphicSize`. On MapLibre the same flag goes on the `PaintFeature`.
+
+### A picture for a menu
+
+A list of names does not tell an operator what is about to land on their map, and 293 of
+them do not tell them apart. `@zaes/tactical-graphics/thumbnails` carries one small SVG
+per graphic for exactly that:
+
+```tsx
+import {getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
+import {getDisplayName, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+Object.values(TacticalGraphicName).map(name => (
+    <li key={name}>
+        <img src={getGraphicThumbnailUrl(name)} alt="" width={72} height={47} loading="lazy" />
+        <span>{getDisplayName(name)}</span>
+    </li>
+));
+```
+
+`Object.values(TacticalGraphicName)` rather than `listTacticalGraphicNames()` because the
+latter [returns plain strings](#the-tacticalgraphic-object) and `getDisplayName` wants the
+enum. Either works for the thumbnail itself — both accessors take a `string` too.
+
+Three exports, and one of them is usually all you need:
+
+| Export | Gives you |
+|---|---|
+| `getGraphicThumbnailUrl(name)` | A `data:` URI ready for `<img src>`. Percent-encoded, built on first ask and cached, so re-rendering the same option costs nothing |
+| `getGraphicThumbnailSvg(name)` | The raw `<svg>` markup, for inlining into the DOM — the one to use if you want to restyle it with CSS |
+| `GRAPHIC_THUMBNAIL_SVGS` | The whole `Partial<Record<TacticalGraphicName, string>>`, if you would rather hold the map yourself |
+
+Both accessors return `undefined` for a name that has no thumbnail, so a picker can render
+a spacer and keep its rows aligned.
+
+**They are drawn by this library's own paint layer**, through the same seam the two
+renderers use — not traced by hand and not exported from a design tool. A symbol and its
+thumbnail cannot drift apart, and a graphic whose rendering changes gets a new thumbnail
+in the same release.
+
+**Give them a background.** The markup is transparent and its line work is black, the same
+[one palette](#there-is-one-palette) the map uses. On a dark panel the only thing that
+shows is the halo around the text, so the picker supplies the plate:
+
+```css
+.graphic-thumbnail { background: #fff; border-radius: 4px; }
+```
+
+That is the host's to set for the same reason the palette is: a white rectangle baked into
+the artwork could never sit on anything else.
+
+**They are tuned for a picker, not for study.** At a few dozen pixels beside a label that
+already spells the name out, text is a smudge that costs the shape its room — so a line
+graphic carries no amplifier at all, a point graphic carries its designation and nothing
+else, and only an area keeps the full stack, held clear of its own boundary. The doctrinal
+abbreviation always stays, because `PL` against `LD` against `FSCL` is the whole difference
+between forty otherwise identical strokes. Areas are drawn as a free-form blob, since a
+rectangle is a *different symbol* in this standard — the seventeen genuinely rectangular
+zones and the nineteen circular ones keep their true shapes.
+
+**Nothing here is fetched.** The subpath is plain inline markup with no external
+references, so it works offline, behind a proxy, and inside a `data:` URI. It is also
+**not re-exported from the root**, so the markup only reaches a program that imports the
+subpath — using this package for geometry costs you nothing for pictures you never asked
+for.
 
 ### Your own features, our styling
 
@@ -1564,10 +1630,12 @@ written up: `ai/conventions.md`, "A symbology fact never lives in a holder".
 ## Development
 
 ```bash
-npm start            # run the demo app
-npm test             # run the test suite
-npx tsc --noEmit     # typecheck (the main correctness gate)
-npm run lint         # eslint --fix
+npm start                  # run the demo app
+npm test                   # run the test suite
+npx tsc --noEmit           # typecheck (the main correctness gate)
+npm run lint               # eslint --fix
+npm run gen:thumbnails     # redraw the picker thumbnails, then rebuild
+npm run check:thumbnails   # report whether the committed thumbnails are stale
 ```
 
 The generators in `src/tacticalgraphics/graphics/` are the reference for new
@@ -1587,6 +1655,11 @@ Steps 1 and 4 are enforced by the compiler — `GRAPHIC_CATEGORIES` is an exhaus
 `Record<TacticalGraphicName, …>`, so TypeScript tells you what's missing. To wire
 the graphic into the demo app you also need entries in
 `controllerRegistry.ts` and `graphicFieldRegistry.ts`.
+
+5. `npm run build && npm run gen:thumbnails` — the [picker thumbnail](#a-picture-for-a-menu).
+   Nothing fails to compile without it; the graphic simply has no picture, and the
+   thumbnails suite fails on coverage. The generator reads `dist/` and writes source, so it
+   needs a build before it and one after — `gen:thumbnails` runs the second for you.
 
 A graphic is "done" when a user can draw it, label it, reposition and modify it,
 and rotate and resize it wherever those gestures mean something for that symbol —
