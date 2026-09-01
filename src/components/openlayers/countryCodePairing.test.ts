@@ -58,11 +58,16 @@ describe('country codes pair with designations', () => {
          * pair `T2 ( AS )` — the establishing formation and its country — with no second
          * name beside it, so one code and one only.
          *
-         * The six lines joined them on 2026-09-01. `T2 ( AS )` is the same pair on the same
-         * kind of plate, and the fire support coordination line, the battlefield
-         * coordination line and the coordinated fire line all draw it; the battlefield
-         * handover line and the delay line follow the same ruling, and the decision line
-         * letters `T` beside `AS` and sets the two apart with a slash rather than brackets.
+         * The six lines joined them on 2026-09-01: the fire support coordination line, the
+         * battlefield coordination line and the coordinated fire line draw `T2 ( AS )`
+         * outright; the battlefield handover line and the delay line follow the same
+         * ruling, and the decision line letters `T` beside `AS` and sets the two apart with
+         * a slash rather than brackets.
+         *
+         * Three more on 2026-09-02. The no fire line and the restrictive fire line carry the
+         * same `T2 ( AS )` plate as the first three and had simply been left out; the named
+         * area of interest **line** letters `NAI T/AS`, the slash form. Its *area* twin
+         * (120200) letters no country code and is deliberately not here.
          *
          * Pinned by name rather than counted, and the pin earned it: adding the six turned
          * this list over silently. One more appearing here would mean a graphic picked up a
@@ -77,6 +82,9 @@ describe('country codes pair with designations', () => {
                 TacticalGraphicName.DecisionLine,
                 TacticalGraphicName.DelayLine,
                 TacticalGraphicName.FireSupportCoordinationLine,
+                TacticalGraphicName.NamedAreaOfInterestLine,
+                TacticalGraphicName.NoFireLine,
+                TacticalGraphicName.RestrictiveFireLine,
                 TacticalGraphicName.FreeFireAreaCircular,
                 TacticalGraphicName.FreeFireAreaIrregular,
                 TacticalGraphicName.FreeFireAreaRectangular,

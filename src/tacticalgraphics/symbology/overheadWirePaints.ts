@@ -58,11 +58,21 @@ const PYLON: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
     ],
 ];
 
-/** Where the mast stands in the glyph's own box: the midpoint of its two feet, at ground. */
+/** Where the mast stands in the glyph's own box: the midpoint of its two feet. */
 const PYLON_FOOT_X = 100;
+/** Ground and mast-top, so the glyph's own height is a number rather than a guess. */
 const PYLON_GROUND_Y = 446;
-/** Top of the mast, so the glyph's own height is a number rather than a guess. */
 const PYLON_TOP_Y = 15;
+/**
+ * The height the wire attaches at — the middle of the glyph, not its foot.
+ *
+ * The plate points its `PT` arrow at the base, and standing the pylon on the anchor was the
+ * literal reading of that; it draws the wire along the ground with the towers above it,
+ * which is not what either the Template or the Example shows. Both run the wire through the
+ * pylons at mid height. (User's call, 2026-09-02: "the line needs to be from the middle of
+ * the svg, like the decision line".)
+ */
+const PYLON_ANCHOR_Y = (PYLON_TOP_Y + PYLON_GROUND_Y) / 2;
 
 /** How tall a pylon stands on screen, in pixels. */
 export const PYLON_HEIGHT_PX = 26;
@@ -77,8 +87,8 @@ export const PYLON_HEIGHT_PX = 26;
  * sizing it in metres, would both be wrong, and the second would be invisible until
  * someone zoomed.
  *
- * The anchor is the pylon's **foot**: the plate points its `PT 1` arrow at the bottom of
- * the legs, so the drawn line is the wire's ground track and the towers stand on it.
+ * The wire meets the pylon at its **middle**, so the glyph straddles the line rather than
+ * standing on it. @see PYLON_ANCHOR_Y
  */
 function pylonAt(anchor: ProjectedPosition, context: PaintContext): ProjectedPosition[][] {
     const k = (PYLON_HEIGHT_PX * context.resolution) / (PYLON_GROUND_Y - PYLON_TOP_Y);
@@ -87,9 +97,9 @@ function pylonAt(anchor: ProjectedPosition, context: PaintContext): ProjectedPos
             ([x, y]): ProjectedPosition => [
                 anchor[0] + (x - PYLON_FOOT_X) * k,
                 // The glyph's y runs down and the projection's runs up, so this subtracts
-                // from ground rather than adding to it. Getting it backwards buries the
-                // pylon instead of standing it up, and looks deliberate.
-                anchor[1] + (PYLON_GROUND_Y - y) * k,
+                // rather than adding. Getting it backwards buries the pylon instead of
+                // standing it up, and looks deliberate.
+                anchor[1] + (PYLON_ANCHOR_Y - y) * k,
             ],
         ),
     );
@@ -140,6 +150,27 @@ const SAFE_LANE_LABEL_GAP_PX = 10;
  * geometry already carries, so a lane drawn in either direction puts its column on the same
  * side relative to travel.
  *
+ * ## Right of travel, upright, and measured clear of the symbol
+ *
+ * Three rules, all of them about the reader rather than the plate (user's call, 2026-09-02):
+ *
+ * - **Right of the line running point 1 to point 2.** Relative to travel, not to the map's
+ *   north, so redrawing the same lane the other way round does not swap the column across
+ *   the symbol.
+ * - **Never rotated.** The block reads horizontally whatever the lane's heading. A column
+ *   of four amplifiers turned to follow a diagonal is unreadable, and turned upside down on
+ *   a north-running lane it is worse.
+ * - **Never touching the line work.** The clearance is *measured* off the realized geometry
+ *   rather than assumed: the splay at each end reaches out perpendicular to the lane by an
+ *   amount that depends on the decoration size and the zoom, so a fixed offset that clears
+ *   it at one zoom sits on top of it at another.
+ *
+ * The last two interact, and that is the part worth reading twice. An upright block hung
+ * beside the line grows in its own two directions from its anchor, so a block placed to the
+ * east and aligned to grow west walks straight back over the symbol. Both the horizontal
+ * and the vertical alignment therefore follow the sign of the offset, which puts the anchor
+ * on the corner nearest the lane and sends the block away in both axes.
+ *
  * ## The width is a stated number, and nothing draws it
  *
  * `AM` is the lane's width in metres. The symbol is a single line, so there is no drawn
@@ -174,26 +205,40 @@ export function safeLaneOrGapPaint(): LinePaint {
         const len = Math.hypot(dx, dy);
         if (len === 0) return lineWork;
 
+        // The right hand looking from point 1 to point 2, in a projection whose y runs up.
+        const rightX = dy / len;
+        const rightY = -dx / len;
+
         /*
-         * Across the lane, on the **left**-hand side looking from entry to exit -- taken
-         * from travel rather than from the map's north, so the column stays on the same
-         * side of the symbol whichever way the lane was drawn.
+         * How far the drawn symbol reaches on that side, measured rather than assumed.
          *
-         * Left, because that is the plate's side: 290600 draws its lane running down the
-         * page from point 1 to point 2 and stacks the boxes to the *page's* right, which
-         * for southward travel is the left hand.
-         *
-         * **The alignment follows the side, or the block runs back over the lane.** The
-         * text is hung from a point beside the line and grows in its own direction; hung
-         * left-aligned on the west side, it starts 10 px clear and then crosses the lane it
-         * is labelling. Which side "right of travel" lands on depends on the lane's
-         * heading, so the alignment has to be decided from the offset that came out rather
-         * than fixed.
+         * The splay is `size` metres long at 45 degrees to the lane, and `size` is derived
+         * from the zoom — so the reach in projected metres changes as the user zooms, and
+         * any constant that cleared it at one zoom would sit on the arm at another. Every
+         * point of the realized geometry is projected onto the offset direction and the
+         * furthest one wins; the fixed gap is then added to that.
          */
-        const offset = SAFE_LANE_LABEL_GAP_PX * context.resolution;
-        const acrossX = -dy / len;
-        const at: ProjectedPosition = [entry[0] + acrossX * offset, entry[1] + (dx / len) * offset];
-        const align: 'left' | 'right' = acrossX >= 0 ? 'left' : 'right';
+        let reach = 0;
+        for (const path of geometry.coordinates) {
+            for (const point of path) {
+                reach = Math.max(reach, (point[0] - entry[0]) * rightX + (point[1] - entry[1]) * rightY);
+            }
+        }
+        const offset = reach + SAFE_LANE_LABEL_GAP_PX * context.resolution;
+        const at: ProjectedPosition = [entry[0] + rightX * offset, entry[1] + rightY * offset];
+
+        /*
+         * The block grows away from the lane in both axes.
+         *
+         * `align` puts the anchor on the block's near edge horizontally and `baseline` does
+         * the same vertically, each taken from the sign of the offset. The dead band is
+         * what makes a lane that runs nearly north-south centre its column rather than
+         * flipping it end for end over a rounding error.
+         */
+        const DEAD_BAND = 0.2;
+        const align: 'left' | 'center' | 'right' = rightX > DEAD_BAND ? 'left' : rightX < -DEAD_BAND ? 'right' : 'center';
+        const baseline: 'top' | 'middle' | 'bottom' =
+            rightY > DEAD_BAND ? 'bottom' : rightY < -DEAD_BAND ? 'top' : 'middle';
 
         return [
             ...lineWork,
@@ -212,10 +257,10 @@ export function safeLaneOrGapPaint(): LinePaint {
                     font: fontStyle,
                     fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
-                    // Hung from the entry corner, so the column grows down the lane the way
-                    // the plate stacks it rather than straddling the end.
+                    // Both taken from the offset, so the anchor is the block's corner
+                    // nearest the lane and the text runs away from it. @see the note above.
                     align,
-                    baseline: 'top',
+                    baseline,
                     scale: scaleOf(feature, context),
                 },
             },

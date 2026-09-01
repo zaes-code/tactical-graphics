@@ -193,6 +193,16 @@ const SAFE_LANE = f(true, false, true, true, false, {width: true});
 const GENERIC_LINE = f(true, false, false, false, true);
 
 /**
+ * Named area of interest, line form (APP-06 142000): `NAI T/AS`.
+ *
+ * The designation and a country code, set apart by a slash rather than bracketed --
+ * the decision line's form, not the fire-support family's. The *area* form (120200)
+ * letters no country code at all, which is why this is its own profile rather than a
+ * shared one. (User's call, 2026-09-02.)
+ */
+const NAI_LINE = f(true, false, false, false, true, {countryCodes: true});
+
+/**
  * Line, generic (APP-06 110400): the designation and the date-time group, both ends.
  *
  * Its Template sets **T** above each end of the line and **W - W1** below each, which is
@@ -200,7 +210,7 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * user could see the shape and never fill in the only two amplifiers it has. The status is
  * not among them.
  */
-const LINE_GENERIC = f(true, false, true, true, false);
+const LINE_GENERIC = f(true, false, true, true, false, {additionalInfo: true});
 
 /**
  * Obstacle line: identifier only.
@@ -293,9 +303,9 @@ const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
  * designation with no first means nothing to an operator, the same call as the fire-support
  * *areas* — and the country code joins it. (User's call, 2026-09-01.)
  *
- * **No fire line and restrictive fire line share the plain constant above and the same
- * plate**, so they are very likely the same change; they were not part of the call, so they
- * are left as they were rather than swept along with it.
+ * The no fire line and the restrictive fire line joined on 2026-09-02, which settles the
+ * open question this note used to carry: they share the plate and they take the same
+ * change. `FIRE_SUPPORT_LINE` is now the profile for the lines that have no `AS` box.
  */
 const FIRE_SUPPORT_LINE_WITH_COUNTRY = f(true, false, true, true, true, {countryCodes: true});
 /** Phase line: primary identifier at each end, no date. */
@@ -307,6 +317,15 @@ const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
 const NAME_FIELD_ONLY = f(true, false, false, false, false);
+/**
+ * Free text and nothing else -- the graphic whose single box is `H`.
+ *
+ * 272200's Template carries one lettered box and it is `H`; the Example fills it with
+ * `30 CGH`, a dose rate, which is exactly what a designation is not. Offering a name
+ * instead put an amplifier on the symbol that no plate asks for and left the one it does
+ * ask for unreachable. (User's call, 2026-09-02.)
+ */
+const ADDITIONAL_INFO_ONLY = f(false, false, false, false, false, {additionalInfo: true});
 
 /**
  * The action areas — JTAA, SAA and SGAA (APP-06 150501-150503).
@@ -467,11 +486,11 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.LightLine]: GENERIC_LINE,
     [TacticalGraphicName.LineGeneric]: LINE_GENERIC,
     [TacticalGraphicName.HandoverLine]: GENERIC_LINE,
-    [TacticalGraphicName.NamedAreaOfInterestLine]: GENERIC_LINE,
+    [TacticalGraphicName.NamedAreaOfInterestLine]: NAI_LINE,
     [TacticalGraphicName.HoldingLine]: GENERIC_LINE,
-    [TacticalGraphicName.NoFireLine]: FIRE_SUPPORT_LINE,
+    [TacticalGraphicName.NoFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.BattlefieldCoordinationLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
-    [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE,
+    [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.IntelligenceCoordinationLine]: f(true, false, true, true, true),
     [TacticalGraphicName.CoordinatedFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.EngineerWorkLine]: f(true, true, false, false, true, {countryCodes: true}),
@@ -523,7 +542,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
     // The dose the operator typed goes in the break: "30 CGH".
-    [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA_FENCED,
