@@ -9,6 +9,7 @@ import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
 import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
 import {AreaGraphic, RectangularArea, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
+import {RectangularTarget} from "../graphics/RectangularTarget";
 import {isRectangular} from "./handles";
 import {
     AreaDefense,
@@ -39,11 +40,13 @@ import {Bridge} from "../graphics/Bridge";
 import {Ford, FordHard} from "../graphics/Ford";
 import {FerryCrossing} from "../graphics/FerryCrossing";
 import {PassageLane} from "../graphics/PassageLane";
+import {SafeLaneOrGap} from "../graphics/SafeLaneOrGap";
+import {OverheadWire} from "../graphics/OverheadWire";
 import {Fix} from "../graphics/Fix";
 import {Turn} from "../graphics/Turn";
 import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackFeint, DirectionOfSupportingAttack} from "../graphics/Direction";
 import {FollowTask} from "../graphics/FollowTask";
-import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, AxisOfAttack, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
+import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
 import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
 import {Exploitation} from "../graphics/Exploitation";
@@ -117,7 +120,6 @@ TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());
 TacticalGraphicsRegistry.register(new MainAttack());
 TacticalGraphicsRegistry.register(new MainAttackFeint());
 TacticalGraphicsRegistry.register(new SupportingAttack());
-TacticalGraphicsRegistry.register(new AxisOfAttack());
 TacticalGraphicsRegistry.register(new Counterattack());
 TacticalGraphicsRegistry.register(new CounterattackByFire());
 TacticalGraphicsRegistry.register(new AvenueOfApproach());
@@ -188,6 +190,8 @@ TacticalGraphicsRegistry.register(new FordHard());
 TacticalGraphicsRegistry.register(new FerryCrossing());
 
 TacticalGraphicsRegistry.register(new PassageLane());
+TacticalGraphicsRegistry.register(new SafeLaneOrGap());
+TacticalGraphicsRegistry.register(new OverheadWire());
 
 let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AttackPosition,
@@ -276,7 +280,6 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.FireSupportAreaIrregular,
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.TargetAreaIrregular,
-    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.HighDensityAirspaceControlZone,
     TacticalGraphicName.RestrictedOperationsZone,
     TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone,
@@ -300,6 +303,12 @@ areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(
     // base *is* its outline. @see RectangularArea, isRectangular
     isRectangular(name) ? new RectangularArea(name) : new AreaGraphic(name),
 ))
+
+/**
+ * **One anchor point, not two.** Its plate builds the box from amplifiers, so it shares
+ * neither a base shape nor a generator with the rectangles above. @see RectangularTarget
+ */
+TacticalGraphicsRegistry.register(new RectangularTarget(TacticalGraphicName.TargetAreaRectangular));
 
 //Mission Task Graphics
 TacticalGraphicsRegistry.register(new Control());

@@ -39,6 +39,26 @@ export interface CorridorOptions extends BaseGraphicOptions {
     width?: number;
 }
 
+/**
+ * Options for the rectangular target (APP-06 240802), the one rectangle built entirely
+ * from amplifiers rather than from anchor points.
+ *
+ * Its plate takes **one** anchor point and states the shape outright: "the target length
+ * (AM1) in metres and target width (AM) in metres", plus a target attitude (AN). Every
+ * other rectangle in the set is two points and a width, which is why this bag exists
+ * rather than a `length` on `BaseGraphicOptions` that nothing else would read.
+ *
+ * `rotation` carries the attitude. The plate quotes AN in mils and this is degrees, like
+ * every other angle in the schema — one rotation rather than a parallel field for the same
+ * physical quantity, converted for display if a host wants mils.
+ */
+export interface RectangularTargetOptions extends BaseGraphicOptions {
+    /** Full length in metres, along the attitude bearing — amplifier AM1. */
+    length?: number;
+    /** Half the full width in metres, across the attitude — amplifier AM, halved on the way in. */
+    radius?: number;
+}
+
 /** Options for area graphics that carry an echelon modifier (e.g. BattlePosition). */
 export interface EchelonAreaOptions extends BaseGraphicOptions {
     echelon?: TacticalGraphicEchelon;
@@ -115,13 +135,21 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
  */
 export interface RangeFanBand {
     /**
-     * How far the band reaches, in **kilometers**.
+     * How far the band reaches, in **meters** — like `radius`, `width` and `decorationSize`.
      *
-     * The one distance in this schema that is not meters — `radius`, `width` and
-     * `decorationSize` all are. It is kilometers because a weapon or sensor envelope is
-     * quoted that way and the label prints the number bare, so meters here would put
-     * three zeroes on every ring. Kept rather than corrected: changing it would silently
-     * rescale every range fan already saved by a factor of a thousand.
+     * **This was kilometers before 3.2.0.** Both APP-06 range fan plates say otherwise in
+     * as many words — 242200 (sector) *"All ranges in metres"*, 242100 (circular) *"All
+     * units in metres"* — and their examples read `RG 5000`, `MAX RG(1) 28,500`. A 5 km
+     * band used to render `RG 5` where the standard renders `RG 5000`.
+     *
+     * The earlier note here defended kilometers on the grounds that an envelope is quoted
+     * that way and metres would put three zeroes on every ring. The label answers that by
+     * grouping thousands (`5,000`) rather than by changing the unit. (User's call,
+     * 2026-08-31.)
+     *
+     * **There is no migration.** A fan saved before 3.2.0 carries a kilometer number and
+     * will render a thousand times too small; that break was taken deliberately rather
+     * than carrying a schema version for one field. @see formatRange
      */
     range: number;
     /** Optional user-entered name shown above the auto-generated range line. */
@@ -204,6 +232,7 @@ export type GraphicOptions =
     | EchelonAreaOptions
     | CircularAreaOptions
     | EncirclementOptions
+    | RectangularTargetOptions
     | RouteOptions
     | SecurityOperationOptions
     | RangeFanOptions;
@@ -589,7 +618,6 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.AviationAxisOfAdvance:
         case TacticalGraphicName.BattlePosition:
         case TacticalGraphicName.MainAxisOfAdvance:
-        case TacticalGraphicName.AxisOfAttack:
         case TacticalGraphicName.SupportingAttack:
             return '';*/
 
@@ -909,6 +937,14 @@ export enum TacticalGraphicName {
     FordDifficult = 'FordDifficult',
     FerryCrossing = 'FerryCrossing',
     PassageLane = 'PassageLane',
+    /*
+     * **The same picture as `PassageLane`, and that is what the publications draw.**
+     * APP-06 290600's Template and FM 1-02.2 Table 5-16's passage lane are both a lane with
+     * a two-armed splay at each end; what separates them is the amplifiers. The passage
+     * lane letters `W` and `W1` and nothing else; the safe lane adds `T` and `AM`, so a
+     * named lane with a stated width can only be this one.
+     */
+    SafeLaneOrGap = 'SafeLaneOrGap',
 
     ObstacleBelt = 'ObstacleBelt',
     ObstacleGroup = 'ObstacleGroup',
@@ -918,6 +954,8 @@ export enum TacticalGraphicName {
     ObstacleRestrictedArea = 'ObstacleRestrictedArea',
 
     Abatis = 'Abatis',
+    /** A plain line with a pylon standing at every anchor point. Carries no amplifiers. */
+    OverheadWire = 'OverheadWire',
     ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
     ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
     ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',

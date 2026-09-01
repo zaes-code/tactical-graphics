@@ -217,17 +217,19 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ForwardLineOfOwnTroops]:                      '140100',  // Forward Line of Troops
     [TacticalGraphicName.Bridge]:                                      '271100',  // Bridge
     [TacticalGraphicName.AssaultCrossing]:                             '271300',  // Assault Crossing
-    [TacticalGraphicName.Gap]:                                         '290600',  // Safe Lane or Gap
+    [TacticalGraphicName.Gap]:                                         null,      // FM only; APP-06's 290600 is a different symbol
     [TacticalGraphicName.FordEasy]:                                    '271500',  // Ford Easy
     [TacticalGraphicName.FordDifficult]:                               '271600',  // Ford Difficult
     [TacticalGraphicName.FerryCrossing]:                               '290700',  // Ferry
     [TacticalGraphicName.PassageLane]:                                 null,
+    [TacticalGraphicName.SafeLaneOrGap]:                               '290600',  // Safe Lane or Gap
     [TacticalGraphicName.ObstacleBelt]:                                '270100',  // Obstacle Belt
     [TacticalGraphicName.ObstacleGroup]:                               null,
     [TacticalGraphicName.ObstacleZone]:                                '270200',  // Obstacle Zone
     [TacticalGraphicName.ObstacleFreeArea]:                            '270300',  // Obstacle Free Zone
     [TacticalGraphicName.ObstacleRestrictedArea]:                      '270400',  // Obstacle Restricted Zone
     [TacticalGraphicName.Abatis]:                                      '280100',  // Abatis
+    [TacticalGraphicName.OverheadWire]:                                '282003',  // Overhead Wire
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:           '271201',  // Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:             '271202',  // Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: '271203',  // Explosives, State of Readiness 2 (Armed but Passable)

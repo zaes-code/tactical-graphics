@@ -170,3 +170,47 @@ describe('asStyleFunction', () => {
         expect(toPaintFeature(f)!.hostilityColor).toBe('rgb(1, 2, 3)');
     });
 });
+
+/**
+ * # The country code has to survive both routes to the same paint
+ *
+ * `defaultLinePaint` is reached two ways: MapLibre reads it out of the registry, and
+ * OpenLayers calls it from `getDefaultLineStyle` with **no options object at all**. So an
+ * option table kept anywhere but inside the paint reaches one engine and not the other --
+ * which is what happened on 2026-09-01, when the fire-support lines gained a country code
+ * that MapLibre drew and OpenLayers silently dropped. Nothing failed: the field was
+ * offered, saved and restored, and one renderer just never painted it.
+ *
+ * These assert the text itself rather than that a paint exists, because "a paint exists"
+ * was true throughout the defect.
+ */
+describe('the fire-support lines set their country code on both engines', () => {
+    const WITH_CODE = [
+        TacticalGraphicName.FireSupportCoordinationLine,
+        TacticalGraphicName.BattlefieldCoordinationLine,
+        TacticalGraphicName.BattlefieldHandoverLine,
+        TacticalGraphicName.DelayLine,
+    ];
+
+    /** Every string a paint sets, given a designation and a country code. */
+    const painted = (name: TacticalGraphicName) => {
+        const f = new Feature(line());
+        f.set(TACTICAL_GRAPHIC_KEY, {name, designation: 'ALPHA', countryCode: 'GBR'});
+        f.set('graphicName', name);
+        return (getPaintFunction(name)?.graphic?.(toPaintFeature(f)!, paintContext(RESOLUTION)) ?? [])
+            .map(p => p.text?.text)
+            .filter((t): t is string => Boolean(t));
+    };
+
+    it.each(WITH_CODE)('%s brackets the code after the designation', name => {
+        const texts = painted(name);
+        expect(texts.some(t => t.includes('ALPHA (GBR)'))).toBe(true);
+    });
+
+    it('does not hand a country code to a line whose plate has no box for one', () => {
+        // The line of departure is the control: same paint, same fields on the feature, and
+        // no `AS` on its plate, so the bag carrying a code must change nothing.
+        const texts = painted(TacticalGraphicName.LineOfDeparture);
+        expect(texts.some(t => t.includes('GBR'))).toBe(false);
+    });
+});

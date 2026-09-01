@@ -38,6 +38,11 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Fix]: 14,
     [TacticalGraphicName.TacticalFix]: 14,
     [TacticalGraphicName.PassageLane]: 20,
+    // The same splay, because it is the same picture -- APP-06 290600 and the FM's
+    // passage lane draw one outline and differ only in what they letter. Missing from
+    // this table the fallback is **1 px**, so the arms came out a metre long and the
+    // symbol rendered as a bare line: a safe lane that looked like a phase line.
+    [TacticalGraphicName.SafeLaneOrGap]: 20,
     [TacticalGraphicName.FerryCrossing]: 15,
     [TacticalGraphicName.Bridge]: 15,
     [TacticalGraphicName.Gap]: 15,

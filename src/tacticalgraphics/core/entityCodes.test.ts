@@ -47,7 +47,9 @@ describe('GRAPHIC_ENTITY_CODES', () => {
 
     it('leaves exactly the FM 1-02.2-only graphics uncoded', () => {
         const uncoded = names().filter((n) => GRAPHIC_ENTITY_CODES[n] === null);
-        expect(uncoded).toHaveLength(8);
+        // Nine since `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
+        // gap", a different symbol. @see specifications.test.ts, FM_ONLY_GRAPHICS
+        expect(uncoded).toHaveLength(9);
         for (const name of uncoded) {
             expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2]);
         }
@@ -89,7 +91,7 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 283 assignments over 282 distinct codes -- 141100 is the one shared pair.
-        expect(codes).toHaveLength(282);
+        // 284 assignments over 283 distinct codes -- 141100 is the one shared pair.
+        expect(codes).toHaveLength(283);
     });
 });

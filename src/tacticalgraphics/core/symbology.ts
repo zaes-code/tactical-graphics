@@ -446,6 +446,14 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.TargetBuildUpAreaCircular,
     TacticalGraphicName.TargetValueAreaCircular,
     TacticalGraphicName.ZoneOfResponsibilityCircular,
+    /*
+     * Not a circle, but sized by the same gesture. The rectangular target became
+     * point-anchored in 3.2.0 — one anchor point, with the length swung and set by dragging
+     * the edge handle — so it resizes exactly the way the entries above do, and would
+     * otherwise be the one graphic in the family that reports nothing while you drag it.
+     * The number under the cursor is its half-length. @see RectangularTarget
+     */
+    TacticalGraphicName.TargetAreaRectangular,
 ]);
 
 /**
@@ -798,6 +806,27 @@ export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
     return DERIVED_ANCHOR_GRAPHICS.has(name);
 }
 
+/**
+ * The symbols the operator turns and moves but does not **scale by dragging**.
+ *
+ * A range fan's size is not one number. It is a list of bands, each with its own range in
+ * metres and its own label — `MG RG 60,000`, `ATGM RG 120,000` — and those numbers are
+ * *stated*, read off a weapon's data rather than found by eye. A whole-graphic resize can
+ * only multiply them all by the same factor, which turns a set of real ranges into a set of
+ * arbitrary ones and leaves the labels reading numbers nobody chose.
+ *
+ * So the affordance is not offered, and the two ways left are the two that mean something:
+ * type a range into the dialog's band editor, or drag that band's own rim handle, which
+ * moves one ring and writes the metres it landed on. (User's call, 2026-09-01.)
+ *
+ * **This is not `ROTATE_ONLY_SYMBOLS`.** That set is for symbols with no size input at all;
+ * these have several, and the point is which control reaches them.
+ */
+const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+]);
+
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
@@ -907,6 +936,9 @@ export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
     }
     if (RESIZE_ONLY_SYMBOLS.has(name)) {
         return {translate: true, rotate: false, resize: true, modify: false};
+    }
+    if (NO_DRAG_RESIZE_SYMBOLS.has(name)) {
+        return {translate: true, rotate: true, resize: false, modify: false};
     }
     return {translate: true, rotate: true, resize: true, modify: !pointAnchored && !DERIVED_ANCHOR_GRAPHICS.has(name)};
 }

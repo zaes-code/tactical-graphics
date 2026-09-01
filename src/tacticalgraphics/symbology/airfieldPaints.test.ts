@@ -128,7 +128,7 @@ describe('APP-06 131900 — airfield', () => {
      *
      * Deriving it from `graphicSize` instead assumes that number is the runway's half
      * length, which holds only on the path that stamps it. The catalog hands the paint the
-     * sample's `radius`, which is smaller, and the designation printed 17 px *inside* the
+     * sample's `radius`, which is smaller, and the label printed 17 px *inside* the
      * runway it is supposed to sit beyond — visible on zaes.com rather than in the app,
      * which is why no test caught it.
      */
