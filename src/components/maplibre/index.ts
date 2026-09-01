@@ -4,7 +4,7 @@
  * ## Status: shipped in 2.0.0
  *
  * A complete renderer, not a spike. It paints **291 of the 292 registered
- * graphics** — every one of them, since `AxisOfAttack` was removed in 4.0.0
+ * graphics** — every one of them, since `AxisOfAttack` was removed in 3.2.0
  * and no UI path anywhere in the package — and it carries draw, modify and all
  * four handle gestures. Both engines read one shared paint layer, so what a
  * symbol looks like is the same fact on each rather than two implementations

@@ -48,7 +48,7 @@ describe('a drawn rectangular zone', () => {
     /**
      * **No drawn rectangle derives a length any more.**
      *
-     * The rectangular target was the one that did, and in 4.0.0 it stopped being a drawn
+     * The rectangular target was the one that did, and in 3.2.0 it stopped being a drawn
      * rectangle at all: APP-06 240802 gives it one anchor point and *states* the length, so
      * the number is an input rather than something read back off a box. The two-point zones
      * never carried one. @see RECTANGLE_LENGTH_GRAPHICS, RectangularTarget

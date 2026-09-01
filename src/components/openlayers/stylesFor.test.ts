@@ -26,7 +26,7 @@ import {resetTacticalGraphicsConfig} from '@zaes/tactical-graphics';
  *
  * `AxisOfAttack` used to be the exception — a generator with no enum member, no controller
  * and no UI path — and was pinned here rather than filtered silently. It was removed in
- * 4.0.0 for appearing in neither publication.
+ * 3.2.0 for appearing in neither publication.
  */
 const ALL = listTacticalGraphicNames() as TacticalGraphicName[];
 
@@ -119,7 +119,7 @@ describe('stylesFor', () => {
     it('draws every registered name — there is no longer one it cannot', () => {
         /*
          * This used to assert the opposite: that `AxisOfAttack` threw, being registered with
-         * no enum member and so no controller. Removing it in 4.0.0 makes the registry and
+         * no enum member and so no controller. Removing it in 3.2.0 makes the registry and
          * the enum agree, and the stronger claim is now true — every name a consumer can list
          * is a name this engine can style.
          */

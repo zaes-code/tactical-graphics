@@ -198,7 +198,7 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * The designation and a country code, set apart by a slash rather than bracketed --
  * the decision line's form, not the fire-support family's. The *area* form (120200)
  * letters no country code at all, which is why this is its own profile rather than a
- * shared one. (User's call, 2026-09-02.)
+ * shared one. (User's call, 2026-09-01.)
  */
 const NAI_LINE = f(true, false, false, false, true, {countryCodes: true});
 
@@ -303,7 +303,7 @@ const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
  * designation with no first means nothing to an operator, the same call as the fire-support
  * *areas* — and the country code joins it. (User's call, 2026-09-01.)
  *
- * The no fire line and the restrictive fire line joined on 2026-09-02, which settles the
+ * The no fire line and the restrictive fire line joined on 2026-09-01, which settles the
  * open question this note used to carry: they share the plate and they take the same
  * change. `FIRE_SUPPORT_LINE` is now the profile for the lines that have no `AS` box.
  */
@@ -323,7 +323,7 @@ const NAME_FIELD_ONLY = f(true, false, false, false, false);
  * 272200's Template carries one lettered box and it is `H`; the Example fills it with
  * `30 CGH`, a dose rate, which is exactly what a designation is not. Offering a name
  * instead put an amplifier on the symbol that no plate asks for and left the one it does
- * ask for unreachable. (User's call, 2026-09-02.)
+ * ask for unreachable. (User's call, 2026-09-01.)
  */
 const ADDITIONAL_INFO_ONLY = f(false, false, false, false, false, {additionalInfo: true});
 

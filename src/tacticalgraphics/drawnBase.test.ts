@@ -111,7 +111,7 @@ describe('isRectangular', () => {
     });
 
     it('covers the seventeen the registry draws as boxes', () => {
-        // Seventeen, not eighteen: the rectangular target left this set in 4.0.0. Its plate
+        // Seventeen, not eighteen: the rectangular target left this set in 3.2.0. Its plate
         // takes one anchor point and builds the box from its length, width and attitude, so
         // it is not "two anchor points and a width" like the rest. @see RectangularTarget
         expect(names.filter(isRectangular)).toHaveLength(17);
