@@ -93,6 +93,7 @@ import {
     humanTerrainLabelPaint,
     outsideCornerDatePaint,
     areaLabelStackPaint,
+    belowShapeLiteralPaint,
     groupOrSeriesOfTargetsLabelPaint,
     positionAreaArtilleryLabelPaint,
     smokeObscurantLabelPaint,
@@ -428,6 +429,9 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (ZONE_GRAPHICS_IRREGULAR.includes(name)) return zoneLabelPaint(name, true);
     if (STACK_LABEL_GRAPHICS.includes(name)) return areaLabelStackPaint(name);
     if (name === TacticalGraphicName.ObstacleFreeArea) return areaLabelStackPaint(name, {before: ['FREE']});
+    // Its plate names the enclosure under the shape and offers no designation box, so there
+    // is nothing to type and the default centred label had nothing to draw.
+    if (name === TacticalGraphicName.AirheadLine) return belowShapeLiteralPaint('AIRHEAD LINE');
     // 310200's Template stacks its literal on two lines with the designation **under** it,
     // where every other prefixed area sets the two side by side. @see areaLabelStackPaint
     if (name === TacticalGraphicName.EnemyPrisonerOfWarHoldingArea) {

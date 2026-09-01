@@ -2197,6 +2197,11 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     // first one it missed: the case here passed `psyOpsMarkPaint(() => [])`, an empty
     // base, so the speaker and its amplifiers drew and the date-time group outside the
     // upper-left corner — which the registry's base draws — never appeared on this engine.
+    // The airhead line joined for the same reason: its label is the literal "AIRHEAD LINE"
+    // set under the shape, which only the paint layer knows how to draw. Left out, this
+    // engine fell through to the legacy switch and drew a designation the graphic no longer
+    // offers. Registering a paint takes two edits — the registry, and this list.
+    TacticalGraphicName.AirheadLine,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,

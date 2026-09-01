@@ -13,7 +13,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
-import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierText, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale, sampleSegments} from './symbolFit';
 import { liftedAnchor} from './labelFit';
 
@@ -167,7 +167,17 @@ const AIRFIELD_FALLBACK_HALF_WIDTH = 2_000;
 export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPaint {
     return (feature, context) => {
         const center = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
-        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
+        /*
+         * **Field H, not a designation.** The text beside the strip says what the airfield is
+         * rather than naming it, which is the airfield zone's reading too. (User's call,
+         * 2026-09-01.)
+         *
+         * Through `amplifierText`, because that changes what "show name only" does with it: a
+         * designation survives that mode — it *is* the name — and field H is an annotation
+         * that has to drop with the rest. The mobility corridor leaked the same way when its
+         * text moved to H.
+         */
+        const text = getFullLabel(name, amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())).trim();
         if (!center || !text) return [];
 
         /*

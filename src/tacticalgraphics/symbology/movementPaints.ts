@@ -287,9 +287,16 @@ export function aviationAxisLabelPaint(): MovementPaint {
         const value = nameAndDate(feature);
         if (!value) return [];
 
+        /*
+         * **`alignAlong`, not a fixed `'left'`.** The rotation is kept upright, so an arrow
+         * pointing west has its text turned through 180 degrees — and a left-aligned block
+         * then runs *away* from the shaft instead of along it. Drawn west, the name and the
+         * date ended up off the tail entirely and reading in the wrong order against the
+         * arrow. The helper flips the alignment exactly when the rotation flipped.
+         */
         return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
-            align: 'left',
+            align: alignAlong('left', coords[0], coords[1]),
         })];
     };
 }

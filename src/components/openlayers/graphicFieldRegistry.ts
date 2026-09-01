@@ -737,7 +737,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
     [TacticalGraphicName.AirfieldZone]: AIRFIELD_ZONE,
-    [TacticalGraphicName.Airfield]: NAME_FIELD_ONLY,
+    // Field H, like the airfield *zone* beside it — the text is what the strip is, not a
+    // name for it. (User's call, 2026-09-01.) @see airfieldPointLabelPaint
+    [TacticalGraphicName.Airfield]: AIRFIELD_ZONE,
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
     [TacticalGraphicName.StrongPoint]: f(true, false, false, false, false, {echelon: true}),
@@ -830,7 +832,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
     [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.AirheadLine]: NAME_FIELD_ONLY,
+    // No designation: its plate labels the shape with the words "AIRHEAD LINE" and offers
+    // no name box. (User's call, 2026-09-01.) @see airheadLineLabelPaint
+    [TacticalGraphicName.AirheadLine]: f(false, false, false, false, false),
     [TacticalGraphicName.ObstacleBelt]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleZone]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,
