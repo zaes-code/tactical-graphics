@@ -66,15 +66,14 @@ function snapshotOf(handler: TacticalGraphicHandler) {
 }
 
 /**
- * `AxisOfAttack` is registered in the core registry without a `TacticalGraphicName`
- * member, so `CONTROLLER_REGISTRY` — keyed by the enum — has no entry and `getController`
- * throws. It is reachable through `renderTacticalGraphic` but not drawable in this
- * renderer. See ai/context.md, "Counts".
+ * Every registered graphic, with nothing filtered out.
+ *
+ * There used to be one exception — `AxisOfAttack`, a generator registered without a
+ * `TacticalGraphicName` member, so the enum-keyed `CONTROLLER_REGISTRY` had no entry for it
+ * and `getController` threw. It was removed in 4.0.0: it appeared in neither publication and
+ * had no UI path, so the registry and the enum now hold the same 291 names.
  */
-const NO_CONTROLLER = ['AxisOfAttack'];
-
-const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
-    .filter(n => !NO_CONTROLLER.includes(String(n)));
+const NAMES = listTacticalGraphicNames() as TacticalGraphicName[];
 
 describe(`every registered graphic round-trips (${NAMES.length} names)`, () => {
     it.each(NAMES.map(n => [String(n), n] as const))('%s', (_label, name) => {
