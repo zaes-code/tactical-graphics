@@ -7,7 +7,7 @@
  *
  * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done and
  * `isPaintable` is now true for every registered name — the lone exception, `AxisOfAttack`,
- * was removed in 4.0.0 for appearing in neither publication and having no UI path. The
+ * was removed in 3.2.0 for appearing in neither publication and having no UI path. The
  * record stays partial anyway: a graphic can legitimately have no paint of its own, and an
  * exhaustive one would force a placeholder that reads as "done".
  *

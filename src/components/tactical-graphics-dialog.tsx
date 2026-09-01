@@ -53,7 +53,7 @@ import {getGraphicFields} from './openlayers/graphicFieldRegistry';
  * the geometry generator multiplies by 1000 when calling turf.
  */
 function defaultRangeFanConfig(): RangeFanConfig {
-    // Metres, matching RangeFanBand.range as of 4.0.0 — this was 1 (km).
+    // Metres, matching RangeFanBand.range as of 3.2.0 — this was 1 (km).
     return {
         bands: [{range: 1000}],
     };
@@ -131,7 +131,7 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.rangeFan) {
         // First time opening the editor on this fan: seed a single band at the drawn
         // radius so pressing OK does not snap the geometry to the fallback. Both
-        // `graphicSize` and a band's range are metres as of 4.0.0 — this divided by a
+        // `graphicSize` and a band's range are metres as of 3.2.0 — this divided by a
         // thousand, which was right while bands were kilometres and now seeds a fan a
         // thousand times too small. @see RangeFanBand.range
         labels.rangeFan = stored.rangeFan ?? {
@@ -1093,7 +1093,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                             // "extend the same wedge to a longer range" flow
                                             // needs zero typing.
                                             const nextBand: RangeFanBand = {
-                                                // A kilometre step, in metres — bands are metres as of 4.0.0.
+                                                // A kilometre step, in metres — bands are metres as of 3.2.0.
                                                 range: Math.max(1000, (last?.range ?? 0) + 1000),
                                                 ...(isSector && last
                                                     ? {

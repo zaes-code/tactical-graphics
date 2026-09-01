@@ -70,7 +70,7 @@ function snapshotOf(handler: TacticalGraphicHandler) {
  *
  * There used to be one exception — `AxisOfAttack`, a generator registered without a
  * `TacticalGraphicName` member, so the enum-keyed `CONTROLLER_REGISTRY` had no entry for it
- * and `getController` threw. It was removed in 4.0.0: it appeared in neither publication and
+ * and `getController` threw. It was removed in 3.2.0: it appeared in neither publication and
  * had no UI path, so the registry and the enum now hold the same 291 names.
  */
 const NAMES = listTacticalGraphicNames() as TacticalGraphicName[];

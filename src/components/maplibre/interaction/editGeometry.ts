@@ -631,7 +631,7 @@ const BAND_SEPARATION_FRACTION = 0.05;
 export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
     const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
-    // Mercator metres, which is the unit a band stores as of 4.0.0 — the conversion to
+    // Mercator metres, which is the unit a band stores as of 3.2.0 — the conversion to
     // kilometers that used to sit here is gone, not merely inlined. @see RangeFanBand.range
     const metres = Math.hypot(at[0] - center[0], at[1] - center[1]);
     if (!isFinite(metres) || metres <= 0) return description;

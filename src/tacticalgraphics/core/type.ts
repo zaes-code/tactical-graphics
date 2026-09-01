@@ -137,7 +137,7 @@ export interface RangeFanBand {
     /**
      * How far the band reaches, in **meters** — like `radius`, `width` and `decorationSize`.
      *
-     * **This was kilometers before 4.0.0.** Both APP-06 range fan plates say otherwise in
+     * **This was kilometers before 3.2.0.** Both APP-06 range fan plates say otherwise in
      * as many words — 242200 (sector) *"All ranges in metres"*, 242100 (circular) *"All
      * units in metres"* — and their examples read `RG 5000`, `MAX RG(1) 28,500`. A 5 km
      * band used to render `RG 5` where the standard renders `RG 5000`.
@@ -147,7 +147,7 @@ export interface RangeFanBand {
      * grouping thousands (`5,000`) rather than by changing the unit. (User's call,
      * 2026-08-31.)
      *
-     * **There is no migration.** A fan saved before 4.0.0 carries a kilometer number and
+     * **There is no migration.** A fan saved before 3.2.0 carries a kilometer number and
      * will render a thousand times too small; that break was taken deliberately rather
      * than carrying a schema version for one field. @see formatRange
      */

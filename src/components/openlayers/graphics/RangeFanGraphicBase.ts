@@ -180,7 +180,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         const bandIndex = handleIndex;
 
         // `getTurfDistance` is kilometers by contract and stays that way — it is a general
-        // adapter method. Bands are metres as of 4.0.0, so the conversion is explicit here
+        // adapter method. Bands are metres as of 3.2.0, so the conversion is explicit here
         // rather than hidden in the adapter. @see RangeFanBand.range
         const metres =
             openlayersAdapter.getTurfDistance(
@@ -204,7 +204,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // single band derived from `size`, so drive `size` and leave the
         // amplifiers alone rather than inventing a band the user never typed.
         if (!configBands || configBands.length === 0) {
-            // Both metres as of 4.0.0 — this used to scale a kilometer band up to `size`.
+            // Both metres as of 3.2.0 — this used to scale a kilometer band up to `size`.
             this.size = clamped;
             this.updateGeometry();
             return;

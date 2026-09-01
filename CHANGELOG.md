@@ -21,8 +21,12 @@ against their Chapter 8 row — name, template, draw rules and worked example �
 with `graphicFieldRegistry`. The method and the full findings are in
 `docs/app6-field-validation.md`.
 
-Breaking, so this is a major. Two changes alter stored data and one alters a symbol's
-anchor count; everything else is additive.
+**Shipped as a minor, on the maintainer's call, and the `Breaking` section below is
+therefore the only warning a consumer gets.** Semantic versioning would make this a major:
+five of the changes below alter what a *saved* graphic draws, and three of those have no
+migration path. A range fan stored before 3.2.0 draws a thousand times too small, a
+rectangular target will not restore as the same shape, and a radiation dose rate contour
+line loses its label. Read that section before upgrading.
 
 ### Breaking
 
@@ -39,7 +43,7 @@ anchor count; everything else is additive.
   examples read `RG 5000` and `MAX RG(1) 28,500`. A 5 km band used to render `RG 5`. The
   label now groups thousands, which answers the argument the old schema comment made for
   kilometres without keeping the divergence. **There is no migration:** a fan saved before
-  4.0.0 carries a kilometre number and will draw a thousand times too small.
+  3.2.0 carries a kilometre number and will draw a thousand times too small.
 - **The rectangular target is built from one anchor point.** APP-06 240802 "requires one
   (1) anchor point" and states the shape outright — target length (AM1), target width (AM)
   and target attitude (AN). It was a two-point drawn rectangle, so **a saved rectangular
@@ -48,7 +52,7 @@ anchor count; everything else is additive.
 - **The radiation dose rate contour line's dose moved from `identifier1` to
   `additionalInfo`.** APP-06 272200's Template carries one lettered box and it is `H`; its
   Example fills it with `30 CGH`, a dose rate, which is exactly what a designation is not.
-  The dialog no longer offers a name. **A contour line saved before 4.0.0 keeps its dose in
+  The dialog no longer offers a name. **A contour line saved before 3.2.0 keeps its dose in
   `designation` and will draw without one** until the text is moved to additional
   information — there is no read fallback here, because a name and a dose rate are
   different things and silently promoting one to the other would be a guess.

@@ -69,7 +69,7 @@ const PYLON_TOP_Y = 15;
  * The plate points its `PT` arrow at the base, and standing the pylon on the anchor was the
  * literal reading of that; it draws the wire along the ground with the towers above it,
  * which is not what either the Template or the Example shows. Both run the wire through the
- * pylons at mid height. (User's call, 2026-09-02: "the line needs to be from the middle of
+ * pylons at mid height. (User's call, 2026-09-01: "the line needs to be from the middle of
  * the svg, like the decision line".)
  */
 const PYLON_ANCHOR_Y = (PYLON_TOP_Y + PYLON_GROUND_Y) / 2;
@@ -152,7 +152,7 @@ const SAFE_LANE_LABEL_GAP_PX = 10;
  *
  * ## Right of travel, upright, and measured clear of the symbol
  *
- * Three rules, all of them about the reader rather than the plate (user's call, 2026-09-02):
+ * Three rules, all of them about the reader rather than the plate (user's call, 2026-09-01):
  *
  * - **Right of the line running point 1 to point 2.** Relative to travel, not to the map's
  *   north, so redrawing the same lane the other way round does not swap the column across
