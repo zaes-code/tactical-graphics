@@ -749,10 +749,26 @@ const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parenthes
     [TacticalGraphicName.BattlefieldCoordinationLine]: 'parentheses',
     [TacticalGraphicName.BattlefieldHandoverLine]: 'parentheses',
     [TacticalGraphicName.DelayLine]: 'parentheses',
-    // The decision line writes `T/AS` instead, which is what `'slash'` is for -- but it has
-    // its own paint (the star at each end) and never reaches this one, so listing it here
-    // would be a second statement of a fact that lives in `decisionLinePaint`.
+    // The no fire line and the restrictive fire line carry the same `T2 ( AS )` plate as the
+    // four above; they were left out of the first ruling and swept in by the second.
+    [TacticalGraphicName.NoFireLine]: 'parentheses',
+    [TacticalGraphicName.RestrictiveFireLine]: 'parentheses',
+    // 142000 writes `NAI T/AS` -- the slash form. (The *area* named area of interest,
+    // 120200, letters no country code at all and is not here.)
+    [TacticalGraphicName.NamedAreaOfInterestLine]: 'slash',
+    // The decision line writes `T/AS` too, but it has its own paint -- the star at each end
+    // -- and never reaches this one, so listing it would be a second statement of a fact
+    // that lives in `decisionLinePaint`.
 };
+
+/**
+ * The default lines whose plate boxes `H` beside `T` at each end.
+ *
+ * Only `line, generic` so far. 110400's Template sets `H` and `T` side by side above each
+ * end with `W - W1` below, and its Example reads `IDR METH` — two boxes, one line of text.
+ * Everything else in this family has no `H` box, so this is a list rather than a default.
+ */
+const DEFAULT_LINE_ADDITIONAL_INFO: ReadonlySet<TacticalGraphicName> = new Set([TacticalGraphicName.LineGeneric]);
 
 /**
  * How a line sets its country code, if it takes one at all.
@@ -782,7 +798,16 @@ export function defaultLinePaint(
                 : countryCode === 'slash'
                   ? [designation.trim(), country].filter(Boolean).join('/')
                   : formatDesignationWithCountry(designation, country);
-        const identifier = getFullLabel(name, named);
+        /*
+         * **Field H leads the line, ahead of the designation.** 110400 boxes them in that
+         * order, `H` then `T`, and the Example runs them together as one line of text with
+         * a space between. It is free text the operator typed, so "name only" takes it away
+         * and leaves the designation standing.
+         */
+        const free = DEFAULT_LINE_ADDITIONAL_INFO.has(name)
+            ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
+            : '';
+        const identifier = [free, getFullLabel(name, named)].filter(Boolean).join(' ');
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';

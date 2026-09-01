@@ -21,7 +21,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierText, lineColorOf, scaleOf} from './paintFunctions';
 import {textWidth} from './decorations';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -212,7 +212,7 @@ export function contourLineBoundaryPaint(): CardinalPaint {
 
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
-        const text = (feature.properties.designation ?? '').trim();
+        const text = contourDose(feature);
         if (!text) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
 
         const scale = scaleOf(feature, context);
@@ -221,12 +221,27 @@ export function contourLineBoundaryPaint(): CardinalPaint {
     };
 }
 
+/**
+ * The dose that goes in the break, from field **H**.
+ *
+ * 272200's Template carries one lettered box and it is `H`; the Example fills it with
+ * `30 CGH`. It read `designation` until 2026-09-02, which put an amplifier on the symbol
+ * that no plate asks for and left the one it does ask for with nowhere to go.
+ *
+ * **Both halves of the symbol read this**, because one sizes the gap in the outline and the
+ * other fills it: if they ever read different fields the ring breaks around text that is
+ * not there. That is the whole reason it is a function and not two expressions.
+ */
+function contourDose(feature: PaintFeature): string {
+    return amplifierText(feature, (feature.properties.additionalInfo ?? '').trim());
+}
+
 /** The dose in that break, over whatever the area's ordinary label paint drew. */
 export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
     return (feature, context) => {
         const paints = base(feature, context);
         const ring = feature.ring;
-        const text = (feature.properties.designation ?? '').trim();
+        const text = contourDose(feature);
         if (!ring || ring.length < 4 || !text) return paints;
 
         const scale = scaleOf(feature, context);

@@ -81,19 +81,22 @@ describe('APP-06 282003 — overhead wire', () => {
         expect(first).toEqual(STRAIGHT);
     });
 
-    it('stands the pylon up, not down', () => {
+    it('straddles the wire rather than standing on it', () => {
+        // The wire attaches at the glyph's middle, so the pylon reaches above and below the
+        // line by roughly the same amount. It used to stand on the anchor, which drew the
+        // wire along the ground with the towers above -- not what either the Template or
+        // the Example shows.
+        const ys = paths(NAME, wire(STRAIGHT), context())
+            .slice(1)
+            .flat()
+            .map(p => p[1]);
+        expect(Math.max(...ys)).toBeGreaterThan(0);
+        expect(Math.min(...ys)).toBeLessThan(0);
         // The glyph's own y runs down and the projection's runs up; flipping the wrong way
-        // buries the pylon below the wire and still looks like a symbol.
-        const above = paths(NAME, wire(STRAIGHT), context())
-            .slice(1)
-            .flat()
-            .filter(p => p[1] > 0.001).length;
-        const below = paths(NAME, wire(STRAIGHT), context())
-            .slice(1)
-            .flat()
-            .filter(p => p[1] < -0.001).length;
-        expect(above).toBeGreaterThan(0);
-        expect(below).toBe(0);
+        // inverts the pylon and still looks like a symbol. The cross-arm is the widest
+        // stroke and sits at the top, so its y decides which way up this is.
+        const [crossArm] = paths(NAME, wire(STRAIGHT), context()).slice(1);
+        expect(Math.min(...crossArm.map(p => p[1]))).toBeGreaterThan(0);
     });
 
     it('holds the pylon to a constant screen size across zooms', () => {
@@ -186,18 +189,73 @@ describe('APP-06 290600 — safe lane or gap', () => {
         expect(texts(NAME, hidden, context())).toEqual(['LANE ALPHA']);
     });
 
-    it('sets the column on the same side of the lane whichever way it was drawn', () => {
-        const spotOf = (entry: ProjectedPosition, exit: ProjectedPosition) => {
-            const paint = getPaintFunction(NAME)!.graphic!;
-            const mark = paint(lane({designation: 'L'}, entry, exit), context()).find(p => p.text);
-            return (mark!.geometry as {coordinates: ProjectedPosition}).coordinates;
+    const markOf = (props: Record<string, unknown>, entry = ENTRY, exit = EXIT, ctx = context()) => {
+        const paint = getPaintFunction(NAME)!.graphic!;
+        return paint(lane(props, entry, exit), ctx).find(p => p.text)!;
+    };
+    const spotOf = (entry: ProjectedPosition, exit: ProjectedPosition, ctx = context()) =>
+        (markOf({designation: 'L'}, entry, exit, ctx).geometry as {coordinates: ProjectedPosition}).coordinates;
+
+    it('sets the column right of the line running point 1 to point 2', () => {
+        // Right of *travel*: drawn southward the column is west of the lane, drawn
+        // northward it is east. Taking the side from the map's north instead would put it
+        // on the same compass side both times -- the column would jump across the symbol
+        // when the same lane was redrawn the other way round.
+        expect(spotOf([0, 0], [0, -20_000])[0]).toBeLessThan(0);
+        expect(spotOf([0, -20_000], [0, 0])[0]).toBeGreaterThan(0);
+    });
+
+    it('never rotates the column', () => {
+        // A stack of four amplifiers turned to follow a diagonal is unreadable, and turned
+        // through half a turn on a north-running lane it is worse.
+        for (const [entry, exit] of [
+            [ENTRY, EXIT],
+            [[0, 0], [20_000, 0]],
+            [[0, 0], [14_000, 14_000]],
+            [[0, 0], [-14_000, -9_000]],
+        ] as [ProjectedPosition, ProjectedPosition][]) {
+            expect(markOf({designation: 'L'}, entry, exit).text!.rotation ?? 0).toBe(0);
+        }
+    });
+
+    it('clears the line work at every heading, and at every zoom', () => {
+        /*
+         * The real requirement: the block must not touch the symbol. Measured as the
+         * distance from the anchor to the nearest point of any drawn path, in pixels --
+         * which is the unit the gap is stated in, and the unit that has to hold as the zoom
+         * changes. A constant offset in metres passes the first case and fails the rest.
+         */
+        const nearestPx = (entry: ProjectedPosition, exit: ProjectedPosition, ctx: PaintContext) => {
+            const at = spotOf(entry, exit, ctx);
+            let best = Infinity;
+            for (const path of paths(NAME, lane({designation: 'L'}, entry, exit), ctx)) {
+                for (const p of path) best = Math.min(best, Math.hypot(p[0] - at[0], p[1] - at[1]));
+            }
+            return best / ctx.resolution;
         };
-        // Left of travel, which is the plate's side: drawn southward the column is east of
-        // the lane, drawn northward it is west. Taking the side from the map's north
-        // instead would put it on the same compass side both times, which is the bug this
-        // is for -- the column would swap sides of the symbol on a redraw.
-        expect(spotOf([0, 0], [0, -20_000])[0]).toBeGreaterThan(0);
-        expect(spotOf([0, -20_000], [0, 0])[0]).toBeLessThan(0);
+        const headings: [ProjectedPosition, ProjectedPosition][] = [
+            [ENTRY, EXIT],
+            [[0, 0], [20_000, 0]],
+            [[0, 0], [14_000, 14_000]],
+            [[0, 0], [-14_000, -9_000]],
+            [[0, 0], [0, 20_000]],
+        ];
+        for (const ctx of [context(5), context(10), context(60)]) {
+            for (const [entry, exit] of headings) {
+                expect(nearestPx(entry, exit, ctx)).toBeGreaterThanOrEqual(9.9);
+            }
+        }
+    });
+
+    it('grows the block away from the lane, never back across it', () => {
+        // The anchor sits on the corner nearest the symbol, so both alignments have to
+        // follow the offset. Hung the other way the block starts clear and then walks over
+        // the line it is labelling.
+        expect(markOf({designation: 'L'}, [0, 0], [0, -20_000]).text!.align).toBe('right');
+        expect(markOf({designation: 'L'}, [0, -20_000], [0, 0]).text!.align).toBe('left');
+        // A lane running east: the offset is straight down, so the block hangs below it.
+        expect(markOf({designation: 'L'}, [0, 0], [20_000, 0]).text!.baseline).toBe('top');
+        expect(markOf({designation: 'L'}, [20_000, 0], [0, 0]).text!.baseline).toBe('bottom');
     });
 
     it('does not print the date range twice', () => {
