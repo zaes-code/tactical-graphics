@@ -1,5 +1,6 @@
 import Feature from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
+import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {getDistance} from 'ol/sphere';
@@ -48,6 +49,16 @@ const axis = (halfLengthDeg = 0.14) =>
 const holderFor = (name: TacticalGraphicName) => {
     const controller: any = getController(name, RESOLUTION);
     controller.setBaseFeature(axis());
+    return controller;
+};
+
+/**
+ * The rectangular target's holder, which takes a **Point** base rather than an axis.
+ * @see RectangularTargetGraphicBase
+ */
+const pointHolderFor = (name: TacticalGraphicName) => {
+    const controller: any = getController(name, RESOLUTION);
+    controller.setBaseFeature(new Feature({geometry: new Point(fromLonLat([0, 51.5]))}));
     return controller;
 };
 
@@ -266,23 +277,77 @@ describe('the live width read-out', () => {
  * grids **or by a center grid, a length, width, and an altitude**". APP-06 240802 names
  * them outright — "the target length (AM1) in metres and target width (AM) in metres".
  */
-describe('the rectangular target files a length as well as a width', () => {
+describe('the rectangular target states its length and width', () => {
     const TARGET = TacticalGraphicName.TargetAreaRectangular;
 
-    it('offers both fields', () => {
+    it('offers a length, a width and an attitude', () => {
         expect(getGraphicFields(TARGET).width).toBe(true);
         expect(getGraphicFields(TARGET).length).toBe(true);
+        expect(getGraphicFields(TARGET).attitude).toBe(true);
     });
 
-    it('files length along the axis and width across it, in ground meters', () => {
-        const controller = holderFor(TARGET);
+    it('takes one anchor point, not two', () => {
+        /*
+         * The whole reason it left the rectangle family: APP-06 240802 "requires one (1)
+         * anchor point" and gives the shape as amplifiers.
+         *
+         * `baseVertexCount` stays *undefined*, like every other point-anchored graphic —
+         * that table caps line draws, and a one-point base is a `Point` draw with no second
+         * click to cap. The holder taking a Point base is the real assertion, and
+         * `pointHolderFor` makes it in the tests below. @see RectangularTarget
+         */
+        expect(isRectangular(TARGET)).toBe(false);
+        expect(baseVertexCount(TARGET)).toBeUndefined();
+    });
+
+    it('files a length and a width that the box actually measures', () => {
+        // Stated, not derived. The holder is the source of both numbers now, so the test
+        // is that the drawn ring agrees with what it filed — the opposite direction from
+        // the two-point zones, which read their width back off the ring.
+        const controller = pointHolderFor(TARGET);
         const bag = readGraphicLabels(controller.graphic.graphic);
-        const drawn = (controller.graphic.base.getGeometry() as LineString).getCoordinates();
-        expect(bag.length).toBeCloseTo(getDistance(toLonLat(drawn[0]), toLonLat(drawn[1])), -2);
-        expect(bag.width).toBeCloseTo(groundWidth(controller), -2);
+        expect(bag.length).toBeGreaterThan(0);
+        expect(bag.width).toBeGreaterThan(0);
+
+        const r = ring(controller);
+        // `[left1, left2, right2, right1, left1]` — corner 0 to corner 3 is one full width
+        // across the axis, corner 0 to corner 1 one full length along it.
+        expect(getDistance(toLonLat(r[0]), toLonLat(r[3]))).toBeCloseTo(bag.width!, -2);
+        expect(getDistance(toLonLat(r[0]), toLonLat(r[1]))).toBeCloseTo(bag.length!, -2);
     });
 
-    it('is the only rectangle that files a length', () => {
+    it('resizes to a width the operator types', () => {
+        const controller = pointHolderFor(TARGET);
+        controller.graphic.setLabel({...readGraphicLabels(controller.graphic.graphic), width: 4000});
+        const r = ring(controller);
+        expect(getDistance(toLonLat(r[0]), toLonLat(r[3]))).toBeCloseTo(4000, -2);
+    });
+
+    it('keeps its proportions through a uniform resize', () => {
+        /*
+         * A circle has one number, so a resize is just `size × factor`. This graphic has
+         * two, and once a width is typed it stops following the length — so a resize that
+         * moved only `size` stretched the box instead of scaling it. Driven through the
+         * controller, which is where the gesture applies the factor, beside the arrowhead
+         * scaling it mirrors. @see MissionTaskController.handleResize
+         */
+        const holder = pointHolderFor(TARGET);
+        const typed = 6000;
+        holder.graphic.setLabel({...readGraphicLabels(holder.graphic.graphic), width: typed});
+
+        const before = readGraphicLabels(holder.graphic.graphic);
+        const ratio = before.width! / before.length!;
+        holder.handleResize(2);
+        const after = readGraphicLabels(holder.graphic.graphic);
+
+        expect(after.length).toBeCloseTo(before.length! * 2, -1);
+        expect(after.width).toBeCloseTo(typed * 2, -1);
+        expect(after.width! / after.length!).toBeCloseTo(ratio, 5);
+    });
+
+    it('is still the only rectangle that files a length', () => {
+        // The two-point zones derive both dimensions from their anchor points, so a length
+        // on one of them would be a number nothing set. @see RECTANGLE_LENGTH_GRAPHICS
         for (const name of RECTANGULAR) {
             expect(readGraphicLabels(holderFor(name).graphic.graphic).length).toBeUndefined();
         }

@@ -128,7 +128,7 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'rotation', 'bend', 'mirrored'] as const;
+const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'bend', 'mirrored'] as const;
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -332,10 +332,18 @@ export function applyRestoredGeometry(
         const holder = handler.graphic as {suspendMinimumSize?: boolean};
         const guarded = typeof holder.suspendMinimumSize === 'boolean';
         if (guarded) holder.suspendMinimumSize = true;
+        // The rectangular target is the one point-anchored graphic whose shape is filed
+        // rather than derived: its width is typed, never dragged, so nothing else replays
+        // it. Duck-typed for the same reason the flags above are — a future holder that
+        // files a width should inherit this without being named here.
+        const widthed = handler.graphic as {setOffset?: (n: number) => void};
+        if (state.width !== undefined) widthed.setOffset?.(state.width / 2);
         try {
             handler.graphic.updateGeom({
                 center: coords as Coordinate,
-                size: state.radius,
+                // `size` is a half-length for a graphic that files a length, and a radius
+                // for everything else. A holder files one or the other, never both.
+                size: state.length !== undefined ? state.length / 2 : state.radius,
                 rotation: state.rotation,
             });
         } finally {

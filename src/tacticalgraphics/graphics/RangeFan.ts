@@ -3,8 +3,8 @@ import {RangeFanBand, RangeFanOptions, TacticalGraphicName} from "../core/type";
 import {Feature, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 
-const DEFAULT_RADIUS_KM = 1;
-const KM_TO_M = 1000;
+/** Fallback outer range when a fan has no bands yet, in metres. */
+const DEFAULT_RADIUS_M = 1000;
 const SECTOR_HALF_ARC_DEFAULT_DEG = 45;
 const ARC_STEPS = 60;
 /** Where the arrow's tip sits, expressed as a fraction of the outer band's
@@ -31,11 +31,9 @@ export function rotationToAzimuth(rotationDeg: number): number {
 export function resolveBands(opts: RangeFanOptions | undefined): RangeFanBand[] {
     const bands = opts?.bands?.filter(b => Number.isFinite(b.range) && b.range > 0) ?? [];
     if (bands.length === 0) {
-        // opts.size comes from the controller in projected meters
-        // (OL Circle.getRadius); convert to km so the fallback band has
-        // the same units as user-entered bands.
-        const drawnKm = opts?.size != null ? opts.size / KM_TO_M : DEFAULT_RADIUS_KM;
-        return [{range: drawnKm}];
+        // opts.size is projected metres from the controller (OL Circle.getRadius), which
+        // is now the same unit a band carries — no conversion left to get wrong.
+        return [{range: opts?.size ?? DEFAULT_RADIUS_M}];
     }
     // Sort by range so we can render concentric rings cleanly.
     return [...bands].sort((a, b) => a.range - b.range);
@@ -91,14 +89,13 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
             // turf-based circle (geographic coords). createCircularArc with
             // a 0–360 sweep returns a closed ring; passing rotation=0 is
             // fine because we want the same circle no matter what bearing
-            // we're "facing". Band ranges are in km; convert to meters for
-            // turf's "meters" units.
-            const ring = geometryService.createCircularArc(center, 0, band.range * KM_TO_M, 0, 360, ARC_STEPS * 2);
+            // we're "facing". Band ranges are metres, which is what turf wants.
+            const ring = geometryService.createCircularArc(center, 0, band.range, 0, 360, ARC_STEPS * 2);
             lines.push(ring);
         }
 
         // Radial tick at the reference bearing, at the outermost band.
-        const outerRadiusM = bands[bands.length - 1].range * KM_TO_M;
+        const outerRadiusM = bands[bands.length - 1].range;
         const tickStartR = outerRadiusM * (1 - TICK_FRACTION);
         const tickStart = pointAtAzimuth(center, refAz, tickStartR);
         const tickEnd = pointAtAzimuth(center, refAz, outerRadiusM);
@@ -119,7 +116,7 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
         const refAz = opts?.centerAzimuthDeg ?? rotationToAzimuth(opts?.rotation ?? 0);
-        const rims = bands.map(band => pointAtAzimuth(center, refAz, band.range * KM_TO_M));
+        const rims = bands.map(band => pointAtAzimuth(center, refAz, band.range));
         return this.asMultiPointFeature([center, ...rims]);
     }
 
@@ -136,11 +133,11 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
         const refAz = opts?.centerAzimuthDeg ?? rotationToAzimuth(opts?.rotation ?? 0);
 
         const points: Position[] = [center];
-        let prevKm = 0;
+        let prevM = 0;
         for (const band of bands) {
-            const midKm = (prevKm + band.range) / 2;
-            points.push(pointAtAzimuth(center, refAz, midKm * KM_TO_M));
-            prevKm = band.range;
+            const midM = (prevM + band.range) / 2;
+            points.push(pointAtAzimuth(center, refAz, midM));
+            prevM = band.range;
         }
 
         return this.asMultiPointFeature(points, {
@@ -170,13 +167,13 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
         for (let i = 0; i < bands.length; i++) {
             const band = bands[i];
             const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
-            const radiusM = band.range * KM_TO_M;
+            const radiusM = band.range;
             // Inner endpoint of this band's edge lines: for the innermost
             // band that's the center; for every outer band it's the
             // *previous* band's circle along the same azimuth (visible or
             // not), so each band reads as its own enclosed donut slice
             // instead of one giant fan with overlapping radial spokes.
-            const prevRadiusM = i === 0 ? 0 : bands[i - 1].range * KM_TO_M;
+            const prevRadiusM = i === 0 ? 0 : bands[i - 1].range;
 
             // Outer arc at this band's radius.
             lines.push(arcAtAzimuthRange(center, leftAz, rightAz, radiusM, ARC_STEPS));
@@ -201,7 +198,7 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
         // One axis arrow for the whole fan along the global center bearing.
         // Tip lands well past the outermost arc so the head reads as
         // pointing away from the wedge rather than touching its edge.
-        const outerRadiusM = bands[bands.length - 1].range * KM_TO_M;
+        const outerRadiusM = bands[bands.length - 1].range;
         const tipR = outerRadiusM * (1 + ARROW_TIP_OFFSET_FRACTION);
         const arrowTip = pointAtAzimuth(center, centerAz, tipR);
         lines.push([center, arrowTip]);
@@ -219,17 +216,36 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
     }
 
     /**
-     * `[center, ...one handle per band]` — each band's handle sits on its own arc
-     * along the *global* center bearing (the same anchor the band's mid-label
-     * uses), so every band's range can be dragged independently. Handles follow
-     * the **sorted** band order from `resolveBands`.
+     * `[center, ...one rim per band, ...each band's two arc ends]`.
+     *
+     * **Three handles per band, and the order is an interface.** The renderer strips the
+     * center and hands what is left to the holder as a bare index, so this order is the
+     * only thing that says which handle means what:
+     *
+     * | index (after the center) | meaning |
+     * |---|---|
+     * | `0 .. N-1` | band *i*'s **range** — its rim, on the global center bearing |
+     * | `N + 2i` | band *i*'s **left azimuth** — the left end of its outer arc |
+     * | `N + 2i + 1` | band *i*'s **right azimuth** |
+     *
+     * The rim sits where the band's own mid-label is anchored, so the two read as the same
+     * place. The arc ends are the points the operator sees the bearing printed beside, which
+     * is where they reach for when they want to change it — a fan with three bands drawn at
+     * 020/070, 035/085 and 045/100 had a handle for none of those six numbers before this.
+     *
+     * Handles follow the **sorted** band order from `resolveBands`, which is what the
+     * holder's index arithmetic assumes.
      */
     generateHandles(base: Feature<Point>, opts?: RangeFanOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
         const centerAz = resolveCenterAzimuth(opts);
-        const rims = bands.map(band => pointAtAzimuth(center, centerAz, band.range * KM_TO_M));
-        return this.asMultiPointFeature([center, ...rims]);
+        const rims = bands.map(band => pointAtAzimuth(center, centerAz, band.range));
+        const arcEnds = bands.flatMap(band => {
+            const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
+            return [pointAtAzimuth(center, leftAz, band.range), pointAtAzimuth(center, rightAz, band.range)];
+        });
+        return this.asMultiPointFeature([center, ...rims, ...arcEnds]);
     }
 
     /**
@@ -249,11 +265,11 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
         const centerAz = resolveCenterAzimuth(opts);
 
         const points: Position[] = [center];
-        let prevKm = 0;
+        let prevM = 0;
         const bandsWithAzimuths = bands.map(band => {
             const {leftAz, rightAz} = resolveBandAzimuths(band, opts);
-            const radiusM = band.range * KM_TO_M;
-            const midKm = (prevKm + band.range) / 2;
+            const radiusM = band.range;
+            const midM = (prevM + band.range) / 2;
             // On the arc, not past it. This used to be `radiusM * 1.05`, which is a metric
             // offset baked into the geometry: 5% of a 180 km band is 9 km of ground, a few
             // pixels when the whole fan fits the screen and tens of pixels once you zoom
@@ -261,10 +277,10 @@ export class WeaponRangeFanSector extends TacticalGraphicsBase<RangeFanOptions> 
             // The clearance is a screen quantity and belongs in the paint, which already
             // nudges these outward by a fixed pixel gap. @see AZIMUTH_LABEL_GAP_PX
             const azLabelR = radiusM;
-            points.push(pointAtAzimuth(center, centerAz, midKm * KM_TO_M));
+            points.push(pointAtAzimuth(center, centerAz, midM));
             points.push(pointAtAzimuth(center, leftAz, azLabelR));
             points.push(pointAtAzimuth(center, rightAz, azLabelR));
-            prevKm = band.range;
+            prevM = band.range;
             // Stamp the *resolved absolute* azimuths so the OL style fn
             // can format them as compass bearings (e.g. "315"). The raw
             // user-facing fields on RangeFanBand are deflections, not

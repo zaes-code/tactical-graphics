@@ -26,16 +26,29 @@ export type GraphicFieldSet = {
     /** Second identifier — the graphic's lower/second designation. */
     identifier2: boolean;
     /**
-     * Country code inputs, one per designation.
+     * Country code inputs — **one per designation this graphic offers.**
      *
-     * Separate from `identifier2` because the two do not travel together. Only
-     * `boundaryPaint` and `engineerWorkLinePaint` read them, and each composes
-     * `designation + countryCode` and `secondDesignation + secondCountryCode` — so the
-     * first code belongs to the *first* designation, not the second.
+     * Separate from `identifier2` because the two do not travel together. Final protective
+     * fire is the graphic that proves the split: it takes a second designation and no
+     * country code at all, and while the two shared a flag it was offered two boxes nothing
+     * would ever draw.
      *
-     * Final protective fire is the graphic that proves the split: it takes a second
-     * designation and no country code at all, and while the two shared a flag it was
-     * offered two boxes nothing would ever draw.
+     * ## How many boxes to render
+     *
+     * A code pairs with a designation — the paints compose `designation + countryCode` and
+     * `secondDesignation + secondCountryCode` — so the count follows the designations:
+     *
+     * ```
+     * countryCode        countryCodes
+     * secondCountryCode  countryCodes && identifier2
+     * ```
+     *
+     * The first code belongs to the *first* designation, not the second. A host that renders
+     * both boxes off this one flag puts an "other country code" on the fire-support areas,
+     * which carry `T2 ( AS )` and no second name and would never draw it — the same defect
+     * the split was made to fix, one level down.
+     *
+     * @see countryCodePairing.test.ts, which pins the pairing for every graphic
      */
     countryCodes: boolean;
     /**
@@ -76,6 +89,16 @@ export type GraphicFieldSet = {
     width: boolean;
     /** Rectangle length in meters — only the rectangular target carries one. */
     length: boolean;
+    /**
+     * Target attitude — amplifier `AN`, the bearing the rectangle's long axis lies along.
+     *
+     * Only the rectangular target, whose plate builds the whole box from amplifiers rather
+     * than from anchor points, so the orientation has nowhere else to come from. Backed by
+     * `rotation` in degrees rather than a field of its own: the plate quotes AN in mils,
+     * but it is the same physical quantity, and a parallel field for it would be the
+     * mistake `isDarkMode` was. @see RectangularTarget
+     */
+    attitude: boolean;
     /** Circle radius in meters — the graphics a user resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
@@ -113,6 +136,7 @@ function f(
             | 'altitude2'
             | 'width'
             | 'length'
+            | 'attitude'
             | 'radius'
             | 'grids'
             | 'weapon'
@@ -140,6 +164,7 @@ function f(
         altitude2: false,
         width: false,
         length: false,
+        attitude: false,
         radius: false,
         grids: false,
         weapon: false,
@@ -153,8 +178,29 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
+
+/**
+ * Safe lane or gap (APP-06 290600): `T` / `AM` / `W` / `W1`, stacked beside the lane.
+ *
+ * The width is the amplifier `AM` and is a *stated* number, not something a drag
+ * produces -- the plate's Example reads `4.5M` beside a lane whose drawn width is
+ * nothing at all, because the symbol is a single line. This is the whole of what
+ * separates it from the passage lane, which shares its outline and letters only the two
+ * dates. @see SafeLaneOrGap
+ */
+const SAFE_LANE = f(true, false, true, true, false, {width: true});
 /** The plain lines that carry a designation and a status, and no dates. */
 const GENERIC_LINE = f(true, false, false, false, true);
+
+/**
+ * Named area of interest, line form (APP-06 142000): `NAI T/AS`.
+ *
+ * The designation and a country code, set apart by a slash rather than bracketed --
+ * the decision line's form, not the fire-support family's. The *area* form (120200)
+ * letters no country code at all, which is why this is its own profile rather than a
+ * shared one. (User's call, 2026-09-01.)
+ */
+const NAI_LINE = f(true, false, false, false, true, {countryCodes: true});
 
 /**
  * Line, generic (APP-06 110400): the designation and the date-time group, both ends.
@@ -164,7 +210,7 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * user could see the shape and never fill in the only two amplifiers it has. The status is
  * not among them.
  */
-const LINE_GENERIC = f(true, false, true, true, false);
+const LINE_GENERIC = f(true, false, true, true, false, {additionalInfo: true});
 
 /**
  * Obstacle line: identifier only.
@@ -234,10 +280,34 @@ const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
  * and a control nobody uses is a control that gets filled in by accident. Setting
  * `secondDesignation` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
  */
-const DECISION_LINE = f(true, false, false, false, false);
-/** Mobility corridor: free text plus the echelon its own note makes mandatory. */
-const MOBILITY_CORRIDOR = f(true, false, false, false, false, {echelon: true});
+/** Decision line: `T/AS` — the designation and its country code, slash-separated. */
+const DECISION_LINE = f(true, false, false, false, false, {countryCodes: true});
+/**
+ * Mobility corridor (APP-06 142100): field **H** plus the echelon its own note makes mandatory.
+ *
+ * The Template is `H` over `B` with no `T`, and the example is "SMALL DITCHES" — a
+ * description of the going rather than a name, which is field H's job. It offered
+ * `identifier1` instead; the paint read `designation` while its own comment called the
+ * amplifier H. (User's call, 2026-08-31.)
+ *
+ * Strong point has the same two amplifiers the other way round — a real `T` with `B` under
+ * it — so the two look alike here and are not. @see mobilityCorridorPaint
+ */
+const MOBILITY_CORRIDOR = f(false, false, false, false, false, {additionalInfo: true, echelon: true});
 const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
+
+/**
+ * The fire-support lines whose plate pairs the designation with a country code.
+ *
+ * APP-06 letters these `T2 ( AS )`. The designation stays in `identifier1` — a second
+ * designation with no first means nothing to an operator, the same call as the fire-support
+ * *areas* — and the country code joins it. (User's call, 2026-09-01.)
+ *
+ * The no fire line and the restrictive fire line joined on 2026-09-01, which settles the
+ * open question this note used to carry: they share the plate and they take the same
+ * change. `FIRE_SUPPORT_LINE` is now the profile for the lines that have no `AS` box.
+ */
+const FIRE_SUPPORT_LINE_WITH_COUNTRY = f(true, false, true, true, true, {countryCodes: true});
 /** Phase line: primary identifier at each end, no date. */
 const PHASE_LINE = f(true, false, false, false, false);
 /** Boundary: dual identifier with country codes + echelon. */
@@ -247,6 +317,15 @@ const ROUTE = f(true, false, false, false, true, {direction: true});
 
 /** Generic area: identifier + dates. */
 const NAME_FIELD_ONLY = f(true, false, false, false, false);
+/**
+ * Free text and nothing else -- the graphic whose single box is `H`.
+ *
+ * 272200's Template carries one lettered box and it is `H`; the Example fills it with
+ * `30 CGH`, a dose rate, which is exactly what a designation is not. Offering a name
+ * instead put an amplifier on the symbol that no plate asks for and left the one it does
+ * ask for unreachable. (User's call, 2026-09-01.)
+ */
+const ADDITIONAL_INFO_ONLY = f(false, false, false, false, false, {additionalInfo: true});
 
 /**
  * The action areas — JTAA, SAA and SGAA (APP-06 150501-150503).
@@ -279,16 +358,51 @@ const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
  */
 const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
-const FIRE_SUPPORT_AREA = f(true, false, true, true, true);
+/**
+ * Free fire / no fire / restrictive fire area (APP-06 2402xx, 2403xx, 2404xx).
+ *
+ * The plate template is `T2 ( AS )` — the establishing formation and its country, with no
+ * plain `T` at all: `FFA / 2AD (DEU)`, `NFA / 52ID (GBR)`, `RFA / 1ID (FRA)`. A second
+ * designation with no first makes no sense to an operator, so the text goes in
+ * `identifier1` and the country beside it, the same way field `AP` already routes to the
+ * designation on the target graphics. (User's call, 2026-08-31.)
+ *
+ * Position area for artillery looks identical on this side of the registry but is *not*
+ * this shape — its plate really is a plain `T` (`3BCT`) with no country field. It has its
+ * own constant so the two cannot drift back together.
+ */
+const FIRE_SUPPORT_AREA = f(true, false, true, true, true, {countryCodes: true});
+
+/** Position area for artillery (APP-06 2405xx): `T` over `W - W1`, no country code. */
+const POSITION_AREA_ARTILLERY = f(true, false, true, true, true);
+
+/**
+ * Airspace coordination area (APP-06 240101/240102/240103) — **two designations**.
+ *
+ * Both publications give this symbol a second name field; they simply letter it differently,
+ * APP-06 as `T2` and FM 1-02.2 as `T1`. Either way the operator gets two boxes, so it is
+ * `identifier1` + `identifier2` here. (User's call, 2026-08-31.)
+ *
+ * An earlier comment on the engagement-zone constant claimed the FM template listed no
+ * second identifier for ACAs. That was wrong, and it was attached to a constant the ACAs
+ * do not even use. Takes its extras as an argument because the rectangular variant is the
+ * only one with a width.
+ */
+const AIRSPACE_COORDINATION_AREA = (extra: {width: boolean; altitude1: boolean; altitude2: boolean; grids: boolean}) =>
+    f(true, true, true, true, true, extra);
 
 /** Air corridor: identifier + dates (operationally time-bounded). */
 const AIR_CORRIDOR = f(true, false, true, true, false, {width: true, altitude1: true, altitude2: true});
 /**
- * Airspace coordination area / engagement zone: identifier + dates + altitude.
- * FM 1-02.2 Table 5-23 template lists T, X, X1, W, W1 only — no second
- * identifier (Field AS is not specified for engagement zones or ACAs).
+ * Engagement and control zones — FEZ, JEZ, MEZ, HIMEZ, LOMEZ, SHORADEZ, WEZ, WFZ, ROZ,
+ * UA-ROZ, HIDACZ, AAR-ROZ: identifier + dates + altitude.
+ *
+ * **Despite the name, the airspace coordination areas do not use this** — they carry a
+ * second designation and are declared individually below. Every plate in this group was
+ * checked against APP-06 Chapter 8 and shows `T`, `X`, `X1`, `W`, `W1` and nothing else,
+ * which is what the name once claimed on the ACAs' behalf and got wrong.
  */
-const AIRSPACE_COORDINATION_AREA = f(true, false, true, true, true, {width: false, altitude1: true, altitude2: true});
+const ENGAGEMENT_ZONE = f(true, false, true, true, true, {width: false, altitude1: true, altitude2: true});
 
 /**
  * Movement arrow (axis of advance, direction of attack) and retrograde task.
@@ -312,7 +426,8 @@ const MOV = f(true, false, false, false, false);
  * obscuring key geographic information", and a movable amplifier is a placement decision
  * rather than a flag. Field N is per-vertex, which this schema does not express.
  */
-const AVENUE_OF_APPROACH = f(true, false, false, false, false);
+/** Avenue of approach: the literal `AA`, field T beside it, and field H set outside. */
+const AVENUE_OF_APPROACH = f(true, false, false, false, false, {additionalInfo: true});
 
 /**
  * Tactical mission task (Chapter 6).
@@ -353,8 +468,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ForwardEdgeOfBattleArea]: GENERIC_LINE,
     [TacticalGraphicName.ReleaseLine]: GENERIC_LINE,
     [TacticalGraphicName.BridgeheadLine]: GENERIC_LINE,
-    [TacticalGraphicName.BattlefieldHandoverLine]: GENERIC_LINE,
-    [TacticalGraphicName.DelayLine]: GENERIC_LINE,
+    // Its template shows neither, but the worked example carries both: BHL 23ID over a
+    // date range at each end. (User's call, 2026-09-01.)
+    [TacticalGraphicName.BattlefieldHandoverLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
+    // FM 1-02.2 table 5-8 draws its example with a date range at each end, like the
+    // battlefield handover line above it. (User's call, 2026-09-01.)
+    [TacticalGraphicName.DelayLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.FinalCoordinationLine]: GENERIC_LINE,
     [TacticalGraphicName.LimitOfAdvance]: GENERIC_LINE,
     [TacticalGraphicName.LineOfDeparture]: GENERIC_LINE,
@@ -362,18 +481,18 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ProbableLineOfDeployment]: f(true, false, false, false, false),
     [TacticalGraphicName.IdentificationFriendOrFoeOff]: SHAPE_ONLY,
     [TacticalGraphicName.IdentificationFriendOrFoeOn]: SHAPE_ONLY,
-    [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE,
+    [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, true),
     [TacticalGraphicName.LightLine]: GENERIC_LINE,
     [TacticalGraphicName.LineGeneric]: LINE_GENERIC,
     [TacticalGraphicName.HandoverLine]: GENERIC_LINE,
-    [TacticalGraphicName.NamedAreaOfInterestLine]: GENERIC_LINE,
+    [TacticalGraphicName.NamedAreaOfInterestLine]: NAI_LINE,
     [TacticalGraphicName.HoldingLine]: GENERIC_LINE,
-    [TacticalGraphicName.NoFireLine]: FIRE_SUPPORT_LINE,
-    [TacticalGraphicName.BattlefieldCoordinationLine]: FIRE_SUPPORT_LINE,
-    [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE,
+    [TacticalGraphicName.NoFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
+    [TacticalGraphicName.BattlefieldCoordinationLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
+    [TacticalGraphicName.RestrictiveFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.IntelligenceCoordinationLine]: f(true, false, true, true, true),
-    [TacticalGraphicName.CoordinatedFireLine]: f(true, false, true, true, true),
+    [TacticalGraphicName.CoordinatedFireLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.EngineerWorkLine]: f(true, true, false, false, true, {countryCodes: true}),
     [TacticalGraphicName.MunitionFlightPath]: SHAPE_AND_DTG,
 
@@ -400,6 +519,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Simple line graphics ────────────────────────────────────────────────
     [TacticalGraphicName.ForwardLineOfOwnTroops]: f(false, false, false, false, true),
     [TacticalGraphicName.ObstacleLine]: OBSTACLE_LINE,
+    [TacticalGraphicName.OverheadWire]: SHAPE_ONLY,
     // Only the mineline takes a modifier; the other four carry no amplifier at all.
     // The decision line's two fields are drawn as `T/AS`, joined by a slash.
     // The letter is the symbol; field A is a host-injected unit symbol, not a text input.
@@ -422,7 +542,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
     // The dose the operator typed goes in the break: "30 CGH".
-    [TacticalGraphicName.RadiationDoseRateContourLine]: NAME_FIELD_ONLY,
+    [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA_FENCED,
@@ -458,6 +578,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FerryCrossing]: SHAPE_ONLY,
     // Passage lane (Table 5-16): FM example shows a DTG ("at 0600 Zulu 12 FEB 2007").
     [TacticalGraphicName.PassageLane]: SHAPE_AND_DTG,
+    [TacticalGraphicName.SafeLaneOrGap]: SAFE_LANE,
     [TacticalGraphicName.LinearTarget]: NAME_FIELD_ONLY,
     // Second designation but no country code: finalProtectiveFirePaint reads only
     // designation, secondDesignation and weapon.
@@ -485,8 +606,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
     // the crossing-site symbols carry no name.
     [TacticalGraphicName.Bridge]: SHAPE_ONLY,
-    [TacticalGraphicName.Gap]: f(true, false, true, false, false),
-    [TacticalGraphicName.AssaultCrossing]: f(false, false, true, false, false),
+    // `T` over `W - W1`; the second date was missing. (User's call, 2026-09-01.)
+    [TacticalGraphicName.Gap]: f(true, false, true, true, false),
+    // `W - W1`, not a lone `W`. (User's call, 2026-09-01.)
+    [TacticalGraphicName.AssaultCrossing]: f(false, false, true, true, false),
     [TacticalGraphicName.FordEasy]: SHAPE_ONLY,
     [TacticalGraphicName.FordDifficult]: SHAPE_ONLY,
     [TacticalGraphicName.InfiltrationLane]: MOV,
@@ -658,8 +781,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RefugeeHoldingArea]: AREA_SIMPLE,
     [TacticalGraphicName.BrigadeSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DivisionSupportArea]: AREA_SIMPLE,
-    [TacticalGraphicName.CorpsSupportArea]: AREA_SIMPLE,
-    [TacticalGraphicName.FighterEngagementZone]: AIRSPACE_COORDINATION_AREA,
+    // Its plate carries `W - W1` and the example fills in a real range, where the other
+    // support areas carry none. (User's call, 2026-09-01.)
+    [TacticalGraphicName.CorpsSupportArea]: f(true, false, true, true, true),
+    [TacticalGraphicName.FighterEngagementZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
     [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
@@ -667,6 +792,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
     [TacticalGraphicName.AirfieldZone]: AIRFIELD_ZONE,
+    // Field T: the text beside the strip names the airfield. The airfield *zone* next to it
+    // is the one that takes field H. (User's call, 2026-09-01.) @see airfieldPointLabelPaint
     [TacticalGraphicName.Airfield]: NAME_FIELD_ONLY,
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
@@ -681,9 +808,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RestrictiveFireAreaRectangular]: {...FIRE_SUPPORT_AREA, width: true},
     [TacticalGraphicName.RestrictiveFireAreaCircular]: FIRE_SUPPORT_AREA,
     // Table 5-24 (fire support coordination): para 5-42 requires T and W/W1.
-    [TacticalGraphicName.PositionAreaArtilleryIrregular]: FIRE_SUPPORT_AREA,
-    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...FIRE_SUPPORT_AREA, width: true},
-    [TacticalGraphicName.PositionAreaArtilleryCircular]: FIRE_SUPPORT_AREA,
+    [TacticalGraphicName.PositionAreaArtilleryIrregular]: POSITION_AREA_ARTILLERY,
+    [TacticalGraphicName.PositionAreaArtilleryRectangular]: {...POSITION_AREA_ARTILLERY, width: true},
+    [TacticalGraphicName.PositionAreaArtilleryCircular]: POSITION_AREA_ARTILLERY,
     // Table 5-26 template: T, AM (width), W, W1.
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]: TARGET_ACQUISITION_AREA,
     [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: {...TARGET_ACQUISITION_AREA, width: true},
@@ -721,32 +848,37 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.FireSupportAreaRectangular]: {...f(true, false, true, true, false), width: true},
     [TacticalGraphicName.FireSupportAreaCircular]: f(true, false, true, true, false),
     [TacticalGraphicName.TargetAreaIrregular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true},
+    /**
+     * One anchor point plus length, width and attitude — the plate builds the box outright.
+     * `AP` is its designation letter, which routes to `identifier1` the way it already does
+     * on the other target graphics. @see RectangularTarget
+     */
+    [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true, attitude: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.HighDensityAirspaceControlZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.RestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.WeaponEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.JointEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.MissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.LowAltitudeMissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.HighAltitudeMissileEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.WeaponsFreeZone]: AIRSPACE_COORDINATION_AREA,
-    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.HighDensityAirspaceControlZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.RestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.WeaponEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.JointEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.MissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.LowAltitudeMissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.HighAltitudeMissileEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.WeaponsFreeZone]: ENGAGEMENT_ZONE,
+    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]: AIRSPACE_COORDINATION_AREA({
         width: false,
         altitude1: true,
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]: AIRSPACE_COORDINATION_AREA({
         width: true,
         altitude1: true,
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: f(true, false, true, true, true, {
+    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]: AIRSPACE_COORDINATION_AREA({
         width: false,
         altitude1: true,
         altitude2: true,
@@ -755,7 +887,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
     [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
-    [TacticalGraphicName.AirheadLine]: NAME_FIELD_ONLY,
+    // No designation: its plate labels the shape with the words "AIRHEAD LINE" and offers
+    // no name box. (User's call, 2026-09-01.) @see airheadLineLabelPaint
+    [TacticalGraphicName.AirheadLine]: f(false, false, false, false, false),
     [TacticalGraphicName.ObstacleBelt]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleZone]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleGroup]: NAME_FIELD_ONLY,

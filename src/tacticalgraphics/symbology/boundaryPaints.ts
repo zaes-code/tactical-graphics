@@ -13,7 +13,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, 
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {projectedMidSegment, textWidth} from './decorations';
 import {echelonMarks} from './echelonPaints';
-import {amplifierDash, formatFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -82,8 +82,8 @@ export function boundaryPaint(): LinePaint {
         if (coords.length < 2) return [];
 
         const props = feature.properties;
-        const topLabel = formatFullLabel(props.designation ?? '', props.countryCode ?? '');
-        const bottomLabel = formatFullLabel(props.secondDesignation ?? '', props.secondCountryCode ?? '');
+        const topLabel = formatDesignationWithCountry(props.designation, props.countryCode);
+        const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
         const {index, t} = projectedMidSegment(coords);
@@ -163,10 +163,20 @@ export interface ResolvedRangeFanBand {
     resolvedRightAz?: number;
 }
 
-/** Range bands are stored in km; print them dropping a trailing .0. */
-function formatKm(km: number): string {
-    if (!Number.isFinite(km)) return '0';
-    return Number.isInteger(km) ? String(km) : km.toFixed(1);
+/**
+ * A band's range in metres, thousands grouped — "5,000", "28,500".
+ *
+ * The grouping is the plate's own: 242100's example prints `MAX RG(1) 28,500` and
+ * `MAX RG(2) 34,400`. It is also what answers the argument the schema used to make for
+ * storing kilometers — that metres put three unreadable zeroes on every ring. A separator
+ * makes the zeroes readable without changing the unit. @see RangeFanBand.range
+ *
+ * A fractional metre is not a range anyone quotes, so it rounds rather than carrying a
+ * decimal the way the kilometer formatter had to.
+ */
+function formatRange(metres: number): string {
+    if (!Number.isFinite(metres)) return '0';
+    return Math.round(metres).toLocaleString('en-US');
 }
 
 /**
@@ -295,8 +305,17 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             const lines: string[] = [];
             const bandLabel = band.label?.trim();
             if (bandLabel) lines.push(bandLabel);
-            if (feature.rangeFanShape === 'circular') lines.push(`MIN RG ${formatKm(band.range)}`);
-            else if (isSector) lines.push(`RG ${formatKm(band.range)}`);
+            /*
+             * **The innermost band is the minimum range; every band outside it is a
+             * maximum.** 242100 labels them `MIN RG`, then `MAX RG(1)`, `MAX RG(2)`, and so
+             * on — the fan reads as one envelope with an inner limit and a series of outer
+             * ones, not as a stack of minimums. This printed `MIN RG` on all of them.
+             *
+             * The sector's own plate (242200) prints a bare `RG` per band and is unchanged.
+             */
+            if (feature.rangeFanShape === 'circular') {
+                lines.push(i === 0 ? `MIN RG ${formatRange(band.range)}` : `MAX RG(${i}) ${formatRange(band.range)}`);
+            } else if (isSector) lines.push(`RG ${formatRange(band.range)}`);
             // Not `.trim()` — a band's altitude is a number now, and a legacy string
             // still has to survive the same call. @see formatAltitude
             const altitude = band.altitude;

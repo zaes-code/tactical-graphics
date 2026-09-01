@@ -20,14 +20,14 @@
  * label-scale function"
  */
 
-import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicName} from '../core/type';
-import {alignAlong, uprightRotation} from './decorations';
+import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
+import {alignAlong, offsetAbove, uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
-import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -98,7 +98,7 @@ function text(
     feature: PaintFeature, at: ProjectedPosition,
     value: string,
     scale: number,
-    extra: {rotation?: number; align?: 'left' | 'center' | 'right'; halo?: boolean} = {},
+    extra: {rotation?: number; align?: 'left' | 'center' | 'right'; halo?: boolean; kind?: TextKind} = {},
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
@@ -107,6 +107,7 @@ function text(
             font: fontStyle,
             fill: labelColorOf(feature),
             halo: extra.halo === false ? undefined : {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+            kind: extra.kind,
             rotation: extra.rotation,
             align: extra.align ?? 'center',
             baseline: 'middle',
@@ -287,9 +288,16 @@ export function aviationAxisLabelPaint(): MovementPaint {
         const value = nameAndDate(feature);
         if (!value) return [];
 
+        /*
+         * **`alignAlong`, not a fixed `'left'`.** The rotation is kept upright, so an arrow
+         * pointing west has its text turned through 180 degrees — and a left-aligned block
+         * then runs *away* from the shaft instead of along it. Drawn west, the name and the
+         * date ended up off the tail entirely and reading in the wrong order against the
+         * arrow. The helper flips the alignment exactly when the rotation flipped.
+         */
         return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
-            align: 'left',
+            align: alignAlong('left', coords[0], coords[1]),
         })];
     };
 }
@@ -310,17 +318,87 @@ export function aviationAxisLabelPaint(): MovementPaint {
  * carries a **fixed prefix** where that family carries none, so it cannot simply be
  * another entry in `AXIS_OF_ADVANCE_LABELS`. The plate reads `AA` followed by field T.
  */
+/** The gap between the arrow's casing and field H, in screen pixels. */
+const AVENUE_ADDITIONAL_INFO_GAP_PX = 12;
+
+/**
+ * `ENY` at the **rear end of each rail**, and only when the graphic is hostile.
+ *
+ * 152300's Template boxes an `N` on both parallels at the back of the symbol; the Example
+ * draws the pair as `ENY`. Field N is the hostile marker and appears for a hostile graphic
+ * and for no other -- the same reading the areas already take. The text stays in the label
+ * colour: hostile *line work* goes red, hostile text amplifiers do not.
+ * @see ai/decisions.md, the hostility colour rule
+ *
+ * The two anchors are the last two the generator publishes. A symbol drawn before this was
+ * added -- or restored from a save -- carries only the head span, so anything short of four
+ * anchors simply paints nothing rather than guessing where the rails were.
+ */
+function avenueHostileMarks(feature: PaintFeature, context: PaintContext, coords: ProjectedPosition[]): Paint[] {
+    if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return [];
+    if (coords.length < 4) return [];
+
+    const [, , left, right] = coords;
+    const midX = (left[0] + right[0]) / 2;
+    const midY = (left[1] + right[1]) / 2;
+    const scale = spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX);
+    const gap = AVENUE_ADDITIONAL_INFO_GAP_PX * context.resolution;
+
+    return [left, right].map(rail => {
+        // Pushed straight out from the centreline, so each mark clears its own rail whichever
+        // way the arrow was drawn. A rail lying on the centreline has no outward side; it
+        // then stays put rather than flying off in whatever direction a zero-length normal
+        // normalizes to.
+        const dx = rail[0] - midX;
+        const dy = rail[1] - midY;
+        const len = Math.hypot(dx, dy);
+        const at: ProjectedPosition = len === 0 ? rail : [rail[0] + (dx / len) * gap, rail[1] + (dy / len) * gap];
+        return text(feature, at, 'ENY', scale);
+    });
+}
+
 export function avenueOfApproachLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
 
         const [c0, c1] = coords;
-        // The literal and field T, and nothing else: 152300's Template carries no `W`/`W1`.
-        // An imported bag can still hold a `startDate` for a symbol with nowhere to put one,
-        // and painting it anyway is how a field nobody offered ends up on the map.
+        // The literal and field T, and nothing else on this line: 152300's Template carries
+        // no `W`/`W1`. An imported bag can still hold a `startDate` for a symbol with nowhere
+        // to put one, and painting it anyway is how a field nobody offered ends up on the map.
         const label = feature.properties.designation?.trim();
-        return behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
+        const paints = behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
+
+        /*
+         * **Field H sits outside the arrow, level with `AA`.** The plate boxes it clear of the
+         * line work and notes that it "should be movable to avoid obscuring key geographic
+         * information" -- so the one thing it must not do is land on the casing. The span this
+         * family publishes is one `radius` long and `radius` is the arrow's half-width, so
+         * offsetting by the span plus a fixed gap clears the rail at every zoom and every size
+         * without the paint having to know how wide the arrow was drawn.
+         */
+        const additional = feature.properties.additionalInfo?.trim();
+        if (additional && paints.length) {
+            const halfWidthPx = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) / context.resolution;
+            const at = offsetAbove(
+                paints[0].geometry.coordinates as ProjectedPosition,
+                c0,
+                c1,
+                context.resolution,
+                halfWidthPx + AVENUE_ADDITIONAL_INFO_GAP_PX,
+            );
+            paints.push(
+                text(feature, at, additional, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+                    rotation: uprightRotation(c0, c1),
+                    align: alignAlong('right', c0, c1),
+                    // Free text the operator typed, so "name only" takes it away. The `AA`
+                    // literal and the `ENY` marks are the symbol and stay.
+                    kind: 'amplifier',
+                }),
+            );
+        }
+
+        return paints.concat(avenueHostileMarks(feature, context, coords));
     };
 }
 

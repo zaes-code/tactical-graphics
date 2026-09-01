@@ -48,7 +48,7 @@ const SCREEN_SIZED = ['Cover', 'Guard', 'Screen'];
 const KNOWN_FAILING: string[] = [];
 
 const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
-    .filter(n => !['AxisOfAttack', ...SCREEN_SIZED, ...KNOWN_FAILING].includes(String(n)));
+    .filter(n => ![...SCREEN_SIZED, ...KNOWN_FAILING].includes(String(n)));
 
 describe(`a manipulated graphic restores as it was left (${NAMES.length} names)`, () => {
     it.each(NAMES.map(n => [String(n), n] as const))('%s', (_label, name) => {
