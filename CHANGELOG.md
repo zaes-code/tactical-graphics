@@ -62,6 +62,12 @@ anchor count; everything else is additive.
 - **The rectangular target offers an attitude** (amplifier AN), backed by `rotation` in
   degrees, and its **`length` now reaches the generator** — it was offered and accepted a
   value that changed nothing.
+- **The rectangular target has two grips**, one per dimension: a length grip on the middle
+  of the leading short side and a width grip on the middle of a long side, both sitting on
+  the outline. Its handle contract is `['shape', 'offset']`, stated in the portable half so
+  both renderers agree. The sizing read-out now names the dimension being dragged — `WIDTH`
+  or `LENGTH` — and its line runs from the centre to the grip rather than projecting the
+  radius along the cursor's bearing, which for a rectangle ran out past the long side.
 
 ### Fixed
 
