@@ -60,7 +60,15 @@ export class RectangularTarget extends TacticalGraphicsBase {
         const center = base.geometry.coordinates;
         const length = opts?.length && opts.length > 0 ? opts.length : DEFAULT_LENGTH_M;
         const halfWidth = opts?.radius && opts.radius > 0 ? opts.radius : DEFAULT_HALF_WIDTH_M;
-        const attitude = opts?.rotation ?? 0;
+        /*
+         * **`rotation` is planar here, and `along` wants a compass bearing.**
+         *
+         * The point-anchored holders measure rotation the way trigonometry does — 0 is
+         * east, counter-clockwise positive — while a bearing is 0 at north and runs
+         * clockwise. `90 - r` is the conversion, and without it the box was built at right
+         * angles to the grip that sized it: drag east, get a box running north.
+         */
+        const attitude = 90 - (opts?.rotation ?? 0);
 
         // Half the length either side of the centre, along the attitude. `rectangleFromAxis`
         // then takes it from there, so the corner construction stays in one place.
@@ -76,16 +84,27 @@ export class RectangularTarget extends TacticalGraphicsBase {
     }
 
     /**
-     * `[edge, centre]` — the point-anchored order.
+     * `[length grip, width grip, centre]`.
      *
-     * `handles[0]` drives rotate and resize, `handles[1]` drives translate, which is the
-     * convention every `missionTask`-routed graphic already follows. The edge sits at the
-     * middle of the leading short side, so dragging it swings the attitude and sets the
-     * length in the one gesture; the width stays a typed amplifier, as the plate has it.
+     * **Two grips, because the plate gives this symbol two independent dimensions.** Every
+     * other point-anchored graphic has one number to drag — a radius — so the convention
+     * there is `[edge, centre]`. A rectangle sized entirely by amplifiers has a length and
+     * a width, and a single grip can only set one of them; the other would be typed-only,
+     * which is a control the user cannot see.
+     *
+     * - **Grip 0** sits at the middle of the leading short side, one half-length out along
+     *   the attitude. Dragging it swings the attitude and sets the length together.
+     * - **Grip 1** sits at the middle of a long side, one half-width out across the
+     *   attitude. Dragging it sets the width and nothing else.
+     *
+     * Both sit exactly *on* the outline, which is what lets the measure read-out end on the
+     * edge it is reporting rather than extrapolating a distance past it.
+     *
+     * The centre is last and is split off by position, not index. @see publishHandles
      */
     generateHandles(base: Feature<Point>, opts: RectangularTargetOptions | undefined): Feature<MultiPoint> {
-        const {center, p2} = this.frame(base, opts);
-        return this.asMultiPointFeature([p2, center]);
+        const {center, p2, halfWidth, attitude} = this.frame(base, opts);
+        return this.asMultiPointFeature([p2, along(center, halfWidth, attitude + 90), center]);
     }
 
     generateLabels(base: Feature<Point>, opts: RectangularTargetOptions | undefined): Feature<Point> {

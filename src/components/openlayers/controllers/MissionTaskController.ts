@@ -133,6 +133,27 @@ export class MissionTaskController implements TacticalGraphicHandler {
         return this.graphic.centerCoordinate();
     }
 
+    /**
+     * Forwarded so the manager will treat a grab on the width grip as an offset grab at
+     * all: `handleDownEvent` tests `!!activeController.setOffset` before it looks at the
+     * feature's own `offsetHandler` flag. Only the rectangular target implements it here.
+     */
+    setOffset = (offset: number): void => {
+        (this.graphic as {setOffset?: (n: number) => void}).setOffset?.(offset);
+    };
+
+    /**
+     * A width drag, for the holders whose frame is not in their base.
+     *
+     * The manager's own `handleOffset` measures a perpendicular against two anchor points;
+     * a point-anchored graphic has one, so the holder is given the cursor and works the
+     * width out from its own centre and attitude. Only the rectangular target implements
+     * it. @see RectangularTargetGraphicBase.setOffsetFromPoint
+     */
+    setOffsetFromPoint = (coordinate: Coordinate): void => {
+        (this.graphic as {setOffsetFromPoint?: (c: Coordinate) => void}).setOffsetFromPoint?.(coordinate);
+    };
+
     onResolutionChangeFunc(e: ObjectEvent): void {
     }
 
