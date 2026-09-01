@@ -2,7 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
+import {allowedGestures, groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -60,9 +60,12 @@ export class MissionTaskController implements TacticalGraphicHandler {
      * Edit ("modify vertices") mode resizes this graphic, identical to resize
      * mode. A circle graphic keeps its base point out of the rendering source,
      * so OpenLayers' `Modify` never sees it and an edit drag would otherwise
-     * pan the map. Set by the factories in `controllerRegistry.ts`; the range
-     * fans deliberately leave it false — their radius comes from band
-     * amplifiers, not from `size`, so resizing them is its own problem.
+     * pan the map. Set by the factories in `controllerRegistry.ts`.
+     *
+     * **The range fans set it too**, though `handleResize` now refuses them: this is what
+     * claims the drag, and a fan that did not claim it would pan the map out from under
+     * the graphic the user was trying to edit. Their sizes come from the band amplifiers
+     * and their own rim handles instead. @see allowedGestures, NO_DRAG_RESIZE_SYMBOLS
      */
     editStretches: boolean = false;
     private currentMouseCoord: Coordinate = [0, 0];
@@ -227,7 +230,26 @@ export class MissionTaskController implements TacticalGraphicHandler {
         this.currentMouseCoord = evt.coordinate;
     };
 
+    /**
+     * The gate. **The refusal reads the library's table rather than restating it.**
+     *
+     * `allowedGestures(name)` is what MapLibre reads and what decides whether the host
+     * draws a resize affordance at all. A controller that separately decided the same
+     * thing would be a second statement of one fact — the shape of defect
+     * `gestureParity.test.ts` exists to catch, and it caught exactly this the first time
+     * the range fans were told to stop scaling: the affordance vanished while a drag
+     * through any other route still scaled them.
+     *
+     * Split from the work below so a subclass can still refuse by overriding, and so the
+     * parity test can tell a refusal from a resize by watching where the call lands.
+     */
     handleResize(deltaSize: number): void {
+        if (!allowedGestures(this.graphic.name).resize) return;
+        this.applyResize(deltaSize);
+    }
+
+    /** The resize itself, reached only once the gesture is allowed. */
+    protected applyResize(deltaSize: number): void {
         // Armed here rather than on pointer-down: a resize gesture only becomes one once
         // it actually changes the size. The manager disarms it on pointer-up.
         this.graphic.showMeasure?.(true);

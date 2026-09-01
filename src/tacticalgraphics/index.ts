@@ -70,7 +70,7 @@ export type {
  * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
  * them in `RangeFanGraphicBase`.
  */
-export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands} from './graphics/RangeFan';
+export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands, rotationToAzimuth} from './graphics/RangeFan';
 
 /**
  * Turn's bend limits and the clamp that enforces them. A renderer that lets the
