@@ -15,6 +15,49 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **A fourth entry point, `@zaes/tactical-graphics/thumbnails`** — one small SVG per
+  graphic, for a picker that has to show the user what they are about to add. 293
+  thumbnails, keyed by `TacticalGraphicName`:
+
+  ```ts
+  import {getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
+  <img src={getGraphicThumbnailUrl(name)} alt="" />
+  ```
+
+  `GRAPHIC_THUMBNAIL_SVGS` gives the raw markup, `getGraphicThumbnailSvg(name)` one of
+  them, and `getGraphicThumbnailUrl(name)` a percent-encoded `data:` URI built on first
+  ask and cached. Everything is inline — no external references, no bundler loader, no
+  network.
+
+  They are **drawn by the library's own paint layer**, through the same seam MapLibre
+  and the zaes.com catalog use, so a symbol and its thumbnail cannot disagree. Generated
+  by `npm run gen:thumbnails`; `npm run check:thumbnails` reports a stale file.
+
+  **The root entry point does not re-export them**, deliberately: `index.ts` never names
+  the module, so the ~630 KB of markup lands only on a consumer that imports the subpath.
+  Anyone using the package for geometry pays nothing.
+
+  What a thumbnail shows is tuned for a picker rather than for comparison against a
+  plate, which is what makes it different from the catalog tile of the same symbol:
+
+  - **areas** are drawn as a free-form bean, not the rectangle the catalog uses — a
+    rectangle is a *different symbol* here, and 94 traced areas were rendering as though
+    they were the 17 genuinely rectangular zones. Amplifiers are kept and held clear of
+    the boundary
+  - **point graphics** carry the designation and nothing else
+  - **line graphics** carry no text at all; a line's identity is its dashes, ticks and
+    arrowheads, and at picker size an amplifier only covers them
+  - **capture, seize, evacuate and recover** are drawn to the proportions in APP-06 Table
+    8-A-1 — a small circle and a long swept arrow, rather than the fat circle and stub
+    the evenly-spaced default base produced
+
+### Changed
+
+- Nothing in the published catalog SVGs on zaes.com. The generator gained a `--profile`
+  flag and the `catalog` profile's output is byte-for-byte what it was.
+
 ## [3.2.0] — 2026-09-01
 
 **A plate-by-plate audit of the amplifier fields against APP-06 Chapter 8, and the
