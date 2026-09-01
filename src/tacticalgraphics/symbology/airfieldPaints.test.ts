@@ -106,11 +106,11 @@ describe('APP-06 131900 — airfield', () => {
         expect(painted0).toEqual(arms);
     });
 
-    it('sets field H beside the runway, not through the crossing', () => {
+    it('sets its designation beside the runway, not through the crossing', () => {
         const center = project(CENTER);
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
-            properties: {name: TacticalGraphicName.Airfield, additionalInfo: 'JOINT'},
+            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
             graphicSize: SIZE,
         } as PaintFeature, context(200));
 
@@ -139,7 +139,7 @@ describe('APP-06 131900 — airfield', () => {
 
         const [label] = airfieldPointLabelPaint(TacticalGraphicName.Airfield)({
             geometry: {type: 'Point', coordinates: center},
-            properties: {name: TacticalGraphicName.Airfield, additionalInfo: 'JOINT'},
+            properties: {name: TacticalGraphicName.Airfield, designation: 'JOINT'},
             // Deliberately wrong for this graphic, the way the catalog's is: a size that
             // would put the label well inside the runway.
             graphicSize: SIZE * 0.6,

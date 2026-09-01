@@ -720,19 +720,69 @@ export interface DefaultLineOptions {
      * showing dates the moment a user filled the field in.
      */
     showDates?: boolean;
+    /**
+     * How this line sets its country code beside the designation, if it takes one.
+     *
+     * `'parentheses'` is the fire-support family's — APP-06 letters them `T2 ( AS )` and the
+     * example reads `FSCL MND(USA)`. `'slash'` is the decision line's, whose plate writes
+     * `T/AS`. Absent means the line takes no country code, which is most of them.
+     * (User's call, 2026-09-01.)
+     */
+    countryCode?: 'parentheses' | 'slash';
+}
+
+/**
+ * The lines that set a country code beside their designation, and how.
+ *
+ * **This lives here, beside the paint, and not in the registry.** It started in
+ * `registry.ts`, which meant MapLibre -- which builds its styles from the registry -- drew
+ * `FSCL ALPHA (GBR)` while OpenLayers, whose line style calls `defaultLinePaint(name)` with
+ * no options at all, drew `FSCL ALPHA` and dropped the code on the floor. Nothing failed:
+ * the country code round-tripped through save and restore, the dialog offered it, and one
+ * of the two engines simply never painted it. Making it the paint's own default is what
+ * stops an engine having an opinion about a symbology fact.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parentheses' | 'slash'>> = {
+    // `T2 ( AS )` on the plate, `FSCL MND(USA)` in the worked example.
+    [TacticalGraphicName.FireSupportCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldHandoverLine]: 'parentheses',
+    [TacticalGraphicName.DelayLine]: 'parentheses',
+    // The decision line writes `T/AS` instead, which is what `'slash'` is for -- but it has
+    // its own paint (the star at each end) and never reaches this one, so listing it here
+    // would be a second statement of a fact that lives in `decisionLinePaint`.
+};
+
+/**
+ * How a line sets its country code, if it takes one at all.
+ *
+ * Exported so a renderer that assembles its own options can start from the same answer
+ * rather than restating it -- and so a test can assert the two engines agree.
+ */
+export function defaultLineCountryCodeStyle(name: TacticalGraphicName): 'parentheses' | 'slash' | undefined {
+    return DEFAULT_LINE_COUNTRY_CODES[name];
 }
 
 export function defaultLinePaint(
     name: TacticalGraphicName,
     options: DefaultLineOptions = {},
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
-    const {alwaysDashed = false, showDates = true} = options;
+    const {alwaysDashed = false, showDates = true, countryCode = defaultLineCountryCodeStyle(name)} = options;
     return (feature, context) => {
         if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const identifier = getFullLabel(name, feature.properties.designation ?? '');
+        const designation = feature.properties.designation ?? '';
+        const country = (feature.properties.countryCode ?? '').trim();
+        const named =
+            countryCode === undefined || !country
+                ? designation.trim()
+                : countryCode === 'slash'
+                  ? [designation.trim(), country].filter(Boolean).join('/')
+                  : formatDesignationWithCountry(designation, country);
+        const identifier = getFullLabel(name, named);
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';

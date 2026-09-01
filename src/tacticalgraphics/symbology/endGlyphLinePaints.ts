@@ -162,7 +162,15 @@ export function decisionLinePaint(): EndGlyphPaint {
         const stroke = {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const paints: Paint[] = [];
 
-        const text = [feature.properties.designation, feature.properties.secondDesignation]
+        /*
+         * **`T/AS` — the designation and its country code**, not a second designation.
+         *
+         * 110500's template letters the pair `T/AS`, and the slash is the separator the plate
+         * draws. This composed `designation/secondDesignation`, which put a field the graphic
+         * does not offer into the star and left the country code with nowhere to go.
+         * (User's call, 2026-09-01.)
+         */
+        const text = [feature.properties.designation, feature.properties.countryCode]
             .map(part => (part ?? '').trim())
             .filter(Boolean)
             .join('/');

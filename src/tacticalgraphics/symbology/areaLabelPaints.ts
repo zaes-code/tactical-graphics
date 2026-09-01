@@ -577,6 +577,15 @@ export function areaDefaultLabelPaint(
      * @see cardinalLabelPaint
      */
     withLiteral = true,
+    /**
+     * Whether the outline wears `ENY` at its west and east crossings when the graphic is
+     * hostile — field `N`.
+     *
+     * The corps support area is the one that asked for it here: its plate boxes an `N` at
+     * exactly those two points, where the other support areas carry none. (User's call,
+     * 2026-09-01.) @see hostileFlankMarks
+     */
+    withHostileFlanks = false,
 ): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
@@ -609,6 +618,7 @@ export function areaDefaultLabelPaint(
         // Both marks are emitted even when empty, matching the original: an empty
         // `text` renders nothing, and keeping the shape identical keeps the mark
         // count comparable between the two renderers.
-        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX)];
+        const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX), ...flanks];
     };
 }

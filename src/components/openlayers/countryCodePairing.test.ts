@@ -52,19 +52,31 @@ describe('country codes pair with designations', () => {
         );
     });
 
-    it('is the nine fire-support areas that take one', () => {
+    it('is the fire-support areas and the fire-support lines that take one', () => {
         /*
          * Free, no and restrictive fire areas, three variants each. Their plates letter the
          * pair `T2 ( AS )` — the establishing formation and its country — with no second
          * name beside it, so one code and one only.
          *
-         * Pinned by name rather than counted: these nine arrived together in 4.0.0, and a
-         * tenth appearing here silently would mean some graphic picked up a country code
-         * without anyone checking its plate for a second designation.
+         * The six lines joined them on 2026-09-01. `T2 ( AS )` is the same pair on the same
+         * kind of plate, and the fire support coordination line, the battlefield
+         * coordination line and the coordinated fire line all draw it; the battlefield
+         * handover line and the delay line follow the same ruling, and the decision line
+         * letters `T` beside `AS` and sets the two apart with a slash rather than brackets.
+         *
+         * Pinned by name rather than counted, and the pin earned it: adding the six turned
+         * this list over silently. One more appearing here would mean a graphic picked up a
+         * country code without anyone checking its plate for a second designation.
          */
         const single = withCodes.filter(name => !getGraphicFields(name).identifier2);
         expect([...single].sort()).toEqual(
             [
+                TacticalGraphicName.BattlefieldCoordinationLine,
+                TacticalGraphicName.BattlefieldHandoverLine,
+                TacticalGraphicName.CoordinatedFireLine,
+                TacticalGraphicName.DecisionLine,
+                TacticalGraphicName.DelayLine,
+                TacticalGraphicName.FireSupportCoordinationLine,
                 TacticalGraphicName.FreeFireAreaCircular,
                 TacticalGraphicName.FreeFireAreaIrregular,
                 TacticalGraphicName.FreeFireAreaRectangular,
