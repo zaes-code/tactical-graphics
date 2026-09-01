@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [3.2.0] — 2026-09-01
+
 **A plate-by-plate audit of the amplifier fields against APP-06 Chapter 8, and the
 corrections it turned up.** All 84 graphics that carry a distinctive field were read
 against their Chapter 8 row — name, template, draw rules and worked example — and compared
@@ -815,6 +817,7 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 ---
 
 [Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...develop
+[3.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...v2.1.0
