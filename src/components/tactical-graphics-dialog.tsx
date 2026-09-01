@@ -80,7 +80,22 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     const stored = selection.labels;
     const fields = getGraphicFields(selection.graphicName);
 
+    /*
+     * **Everything stored, then the fields this dialog manages on top.**
+     *
+     * `writeGraphicProperties` replaces the amplifier bag rather than merging it, so an
+     * amplifier the dialog does not offer has nowhere to survive: building the bag from
+     * the offered fields alone destroyed it on the next OK. Measured on a forward edge of
+     * battle area, which paints a date-time pair and offers no box for one — dates set by
+     * an import, a restore or a host through the public API were gone the moment the
+     * operator renamed it.
+     *
+     * The explicit blanking below still wins, so a field this dialog *does* manage can
+     * still be cleared, and a designation on a graphic that no longer takes one is still
+     * dropped rather than lingering.
+     */
     const labels: GraphicLabels = {
+        ...stored,
         designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
     };
@@ -115,12 +130,12 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     }
     if (fields.rangeFan) {
         // First time opening the editor on this fan: seed a single band at the drawn
-        // radius so pressing OK does not snap the geometry to the 1 km fallback.
-        // `graphicSize` is projected meters; the editor works in kilometers.
+        // radius so pressing OK does not snap the geometry to the fallback. Both
+        // `graphicSize` and a band's range are metres as of 4.0.0 — this divided by a
+        // thousand, which was right while bands were kilometres and now seeds a fan a
+        // thousand times too small. @see RangeFanBand.range
         labels.rangeFan = stored.rangeFan ?? {
-            bands: [
-                {range: selection.graphicSize && selection.graphicSize > 0 ? Math.max(0.1, Math.round((selection.graphicSize / 1000) * 10) / 10) : 1},
-            ],
+            bands: [{range: selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000}],
         };
     }
 
