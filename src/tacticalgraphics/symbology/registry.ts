@@ -5,11 +5,11 @@
  * this what draws a graphic; `isPaintable` is how it finds out whether the answer
  * exists yet.
  *
- * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done —
- * `isPaintable` is true for 291 of the 292 registered names — but the one exception is
- * real: `AxisOfAttack` is a generator with no enum member, no controller and no UI path.
- * An exhaustive record would have to name it, and naming it would mean either a
- * placeholder that reads as "done" or a member the enum does not have.
+ * **Deliberately not an exhaustive `Record<TacticalGraphicName, …>`.** The port is done and
+ * `isPaintable` is now true for every registered name — the lone exception, `AxisOfAttack`,
+ * was removed in 4.0.0 for appearing in neither publication and having no UI path. The
+ * record stays partial anyway: a graphic can legitimately have no paint of its own, and an
+ * exhaustive one would force a placeholder that reads as "done".
  *
  * **Registering a paint takes two edits**, and this is the trap: the entry here, and the
  * routing on the OpenLayers side. A holder that still chooses its style itself will not

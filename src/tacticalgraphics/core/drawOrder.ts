@@ -66,7 +66,6 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,    // 151402 Attack Helicopter
     // Registered without an enum member -- the axis family's fifth variant, reachable
     // through the registry but not through the UI. @see ai/context.md, "Counts"
-    'AxisOfAttack',
     TacticalGraphicName.FollowAndAssume,
     TacticalGraphicName.FollowAndSupport,
     TacticalGraphicName.Counterattack,                    // 340600 Counter-Attack

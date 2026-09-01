@@ -618,7 +618,6 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.AviationAxisOfAdvance:
         case TacticalGraphicName.BattlePosition:
         case TacticalGraphicName.MainAxisOfAdvance:
-        case TacticalGraphicName.AxisOfAttack:
         case TacticalGraphicName.SupportingAttack:
             return '';*/
 

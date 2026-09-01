@@ -176,49 +176,6 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
     }
 }
 
-export class AxisOfAttack extends MovementGraphicBase {
-    name: string = 'AxisOfAttack';
-
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = this.arrowCenterline(base, radius);
-
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
-            leftArrowBase[leftArrowBase.length - 1],
-            leftArrowBase[leftArrowBase.length - 2],
-            radius);
-        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
-            rightArrowBase[rightArrowBase.length - 1],
-            rightArrowBase[rightArrowBase.length - 2],
-            -radius,
-        );
-        let lastLeft = leftArrowBase[leftArrowBase.length - 1];
-        let lastRight = rightArrowBase[rightArrowBase.length - 1];
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadParallel: Position = geometryService.getExtendedPoint(
-            leftArrowHeadBase,
-            leftArrowBase[leftArrowBase.length - 1],
-            radius * 0.3,
-        );
-        const rightArrowHeadParallel: Position = geometryService.getExtendedPoint(
-            rightArrowHeadBase,
-            rightArrowBase[rightArrowBase.length - 1],
-            radius * 0.3,
-        );
-        const extendedTip: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius * 1.3);
-        const arrowExtraSegments = geometryService.lineStringToDashes([leftArrowHeadParallel, extendedTip, rightArrowHeadParallel], [radius / 3, radius / 3]);
-        let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];
-
-        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase, arrowCoords, ...arrowExtraSegments.geometry.coordinates]);
-    }
-}
-
 /**
  * Emits a 2-point label span lying along the last segment of the arrow's center
  * line, ending where the body does. The style function uses this span for
