@@ -98,6 +98,7 @@
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "gen:catalog": "node scripts/gen-catalog-svgs.js --profile catalog",
     "gen:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail",
+    "postgen:thumbnails": "node scripts/build-lib.js",
     "check:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail --check",
     "typecheck": "tsc --noEmit",
     "check:readme-samples": "node scripts/check-readme-samples.mjs",
