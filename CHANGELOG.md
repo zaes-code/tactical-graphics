@@ -115,7 +115,7 @@ line loses its label. Read that section before upgrading.
   asks for could not be filled in. An input appears when there is no measurement to show.
 
 - New exports: `overheadWirePaint`, `safeLaneOrGapPaint`, `formatLaneWidth`,
-  `defaultLineCountryCodeStyle`, `rotationToAzimuth`.
+  `rotationToAzimuth`, and the doctrinal-completeness API above.
 
 - **`validateTacticalGraphic(name, properties)`** reports what a graphic still needs to be
   doctrinally complete, with the plate each rule came from. A mobility corridor without its
