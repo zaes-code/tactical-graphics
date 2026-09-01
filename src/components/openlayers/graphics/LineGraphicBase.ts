@@ -27,7 +27,9 @@ import {
     nestedZoneStyleFunc,
     obstacleBypassStyleFunc,
     obstacleLineStyle,
+    overheadWireStyle,
     passageLaneGraphicStyle,
+    safeLaneOrGapStyle,
     phaseLineStyleFunc,
     probableLineOfDeploymentStyleFunc,
     protectionLineStyleFunc,
@@ -154,6 +156,12 @@ export class LineGraphicBase implements LineGraphic {
                     return finalProtectiveFireStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.PassageLane:
                     return passageLaneGraphicStyle()(feature, resolution);
+                // Same outline as the passage lane above, drawn by the same function, plus
+                // the amplifier column APP-06 letters and FM 1-02.2 does not.
+                case TacticalGraphicName.SafeLaneOrGap:
+                    return safeLaneOrGapStyle(name)(feature, resolution);
+                case TacticalGraphicName.OverheadWire:
+                    return overheadWireStyle(name)(feature, resolution);
                 default:
                     return defaultLineStyle(name)(feature, resolution);
             }

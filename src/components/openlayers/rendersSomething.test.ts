@@ -46,10 +46,8 @@ function fakeManager(): TacticalGraphicsManager {
     } as unknown as TacticalGraphicsManager;
 }
 
-/** @see fullRoundTrip.test.ts — `AxisOfAttack` has no enum member and so no controller. */
-const NO_CONTROLLER = ['AxisOfAttack'];
-
-const NAMES = (listTacticalGraphicNames() as TacticalGraphicName[]).filter(n => !NO_CONTROLLER.includes(String(n)));
+/** Every registered graphic. @see fullRoundTrip.test.ts for the one that used to be excluded. */
+const NAMES = listTacticalGraphicNames() as TacticalGraphicName[];
 
 beforeEach(() => resetTacticalGraphicsConfig());
 

@@ -89,7 +89,7 @@ describe('TIP_FIRST_GRAPHICS', () => {
         // FM 1-02.2 publishes no anchor-point numbering, so a graphic can only be listed
         // here on APP-06's authority -- and a graphic APP-06 does not code has none.
         for (const name of TIP_FIRST_GRAPHICS) {
-            if (!(name in TacticalGraphicName)) continue; // AxisOfAttack: registered, no enum member
+            if (!(name in TacticalGraphicName)) continue;
             expect(GRAPHIC_ENTITY_CODES[name as TacticalGraphicName]).toMatch(/^\d{6}$/);
         }
     });

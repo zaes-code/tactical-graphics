@@ -70,7 +70,7 @@ export type {
  * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
  * them in `RangeFanGraphicBase`.
  */
-export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands} from './graphics/RangeFan';
+export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands, rotationToAzimuth} from './graphics/RangeFan';
 
 /**
  * Turn's bend limits and the clamp that enforces them. A renderer that lets the
@@ -91,6 +91,14 @@ export {
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
 export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes} from './core/entityCodes';
+export {
+    DoctrinalIssueKind,
+    getDoctrinalRequirements,
+    hasDoctrinalRequirements,
+    isTacticalGraphicComplete,
+    validateTacticalGraphic,
+} from './core/doctrine';
+export type {DoctrinalIssue, DoctrinalValidation} from './core/doctrine';
 
 // ── Escape hatches for advanced use ─────────────────────────────────────────
 export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
@@ -281,6 +289,7 @@ export {
     areaOutlinePaint,
     defaultLinePaint,
     amplifierDash,
+    formatDesignationWithCountry,
     formatFullLabel,
     getFullLabel,
     missionTaskLabelPaint,
@@ -368,6 +377,7 @@ export {
 export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
 export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
 export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
+export {formatLaneWidth, overheadWirePaint, safeLaneOrGapPaint} from './symbology/overheadWirePaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';

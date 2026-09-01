@@ -242,7 +242,7 @@ const SAMPLE_AMPLIFIERS = {
         // it. @see EXTRA_SAMPLES
         //
         // Kilometers, unlike every other distance here. @see RangeFanBand.range
-        bands: [{range: 180, label: 'ARTY', altitude: 1500}],
+        bands: [{range: 180000, label: 'ARTY', altitude: 1500}],
     },
 };
 
@@ -324,9 +324,9 @@ const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphi
         properties: {
             rangeFan: {
                 bands: [
-                    {range: 60, label: 'MG'},
-                    {range: 120, label: 'ATGM'},
-                    {range: 180, label: 'ARTY'},
+                    {range: 60000, label: 'MG'},
+                    {range: 120000, label: 'ATGM'},
+                    {range: 180000, label: 'ARTY'},
                 ],
             },
         },
@@ -338,9 +338,9 @@ const EXTRA_SAMPLES: {name: TacticalGraphicName; properties: Omit<TacticalGraphi
             // is the thing a sector fan can do that a circular one cannot.
             rangeFan: {
                 bands: [
-                    {range: 60, label: 'MG', leftAzimuthDeg: 20, rightAzimuthDeg: 70},
-                    {range: 120, label: 'ATGM', leftAzimuthDeg: 35, rightAzimuthDeg: 85},
-                    {range: 180, label: 'ARTY', leftAzimuthDeg: 45, rightAzimuthDeg: 100},
+                    {range: 60000, label: 'MG', leftAzimuthDeg: 20, rightAzimuthDeg: 70},
+                    {range: 120000, label: 'ATGM', leftAzimuthDeg: 35, rightAzimuthDeg: 85},
+                    {range: 180000, label: 'ARTY', leftAzimuthDeg: 45, rightAzimuthDeg: 100},
                 ],
             },
         },

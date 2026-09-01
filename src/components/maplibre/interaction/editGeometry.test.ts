@@ -400,20 +400,22 @@ describe('setBandRange — the range-fan handles', () => {
         }),
     });
 
-    it('sets the band it was given, in kilometers', () => {
-        // One degree of longitude is about 111 km.
-        const edited = setBandRange(fan([10, 200, 400]), 1, [1, 0]);
-        expect(edited.properties.rangeFan!.bands[1].range).toBeCloseTo(111, 0);
+    it('sets the band it was given, in metres', () => {
+        // One degree of longitude is about 111 km — 111,000 metres, which is the unit a
+        // band stores as of 3.2.0. Both range fan plates say so outright.
+        // @see RangeFanBand.range
+        const edited = setBandRange(fan([10_000, 200_000, 400_000]), 1, [1, 0]);
+        expect(edited.properties.rangeFan!.bands[1].range / 1000).toBeCloseTo(111, 0);
         // And leaves its neighbors where they were.
-        expect(edited.properties.rangeFan!.bands[0].range).toBe(10);
-        expect(edited.properties.rangeFan!.bands[2].range).toBe(400);
+        expect(edited.properties.rangeFan!.bands[0].range).toBe(10_000);
+        expect(edited.properties.rangeFan!.bands[2].range).toBe(400_000);
     });
 
     it('never lets a band pass the one outside it', () => {
         // Dragging band 0 far out would otherwise reorder the rings, and the handle the
         // user is holding would end up attached to a different band.
-        const edited = setBandRange(fan([10, 50, 400]), 0, [4, 0]);
-        expect(edited.properties.rangeFan!.bands[0].range).toBeLessThan(50);
+        const edited = setBandRange(fan([10_000, 50_000, 400_000]), 0, [4, 0]);
+        expect(edited.properties.rangeFan!.bands[0].range).toBeLessThan(50_000);
     });
 
     it('never lets a band pass the one inside it', () => {

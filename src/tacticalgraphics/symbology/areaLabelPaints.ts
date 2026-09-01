@@ -26,7 +26,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
+import {amplifierText, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX} from '../core/config';
@@ -138,6 +138,75 @@ export function areaDateLabel(feature: PaintFeature): string {
     return start || end || '';
 }
 
+/** Screen-pixel clearance between the shape's lower edge and the literal under it. */
+const BELOW_SHAPE_GAP_PX = 10;
+
+/**
+ * A fixed literal set **below** the shape, centred on it.
+ *
+ * The airhead line is the case: its plate labels the enclosure with the words "AIRHEAD
+ * LINE" under it and offers no name box at all, so there is nothing for the operator to
+ * type and nothing for a designation-driven label to draw. (User's call, 2026-09-01.)
+ *
+ * Below the *painted* outline rather than at the label anchor, because the anchor sits in
+ * the middle of the shape and this word belongs outside it. The gap is in screen pixels so
+ * it holds at every zoom, which is the standing rule for any clearance.
+ */
+export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
+    return (feature, context) => {
+        const box = feature.bounds;
+        if (!box) return [];
+        /*
+         * **Emitted directly, not through `stack`.** That helper runs the text through
+         * `fitLabelScale`, which shrinks a label until it fits *inside* the outline — right
+         * for a centred name and wrong for anything hung outside, where it collapses the
+         * text to nothing. The engine reported the mark and the map showed no words. The
+         * outside labels here all bypass it for the same reason. @see zoneLabelPaint
+         */
+        return [{
+            geometry: {
+                type: 'Point',
+                coordinates: [(box.minX + box.maxX) / 2, box.minY - BELOW_SHAPE_GAP_PX * context.resolution],
+            },
+            text: {
+                text: literal,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'top',
+                scale: outsideScaleOf(feature, context),
+            },
+        }];
+    };
+}
+
+/**
+ * The area graphics whose plate carries a country code beside the designation.
+ *
+ * APP-06 letters the pair `T2 ( AS )` on the free, no and restrictive fire areas — the
+ * establishing formation and its country — and on nothing else that routes through the
+ * centred stack. Fire support area, the obstacle areas and the EPW holding area take a
+ * designation and no country at all.
+ *
+ * **A list rather than "render it whenever one is set".** Composing the code
+ * unconditionally made four graphics draw a country they have no field for, which is
+ * invisible while nothing can set one and wrong the moment a restore or an import carries
+ * it. Which symbols take a country is a fact about the symbology, so it lives here rather
+ * than being inferred from whichever renderer happens to offer an input.
+ */
+const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.FreeFireAreaIrregular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.NoFireAreaIrregular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.RestrictiveFireAreaIrregular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+];
+
 /**
  * The default: designation over date-time group, centered on the anchor.
  *
@@ -166,9 +235,17 @@ export function areaLabelStackPaint(
          * stacks them: "EPW" over "HOLDING AREA" over the designation, which is a
          * different arrangement and not one a prefix can express.
          */
-        const designation = options.literalLines
-            ? (feature.properties.designation ?? '').trim()
-            : getFullLabel(name, feature.properties.designation ?? '').trim();
+        /*
+         * The country code rides on the designation line, in parentheses — "FFA 2AD (DEU)".
+         * The free / no / restrictive fire areas are the ones that carry it (APP-06 letters
+         * the pair `T2 ( AS )`); every other graphic here has no `countryCode` to read, and
+         * `formatDesignationWithCountry` then returns the designation untouched, so this is
+         * inert for them.
+         */
+        const named = COUNTRY_CODE_AREAS.includes(name)
+            ? formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode)
+            : (feature.properties.designation ?? '').trim();
+        const designation = options.literalLines ? named : getFullLabel(name, named).trim();
 
         const lines = [
             ...(options.before ?? []),
@@ -500,6 +577,15 @@ export function areaDefaultLabelPaint(
      * @see cardinalLabelPaint
      */
     withLiteral = true,
+    /**
+     * Whether the outline wears `ENY` at its west and east crossings when the graphic is
+     * hostile — field `N`.
+     *
+     * The corps support area is the one that asked for it here: its plate boxes an `N` at
+     * exactly those two points, where the other support areas carry none. (User's call,
+     * 2026-09-01.) @see hostileFlankMarks
+     */
+    withHostileFlanks = false,
 ): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
@@ -532,6 +618,7 @@ export function areaDefaultLabelPaint(
         // Both marks are emitted even when empty, matching the original: an empty
         // `text` renders nothing, and keeping the shape identical keeps the mark
         // count comparable between the two renderers.
-        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX)];
+        const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX), ...flanks];
     };
 }

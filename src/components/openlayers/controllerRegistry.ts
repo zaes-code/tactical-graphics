@@ -12,6 +12,7 @@ import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
 import {
     CircularAreaGraphicBase,
+    RectangularTargetGraphicBase,
     EnvelopmentGraphicBase,
     AmbushGraphicBase,
     ContainGraphicBase,
@@ -244,6 +245,20 @@ const dropped = (
     );
 };
 
+/**
+ * The rectangular target: one anchor point, and a box made of amplifiers.
+ *
+ * Point-anchored rather than `polygonRect`, because its plate gives it one anchor point and
+ * not two. That puts it on the mission-task controller like every other point-anchored
+ * graphic — `editStretches` for the same reason the circles have it, so an edit-mode drag
+ * resizes instead of panning the map. @see RectangularTargetGraphicBase
+ */
+const rectangularTarget = (name: TacticalGraphicName, res: number) => {
+    const controller = new MissionTaskController(new RectangularTargetGraphicBase(name, res, res));
+    controller.editStretches = true;
+    return controller;
+};
+
 const circularArea = (name: TacticalGraphicName, res: number) => {
     const controller = new MissionTaskController(new CircularAreaGraphicBase(name, res, res));
     controller.editStretches = true;
@@ -385,7 +400,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.DeadSpaceAreaRectangular]:              polygonRect,
     [TacticalGraphicName.BlueKillBoxRectangular]:                polygonRect,
     [TacticalGraphicName.PurpleKillBoxRectangular]:              polygonRect,
-    [TacticalGraphicName.TargetAreaRectangular]:                 polygonRect,
+    [TacticalGraphicName.TargetAreaRectangular]:                 rectangularTarget,
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 
@@ -441,6 +456,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ForwardLineOfOwnTroops]:           line(),
     [TacticalGraphicName.LineOfContact]:                    line(),
     [TacticalGraphicName.ObstacleLine]:                     line(),
+    // "Additional points can be defined to extend the line" -- no vertex limit, and
+    // each vertex stands a pylon, so a drag has to move the grabbed one.
+    [TacticalGraphicName.OverheadWire]:                     vertexLine(0, 2),
     // The mineline extends with extra vertices; the other four are defined by two
     // anchor points and nothing else, so their draw stops at two.
     // Four anchor points, each meaning something different, so every one is draggable.
@@ -492,6 +510,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // The end handle moves that vertex — lengthening the lane is what dragging its
     // end means — while the resize icon still scales the whole symbol. @see Abatis
     [TacticalGraphicName.PassageLane]:                      vertexLine(2, 2),
+    // Two anchor points exactly: 290600's entry and exit. Same controller as the
+    // passage lane it shares an outline with.
+    [TacticalGraphicName.SafeLaneOrGap]:                    vertexLine(2, 2),
     [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
     // The apex is vertex 0: APP-06 140500 numbers this symbol from its vertex, and the
     // base follows the standard now. It was 1 while the legs were drawn first. @see anchorVertex

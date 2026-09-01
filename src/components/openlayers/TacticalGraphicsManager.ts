@@ -1018,7 +1018,20 @@ export class TacticalGraphicsManager {
                 // A graphic whose handles each drive a different dimension (the
                 // range fans, one rim per band) takes the grabbed handle's index
                 // and the raw cursor; everything else scales uniformly.
-                if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
+                if (this.activeFeature?.get('offsetHandler')) {
+                    /*
+                     * **A width grip sets a width here too.**
+                     *
+                     * The line path has always had this branch; the circle path had not
+                     * needed one, because until the rectangular target every point-anchored
+                     * graphic had exactly one number to drag. It has two, and without this
+                     * a drag on its width grip fell through to `handleResize` and scaled
+                     * the whole box — the width did move, but only because it follows the
+                     * length, so the give-away was the two staying in a fixed ratio.
+                     * @see RectangularTargetGraphicBase.setOffsetFromPoint
+                     */
+                    this.handleOffset(evt);
+                } else if (this.activeController.handleBandResize && this.activeHandleIndex >= 0) {
                     this.activeController.handleBandResize(this.activeHandleIndex, this.grabAdjusted(evt.coordinate));
                 } else if (this.isMirrorHandleGrab()) {
                     // **A mirror handle flips and does nothing else**, which is what the
@@ -1355,7 +1368,21 @@ export class TacticalGraphicsManager {
     // update the width of a graphic
     handleOffset(evt: MapBrowserEvent): void {
         if (!this.activeController) return;
-        const stored = <number[][]>this.activeController.getBaseGeometry();
+        const stored = <number[][]>(this.activeController.getBaseGeometry() as unknown);
+
+        /*
+         * **A point-anchored base carries no axis to measure a width against.**
+         *
+         * `getBaseGeometry` returns the centre for those — a flat `[x, y]`, which passes
+         * the length test below and then has `stored[0][0]` read off a number, so every
+         * figure downstream comes out NaN. The frame is the holder's, not the base's: its
+         * centre and its attitude. So the cursor is handed over and the holder answers.
+         * @see RectangularTargetGraphicBase.setOffsetFromPoint
+         */
+        if (Array.isArray(stored) && typeof (stored as unknown[])[0] === 'number') {
+            this.activeController.setOffsetFromPoint?.(evt.coordinate);
+            return;
+        }
         if (!stored || stored.length < 2) return;
 
         // **Oriented the generator's way, because the sign below leaves this function.**

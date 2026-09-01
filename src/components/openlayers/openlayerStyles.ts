@@ -178,6 +178,8 @@ import {
     zoneLabelPaint,
     areaOutlinePaint,
     defaultLinePaint,
+    overheadWirePaint,
+    safeLaneOrGapPaint,
     encirclementPaint,
     CARDINAL_LABEL_AREAS,
     CBRN_AREAS,
@@ -609,9 +611,17 @@ export const createMeasureFeature = () => {
 
         const [a, b] = coords;
         const stated = f.get('measureMeters') as number | undefined;
-        const text = formatDistance(
+        const distance = formatDistance(
             typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
         );
+        /*
+         * **A graphic with more than one dimension has to say which one this is.** A radius
+         * read-out needs no caption — a circle has one number — but the rectangular target
+         * has a length and a width on two separate grips, and an unlabelled figure beside
+         * one of them does not say which the drag is changing. @see measureCaption
+         */
+        const caption = f.get('measureLabel') as string | undefined;
+        const text = caption ? `${caption} ${distance}` : distance;
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the
@@ -944,6 +954,16 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
 /** **Ported.** @see mobilityPaints.ts, `passageLanePaint`. */
 export function passageLaneGraphicStyle(): StyleFunction {
     return asStyleFunction(passageLanePaint());
+}
+
+/** **Ported.** @see overheadWirePaints.ts, `safeLaneOrGapPaint`. */
+export function safeLaneOrGapStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(safeLaneOrGapPaint(), name);
+}
+
+/** **Ported.** @see overheadWirePaints.ts, `overheadWirePaint`. */
+export function overheadWireStyle(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(overheadWirePaint(), name);
 }
 
 
@@ -2189,6 +2209,11 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     // first one it missed: the case here passed `psyOpsMarkPaint(() => [])`, an empty
     // base, so the speaker and its amplifiers drew and the date-time group outside the
     // upper-left corner — which the registry's base draws — never appeared on this engine.
+    // The airhead line joined for the same reason: its label is the literal "AIRHEAD LINE"
+    // set under the shape, which only the paint layer knows how to draw. Left out, this
+    // engine fell through to the legacy switch and drew a designation the graphic no longer
+    // offers. Registering a paint takes two edits — the registry, and this list.
+    TacticalGraphicName.AirheadLine,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,
@@ -2196,6 +2221,11 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.SubmarineActionArea,
     TacticalGraphicName.SubmarineGeneratedActionArea,
     TacticalGraphicName.AreaGeneric,
+    // 310800's Template boxes an `N` on each flank beside `CSA T` and `W - W1`. Only the
+    // paint layer draws those; without this line OpenLayers fell through to the legacy
+    // switch and drew the name and dates with no hostile marks, while MapLibre drew all
+    // three. Registering a paint takes two edits — the registry, and this list.
+    TacticalGraphicName.CorpsSupportArea,
     TacticalGraphicName.HumanTerrain,
     TacticalGraphicName.EnemyPrisonerOfWarHoldingArea,
     // The Sector 1 / Sector 2 / field H stack. @see sectorModifierPaints
@@ -2577,12 +2607,6 @@ function formatAzimuth(deg: number): string {
     let n = Math.round(deg) % 360;
     if (n < 0) n += 360;
     return String(n).padStart(3, '0');
-}
-
-/** Range bands are stored in km; print them dropping a trailing .0. */
-function formatKm(km: number): string {
-    if (!Number.isFinite(km)) return '0';
-    return Number.isInteger(km) ? String(km) : km.toFixed(1);
 }
 
 function getOffset(distance: number, rotation: number): [number, number] {

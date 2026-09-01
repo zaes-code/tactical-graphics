@@ -176,49 +176,6 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
     }
 }
 
-export class AxisOfAttack extends MovementGraphicBase {
-    name: string = 'AxisOfAttack';
-
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = this.arrowCenterline(base, radius);
-
-        let lastLinePoint = baseCoords[baseCoords.length - 1];
-        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
-
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
-            leftArrowBase[leftArrowBase.length - 1],
-            leftArrowBase[leftArrowBase.length - 2],
-            radius);
-        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
-            rightArrowBase[rightArrowBase.length - 1],
-            rightArrowBase[rightArrowBase.length - 2],
-            -radius,
-        );
-        let lastLeft = leftArrowBase[leftArrowBase.length - 1];
-        let lastRight = rightArrowBase[rightArrowBase.length - 1];
-
-        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
-        const leftArrowHeadParallel: Position = geometryService.getExtendedPoint(
-            leftArrowHeadBase,
-            leftArrowBase[leftArrowBase.length - 1],
-            radius * 0.3,
-        );
-        const rightArrowHeadParallel: Position = geometryService.getExtendedPoint(
-            rightArrowHeadBase,
-            rightArrowBase[rightArrowBase.length - 1],
-            radius * 0.3,
-        );
-        const extendedTip: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius * 1.3);
-        const arrowExtraSegments = geometryService.lineStringToDashes([leftArrowHeadParallel, extendedTip, rightArrowHeadParallel], [radius / 3, radius / 3]);
-        let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];
-
-        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase, arrowCoords, ...arrowExtraSegments.geometry.coordinates]);
-    }
-}
-
 /**
  * Emits a 2-point label span lying along the last segment of the arrow's center
  * line, ending where the body does. The style function uses this span for
@@ -276,6 +233,27 @@ export class MainAttack extends MovementGraphicBase {
  */
 export class AvenueOfApproach extends MainAttack {
     name: string = TacticalGraphicName.AvenueOfApproach;
+
+    /**
+     * Four anchors, not two: the head span the family publishes, then the **rear end of
+     * each rail**.
+     *
+     * 152300's Template boxes an `N` on both rails at the back of the symbol, and an `H`
+     * outside it. Neither can be placed from the head span alone, and a paint cannot go
+     * looking for the rails -- it is handed one feature. The generator already computes
+     * both parallels to draw the arrow, so publishing where they start costs nothing and
+     * keeps the placement a fact of the geometry rather than a guess in a renderer.
+     *
+     * `anchors()` in the paint layer reads the first two for rotation and scale exactly as
+     * before, so the axis-of-advance placement is unchanged.
+     */
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        const left = geometryService.computeParallelLineString(centerline, radius);
+        const right = geometryService.computeParallelLineString(centerline, -radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0]]);
+    }
 }
 
 export class MainAttackFeint extends MovementGraphicBase {

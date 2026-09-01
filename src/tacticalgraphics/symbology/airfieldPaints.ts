@@ -167,6 +167,8 @@ const AIRFIELD_FALLBACK_HALF_WIDTH = 2_000;
 export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPaint {
     return (feature, context) => {
         const center = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
+        // Field T. Not through `amplifierText`: a designation survives "show name only",
+        // because it is the name. The airfield *zone* beside this one takes field H.
         const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!center || !text) return [];
 

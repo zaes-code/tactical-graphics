@@ -66,7 +66,6 @@ const context: PaintContext = {
 
 /** The names an `AreaGraphicBase` holds — the ones `getAreaLabelStylesFn` is called for. */
 const AREA_NAMES = (listTacticalGraphicNames() as TacticalGraphicName[])
-    .filter(n => String(n) !== 'AxisOfAttack')
     .filter(name => {
         try {
             return getController(name, RES).graphic instanceof AreaGraphicBase;
