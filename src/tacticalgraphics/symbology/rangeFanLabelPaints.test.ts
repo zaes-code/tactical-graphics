@@ -125,7 +125,7 @@ describe('the sector generator', () => {
         // already nudges it outward by a fixed pixel gap. Anchoring at `radius * 1.05`
         // instead put 5% of the band — 9 km on a 180 km fan — into the geometry, which is a
         // few pixels zoomed out and tens of pixels zoomed in, so the number crept off its
-        // own edge the further you went in. This is the rule in CLAUDE.md: a zoom-invariant
+        // own edge the further you went in. This is the standing rule: a zoom-invariant
         // gap is computed in the paint, never baked into the GeoJSON.
         const out = renderTacticalGraphic({
             type: 'Feature',

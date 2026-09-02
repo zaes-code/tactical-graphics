@@ -13,7 +13,7 @@
  *   `'Antitank Mine'`, `'Platoon/Detachment'`, `'One Way'`.
  * - **`TacticalGraphicName` is the dispatch key**, not a label. It is a PascalCase
  *   identifier matching its own key, and `getDisplayName()` is what the UI shows —
- *   which is the convention `CLAUDE.md` already states for it.
+ *   which is the convention the repo already states for it.
  * - **`AltitudeDatum` and `TacticalGraphicSpecification` hold literals somebody else
  *   wrote**: `MSL`, `AGL`, `FL` are printed on the plate exactly like that, and
  *   `'FM 1-02.2'` is a document number.
