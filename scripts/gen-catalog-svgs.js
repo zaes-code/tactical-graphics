@@ -284,6 +284,7 @@ function sweptArcBase() {
 /** Amplifiers that put text on the symbol. Dropped wholesale for the corridors. */
 const TEXT_AMPLIFIERS = [
     'designation',
+    'additionalInfo',
     'secondDesignation',
     'countryCode',
     'secondCountryCode',
@@ -392,8 +393,23 @@ function beanRing() {
     return ring;
 }
 
+/**
+ * The multiple-strike safe distance zone traces a RING, but files it as a LineString, so
+ * the default line base hands it two points — and two points cannot close. The picker
+ * showed a bare horizontal stroke where the symbol is two nested numbered zones.
+ *
+ * The bean does double duty here: it is the shape an operator actually traces, and zone 2
+ * is derived from it, so one ring is the whole input. @see beanRing
+ *
+ * **Both profiles.** The catalog's output is otherwise pinned, but a tile that shows a bare
+ * horizontal stroke where the symbol is two nested numbered zones is not a rendering of the
+ * symbol at all — it is a rendering of a base the harness could not supply.
+ */
+const RING_BASED = ['MinimumSafeDistanceMultipleStrike'];
+
 function makeBase(name) {
     const type = baseGeometryFor ? baseGeometryFor(name) : 'LineString';
+    if (RING_BASED.includes(name)) return {type: 'LineString', coordinates: beanRing()};
     const shaped = IS_THUMB && SWEPT_ARC_TASKS.includes(name) ? sweptArcBase : SHAPED_BASES[name];
     if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};
@@ -443,6 +459,14 @@ const AMPLIFIERS = {
 
     // Text amplifiers.
     designation: 'ALPHA',
+    /**
+     * Amplifier H, free text. **Fifteen graphics offer it and none of them ever got one**,
+     * so a symbol whose entire label IS this field drew as a bare outline — the radiation
+     * dose rate contour line, whose plate writes the dose into a break in its own line, was
+     * a plain rectangle here. Kept neutral rather than plate-specific: one bag serves all
+     * fifteen, and a dose reading on an airfield zone would be worse than no reading.
+     */
+    additionalInfo: 'INFO',
     secondDesignation: 'BRAVO',
     countryCode: 'USA',
     secondCountryCode: 'CAN',
@@ -1146,7 +1170,7 @@ if (!ONLY && !IS_THUMB && !CHECK) fs.writeFileSync(
  * '@zaes/tactical-graphics/thumbnails/Foo.svg'` needs a loader `tsc` cannot provide,
  * and picking one by name at run time needs a `require.context` that is webpack's alone.
  * This is the same rule the route-direction arrows already live under — @see
- * `assets/routeDirectionIcons.ts`, and the "No bundler-only imports" note in CLAUDE.md.
+ * `assets/routeDirectionIcons.ts`, and the "No bundler-only imports" rule it follows.
  *
  * The module is deliberately NOT re-exported from `index.ts`. It is reachable only
  * through the `./thumbnails` subpath, so the half-megabyte of markup lands solely on a

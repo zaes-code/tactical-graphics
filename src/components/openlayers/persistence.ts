@@ -386,8 +386,24 @@ export function applyRestoredGeometry(
         // `setOffset` takes the holder's own number, and a holder owns exactly one of the
         // three: a half-width for the width family (stored full, so halve it back), a
         // decoration size for the line families, a radius for anything with a center.
-        const scalar = state.width !== undefined ? state.width / 2 : (state.decorationSize ?? state.radius);
+        // **Decoration size first, because a width is not always the holder's own scalar.**
+        // It was, while every line holder owned exactly one number. The multiple-strike
+        // safe distance zone broke that: its `width` is the standoff between its two rings,
+        // a typed amplifier the generator reads straight from the bag, and it sits beside
+        // the decoration size its holder stamps like every other line graphic. Replaying
+        // the standoff through `setOffset` overwrote that decoration size with an unrelated
+        // number and the round trip stopped agreeing with itself.
+        //
+        // The width families are unaffected: `AirCorridor` and `MovementGraphicBase` stamp
+        // a width and no decoration size, so they still take the second branch.
+        const scalar = state.decorationSize ?? (state.width !== undefined ? state.width / 2 : state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
+        // A width that is an amplifier rather than a half-width. `toLabels` strips it from
+        // the bag as a geometry key, so a holder that reads one needs it handed back here or
+        // it re-seeds from the loading session's zoom. Duck-typed: only the multiple-strike
+        // zone answers today, and a future holder that files a standoff inherits this.
+        const standoffed = handler.graphic as {setStandoff?: (n: number) => void};
+        if (state.width !== undefined) standoffed.setStandoff?.(state.width);
         // Which side the hook hangs on — user intent, so it has to come back.
         if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
         return;

@@ -21,7 +21,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {amplifierText, lineColorOf, scaleOf} from './paintFunctions';
+import {amplifierText, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {textWidth} from './decorations';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -246,7 +246,10 @@ export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
 
         const scale = scaleOf(feature, context);
         const {spots} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
-        for (const at of spots) paints.push(breakLabel(at, text, lineColorOf(feature), scale));
+        // The dose is what the operator typed, so it is an amplifier and follows the
+        // host's "label text uses hostility" choice. It was taking the line colour, which
+        // made it red on a hostile contour whatever the host had set. @see labelColorOf
+        for (const at of spots) paints.push(breakLabel(at, text, labelColorOf(feature), scale));
         return paints;
     };
 }
@@ -281,7 +284,11 @@ export function nestedZonePaint(): CardinalPaint {
             const center = ringCenter(geometry.coordinates[0]);
             const {runs, spots} = breakRingAt(ring, center, EAST, halfBreak(context, text, scale));
             paints.push({geometry: {type: 'MultiLineString', coordinates: runs}, stroke});
-            for (const at of spots) paints.push(breakLabel(at, text, color, scale));
+            // `color` is the LINE colour and belongs to the ring, not to the number set
+            // in its gap. The zone numbers are text, so they follow the host's setting like
+            // every other label; passing the line colour made them red on a hostile zone
+            // with the setting off.
+            for (const at of spots) paints.push(breakLabel(at, text, labelColorOf(feature), scale));
         });
         return paints;
     };
