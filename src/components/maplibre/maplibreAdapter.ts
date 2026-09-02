@@ -10,6 +10,7 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
+    defaultStandoffMetres,
     drawnAnchorFrame,
     drawnAnchors,
     drawnSizeMeters,
@@ -290,9 +291,16 @@ function sizeDefaults(
     // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
     const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
 
+    // A graphic whose `width` is a standoff rather than a half-width seeds it from the
+    // library, so both engines open the same symbol with the same gap. Without this the
+    // multiple-strike zone would start at MapLibre's generic 20 px offset here and at half
+    // a screen inch on OpenLayers. @see defaultStandoffMetres
+    const standoff = defaultStandoffMetres(name, drawingResolution ?? 0);
+
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && standoff !== undefined ? {width: standoff} : {}),
+        ...(supplied.width === undefined && standoff === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),

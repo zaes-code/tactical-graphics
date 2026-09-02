@@ -877,6 +877,7 @@ const SECURITY_OPERATION_REACH_PX =
  * @see placeOriginCentered
  */
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from '../graphics/SecurityOperation';
+export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from '../graphics/SafeDistanceZone';
 
 /**
  * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by

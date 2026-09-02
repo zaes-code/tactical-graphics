@@ -39,7 +39,7 @@ import {
     tacticalFixStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -55,6 +55,17 @@ export class LineGraphicBase implements LineGraphic {
     hidesStartHandle?: boolean;
     graphicLabel: GraphicLabels = {designation: ''};
     resolution: number | undefined;
+    /** A standoff replayed by a restore, if any. @see setStandoff */
+    private standoffOverride: number | undefined;
+    /**
+     * The standoff the current geometry was actually built from.
+     *
+     * `setLabel` needs to know whether a typed value differs from what is ON SCREEN, and
+     * the bag is no help: `featurePropertiesSource.apply` writes the new labels onto the
+     * feature and only then calls `setLabel`, so by that point the bag already holds the
+     * number the operator just typed and every comparison against it says "unchanged".
+     */
+    private standoffInUse: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {
         if (resolution !== undefined) {
@@ -327,6 +338,38 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
+     * The standoff between the multiple-strike zone's two rings, in metres.
+     *
+     * Three sources, in order: a distance replayed by a restore, one the operator typed in
+     * the dialog, and failing both a seed of half a screen inch at the resolution the
+     * graphic is being drawn at. The seed is taken **once** — after it is stamped, `filed`
+     * carries it and this returns it unchanged — so the gap is a real distance from the
+     * first render and does not move when the operator zooms.
+     *
+     * `groundLength`, not the bare resolution: a pixel size times the raw number is a
+     * projected length and comes out 1/cos(latitude) too large. @see graphicSize
+     */
+    private standoff(filed: number | undefined): number {
+        if (this.standoffOverride !== undefined) return this.standoffOverride;
+        if (filed !== undefined) return filed;
+        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude())) ?? 0;
+    }
+
+    /**
+     * Replays a saved standoff.
+     *
+     * Separate from `setOffset` because the two are different numbers: `setOffset` carries
+     * the holder's decoration size, and this carries an amplifier the generator reads. A
+     * restore strips `width` out of the amplifier bag as a geometry key, so without this
+     * hook the standoff never came back and the graphic re-seeded itself from whatever zoom
+     * the file was opened at. @see toLabels in persistence.ts
+     */
+    setStandoff(metres: number) {
+        this.standoffOverride = metres;
+        this.updateGraphic();
+    }
+
+    /**
      * Replays a stamped `size`. Named for the `LineGraphic` hook restore already calls;
      * no graphic in this family has a draggable width handle, so nothing else reaches it.
      */
@@ -370,10 +413,28 @@ export class LineGraphicBase implements LineGraphic {
     handleIndexOffset = 0;
 
     updateGraphic = () => {
+        // **Resolved before generating, not after.** The standoff is an INPUT to the
+        // shape — without it the multiple-strike zone has no second ring to draw — so
+        // stamping it after the generator ran produced a symbol with one ring and a width
+        // in its bag that nothing had read. Caught by drawing it in the running app; every
+        // unit-level check passed, because they hand the generator a width up front.
+        const bag = {...readGraphicLabels(this.graphics)};
+        const standoff =
+            this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike ? this.standoff(bag.width) : undefined;
+        this.standoffInUse = standoff;
+
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.graphicSize(), mirrored: this.mirrored}
+            {
+                size: this.graphicSize(),
+                mirrored: this.mirrored,
+                // Halved, because that is what `toGraphicOptions` hands a generator for a
+                // public `width` and the generator doubles it straight back. Passing the
+                // whole distance here would have made a graphic drawn in the app twice the
+                // one restored from a file. @see standoffMetres
+                ...(standoff !== undefined ? {radius: standoff / 2} : {}),
+            }
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
@@ -387,18 +448,48 @@ export class LineGraphicBase implements LineGraphic {
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
+        writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
             mirrored: this.mirrored,
+            // The same number the shape was just built from, filed so a restore replays a
+            // distance instead of re-deriving one from whatever zoom the file is opened at.
+            ...(standoff !== undefined ? {width: standoff} : {}),
         });
     };
 
     setLabel = (labels: GraphicLabels): void => {
         this.graphicLabel = labels;
-        // Stamping fires a `change` event on each feature, which re-renders them.
-        // Geometry state travels with the amplifiers — a bare write drops the stamped
-        // `radius` and the graphic stops describing itself. @see AirCorridor.setLabel
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {decorationSize: this.graphicSize()});
+
+        // **A width that is a shape input has to rebuild the shape.**
+        //
+        // Amplifiers do not normally change geometry, so this used to write the bag and
+        // stop. The multiple-strike zone's width is the standoff its outer ring is derived
+        // from: typing a new one changed the number in the file and left the picture alone
+        // until some later gesture happened to regenerate it. @see AirCorridor.setLabel,
+        // which has done this since its own width became typeable.
+        const filesStandoff = this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike;
+        // The gap in force right now: a replayed or typed override, else the value already
+        // stamped on the features, else the seed. Read BEFORE adopting anything, so the
+        // comparison below is against what is on screen. @see standoff
+        const inForce = filesStandoff ? (this.standoffInUse ?? this.standoff(readGraphicLabels(this.graphics).width)) : undefined;
+        const typed = filesStandoff ? labels.width : undefined;
+        const rebuild = typed !== undefined && Number.isFinite(typed) && typed > 0 && typed !== inForce;
+        if (rebuild) this.standoffOverride = typed;
+
+        // Carry the standoff through. `writeGraphicProperties` replaces the bag wholesale,
+        // so a write that omits it erases the gap the graphic was drawn with — and then
+        // nothing recomputes it, so editing any unrelated amplifier would silently reset
+        // the zone. Same trap AirCorridor documents for its own width.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {
+            decorationSize: this.graphicSize(),
+            // The effective gap, not just an override: a graphic drawn a moment ago has its
+            // standoff from the seed and no override at all, so keying off the override
+            // erased the very thing this write exists to preserve.
+            ...(filesStandoff ? {width: rebuild ? (typed as number) : (inForce as number)} : {}),
+        });
+
+        // After the write, so the regenerate reads the bag the operator just set.
+        if (rebuild) this.updateGraphic();
     };
 
 }
