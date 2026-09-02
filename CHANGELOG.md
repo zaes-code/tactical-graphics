@@ -15,6 +15,63 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [3.4.0] — 2026-09-02
+
+**Three CBRN graphics finished, and the STRIKWARN zone redesigned around how it is
+actually drawn.** The tracker now records all 293 registered graphics as drawable,
+correctly shaped and fully editable.
+
+### Changed
+
+- **The multiple-strike minimum safe distance zone (APP-06 272101) is drawn from one
+  polygon, not two.** The operator traces zone 1; zone 2 is derived from it, held off by a
+  standoff that seeds at half a screen inch and is a real distance in metres thereafter.
+  Reshaping zone 1 reshapes zone 2 with it.
+
+  The plate has the operator place every point of both zones, with an equal number each.
+  The emitted symbol still satisfies that — the offset is a **miter**, one output vertex
+  per input vertex, not a buffer that would round corners into extra points.
+
+  **What it gives up:** a zone 2 that is not a uniform offset can no longer be drawn.
+
+  **Saved graphics are unaffected.** One saved before this carries no width and holds both
+  rings end to end; it still renders exactly as it did. The two forms are told apart by
+  whether a standoff is filed.
+
+  The standoff is editable as **Width (m)** in the properties dialog.
+
+### Added
+
+- `defaultStandoffMetres(name, groundResolution)` and
+  `MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX` — both renderers seed the gap from these, so
+  the same symbol cannot open with different gaps on the two engines.
+- `GeometryService.offsetRingOutward(ring, metres)` — a uniform outward miter offset of a
+  closed ring, winding-independent, with the miter capped so a near-reflex corner cannot
+  launch its vertex off the map.
+- `GraphicFieldSet.widthTyped` — says whether a graphic's width is **typed** or **measured
+  off the map**. A corridor's width is read from its rails and shown as a read-out; a
+  standoff has nothing to measure and must be an input. Presence alone cannot tell them
+  apart, so a host dialog needs this flag to pick the right control.
+
+### Fixed
+
+- A restore replayed a graphic's `width` through `setOffset` even when that width was an
+  amplifier rather than the holder's half-width, overwriting the stamped decoration size.
+- The properties dialog dropped a typed width when reopening, so the field showed empty and
+  offered to replace a real value with nothing. Safe lane's typed width had the same hole.
+- Editing a typed width changed the stored number without rebuilding the shape, so the gap
+  moved only when some later gesture happened to regenerate the graphic.
+- Fifteen graphics whose label is the `additionalInfo` amplifier were drawn without one in
+  the catalog and picker images — a symbol whose entire label is that field, the radiation
+  dose rate contour line, rendered as a bare outline.
+- The multiple-strike zone's catalog and picker images were a bare horizontal stroke: the
+  harness hands a line-based graphic two points, and two points cannot close into a ring.
+- **A label set in a break in a graphic's own line ignored `labelUsesHostilityColor`.** The
+  safe distance zones' `1` and `2`, and the radiation contour's dose, took the *line*
+  colour, so they came out hostility-coloured whatever the host had chosen. Every other
+  label in the library goes through `labelColorOf`, which is what reads that setting.
+
+
 ### Changed
 
 - **The multiple-strike minimum safe distance zone (APP-06 272101) is drawn from one
@@ -904,7 +961,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...develop
+[3.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...v3.1.0
