@@ -449,10 +449,37 @@ export class LineGraphicBase implements LineGraphic {
 
     setLabel = (labels: GraphicLabels): void => {
         this.graphicLabel = labels;
-        // Stamping fires a `change` event on each feature, which re-renders them.
-        // Geometry state travels with the amplifiers — a bare write drops the stamped
-        // `radius` and the graphic stops describing itself. @see AirCorridor.setLabel
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {decorationSize: this.graphicSize()});
+
+        // **A width that is a shape input has to rebuild the shape.**
+        //
+        // Amplifiers do not normally change geometry, so this used to write the bag and
+        // stop. The multiple-strike zone's width is the standoff its outer ring is derived
+        // from: typing a new one changed the number in the file and left the picture alone
+        // until some later gesture happened to regenerate it. @see AirCorridor.setLabel,
+        // which has done this since its own width became typeable.
+        const filesStandoff = this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike;
+        // The gap in force right now: a replayed or typed override, else the value already
+        // stamped on the features, else the seed. Read BEFORE adopting anything, so the
+        // comparison below is against what is on screen. @see standoff
+        const inForce = filesStandoff ? this.standoff(readGraphicLabels(this.graphics).width) : undefined;
+        const typed = filesStandoff ? labels.width : undefined;
+        const rebuild = typed !== undefined && Number.isFinite(typed) && typed > 0 && typed !== inForce;
+        if (rebuild) this.standoffOverride = typed;
+
+        // Carry the standoff through. `writeGraphicProperties` replaces the bag wholesale,
+        // so a write that omits it erases the gap the graphic was drawn with — and then
+        // nothing recomputes it, so editing any unrelated amplifier would silently reset
+        // the zone. Same trap AirCorridor documents for its own width.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {
+            decorationSize: this.graphicSize(),
+            // The effective gap, not just an override: a graphic drawn a moment ago has its
+            // standoff from the seed and no override at all, so keying off the override
+            // erased the very thing this write exists to preserve.
+            ...(filesStandoff ? {width: rebuild ? (typed as number) : (inForce as number)} : {}),
+        });
+
+        // After the write, so the regenerate reads the bag the operator just set.
+        if (rebuild) this.updateGraphic();
     };
 
 }
