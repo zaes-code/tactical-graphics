@@ -389,6 +389,9 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
+// The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
+// turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
+export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
