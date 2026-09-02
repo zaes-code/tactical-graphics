@@ -39,7 +39,7 @@ import {
     tacticalFixStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -55,6 +55,8 @@ export class LineGraphicBase implements LineGraphic {
     hidesStartHandle?: boolean;
     graphicLabel: GraphicLabels = {designation: ''};
     resolution: number | undefined;
+    /** A standoff replayed by a restore, if any. @see setStandoff */
+    private standoffOverride: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {
         if (resolution !== undefined) {
@@ -327,6 +329,38 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
+     * The standoff between the multiple-strike zone's two rings, in metres.
+     *
+     * Three sources, in order: a distance replayed by a restore, one the operator typed in
+     * the dialog, and failing both a seed of half a screen inch at the resolution the
+     * graphic is being drawn at. The seed is taken **once** — after it is stamped, `filed`
+     * carries it and this returns it unchanged — so the gap is a real distance from the
+     * first render and does not move when the operator zooms.
+     *
+     * `groundLength`, not the bare resolution: a pixel size times the raw number is a
+     * projected length and comes out 1/cos(latitude) too large. @see graphicSize
+     */
+    private standoff(filed: number | undefined): number {
+        if (this.standoffOverride !== undefined) return this.standoffOverride;
+        if (filed !== undefined) return filed;
+        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude())) ?? 0;
+    }
+
+    /**
+     * Replays a saved standoff.
+     *
+     * Separate from `setOffset` because the two are different numbers: `setOffset` carries
+     * the holder's decoration size, and this carries an amplifier the generator reads. A
+     * restore strips `width` out of the amplifier bag as a geometry key, so without this
+     * hook the standoff never came back and the graphic re-seeded itself from whatever zoom
+     * the file was opened at. @see toLabels in persistence.ts
+     */
+    setStandoff(metres: number) {
+        this.standoffOverride = metres;
+        this.updateGraphic();
+    }
+
+    /**
      * Replays a stamped `size`. Named for the `LineGraphic` hook restore already calls;
      * no graphic in this family has a draggable width handle, so nothing else reaches it.
      */
@@ -387,9 +421,15 @@ export class LineGraphicBase implements LineGraphic {
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphics)}, {
+        const bag = {...readGraphicLabels(this.graphics)};
+        writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
             mirrored: this.mirrored,
+            // The multiple-strike zone derives its outer ring from a standoff, so it needs
+            // one before it can draw a second ring at all. Seeded once, in metres, from the
+            // draw-time resolution — and only when absent, so neither a restore nor a
+            // number the operator typed in the dialog is overwritten on the next redraw.
+            ...(this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike ? {width: this.standoff(bag.width)} : {}),
         });
     };
 

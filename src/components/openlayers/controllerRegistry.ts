@@ -493,7 +493,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Centre, then the two radii. Handle 0 is the centre and moves the whole zone.
     [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3, 0),
     // An even number of points, half per ring, so the draw cannot be capped.
-    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 6, 0),
+    // Six was the old pair traced end to end. Zone 1 alone is a polygon, so three.
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 3, 0),
     [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3, 2),
     [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3, 2),
     [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3, 2),
