@@ -57,6 +57,15 @@ export class LineGraphicBase implements LineGraphic {
     resolution: number | undefined;
     /** A standoff replayed by a restore, if any. @see setStandoff */
     private standoffOverride: number | undefined;
+    /**
+     * The standoff the current geometry was actually built from.
+     *
+     * `setLabel` needs to know whether a typed value differs from what is ON SCREEN, and
+     * the bag is no help: `featurePropertiesSource.apply` writes the new labels onto the
+     * feature and only then calls `setLabel`, so by that point the bag already holds the
+     * number the operator just typed and every comparison against it says "unchanged".
+     */
+    private standoffInUse: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {
         if (resolution !== undefined) {
@@ -412,6 +421,7 @@ export class LineGraphicBase implements LineGraphic {
         const bag = {...readGraphicLabels(this.graphics)};
         const standoff =
             this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike ? this.standoff(bag.width) : undefined;
+        this.standoffInUse = standoff;
 
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
@@ -461,7 +471,7 @@ export class LineGraphicBase implements LineGraphic {
         // The gap in force right now: a replayed or typed override, else the value already
         // stamped on the features, else the seed. Read BEFORE adopting anything, so the
         // comparison below is against what is on screen. @see standoff
-        const inForce = filesStandoff ? this.standoff(readGraphicLabels(this.graphics).width) : undefined;
+        const inForce = filesStandoff ? (this.standoffInUse ?? this.standoff(readGraphicLabels(this.graphics).width)) : undefined;
         const typed = filesStandoff ? labels.width : undefined;
         const rebuild = typed !== undefined && Number.isFinite(typed) && typed > 0 && typed !== inForce;
         if (rebuild) this.standoffOverride = typed;
