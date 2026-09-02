@@ -1291,7 +1291,8 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
 
     protected persistedGeometryState(): GraphicGeometryState {
         // The effective metres, not the typed-or-nothing field: a restore has to rebuild
-        // the box that is on the screen. @see the stamping rule in CLAUDE.md
+        // the box that is on the screen. @see the stamping rule: a holder stores the derived
+        // distance it hands the generator, never the viewport factor that produced it.
         return {length: this.size * 2, width: this.halfWidth * 2};
     }
 
