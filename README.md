@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**290 graphics** are implemented and verified today, covering **303 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**293 graphics** are implemented and verified today, covering **306 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
@@ -1333,6 +1333,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Kill Zone | Areas |
 | Landing Zone | Areas |
 | Limited Access Area | Areas |
+| Minimum Safe Distance Zone | Areas |
+| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
 | Named Area Of Interest | Areas |
 | Nuclear Contaminated Area | Areas |
 | Objective Area | Areas |
@@ -1341,6 +1343,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | PsyOps Zone, Circular | Areas |
 | PsyOps Zone, Irregular | Areas |
 | PsyOps Zone, Rectangular | Areas |
+| Radiation Dose Rate Contour Line | Areas |
 | Radiological Contaminated Area | Areas |
 | Radiological Contaminated Area, Toxic Industrial Material | Areas |
 | Refugee Holding Area | Areas |
@@ -1584,9 +1587,6 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Category |
 |---|---|
-| Minimum Safe Distance Zone | Areas |
-| Minimum Safe Distance Zone, Multiple Strike (STRIKWARN) | Areas |
-| Radiation Dose Rate Contour Line | Areas |
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
 
