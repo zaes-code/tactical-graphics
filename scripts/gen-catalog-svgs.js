@@ -413,15 +413,11 @@ function makeBase(name) {
     const shaped = IS_THUMB && SWEPT_ARC_TASKS.includes(name) ? sweptArcBase : SHAPED_BASES[name];
     if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};
-    if (type === 'Polygon') {
-        if (IS_THUMB) return {type: 'Polygon', coordinates: [beanRing()]};
-        const w = D * 1.35;
-        const h = D * 0.9;
-        return {
-            type: 'Polygon',
-            coordinates: [[[LON - w, LAT - h], [LON + w, LAT - h], [LON + w, LAT + h], [LON - w, LAT + h], [LON - w, LAT - h]]],
-        };
-    }
+    // **Both profiles.** A traced area is a blob, and drawing every one as a rectangle made
+    // ninety-four free-form areas look like the seventeen the standard actually defines as
+    // rectangular. That is as misleading beside a plate as it is in a picker — arguably
+    // more so, since the catalog exists to be compared against one. @see beanRing
+    if (type === 'Polygon') return {type: 'Polygon', coordinates: [beanRing()]};
     const n = Math.max(2, (baseVertexCount && baseVertexCount(name)) || 2);
     const pts = [];
     // A gentle arc rather than a straight run — it shows that the arrows and
@@ -1054,7 +1050,10 @@ function buildAt(name, zoom, drop) {
     // Measured in the pre-wrap px space, alongside the overlap check and for the same
     // reason: the wrap below is a uniform scale, so it moves the label and the boundary
     // together and cannot turn a clearance into an intrusion.
-    const inset = IS_THUMB && kindOf(name) === 'area' ? labelInsetViolation(second.ring && second.ring.map(toPx), textBoxes) : 0;
+    // Both profiles: an amplifier stack crossing its own boundary is wrong beside a plate
+    // for the same reason it is wrong in a picker. It only became reachable for the catalog
+    // when its areas stopped being rectangles — a bean is narrower at the ends.
+    const inset = kindOf(name) === 'area' ? labelInsetViolation(second.ring && second.ring.map(toPx), textBoxes) : 0;
 
     // Fit the *emitted* extent — labels and dots included — into the tile.
     // Everything is already in px, so this is one wrapping transform rather
@@ -1258,9 +1257,7 @@ console.log(`skipped   : ${skipped.length}`);
 for (const s of skipped.slice(0, 30)) console.log(`   - ${s[0]} => ${s[1]}`);
 console.log(`labels still touching : ${collided.length}`);
 for (const n of collided) console.log(`   - ${n}`);
-if (IS_THUMB) {
-    console.log(`labels still crossing a boundary : ${intruded.length}`);
-    for (const n of intruded) console.log(`   - ${n}`);
-}
+console.log(`labels still crossing a boundary : ${intruded.length}`);
+for (const n of intruded) console.log(`   - ${n}`);
 
 if (CHECK && stale) process.exit(1);
