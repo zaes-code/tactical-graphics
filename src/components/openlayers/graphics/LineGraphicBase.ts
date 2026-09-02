@@ -404,10 +404,27 @@ export class LineGraphicBase implements LineGraphic {
     handleIndexOffset = 0;
 
     updateGraphic = () => {
+        // **Resolved before generating, not after.** The standoff is an INPUT to the
+        // shape — without it the multiple-strike zone has no second ring to draw — so
+        // stamping it after the generator ran produced a symbol with one ring and a width
+        // in its bag that nothing had read. Caught by drawing it in the running app; every
+        // unit-level check passed, because they hand the generator a width up front.
+        const bag = {...readGraphicLabels(this.graphics)};
+        const standoff =
+            this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike ? this.standoff(bag.width) : undefined;
+
         let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.graphicName,
             this.base,
-            {size: this.graphicSize(), mirrored: this.mirrored}
+            {
+                size: this.graphicSize(),
+                mirrored: this.mirrored,
+                // Halved, because that is what `toGraphicOptions` hands a generator for a
+                // public `width` and the generator doubles it straight back. Passing the
+                // whole distance here would have made a graphic drawn in the app twice the
+                // one restored from a file. @see standoffMetres
+                ...(standoff !== undefined ? {radius: standoff / 2} : {}),
+            }
         );
         if (!tacticalGraphic) return;
         const {graphic, handles, labels} = tacticalGraphic;
@@ -421,15 +438,12 @@ export class LineGraphicBase implements LineGraphic {
         // Persist the *effective* meter value rather than the viewport factor it came
         // from, so a restore replays a distance instead of re-deriving one from whatever
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
-        const bag = {...readGraphicLabels(this.graphics)};
         writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
             mirrored: this.mirrored,
-            // The multiple-strike zone derives its outer ring from a standoff, so it needs
-            // one before it can draw a second ring at all. Seeded once, in metres, from the
-            // draw-time resolution — and only when absent, so neither a restore nor a
-            // number the operator typed in the dialog is overwritten on the next redraw.
-            ...(this.graphicName === TacticalGraphicName.MinimumSafeDistanceMultipleStrike ? {width: this.standoff(bag.width)} : {}),
+            // The same number the shape was just built from, filed so a restore replays a
+            // distance instead of re-deriving one from whatever zoom the file is opened at.
+            ...(standoff !== undefined ? {width: standoff} : {}),
         });
     };
 
