@@ -14,6 +14,13 @@ const MAX_DASHES_PER_LINE = 250;
 const EARTH_RADIUS_METERS = 6378137;
 
 /**
+ * Smallest cos(half-angle) the miter offset will divide by. 0.25 lets a corner grow to
+ * four times the offset distance, which covers every reasonable traced corner, and stops
+ * a near-reflex one from launching its vertex off the map. @see offsetRingOutward
+ */
+const MITER_COS_FLOOR = 0.25;
+
+/**
  * Internal proportions of the attack-by-fire / support-by-fire position symbols,
  * all expressed against the bar's half-height so the whole symbol scales as one
  * piece. Measured off the FM 1-02.2 table 6-1 constructs — the 89x149 px
@@ -2272,6 +2279,90 @@ class GeometryService {
 
         // Close the triangle by returning to p1
         return [p1, apex, p2];
+    }
+
+    /**
+     * A closed ring pushed outward by a uniform distance, vertex for vertex.
+     *
+     * Used by the multiple-strike safe distance zone, where zone 2 is zone 1 held off by a
+     * standoff the operator sets. APP-06 272101 requires "an equal number of points for
+     * both polygons", so this is a **miter offset** — each vertex maps to exactly one
+     * offset vertex — rather than a buffer, which would round the corners into an
+     * arbitrary number of new points and break that correspondence.
+     *
+     * Each vertex moves along the bisector of its two edge normals, out by
+     * `distance / cos(half the turn angle)`. That extra secant is what keeps the *edges*
+     * a uniform `distance` apart; moving every vertex radially from the centroid instead
+     * would scale the ring, and the gap would then be wide at the far end of an elongated
+     * zone and narrow at the near end.
+     *
+     * **The miter is capped.** At a near-reflex corner the secant runs away — cos(θ/2)
+     * approaches zero — and one vertex would fly off to infinity. Past the cap the corner
+     * is simply pushed along the bisector by the capped length, which rounds it off
+     * slightly rather than producing a spike.
+     *
+     * Winding is detected rather than assumed, so a ring traced clockwise and one traced
+     * counter-clockwise both grow outward. A caller that passes an unclosed ring gets an
+     * unclosed ring back.
+     *
+     * @param ring     closed or unclosed ring, in degrees
+     * @param distance metres to offset by; zero or negative returns the ring unchanged
+     */
+    offsetRingOutward(ring: Position[], distance: number): Position[] {
+        const closed =
+            ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1];
+        const pts = closed ? ring.slice(0, -1) : ring.slice();
+        if (pts.length < 3 || !(distance > 0)) return ring;
+
+        // Shoelace on the raw degrees. Only the SIGN is wanted, and that survives the
+        // longitude squeeze that would spoil an area computed this way.
+        let twiceArea = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const [x1, y1] = pts[i];
+            const [x2, y2] = pts[(i + 1) % pts.length];
+            twiceArea += x1 * y2 - x2 * y1;
+        }
+        // Counter-clockwise (positive area) puts the interior to the left of each edge, so
+        // outward is the right-hand normal: bearing + 90. Clockwise flips it.
+        const outwardSign = twiceArea > 0 ? 1 : -1;
+
+        const km = distance / 1000;
+        const out: Position[] = pts.map((cur, i) => {
+            const prev = pts[(i - 1 + pts.length) % pts.length];
+            const next = pts[(i + 1) % pts.length];
+
+            const inBearing = turf.bearing(turf.point(prev), turf.point(cur));
+            const outBearing = turf.bearing(turf.point(cur), turf.point(next));
+
+            const inNormal = inBearing + 90 * outwardSign;
+            const outNormal = outBearing + 90 * outwardSign;
+
+            // Average the two normals as vectors, so the bisector is right even when the
+            // pair straddles the 0/360 wrap that averaging the numbers would get wrong.
+            const rad = (d: number) => (d * Math.PI) / 180;
+            const bx = Math.cos(rad(inNormal)) + Math.cos(rad(outNormal));
+            const by = Math.sin(rad(inNormal)) + Math.sin(rad(outNormal));
+            if (bx === 0 && by === 0) return cur.slice(); // a spike doubling back on itself
+            const bisector = (Math.atan2(by, bx) * 180) / Math.PI;
+
+            // Half the TURN between the two normals; the miter length is distance/cos(half).
+            //
+            // A straight join turns by nothing and must offset by exactly `distance`:
+            // cos(0) = 1. A square corner turns 90 and offsets by distance/cos(45) — the
+            // familiar 1.414. Subtracting from 180 first, as this did, is right at 90 and
+            // wrong everywhere else, and it agrees at 90 which is why a square-only test
+            // waved it through: a straight join came out as cos(90) = 0 and was pushed to
+            // the cap, so a many-vertex ring landed up to four times too far out and
+            // unevenly, because the error grows as the corner gets shallower.
+            const between = Math.abs(((outNormal - inNormal + 540) % 360) - 180);
+            const half = rad(between / 2);
+            const cos = Math.cos(half);
+            const miter = cos > MITER_COS_FLOOR ? km / cos : km / MITER_COS_FLOOR;
+
+            return turf.destination(turf.point(cur), miter, bisector, {units: 'kilometers'}).geometry.coordinates;
+        });
+
+        return closed ? [...out, out[0].slice()] : out;
     }
 }
 
