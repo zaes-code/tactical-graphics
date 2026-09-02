@@ -392,8 +392,19 @@ function beanRing() {
     return ring;
 }
 
+/**
+ * The multiple-strike safe distance zone traces a RING, but files it as a LineString, so
+ * the default line base hands it two points — and two points cannot close. The picker
+ * showed a bare horizontal stroke where the symbol is two nested numbered zones.
+ *
+ * The bean does double duty here: it is the shape an operator actually traces, and zone 2
+ * is derived from it, so one ring is the whole input. @see beanRing
+ */
+const RING_BASED = ['MinimumSafeDistanceMultipleStrike'];
+
 function makeBase(name) {
     const type = baseGeometryFor ? baseGeometryFor(name) : 'LineString';
+    if (IS_THUMB && RING_BASED.includes(name)) return {type: 'LineString', coordinates: beanRing()};
     const shaped = IS_THUMB && SWEPT_ARC_TASKS.includes(name) ? sweptArcBase : SHAPED_BASES[name];
     if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};

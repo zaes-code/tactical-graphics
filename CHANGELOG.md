@@ -15,6 +15,49 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Changed
+
+- **The multiple-strike minimum safe distance zone (APP-06 272101) is drawn from one
+  polygon, not two.** The operator traces zone 1; zone 2 is derived from it, held off by a
+  standoff that seeds at half a screen inch and is then a real distance in metres. Editing
+  a zone-1 vertex reshapes both rings together, which the hand-traced form could never
+  guarantee.
+
+  The plate has the operator place every point of both zones — *"Points 1 through N/2
+  define the inner safe zone (zone 1). Points N/2 +1 though point N defines the outer zone
+  (zone 2)"* — with an equal number of points each. The emitted symbol still satisfies
+  that: the offset is a **miter**, one output vertex per input vertex, not a buffer that
+  would round the corners into extra points.
+
+  **What it gives up:** a zone 2 that is not a uniform offset — wider downwind, say — can
+  no longer be drawn. The plate allows it.
+
+  **Saved graphics are unaffected.** One saved before this change carries no width and
+  holds both rings end to end; it still renders exactly as it did. The two forms are told
+  apart by whether a standoff is filed, so nothing has to guess.
+
+  The standoff is editable as **Width (m)** in the properties dialog — the one thing about
+  the symbol that no handle can express.
+
+### Added
+
+- `defaultStandoffMetres(name, groundResolution)` and
+  `MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX`. Both renderers seed the gap from these
+  rather than each choosing a number, which is what stops the same symbol opening with
+  different gaps on the two engines.
+- `GeometryService.offsetRingOutward(ring, metres)` — a uniform outward miter offset of a
+  closed ring, winding-independent, with the miter capped so a near-reflex corner cannot
+  launch its vertex off the map.
+
+### Fixed
+
+- A restore replayed a graphic's `width` through `setOffset` even when that width was an
+  amplifier rather than the holder's half-width, overwriting the decoration size the
+  holder had stamped. The width families are unaffected — they file a width and no
+  decoration size.
+- The multiple-strike zone's picker thumbnail was a bare horizontal stroke: the harness
+  hands a line-based graphic two points, and two points cannot close into a ring.
+
 ## [3.3.0] — 2026-09-01
 
 ### Added

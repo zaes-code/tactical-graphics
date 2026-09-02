@@ -540,7 +540,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
     // The numbers 1 and 2 are the symbol, not an amplifier the operator sets.
     [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
-    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
+    // Zone 2 is zone 1 held off by this distance, so the standoff is the one thing
+    // about the symbol that cannot be expressed by dragging a handle. @see
+    // MinimumSafeDistanceMultipleStrike, and note the dialog labels it "Width (m)".
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: f(false, false, false, false, false, {width: true}),
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
