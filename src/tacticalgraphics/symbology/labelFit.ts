@@ -101,7 +101,7 @@ const CAP_MAX_ASPECT = 2;
  *
  * **Pass the size the label is really drawn at.** A scale is a multiplier on a font, and
  * this library renders two: `BASE_FONT_SIZE_PX` for most labels and 24 px for the
- * ratio-locked families, which is the trap `CLAUDE.md` already warns about. The relief in
+ * ratio-locked families, which is the documented trap here. The relief in
  * place draws at 24 and was capped as though it drew at 16, so its cap sat half again too
  * high and never bit — the graphic the user reported.
  *

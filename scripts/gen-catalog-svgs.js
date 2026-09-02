@@ -1146,7 +1146,7 @@ if (!ONLY && !IS_THUMB && !CHECK) fs.writeFileSync(
  * '@zaes/tactical-graphics/thumbnails/Foo.svg'` needs a loader `tsc` cannot provide,
  * and picking one by name at run time needs a `require.context` that is webpack's alone.
  * This is the same rule the route-direction arrows already live under — @see
- * `assets/routeDirectionIcons.ts`, and the "No bundler-only imports" note in CLAUDE.md.
+ * `assets/routeDirectionIcons.ts`, and the "No bundler-only imports" rule it follows.
  *
  * The module is deliberately NOT re-exported from `index.ts`. It is reachable only
  * through the `./thumbnails` subpath, so the half-megabyte of markup lands solely on a
