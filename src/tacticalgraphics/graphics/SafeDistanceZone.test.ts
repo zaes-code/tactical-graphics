@@ -42,6 +42,43 @@ describe('minimum safe distance zone, multiple strike', () => {
             }
         });
 
+        /**
+         * **The square is the one shape that cannot catch a wrong half-angle.**
+         *
+         * The first version of the miter used `(180 - between) / 2`, which agrees with the
+         * correct `between / 2` at exactly 90 degrees and nowhere else. A square-only test
+         * passed it. A shallow join — `cos(0)` mistaken for `cos(90)` — was pushed to the
+         * miter cap and landed four times too far out, so a traced ring came back visibly
+         * uneven. Anything with many vertices is the case that bites, so it is the case
+         * pinned here.
+         */
+        it('holds the gap uniform on a many-vertex ring, not just at square corners', () => {
+            const ring: Position[] = [];
+            for (let i = 0; i < 36; i++) {
+                const t = (i / 36) * Math.PI * 2;
+                ring.push([-77 + 0.05 * Math.cos(t), 39 + 0.04 * Math.sin(t)]);
+            }
+            ring.push(ring[0]);
+            const out = geometryService.offsetRingOutward(ring, 500);
+            const gaps = [];
+            for (let i = 0; i < ring.length - 1; i++) {
+                const mid = turf.midpoint(turf.point(ring[i]), turf.point(ring[i + 1])).geometry.coordinates;
+                gaps.push(distanceToRing(out, mid));
+            }
+            // Every side within 5% of the asked-for distance, and of each other.
+            for (const g of gaps) expect(Math.abs(g - 500) / 500).toBeLessThan(0.05);
+            expect((Math.max(...gaps) - Math.min(...gaps)) / 500).toBeLessThan(0.05);
+        });
+
+        it('offsets a straight join by exactly the distance', () => {
+            // between = 0, so cos(half) must be 1. Reading it as cos(90) gives zero and the
+            // cap takes over — the shape of the bug above, in its simplest form.
+            const straight: Position[] = [[-77, 39], [-76.98, 39], [-76.96, 39], [-76.96, 38.98], [-77, 38.98], [-77, 39]];
+            const out = geometryService.offsetRingOutward(straight, 500);
+            const mid = turf.midpoint(turf.point(straight[0]), turf.point(straight[1])).geometry.coordinates;
+            expect(Math.abs(distanceToRing(out, mid) - 500) / 500).toBeLessThan(0.05);
+        });
+
         it('emits one vertex per input vertex, as the plate requires', () => {
             // "an equal number of points for both polygons" — a buffer would round the
             // corners into extra points and break that.

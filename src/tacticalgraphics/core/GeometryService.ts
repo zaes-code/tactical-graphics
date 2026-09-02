@@ -2345,9 +2345,17 @@ class GeometryService {
             if (bx === 0 && by === 0) return cur.slice(); // a spike doubling back on itself
             const bisector = (Math.atan2(by, bx) * 180) / Math.PI;
 
-            // Half the angle between the two normals; the miter length is distance/cos.
-            let between = Math.abs(((outNormal - inNormal + 540) % 360) - 180);
-            const half = rad((180 - between) / 2);
+            // Half the TURN between the two normals; the miter length is distance/cos(half).
+            //
+            // A straight join turns by nothing and must offset by exactly `distance`:
+            // cos(0) = 1. A square corner turns 90 and offsets by distance/cos(45) — the
+            // familiar 1.414. Subtracting from 180 first, as this did, is right at 90 and
+            // wrong everywhere else, and it agrees at 90 which is why a square-only test
+            // waved it through: a straight join came out as cos(90) = 0 and was pushed to
+            // the cap, so a many-vertex ring landed up to four times too far out and
+            // unevenly, because the error grows as the corner gets shallower.
+            const between = Math.abs(((outNormal - inNormal + 540) % 360) - 180);
+            const half = rad(between / 2);
             const cos = Math.cos(half);
             const miter = cos > MITER_COS_FLOOR ? km / cos : km / MITER_COS_FLOOR;
 
