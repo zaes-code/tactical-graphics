@@ -123,6 +123,11 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     // One datum for both, since a floor and a ceiling measured from different things
     // would describe two different volumes. Shown whenever either altitude is.
     if (fields.altitude1 || fields.altitude2) labels.altitudeDatum = stored.altitudeDatum;
+    // **A width the operator types has to come back when the dialog reopens.** It is the
+    // one shape input that is not derived, so unlike a radius there is nothing to
+    // recompute it from — dropping it here left the box empty every time and offered to
+    // replace a real gap with nothing. Safe lane's typed width had the same hole.
+    if (fields.width) labels.width = stored.width;
     if (fields.weapon) labels.weapon = stored.weapon ?? '';
     if (fields.grids) {
         labels.secondDesignation = stored.secondDesignation ?? '';
