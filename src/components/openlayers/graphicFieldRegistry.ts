@@ -87,6 +87,20 @@ export type GraphicFieldSet = {
     altitude2: boolean;
     /** Width field (Airspace Area). */
     width: boolean;
+    /**
+     * Whether that width is **typed rather than measured**.
+     *
+     * A corridor's width is read off the map — the rails are that far apart — so the dialog
+     * shows it as a read-out and offers no input, because a second way to set it would have
+     * to be kept in step with the drag that already sets it. The multiple-strike safe
+     * distance zone is the other way round: its width is the standoff its outer ring is
+     * derived FROM, so nothing measures it and it has to be typed.
+     *
+     * The dialog cannot tell the two apart on its own. It gates on whether a width is
+     * present, and both kinds are present, so a typed width was rendering as a label the
+     * operator could read and not change.
+     */
+    widthTyped?: boolean;
     /** Rectangle length in meters — only the rectangular target carries one. */
     length: boolean;
     /**
@@ -135,6 +149,7 @@ function f(
             | 'altitude1'
             | 'altitude2'
             | 'width'
+            | 'widthTyped'
             | 'length'
             | 'attitude'
             | 'radius'
@@ -540,7 +555,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.MobilityCorridor]: MOBILITY_CORRIDOR,
     // The numbers 1 and 2 are the symbol, not an amplifier the operator sets.
     [TacticalGraphicName.MinimumSafeDistanceZone]: SHAPE_ONLY,
-    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: SHAPE_ONLY,
+    // Zone 2 is zone 1 held off by this distance, so the standoff is the one thing
+    // about the symbol that cannot be expressed by dragging a handle. @see
+    // MinimumSafeDistanceMultipleStrike, and note the dialog labels it "Width (m)".
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: f(false, false, false, false, false, {width: true, widthTyped: true}),
     // The dose the operator typed goes in the break: "30 CGH".
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
