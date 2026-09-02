@@ -838,7 +838,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                  * figure you dragged to — without a second way to set it
                                  * that would have to be kept in step with the geometry.
                                  */}
-                                {fields.width && measured.width !== undefined && (
+                                {fields.width && measured.width !== undefined && !fields.widthTyped && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <Typography variant="caption" color="text.secondary">
                                             Width
@@ -865,8 +865,16 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                  * graphic name, so it stays one control: a graphic that
                                  * measures its width still shows the read-out and no input,
                                  * and the two can never both appear.
+                                 *
+                                 * **`widthTyped` is the third case that gate could not see.**
+                                 * The multiple-strike safe distance zone files a width — so
+                                 * a measurement is present — but that width is the standoff
+                                 * its outer ring is derived FROM, not something read off the
+                                 * map. It rendered as a label the operator could read and
+                                 * not change. The field set now says which kind of width a
+                                 * graphic has, because presence alone cannot tell them apart.
                                  */}
-                                {fields.width && measured.width === undefined && (
+                                {fields.width && (measured.width === undefined || fields.widthTyped) && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth variant="outlined">
                                             <InputLabel htmlFor="width-input">Width (m)</InputLabel>
