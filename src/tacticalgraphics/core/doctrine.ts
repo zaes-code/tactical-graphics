@@ -118,6 +118,7 @@ const DOCTRINAL_RULES: Partial<Record<TacticalGraphicName, readonly DoctrinalRul
     ],
     [TacticalGraphicName.RestrictedTerrain]: [RESTRICTED_TERRAIN_RULE('APP-06 152400')],
     [TacticalGraphicName.SeverelyRestrictedTerrain]: [RESTRICTED_TERRAIN_RULE('APP-06 152500')],
+    [TacticalGraphicName.MinedArea]: [MINE_FIELD_H_RULE('APP-06 270800')],
     [TacticalGraphicName.MinedAreaFenced]: [MINE_FIELD_H_RULE('APP-06 270801')],
     [TacticalGraphicName.MinefieldDynamicDepiction]: [MINE_FIELD_H_RULE('APP-06 270707')],
 };

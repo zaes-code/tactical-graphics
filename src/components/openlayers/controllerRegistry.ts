@@ -329,6 +329,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.AirfieldZone]: polygon,
     [TacticalGraphicName.RadiationDoseRateContourLine]: polygon,
     [TacticalGraphicName.MinefieldDynamicDepiction]: polygon,
+    [TacticalGraphicName.MinedArea]: polygon,
     [TacticalGraphicName.MinedAreaFenced]: polygon,
     [TacticalGraphicName.PsyOpsZoneIrregular]: polygon,
     [TacticalGraphicName.PsyOpsZoneRectangular]: polygonRect,
@@ -668,6 +669,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // [TacticalGraphicName.FollowAndSupport]: block,
 
     // ── Crossed-line mission tasks (one click plants it; resize yes, rotate no) ──
+    [TacticalGraphicName.Defeat]:     pointDrop,
     [TacticalGraphicName.Destroy]:    pointDrop,
     [TacticalGraphicName.Interdict]:  pointDrop,
     [TacticalGraphicName.Neutralize]: pointDrop,

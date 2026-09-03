@@ -85,7 +85,7 @@ export {obstacleBypassPaint} from './obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './movementPaints';
 export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
-export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
+export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
 export type {MobilityGlyph} from './sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -110,6 +110,7 @@ export {
     crossedMissionTaskLabelPaint,
     crossedMissionTaskLabelScale,
     crossedMissionTaskPaint,
+    defeatPaint,
     movementToContactPaint,
     pursuitPaint,
 } from './missionTaskPaints';

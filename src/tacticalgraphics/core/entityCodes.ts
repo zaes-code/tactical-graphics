@@ -116,6 +116,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.Control]:                                     '343200',  // Control
     [TacticalGraphicName.CordonAndKnock]:                              '342600',  // Cordon and Knock
     [TacticalGraphicName.MinefieldDynamicDepiction]:                   '270707',  // Minefield, Dynamic Depiction
+    [TacticalGraphicName.MinedArea]:                                   '270800',  // Mined Area
     [TacticalGraphicName.MinedAreaFenced]:                             '270801',  // Mined Area, Fenced
     [TacticalGraphicName.PsyOpsZoneIrregular]:                         '242701',  // PsyOps Zone, Irregular
     [TacticalGraphicName.PsyOpsZoneRectangular]:                       '242702',  // PsyOps Zone, Rectangular
@@ -300,6 +301,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                  '242200',  // Weapon/Sensor Range Fan, Sector
     [TacticalGraphicName.LineOfContact]:                               '141100',  // Line of Departure/Line of Contact
     [TacticalGraphicName.AttackByFire]:                                '152000',  // Attack by Fire
+    [TacticalGraphicName.Defeat]:                                      '344300',  // Defeat
     [TacticalGraphicName.Destroy]:                                     '340900',  // Destroy
     [TacticalGraphicName.Exfiltrate]:                                  '343700',  // Exfiltrate
     [TacticalGraphicName.Interdict]:                                   '341400',  // Interdict

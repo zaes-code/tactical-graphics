@@ -12,6 +12,7 @@ import {
     TacticalGraphicError,
     toFeatureCollection,
 } from './render';
+import {allowedGestures, publishesAnchorHandleOnly} from './symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 
 const axisFeature = (): Feature => ({
@@ -199,17 +200,58 @@ describe('crossed mission tasks', () => {
     ];
 
     /**
-     * All four, as of 2026-08-17. They were fixed-size badges pinned to a constant 100 px,
-     * so the centre was the only handle worth publishing — an edge handle would have
-     * offered a dimension that could not change. They now cover ground and scale with it.
+     * **One handle, at the centre**, since 2026-09-03.
+     *
+     * Each of these plates reads "This symbol requires one anchor point. The centre point
+     * defines the centre of the symbol", and one anchor point is one handle. The centre is
+     * what the operator grabs and the only thing there is to grab.
+     *
+     * It went the other way twice, and both readings had something right. Before
+     * 2026-08-17 they were fixed-size badges pinned to a constant 100 px, so a stored size
+     * was divided straight back out and they did not scale with the ground — a real defect,
+     * fixed by giving them a real size. But the fix also gave them an edge handle, and
+     * `publishHandles` promotes anything off-centre to the live red grip and demotes the
+     * centre to a grey inert dot — so the grab point ended up beside a symbol described by
+     * its middle. @see publishesAnchorHandleOnly
      */
-    it.each(CROSSED)('%s publishes [edge, center], so the edge can be dragged', name => {
+    it.each([...CROSSED, TacticalGraphicName.Defeat])('%s publishes the centre alone', name => {
         const {handles} = renderTacticalGraphic(pointTask(name));
         const coords = (handles.geometry as any).coordinates;
-        expect(coords).toHaveLength(2);
-        // Edge first — the order the controllers depend on. The centre is the anchor.
-        expect(coords[1]).toEqual([-77.0, 38.9]);
-        expect(coords[0]).not.toEqual([-77.0, 38.9]);
+        expect(coords).toEqual([[-77.0, 38.9]]);
+    });
+
+    /**
+     * **And they still resize**, which is the other half and a separate fact.
+     *
+     * The two were one switch — `generateHandles` read `allowedGestures().resize` — so the
+     * only way to move the handle to the centre was to take the gesture away. They are
+     * independent now, and this pins the independence: the selection box's resize button
+     * comes from `allowedGestures`, and the drag runs through `beginGesture` rather than
+     * through a handle, so a symbol can offer the gesture and publish one grab point.
+     * Collapse them again and one of these two assertions fails.
+     */
+    it.each([...CROSSED, TacticalGraphicName.Defeat])('%s still offers move and resize, and refuses rotate', name => {
+        expect(allowedGestures(name)).toEqual({translate: true, rotate: false, resize: true, modify: false});
+        expect(publishesAnchorHandleOnly(name)).toBe(true);
+    });
+
+    /**
+     * The size is still real, which is the half of the 2026-08-17 change that stays.
+     *
+     * Losing the drag must not put them back to being pinned to a screen constant: a task
+     * drawn at 1 km has to be twice the one drawn at 500 m, or it is a badge again.
+     */
+    it.each(CROSSED)('%s still scales with the radius it was given', name => {
+        const spanOf = (radius: number) => {
+            const {graphic} = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
+                properties: {tacticalGraphic: {name, radius, rotation: 0}},
+            });
+            const xs = ((graphic.geometry as any).coordinates as number[][][]).flat().map(c => c[0]);
+            return Math.max(...xs) - Math.min(...xs);
+        };
+        expect(spanOf(2000) / spanOf(1000)).toBeCloseTo(2, 2);
     });
 
     it.each(CROSSED)('%s emits both arms whole, centered on the base point', name => {

@@ -247,14 +247,18 @@ const OBSTACLE_LINE = f(true, false, false, false, false);
 const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, additionalInfo: true});
 
 /**
- * Mined area, fenced (APP-06 270801): field H and the mine type, and nothing else.
+ * Mined area and mined area, fenced (APP-06 270800, 270801): field H and the mine type,
+ * and nothing else.
  *
- * The same Template as its sibling minus the date — this one is a marked minefield rather
- * than a scatterable one, so there is no self-destruct time to post. (User's call,
+ * The same Template as the dynamic depiction minus the date — these are marked minefields
+ * rather than scatterable ones, so there is no self-destruct time to post. (User's call,
  * 2026-08-27.) A `startDate` arriving on a restored or imported graphic still draws;
  * what is gone is the control that invites one.
+ *
+ * **One set for both**, because the two plates letter the same boxes: 270800 and 270801
+ * differ in the wire on the outline and in nothing a field can carry.
  */
-const MINE_AREA_FENCED = f(false, false, false, false, false, {mineType: true, additionalInfo: true});
+const MINE_AREA = f(false, false, false, false, false, {mineType: true, additionalInfo: true});
 
 /**
  * Restricted terrain and severely restricted terrain (APP-06 152400, 152500).
@@ -563,7 +567,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
-    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA_FENCED,
+    [TacticalGraphicName.MinedArea]: MINE_AREA,
+    [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
     [TacticalGraphicName.PsyOpsZoneRectangular]: {...PSYOPS_ZONE, width: true},
@@ -662,6 +667,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Exploitation is a Chapter 5 offensive planning symbol (Table 5-10); keep identifier.
     [TacticalGraphicName.Exploitation]: SHAPE_ONLY,
     [TacticalGraphicName.AttackByFire]: MISSION_TASK,
+    [TacticalGraphicName.Defeat]: MISSION_TASK,
     [TacticalGraphicName.Destroy]: MISSION_TASK,
     [TacticalGraphicName.Neutralize]: MISSION_TASK,
     [TacticalGraphicName.SupportByFire]: MISSION_TASK,

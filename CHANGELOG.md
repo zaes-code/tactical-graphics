@@ -15,9 +15,10 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-**A coverage and documentation audit. No geometry changed and no symbol moved**, so
-nothing a consumer draws is affected; what changed is which publication eight graphics are
-recorded as belonging to, and the checks that keep the generated documentation honest.
+**Two graphics added, and the coverage and documentation audit that found them.** The
+registry goes 293 → 295. Nothing that was drawing before draws differently; the five
+one-anchor mission tasks change which handles they offer, and eight graphics change which
+publication they are recorded under.
 
 ### Fixed
 
@@ -51,7 +52,39 @@ recorded as belonging to, and the checks that keep the generated documentation h
   which has no migration path, so the document named the wrong release for the one thing a
   consumer most needs the right release number for.
 
+### Added
+
+- **`MinedArea` (APP-06 270800, FM 1-02.2 table 5-20)** — a drawn area with `M` markers on
+  its boundary and the mine row inside, the unfenced sibling of `MinedAreaFenced`. The wire
+  is the whole of the difference between them, so one paint draws both and a `fenced` flag
+  picks; `minedAreaPaint` is exported alongside `minedAreaFencedPaint`.
+
+  It had been missed because Table A-32 lists 270801 *under* it, so a "parent rows are
+  headers" filter hid it — but 270800 carries its own Anchor Points block, and a header
+  does not.
+
+- **`Defeat` (APP-06 344300)** — four solid arrows converging on a `D`. Its proportions are
+  measured off the Template at 600 dpi rather than chosen: the tip stands 0.192 of the reach
+  off centre, the head is 0.222 long and 0.12 half-wide, the shaft 0.048. APP-06 only; FM
+  1-02.2 does not name the task.
+
+  Its Draw Rules cell is word for word Destroy's, so it takes Destroy's whole contract —
+  point-anchored, dropped at the crossed tasks' size, no rotation.
+
 ### Changed
+
+- **Defeat, Destroy, Interdict, Neutralize and Suppress publish one handle, at the centre.**
+  Each plate reads "requires one anchor point. The centre point defines the centre of the
+  symbol", and one anchor point is one handle. They had emitted `[edge, centre]`, which made
+  the edge the live grip and left the centre showing as a grey inert dot — a grab point
+  beside a symbol the standard describes by its middle.
+
+  **Nothing else changes: all five still move and resize**, and `allowedGestures` still
+  reports `{translate: true, rotate: false, resize: true}` for each. The handle set and the
+  gesture set had been one switch — `generateHandles` read `allowedGestures().resize` — and
+  are now separate, which is what lets the grip move to the centre without taking a
+  capability away. New export: `publishesAnchorHandleOnly(name)`, for a host drawing its own
+  handles. Saved graphics are unaffected.
 
 - **`npm run check:docs`** runs the three freshness checks that guard generated artifacts —
   picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`

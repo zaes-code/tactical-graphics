@@ -199,6 +199,7 @@ export {
     allowedGestures,
     dropSizePx,
     supportsHostility,
+    publishesAnchorHandleOnly,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
     formatDistance,
@@ -344,7 +345,7 @@ export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
-export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
 export type {MobilityGlyph} from './symbology/sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -371,6 +372,7 @@ export {
     crossedMissionTaskLabelPaint,
     crossedMissionTaskLabelScale,
     crossedMissionTaskPaint,
+    defeatPaint,
     movementToContactPaint,
     pursuitPaint,
 } from './symbology/missionTaskPaints';
