@@ -830,11 +830,53 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
     TacticalGraphicName.RoadblockCompleteExecuted,
+    // Its four arrows sit in the quadrants; on the cardinals it is a picture APP-06 344300
+    // does not draw. Same reason as the crossed tasks below it. @see Defeat
+    TacticalGraphicName.Defeat,
     TacticalGraphicName.Destroy,
     TacticalGraphicName.Interdict,
     TacticalGraphicName.Neutralize,
     TacticalGraphicName.Suppress,
 ]);
+
+/**
+ * The graphics that publish **their anchor point and nothing else** as a handle.
+ *
+ * The five one-letter tasks drawn about a centre. Every one of their plates says the same
+ * thing: *"This symbol requires one anchor point. The centre point defines the centre of
+ * the symbol."* One anchor point is one handle, and it is the middle.
+ *
+ * **This is not a refusal, and it is deliberately not `allowedGestures`.** All five still
+ * resize — that is what the edit-mode affordance offers and what `handleResize` performs —
+ * and asking them to stop would take away a capability nobody asked to lose. What this
+ * governs is only which points the generator publishes as grabbable.
+ *
+ * The two had been the same switch, and that is the defect it fixes. `generateHandles`
+ * emitted `[edge, centre]` whenever a resize was allowed; `publishHandles` then makes
+ * anything off-centre the live red handle and anything on the centre a grey inert dot. So
+ * a symbol the standard describes by its middle showed its live grip off to one side, with
+ * a dead-looking dot where the anchor is. Now the generator emits the centre alone, nothing
+ * is off-centre to promote, and `publishHandles` publishes the centre as the live handle.
+ * @see MissionTaskGraphicBase.publishHandles (User's call, 2026-09-03.)
+ */
+const ANCHOR_ONLY_HANDLE_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Defeat,
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+]);
+
+/**
+ * Whether `name` publishes its anchor point alone, rather than an `[edge, centre]` pair.
+ *
+ * In the map-agnostic half because it decides what a *generator* emits, so both renderers
+ * get the same handle set from the same statement rather than one of them cropping the
+ * pair in a holder. @see ANCHOR_ONLY_HANDLE_GRAPHICS
+ */
+export function publishesAnchorHandleOnly(name: TacticalGraphicName): boolean {
+    return ANCHOR_ONLY_HANDLE_GRAPHICS.has(name);
+}
 
 /** How far a security operation's arm reaches from the centre, in screen pixels. */
 const SECURITY_OPERATION_REACH_PX =
@@ -899,6 +941,10 @@ export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from '
 const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // The crossed tasks, fixed and resizable alike: the size the family has always
     // been drawn at. @see CROSSED_HALF_WIDTH_PX
+    // Defeat is sized from the same number rather than one of its own: it is measured off
+    // its plate in fractions of the box's half-width, exactly as Destroy is, so the two
+    // land the same size on screen and the label rule they share stays honest.
+    [TacticalGraphicName.Defeat]: 50,
     [TacticalGraphicName.Destroy]: 50,
     [TacticalGraphicName.Interdict]: 50,
     [TacticalGraphicName.Neutralize]: 50,

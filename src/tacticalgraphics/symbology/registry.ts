@@ -39,7 +39,7 @@ import {
 import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
-import {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
+import {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
 import {sectorModifierLabelPaint} from './sectorModifierPaints';
 import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
@@ -64,6 +64,7 @@ import {
     baseDefenseZoneLabelPaint,
     crossedMissionTaskLabelPaint,
     crossedMissionTaskPaint,
+    defeatPaint,
     advanceToContactPaint,
     movementToContactPaint,
     pursuitPaint,
@@ -842,6 +843,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     for (const name of CROSSED_MISSION_TASKS) {
         registry[name] = {graphic: crossedMissionTaskPaint(name), label: crossedMissionTaskLabelPaint(name)};
     }
+    // Defeat is not one of them — its arrows do not cross and are filled rather than
+    // stroked — but its `D` is sized by the same rule, so it takes their label paint.
+    registry[TacticalGraphicName.Defeat] = {
+        graphic: defeatPaint(),
+        label: crossedMissionTaskLabelPaint(TacticalGraphicName.Defeat),
+    };
 
     // The readiness states differ only in which bar is dashed — a stroke property, so
     // it cannot live in the geometry and every one of them needs a paint function.
@@ -955,6 +962,10 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // The two mine areas: different outlines, the same row of mines inside.
     registry[TacticalGraphicName.MinefieldDynamicDepiction] = {
         graphic: minefieldAreaPaint(),
+        label: mineFillPaint(),
+    };
+    registry[TacticalGraphicName.MinedArea] = {
+        graphic: minedAreaPaint(),
         label: mineFillPaint(),
     };
     registry[TacticalGraphicName.MinedAreaFenced] = {

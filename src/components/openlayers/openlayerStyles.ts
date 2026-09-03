@@ -137,6 +137,7 @@ import {
     missionTaskLabelPaint,
     crossedMissionTaskLabelScale,
     crossedMissionTaskPaint,
+    defeatPaint,
     blockPaint,
     breachPaint,
     clearPaint,
@@ -192,6 +193,7 @@ import {
     PSYOPS_ZONES,
     psyOpsZonePaint,
     mineFillPaint,
+    minedAreaPaint,
     minedAreaFencedPaint,
     minefieldAreaPaint,
     cbrnContaminatedAreaPaint,
@@ -2271,6 +2273,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return getAirfieldStyle(name);
         // The row of mines rides the label feature, like the loudspeaker below it.
         case TacticalGraphicName.MinefieldDynamicDepiction:
+        case TacticalGraphicName.MinedArea:
         case TacticalGraphicName.MinedAreaFenced:
             return asStyleFunction(mineFillPaint(), name);
         // The loudspeaker rides the label feature; the outline belongs to the polygon.
@@ -2556,6 +2559,19 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  *
  * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
  */
+/**
+ * **Ported.** @see missionTaskPaints.ts, `defeatPaint`.
+ *
+ * Registering the paint in `symbology/registry.ts` is only half of it: MapLibre reads that
+ * registry and OpenLayers reads this dispatch, so a paint wired in one place draws on one
+ * engine and falls through to the default on the other. Defeat shipped that way for the
+ * length of one review — its arrows came out as outlines here and filled on MapLibre and in
+ * the picker thumbnail, which is generated through the registry.
+ */
+export function defeatStyleFunc(): StyleFunction {
+    return asStyleFunction(defeatPaint(), TacticalGraphicName.Defeat);
+}
+
 /** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskPaint`. */
 export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(crossedMissionTaskPaint(name), name);
@@ -3136,6 +3152,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     }
     if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
         return asStyleFunction(minefieldAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.MinedArea) {
+        return asStyleFunction(minedAreaPaint(), name)(feature, resolution);
     }
     if (name === TacticalGraphicName.MinedAreaFenced) {
         return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);

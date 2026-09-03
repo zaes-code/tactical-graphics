@@ -26,6 +26,7 @@ import {
     createInertHandleFeature,
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
+    defeatStyleFunc,
     fightingPositionStyleFunc,
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
@@ -183,6 +184,11 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (CROSSED_MISSION_TASKS.includes(name)) {
             this.graphic.setStyle(crossedMissionTaskStyleFunc(name));
         }
+        // Defeat's four arrows are filled rings rather than strokes, and the default
+        // mission-task style only strokes — so without this it draws as four outlines.
+        if (name === TacticalGraphicName.Defeat) {
+            this.graphic.setStyle(defeatStyleFunc());
+        }
         // Turn is a GeometryCollection — stroked curve plus filled arrowhead —
         // so it needs a fill as well as a stroke, and not the default blue one.
         if (name === TacticalGraphicName.TacticalTurn || name === TacticalGraphicName.Turn) {
@@ -242,7 +248,9 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         // …but the crossed four cap their symbol at 100 px across, and the
         // letter has to stop growing with it. Must come after the block above.
-        if (CROSSED_MISSION_TASKS.includes(name)) {
+        // Defeat shares that cap: its `D` sits in a gap the generator leaves, and the two
+        // symbols have to letter the same size on screen. @see crossedLabelHalfWidthPx
+        if (CROSSED_MISSION_TASKS.includes(name) || name === TacticalGraphicName.Defeat) {
             this.label.setStyle(crossedMissionTaskLabelStyleFn(name));
         }
     }

@@ -146,6 +146,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
     [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
     [TacticalGraphicName.MinefieldDynamicDepiction]: BOTH, // APP-06 270707 Minefield, Dynamic Depiction -- FM table 5-20 "dynamic depiction minefield"
+    [TacticalGraphicName.MinedArea]: BOTH, // APP-06 270800 Mined Area -- FM table 5-20 "mined area"
     [TacticalGraphicName.MinedAreaFenced]: BOTH, // APP-06 270801 Mined Area, Fenced -- FM table 5-20 "mined area, fenced"
     [TacticalGraphicName.PsyOpsZoneIrregular]: APP6_ONLY, // APP-06 242701 PsyOps Zone, Irregular
     [TacticalGraphicName.PsyOpsZoneRectangular]: APP6_ONLY, // APP-06 242702 PsyOps Zone, Rectangular
@@ -333,6 +334,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                   BOTH,      // APP-06 242200 Weapon/Sensor Range Fan, Sector
     [TacticalGraphicName.LineOfContact]:                                BOTH,      // APP-06 141100 Line of Departure/Line of Contact
     [TacticalGraphicName.AttackByFire]:                                 BOTH,      // APP-06 152000 Attack by Fire
+    [TacticalGraphicName.Defeat]:                                       APP6_ONLY, // APP-06 344300 Defeat
     [TacticalGraphicName.Destroy]:                                      BOTH,      // APP-06 340900 Destroy
     [TacticalGraphicName.Exfiltrate]:                                   BOTH,      // APP-06 343700 Exfiltrate
     [TacticalGraphicName.Interdict]:                                    BOTH,      // APP-06 341400 Interdict

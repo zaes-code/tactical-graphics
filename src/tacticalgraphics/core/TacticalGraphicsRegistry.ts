@@ -66,6 +66,7 @@ import {
 } from "../graphics/FormsOfManeuver";
 import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan";
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
+import {Defeat} from '../graphics/Defeat';
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
 import {WireObstacle} from "../graphics/WireObstacle";
@@ -242,6 +243,7 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.RadiationDoseRateContourLine,
     TacticalGraphicName.MinefieldDynamicDepiction,
+    TacticalGraphicName.MinedArea,
     TacticalGraphicName.MinedAreaFenced,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
@@ -474,6 +476,10 @@ const crossedTasks = [
     TacticalGraphicName.Suppress,
 ];
 crossedTasks.forEach(name => TacticalGraphicsRegistry.register(new CrossedMissionTask(name)));
+
+// Defeat takes Destroy's draw rule word for word but not its shape: four filled arrows
+// converging on the letter rather than two lines crossing at it. @see Defeat
+TacticalGraphicsRegistry.register(new Defeat());
 
 // Exfiltrate is a multi-vertex route with an arrowhead and no cane hook — see the
 // class comment for why it is not a RetrogradeTask.

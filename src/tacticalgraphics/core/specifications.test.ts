@@ -79,6 +79,9 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // Two mission tasks APP-06 draws that FM 1-02.2 does not name. Both reuse an
     // existing construction exactly -- only the letter is theirs.
     TacticalGraphicName.CordonAndKnock,
+    // 344300. Four arrows converging on a `D`; FM 1-02.2 never uses the word as a task,
+    // and its own `D` belongs to Destroy, which is a solid X. @see Defeat
+    TacticalGraphicName.Defeat,
     TacticalGraphicName.Locate,
     // Three APP-06 areas with no FM counterpart. Two carry no label at all -- the
     // plate's template cell is a bare outline -- which the switch default already

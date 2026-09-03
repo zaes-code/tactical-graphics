@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**293 graphics** are implemented and verified today, covering **306 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**295 graphics** are implemented and verified today, covering **308 doctrinal variants**, across 14 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
@@ -117,7 +117,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **52 of the 293 graphics need a geometry input as well**:
+`name` is always required, and **53 of the 295 graphics need a geometry input as well**:
 the point-anchored ones (mission tasks, range fans, fighting positions, the circular
 areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
 `decorationSize`. Without them you get a turf error rather than a default — see
@@ -746,7 +746,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 106 of the 293 graphics — the ones that keep every glyph
+// `labels` is undefined for 106 of the 295 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);
@@ -1240,7 +1240,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 293 supported names.
+the 295 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1441,6 +1441,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Main Supply Route, One-Way Traffic | Mobility and Countermobility Control Measures |
 | Main Supply Route, Two-Way Traffic | Mobility and Countermobility Control Measures |
 | Mine Cluster | Mobility and Countermobility Control Measures |
+| Mined Area | Mobility and Countermobility Control Measures |
 | Mined Area, Fenced | Mobility and Countermobility Control Measures |
 | Minefield, Dynamic Depiction | Mobility and Countermobility Control Measures |
 | Mineline | Mobility and Countermobility Control Measures |
@@ -1507,6 +1508,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Clear | Tactical Mission Tasks |
 | Contain | Tactical Mission Tasks |
 | Control | Tactical Mission Tasks |
+| Defeat | Tactical Mission Tasks |
 | Demonstration | Tactical Mission Tasks |
 | Deny | Tactical Mission Tasks |
 | Destroy | Tactical Mission Tasks |

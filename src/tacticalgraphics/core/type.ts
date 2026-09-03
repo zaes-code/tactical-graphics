@@ -666,6 +666,9 @@ export function getLabel(name: TacticalGraphicName) {
 
         case TacticalGraphicName.AttackByFire:
             return 'AF';
+        // Both letter `D`, and they are different symbols: Destroy is a solid X, Defeat
+        // is four arrows converging on the letter. APP-06 340900 and 344300.
+        case TacticalGraphicName.Defeat:
         case TacticalGraphicName.Destroy:
             return 'D';
         case TacticalGraphicName.Exfiltrate:
@@ -995,6 +998,13 @@ export enum TacticalGraphicName {
     PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
     PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
     MinefieldDynamicDepiction = 'MinefieldDynamicDepiction',  // APP-06 270707 Minefield, Dynamic Depiction
+    /**
+     * APP-06 270800. **The fenced area's parent, and a symbol in its own right** --
+     * Table A-32 lists 270801 under it, but 270800 carries its own Anchor Points rule
+     * and FM 1-02.2 table 5-20 draws the two on consecutive rows. The whole of the
+     * difference is the wire: this one's outline is a plain line. @see MinedAreaFenced
+     */
+    MinedArea = 'MinedArea',                                  // APP-06 270800 Mined Area
     MinedAreaFenced = 'MinedAreaFenced',                      // APP-06 270801 Mined Area, Fenced
     MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
     MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
@@ -1069,6 +1079,12 @@ export enum TacticalGraphicName {
 
     // Additional mission tasks
     AttackByFire = 'AttackByFire',
+    /**
+     * APP-06 344300. Four solid arrows converging on a `D`, and its Draw Rules cell is
+     * word for word Destroy's -- one anchor point, centre, static. So it takes Destroy's
+     * whole interaction contract rather than a new one. @see Defeat, Destroy
+     */
+    Defeat = 'Defeat',
     Destroy = 'Destroy',
     Exfiltrate = 'Exfiltrate',
     Interdict = 'Interdict',
@@ -1099,6 +1115,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.PsyOpsZoneRectangular]: 'PsyOps zone, rectangular',
     [TacticalGraphicName.PsyOpsZoneCircular]: 'PsyOps zone, circular',
     [TacticalGraphicName.MinefieldDynamicDepiction]: 'minefield, dynamic depiction',
+    [TacticalGraphicName.MinedArea]: 'mined area',
     [TacticalGraphicName.MinedAreaFenced]: 'mined area, fenced',
     [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',

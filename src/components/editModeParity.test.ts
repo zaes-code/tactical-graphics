@@ -119,6 +119,13 @@ describe('the affordances a graphic offers', () => {
         [TacticalGraphicName.Guard, {rotate: true, resize: true}],
         [TacticalGraphicName.Screen, {rotate: true, resize: true}],
         // One doctrinal orientation each: an X turned 45° is a different symbol.
+        //
+        // **They resize, and they publish one handle.** Those are two different facts and
+        // this is the one about gestures: the buttons on the selection box come from here,
+        // and the resize is performed through `beginGesture`, not by dragging a handle. How
+        // many handles the generator publishes is `publishesAnchorHandleOnly`, asserted
+        // separately — collapsing the two is what put a live grip beside these symbols.
+        [TacticalGraphicName.Defeat, {rotate: false, resize: true}],
         [TacticalGraphicName.Destroy, {rotate: false, resize: true}],
         [TacticalGraphicName.Interdict, {rotate: false, resize: true}],
         [TacticalGraphicName.Neutralize, {rotate: false, resize: true}],
