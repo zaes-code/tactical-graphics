@@ -459,9 +459,9 @@ TacticalGraphicsRegistry.register(new FortifiedLine());
 const additionalBlockTasks = [
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.SupportByFire,
-    // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.FollowAndAssume,
-    // TacticalGraphicName.FollowAndSupport,
+    // Follow and assume / follow and support were here, and are NOT block arrows —
+    // that shape is why they were switched off. They have their own generator now.
+    // @see FollowTask, registered above.
 ];
 additionalBlockTasks.forEach(name => TacticalGraphicsRegistry.register(new NamedBlockArrow(name)));
 

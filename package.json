@@ -102,6 +102,12 @@
     "check:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail --check",
     "typecheck": "tsc --noEmit",
     "check:readme-samples": "node scripts/check-readme-samples.mjs",
+    "gen:field-matrix": "node scripts/gen-field-matrix.mjs",
+    "check:field-matrix": "node scripts/gen-field-matrix.mjs --check",
+    "check:conformance": "node ai/conformance/build-report.mjs --check",
+    "check:tracker": "python scripts/gen-readme-graphics-table.py --check",
+    "check:docs": "npm run check:thumbnails && npm run check:field-matrix && npm run check:readme-samples",
+    "check:docs:internal": "npm run check:docs && npm run check:conformance && npm run check:tracker",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "prepublishOnly": "npm run typecheck && npm run build"
   },

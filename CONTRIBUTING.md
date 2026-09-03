@@ -101,13 +101,17 @@ Every one of the five is a `Record<TacticalGraphicName, …>`, so none of this i
 
 5. If — and only if — APP-06 numbers the new graphic's anchor points from its arrowhead, and your generator builds that end last, add it to `TIP_FIRST_GRAPHICS` in `core/drawOrder.ts`. That list is not exhaustive and not a default: a graphic whose draw rule already agrees, or that has no arrowhead, stays off it. `GRAPHIC_ENTITY_CODES` and `GRAPHIC_SPECIFICATIONS` are asserted against each other — a `null` code means exactly "FM 1-02.2 only" — so look the symbol up rather than guessing.
 
-A graphic is **done** when a user can draw it, label it, and reposition, modify, rotate and resize it *wherever those gestures mean something for that symbol*. Some refuse a gesture on purpose — a fixed-size symbol has no resize — and that refusal belongs in the shared tables, not in one renderer.
+6. `npm run build && npm run gen:thumbnails`, then `npm run check:docs`. **Nothing here is typed, so nothing fails to compile** — but the picker thumbnail and `docs/graphic-field-matrix.{csv,md}` are both generated from the built library, and a graphic added without regenerating them simply has no picture and no row. `npm run check:docs` is the one command that says so; run it before opening the pull request.
+
+A graphic is **done** when a user can draw it, label it, and reposition, modify, rotate and resize it *wherever those gestures mean something for that symbol*. Some refuse a gesture on purpose — the crossed mission tasks refuse rotation, because an X turned 45° is a different symbol — and that refusal belongs in the shared tables, not in one renderer.
 
 Doctrinal reference is [FM 1-02.2](https://www.battleorder.org/post/symbolsfm). Cite the figure or table number in your PR so a reviewer can check the shape.
 
 ## Style
 
 Prettier (`.prettierrc.json`): 4-space indent, single quotes, no bracket spacing (`{foo}`, not `{ foo }`), 150-column lines, trailing commas. ESLint is minimal — it only strips unused imports.
+
+**Neither is enforced, and much of the existing tree does not satisfy Prettier.** So format the lines you touch and leave the rest alone: `npx prettier --write` across the repository would produce a diff of hundreds of files and bury the change you came to make.
 
 Match the surrounding code's comment density and naming. Write a comment to state a constraint the code cannot show, not to narrate what the next line does.
 

@@ -670,11 +670,12 @@ export function getLabel(name: TacticalGraphicName) {
             return 'D';
         case TacticalGraphicName.Exfiltrate:
             return 'EX';
-        // Excluded — see ai/excluded-graphics.md
-        // case TacticalGraphicName.FollowAndAssume:
-        //     return 'F/A';
-        // case TacticalGraphicName.FollowAndSupport:
-        //     return 'F/S';
+        /*
+         * Follow and assume / follow and support take no case. Both were revived on
+         * 2026-08-28 and their letter sits INSIDE the rear box, which is a screen size
+         * this layer does not know -- so `followTaskPaint` places the text itself and
+         * `getLabel` returning '' is correct. @see FollowTask.ts
+         */
         case TacticalGraphicName.Interdict:
             return 'I';
         case TacticalGraphicName.Neutralize:
@@ -1026,7 +1027,7 @@ export enum TacticalGraphicName {
 
     // Forms of maneuver / offensive operations
     Infiltration = 'Infiltration',
-    InfiltrationLane = "InfiltrationLane",
+    InfiltrationLane = 'InfiltrationLane',
     MovementToContact = 'MovementToContact',
     /** APP-06 342900. A different symbol from MovementToContact, not a rename. @see AdvanceToContact */
     AdvanceToContact = 'AdvanceToContact',
@@ -1070,9 +1071,6 @@ export enum TacticalGraphicName {
     AttackByFire = 'AttackByFire',
     Destroy = 'Destroy',
     Exfiltrate = 'Exfiltrate',
-    // Excluded — see ai/excluded-graphics.md
-    // FollowAndAssume = 'FollowAndAssume',
-    // FollowAndSupport = 'FollowAndSupport',
     Interdict = 'Interdict',
     Neutralize = 'Neutralize',
     SupportByFire = 'SupportByFire',
