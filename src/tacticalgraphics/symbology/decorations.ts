@@ -838,6 +838,7 @@ export function screenSizedArrowHead(
     ring: ProjectedPosition[],
     path: ProjectedPosition[],
     resolution: number,
+    measure: 'traversed' | 'reach' = 'traversed',
 ): ProjectedPosition[] | null {
     if (!ring || ring.length < 3) return null;
     const [tip, left, right] = ring;
@@ -845,7 +846,23 @@ export function screenSizedArrowHead(
     const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
     if (currentLength === 0) return null;
 
-    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
+    /*
+     * **Which length the head is allowed a share of.**
+     *
+     * `traversed` is how far the pen travels — right for a route, where the drawn path is
+     * the symbol and a long winding one really does have room for a full-size head.
+     *
+     * `reach` is end to end, and it is what a symbol wants when its line is a *texture*
+     * rather than a route. Fix's zigzag traverses roughly twice its own run, so a share of
+     * the traversal let its head reach the 15 px ceiling on a symbol only 50 px across —
+     * a triangle a third the width of the graphic, which is what the sweep showed. Ferry
+     * crossing was always right and looks unchanged here, because its line is straight and
+     * the two measures are the same number for it. (User's call, 2026-09-03.)
+     */
+    const span = measure === 'reach' && path.length >= 2
+        ? Math.hypot(path[path.length - 1][0] - path[0][0], path[path.length - 1][1] - path[0][1])
+        : pathLength(path);
+    const availablePx = path.length >= 2 ? span / resolution : Infinity;
     const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
     if (wantedPx < DECORATION_MIN_PX) return null;
 
