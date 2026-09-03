@@ -104,6 +104,46 @@ describe('exfiltrate and infiltrate get the three points that make an S', () => 
     });
 });
 
+describe('the minimum safe distance zones draw rings, not a segment', () => {
+    /*
+     * Both fell to a straight line and neither complained: 272100 returns the raw
+     * coordinates below three points, 272101 below six. Found by measuring the rendered
+     * extent of every sample and asking which had none — a two-point horizontal base has
+     * zero height, and a graphic whose plate is a pair of concentric rings should not.
+     */
+    it('gives 272100 a centre and a point on each ring', () => {
+        expect(sampleBase(TacticalGraphicName.MinimumSafeDistanceZone)).toHaveLength(3);
+    });
+
+    it('gives 272101 an even count of at least six, two rings traced end to end', () => {
+        const base = sampleBase(TacticalGraphicName.MinimumSafeDistanceMultipleStrike);
+        expect(base.length).toBeGreaterThanOrEqual(6);
+        expect(base.length % 2).toBe(0);
+    });
+
+    it.each([
+        TacticalGraphicName.MinimumSafeDistanceZone,
+        TacticalGraphicName.MinimumSafeDistanceMultipleStrike,
+    ])('%s renders two rings with real height', name => {
+        const {graphic} = renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name, radius: 180_000}},
+            geometry: {type: 'LineString', coordinates: sampleBase(name)},
+        } as never);
+        const rings = (graphic.geometry as {coordinates: number[][][]}).coordinates;
+        expect(rings).toHaveLength(2);
+        // Height, because a flat base gives a flat fallback: this is the assertion that
+        // fails against the unfixed sample and the one the eye was making.
+        for (const ring of rings) {
+            const ys = ring.map(p => p[1]);
+            expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.5);
+        }
+        // Nested: the inner ring's extent has to sit inside the outer one's.
+        const spanOf = (r: number[][]) => Math.max(...r.map(p => p[0])) - Math.min(...r.map(p => p[0]));
+        expect(spanOf(rings[0])).toBeLessThan(spanOf(rings[1]));
+    });
+});
+
 describe('the symbols whose furniture is a screen size get a longer run', () => {
     const LONG = [
         TacticalGraphicName.FollowAndAssume,

@@ -39,7 +39,29 @@ const COLUMN_STEP = 9;
 const ROW_STEP = 7;
 /** Half-extent of a sample, in degrees. */
 const HALF = 2.6;
-const COLUMNS = 14;
+
+/**
+ * How many samples to a row — and it is a **legibility** setting, not a taste one.
+ *
+ * The sheet is framed by a fit, so only *relative* sizes matter: growing every sample and
+ * every cell together changes nothing, because the fit gives it straight back. What does
+ * change things is the sheet's **aspect**, because the fit is limited by whichever
+ * dimension runs out first against a landscape viewport.
+ *
+ * At 14 columns, 295 samples make 22 rows: 126 degrees wide against 147 tall, which
+ * projects to an aspect of 0.57 in a viewport of 1.7. Height is the binding constraint and
+ * every sample lands about 38 px across. **Below what a decoration needs to exist**:
+ * `decorationScale` allows an open path's repeating mark 5% of its length and drops it
+ * under `DECORATION_MIN_PX`, so a 14 px wire mark needs a 60 px run — and all nine wire
+ * obstacles, both scalloped lines and the anti-tank ditches drew as *identical plain
+ * lines*. Nine symbols whose entire meaning is the texture on the stroke.
+ *
+ * At 20 the sheet is 180 x 98, projected aspect 1.58, and width binds instead: 87 px a
+ * sample, and the marks are there. Measured, both times, not estimated.
+ *
+ * The number is a floor — `cellOrigin` widens it further rather than run past the pole.
+ */
+const COLUMNS = 20;
 
 /** Where the grid starts horizontally, so it sits over open water rather than land labels. */
 const ORIGIN_LON = -64;
@@ -190,6 +212,44 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
     [TacticalGraphicName.Escort]: (lon, lat) => ({
         type: 'LineString',
         coordinates: [[lon, lat], [lon - HALF, lat], [lon + HALF, lat]],
+    }),
+
+    /*
+     * **The two minimum safe distance zones draw nested rings, and both fell to a straight
+     * line.** Neither refuses a short base: 272100 returns the raw coordinates below three
+     * points and 272101 below six, so the sweep showed each as a bare segment beside the
+     * contour lines they belong with. Found by measuring the rendered extent of all 295
+     * samples and asking which had none — @see tmp/build-contact-sheets.py.
+     *
+     * 272100's rule is *"Points 1, and 2 define the radii of circles 1, and 2"* about a
+     * centre, so its three points are the centre and one point on each ring; the generator
+     * takes the distance from the centre to each and sorts them, so which is which does not
+     * matter here.
+     */
+    [TacticalGraphicName.MinimumSafeDistanceZone]: (lon, lat) => ({
+        type: 'LineString',
+        coordinates: [[lon, lat], [lon + HALF * 0.45, lat], [lon + HALF * 0.9, lat]],
+    }),
+
+    /*
+     * 272101 traces both zones: *"Points 1 through N/2 define the inner safe zone (zone 1).
+     * Points N/2 +1 though point N defines the outer zone (zone 2)"*, an even count, at
+     * least six. Twelve — two hexagons — because three points a ring is a triangle and
+     * reads as a mistake rather than as a zone.
+     *
+     * **The traced form rather than the standoff form**, deliberately. A graphic carrying a
+     * standoff derives zone 2 from zone 1 and needs only one ring; one without carries both
+     * rings end to end. The sweep files no standoff, so this is the base its own restore
+     * path produces — and it is also what the plate draws. @see MinimumSafeDistanceMultipleStrike
+     */
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: (lon, lat) => ({
+        type: 'LineString',
+        coordinates: [0.5, 0.95].flatMap(scale =>
+            Array.from({length: 6}, (_, i) => {
+                const angle = Math.PI / 2 + (i * 2 * Math.PI) / 6;
+                return [lon + HALF * scale * Math.cos(angle), lat + HALF * scale * Math.sin(angle)] as Position;
+            }),
+        ),
     }),
 
     /*
