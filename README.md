@@ -746,7 +746,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 104 of the 293 graphics — the ones that keep every glyph
+// `labels` is undefined for 106 of the 293 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);

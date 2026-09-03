@@ -15,6 +15,49 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+**A coverage and documentation audit. No geometry changed and no symbol moved**, so
+nothing a consumer draws is affected; what changed is which publication eight graphics are
+recorded as belonging to, and the checks that keep the generated documentation honest.
+
+### Fixed
+
+- **Eight graphics were tagged `APP-06` only and are in FM 1-02.2 as well.** The four CBRN
+  contaminated areas (`BiologicalContaminatedArea` 271700, `ChemicalContaminatedArea`
+  271800, `NuclearContaminatedArea` 271900, `RadiologicalContaminatedArea` 272000) are FM
+  table 5-28; `MinefieldDynamicDepiction` 270707, `MinedAreaFenced` 270801 and `TripWire`
+  290500 are FM table 5-20; `Demonstration` 343300 is FM table 5-15, where the plate draws
+  the same `DEM` hook this library draws.
+
+  Every one had been classified on a text search of the manual that came back empty, and
+  **the search was the defect.** FM tables name a symbol by its position under a heading:
+  table 5-28's rows read `biological`, `chemical`, `nuclear` and `radiological` beneath a
+  heading `Contaminated area`, so the phrase "biological contaminated area" appears nowhere
+  in the document. `getSpecifications` and `listNamesBySpecification` now return these
+  eight under FM 1-02.2 as well, which is additive — nothing that was returned before has
+  stopped being returned. The count moves from 214/8/69 to **221 both / 9 FM-only / 63
+  APP-06-only**. Pinned per graphic, by the table that carries it, in
+  `specifications.test.ts`.
+
+- **`docs/graphic-field-matrix.csv` / `.md` were four releases stale** and still listed
+  `axis of attack`, removed in 3.2.0. Regenerated; `npm run check:field-matrix` is new and
+  fails when they drift again.
+
+- **The README's `prepareFeatures` note said `labels` is undefined for 104 of the 293
+  graphics.** It is 106 — the denominator was updated when the registry grew from 291 and
+  the numerator was not, and both graphics added at that point return no label feature.
+
+- **`docs/app6-field-validation.md` attributed the 3.2.0 amplifier changes to 4.0.0**, a
+  version that does not exist. That included the range-fan kilometres-to-metres change,
+  which has no migration path, so the document named the wrong release for the one thing a
+  consumer most needs the right release number for.
+
+### Changed
+
+- **`npm run check:docs`** runs the three freshness checks that guard generated artifacts —
+  picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`
+  already; nothing ran any of them, which is how the field matrix went stale unnoticed.
+  `npm run gen:field-matrix` and `npm run check:field-matrix` are the two new scripts.
+
 ## [3.4.0] — 2026-09-02
 
 **Three CBRN graphics finished, and the STRIKWARN zone redesigned around how it is

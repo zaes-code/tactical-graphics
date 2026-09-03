@@ -213,7 +213,8 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Disrupt,
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.SupportByFire,
-    // FollowAndAssume and FollowAndSupport are excluded the same way.
+    // Follow and assume / follow and support are deliberately absent: they are no
+    // longer block arrows and carry their own two-point handles. @see FollowTask
 ];
 
 /**

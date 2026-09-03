@@ -3,8 +3,8 @@ import {GRAPHIC_SPECIFICATIONS, TacticalGraphicSpecification, getSpecifications,
 import {TacticalGraphicName} from './type';
 
 /**
- * The seven graphics FM 1-02.2 defines and APP-06 Edition E does not. Pinned by
- * name rather than by count so that moving one in or out of APP-06 has to be a
+ * The graphics FM 1-02.2 defines and APP-06 Edition E does not. Pinned by name
+ * rather than by count so that moving one in or out of APP-06 has to be a
  * deliberate edit to this list, with the Table A-32 lookup that justifies it.
  */
 const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
@@ -101,8 +101,6 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
     TacticalGraphicName.Capture,
-    TacticalGraphicName.MinefieldDynamicDepiction,
-    TacticalGraphicName.MinedAreaFenced,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,
@@ -110,7 +108,6 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.Deny,
     TacticalGraphicName.Escort,
-    TacticalGraphicName.Demonstration,
     TacticalGraphicName.Evacuate,
     TacticalGraphicName.Recover,
     TacticalGraphicName.DecisionLine,
@@ -119,19 +116,18 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.ObstacleBypassDifficult,
     TacticalGraphicName.ObstacleBypassImpossible,
     TacticalGraphicName.Mineline,
+    // FM table 5-21 lists a `mine cluster` too, but as a minefield SECTOR 1 MODIFIER
+    // -- a glyph that goes inside another symbol. APP-06 290400 is a protection LINE.
+    // Same words, different thing; this stays APP-06 only. @see the retagging note below.
     TacticalGraphicName.MineCluster,
-    TacticalGraphicName.TripWire,
     TacticalGraphicName.RaftSite,
     TacticalGraphicName.FortifiedPosition,
     TacticalGraphicName.NamedAreaOfInterestLine,
-    // One construction, four letters: APP-06 Table 8-19 draws all four the same way.
-    TacticalGraphicName.BiologicalContaminatedArea,
+    // The toxic-industrial-material variants only. Their four parents moved to BOTH on
+    // 2026-09-03 -- FM table 5-28 draws all four -- but the manual has no TIM subtype.
     TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
     TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
     TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
-    TacticalGraphicName.ChemicalContaminatedArea,
-    TacticalGraphicName.NuclearContaminatedArea,
-    TacticalGraphicName.RadiologicalContaminatedArea,
     // The two that write their abbreviation into their own broken boundary.
     TacticalGraphicName.ArtilleryManeuverArea,
     TacticalGraphicName.ArtilleryReservedArea,
@@ -177,6 +173,35 @@ describe('graphic specifications', () => {
         const inApp6 = listNamesBySpecification(TacticalGraphicSpecification.APP6);
         const expected = names.filter((name) => !FM_ONLY_GRAPHICS.includes(name));
         expect(inApp6).toEqual(expected);
+    });
+
+    /*
+     * The eight retagged on 2026-09-03, pinned by the FM table that carries each.
+     *
+     * Every one of them had been APP6_ONLY on the strength of a name search over
+     * `docs/FM_1-02.2.txt` that came back empty -- and the search was the defect, not the
+     * manual. **FM tables name a symbol by its position under a heading.** Table 5-28's
+     * four contaminated areas are rows reading `biological`, `chemical`, `nuclear` and
+     * `radiological` under a heading `Contaminated area`, so the phrase this library uses
+     * appears nowhere; table 5-20 does the same to the minefield family, and table 5-15
+     * puts `demonstration` under `Variations of Tactical Deception`.
+     *
+     * Pinned individually rather than trusted to the list above, because the list above
+     * is the thing that was wrong. Each plate was opened and read.
+     */
+    const RETAGGED_TO_BOTH: [TacticalGraphicName, string][] = [
+        [TacticalGraphicName.BiologicalContaminatedArea, 'FM table 5-28, row "biological"'],
+        [TacticalGraphicName.ChemicalContaminatedArea, 'FM table 5-28, row "chemical"'],
+        [TacticalGraphicName.NuclearContaminatedArea, 'FM table 5-28, row "nuclear"'],
+        [TacticalGraphicName.RadiologicalContaminatedArea, 'FM table 5-28, row "radiological"'],
+        [TacticalGraphicName.MinefieldDynamicDepiction, 'FM table 5-20, row "dynamic depiction minefield"'],
+        [TacticalGraphicName.MinedAreaFenced, 'FM table 5-20, row "mined area, fenced"'],
+        [TacticalGraphicName.TripWire, 'FM table 5-20, row "tripwire"'],
+        [TacticalGraphicName.Demonstration, 'FM table 5-15, "Variations of Tactical Deception", labelled DEM'],
+    ];
+
+    it.each(RETAGGED_TO_BOTH)('%s is in both catalogs (%s)', (name) => {
+        expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6]);
     });
 
     it('does not hand out a mutable specification array', () => {
