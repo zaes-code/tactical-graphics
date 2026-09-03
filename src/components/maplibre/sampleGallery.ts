@@ -74,9 +74,10 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     // **West to east as the *graphic* files it.** Thirty-two graphics store the arrowhead as
     // point 1, so handing one a west-to-east path aims it west and the sheet fills with
     // arrows pointing back into the previous cell. @see storedOrder
+    const runHalf = HALF * (LONG_RUN_SAMPLES[name] ?? 1);
     const line: Geometry = {
         type: 'LineString',
-        coordinates: storedOrder(name, [[lon - HALF, lat], [lon + HALF, lat]]),
+        coordinates: storedOrder(name, [[lon - runHalf, lat], [lon + runHalf, lat]]),
     };
     const point: Geometry = {type: 'Point', coordinates: [lon, lat]};
     // **A rectangle gets four corners and an irregular area gets five**, so the sweep
@@ -125,6 +126,33 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     return [line, ring, point];
 }
 
+/**
+ * Graphics drawn on a **longer run than the cell's default**, and how much longer.
+ *
+ * A symbol whose plate says it *"varies only in length"* carries every dimension except
+ * that run as a screen size — the body, the connector, the head, the trident's prongs. On a
+ * cell-width run those screen sizes take up nearly all of it, so the head sits on the tail
+ * and the shape the operator is meant to recognise has nowhere to be. `endMarkScale` keeps
+ * it from overflowing, which is why it renders as a legible symbol rather than an obvious
+ * mess — and is exactly why the sweep did not look broken.
+ *
+ * **Lengthening the base is the right fix and shrinking the decorations is not**: the
+ * decorations are the size the standard draws them at, and a sample that shrank them would
+ * be showing something other than what the app draws. The cell has room — columns are
+ * {@link COLUMN_STEP} apart against a default span of `2 x HALF`.
+ *
+ * Kept as a small table rather than a rule, because "how much run does this symbol's
+ * furniture need" is a fact about each plate. @see followTaskPaint, fixPaint
+ */
+const LONG_RUN_SAMPLES: Partial<Record<TacticalGraphicName, number>> = {
+    // Body 46 px, head 26 px and a dashed connector between them, all screen sizes.
+    [TacticalGraphicName.FollowAndAssume]: 1.6,
+    [TacticalGraphicName.FollowAndSupport]: 1.6,
+    // The trident's prongs and its vertical bar are screen sizes too.
+    [TacticalGraphicName.Fix]: 1.6,
+    [TacticalGraphicName.TacticalFix]: 1.6,
+};
+
 /** @see candidateGeometries — the layouts for graphics whose points are numbered roles. */
 const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat: number) => Geometry>> = {
     ...Object.fromEntries([
@@ -142,6 +170,11 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
 
     ...Object.fromEntries([
         TacticalGraphicName.Capture,
+        // **Seize is one of these and was not listed**, so it fell through to the two-point
+        // line, drew its circle and stopped — a lettered ring beside three siblings with
+        // arcs and arrows on them. Same generator (`SweptArcTask`), same four numbered
+        // points, so it takes the same layout rather than one of its own.
+        TacticalGraphicName.Seize,
         TacticalGraphicName.Evacuate,
         TacticalGraphicName.Recover,
     ].map(name => [name, (lon: number, lat: number): Geometry => ({
@@ -158,7 +191,41 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
         type: 'LineString',
         coordinates: [[lon, lat], [lon - HALF, lat], [lon + HALF, lat]],
     }),
+
+    /*
+     * **Exfiltrate and infiltrate need three points, and a two-point line does not fail —
+     * it draws a bare straight line.** `Exfiltrate.generateGraphics` returns the raw
+     * coordinates when it is handed fewer than three, so the sweep showed both as a plain
+     * segment with no S and no arrowhead, and nothing reported a problem.
+     *
+     * APP-06 343700 numbers them: *"Point 1 defines the end of the straight line portion of
+     * the graphic. Point 2 defines the centre of the two 90 degree circular arcs. Point 3
+     * defines the tip of the arrowhead."* So the chord is 1 → 3 and point 2 is read as a
+     * **perpendicular offset from that chord** — its distance across sets the depth and the
+     * side, its distance along sets where the S sits. @see GeometryService.createSCurve
+     *
+     * `S_CURVE_OFFSET` is that offset. It is chosen against the construction rather than by
+     * eye: `createSCurve` caps the arc radius at 0.24 of the chord, and the axis tilts by
+     * `asin(2r / chord)` to keep both ends on the chord — so a large offset makes a steep
+     * diagonal with no straight left either side of the turn, and a small one makes a bend
+     * rather than an S. At 0.35 the radius is about a sixth of the run and the two straights
+     * come out 1.7 and 1.4 units long, which is the plate's shape.
+     */
+    ...Object.fromEntries([
+        TacticalGraphicName.Exfiltrate,
+        TacticalGraphicName.Infiltration,
+    ].map(name => [name, (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon - HALF, lat],
+            [lon, lat + HALF * S_CURVE_OFFSET],
+            [lon + HALF, lat],
+        ],
+    })])),
 };
+
+/** @see ROLE_SAMPLE_LAYOUTS, the exfiltrate entry — a fraction of the cell half-width. */
+const S_CURVE_OFFSET = 0.35;
 
 /**
  * A three-anchor base spanning the same cell the two-point line does.

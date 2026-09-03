@@ -86,6 +86,14 @@ publication they are recorded under.
   capability away. New export: `publishesAnchorHandleOnly(name)`, for a host drawing its own
   handles. Saved graphics are unaffected.
 
+- **The arrowhead on `Fix` and `TacticalFix` is capped against the symbol's reach, not the
+  length of its zigzag.** `screenSizedArrowHead` limits a solid head to a share of the line
+  it terminates, and it was measuring how far the pen travels. A zigzag traverses about
+  twice its own run, so the head reached the absolute ceiling on a symbol half that wide —
+  15 px of head on 49.9 px of reach, against ferry crossing's proportionate 7.8 on 31.2.
+  Both are 0.25 of their own reach now. The helper takes a `measure` argument and defaults
+  to the old behaviour, so a route — where the drawn path *is* the symbol — is unchanged.
+
 - **`npm run check:docs`** runs the three freshness checks that guard generated artifacts —
   picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`
   already; nothing ran any of them, which is how the field matrix went stale unnoticed.

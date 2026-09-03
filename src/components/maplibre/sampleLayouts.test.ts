@@ -1,0 +1,134 @@
+/**
+ * # The sweep's per-graphic base layouts
+ *
+ * `candidateGeometries` tries a two-point line, then a ring, then a point, and keeps the
+ * first that builds — which is right for the great majority and silently wrong for the
+ * graphics whose points are *numbered roles* rather than a path. **A wrong base does not
+ * throw: it builds a lesser symbol**, and the sweep then shows that lesser symbol as though
+ * it were the graphic.
+ *
+ * Every case below was found by looking at the sheet, not by a failing test, and each is
+ * pinned here so the next one has to be a deliberate edit:
+ *
+ *   - **seize** took the two-point line, drew its circle and stopped — a lettered ring
+ *     beside three siblings carrying arcs and arrows. It is a `SweptArcTask` like capture,
+ *     evacuate and recover and needs their four points.
+ *   - **exfiltrate and infiltrate** need three, and with two `Exfiltrate.generateGraphics`
+ *     returns the raw coordinates: a bare straight segment, no S and no arrowhead.
+ *   - **follow and assume / follow and support / fix / tactical fix** build fine on two
+ *     points, but every dimension except the run between them is a *screen* size. On a
+ *     cell-width run the furniture takes nearly all of it and the head sits on the tail.
+ */
+import {
+    TacticalGraphicName,
+    listTacticalGraphicNames,
+    renderTacticalGraphic,
+} from '@zaes/tactical-graphics';
+import {sampleFeatureCollection} from './sampleGallery';
+
+/**
+ * The sample base the sweep hands `name`.
+ *
+ * Read from `sampleFeatureCollection`, which is what the app actually draws from — both
+ * engines restore that collection rather than each building its own sheet.
+ */
+function sampleBase(name: TacticalGraphicName): number[][] {
+    const feature = sampleFeatureCollection(undefined, [name]).features
+        .find(f => (f.properties as {tacticalGraphic?: {name?: string}})?.tacticalGraphic?.name === name);
+    const geometry = feature?.geometry;
+    if (!geometry || geometry.type !== 'LineString') return [];
+    return geometry.coordinates as number[][];
+}
+
+/** End-to-end reach of a base, in degrees — the run its screen-sized furniture sits on. */
+const reachOf = (base: number[][]): number =>
+    base.length < 2 ? 0 : Math.hypot(base[base.length - 1][0] - base[0][0], base[base.length - 1][1] - base[0][1]);
+
+describe('the swept-arc tasks all get four points', () => {
+    const FAMILY = [
+        TacticalGraphicName.Capture,
+        TacticalGraphicName.Seize,
+        TacticalGraphicName.Evacuate,
+        TacticalGraphicName.Recover,
+    ];
+
+    it.each(FAMILY)('%s is handed the four numbered points its generator reads', name => {
+        expect(sampleBase(name)).toHaveLength(4);
+    });
+
+    it('lays all four out identically, so the sheet compares them', () => {
+        // Relative to each sample's own first point: the four differ only in where the cell
+        // is, and a sibling drifting out of the group is exactly how seize went unnoticed.
+        const shapes = FAMILY.map(name => {
+            const base = sampleBase(name);
+            return base.map(([x, y]) => [+(x - base[0][0]).toFixed(6), +(y - base[0][1]).toFixed(6)]);
+        });
+        for (const shape of shapes) expect(shape).toEqual(shapes[0]);
+    });
+});
+
+describe('exfiltrate and infiltrate get the three points that make an S', () => {
+    const PAIR = [TacticalGraphicName.Exfiltrate, TacticalGraphicName.Infiltration];
+
+    it.each(PAIR)('%s is handed three points', name => {
+        expect(sampleBase(name)).toHaveLength(3);
+    });
+
+    it.each(PAIR)('%s offsets point 2 off the chord, which is what bends the S', name => {
+        // APP-06 343700 reads point 2 as the centre of the two arcs, and `createSCurve`
+        // takes its *perpendicular offset from the 1 -> 3 chord* as the depth and the side.
+        // On the chord it is no offset at all, `radius` comes out zero, and the function
+        // returns the bare two-point chord — a straight line where an S should be.
+        const [p1, p2, p3] = sampleBase(name);
+        const chordX = p3[0] - p1[0];
+        const chordY = p3[1] - p1[1];
+        const length = Math.hypot(chordX, chordY);
+        const offset = Math.abs(((p2[0] - p1[0]) * -chordY + (p2[1] - p1[1]) * chordX) / length);
+        expect(offset).toBeGreaterThan(0);
+        // And not so deep that the arcs eat the straights: `createSCurve` caps the radius at
+        // 0.24 of the chord, so past that the S is all turn and no run.
+        expect(offset / length).toBeLessThan(0.24);
+    });
+
+    it.each(PAIR)('%s draws a curve rather than the raw segment', name => {
+        // The two-point case returns `[coords]` — two points, no arrowhead. Anything built
+        // from three has a densified path and a head, so the count is the discriminator.
+        const {graphic} = renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name, radius: 180_000}},
+            geometry: {type: 'LineString', coordinates: sampleBase(name)},
+        } as never);
+        const geometry = graphic.geometry as {type: string; coordinates: number[][][]};
+        expect(geometry.type).toBe('MultiLineString');
+        expect(geometry.coordinates[0].length).toBeGreaterThan(10);
+    });
+});
+
+describe('the symbols whose furniture is a screen size get a longer run', () => {
+    const LONG = [
+        TacticalGraphicName.FollowAndAssume,
+        TacticalGraphicName.FollowAndSupport,
+        TacticalGraphicName.Fix,
+        TacticalGraphicName.TacticalFix,
+    ];
+
+    /** A graphic with no such furniture, for the comparison to mean anything. */
+    const ORDINARY = TacticalGraphicName.PhaseLine;
+
+    it.each(LONG)('%s is drawn on a longer run than an ordinary line graphic', name => {
+        expect(reachOf(sampleBase(name))).toBeGreaterThan(reachOf(sampleBase(ORDINARY)) * 1.4);
+    });
+
+    it('does not lengthen anything else', () => {
+        // A blanket "make line samples longer" would repack the whole sheet and is not what
+        // was asked for. Only the graphics whose plates say "varies only in length" need it.
+        const ordinary = reachOf(sampleBase(ORDINARY));
+        const longer = listTacticalGraphicNames()
+            .filter(name => !LONG.includes(name as TacticalGraphicName))
+            .filter(name => {
+                const base = sampleBase(name as TacticalGraphicName);
+                return base.length === 2 && reachOf(base) > ordinary * 1.01;
+            });
+        expect(longer).toEqual([]);
+    });
+});
