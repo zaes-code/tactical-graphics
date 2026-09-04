@@ -897,6 +897,9 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.AttackByFire, TacticalGraphicName.SupportByFire,
         TacticalGraphicName.Exfiltrate,
         TacticalGraphicName.ReliefInPlace,
+        // The convoys: "point 1 defines the tip of the arrowhead and point 2 defines the
+        // rear of the symbol", and the symbol "varies only in length". @see convoyPaints
+        TacticalGraphicName.MovingConvoy, TacticalGraphicName.HaltedConvoy,
     ];
     // Placed, not drawn: one click drops a fixed-size badge.
     const onePoint: TacticalGraphicName[] = [
@@ -908,8 +911,9 @@ function getPointHint(name: TacticalGraphicName): string | null {
     // the orientation, and the third handle sets the width. @see RectangularArea
     if (isRectangular(name)) return '2 points (then drag the width)';
     if (twoPoint.includes(name)) return '2 points';
-    if (name === TacticalGraphicName.FieldsOfFire) return '3 points';
-    // if (name === TacticalGraphicName.SearchArea) return '3 points';
+    // Both are the same three-point V: a vertex and two arrowhead tips, in APP-06's own
+    // numbering. @see SWAP_FIRST_TWO
+    if (name === TacticalGraphicName.FieldsOfFire || name === TacticalGraphicName.SearchArea) return '3 points';
 
     if (name.endsWith('Irregular') ||
         name === TacticalGraphicName.LimitedAccessArea ||

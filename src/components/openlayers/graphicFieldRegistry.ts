@@ -258,6 +258,41 @@ const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, a
  * **One set for both**, because the two plates letter the same boxes: 270800 and 270801
  * differ in the wire on the outline and in nothing a field can carry.
  */
+/**
+ * The maritime bearing lines (APP-06 220100-220108): field H, and nothing else.
+ *
+ * Their Template letters exactly two things — the type letter at the midpoint, which is the
+ * symbol rather than an amplifier, and one `H` box beside point 2. The Examples fill that
+ * box with a contact identifier: `MSL` on the EW line, `L3-ACT` on the acoustic pair,
+ * `PAT-1` on the jammer and the RDF. No designation, no dates, no country code.
+ */
+const BEARING_LINE = f(false, false, false, false, false, {additionalInfo: true});
+
+/**
+ * The navigational rhumb line (APP-06 220109): `T` and `AN`, and it is the only line in the
+ * library to letter a bearing.
+ *
+ * *"Amplifier AN is to be displayed at the midpoint of the line and parallel to the line and
+ * to the North/West of the line. Amplifier T is to be displayed within a box and should be
+ * oriented upright and on the opposite side of the line from amplifier AN."* `AN` maps to
+ * `attitude`, the same field the rectangular target reads it into.
+ *
+ * **`attitude` is declared, but nothing here or in either holder stamps a `rotation` for it
+ * to read, and that is deliberate.** The rectangular target has an attitude because an edge
+ * handle swings one; a two-point line has no rotation *state* — its bearing is its geometry,
+ * and the paint derives and draws it on every render rather than waiting to be told. @see
+ * rhumbBearing, and the plate's own Orientation clause: "orientation is determined by the
+ * order in which the anchor points are entered".
+ *
+ * So the flag says the true thing — the graphic carries `AN`, which is what the conformance
+ * audit asks — while the dialog's attitude row stays hidden, being guarded on a defined
+ * `measured.rotation`. There is no dead UI, and the day a holder does stamp one the row
+ * appears by itself. The alternative was a stamp in *two* places, because the two engines
+ * fill `measured` from different ends of the same bag; that asymmetry is how six parity
+ * defects got in. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+const RHUMB_LINE = f(true, false, false, false, false, {attitude: true});
+
 const MINE_AREA = f(false, false, false, false, false, {mineType: true, additionalInfo: true});
 
 /**
@@ -502,6 +537,16 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.IdentificationFriendOrFoeOn]: SHAPE_ONLY,
     [TacticalGraphicName.FireSupportCoordinationLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.CommonSensorBoundary]: f(true, false, true, true, true),
+    [TacticalGraphicName.BearingLine]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineElectronic]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineAcoustic]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineTorpedo]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineJammer]: BEARING_LINE,
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: BEARING_LINE,
+    [TacticalGraphicName.NavigationalRhumbLine]: RHUMB_LINE,
     [TacticalGraphicName.LightLine]: GENERIC_LINE,
     [TacticalGraphicName.LineGeneric]: LINE_GENERIC,
     [TacticalGraphicName.HandoverLine]: GENERIC_LINE,
@@ -878,6 +923,63 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
      * on the other target graphics. @see RectangularTarget
      */
     [TacticalGraphicName.TargetAreaRectangular]: {...NAME_FIELD_ONLY, width: true, length: true, attitude: true},
+    /*
+     * 240804 letters only `T` and `WIDTH (M)`. Its length and its attitude are read off the
+     * two anchor points -- the plate says so twice, under Size/Shape and Orientation -- so
+     * neither is a field here, which is the difference from 240802 above.
+     */
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]: {...NAME_FIELD_ONLY, width: true},
+
+    /*
+     * APP-06 §8.10 Table 8-12 -- the maritime control areas. Every set below is what its
+     * own Template letters, and the four differ from one another in ways a family-wide
+     * default would have flattened:
+     *
+     * | plate | boxes | reads as |
+     * |---|---|---|
+     * | 200101 / 200201 | `T`, `AM`, `AM1`, `AN` | designation, width, length, attitude |
+     * | 200202 | `T`, `AM` | designation and a width; length and attitude come off the two anchor points |
+     * | 200401 | `AM`, `AM1`, `AN` and **no `T`** | the literal `AOI` is fixed; there is nothing to type |
+     * | 200402 | `AM` and no `T` | a width, and nothing else |
+     * | 200300 | `AM`, `W`, `W1` | a radius and a date-time group; `N` is the symbol, not a field |
+     * | 200500 | nothing at all | |
+     * | 200600 | `AM1`, `AM2`, `AN` and no `T` | length, width, attitude |
+     * | 200700 | `T` plus four numbers | the numbers are the range-fan editor |
+     *
+     * **`AM` is a radius on the ellipses and a full width on the rectangles**, which is the
+     * mapping to check twice: the ellipse plates say "a minor axis radius (AM), a major
+     * axis radius (AM1)" while 200202 says "the width, defined in metres, will determine
+     * the width of the rectangle". The generators reconcile it. @see EllipticalArea
+     */
+    [TacticalGraphicName.LaunchAreaEllipse]: {...NAME_FIELD_ONLY, width: true, length: true, attitude: true},
+    [TacticalGraphicName.DefendedAreaEllipse]: {...NAME_FIELD_ONLY, width: true, length: true, attitude: true},
+    [TacticalGraphicName.DefendedAreaRectangle]: {...NAME_FIELD_ONLY, width: true},
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: {...SHAPE_ONLY, width: true, length: true, attitude: true},
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: {...SHAPE_ONLY, width: true},
+    [TacticalGraphicName.NoAttackZone]: {...SHAPE_AND_DTG, radius: true},
+    [TacticalGraphicName.ActiveManeuverArea]: SHAPE_ONLY,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: {...SHAPE_ONLY, width: true, length: true, attitude: true},
+    /*
+     * 200700's start range, stop range, search axis azimuth and stop relative bearing are
+     * a two-ring sector, so they are edited through the range-fan editor rather than
+     * through four fields of their own. @see RadarSearchDoctrine for why that is a
+     * description of the plate and not a shortcut.
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]: {...NAME_FIELD_ONLY, rangeFan: true},
+    /*
+     * APP-06 152200 letters **one** box, `A`, and `A` is the tactical symbol indicator --
+     * an associated unit symbol centred over point 1, not text. There is no field here for
+     * the same reason cover, guard and screen are `SHAPE_ONLY`: what goes in the middle is
+     * a point symbol a host injects. @see SearchArea
+     */
+    [TacticalGraphicName.SearchArea]: SHAPE_ONLY,
+    /*
+     * The convoys letter `V`, `H`, `W` and `W1` and no designation at all. `V` is the
+     * equipment type -- `M1A2` and `M915` in the two Examples -- and this library files V
+     * under `weapon`. @see ai/conformance/README.md, the letter mapping
+     */
+    [TacticalGraphicName.MovingConvoy]: {...SHAPE_AND_DTG, additionalInfo: true, weapon: true},
+    [TacticalGraphicName.HaltedConvoy]: {...SHAPE_AND_DTG, additionalInfo: true, weapon: true},
     [TacticalGraphicName.TargetAreaCircular]: NAME_FIELD_ONLY,
     [TacticalGraphicName.HighDensityAirspaceControlZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.RestrictedOperationsZone]: ENGAGEMENT_ZONE,

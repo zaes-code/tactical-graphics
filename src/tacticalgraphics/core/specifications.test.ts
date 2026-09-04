@@ -134,6 +134,76 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // The two that write their abbreviation into their own broken boundary.
     TacticalGraphicName.ArtilleryManeuverArea,
     TacticalGraphicName.ArtilleryReservedArea,
+    /*
+     * APP-06 §8.11, the maritime control lines (220100-220109), added 2026-09-03.
+     *
+     * The FM has no bearing line and no rhumb line of any kind, and this was checked the
+     * way the 2026-09-03 retagging batch established it has to be: by **searching the
+     * manual's text**, not by trusting that a maritime chapter has no Army counterpart.
+     * Eight graphics moved APP6_ONLY -> BOTH that same day because the search had been
+     * skipped, so what it returned is recorded here rather than the conclusion alone:
+     *
+     *   bearing line · rhumb · jammer · direction finder · acoustic   0 hits each
+     *   bearing                                                       2 hits, both the
+     *                                                                 *same glossary entry*
+     *
+     * That last one is the trap in miniature and cuts the way that matters. `direction
+     * finding` really is in the manual -- defined at the term list and again in the
+     * glossary, quoting JP 3-85 -- and it is still not a symbol. A definition is not a
+     * control measure, so 220108 stays APP-06 only; a search that stopped at "found it"
+     * would have tagged it BOTH, which is the mirror image of the mistake the batch fixed.
+     */
+    TacticalGraphicName.BearingLine,
+    TacticalGraphicName.BearingLineElectronic,
+    TacticalGraphicName.BearingLineElectromagneticWarfare,
+    TacticalGraphicName.BearingLineAcoustic,
+    TacticalGraphicName.BearingLineAcousticAmbiguous,
+    TacticalGraphicName.BearingLineTorpedo,
+    TacticalGraphicName.BearingLineElectroOpticalIntercept,
+    TacticalGraphicName.BearingLineJammer,
+    TacticalGraphicName.BearingLineRadioDirectionFinder,
+    TacticalGraphicName.NavigationalRhumbLine,
+    // APP-06 240804. `aegis`, `NSFS` and `naval surface fire` are all absent from the FM;
+    // `naval gunfire` is present, but as a *section heading* over the fire support areas
+    // and the fire support station -- which this library covers under their own codes.
+    TacticalGraphicName.TargetAreaSingleTargetAegis,
+    /*
+     * APP-06 §8.10 Table 8-12, the maritime control areas (group 20), added 2026-09-04.
+     *
+     * Searched the same way, and recorded rather than concluded:
+     *
+     *   launch area · defended area · no attack · NOTACK · ship area · cued acquisition
+     *                                                                   0 hits each
+     *   radar search                                                    4 hits, and every
+     *                                                                   one of them prose
+     *
+     * The four are the glossary and term-list definitions of an artillery target
+     * intelligence zone and a call for fire zone -- *"a weapons locating radar search area
+     * in enemy territory"* -- two graphics this library already draws under 241401 and
+     * 241001. Same words, different thing, exactly as `mine cluster` was. A definition is
+     * not a plate.
+     */
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.NoAttackZone,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+    TacticalGraphicName.RadarSearchDoctrine,
+    /*
+     * APP-06 152200. `search area` is in the manual six times and never as a symbol -- the
+     * hits are "target acquisition search areas" in the common sensor boundary's definition
+     * and "weapons locating radar search area" in the two zones above. `reconnaissance
+     * area` is absent entirely, and its Table 8-10 neighbours 151900, 152300, 152400 and
+     * 152500 are all APP-06 only.
+     *
+     * **The convoys are deliberately not here.** FM table 5-18 draws both, which is why
+     * they are `BOTH` -- and they are the counter-example that keeps this list honest, added
+     * in the same commit as the nine above.
+     */
+    TacticalGraphicName.SearchArea,
 ];
 
 describe('graphic specifications', () => {

@@ -560,6 +560,26 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.PsyOpsZoneRectangular,
+    /*
+     * APP-06 240804. It belongs here and **not** with `TargetAreaRectangular`, despite the
+     * shared words in the name: its plate says "this symbol requires two anchor points and
+     * a width (defined in metres) to define the boundary of the area. Points 1 and 2 will
+     * be located on the opposite sides of the area" -- which is this family's construction
+     * exactly. 240802 builds its box from typed amplifiers off a single anchor point and is
+     * a different symbol. @see TargetAreaSingleTargetAegis
+     */
+    TacticalGraphicName.TargetAreaSingleTargetAegis,
+    /*
+     * APP-06 200202 and 200402. Same rule again, word for word: "requires two anchor points
+     * and a width, defined in metres, to define the boundary of the area. Points 1 and 2
+     * will be located in the centre of two opposing sides of the rectangle."
+     *
+     * They are the second and third exception to `drawnBase.test.ts`'s naming rule -- built
+     * like the family and not called `...Rectangular`, because APP-06 spells these two
+     * `Rectangle`. Named there rather than renamed here: a display name follows the plate.
+     */
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
 ];
 
 /**
@@ -641,7 +661,40 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.RaftSite]: 2,
     [TacticalGraphicName.FortifiedPosition]: 2,
 
+    /*
+     * APP-06 §8.11, the maritime control lines. Every one of their draw rules says the same
+     * thing -- "requires two anchor points. Points 1 and 2 define the endpoints" -- and
+     * 220100 adds that the symbol "varies only in length".
+     *
+     * The count has to be stated *here* and not only in the OpenLayers factory, which is
+     * what `drawLimitParity` caught: registering them as `line(2)` capped the draw on one
+     * engine and left the library saying "no limit", so MapLibre would have gone on
+     * accepting vertices for a symbol defined by exactly two. It also feeds
+     * `editStretches`, which reads a fixed vertex count as its condition.
+     */
+    [TacticalGraphicName.BearingLine]: 2,
+    [TacticalGraphicName.BearingLineElectronic]: 2,
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: 2,
+    [TacticalGraphicName.BearingLineAcoustic]: 2,
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: 2,
+    [TacticalGraphicName.BearingLineTorpedo]: 2,
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: 2,
+    [TacticalGraphicName.BearingLineJammer]: 2,
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: 2,
+    [TacticalGraphicName.NavigationalRhumbLine]: 2,
+
+    /*
+     * The convoys. Both plates read "this symbol requires two anchor points. Point 1
+     * defines the tip of the arrowhead and point 2 defines the rear", and both add that the
+     * symbol "varies only in length" -- so two points, exactly, on either engine.
+     */
+    [TacticalGraphicName.MovingConvoy]: 2,
+    [TacticalGraphicName.HaltedConvoy]: 2,
+
     // Three: two arrow tips and a rear, or a centre and two ends.
+    // APP-06 152200: "requires three anchor points. Point 1 defines the vertex of the
+    // graphic. Points 2 and 3 define the tips of the arrowheads." @see SearchArea
+    [TacticalGraphicName.SearchArea]: 3,
     [TacticalGraphicName.ObstacleBypassEasy]: 3,
     [TacticalGraphicName.ObstacleBypassDifficult]: 3,
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
@@ -703,6 +756,13 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  */
 const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 0,
+    /*
+     * The search area's vertex, for the same reason and at the same index: 152200 numbers
+     * it point 1 and the arms' tips points 2 and 3, so the base stores `[end, apex, end]`
+     * and is swapped into that numbering. Dragging the vertex under a reshape would bend
+     * the whole symbol about the point the operator thinks of as its origin.
+     */
+    [TacticalGraphicName.SearchArea]: 0,
 };
 
 /**
@@ -883,6 +943,23 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Turn,
     TacticalGraphicName.WeaponSensorRangeFanCircular,
     TacticalGraphicName.WeaponSensorRangeFanSector,
+    /*
+     * The seven point-anchored maritime control areas -- APP-06 §8.10.
+     *
+     * Two circles sized by a rim drag, three ellipses and a rotated rectangle sized the
+     * way `TargetAreaRectangular` is, and one sector fan. Every one is placed by a single
+     * anchor point and sized by dragging away from it, which is what this list describes;
+     * the OpenLayers factories (`circularArea`, `rectangularTarget`, `rangeFan`) all set
+     * `editStretches` unconditionally, so leaving them out here would have MapLibre
+     * translating where OpenLayers resizes. @see editStretchParity.test.ts, which caught it
+     */
+    TacticalGraphicName.NoAttackZone,
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+    TacticalGraphicName.RadarSearchDoctrine,
 ];
 
 /**

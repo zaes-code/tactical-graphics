@@ -136,8 +136,17 @@ import {
     crossedMissionTaskLabelPaint,
     missionTaskLabelPaint,
     crossedMissionTaskLabelScale,
+    aegisSingleTargetPaint,
+    bearingLinePaint,
+    activeManeuverAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    radarSearchLabelPaint,
+    convoyPaint,
+    searchAreaPaint,
     crossedMissionTaskPaint,
     defeatPaint,
+    rhumbLinePaint,
     blockPaint,
     breachPaint,
     clearPaint,
@@ -2216,6 +2225,23 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     // engine fell through to the legacy switch and drew a designation the graphic no longer
     // offers. Registering a paint takes two edits — the registry, and this list.
     TacticalGraphicName.AirheadLine,
+    /*
+     * The maritime areas. Their label blocks exist only in the paint layer, and each of the
+     * three arrangements is one this engine's switch cannot express: `LA - T` joins with a
+     * hyphen where `getFullLabel` joins with a space, `AOI` is a bare literal *under* the
+     * shape with no designation at all, and 200300 stacks a fixed `N` over `W - W1`.
+     * Falling through would have drawn `LA 1`, `AOI 1` and a bare date on this engine and
+     * the plates' own text on the other. @see areaLabelPainterFor
+     */
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
+    TacticalGraphicName.NoAttackZone,
+    // 200700's `T` is placed by the generator, out in the middle of the search area rather
+    // than at the anchor point, and drawn plain. @see radarSearchLabelPaint
+    TacticalGraphicName.RadarSearchDoctrine,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,
@@ -2271,6 +2297,12 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // **The second of the two edits.** Registering `aegisSingleTargetPaint` in
+        // `symbology/registry.ts` gets MapLibre, the thumbnails and the catalog; without
+        // this arm OpenLayers falls through to the ordinary area label and draws 240804 as
+        // 240802 -- two symbols, one picture. @see paintParity.test.ts
+        case TacticalGraphicName.TargetAreaSingleTargetAegis:
+            return asStyleFunction(aegisSingleTargetPaint(), name);
         // The row of mines rides the label feature, like the loudspeaker below it.
         case TacticalGraphicName.MinefieldDynamicDepiction:
         case TacticalGraphicName.MinedArea:
@@ -2570,6 +2602,46 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  */
 export function defeatStyleFunc(): StyleFunction {
     return asStyleFunction(defeatPaint(), TacticalGraphicName.Defeat);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `activeManeuverAreaPaint`. */
+export function activeManeuverAreaStyleFunc(): StyleFunction {
+    return asStyleFunction(activeManeuverAreaPaint(), TacticalGraphicName.ActiveManeuverArea);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `cuedAcquisitionDoctrinePaint`. */
+export function cuedAcquisitionDoctrineStyleFunc(): StyleFunction {
+    return asStyleFunction(cuedAcquisitionDoctrinePaint(), TacticalGraphicName.CuedAcquisitionDoctrine);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `radarSearchDoctrinePaint`. */
+export function radarSearchDoctrineStyleFunc(): StyleFunction {
+    return asStyleFunction(radarSearchDoctrinePaint(), TacticalGraphicName.RadarSearchDoctrine);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `radarSearchLabelPaint`. */
+export function radarSearchLabelStyleFunc(): StyleFunction {
+    return asStyleFunction(radarSearchLabelPaint(), TacticalGraphicName.RadarSearchDoctrine);
+}
+
+/** **Ported.** @see convoyPaints.ts, `convoyPaint`. */
+export function convoyStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(convoyPaint(name), name);
+}
+
+/** **Ported.** @see searchAreaPaints.ts, `searchAreaPaint`. */
+export function searchAreaStyleFunc(): StyleFunction {
+    return asStyleFunction(searchAreaPaint(), TacticalGraphicName.SearchArea);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `bearingLinePaint`. */
+export function bearingLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(bearingLinePaint(name), name);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `rhumbLinePaint`. */
+export function rhumbLineStyleFunc(): StyleFunction {
+    return asStyleFunction(rhumbLinePaint(), TacticalGraphicName.NavigationalRhumbLine);
 }
 
 /** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskPaint`. */
@@ -3158,6 +3230,22 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     }
     if (name === TacticalGraphicName.MinedAreaFenced) {
         return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);
+    }
+    /*
+     * The three maritime areas whose plate names a colour. **The second of the two edits:**
+     * registered in `symbology/registry.ts` they draw on MapLibre, in the thumbnails and in
+     * the catalog, and fall through to the plain affiliation outline here -- so 200500
+     * would be an ordinary black circle on this engine and amber on the other, which is a
+     * parity defect that looks like a rendering bug. @see paintParity.test.ts
+     */
+    if (name === TacticalGraphicName.ActiveManeuverArea) {
+        return asStyleFunction(activeManeuverAreaPaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.CuedAcquisitionDoctrine) {
+        return asStyleFunction(cuedAcquisitionDoctrinePaint(), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.RadarSearchDoctrine) {
+        return asStyleFunction(radarSearchDoctrinePaint(), name)(feature, resolution);
     }
     if (PSYOPS_ZONES.includes(name)) {
         return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);

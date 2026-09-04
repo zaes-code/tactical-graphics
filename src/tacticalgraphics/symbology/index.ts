@@ -86,6 +86,7 @@ export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './movementPaints';
 export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, rhumbLinePaint} from './maritimeLinePaints';
 export type {MobilityGlyph} from './sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -119,6 +120,19 @@ export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} f
 export {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './echelonPaints';
+export {aegisSingleTargetPaint} from './aegisTargetPaints';
+export {
+    ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_FILL,
+    RADAR_SEARCH_FILL,
+    RADAR_SEARCH_STROKE,
+    activeManeuverAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    radarSearchLabelPaint,
+} from './maritimeAreaPaints';
+export {convoyPaint} from './convoyPaints';
+export {searchAreaPaint} from './searchAreaPaints';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './boundaryPaints';

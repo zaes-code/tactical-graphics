@@ -75,8 +75,10 @@ const groundWidth = (controller: any): number => {
 };
 
 describe('rectangular zones carry their width in meters', () => {
-    it('covers all seventeen rectangular zones', () => {
-        expect(RECTANGULAR).toHaveLength(17);
+    it('covers all twenty rectangular zones', () => {
+        // Eighteen since APP-06 240804 joined on 2026-09-03; twenty since the two maritime
+        // ones, 200202 and 200402, joined on 2026-09-04. @see isRectangular
+        expect(RECTANGULAR).toHaveLength(20);
     });
 
     it.each(RECTANGULAR)('%s offers a width field in the dialog', name => {

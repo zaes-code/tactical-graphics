@@ -224,6 +224,12 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.FireSupportAreaCircular]:                      BOTH,      // APP-06 241003 Circular
     [TacticalGraphicName.TargetAreaIrregular]:                          BOTH,      // APP-06 240801 Area Target
     [TacticalGraphicName.TargetAreaRectangular]:                        BOTH,      // APP-06 240802 Rectangular Target
+    // AEGIS is naval fire support, and the FM has no counterpart. `aegis`, `NSFS` and
+    // `naval surface fire` return zero hits; `naval gunfire` returns four, and none of them
+    // is this symbol -- it is an FM *section heading*, and what sits under it is the fire
+    // support area (irregular / rectangular / circular) plus the fire support station, all
+    // of which this library already covers under their own codes. A heading is not a plate.
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:                  APP6_ONLY, // APP-06 240804 Rectangular Target - Single Target (AEGIS only)
     [TacticalGraphicName.TargetAreaCircular]:                           BOTH,      // APP-06 240803 Circular Target
     [TacticalGraphicName.HighDensityAirspaceControlZone]:               BOTH,      // APP-06 170900 High-Density Airspace Control Zone
     [TacticalGraphicName.RestrictedOperationsZone]:                     BOTH,      // APP-06 171000 Restricted Operations Zone (ROZ)
@@ -342,6 +348,51 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.SupportByFire]:                                BOTH,      // APP-06 152100 Support by Fire
     [TacticalGraphicName.Suppress]:                                     BOTH,      // APP-06 342800 Suppress
     [TacticalGraphicName.FightingPosition]:                             FM_ONLY,
+    [TacticalGraphicName.BearingLine]: APP6_ONLY, // APP-06 220100 Bearing Line
+    [TacticalGraphicName.BearingLineElectronic]: APP6_ONLY, // APP-06 220101 Bearing Line, Electronic
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: APP6_ONLY, // APP-06 220102 Bearing Line, Electromagnetic Warfare (EW)
+    [TacticalGraphicName.BearingLineAcoustic]: APP6_ONLY, // APP-06 220103 Bearing Line, Acoustic
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: APP6_ONLY, // APP-06 220104 Bearing Line, Acoustic (Ambiguous)
+    [TacticalGraphicName.BearingLineTorpedo]: APP6_ONLY, // APP-06 220105 Bearing Line, Torpedo
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: APP6_ONLY, // APP-06 220106 Bearing Line, Electro-Optical Intercept
+    [TacticalGraphicName.BearingLineJammer]: APP6_ONLY, // APP-06 220107 Bearing Line, Jammer
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: APP6_ONLY, // APP-06 220108 Bearing Line, Radio Direction Finder (RDF)
+    [TacticalGraphicName.NavigationalRhumbLine]: APP6_ONLY, // APP-06 220109 Navigational Rhumb Line
+    /*
+     * APP-06 §8.10 Table 8-12, the maritime control areas.
+     *
+     * **APP-06 only, and the FM search is recorded rather than asserted.** FM 1-02.2 is a
+     * land manual with no maritime chapter: `launch area`, `defended area`, `no attack`,
+     * `NOTACK`, `ship area` and `cued acquisition` return nothing at all. `radar search`
+     * returns four hits and every one of them is the *prose* definition of an artillery
+     * target intelligence zone or a call for fire zone -- "a weapons locating radar search
+     * area in enemy territory" -- which are two graphics this library already carries under
+     * their own codes. A definition is not a plate, and the words overlapping is the same
+     * trap `mine cluster` set. @see specifications.test.ts
+     */
+    [TacticalGraphicName.LaunchAreaEllipse]: APP6_ONLY, // APP-06 200101 Launch Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaEllipse]: APP6_ONLY, // APP-06 200201 Defended Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaRectangle]: APP6_ONLY, // APP-06 200202 Defended Area, Rectangle
+    [TacticalGraphicName.NoAttackZone]: APP6_ONLY, // APP-06 200300 No Attack (NOTACK) Zone
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: APP6_ONLY, // APP-06 200401 Ship Area of Interest, Ellipse/Circle
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: APP6_ONLY, // APP-06 200402 Ship Area of Interest, Rectangle
+    [TacticalGraphicName.ActiveManeuverArea]: APP6_ONLY, // APP-06 200500 Active Manoeuvre Area
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: APP6_ONLY, // APP-06 200600 Cued Acquisition Doctrine
+    [TacticalGraphicName.RadarSearchDoctrine]: APP6_ONLY, // APP-06 200700 Radar Search Doctrine
+    /*
+     * APP-06 152200. `search area` appears six times in FM 1-02.2 and not once as a symbol:
+     * every hit is the glossary phrase "target acquisition search areas" or "weapons
+     * locating radar search area", and `reconnaissance area` appears nowhere. Its Table
+     * 8-10 neighbours -- 151900, 152400, 152500, 152300 -- are all APP-06 only too.
+     */
+    [TacticalGraphicName.SearchArea]: APP6_ONLY, // APP-06 152200 Search Area/Reconnaissance Area
+    /*
+     * The convoys are in **both**: FM 1-02.2 table 5-18 "Convoy symbols" lists `moving
+     * convoy` and `halted convoy` on consecutive rows, with the manual's own note "the
+     * arrow points in the direction the convoy is moving" -- word for word APP-06 330100's.
+     */
+    [TacticalGraphicName.MovingConvoy]: BOTH, // APP-06 330100 Moving Convoy -- FM table 5-18 "moving convoy"
+    [TacticalGraphicName.HaltedConvoy]: BOTH, // APP-06 330200 Halted Convoy -- FM table 5-18 "halted convoy"
     [TacticalGraphicName.LightLine]: APP6_ONLY,  // APP-06 110200 Light Line
     [TacticalGraphicName.LineGeneric]: APP6_ONLY, // APP-06 110400 Line, Generic
     [TacticalGraphicName.HandoverLine]: APP6_ONLY, // APP-06 141800 Handover Line (HOL)

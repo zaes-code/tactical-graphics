@@ -14,7 +14,11 @@ import {
     endGlyphLineStyleFunc,
     engineerWorkLineStyle,
     escortOrDemonstrationStyleFunc,
+    bearingLineStyleFunc,
+    convoyStyleFunc,
+    searchAreaStyleFunc,
     ferryCrossingStyleFunc,
+    rhumbLineStyleFunc,
     fieldOfFireStyleFunc,
     finalProtectiveFireStyleFunc,
     followTaskStyleFunc,
@@ -101,6 +105,37 @@ export class LineGraphicBase implements LineGraphic {
                     return tacticalFixStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.FerryCrossing:
                     return ferryCrossingStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.BearingLine:
+                case TacticalGraphicName.BearingLineElectronic:
+                case TacticalGraphicName.BearingLineElectromagneticWarfare:
+                case TacticalGraphicName.BearingLineAcoustic:
+                case TacticalGraphicName.BearingLineAcousticAmbiguous:
+                case TacticalGraphicName.BearingLineTorpedo:
+                case TacticalGraphicName.BearingLineElectroOpticalIntercept:
+                case TacticalGraphicName.BearingLineJammer:
+                case TacticalGraphicName.BearingLineRadioDirectionFinder:
+                    // The letter comes from `getLabel(name)` inside the paint, so the nine
+                    // share one arm. @see BEARING_LINES, which is the same list in the
+                    // symbology half -- and the reason this arm exists at all: registering
+                    // the paint in `symbology/registry.ts` gets MapLibre, the thumbnails and
+                    // the catalog, and leaves OpenLayers drawing a bare line. Every picture
+                    // generated off `dist/` was already correct while the app was not.
+                    return bearingLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.NavigationalRhumbLine:
+                    return rhumbLineStyleFunc()(feature, resolution);
+                /*
+                 * The convoys and the search area -- **the second of the two edits again**.
+                 * The block arrow, the open triangle and the stepped V with its solid heads
+                 * are all synthesized in screen space by their paints; without these arms
+                 * OpenLayers draws the bare two-point run and the bare arms, which is what
+                 * the convoys looked like for the whole time they were switched off.
+                 * @see convoyPaints, searchAreaPaints, paintParity.test.ts
+                 */
+                case TacticalGraphicName.MovingConvoy:
+                case TacticalGraphicName.HaltedConvoy:
+                    return convoyStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.SearchArea:
+                    return searchAreaStyleFunc()(feature, resolution);
                 case TacticalGraphicName.DirectionOfMainAttack:
                 case TacticalGraphicName.DirectionOfSupportingAttack:
                 case TacticalGraphicName.AviationDirectionOfAttack:

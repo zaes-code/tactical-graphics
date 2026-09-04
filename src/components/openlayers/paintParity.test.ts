@@ -287,4 +287,90 @@ describe('the two engines agree about which graphics are filled', () => {
         // Listed rather than counted, so a failure names the graphic and which side is wrong.
         expect(disagreements).toEqual([]);
     });
+
+    /**
+     * **The trap this whole file was written for, and the one it did not actually cover.**
+     *
+     * Registering a bespoke paint takes *two* edits: the entry in `symbology/registry.ts`,
+     * which serves MapLibre, the thumbnails and the zaes.com catalog, and an arm in the
+     * relevant OpenLayers holder's `setStyle` switch. Miss the second and the graphic falls
+     * through to the generic line style: **every generated picture is correct and only the
+     * app is wrong**, so a thumbnail sweep, a catalog render and a plate comparison all
+     * agree while the running renderer draws a bare line.
+     *
+     * That has now happened five times — most recently to the nine bearing lines, whose
+     * style functions were imported into `LineGraphicBase` and never called, and before that
+     * to Defeat's filled arrows. The tests above guard the registry against *itself*; none
+     * of them ever asked OpenLayers what it drew, and the fill sweep above catches only the
+     * subset whose defect shows up as a missing fill.
+     *
+     * Text is the discriminator that generalises. A bespoke paint that draws a letter, a
+     * bearing or a designation is the common case, the generic fallback draws none of it,
+     * and "the registry drew text and OpenLayers drew none" is unambiguous. The check runs
+     * **one way on purpose**: OpenLayers legitimately puts some amplifiers on a separate
+     * label feature this comparison never asks for, so it may draw *more*, never less.
+     */
+    it('never lets OpenLayers drop text the registry paints', () => {
+        const textOf = (mark: {text?: {text?: string}}) => mark.text?.text;
+        const silent: string[] = [];
+
+        for (const name of listTacticalGraphicNames() as TacticalGraphicName[]) {
+            const feature = graphicFeature(name);
+            const paint = getPaintFunction(name)?.graphic;
+            const painted = feature && toPaintFeature(feature);
+            if (!feature || !paint || !painted) continue;
+
+            const registryTexts = paint(painted, paintContext(40)).map(textOf).filter((t): t is string => !!t);
+            if (!registryTexts.length) continue;
+
+            const openLayersTexts = [stylesFor(name).graphic(feature, 40)]
+                .flat()
+                .filter(Boolean)
+                .map(style => (style as import('ol/style/Style').default).getText?.()?.getText?.())
+                .filter(Boolean);
+
+            if (!openLayersTexts.length) {
+                silent.push(`${name}: registry paints ${JSON.stringify(registryTexts)}, OpenLayers paints none`);
+            }
+        }
+        expect(silent).toEqual([]);
+    });
+
+    /**
+     * **A missed dispatch does not always show up as missing text, and the worse case is
+     * when it does not.**
+     *
+     * The nine bearing lines proved it. With no arm in `LineGraphicBase`, the generic line
+     * style still drew each one's letter — at *both* ends, the way a phase line carries its
+     * designation — so the text check above passed them all. What the generic style did not
+     * carry was the dash, and 220104 acoustic (ambiguous) is separated from 220103 acoustic
+     * **by the dash alone**: both are lettered `A`. The two symbols rendered as the same
+     * picture in the running app while every generated thumbnail showed them correctly.
+     *
+     * That is the mined anti-tank ditch defect exactly — two graphics, one picture, no test
+     * objecting — so the pattern gets its own assertion rather than relying on the text one
+     * happening to notice. Same one-way rule: OpenLayers may dash something the registry
+     * leaves solid (status dashes ride a separate path), never the reverse.
+     */
+    it('never lets OpenLayers drop a dash the registry paints', () => {
+        const undashed: string[] = [];
+
+        for (const name of listTacticalGraphicNames() as TacticalGraphicName[]) {
+            const feature = graphicFeature(name);
+            const paint = getPaintFunction(name)?.graphic;
+            const painted = feature && toPaintFeature(feature);
+            if (!feature || !paint || !painted) continue;
+
+            const registryDashes = paint(painted, paintContext(40)).some(mark => !!mark.stroke?.dashPx?.length);
+            if (!registryDashes) continue;
+
+            const openLayersDashes = [stylesFor(name).graphic(feature, 40)]
+                .flat()
+                .filter(Boolean)
+                .some(style => !!(style as import('ol/style/Style').default).getStroke?.()?.getLineDash?.()?.length);
+
+            if (!openLayersDashes) undashed.push(`${name}: registry dashes, OpenLayers draws solid`);
+        }
+        expect(undashed).toEqual([]);
+    });
 });

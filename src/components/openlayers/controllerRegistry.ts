@@ -22,7 +22,6 @@ import {
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
-// import {SearchArea} from './graphics/SearchArea';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
 import {Exfiltrate} from './graphics/Exfiltrate';
@@ -34,7 +33,6 @@ import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
-// import {SearchAreaController} from './controllers/SearchAreaController';
 
 /**
  * `resolution` is the zoom the graphic is being created at; `sizing` is that same
@@ -402,6 +400,28 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.BlueKillBoxRectangular]:                polygonRect,
     [TacticalGraphicName.PurpleKillBoxRectangular]:              polygonRect,
     [TacticalGraphicName.TargetAreaRectangular]:                 rectangularTarget,
+    // Two anchor points and a width -- the rectangle family's controller, not the
+    // rectangular target's. @see RECTANGULAR_GRAPHICS
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:           polygonRect,
+    // APP-06 200202 / 200402 -- two anchor points and a width, so the rectangle family's
+    // controller, like 240804 above. @see RECTANGULAR_GRAPHICS
+    [TacticalGraphicName.DefendedAreaRectangle]:                 polygonRect,
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]:           polygonRect,
+    /*
+     * The maritime areas built from one anchor point.
+     *
+     * The three ellipses and the cued acquisition doctrine take `rectangularTarget`: two
+     * independent dimensions and an attitude, all three typed, which is the contract that
+     * factory exists for. 200300 and 200500 are a centre and a radius, which is
+     * `circularArea`. 200700's four numbers are a two-ring sector, which is `rangeFan`.
+     */
+    [TacticalGraphicName.LaunchAreaEllipse]:                     rectangularTarget,
+    [TacticalGraphicName.DefendedAreaEllipse]:                   rectangularTarget,
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]:             rectangularTarget,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]:               rectangularTarget,
+    [TacticalGraphicName.NoAttackZone]:                          circularArea,
+    [TacticalGraphicName.ActiveManeuverArea]:                    circularArea,
+    [TacticalGraphicName.RadarSearchDoctrine]:                   rangeFan,
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 
@@ -436,6 +456,31 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.LineOfDepartureOrLineOfContact]:   line(),
     [TacticalGraphicName.ProbableLineOfDeployment]:         line(),
     [TacticalGraphicName.CommonSensorBoundary]:             line(),
+    /*
+     * APP-06 §8.11 -- `line(2)`, not `vertexLine(2, 2)`.
+     *
+     * `vertexLine` is for a graphic whose *shape is the arrangement of its vertices*, so a
+     * drag moves the grabbed one rather than scaling the symbol. None of these is that: each
+     * draw rule says the two anchor points "define the line" and 220100's adds that the
+     * symbol "varies only in length". There is no arrangement to preserve, so the plain
+     * capped two-point line -- ferry crossing's and trip wire's family -- is the right one.
+     *
+     * **This changes no behaviour, and that is worth saying rather than leaving implied.**
+     * Both factories publish the same single grip here; a capped two-point line gets one and
+     * an uncapped `line()` gets two, which is why phase line shows two. The reason to move
+     * is that `vertexLine` states something untrue about these symbols, not that it drew
+     * them wrongly. @see tmp/probe-maritime-handles.mjs, which measured all four.
+     */
+    [TacticalGraphicName.BearingLine]: line(2),
+    [TacticalGraphicName.BearingLineElectronic]: line(2),
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: line(2),
+    [TacticalGraphicName.BearingLineAcoustic]: line(2),
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: line(2),
+    [TacticalGraphicName.BearingLineTorpedo]: line(2),
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: line(2),
+    [TacticalGraphicName.BearingLineJammer]: line(2),
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: line(2),
+    [TacticalGraphicName.NavigationalRhumbLine]: line(2),
     [TacticalGraphicName.LightLine]: line(),
     [TacticalGraphicName.LineGeneric]: line(),
     [TacticalGraphicName.HandoverLine]: line(),
@@ -631,8 +676,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Screen]: securityOp,
 
     // ── Search area ────────────────────────────────────────────────────────
-    // [TacticalGraphicName.SearchArea]: (name) =>
-    //     new SearchAreaController(new SearchArea(name)),
+    /*
+     * APP-06 152200 -- fields of fire's controller exactly: three vertices, each of which
+     * means something, and the apex inert so a reshape drag cannot bend the symbol about
+     * its own origin. The holder and controller it used before 2026-09-04 are gone with the
+     * SVG badge they drove. @see anchorVertex
+     */
+    [TacticalGraphicName.SearchArea]:                       vertexLine(3, 3, 0),
 
     // ── Forms of maneuver (movement arrows) ────────────────────────────────
     [TacticalGraphicName.MovementToContact]:  missionTask,
@@ -689,8 +739,14 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FinalProtectiveFire]: line(2),
     [TacticalGraphicName.LinearSmokeTarget]:   line(2),
     // Excluded — see ai/excluded-graphics.md
-    // [TacticalGraphicName.MovingConvoy]:     line(),
-    // [TacticalGraphicName.HaltedConvoy]:     line(),
+    /*
+     * The convoys: `line(2)`, capped, because both plates define the symbol by exactly two
+     * anchor points and say it "varies only in length" -- ferry crossing's family, not the
+     * vertex-arrangement one. @see BASE_VERTEX_COUNT, which states the same count for both
+     * engines
+     */
+    [TacticalGraphicName.MovingConvoy]:     line(2),
+    [TacticalGraphicName.HaltedConvoy]:     line(2),
 
     // ── Circular / point target control measures ─────────────────────────────
     // [TacticalGraphicName.TargetReferencePoint]: circularArea,

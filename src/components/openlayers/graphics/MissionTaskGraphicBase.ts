@@ -3,6 +3,7 @@ import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
+    axisAndWidth,
     drawnAnchorFrame,
     drawnAnchors,
     groundLength,
@@ -30,6 +31,8 @@ import {
     fightingPositionStyleFunc,
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
+    activeManeuverAreaStyleFunc,
+    cuedAcquisitionDoctrineStyleFunc,
     getMissionTaskStyleFn,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
@@ -188,6 +191,20 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // mission-task style only strokes — so without this it draws as four outlines.
         if (name === TacticalGraphicName.Defeat) {
             this.graphic.setStyle(defeatStyleFunc());
+        }
+        /*
+         * APP-06 200500 and 200600 -- **the second of the two edits**, and the trap here has
+         * its own shape: `createFeature`'s default is a plain stroke in the hostility colour,
+         * so a graphic registered in the paint layer and not named here draws the *right*
+         * outline in the *wrong* colour with no fill, on this engine only. 200500's amber
+         * and 200600's grey fill are the whole of what those two plates state.
+         * @see maritimeAreaPaints, paintParity.test.ts
+         */
+        if (name === TacticalGraphicName.ActiveManeuverArea) {
+            this.graphic.setStyle(activeManeuverAreaStyleFunc());
+        }
+        if (name === TacticalGraphicName.CuedAcquisitionDoctrine) {
+            this.graphic.setStyle(cuedAcquisitionDoctrineStyleFunc());
         }
         // Turn is a GeometryCollection — stroked curve plus filled arrowhead —
         // so it needs a fill as well as a stroke, and not the default blue one.
@@ -1233,13 +1250,6 @@ export class PursuitGraphicBase extends MissionTaskGraphicBase {
     }
 }
 
-/**
- * An untyped target's half-width, as a share of its half-length.
- *
- * The plate's own example is a box roughly half again as wide as it is deep, which is what
- * this reproduces. @see RectangularTargetGraphicBase.halfWidth
- */
-const DEFAULT_TARGET_WIDTH_RATIO = 0.66;
 
 /**
  * Rectangular target (APP-06 240802) — **point-anchored, and sized by its amplifiers**.
@@ -1288,7 +1298,14 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
      * slab at another. A typed width wins outright. @see toGraphicOptions
      */
     private get halfWidth(): number {
-        return this.typedHalfWidth ?? this.size * DEFAULT_TARGET_WIDTH_RATIO;
+        // **The share comes from the library, not from a constant here.** It used to be a
+        // 0.66 in this file, which meant MapLibre -- whose draw stamps a radius and nothing
+        // else -- had no way to derive a length at all and drew the whole family as a
+        // vertical stroke. @see axisAndWidth
+        // `axisAndWidth` speaks the public schema -- a **full** width -- so it is halved
+        // here, which is the same factor of two `toGraphicOptions` applies.
+        const derived = axisAndWidth(this.name as TacticalGraphicName, this.size);
+        return this.typedHalfWidth ?? (derived ? derived.width / 2 : this.size);
     }
 
     protected generatorOptions(): Record<string, unknown> {
