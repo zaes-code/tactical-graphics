@@ -162,48 +162,75 @@ describe('the amplifiers', () => {
     });
 });
 
-describe('a resize scales the whole symbol', () => {
+describe('a resize scales the symbol; lengthening the line does not', () => {
     /*
-     * **The user's call, 2026-09-04:** *"resize should wholesomely affect the shape and
-     * labels but labels should be capped (as always)".* The first version made every
-     * cross-axis dimension a screen constant, so a resize only stretched the body and the
-     * head stayed the same size — which is the picture this suite now refuses.
+     * **Two gestures, two answers, and the round trip between them is the history here.**
+     *
+     * The first version made every cross-axis dimension a screen constant. The user asked
+     * for *"resize should wholesomely affect the shape and labels"*, which was read as "make
+     * the body a share of the run" — and that made **dragging the red handle** fatten the
+     * convoy, because lengthening the line is not resizing the symbol. The user's correction
+     * (2026-09-04): *"The user should be able to make line pt1-pt2 longer w/o affecting the
+     * width of the graphic. Resize icon should resize wholesomely though."*
+     *
+     * `decorationSize` is the mechanism for exactly that split: a vertex drag leaves it
+     * alone and the resize gesture multiplies it. So the assertions come in pairs — what a
+     * longer run must *not* change, and what a larger `decorationSize` must.
      */
-    const outline = (length: number) =>
-        linesOf(convoyPaint(TacticalGraphicName.MovingConvoy)(
-            runFeature(TacticalGraphicName.MovingConvoy, {}, [[0, 0], [length, 0]]), context,
-        ))[0];
-
+    const drawn = (length: number, decorationSize?: number) =>
+        convoyPaint(TacticalGraphicName.MovingConvoy)(
+            runFeature(TacticalGraphicName.MovingConvoy, decorationSize === undefined ? {} : {decorationSize}, [[0, 0], [length, 0]]),
+            context,
+        );
+    const outline = (length: number, decorationSize?: number) => linesOf(drawn(length, decorationSize))[0];
     const across = (ring: ProjectedPosition[]) => Math.max(...ring.map(p => Math.abs(p[1])));
 
-    it('grows the body and the head with the run, not just the length', () => {
-        expect(across(outline(8000)) / across(outline(4000))).toBeCloseTo(2, 6);
+    it('leaves the body and the head alone when the run is lengthened', () => {
+        expect(across(outline(8000))).toBeCloseTo(across(outline(4000)), 6);
     });
 
-    it('holds the plate proportions at every size', () => {
-        // 50/448 across the body and 114/448 along the head, off the Template at 300 dpi.
-        for (const length of [2000, 4000, 20_000]) {
-            const ring = outline(length);
+    it('grows the body and the head with the decoration size', () => {
+        expect(across(outline(40_000, 4000)) / across(outline(40_000, 2000))).toBeCloseTo(2, 6);
+    });
+
+    it('holds the plate proportions at every decoration size', () => {
+        // 50/448 across the body against 114/448 along the head, off the Template at 300
+        // dpi -- so the head is 2.28 body half-heights long whatever the body is.
+        for (const size of [500, 2000, 8000]) {
+            const ring = outline(200_000, size);
             const bodyHalf = Math.min(...ring.map(p => Math.abs(p[1])).filter(v => v > 0));
             const neck = Math.max(...ring.filter(p => Math.abs(p[1]) > 0).map(p => p[0]));
-            expect(bodyHalf / length).toBeCloseTo(0.112, 3);
-            expect((length - neck) / length).toBeCloseTo(0.255, 2);
+            expect(bodyHalf).toBeCloseTo(size, 6);
+            expect((200_000 - neck) / bodyHalf).toBeCloseTo(2.28, 2);
         }
     });
 
-    it('scales the labels with it, and caps them', () => {
-        const scaleAt = (length: number) => {
-            const paints = convoyPaint(TacticalGraphicName.MovingConvoy)(
-                runFeature(TacticalGraphicName.MovingConvoy, {weapon: 'M1A2'}, [[0, 0], [length, 0]]), context,
-            );
-            return paints.find(p => p.text?.text === 'M1A2')!.text!.scale!;
-        };
-        // Grows with the symbol...
-        expect(scaleAt(4000)).toBeGreaterThan(scaleAt(2000));
-        // ...and stops, rather than reaching the 448 px line of text an uncapped
+    it('scales the labels with the decoration, not with the run, and caps them', () => {
+        const scaleAt = (length: number, decorationSize?: number) =>
+            drawn(length, decorationSize).find(p => p.text?.text === 'M1A2')?.text?.scale
+            ?? convoyPaint(TacticalGraphicName.MovingConvoy)(
+                runFeature(TacticalGraphicName.MovingConvoy,
+                    decorationSize === undefined ? {weapon: 'M1A2'} : {weapon: 'M1A2', decorationSize},
+                    [[0, 0], [length, 0]]),
+                context,
+            ).find(p => p.text?.text === 'M1A2')!.text!.scale!;
+        // A longer run leaves the lettering where it was...
+        expect(scaleAt(8000)).toBeCloseTo(scaleAt(4000), 6);
+        // ...a bigger symbol grows it, measured **below the ceiling**, since two sizes that
+        // both reach it are equal for a reason that says nothing about the rule...
+        expect(scaleAt(200_000, 100)).toBeGreaterThan(scaleAt(200_000, 60));
+        // ...and it stops, rather than reaching the 448 px line of text an uncapped
         // span-proportional scale produced on the avenue of approach. @see scaleOf
-        expect(scaleAt(400_000)).toBeLessThanOrEqual(scaleAt(40_000) * 1.0001);
-        expect(scaleAt(400_000)).toBeLessThan(10);
+        expect(scaleAt(4_000_000, 400_000)).toBeLessThanOrEqual(scaleAt(4_000_000, 40_000) * 1.0001);
+        expect(scaleAt(4_000_000, 400_000)).toBeLessThan(10);
+    });
+
+    it('shrinks rather than overhanging when the run is shorter than the head', () => {
+        // The cap: at the limit one body-half of shaft is left, so the neck stays ahead of
+        // the rear and the outline cannot cross itself. @see convoyPaint
+        const ring = outline(2000, 100_000);
+        expect(Math.min(...ring.map(p => p[0]))).toBeGreaterThanOrEqual(-1e-6);
+        expect(Math.max(...ring.map(p => p[0]))).toBeLessThanOrEqual(2000 + 1e-6);
     });
 
     it('renders V and H at one size, not two', () => {

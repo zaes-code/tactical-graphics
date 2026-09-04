@@ -390,6 +390,24 @@ export class LineGraphicController implements TacticalGraphicHandler {
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
         this.anchorVertex = anchorVertex;
+        /*
+         * **Both ends get a grip once both ends can be dragged.**
+         *
+         * The constructor sets `hidesStartHandle` for any two-point line — "two vertices is
+         * one segment: show only the handle on the far end" — which is right while the only
+         * gesture is a stretch anchored on the near end, because the near handle would then
+         * do nothing. It is wrong the moment the graphic drags vertices: the near end is a
+         * point the user can move, and a point you can move needs something to grab.
+         *
+         * MapLibre publishes both and has all along, so this was a **cross-engine
+         * difference on every `vertexLine(2, …)` graphic** — the convoys, the navigational
+         * line, `Fix`, the follow tasks. Reported on the convoys: *"maplibre has two red
+         * handles (correct) and openlayers has only 1"* (user, 2026-09-04).
+         *
+         * Cleared here rather than in the constructor because this is the builder that
+         * decides: a two-point line that does *not* drag vertices keeps the single handle.
+         */
+        this.graphic.hidesStartHandle = false;
         this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
             const geom = this.graphic.base.getGeometry();
             if (!geom) return;

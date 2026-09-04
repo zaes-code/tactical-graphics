@@ -61,9 +61,23 @@ type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * whole, and the head against the **body**, so the two stay in the relationship the plate
  * draws them in however either is derived.
  */
-/** Half the body's height, as a share of the run. 50/448 and 60/483. */
-const MOVING_BODY_SHARE = 0.112;
-const HALTED_BODY_SHARE = 0.124;
+/**
+ * Half the body's height, in screen pixels at the drawing zoom.
+ *
+ * **A screen size, not a share of the run** -- the two were 0.112 and 0.124 of the reach for
+ * one round, and that made dragging the red handle to lengthen the convoy fatten it as well.
+ * A line the user is lengthening is a line. (User's call, 2026-09-04.)
+ *
+ * The plate's *relationship* between the two survives: 50/448 against 60/483 makes the
+ * halted body about a tenth deeper than the moving one, which is 13 px against 14. The head
+ * and the triangle are still measured against the body below, so the whole symbol keeps its
+ * proportions however the body is arrived at.
+ *
+ * Read through `decorationSize`, so a resize scales the symbol whole and a vertex drag
+ * leaves it alone. @see DECORATION_PX, followTaskPaints
+ */
+const MOVING_BODY_PX = 13;
+const HALTED_BODY_PX = 14;
 
 /** Moving convoy: head length, as a multiple of the body's half-height. 114/50. */
 const MOVING_HEAD_LEN_RATIO = 2.28;
@@ -114,8 +128,24 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
         const headRatio = halted ? HALTED_TRIANGLE_LEN_RATIO : MOVING_HEAD_LEN_RATIO;
         const headHalfRatio = halted ? HALTED_TRIANGLE_HALF_RATIO : MOVING_HEAD_HALF_RATIO;
 
-        // Everything from the run, so the symbol keeps the plate's proportions at any size.
-        const bodyHalf = length * (halted ? HALTED_BODY_SHARE : MOVING_BODY_SHARE);
+        // The stamped decoration size where there is one, else the drawing zoom's worth of
+        // pixels. Everything else is measured against it, so the symbol keeps the plate's
+        // proportions however big it is.
+        const bodyPx = halted ? HALTED_BODY_PX : MOVING_BODY_PX;
+        /*
+         * **Capped against the run, which is what stops the symbol turning inside out.**
+         *
+         * The body is a screen size and the head is a multiple of it, so on a run shorter
+         * than the head `length - headLen` goes negative and the outline crosses itself —
+         * the leading edge behind the trailing one. Holding the unit to `length /
+         * (headRatio + 1)` leaves exactly one body-half of shaft at the limit, so a convoy
+         * drawn far too short renders as a small convoy rather than a knot.
+         *
+         * Same shape of rule as the navigational line's tick cap, and as `decorationScale`
+         * for the repeating decorations: the size is a screen constant until the *shape*
+         * cannot hold it. @see NAVIGATIONAL_TICK_MAX_SHARE
+         */
+        const bodyHalf = Math.min(feature.properties.decorationSize ?? bodyPx * res, length / (headRatio + 1));
         const headLen = bodyHalf * headRatio;
         const headHalf = bodyHalf * headHalfRatio;
 
@@ -181,7 +211,20 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * reason; the host's setting still reaches it, through the ceiling.
          * @see capLabelToSpan, which each block then narrows to the room it actually has
          */
-        const scale = spanProportionalScale(from, at(neck, 0), res, BASE_FONT_SIZE_PX);
+        /*
+         * **The labels scale with the body, not with the run.**
+         *
+         * They were span-proportional against the whole reach, which is the movement
+         * family's rule and right for an arrow whose *length* is the symbol. A convoy's
+         * length is the route it covers: lengthening it by dragging the red handle grew the
+         * text along with everything else, and the user's call is that a vertex drag changes
+         * the line and nothing else. (2026-09-04.)
+         *
+         * Measured against the body's full height, which is `decorationSize` — so a resize
+         * scales the text with the shape, and a longer convoy carries the same lettering.
+         * `spanProportionalScale` still supplies the ceiling. @see maxGraphicLabelScale
+         */
+        const scale = spanProportionalScale(at(0, -bodyHalf), at(0, bodyHalf), res, BASE_FONT_SIZE_PX);
         const text = (
             position: ProjectedPosition,
             value: string,
