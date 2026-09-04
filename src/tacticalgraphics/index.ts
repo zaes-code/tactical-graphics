@@ -346,6 +346,7 @@ export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstratio
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
 export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, rhumbLinePaint} from './symbology/maritimeLinePaints';
 export type {MobilityGlyph} from './symbology/sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -382,6 +383,21 @@ export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
 export {formatLaneWidth, overheadWirePaint, safeLaneOrGapPaint} from './symbology/overheadWirePaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
+export {aegisSingleTargetPaint} from './symbology/aegisTargetPaints';
+export {
+    ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_FILL,
+    RADAR_SEARCH_FILL,
+    RADAR_SEARCH_STROKE,
+    activeManeuverAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    radarSearchLabelPaint,
+} from './symbology/maritimeAreaPaints';
+export {convoyPaint} from './symbology/convoyPaints';
+export {searchAreaPaint} from './symbology/searchAreaPaints';
+export {SEARCH_AREA_ARM, SearchArea, asSearchVee} from './graphics/SearchArea';
+export {EllipticalArea, RadarSearchDoctrine} from './graphics/MaritimeArea';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
@@ -404,7 +420,7 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
 export {normalizeDrawnBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both

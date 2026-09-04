@@ -194,6 +194,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.FireSupportAreaCircular]:                     '241003',  // Circular
     [TacticalGraphicName.TargetAreaIrregular]:                         '240801',  // Area Target
     [TacticalGraphicName.TargetAreaRectangular]:                       '240802',  // Rectangular Target
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:                 '240804',  // Rectangular Target - Single Target (AEGIS only)
     [TacticalGraphicName.TargetAreaCircular]:                          '240803',  // Circular Target
     [TacticalGraphicName.HighDensityAirspaceControlZone]:              '170900',  // High-Density Airspace Control Zone
     [TacticalGraphicName.RestrictedOperationsZone]:                    '171000',  // Restricted Operations Zone (ROZ)
@@ -309,6 +310,29 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.SupportByFire]:                               '152100',  // Support by Fire
     [TacticalGraphicName.Suppress]:                                    '342800',  // Suppress
     [TacticalGraphicName.FightingPosition]:                            null,
+    [TacticalGraphicName.BearingLine]:                                       '220100',  // Bearing Line
+    [TacticalGraphicName.BearingLineElectronic]:                             '220101',  // Bearing Line, Electronic
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]:                 '220102',  // Bearing Line, Electromagnetic Warfare (EW)
+    [TacticalGraphicName.BearingLineAcoustic]:                               '220103',  // Bearing Line, Acoustic
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]:                      '220104',  // Bearing Line, Acoustic (Ambiguous)
+    [TacticalGraphicName.BearingLineTorpedo]:                                '220105',  // Bearing Line, Torpedo
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]:                '220106',  // Bearing Line, Electro-Optical Intercept
+    [TacticalGraphicName.BearingLineJammer]:                                 '220107',  // Bearing Line, Jammer
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]:                   '220108',  // Bearing Line, Radio Direction Finder (RDF)
+    [TacticalGraphicName.NavigationalRhumbLine]:                             '220109',  // Navigational Rhumb Line
+    // APP-06 §8.10 Table 8-12 -- the maritime control areas, entity group 20.
+    [TacticalGraphicName.LaunchAreaEllipse]:                           '200101',  // Launch Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaEllipse]:                         '200201',  // Defended Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaRectangle]:                       '200202',  // Defended Area, Rectangle
+    [TacticalGraphicName.NoAttackZone]:                                '200300',  // No Attack (NOTACK) Zone
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]:                   '200401',  // Ship Area of Interest, Ellipse/Circle
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]:                 '200402',  // Ship Area of Interest, Rectangle
+    [TacticalGraphicName.ActiveManeuverArea]:                          '200500',  // Active Manoeuvre Area
+    [TacticalGraphicName.CuedAcquisitionDoctrine]:                     '200600',  // Cued Acquisition Doctrine
+    [TacticalGraphicName.RadarSearchDoctrine]:                         '200700',  // Radar Search Doctrine
+    [TacticalGraphicName.SearchArea]:                                  '152200',  // Search Area/Reconnaissance Area
+    [TacticalGraphicName.MovingConvoy]:                                '330100',  // Moving Convoy
+    [TacticalGraphicName.HaltedConvoy]:                                '330200',  // Halted Convoy
     [TacticalGraphicName.LightLine]:                                   '110200',  // Light Line
     [TacticalGraphicName.LineGeneric]:                                 '110400',  // Line, Generic
     [TacticalGraphicName.HandoverLine]:                                '141800',  // Handover Line (HOL)

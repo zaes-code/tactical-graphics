@@ -164,6 +164,31 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.PhaseLine]:                        TacticalGraphicCategory.Lines,
     [TacticalGraphicName.ProbableLineOfDeployment]:         TacticalGraphicCategory.Lines,
     [TacticalGraphicName.ReleaseLine]:                      TacticalGraphicCategory.Lines,
+    // APP-06 §8.11 maritime control lines. The library has no maritime category and does
+    // not need one: these are lines, and the menu groups by what a thing *is*.
+    // APP-06 §8.10 Table 8-12 -- the maritime control **areas**, where the nine bearing
+    // lines below are its control lines. Both sit in the two generic buckets rather than
+    // in a maritime one of their own: this enum is the picker's menu, and a category
+    // holding nine graphics an army user never opens is a menu item, not a grouping.
+    [TacticalGraphicName.LaunchAreaEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DefendedAreaEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DefendedAreaRectangle]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.NoAttackZone]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ActiveManeuverArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RadarSearchDoctrine]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BearingLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectronic]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineAcoustic]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineTorpedo]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineJammer]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.NavigationalRhumbLine]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.LightLine]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.LineGeneric]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.HandoverLine]: TacticalGraphicCategory.Lines,
@@ -193,9 +218,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.WireDoubleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireTripleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
     // Convoy Symbols OK
-    // Excluded — see ai/excluded-graphics.md
-    // [TacticalGraphicName.HaltedConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
-    // [TacticalGraphicName.MovingConvoy]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.HaltedConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MovingConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
 
     // Countermobility OK
     // [TacticalGraphicName.Abatis]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
@@ -295,6 +319,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.Infiltration]:                     TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.InfiltrationLane]:                     TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.AvenueOfApproach]:                 TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.SearchArea]:                       TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.MainAxisOfAdvance]:                TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.MainAxisOfAdvanceFeint]:           TacticalGraphicCategory.MovementAndManeuver,
     [TacticalGraphicName.Penetration]:                      TacticalGraphicCategory.MovementAndManeuver,
@@ -385,4 +410,5 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.TargetAreaCircular]:               TacticalGraphicCategory.TargetControlMeasures,
     [TacticalGraphicName.TargetAreaIrregular]:              TacticalGraphicCategory.TargetControlMeasures,
     [TacticalGraphicName.TargetAreaRectangular]:            TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:      TacticalGraphicCategory.TargetControlMeasures,
 };

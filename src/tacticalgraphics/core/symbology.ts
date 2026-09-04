@@ -404,6 +404,9 @@ export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
     TacticalGraphicName.TargetAreaCircular,
+    // APP-06 200300: its Template letters `AM` with `RADIUS (m)` written along the arrow,
+    // so the radius is an amplifier the symbol carries and not only a drag read-out.
+    TacticalGraphicName.NoAttackZone,
     TacticalGraphicName.WeaponSensorRangeFanCircular,
     TacticalGraphicName.WeaponSensorRangeFanSector,
 ]);
@@ -454,6 +457,21 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
      * The number under the cursor is its half-length. @see RectangularTarget
      */
     TacticalGraphicName.TargetAreaRectangular,
+    /*
+     * The maritime control areas sized by the same rim drag and lettering no radius.
+     *
+     * 200500 letters nothing at all; the three ellipses and 200600 letter their two axes
+     * and a rotation, which the dialog offers as `width` / `length` / `attitude` -- a
+     * radius field on top of those would be a fourth way to say the same thing. 200700's
+     * ranges are edited as bands. Every one of them is still *dragged* to size, so the
+     * number under the cursor is the whole feedback the gesture has.
+     */
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+    TacticalGraphicName.RadarSearchDoctrine,
 ]);
 
 /**
@@ -659,6 +677,31 @@ const HAZARD_AREAS = new Set<TacticalGraphicName>([
 ]);
 
 /**
+ * The two maritime areas whose plate **names a colour**, APP-06 200500 and 200700.
+ *
+ * A third reason to withhold an identity, and it is the sharpest of the three: for these
+ * the colour *is* the symbol.
+ *
+ * - 200500, the active manoeuvre area, is a bare circle in amber -- and 200400, ship area
+ *   of interest, is the same bare circle in black. Draw a hostile 200500 red and what is
+ *   on the screen is neither: a circle in a colour that names no symbol at all.
+ * - 200700's Note states its dark cyan outright, border and fill.
+ *
+ * Same ruling as the hazard areas, one step further along: there the colour was doctrinal
+ * and the outline was argued to still carry the affiliation, and that half was withdrawn
+ * on 2026-08-26. Here there is no outline separate from the colour to argue about.
+ *
+ * **200600 is deliberately not here.** Its plate names a *fill*, and its border is stated
+ * as white -- which this library draws in the affiliation colour instead, because a white
+ * stroke is invisible on every basemap the default palette is built for. It has line work
+ * that can carry an identity, so it does. @see maritimeAreaPaints
+ */
+const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.RadarSearchDoctrine,
+]);
+
+/**
  * Restricted terrain and severely restricted terrain, for the same reason as the hazard
  * areas: they describe **ground rather than a force**.
  *
@@ -715,6 +758,7 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
     if (HOSTILE_CAPABLE_MISSION_TASKS.has(name) || CENTER_SYMBOL_GRAPHICS.has(name)) return true;
     if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
     if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
+    if (COLOUR_NAMED_AREAS.has(name)) return false;
     if (TERRAIN_DESCRIPTIONS.has(name)) return false;
     return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
 }

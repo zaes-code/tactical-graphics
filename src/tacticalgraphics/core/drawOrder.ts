@@ -118,20 +118,30 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // drawn second and sits *between* the two legs, so a reversal would only swap the
     // legs and leave the vertex in the middle. It gets a swap instead. @see SWAP_FIRST_TWO
     TacticalGraphicName.FieldsOfFire,                     // 140500
+    // 152200 reads the same way -- "Point 1 defines the vertex of the graphic. Points 2
+    // and 3 define the tips of the arrowheads" -- and is built the same way, apex in the
+    // middle. So it joins fields of fire in `SWAP_FIRST_TWO` rather than being reversed.
+    TacticalGraphicName.SearchArea,                       // 152200
+
+    // -- The convoys --
+    // "Point 1 defines the tip of the arrowhead and point 2 defines the rear of the
+    // symbol." A plain two-point reversal; there is no middle vertex to swap.
+    TacticalGraphicName.MovingConvoy,                     // 330100
+    TacticalGraphicName.HaltedConvoy,                     // 330200
 ];
 
 /**
  * The graphics whose points are reordered by something other than a reversal.
  *
- * Only fields of fire so far, and only because its apex is the **middle** vertex of a
- * three-point base: `[end, apex, end]` is what the generator reads, `[apex, end, end]` is
+ * Fields of fire and the search area, and only because each one's apex is the **middle**
+ * vertex of a three-point base: `[end, apex, end]` is what the generator reads, `[apex, end, end]` is
  * APP-06's numbering, and swapping the first two carries one into the other -- for the
  * two-point sketch a user has drawn halfway through, as well as for the finished V.
  *
  * Swapping two elements is its own inverse, exactly as reversal is, so the same function
  * serves both directions here too.
  */
-const SWAP_FIRST_TWO = new Set<string>([TacticalGraphicName.FieldsOfFire]);
+const SWAP_FIRST_TWO = new Set<string>([TacticalGraphicName.FieldsOfFire, TacticalGraphicName.SearchArea]);
 
 const TIP_FIRST = new Set<string>(TIP_FIRST_GRAPHICS);
 

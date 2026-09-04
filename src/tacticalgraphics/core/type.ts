@@ -666,6 +666,37 @@ export function getLabel(name: TacticalGraphicName) {
 
         case TacticalGraphicName.AttackByFire:
             return 'AF';
+        /*
+         * The maritime control areas -- APP-06 §8.10 Table 8-12.
+         *
+         * Every letter is off its own Template, and the three do **not** all behave the
+         * same way. `LA` and `DA` are prefixes to a designation the operator types, drawn
+         * `LA - T` inside the shape; `AOI` is a bare literal with no `T` box at all,
+         * drawn under the shape. @see maritimeAreaPaints, which is where that split lives
+         *
+         * The plate writes the hyphen: `LA - 1`, `DA - 1`. That is `actionAreaLabelPaint`'s
+         * join, not `getFullLabel`'s space.
+         */
+        case TacticalGraphicName.LaunchAreaEllipse:
+            return 'LA';
+        case TacticalGraphicName.DefendedAreaEllipse:
+        case TacticalGraphicName.DefendedAreaRectangle:
+            return 'DA';
+        case TacticalGraphicName.ShipAreaOfInterestEllipse:
+        case TacticalGraphicName.ShipAreaOfInterestRectangle:
+            return 'AOI';
+        /*
+         * 200300's Template letters a bare `N` over `W - W1`, and there is no designation
+         * box beneath it -- so the letter is the symbol rather than a prefix to anything.
+         */
+        case TacticalGraphicName.NoAttackZone:
+            return 'N';
+        /*
+         * 200500, 200600 and 200700 letter nothing at all in their own Templates -- 200700
+         * carries a `T` that its Draw Rules place "in the centre of the search area aligned
+         * with the search axis", which the paint positions itself, and the other two carry
+         * no text whatever. An empty label is the correct answer, not a missing case.
+         */
         // Both letter `D`, and they are different symbols: Destroy is a solid X, Defeat
         // is four arrows converging on the letter. APP-06 340900 and 344300.
         case TacticalGraphicName.Defeat:
@@ -679,6 +710,34 @@ export function getLabel(name: TacticalGraphicName) {
          * this layer does not know -- so `followTaskPaint` places the text itself and
          * `getLabel` returning '' is correct. @see FollowTask.ts
          */
+        /*
+         * The maritime bearing lines. Each letter is off its own Template at 900 dpi, and
+         * two of them defeat the obvious guess: the electro-optical intercept letters `O`
+         * rather than `EO`, and the radio direction finder spells `RDF` out.
+         *
+         * **Acoustic and acoustic (ambiguous) share `A` on purpose.** The plates give them
+         * the same letter and separate them by the line style alone — 220104 is dashed. A
+         * reader who "fixed" one of these to differ would be inventing symbology.
+         * @see BEARING_LINE_DASHED
+         */
+        case TacticalGraphicName.BearingLine:
+            return 'B';
+        case TacticalGraphicName.BearingLineElectronic:
+            return 'E';
+        case TacticalGraphicName.BearingLineElectromagneticWarfare:
+            return 'EW';
+        case TacticalGraphicName.BearingLineAcoustic:
+        case TacticalGraphicName.BearingLineAcousticAmbiguous:
+            return 'A';
+        case TacticalGraphicName.BearingLineTorpedo:
+            return 'T';
+        case TacticalGraphicName.BearingLineElectroOpticalIntercept:
+            return 'O';
+        case TacticalGraphicName.BearingLineJammer:
+            return 'J';
+        case TacticalGraphicName.BearingLineRadioDirectionFinder:
+            return 'RDF';
+
         case TacticalGraphicName.Interdict:
             return 'I';
         case TacticalGraphicName.Neutralize:
@@ -708,6 +767,23 @@ export enum TacticalGraphicName {
     AviationAxisOfAdvance = 'AviationAxisOfAdvance',
     AttackHelicopterAxisOfAdvance = 'AttackHelicopterAxisOfAdvance',
     AvenueOfApproach = 'AvenueOfApproach',        // APP-06 152300 Avenue of Approach
+    /**
+     * APP-06 152200. A **V of two notched arrows** meeting at a vertex, with the tactical
+     * symbol indicator (`A`) centred over that vertex.
+     *
+     * Its plate takes three anchor points -- "point 1 defines the vertex of the graphic,
+     * points 2 and 3 define the tips of the arrowheads" -- and says the two arms' "length
+     * and orientation can vary independently", so it is the same three-point V that
+     * `FieldsOfFire` (140500) is, and it is listed beside it in {@link SWAP_FIRST_TWO} for
+     * the same reason: the vertex is the *middle* vertex of the stored base.
+     *
+     * **Restored on 2026-09-04, and not as it was.** The 2026-04 implementation was a fixed
+     * SVG path scaled and rotated about one anchor point -- one click, no independent arms,
+     * a hollow arrowhead where the plate draws a solid one -- and it was the one graphic
+     * excluded the *hard* way, with its enum member deleted rather than commented out.
+     * @see ai/excluded-graphics.md
+     */
+    SearchArea = 'SearchArea',                    // APP-06 152200 Search Area/Reconnaissance Area
     Counterattack = 'Counterattack',
     CounterattackByFire = 'CounterattackByFire',  // APP-06 340700 Counter-Attack by Fire
 
@@ -907,6 +983,22 @@ export enum TacticalGraphicName {
     TargetAreaIrregular = 'TargetAreaIrregular',
     TargetAreaRectangular = 'TargetAreaRectangular',
     TargetAreaCircular = 'TargetAreaCircular',
+    /**
+     * APP-06 240804, rectangular target -- single target (AEGIS only).
+     *
+     * **A different symbol from 240802 above, not a variant of it**, and the two plates
+     * disagree on every axis that matters. 240802 takes one anchor point and gets its
+     * length, width and attitude typed as amplifiers (`AM1`, `AM`, `AN` in mils); this one
+     * takes *two anchor points on opposite sides* plus a width in metres, and reads both
+     * its length and its orientation off them. And it carries a mark 240802 has not: the
+     * target cross at its centre, which the plate fixes **upright however the box is
+     * turned** -- "the centre point of the area shall always have the target symbol with
+     * the same upright orientation".
+     *
+     * That last one is why it shares the *rectangle* family's generator and not the
+     * rectangular target's. @see RECTANGULAR_GRAPHICS
+     */
+    TargetAreaSingleTargetAegis = 'TargetAreaSingleTargetAegis',
 
     HighDensityAirspaceControlZone = 'HighDensityAirspaceControlZone',
     RestrictedOperationsZone = 'RestrictedOperationsZone',
@@ -1006,6 +1098,67 @@ export enum TacticalGraphicName {
      */
     MinedArea = 'MinedArea',                                  // APP-06 270800 Mined Area
     MinedAreaFenced = 'MinedAreaFenced',                      // APP-06 270801 Mined Area, Fenced
+    /*
+     * APP-06 §8.11, the maritime bearing lines — 220100 and its eight subtypes.
+     *
+     * **One construction: a two-point line with a fixed letter at its midpoint and field H
+     * beside point 2.** The parent carries `B` and is a symbol in its own right, not a
+     * taxonomy header: it has its own Draw Rules cell and its own Template.
+     *
+     * Every letter below was read off its own plate at 900 dpi, and two of them would have
+     * been wrong if derived from the name — the electro-optical intercept is `O`, not `EO`,
+     * and the acoustic pair share `A`. @see BEARING_LINE_STYLES
+     */
+    BearingLine = 'BearingLine',                                                  // APP-06 220100 Bearing Line
+    BearingLineElectronic = 'BearingLineElectronic',                              // APP-06 220101 Bearing Line, Electronic
+    BearingLineElectromagneticWarfare = 'BearingLineElectromagneticWarfare',      // APP-06 220102 Bearing Line, Electromagnetic Warfare (EW)
+    BearingLineAcoustic = 'BearingLineAcoustic',                                  // APP-06 220103 Bearing Line, Acoustic
+    BearingLineAcousticAmbiguous = 'BearingLineAcousticAmbiguous',                // APP-06 220104 Bearing Line, Acoustic (Ambiguous)
+    BearingLineTorpedo = 'BearingLineTorpedo',                                    // APP-06 220105 Bearing Line, Torpedo
+    BearingLineElectroOpticalIntercept = 'BearingLineElectroOpticalIntercept',    // APP-06 220106 Bearing Line, Electro-Optical Intercept
+    BearingLineJammer = 'BearingLineJammer',                                      // APP-06 220107 Bearing Line, Jammer
+    BearingLineRadioDirectionFinder = 'BearingLineRadioDirectionFinder',          // APP-06 220108 Bearing Line, Radio Direction Finder (RDF)
+    /**
+     * APP-06 220109. Not a bearing line: a plain run carrying its bearing (`AN`) *along* the
+     * line and its designation (`T`) boxed and upright on the other side of it.
+     */
+    NavigationalRhumbLine = 'NavigationalRhumbLine',                              // APP-06 220109 Navigational Rhumb Line
+    /*
+     * APP-06 §8.10 Table 8-12, the **maritime control areas** -- entity group 20.
+     *
+     * Nine drawable leaves, in four constructions rather than nine:
+     *
+     * - **Three ellipses** (200101, 200201, 200401). One anchor point at the centre plus a
+     *   minor-axis radius `AM`, a major-axis radius `AM1` and a rotation `AN` -- the same
+     *   parameterisation the rectangular target (240802) has, so they share its holder,
+     *   its controller and its handle contract. @see EllipticalArea
+     * - **Two rectangles** (200202, 200402). Two anchor points and a width in metres, which
+     *   is the rectangle family's own construction. @see RECTANGULAR_GRAPHICS
+     * - **Two circles** (200300, 200500). Centre and a radius.
+     * - **Two console graphics** (200600, 200700), whose plates state an RGB outright
+     *   rather than leaving the colour to the affiliation.
+     *
+     * The parent rows carry no symbol: 200000, 200100, 200200 and 200400 all read
+     * "currently there is no associated symbol", so unlike 270800 there is nothing hiding
+     * behind a header here. **200400 is the one to check twice** -- it *does* carry its own
+     * Anchor Points block, the shape that made mined area a real omission, but its
+     * Size/Shape reads "Static" and its Template is a bare fixed-size circle, which is a
+     * console icon rather than a drawn area. @see ai/app-6.md
+     */
+    LaunchAreaEllipse = 'LaunchAreaEllipse',                            // APP-06 200101 Launch Area, Ellipse/Circle
+    DefendedAreaEllipse = 'DefendedAreaEllipse',                        // APP-06 200201 Defended Area, Ellipse/Circle
+    DefendedAreaRectangle = 'DefendedAreaRectangle',                    // APP-06 200202 Defended Area, Rectangle
+    NoAttackZone = 'NoAttackZone',                                      // APP-06 200300 No Attack (NOTACK) Zone
+    ShipAreaOfInterestEllipse = 'ShipAreaOfInterestEllipse',            // APP-06 200401 Ship Area of Interest, Ellipse/Circle
+    ShipAreaOfInterestRectangle = 'ShipAreaOfInterestRectangle',        // APP-06 200402 Ship Area of Interest, Rectangle
+    /**
+     * APP-06 200500. A circle in the plate's amber, and the amber is the whole of what
+     * tells it from 200400 -- whose Template is the same circle in black.
+     * @see ACTIVE_MANEUVER_AMBER, which is measured off the plate rather than chosen
+     */
+    ActiveManeuverArea = 'ActiveManeuverArea',                          // APP-06 200500 Active Manoeuvre Area
+    CuedAcquisitionDoctrine = 'CuedAcquisitionDoctrine',                // APP-06 200600 Cued Acquisition Doctrine
+    RadarSearchDoctrine = 'RadarSearchDoctrine',                        // APP-06 200700 Radar Search Doctrine
     MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
     MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
     RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
@@ -1054,10 +1207,17 @@ export enum TacticalGraphicName {
     // Area control measure
     LimitedAccessArea = 'LimitedAccessArea',
 
-    // Convoy
-    // Excluded — see ai/excluded-graphics.md
-    // MovingConvoy = 'MovingConvoy',
-    // HaltedConvoy = 'HaltedConvoy',
+    /*
+     * Convoy -- APP-06 §8.16 Table 8-21 and FM 1-02.2 table 5-18, so **both** publications.
+     *
+     * Revived 2026-09-04. Both were switched off in 2026-08-02 as scope, on a note saying
+     * nothing was wrong with them because each "rendered as a `Phaseline`, which is the
+     * right shape". Reading the plates says otherwise: a moving convoy is a block arrow --
+     * a rectangular body flaring into a solid head -- and a halted one is that body with a
+     * hollow triangle *opening* toward the halt. A plain line is neither. @see convoyPaints
+     */
+    MovingConvoy = 'MovingConvoy',                // APP-06 330100 Moving Convoy
+    HaltedConvoy = 'HaltedConvoy',                // APP-06 330200 Halted Convoy
 
     // Target control measures
     // TargetReferencePoint = 'TargetReferencePoint',
@@ -1117,6 +1277,35 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.MinefieldDynamicDepiction]: 'minefield, dynamic depiction',
     [TacticalGraphicName.MinedArea]: 'mined area',
     [TacticalGraphicName.MinedAreaFenced]: 'mined area, fenced',
+    [TacticalGraphicName.BearingLine]: 'bearing line',
+    [TacticalGraphicName.BearingLineElectronic]: 'bearing line, electronic',
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: 'bearing line, electromagnetic warfare (EW)',
+    [TacticalGraphicName.BearingLineAcoustic]: 'bearing line, acoustic',
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: 'bearing line, acoustic (ambiguous)',
+    [TacticalGraphicName.BearingLineTorpedo]: 'bearing line, torpedo',
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: 'bearing line, electro-optical intercept',
+    [TacticalGraphicName.BearingLineJammer]: 'bearing line, jammer',
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: 'bearing line, radio direction finder (RDF)',
+    [TacticalGraphicName.NavigationalRhumbLine]: 'navigational rhumb line',
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]: 'target area, single target (AEGIS)',
+    /*
+     * The maritime control areas. Each name is the plate's own Control Measure cell,
+     * lower-cased -- **with the exception of `manoeuvre`**, which is spelled the US way
+     * everywhere in this library and matches `artillery maneuver area` beside it. The
+     * plate is quoted in the doc comments; a display name is this library's own text.
+     * @see ai/conventions.md
+     */
+    [TacticalGraphicName.LaunchAreaEllipse]: 'launch area, ellipse/circle',
+    [TacticalGraphicName.DefendedAreaEllipse]: 'defended area, ellipse/circle',
+    [TacticalGraphicName.DefendedAreaRectangle]: 'defended area, rectangle',
+    [TacticalGraphicName.NoAttackZone]: 'no attack (NOTACK) zone',
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: 'ship area of interest, ellipse/circle',
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: 'ship area of interest, rectangle',
+    [TacticalGraphicName.ActiveManeuverArea]: 'active maneuver area',
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: 'cued acquisition doctrine',
+    [TacticalGraphicName.RadarSearchDoctrine]: 'radar search doctrine',
+    /** APP-06's Control Measure cell reads `SEARCH AREA/ RECONNAISSANCE AREA`. */
+    [TacticalGraphicName.SearchArea]: 'search area / reconnaissance area',
     [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: 'minimum safe distance zone, multiple strike (STRIKWARN)',
     [TacticalGraphicName.RadiationDoseRateContourLine]: 'radiation dose rate contour line',

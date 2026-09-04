@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -777,7 +777,7 @@ export class MapLibreInteractions {
         name: TacticalGraphicName,
         wants: string | undefined,
         vertices: Position[],
-    ): {radius?: number; rotation: number} {
+    ): {radius?: number; length?: number; width?: number; rotation: number} {
         // **A graphic whose size *is* its decoration gets no radius at all.** For the
         // direction-of-attack family and the crossings, `size` means "how big is the
         // chevron", which the renderer derives from the zoom — so a placeholder radius
@@ -829,10 +829,30 @@ export class MapLibreInteractions {
         // builds from geodesically; these are mercator metres, 1.56x too long at 50
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
-        return {
-            radius: this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]),
-            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
-        };
+        const drawn = this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]);
+        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /*
+         * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
+         *
+         * 240802 and the four maritime areas built like it take *two* dimensions off one
+         * anchor point. A drag gives one number, so the other has to be derived — the
+         * OpenLayers holder has always done that, in a private constant of its own, and
+         * this engine had no way to know. The result was a box 2 km long (the generator's
+         * flat default) and as wide as the drag, which renders as a vertical stroke: what
+         * 240802 has looked like here since 3.2.0 and what the three maritime ellipses
+         * inherited on the day they were added.
+         *
+         * `axisAndWidth` is that derivation, stated once for both engines. @see
+         * hasAxisAndWidth, and the OpenLayers twin in `RectangularTargetGraphicBase`.
+         */
+        const axis = axisAndWidth(name, drawn);
+        // `{length, width}`, not `{length, radius}`: a **public** `radius` is the graphic's
+        // size and reaches the generator as `size`, where this family's half-width comes in
+        // as the public `width` halved. Stamping a `radius` here would have set a field the
+        // generator does not read and changed nothing. @see toGraphicOptions
+        if (axis) return {length: axis.length, width: axis.width, rotation};
+
+        return {radius: drawn, rotation};
     }
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {

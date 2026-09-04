@@ -5,6 +5,7 @@ import {Feature, MultiLineString, Position} from 'geojson';
 import {anchorsForBow} from './anchors';
 import {TURN_DEFAULT_BEND} from '../graphics/Turn';
 import {
+    baseGeometryFor,
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
     readTacticalGraphicProperties,
@@ -473,6 +474,43 @@ describe('README stays honest about the registry', () => {
         const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);
         expect(quoted).not.toBeNull();
         expect(Number(quoted![1])).toBe(listTacticalGraphicNames().length);
+    });
+
+    /**
+     * A base of the shape the graphic asks for, and nothing else — the state the README's
+     * two remaining numbers are both about.
+     */
+    const bareBase = (name: TacticalGraphicName): Feature => {
+        const wants = baseGeometryFor(name);
+        const geometry: Feature['geometry'] = wants === 'Point'
+            ? {type: 'Point', coordinates: [0, 0]}
+            : wants === 'Polygon'
+                ? {type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+                : {type: 'LineString', coordinates: [[0, 0], [1, 0], [2, 0.5]]};
+        return {type: 'Feature', geometry, properties: {tacticalGraphic: {name}}};
+    };
+
+    /*
+     * **The two numbers that had no check, and had both drifted.** The geometry-input
+     * figure read 53 against a real 54 and the label figure 106 against 119, on a
+     * denominator that was two releases old. Neither is derivable from a count of the
+     * registry, so each is measured here the way the sentence around it describes.
+     */
+    it('quotes the real number of graphics that need a geometry input', () => {
+        // "Without them you get a turf error rather than a default" — so the measure is
+        // exactly which names throw on a bare base.
+        const needsInput = (listTacticalGraphicNames() as TacticalGraphicName[]).filter(name => {
+            try {
+                renderTacticalGraphic(bareBase(name));
+                return false;
+            } catch {
+                return true;
+            }
+        });
+        const quoted = readme.match(/\*\*(\d+) of the (\d+) graphics need a geometry input/);
+        expect(quoted).not.toBeNull();
+        expect(Number(quoted![1])).toBe(needsInput.length);
+        expect(Number(quoted![2])).toBe(listTacticalGraphicNames().length);
     });
 });
 

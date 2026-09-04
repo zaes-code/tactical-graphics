@@ -220,7 +220,22 @@ const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
  */
 export function areaLabelStackPaint(
     name: TacticalGraphicName,
-    options: {before?: string[]; after?: string[]; literalLines?: string[]} = {},
+    options: {
+        before?: string[];
+        after?: string[];
+        literalLines?: string[];
+        /**
+         * Whether the stack carries the operator's designation at all.
+         *
+         * False for exactly one graphic: APP-06 200300, the no-attack zone, whose Template
+         * letters `N` over `AM` over `W - W1` and **no `T` box**. Its field set offers no
+         * designation for the same reason, so nothing in the app can set one — but a
+         * restored or imported graphic can still carry the property, and drawing it would
+         * put text on a symbol the standard does not letter. Off by construction rather
+         * than by trusting the field registry, which is a different question.
+         */
+        withDesignation?: boolean;
+    } = {},
 ): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
@@ -245,7 +260,8 @@ export function areaLabelStackPaint(
         const named = COUNTRY_CODE_AREAS.includes(name)
             ? formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode)
             : (feature.properties.designation ?? '').trim();
-        const designation = options.literalLines ? named : getFullLabel(name, named).trim();
+        const titled = options.literalLines ? named : getFullLabel(name, named).trim();
+        const designation = options.withDesignation === false ? '' : titled;
 
         const lines = [
             ...(options.before ?? []),
