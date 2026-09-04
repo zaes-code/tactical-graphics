@@ -43,9 +43,10 @@
  * legible underneath, which is what an area fill on a chart is for.
  */
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {paintLineWork} from '../core/paint';
+import {paintGeometryMembers, paintLineWork} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicStatus} from '../core/type';
+import {formatDistance} from '../core/symbology';
 import {labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -62,6 +63,29 @@ type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * the unmined one. @see ai/conventions.md, "compare every symbol against its own plate"
  */
 export const ACTIVE_MANEUVER_AMBER = '#FFC000';
+
+/**
+ * 200101's orange and 200201 / 200202's grey — **outline and fill both**.
+ *
+ * **These are the "may be depicted as" colours, and they are applied.** The first version
+ * of this file left them to the host on the reading that an optional colour is a host
+ * choice; the user's call (2026-09-04) is to draw what the plate shows.
+ *
+ * The colour reached the fill alone at first, on the same reasoning 200600 still follows:
+ * fill from the plate, outline from the affiliation. **The user's correction is that the
+ * outline is the plate's too** — the Examples draw an orange ellipse with an orange rim and
+ * a grey one with a grey rim, not a black rim round a tinted middle.
+ *
+ * That has a consequence, and it is the one 200500 and 200700 already carry: with no line
+ * work left in the affiliation's colour, **these three stop offering an identity**. A
+ * hostile launch area drawn red would be some other symbol entirely, and the sample sweep
+ * asserts that anything still claiming hostility paints red from a bag-only stamp — so the
+ * two halves have to move together. @see COLOUR_NAMED_AREAS, supportsHostility
+ */
+export const LAUNCH_AREA_COLOR = 'rgb(255,155,0)';
+export const LAUNCH_AREA_FILL = 'rgba(255,155,0,0.25)';
+export const DEFENDED_AREA_COLOR = 'rgb(85,119,136)';
+export const DEFENDED_AREA_FILL = 'rgba(85,119,136,0.25)';
 
 /** 200600's fill: the plate's grey at the caption's alpha. @see the module header */
 export const CUED_ACQUISITION_FILL = 'rgba(85,119,136,0.25)';
@@ -124,6 +148,99 @@ export function cuedAcquisitionDoctrinePaint(): AreaPaint {
 }
 
 /**
+ * The three maritime areas the plate says "may be depicted as" a colour: 200101 in orange,
+ * 200201 and 200202 in grey.
+ *
+ * **Both the rim and the fill**, from the plate. `stroke` is the solid colour and `fill`
+ * the same colour at the caption's alpha, which is what the Examples draw.
+ */
+export function maritimeFilledAreaPaint(color: string, fill: string): AreaPaint {
+    return feature => {
+        const geometry = outline(feature);
+        const areal = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
+        return [{
+            geometry,
+            ...(areal ? {fill: {color: fill}} : {}),
+            stroke: {color, widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
+        }];
+    };
+}
+
+/** Clearance between the shape's lower edge and the amplifier block under it, screen px. */
+const AXIS_BLOCK_GAP_PX = 10;
+
+/**
+ * `AM`, `AM1` and `AN`, set under the shape — the three numbers that *are* an ellipse.
+ *
+ * ## Why these are drawn at all
+ *
+ * The Templates letter all three in boxes on their own construction arrows, which in this
+ * library's reading is a plate asking for a field; the Examples then print the values as a
+ * caption under the symbol (`AM = 60 Metres`, `AM1 = 112 Metres`, `AN = +30 degrees`).
+ * The first version offered the three as dialog inputs and drew none of them. Drawing them
+ * is the user's call (2026-09-04), and the Example's own layout is what says where.
+ *
+ * ## The mapping, which is two factors of two and a convention
+ *
+ * `AM` is the **minor axis radius** and `AM1` the **major axis radius**, while the public
+ * schema carries a full `width` and a full `length` — so both are halved here. `AN` is the
+ * rotation as stored: the plate's "0 degrees is east/west, positive rotates
+ * counter-clockwise" is the trigonometric convention this library keeps `rotation` in, so
+ * it passes through untouched and only the sign is written out, the way the Example does.
+ *
+ * Distances go through `formatDistance`, the same formatter field `AM` uses on the
+ * corridors, rather than the Example's spelled-out "Metres": the unit convention is the
+ * library's and the Example's prose is explaining its own numbers.
+ *
+ * **The whole block is one `amplifier` mark**, so "name only" drops it entire — which is
+ * what the user asked for, and is right: none of the three names the symbol.
+ */
+export function axisAmplifierPaint(): AreaPaint {
+    return (feature, context) => {
+        const box = feature.bounds;
+        if (!box) return [];
+
+        const {width, length, rotation} = feature.properties;
+        const lines: string[] = [];
+        if (typeof width === 'number' && width > 0) lines.push(`AM = ${formatDistance(width / 2)}`);
+        if (typeof length === 'number' && length > 0) lines.push(`AM1 = ${formatDistance(length / 2)}`);
+        if (typeof rotation === 'number' && Number.isFinite(rotation)) {
+            const turned = Math.round(rotation);
+            lines.push(`AN = ${turned > 0 ? '+' : ''}${turned}°`);
+        }
+        if (!lines.length) return [];
+
+        return [{
+            geometry: {
+                type: 'Point',
+                coordinates: [(box.minX + box.maxX) / 2, box.minY - AXIS_BLOCK_GAP_PX * context.resolution],
+            },
+            text: {
+                text: lines.join('\n'),
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'top',
+                scale: scaleOf(feature, context),
+                kind: 'amplifier',
+            },
+        }];
+    };
+}
+
+/**
+ * A label painter with the axis block appended under it.
+ *
+ * Composed rather than folded into `actionAreaLabelPaint`, which forty other graphics share
+ * and none of the rest letters an axis.
+ */
+export function withAxisAmplifiers(base: AreaPaint): AreaPaint {
+    const axis = axisAmplifierPaint();
+    return (feature, context) => [...base(feature, context), ...axis(feature, context)];
+}
+
+/**
  * Radar search doctrine — APP-06 200700. The annular sector, in the dark cyan its Note
  * states outright.
  *
@@ -131,14 +248,30 @@ export function cuedAcquisitionDoctrinePaint(): AreaPaint {
  * does not, so there is nothing to trade away here. @see the module header
  */
 export function radarSearchDoctrinePaint(): AreaPaint {
-    return feature => {
-        const geometry = outline(feature);
-        const areal = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
-        return [{
-            geometry,
-            ...(areal ? {fill: {color: RADAR_SEARCH_FILL}} : {}),
-            stroke: {color: RADAR_SEARCH_STROKE, widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
-        }];
+    return (feature, context) => {
+        /*
+         * **The sector and its `T` arrive in one collection**, because the graphic is drawn
+         * from three anchor points and so lives on a `LineGraphicBase`, which puts nothing
+         * on a label feature. @see RadarSearchDoctrine.generateGraphics
+         */
+        const members = paintGeometryMembers(feature.geometry);
+        const paints: Paint[] = [];
+        for (const member of members) {
+            if (member.type === 'Point') continue;
+            const areal = member.type === 'Polygon' || member.type === 'MultiPolygon';
+            paints.push({
+                geometry: member,
+                ...(areal ? {fill: {color: RADAR_SEARCH_FILL}} : {}),
+                stroke: {color: RADAR_SEARCH_STROKE, widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
+            });
+        }
+
+        const anchor = members.find(m => m.type === 'Point');
+        const value = (feature.properties.designation ?? '').trim();
+        if (anchor?.type === 'Point' && value) {
+            paints.push(...radarSearchLabelPaint()({...feature, geometry: anchor}, context));
+        }
+        return paints;
     };
 }
 

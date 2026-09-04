@@ -138,10 +138,15 @@ import {
     crossedMissionTaskLabelScale,
     aegisSingleTargetPaint,
     bearingLinePaint,
+    navigationalLinePaint,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
     activeManeuverAreaPaint,
+    maritimeFilledAreaPaint,
     cuedAcquisitionDoctrinePaint,
     radarSearchDoctrinePaint,
-    radarSearchLabelPaint,
     convoyPaint,
     searchAreaPaint,
     crossedMissionTaskPaint,
@@ -2239,9 +2244,6 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.ShipAreaOfInterestRectangle,
     TacticalGraphicName.NoAttackZone,
-    // 200700's `T` is placed by the generator, out in the middle of the search area rather
-    // than at the anchor point, and drawn plain. @see radarSearchLabelPaint
-    TacticalGraphicName.RadarSearchDoctrine,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,
@@ -2609,6 +2611,11 @@ export function activeManeuverAreaStyleFunc(): StyleFunction {
     return asStyleFunction(activeManeuverAreaPaint(), TacticalGraphicName.ActiveManeuverArea);
 }
 
+/** **Ported.** @see maritimeAreaPaints.ts, `maritimeFilledAreaPaint`. */
+export function maritimeFilledAreaStyleFunc(name: TacticalGraphicName, color: string, fill: string): StyleFunction {
+    return asStyleFunction(maritimeFilledAreaPaint(color, fill), name);
+}
+
 /** **Ported.** @see maritimeAreaPaints.ts, `cuedAcquisitionDoctrinePaint`. */
 export function cuedAcquisitionDoctrineStyleFunc(): StyleFunction {
     return asStyleFunction(cuedAcquisitionDoctrinePaint(), TacticalGraphicName.CuedAcquisitionDoctrine);
@@ -2617,11 +2624,6 @@ export function cuedAcquisitionDoctrineStyleFunc(): StyleFunction {
 /** **Ported.** @see maritimeAreaPaints.ts, `radarSearchDoctrinePaint`. */
 export function radarSearchDoctrineStyleFunc(): StyleFunction {
     return asStyleFunction(radarSearchDoctrinePaint(), TacticalGraphicName.RadarSearchDoctrine);
-}
-
-/** **Ported.** @see maritimeAreaPaints.ts, `radarSearchLabelPaint`. */
-export function radarSearchLabelStyleFunc(): StyleFunction {
-    return asStyleFunction(radarSearchLabelPaint(), TacticalGraphicName.RadarSearchDoctrine);
 }
 
 /** **Ported.** @see convoyPaints.ts, `convoyPaint`. */
@@ -2637,6 +2639,11 @@ export function searchAreaStyleFunc(): StyleFunction {
 /** **Ported.** @see maritimeLinePaints.ts, `bearingLinePaint`. */
 export function bearingLineStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(bearingLinePaint(name), name);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `navigationalLinePaint`. */
+export function navigationalLineStyleFunc(): StyleFunction {
+    return asStyleFunction(navigationalLinePaint(), TacticalGraphicName.NavigationalLine);
 }
 
 /** **Ported.** @see maritimeLinePaints.ts, `rhumbLinePaint`. */
@@ -3241,11 +3248,21 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.ActiveManeuverArea) {
         return asStyleFunction(activeManeuverAreaPaint(), name)(feature, resolution);
     }
+    /*
+     * 200101 in orange, 200201 and 200202 in grey -- the "may be depicted as" colours, drawn
+     * since 2026-09-04. **The second of the two edits, caught by `paintParity` for the sixth
+     * time:** registered in `symbology/registry.ts` they fill on MapLibre, in the thumbnails
+     * and in the catalog, and fall through to the plain affiliation outline here. The guard
+     * names the graphic and which side is wrong, which is why this took one run to find.
+     */
+    if (name === TacticalGraphicName.LaunchAreaEllipse) {
+        return asStyleFunction(maritimeFilledAreaPaint(LAUNCH_AREA_COLOR, LAUNCH_AREA_FILL), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.DefendedAreaEllipse || name === TacticalGraphicName.DefendedAreaRectangle) {
+        return asStyleFunction(maritimeFilledAreaPaint(DEFENDED_AREA_COLOR, DEFENDED_AREA_FILL), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.CuedAcquisitionDoctrine) {
         return asStyleFunction(cuedAcquisitionDoctrinePaint(), name)(feature, resolution);
-    }
-    if (name === TacticalGraphicName.RadarSearchDoctrine) {
-        return asStyleFunction(radarSearchDoctrinePaint(), name)(feature, resolution);
     }
     if (PSYOPS_ZONES.includes(name)) {
         return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);

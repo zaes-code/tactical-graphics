@@ -11,8 +11,9 @@
  * arithmetic: the Example draws a run bearing about 059 and prints `060`.
  */
 import {TacticalGraphicName, getLabel} from '../core/type';
+import {isPaintable} from './registry';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, rhumbBearing, rhumbLinePaint} from './maritimeLinePaints';
+import {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbBearing, rhumbLinePaint} from './maritimeLinePaints';
 
 const RESOLUTION = 10;
 
@@ -341,5 +342,80 @@ describe('the navigational rhumb line', () => {
             return Math.max(...ring.map(p => p[0])) - Math.min(...ring.map(p => p[0]));
         };
         expect(spanOf(paintOf(undefined, {designation: '188888'}))).toBeGreaterThan(spanOf(paintOf(undefined, {designation: '1'})));
+    });
+});
+
+describe('the navigational line — APP-06 218400', () => {
+    /**
+     * A drawn line filed under "Maritime Control Points", and the only one of its kind the
+     * 2026-09-03 sweep missed: a group-level filter cannot see it, and a plate-level one
+     * finds exactly three such rows in the six Points groups — this, the abatis and the
+     * overhead wire, the other two already built.
+     */
+    const RESOLUTION = 10;
+    const context = {resolution: RESOLUTION, measureText: (t: string) => t.length * 9} as unknown as PaintContext;
+
+    const run = (coordinates: ProjectedPosition[] = [[0, 0], [4000, 0]]): PaintFeature => ({
+        geometry: {type: 'LineString', coordinates},
+        properties: {name: TacticalGraphicName.NavigationalLine},
+    } as unknown as PaintFeature);
+
+    const segments = (coordinates?: ProjectedPosition[]) =>
+        navigationalLinePaint()(run(coordinates), context)
+            .filter(p => p.geometry.type === 'LineString')
+            .map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates);
+
+    it('is registered, and draws the bar with a tick at each end', () => {
+        expect(isPaintable(TacticalGraphicName.NavigationalLine)).toBe(true);
+        expect(segments()).toHaveLength(3);
+    });
+
+    it('puts the two ticks on the same hand, not mirrored', () => {
+        /*
+         * **The whole shape, and the reading a careless symmetry gets wrong.** Both ticks
+         * rise to the right: the one at point 1 leads forward and up, the one at point 2
+         * trails backward and down, so the figure is rotationally symmetric about the bar's
+         * midpoint. Mirroring the second draws a shallow `Z` with both ends turning the same
+         * way up, which is a different figure. Measured as the sign of the cross-axis
+         * component of each tick, which must be opposite.
+         */
+        const [, first, second] = segments();
+        const firstUp = first[1][1] - first[0][1];
+        const secondUp = second[1][1] - second[0][1];
+        expect(Math.sign(firstUp)).toBe(-Math.sign(secondUp));
+        // ...and the along-axis components too: one leads, one trails.
+        expect(Math.sign(first[1][0] - first[0][0])).toBe(-Math.sign(second[1][0] - second[0][0]));
+    });
+
+    it('sets both ticks at the plate angle', () => {
+        // 40.0 and 40.4 degrees, measured off the Template at 600 dpi; one number for both.
+        for (const tick of segments().slice(1)) {
+            const dx = tick[1][0] - tick[0][0];
+            const dy = tick[1][1] - tick[0][1];
+            // **Undirected**: the trailing tick runs the other way along the same line, so
+            // its `atan2` is 40 - 180. Folding into [0, 180) compares the lines, which is
+            // what "both at the plate angle" means. The first probe compared headings and
+            // reported 140 against 40 for a tick that was correct.
+            const heading = Math.atan2(dy, dx) * (180 / Math.PI);
+            expect(((heading % 180) + 180) % 180).toBeCloseTo(40, 5);
+        }
+    });
+
+    it('holds the ticks at one screen size however long the bar is', () => {
+        // "The symbol varies only in length", so the run is the only thing that grows.
+        const lengthOf = (coordinates: ProjectedPosition[]) => {
+            const [, tick] = segments(coordinates);
+            return Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1]);
+        };
+        expect(lengthOf([[0, 0], [4000, 0]])).toBeCloseTo(lengthOf([[0, 0], [40_000, 0]]), 6);
+    });
+
+    it('shrinks them rather than letting one span the whole bar', () => {
+        const [, tick] = segments([[0, 0], [400, 0]]);
+        expect(Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1])).toBeLessThan(400 * 0.4);
+    });
+
+    it('falls back to a bare bar when a tick would be under the visibility floor', () => {
+        expect(segments([[0, 0], [60, 0]])).toEqual([[[0, 0], [60, 0]]]);
     });
 });

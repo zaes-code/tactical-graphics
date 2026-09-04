@@ -5,7 +5,7 @@ import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import openlayersAdapter from "../openlayersAdapter";
-import {radarSearchDoctrineStyleFunc, radarSearchLabelStyleFunc, getRangeFanLabelStyleFn, LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
+import {getRangeFanLabelStyleFn, LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
 import {resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
@@ -70,25 +70,9 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
             });
         });
 
-        /*
-         * APP-06 200700 rides this holder for its *editing* -- its start and stop ranges
-         * are two rings of a sector -- and shares none of its drawing. The fan strokes
-         * concentric arcs in the affiliation colour and letters `RG 5,000` on each; the
-         * radar search doctrine is one filled annulus in the dark cyan its Note states,
-         * with field `T` out in the middle of the search area.
-         *
-         * **Both overrides are needed, and the label one is the easier to forget**: left
-         * to `getRangeFanLabelStyleFn` this graphic would draw a range read-out no plate
-         * asks for and never draw the `T` that one does. @see maritimeAreaPaints
-         */
-        if (name === TacticalGraphicName.RadarSearchDoctrine) {
-            this.graphic.setStyle(radarSearchDoctrineStyleFunc());
-            this.label.setStyle(radarSearchLabelStyleFunc());
-        } else {
-            // Band metadata is stamped on the label feature by updateGeometry; the
-            // style function reads it (and any amplifiers) straight off the feature.
-            this.label.setStyle(getRangeFanLabelStyleFn(name));
-        }
+        // Band metadata is stamped on the label feature by updateGeometry; the
+        // style function reads it (and any amplifiers) straight off the feature.
+        this.label.setStyle(getRangeFanLabelStyleFn(name));
 
         writeGraphicProperties([this.graphic, this.label, this.handles], name, this.graphicLabels);
     }

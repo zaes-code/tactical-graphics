@@ -330,6 +330,9 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ActiveManeuverArea]:                          '200500',  // Active Manoeuvre Area
     [TacticalGraphicName.CuedAcquisitionDoctrine]:                     '200600',  // Cued Acquisition Doctrine
     [TacticalGraphicName.RadarSearchDoctrine]:                         '200700',  // Radar Search Doctrine
+    // Entity group 21 is "Maritime Control Points"; this one leaf of it is drawn line
+    // work. @see NavigationalLine
+    [TacticalGraphicName.NavigationalLine]:                            '218400',  // Navigational
     [TacticalGraphicName.SearchArea]:                                  '152200',  // Search Area/Reconnaissance Area
     [TacticalGraphicName.MovingConvoy]:                                '330100',  // Moving Convoy
     [TacticalGraphicName.HaltedConvoy]:                                '330200',  // Halted Convoy

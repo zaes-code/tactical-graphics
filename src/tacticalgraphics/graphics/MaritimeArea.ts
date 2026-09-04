@@ -1,4 +1,4 @@
-import {Feature, MultiPoint, Point, Polygon, Position} from 'geojson';
+import {Feature, GeometryCollection, LineString, MultiPoint, Point, Polygon, Position} from 'geojson';
 import {RangeFanOptions, RectangularTargetOptions, TacticalGraphicName} from '../core/type';
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {resolveBandAzimuths, resolveBands} from './RangeFan';
@@ -162,46 +162,81 @@ const RSD_DEFAULT_START_SHARE = 0.4;
  * > axis azimuth, a start range, a stop range, and a stop relative bearing. The stop
  * > relative bearing is an equal angle either side of the search axis.
  *
- * ## Why it is a range fan rather than a bag of four new fields
+ * ## Three anchor points: the radar, the start range and the stop range
  *
- * Those four numbers are, in this library's terms, a **sector range fan with two rings**:
- * the innermost band's range is the start range, the outermost band's is the stop range,
- * and a band already carries a left and a right azimuth about a global `centerAzimuthDeg`.
- * So it takes `RangeFanOptions`, the `rangeFan` controller and the existing bands editor,
- * and adds no parallel schema for quantities the schema already describes.
+ * **The base is drawn, not typed.** Its plate names one anchor point and four numbers, and
+ * the first version took that literally: a two-click centre-and-radius drag that set the
+ * stop range and defaulted the start. That draws the symbol *from the radar to the far
+ * arc*, which is not its shape — the near arc is where the search begins, and it is a
+ * placement rather than a default. (User's call, 2026-09-04.)
  *
- * Two consequences worth stating, because both are deliberate:
+ * So point 1 is the radar, point 2 is on the start arc and point 3 is on the stop arc. Two
+ * ranges and the search axis all come off those three, which leaves the **stop relative
+ * bearing** as the only number the geometry cannot carry — and that stays with the bands
+ * editor, as the outermost band's left and right azimuths.
  *
- * - **One band still draws two arcs.** A single ring leaves the start range unstated, and
- *   zero would put the symbol's apex on the radar itself — a pie wedge, which is a
- *   different picture from every Template and Example this symbol has. So the innermost
- *   arc falls back to a share of the outermost. @see RSD_DEFAULT_START_SHARE
- * - **Only the innermost and outermost rings are drawn.** A sector fan draws every band;
- *   this draws the annulus between the first and the last, because the plate has exactly
- *   two arcs. Bands in between are carried but not painted — the alternative was refusing
- *   them, which would make the shared editor lie about what it accepts.
+ * ## Typed wins, drawn is the fallback
+ *
+ * A band range that has been typed overrides the drag, which is the precedence the
+ * rectangular target's width already uses (`typedHalfWidth ?? derived`). Nothing in the
+ * dialog is dead: type a range and it takes, drag and it takes. A bare two-point base — a
+ * graphic drawn before this change, or a sketch mid-draw — gets the old behaviour, the
+ * stop range with {@link RSD_DEFAULT_START_SHARE} inside it.
+ *
+ * **Only the innermost and outermost rings are drawn.** A sector fan draws every band; this
+ * draws the annulus between the first and the last, because the plate has exactly two arcs.
+ * Bands in between are carried but not painted — the alternative was refusing them, which
+ * would make the shared editor lie about what it accepts.
  *
  * The whole ring is one closed polygon, walked out along the far arc and back along the
  * near one, so the fill the plate specifies has something to fill. @see radarSearchDoctrinePaint
  */
 export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
     name: string = TacticalGraphicName.RadarSearchDoctrine;
-    type: string = 'Point';
+    type: string = 'LineString';
 
-    /** Start range, stop range and the two edge bearings, all resolved. */
-    private frame(base: Feature<Point>, opts: RangeFanOptions | undefined) {
-        const center = base.geometry.coordinates;
+    /**
+     * The radar, the two ranges and the two edge bearings.
+     *
+     * Read off the base where it has them and off the bands where they are typed. The axis
+     * is the bearing from the radar to the **stop** point: that is the one the operator
+     * aims last, and taking it from the start point would let a click a degree off swing
+     * the whole sector.
+     */
+    private frame(base: Feature<LineString>, opts: RangeFanOptions | undefined) {
+        const coords = base.geometry.coordinates;
+        const center = coords[0] ?? [0, 0];
         const bands = resolveBands(opts);
         const outer = bands[bands.length - 1];
-        // Two or more bands: the innermost is the start range, stated. One band: the
-        // default share, so a freshly drawn symbol is the plate's annulus rather than a
-        // wedge. @see RSD_DEFAULT_START_SHARE
-        const start = bands.length > 1 ? bands[0].range : outer.range * RSD_DEFAULT_START_SHARE;
+        const typedStart = bands.length > 1 ? bands[0].range : undefined;
+        const typedStop = opts?.bands?.length ? outer.range : undefined;
+
+        const reach = (to: Position | undefined): number | undefined =>
+            to ? turf.distance(turf.point(center), turf.point(to), {units: 'meters'}) : undefined;
+
+        const stop = typedStop ?? reach(coords[2] ?? coords[1]) ?? outer.range;
+        const start = typedStart
+            ?? (coords.length >= 3 ? reach(coords[1]) : undefined)
+            ?? stop * RSD_DEFAULT_START_SHARE;
+
+        const norm = (deg: number): number => ((deg % 360) + 360) % 360;
         const {leftAz, rightAz} = resolveBandAzimuths(outer, opts);
-        return {center, start, stop: outer.range, leftAz, rightAz};
+        const aimedAt = coords[2] ?? coords[1];
+        if (!aimedAt) return {center, start, stop, leftAz, rightAz};
+
+        /*
+         * **Keep the band's opening; re-aim it.** The half-angle is the operator's, stated
+         * in the editor or left at the fan's own +/-45 degrees; the direction is the drag's.
+         * Overwriting both would throw away a stop relative bearing the moment a vertex
+         * moved, and taking neither would leave the sector pointing wherever the fan's
+         * default centre azimuth happens to be rather than where it was drawn.
+         */
+        const half = norm(rightAz - leftAz) / 2;
+        const axis = norm(turf.bearing(turf.point(center), turf.point(aimedAt)));
+        return {center, start, stop, leftAz: norm(axis - half), rightAz: norm(axis + half)};
     }
 
-    generateGraphics(base: Feature<Point>, opts: RangeFanOptions | undefined): Feature<Polygon> {
+    generateGraphics(base: Feature<LineString>, opts: RangeFanOptions | undefined): Feature<GeometryCollection> {
         const {center, start, stop, leftAz, rightAz} = this.frame(base, opts);
         // Clockwise from left to right, wrapping through north the way the fans do.
         const sweep = ((rightAz - leftAz) % 360 + 360) % 360;
@@ -220,14 +255,51 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
         // near arc collapses onto the centre, which closes the wedge at its apex.
         const ring = start > 0 ? [...arc(stop, false), ...arc(start, true)] : [...arc(stop, false), center];
         ring.push(ring[0]);
-        return this.asPolygonFeature([ring]);
+
+        /*
+         * **The sector and field `T`'s anchor travel together, in one collection.**
+         *
+         * A `LineGraphicBase` graphic puts nothing on a label feature — every mark it draws
+         * comes off the one geometry — and 200700 became one of those when its draw went to
+         * three anchor points. Emitting the anchor here is what lets the paint place `T`
+         * *"in the centre of the search area"* without reconstructing that point from the
+         * ring. Fix does the same with its arrowhead. @see radarSearchDoctrinePaint
+         */
+        return this.asGeometryCollectionFeature([
+            {type: 'Polygon', coordinates: [ring]},
+            this.labelAnchor(center, start, stop, leftAz, rightAz),
+        ]);
     }
 
-    /** `[stop-range grip, centre]` — the one-radius layout every point-anchored circle has. */
-    generateHandles(base: Feature<Point>, opts: RangeFanOptions | undefined): Feature<MultiPoint> {
-        const {center, stop, leftAz, rightAz} = this.frame(base, opts);
+    /** Field `T`'s point: on the search axis, midway between the two arcs. */
+    private labelAnchor(
+        center: Position,
+        start: number,
+        stop: number,
+        leftAz: number,
+        rightAz: number,
+    ): Point {
         const sweep = ((rightAz - leftAz) % 360 + 360) % 360;
-        return this.asMultiPointFeature([along(center, stop, leftAz + sweep / 2), center]);
+        const reach = start + (stop - start) * RSD_LABEL_FRACTION;
+        return {type: 'Point', coordinates: along(center, reach, leftAz + sweep / 2)};
+    }
+
+    /**
+     * The three drawn points, in the order they were clicked: radar, start arc, stop arc.
+     *
+     * A vertex line, so each grip is the anchor point it was placed as. @see anchorVertex,
+     * which makes the radar inert under a reshape so the sector cannot be bent about its
+     * own origin — the same contract fields of fire and the search area have.
+     */
+    generateHandles(base: Feature<LineString>, opts: RangeFanOptions | undefined): Feature<MultiPoint> {
+        const coords = base.geometry.coordinates;
+        if (coords.length >= 3) return this.asMultiPointFeature([coords[0], coords[1], coords[2]]);
+        // A two-point base still publishes three grips, on the axis, so a graphic drawn
+        // before this change edits the same way as one drawn after it.
+        const {center, start, stop, leftAz, rightAz} = this.frame(base, opts);
+        const sweep = ((rightAz - leftAz) % 360 + 360) % 360;
+        const axis = leftAz + sweep / 2;
+        return this.asMultiPointFeature([center, along(center, start, axis), along(center, stop, axis)]);
     }
 
     /**
@@ -235,9 +307,8 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
      * search axis"* — so on the axis, midway between the two arcs, not at the anchor point.
      * The anchor is the radar; the search area is out in front of it.
      */
-    generateLabels(base: Feature<Point>, opts: RangeFanOptions | undefined): Feature<Point> {
+    generateLabels(base: Feature<LineString>, opts: RangeFanOptions | undefined): Feature<Point> {
         const {center, start, stop, leftAz, rightAz} = this.frame(base, opts);
-        const sweep = ((rightAz - leftAz) % 360 + 360) % 360;
-        return this.asPointFeature(along(center, start + (stop - start) * RSD_LABEL_FRACTION, leftAz + sweep / 2));
+        return this.asPointFeature(this.labelAnchor(center, start, stop, leftAz, rightAz).coordinates);
     }
 }

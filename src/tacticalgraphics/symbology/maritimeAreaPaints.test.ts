@@ -20,6 +20,7 @@ import {TacticalGraphicName, getLabel} from '../core/type';
 import {supportsHostility} from '../core/symbology';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {getPaintFunction, isPaintable} from './registry';
+import {withHiddenAmplifiers} from './paintFunctions';
 import {
     ACTIVE_MANEUVER_AMBER,
     CUED_ACQUISITION_FILL,
@@ -116,6 +117,38 @@ describe('the colours the plates state outright', () => {
         expect(supportsHostility(TacticalGraphicName.CuedAcquisitionDoctrine)).toBe(true);
     });
 
+    it.each([
+        [TacticalGraphicName.LaunchAreaEllipse, 'rgb(255,155,0)', 'rgba(255,155,0,0.25)'],
+        [TacticalGraphicName.DefendedAreaEllipse, 'rgb(85,119,136)', 'rgba(85,119,136,0.25)'],
+        [TacticalGraphicName.DefendedAreaRectangle, 'rgb(85,119,136)', 'rgba(85,119,136,0.25)'],
+    ])('%s takes the plate colour on its rim as well as its fill', (name, colour, fill) => {
+        /*
+         * **Rim and fill, not fill alone.** The first version tinted the middle and left the
+         * outline in the affiliation's colour; the Examples draw an orange ellipse with an
+         * orange rim and a grey one with a grey rim. (User's call, 2026-09-04.)
+         */
+        const [ring] = getPaintFunction(name)!.graphic!(ringFeature(name), context);
+        expect(ring.stroke?.color).toBe(colour);
+        expect(ring.fill?.color).toBe(fill);
+    });
+
+    it.each([
+        TacticalGraphicName.LaunchAreaEllipse,
+        TacticalGraphicName.DefendedAreaEllipse,
+        TacticalGraphicName.DefendedAreaRectangle,
+    ])('%s keeps that colour when hostile, and offers no identity', name => {
+        /*
+         * The two halves that have to move together. With no line work left in the
+         * affiliation's colour there is nothing for an identity to show, and the sample
+         * sweep asserts that anything still claiming hostility paints red from a bag-only
+         * stamp. @see COLOUR_NAMED_AREAS
+         */
+        const hostile = ringFeature(name, {hostility: 'hostileFaker'});
+        const [ring] = getPaintFunction(name)!.graphic!(hostile, context);
+        expect(ring.stroke?.color).not.toMatch(/255,\s*0,\s*0/);
+        expect(supportsHostility(name)).toBe(false);
+    });
+
     it('fills the cued acquisition doctrine and outlines it in the affiliation colour', () => {
         // The plate says a white border, which is invisible on this library's basemaps, so
         // the outline is deliberately the ordinary one and the fill carries the symbol.
@@ -165,6 +198,47 @@ describe('the label blocks, which are three different arrangements', () => {
          */
         const drawn = label(name, {designation: 'SHOULD-NOT-DRAW'});
         expect(drawn).toEqual([getLabel(name)]);
+    });
+
+    it.each([
+        TacticalGraphicName.LaunchAreaEllipse,
+        TacticalGraphicName.DefendedAreaEllipse,
+    ])('%s prints AM, AM1 and AN under the shape', name => {
+        /*
+         * **The user's call, 2026-09-04:** the Templates letter all three in boxes on their
+         * own construction arrows, and the Examples print the values under the symbol. The
+         * first version offered the three as dialog inputs and drew none of them.
+         *
+         * `AM` is the *minor axis radius* and `AM1` the *major*, so both are half the public
+         * schema's figure — the factor of two this asserts, since a version that forgot it
+         * still prints three plausible-looking lines. @see axisAmplifierPaint
+         */
+        const drawn = label(name, {width: 40_000, length: 224_000, rotation: 30});
+        expect(drawn).toContain('AM = 20 km');
+        expect(drawn).toContain('AM1 = 112 km');
+        expect(drawn).toContain('AN = +30\u00b0');
+    });
+
+    it('sets the axis block below the shape, not over it', () => {
+        const name = TacticalGraphicName.LaunchAreaEllipse;
+        const marks = getPaintFunction(name)!.label!(
+            anchorFeature(name, {width: 40_000, length: 224_000, rotation: 30}), context,
+        );
+        const block = marks.find(m => String(m.text?.text ?? '').includes('AM1'))!;
+        expect((block.geometry as {coordinates: ProjectedPosition}).coordinates[1]).toBeLessThan(-200_000);
+    });
+
+    it('drops the axis block under "name only", and keeps the designation', () => {
+        // The user asked for exactly this: the three are amplifiers, the `LA - T` is not.
+        const name = TacticalGraphicName.LaunchAreaEllipse;
+        const feature = {
+            ...anchorFeature(name, {designation: '1', width: 40_000, length: 224_000, rotation: 30}),
+            hideAmplifiers: true,
+        } as unknown as PaintFeature;
+        const drawn = withHiddenAmplifiers(getPaintFunction(name)!.label!(feature, context), true);
+        const lines = textsOf(drawn);
+        expect(lines).toContain('LA - 1');
+        expect(lines.some(l => l.startsWith('AM'))).toBe(false);
     });
 
     it('sets AOI outside the shape rather than in the middle of it', () => {

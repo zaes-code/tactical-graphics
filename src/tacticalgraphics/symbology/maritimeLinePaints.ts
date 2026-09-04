@@ -18,7 +18,7 @@ import {paintLineWork} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {textWidth, uprightRotation} from './decorations';
+import {DECORATION_MIN_PX, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -195,6 +195,87 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
         const infoAt = info && beside(from, to, 1, -INFO_OFFSET_PX * scale, context.resolution);
         if (info && infoAt) paints.push(text(infoAt, String(info), 'right', 'amplifier'));
 
+        return paints;
+    };
+}
+
+/**
+ * The navigational line's tick, as a fraction of the run it sits on -- **measured, then
+ * turned into a screen size**.
+ *
+ * Off the Template at 600 dpi: the bar is 802 px, both ticks fit at 40.0 and 40.4 degrees
+ * above the bar's own direction, and they run 0.344 and 0.327 of the bar's length. The
+ * angle is one number to two decimals across both; the *length* is not, because
+ * "the symbol varies only in length" makes the ticks a constant and the bar the variable.
+ * So the angle is kept exactly and the length is expressed in pixels.
+ */
+const NAVIGATIONAL_TICK_ANGLE_DEG = 40;
+
+/**
+ * How long each tick is, in screen pixels.
+ *
+ * 26 px is the plate's own ratio at a bar the length these are drawn at -- 0.33 of about
+ * 78 px -- and sits with the library's other end furniture (a wire mark is 14, a solid
+ * arrowhead 15, a route arrow row 14). @see NAVIGATIONAL_TICK_ANGLE_DEG
+ */
+const NAVIGATIONAL_TICK_PX = 26;
+
+/** The most of the run one tick may span before both shrink. */
+const NAVIGATIONAL_TICK_MAX_SHARE = 0.35;
+
+/**
+ * Navigational -- APP-06 218400.
+ *
+ * > This symbol requires two anchor points. Points 1 and 2 define the corner points of the
+ * > symbol. […] The symbol varies only in length.
+ *
+ * A bar from point 1 to point 2 with a tick at each end, both at the same angle **above the
+ * bar's own direction** and pointing the same way on screen: the one at point 1 leads
+ * forward and up, the one at point 2 trails backward and down. Rotationally symmetric about
+ * the bar's midpoint, which is what makes it read as one mark rather than two arrows.
+ *
+ * **Both ticks are on the same hand, and that is the whole shape.** Mirroring the second --
+ * the obvious symmetry, and the one a careless reading produces -- draws a shallow `Z` with
+ * both ends turning the same way up, which is a different figure. @see the Template.
+ */
+export function navigationalLinePaint(): LinePaint {
+    return (feature, context) => {
+        const run = ends(feature);
+        if (!run) return [];
+        const [from, to] = run;
+
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const length = Math.hypot(dx, dy);
+        if (length === 0) return [];
+        const ux = dx / length;
+        const uy = dy / length;
+
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
+        const paints: Paint[] = [{geometry: {type: 'LineString', coordinates: [from, to]}, stroke}];
+
+        const tickPx = Math.min(NAVIGATIONAL_TICK_PX, (length / context.resolution) * NAVIGATIONAL_TICK_MAX_SHARE);
+        // Below the floor the ticks are a thickening of the stroke rather than a symbol,
+        // and a bare bar is the honest thing to draw. @see DECORATION_MIN_PX
+        if (tickPx < DECORATION_MIN_PX) return paints;
+
+        const tick = tickPx * context.resolution;
+        const theta = (NAVIGATIONAL_TICK_ANGLE_DEG * Math.PI) / 180;
+        // The bar's direction turned `theta` **anticlockwise in projected space**, where +y
+        // is north -- so the tick rises on screen, which is the side the Template draws it.
+        const tx = ux * Math.cos(theta) - uy * Math.sin(theta);
+        const ty = ux * Math.sin(theta) + uy * Math.cos(theta);
+
+        // Point 1: forward and up, away from the bar. Point 2: the same vector, negated, so
+        // the second tick trails backward and down.
+        paints.push({
+            geometry: {type: 'LineString', coordinates: [from, [from[0] + tx * tick, from[1] + ty * tick]]},
+            stroke,
+        });
+        paints.push({
+            geometry: {type: 'LineString', coordinates: [to, [to[0] - tx * tick, to[1] - ty * tick]]},
+            stroke,
+        });
         return paints;
     };
 }

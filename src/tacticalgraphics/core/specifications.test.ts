@@ -204,6 +204,13 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
      * in the same commit as the nine above.
      */
     TacticalGraphicName.SearchArea,
+    /*
+     * APP-06 218400, added 2026-09-04. `navigational` appears in FM 1-02.2 fourteen times
+     * and never as a symbol -- every hit is prose ("navigational aids", "navigation
+     * warfare") or a glossary entry. The manual has no maritime chapter, and this is a
+     * maritime control measure whose neighbours in group 21 are all point symbols.
+     */
+    TacticalGraphicName.NavigationalLine,
 ];
 
 describe('graphic specifications', () => {

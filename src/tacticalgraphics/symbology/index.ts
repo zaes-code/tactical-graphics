@@ -86,7 +86,7 @@ export {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './movementPaints';
 export {psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './minePaints';
-export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, rhumbLinePaint} from './maritimeLinePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbLinePaint} from './maritimeLinePaints';
 export type {MobilityGlyph} from './sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -126,10 +126,17 @@ export {
     CUED_ACQUISITION_FILL,
     RADAR_SEARCH_FILL,
     RADAR_SEARCH_STROKE,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
     activeManeuverAreaPaint,
     cuedAcquisitionDoctrinePaint,
     radarSearchDoctrinePaint,
     radarSearchLabelPaint,
+    axisAmplifierPaint,
+    maritimeFilledAreaPaint,
+    withAxisAmplifiers,
 } from './maritimeAreaPaints';
 export {convoyPaint} from './convoyPaints';
 export {searchAreaPaint} from './searchAreaPaints';

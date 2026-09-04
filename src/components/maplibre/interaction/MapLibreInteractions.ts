@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, drawsCentreToEdge, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -672,6 +672,23 @@ export class MapLibreInteractions {
         // different questions. @see dropSizePx, anchorDraw
         if (dropSizePx(name) !== undefined) {
             this.finishDraw([position]);
+            return;
+        }
+
+        /*
+         * **And the same distinction one step along: a centre-to-edge draw ends on the
+         * second click whatever its base is.** The six anchor graphics store a `LineString`
+         * of derived points, so they fell past the `Point` branch below into the multi-click
+         * path and waited for a double-click — while OpenLayers drew each of them with a
+         * `Circle` interaction that ends itself, and the panel promised "2 points (center →
+         * edge)". Two clicks put nothing on the map at all. @see drawsCentreToEdge
+         */
+        if (drawsCentreToEdge(name)) {
+            if (!this.sketch.length) {
+                this.sketch.push(position);
+                return;
+            }
+            this.finishDraw([this.sketch[0], position]);
             return;
         }
 

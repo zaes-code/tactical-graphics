@@ -37,6 +37,7 @@ import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
+import {usesDrawnAnchors} from './handles';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -471,7 +472,8 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.DefendedAreaEllipse,
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.CuedAcquisitionDoctrine,
-    TacticalGraphicName.RadarSearchDoctrine,
+    // 200700 is no longer sized by a rim drag -- it is three placed points -- so there
+    // is no radius under the cursor to report. @see RadarSearchDoctrine
 ]);
 
 /**
@@ -699,6 +701,20 @@ const HAZARD_AREAS = new Set<TacticalGraphicName>([
 const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
     TacticalGraphicName.ActiveManeuverArea,
     TacticalGraphicName.RadarSearchDoctrine,
+    /*
+     * Three more on 2026-09-04, when the plates' "may be depicted as" colours were applied
+     * to the **outline** as well as the fill (user's call). While only the fill was the
+     * plate's these kept their identity, because the rim still carried it; with the rim
+     * orange or grey there is no line work left for an affiliation to colour, and a hostile
+     * launch area drawn red would be a symbol the standard does not have.
+     *
+     * 200600 is still not here, and the distinction is exact: its plate names a fill and a
+     * *white* border, and a white stroke is invisible on the basemaps this library's palette
+     * is built for — so its outline is the affiliation's and its identity is real.
+     */
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.DefendedAreaRectangle,
 ]);
 
 /**
@@ -1014,6 +1030,36 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
  */
 export function dropSizePx(name: TacticalGraphicName): number | undefined {
     return DROP_SIZE_PX[name];
+}
+
+/**
+ * Whether the draw ends on the **second click** — a centre and an edge.
+ *
+ * **How long a draw runs is a different question from what shape the base is**, and this is
+ * the second time that distinction has cost something. The demonstration cost it first: its
+ * base is a `LineString` of four derived anchors, so the one-click drop fell through to the
+ * multi-click path and the sketch could not be finished. `dropSizePx` answered that one.
+ *
+ * The rest of the anchor family cost it next. Contain, Ambush, Envelopment, Pursuit and the
+ * two turns are drawn centre-to-edge — OpenLayers gives each of them a `Circle` interaction,
+ * which ends itself on the second click — and their bases are `LineString`s too. So on
+ * MapLibre the draw waited for a double-click that the panel's own hint ("2 points (center
+ * → edge)") tells nobody to make: **two clicks left the sketch open and nothing on the
+ * map**. Found by drawing `Contain` on both engines side by side, 2026-09-04.
+ *
+ * **It lives here rather than beside `usesDrawnAnchors`** because `handles.ts` cannot
+ * import this module: `symbology.ts` reaches `render.ts` for `baseGeometryFor`, and
+ * `render.ts` reaches the registry, which reaches `handles.ts`. Putting it there made
+ * `RECTANGULAR_GRAPHICS` unreachable at module-initialisation time and two suites died
+ * with "Cannot access before initialization" — the build was clean, because a cycle is
+ * only a problem at run time.
+ *
+ * Derived rather than listed, because both halves are already stated: an anchor graphic is
+ * centre-to-edge unless it is dropped whole. A seventh member of either list is covered by
+ * construction. @see anchorDraw, which reads `vertices[0]` as the centre and `[1]` as the edge
+ */
+export function drawsCentreToEdge(name: TacticalGraphicName): boolean {
+    return usesDrawnAnchors(name) && dropSizePx(name) === undefined;
 }
 
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {

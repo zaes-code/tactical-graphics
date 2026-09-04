@@ -547,6 +547,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BearingLineJammer]: BEARING_LINE,
     [TacticalGraphicName.BearingLineRadioDirectionFinder]: BEARING_LINE,
     [TacticalGraphicName.NavigationalRhumbLine]: RHUMB_LINE,
+    /*
+     * 218400 letters **nothing**: its Template carries the two `PT` leaders and no boxed
+     * field of any kind, and its Example is the bare figure. So `SHAPE_ONLY`, like the
+     * security operations and the wire obstacles.
+     */
+    [TacticalGraphicName.NavigationalLine]: SHAPE_ONLY,
     [TacticalGraphicName.LightLine]: GENERIC_LINE,
     [TacticalGraphicName.LineGeneric]: LINE_GENERIC,
     [TacticalGraphicName.HandoverLine]: GENERIC_LINE,

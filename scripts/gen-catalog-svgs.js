@@ -451,6 +451,18 @@ const AMPLIFIERS = {
     radius: 900,
     rotation: 0,
     width: 500,
+    /**
+     * **The one geometry input the bag forgot.** Five graphics build their whole shape from
+     * a length and a width about one anchor point -- 240802, 200600 and the three maritime
+     * ellipses -- and with no `length` here each fell back to the generator's own default,
+     * so `AM1` had nothing to print and the ellipses drew at a proportion nobody chose.
+     * Caught by reading the generated sheet: the caption said "AM / AM1 / AN below" and the
+     * picture had two lines. @see axisAndWidth
+     *
+     * Twice the width, so the box and the ellipse come out near the plates' own 0.536 ratio
+     * of minor axis to major.
+     */
+    length: 1000,
     decorationSize: undefined,
 
     // Text amplifiers.

@@ -19,6 +19,7 @@ import type {Feature} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {getPaintFunction, isPaintable} from './registry';
 import {convoyPaint} from './convoyPaints';
+import {fontStyle} from '../core/symbology';
 
 const RESOLUTION = 10;
 const context = {resolution: RESOLUTION, measureText: (t: string) => t.length * 9} as unknown as PaintContext;
@@ -158,6 +159,68 @@ describe('the amplifiers', () => {
         };
         expect(yOf([[0, 0], [4000, 0]])).toBeLessThan(0);
         expect(yOf([[4000, 0], [0, 0]])).toBeLessThan(0);
+    });
+});
+
+describe('a resize scales the whole symbol', () => {
+    /*
+     * **The user's call, 2026-09-04:** *"resize should wholesomely affect the shape and
+     * labels but labels should be capped (as always)".* The first version made every
+     * cross-axis dimension a screen constant, so a resize only stretched the body and the
+     * head stayed the same size — which is the picture this suite now refuses.
+     */
+    const outline = (length: number) =>
+        linesOf(convoyPaint(TacticalGraphicName.MovingConvoy)(
+            runFeature(TacticalGraphicName.MovingConvoy, {}, [[0, 0], [length, 0]]), context,
+        ))[0];
+
+    const across = (ring: ProjectedPosition[]) => Math.max(...ring.map(p => Math.abs(p[1])));
+
+    it('grows the body and the head with the run, not just the length', () => {
+        expect(across(outline(8000)) / across(outline(4000))).toBeCloseTo(2, 6);
+    });
+
+    it('holds the plate proportions at every size', () => {
+        // 50/448 across the body and 114/448 along the head, off the Template at 300 dpi.
+        for (const length of [2000, 4000, 20_000]) {
+            const ring = outline(length);
+            const bodyHalf = Math.min(...ring.map(p => Math.abs(p[1])).filter(v => v > 0));
+            const neck = Math.max(...ring.filter(p => Math.abs(p[1]) > 0).map(p => p[0]));
+            expect(bodyHalf / length).toBeCloseTo(0.112, 3);
+            expect((length - neck) / length).toBeCloseTo(0.255, 2);
+        }
+    });
+
+    it('scales the labels with it, and caps them', () => {
+        const scaleAt = (length: number) => {
+            const paints = convoyPaint(TacticalGraphicName.MovingConvoy)(
+                runFeature(TacticalGraphicName.MovingConvoy, {weapon: 'M1A2'}, [[0, 0], [length, 0]]), context,
+            );
+            return paints.find(p => p.text?.text === 'M1A2')!.text!.scale!;
+        };
+        // Grows with the symbol...
+        expect(scaleAt(4000)).toBeGreaterThan(scaleAt(2000));
+        // ...and stops, rather than reaching the 448 px line of text an uncapped
+        // span-proportional scale produced on the avenue of approach. @see scaleOf
+        expect(scaleAt(400_000)).toBeLessThanOrEqual(scaleAt(40_000) * 1.0001);
+        expect(scaleAt(400_000)).toBeLessThan(10);
+    });
+
+    it('never lets V and H meet in the middle of the body', () => {
+        // Each has half the body; a long equipment type shrinks rather than colliding.
+        const paints = convoyPaint(TacticalGraphicName.MovingConvoy)(
+            runFeature(TacticalGraphicName.MovingConvoy,
+                {weapon: 'M1A2 ABRAMS HEAVY BRIGADE', additionalInfo: 'SERIAL 27 OF 31'},
+                [[0, 0], [4000, 0]]), context,
+        );
+        const mark = (text: string) => paints.find(p => p.text?.text === text)!;
+        const widthOf = (text: string) =>
+            context.measureText(text, fontStyle) * mark(text).text!.scale!;
+        const gap = Math.abs(
+            (mark('SERIAL 27 OF 31').geometry as {coordinates: ProjectedPosition}).coordinates[0]
+            - (mark('M1A2 ABRAMS HEAVY BRIGADE').geometry as {coordinates: ProjectedPosition}).coordinates[0],
+        ) / context.resolution;
+        expect((widthOf('M1A2 ABRAMS HEAVY BRIGADE') + widthOf('SERIAL 27 OF 31')) / 2).toBeLessThanOrEqual(gap);
     });
 });
 

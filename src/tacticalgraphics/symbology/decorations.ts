@@ -817,6 +817,19 @@ export function wavePath(
 
 /** Screen size of a generator-emitted solid arrowhead, tip to base. */
 export const SOLID_ARROWHEAD_PX = 15;
+
+/**
+ * Half the angle between the barbs of that arrowhead, in degrees.
+ *
+ * **Not chosen here — derived from the head the generators already build.**
+ * `GeometryService.createArrowHeadPolygon` sets its base one `arrowSize` back from the tip
+ * and half an `arrowSize` to either side, so the half-angle is `atan(0.5)` and every solid
+ * head in this library that goes through it — Fix, tactical fix, ferry crossing — is that
+ * shape. A paint that builds its own head with `solidArrowHead` has to be told the number,
+ * and the number is this one: a head at some other angle reads as a different family of
+ * symbol, which is what the search area's first version did at 46 degrees.
+ */
+export const SOLID_ARROWHEAD_HALF_ANGLE_DEG = 26.565;
 /** Ceiling on that head as a share of the path it terminates. */
 export const ARROWHEAD_MAX_SHARE = 0.25;
 
