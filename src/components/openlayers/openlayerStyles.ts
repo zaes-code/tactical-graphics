@@ -2244,6 +2244,15 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.ShipAreaOfInterestRectangle,
     TacticalGraphicName.NoAttackZone,
+    /*
+     * **240802, and the sixth time this list has been the missing half.** Its Example prints
+     * `AM = 60 Metres`, `AM1 = 112 Metres`, `AN = 1200 mils` under the box, which only the
+     * paint layer draws; without this line the block appeared on MapLibre, in the thumbnail
+     * and in the catalog, while the app drew a bare designation. Every generated picture was
+     * right and the running renderer was wrong, which is exactly the shape this trap has.
+     * @see axisAmplifierPaint
+     */
+    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,

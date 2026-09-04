@@ -45,9 +45,12 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {paintGeometryMembers, paintLineWork} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicStatus} from '../core/type';
+import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {formatDistance} from '../core/symbology';
-import {labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+// No `lineColorOf` here any more: with 200600's border white, every graphic this
+// module paints takes its colour from its own plate rather than from an affiliation.
+// @see COLOUR_NAMED_AREAS
+import {labelColorOf, scaleOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -90,6 +93,21 @@ export const DEFENDED_AREA_FILL = 'rgba(85,119,136,0.25)';
 /** 200600's fill: the plate's grey at the caption's alpha. @see the module header */
 export const CUED_ACQUISITION_FILL = 'rgba(85,119,136,0.25)';
 
+/**
+ * 200600's border, which its Note states outright: **white**, `RGB: 255,255,255`.
+ *
+ * This was the affiliation's colour first, on the argument that a white stroke is invisible
+ * on the basemaps the default palette is built for, and that the plate's own Note 2 — *"Gray
+ * background is used to show white border and is not part of the symbol"* — admits the
+ * border cannot be seen without help. The user's call (2026-09-04) is that the plate says
+ * white and the symbol is white; a host that needs it visible has a palette and a basemap to
+ * arrange, and this library's job is to draw the symbol.
+ *
+ * It is legible in practice because the fill is not: a 25% grey rectangle behind a white rim
+ * is exactly the figure/ground the plate's own grey panel was standing in for.
+ */
+export const CUED_ACQUISITION_COLOR = 'rgb(255,255,255)';
+
 /** 200700's dark cyan, stated by its Note as the border colour. */
 export const RADAR_SEARCH_STROKE = 'rgb(51,136,136)';
 /** 200700's fill: the same dark cyan at the caption's alpha. */
@@ -126,7 +144,10 @@ export function activeManeuverAreaPaint(): AreaPaint {
 
 /**
  * Cued acquisition doctrine — APP-06 200600. A rotated rectangle with the plate's grey
- * fill, outlined in the affiliation's colour rather than the plate's white.
+ * fill and its stated **white** border.
+ *
+ * Like the other colour-named areas it offers no affiliation: with the rim white there is no
+ * line work left for an identity to colour. @see COLOUR_NAMED_AREAS
  *
  * The shape comes from `RectangularTarget`: one anchor point at the centre, a length
  * `AM1`, a width `AM2` and a rotation `AN`. **`AN` here is a compass bearing** — *"0
@@ -142,7 +163,7 @@ export function cuedAcquisitionDoctrinePaint(): AreaPaint {
         return [{
             geometry,
             ...(areal ? {fill: {color: CUED_ACQUISITION_FILL}} : {}),
-            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
+            stroke: {color: CUED_ACQUISITION_COLOR, widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
         }];
     };
 }
@@ -180,33 +201,75 @@ const AXIS_BLOCK_GAP_PX = 10;
  * The first version offered the three as dialog inputs and drew none of them. Drawing them
  * is the user's call (2026-09-04), and the Example's own layout is what says where.
  *
- * ## The mapping, which is two factors of two and a convention
+ * ## The mapping, and it is **not the same on every plate that letters these three**
  *
- * `AM` is the **minor axis radius** and `AM1` the **major axis radius**, while the public
- * schema carries a full `width` and a full `length` — so both are halved here. `AN` is the
- * rotation as stored: the plate's "0 degrees is east/west, positive rotates
- * counter-clockwise" is the trigonometric convention this library keeps `rotation` in, so
- * it passes through untouched and only the sign is written out, the way the Example does.
+ * Two plates letter `AM` / `AM1` / `AN` and they disagree about what each one is, so the
+ * reading is per-graphic rather than per-block. `AXIS_AMPLIFIER_READING` holds it.
+ *
+ * - **The ellipses (200101, 200201)** say *"a minor axis radius (AM), a major axis radius
+ *   (AM1)"*, so both are **halves** of the public schema's full `width` and `length`. `AN`
+ *   is *"0 degrees is east/west, positive rotates counter-clockwise"* — the trigonometric
+ *   convention `rotation` is already stored in, so it passes through and only the sign is
+ *   written out, the way the Example does.
+ * - **The rectangular target (240802)** says *"the target length (AM1) in metres and target
+ *   width (AM) in metres"* — **full figures, not halves** — and *"as determined by the
+ *   Target Attitude (AN) in mils"*. Its Example prints `AM = 60 Metres`, `AM1 = 112 Metres`,
+ *   `AN = 1200 mils`, and 1200 mils is 67.5 degrees, so the angle is a **compass bearing**
+ *   like the rest of that family's `AN` rather than the ellipses' east-based one.
+ *
+ * Halving a full width would have printed a plausible number half the size, and reading mils
+ * as degrees a plausible number three and a half times too small — neither shows up as
+ * anything but a wrong caption, which is why both are pinned with numbers that make the
+ * factor visible.
  *
  * Distances go through `formatDistance`, the same formatter field `AM` uses on the
  * corridors, rather than the Example's spelled-out "Metres": the unit convention is the
- * library's and the Example's prose is explaining its own numbers.
+ * library's and the Example's prose is explaining its own numbers. Mils are not a distance
+ * and have no such convention, so they are written as the plate writes them.
  *
  * **The whole block is one `amplifier` mark**, so "name only" drops it entire — which is
  * what the user asked for, and is right: none of the three names the symbol.
  */
+/** How one plate letters its axes: whether `AM` / `AM1` are halves, and what `AN` is in. */
+interface AxisAmplifierReading {
+    /** True where the plate calls them radii, so the schema's full figure is halved. */
+    halved: boolean;
+    /** `east` is the stored trigonometric angle; `compassMils` is `90 - rotation`, in mils. */
+    angle: 'east' | 'compassMils';
+}
+
+const ELLIPSE_READING: AxisAmplifierReading = {halved: true, angle: 'east'};
+
+const AXIS_AMPLIFIER_READING: Partial<Record<TacticalGraphicName, AxisAmplifierReading>> = {
+    [TacticalGraphicName.LaunchAreaEllipse]: ELLIPSE_READING,
+    [TacticalGraphicName.DefendedAreaEllipse]: ELLIPSE_READING,
+    [TacticalGraphicName.TargetAreaRectangular]: {halved: false, angle: 'compassMils'},
+};
+
+/** 6400 mils to the full turn — NATO's mil, which is what 240802's `AN` is stated in. */
+const MILS_PER_TURN = 6400;
+
 export function axisAmplifierPaint(): AreaPaint {
     return (feature, context) => {
         const box = feature.bounds;
         if (!box) return [];
 
+        const reading = AXIS_AMPLIFIER_READING[feature.properties.name] ?? ELLIPSE_READING;
         const {width, length, rotation} = feature.properties;
+        const half = (metres: number) => (reading.halved ? metres / 2 : metres);
         const lines: string[] = [];
-        if (typeof width === 'number' && width > 0) lines.push(`AM = ${formatDistance(width / 2)}`);
-        if (typeof length === 'number' && length > 0) lines.push(`AM1 = ${formatDistance(length / 2)}`);
+        if (typeof width === 'number' && width > 0) lines.push(`AM = ${formatDistance(half(width))}`);
+        if (typeof length === 'number' && length > 0) lines.push(`AM1 = ${formatDistance(half(length))}`);
         if (typeof rotation === 'number' && Number.isFinite(rotation)) {
-            const turned = Math.round(rotation);
-            lines.push(`AN = ${turned > 0 ? '+' : ''}${turned}°`);
+            if (reading.angle === 'compassMils') {
+                // `90 - rotation` is the same conversion `RectangularTarget.frame` makes to
+                // hand turf a bearing, so the caption and the shape agree by construction.
+                const bearing = ((90 - rotation) % 360 + 360) % 360;
+                lines.push(`AN = ${Math.round((bearing * MILS_PER_TURN) / 360)} mils`);
+            } else {
+                const turned = Math.round(rotation);
+                lines.push(`AN = ${turned > 0 ? '+' : ''}${turned}°`);
+            }
         }
         if (!lines.length) return [];
 

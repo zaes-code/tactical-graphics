@@ -123,6 +123,7 @@ export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceA
 export {aegisSingleTargetPaint} from './aegisTargetPaints';
 export {
     ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_COLOR,
     CUED_ACQUISITION_FILL,
     RADAR_SEARCH_FILL,
     RADAR_SEARCH_STROKE,

@@ -215,9 +215,24 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
             to ? turf.distance(turf.point(center), turf.point(to), {units: 'meters'}) : undefined;
 
         const stop = typedStop ?? reach(coords[2] ?? coords[1]) ?? outer.range;
-        const start = typedStart
-            ?? (coords.length >= 3 ? reach(coords[1]) : undefined)
-            ?? stop * RSD_DEFAULT_START_SHARE;
+
+        /*
+         * **The start range is the start point's reach *along the axis*, not its distance.**
+         *
+         * The plate gives this symbol *"one anchor point that defines the axis of angular
+         * rotation"* and then a start range and a stop range measured along it: one line,
+         * three points on it. Taking the middle click's raw distance let it sit anywhere on
+         * a circle about the radar while the sector went on being aimed at point 3 — so the
+         * base and its grips zig-zagged across a symbol that is a straight run by
+         * definition. (User's call, 2026-09-04.)
+         *
+         * Projecting onto the axis is what makes the three agree: a drag across the axis
+         * changes nothing, a drag along it moves the near arc, and the grips can be
+         * published on the axis without ever contradicting the shape they describe.
+         * @see projectOntoAxis, generateHandles
+         */
+        const drawnStart = coords.length >= 3 ? this.projectOntoAxis(center, coords[2], coords[1], stop) : undefined;
+        const start = typedStart ?? drawnStart ?? stop * RSD_DEFAULT_START_SHARE;
 
         const norm = (deg: number): number => ((deg % 360) + 360) % 360;
         const {leftAz, rightAz} = resolveBandAzimuths(outer, opts);
@@ -285,17 +300,37 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
     }
 
     /**
-     * The three drawn points, in the order they were clicked: radar, start arc, stop arc.
+     * How far along the search axis a drawn point reaches — its projection, clamped into the
+     * sector.
+     *
+     * `aimedAt` fixes the axis and `point` is measured against it, so the component across
+     * the axis is discarded rather than inflating the range: a start point dragged sideways
+     * keeps its range, one dragged forward or back changes it. Clamped to `[0, stop]`,
+     * because a near arc outside the far one, or behind the radar, is not a shape.
+     */
+    private projectOntoAxis(center: Position, aimedAt: Position, point: Position, stop: number): number {
+        const axis = turf.bearing(turf.point(center), turf.point(aimedAt));
+        const bearing = turf.bearing(turf.point(center), turf.point(point));
+        const distance = turf.distance(turf.point(center), turf.point(point), {units: 'meters'});
+        const alongAxis = distance * Math.cos(((bearing - axis) * Math.PI) / 180);
+        return Math.max(0, Math.min(stop, alongAxis));
+    }
+
+    /**
+     * The three grips: the radar, the start arc and the stop arc — **all on the search
+     * axis**, whatever the clicks that produced them looked like.
      *
      * A vertex line, so each grip is the anchor point it was placed as. @see anchorVertex,
-     * which makes the radar inert under a reshape so the sector cannot be bent about its
-     * own origin — the same contract fields of fire and the search area have.
+     * which makes the radar inert under a reshape so the sector cannot be bent about its own
+     * origin — the same contract fields of fire and the search area have.
+     *
+     * The middle grip is re-derived rather than published where it was dropped. It used to
+     * be handed back raw, so a click off to one side left a handle sitting beside the
+     * symbol, on nothing, and the base line drawn through it made a `V` of a straight run.
+     * The frame has already projected it; this draws it where the frame put it.
+     * @see projectOntoAxis
      */
     generateHandles(base: Feature<LineString>, opts: RangeFanOptions | undefined): Feature<MultiPoint> {
-        const coords = base.geometry.coordinates;
-        if (coords.length >= 3) return this.asMultiPointFeature([coords[0], coords[1], coords[2]]);
-        // A two-point base still publishes three grips, on the axis, so a graphic drawn
-        // before this change edits the same way as one drawn after it.
         const {center, start, stop, leftAz, rightAz} = this.frame(base, opts);
         const sweep = ((rightAz - leftAz) % 360 + 360) % 360;
         const axis = leftAz + sweep / 2;

@@ -206,6 +206,37 @@ describe('a resize scales the whole symbol', () => {
         expect(scaleAt(400_000)).toBeLessThan(10);
     });
 
+    it('renders V and H at one size, not two', () => {
+        /*
+         * **The user's report, 2026-09-04: "H is bigger on zoomout".**
+         *
+         * The two fields sit side by side inside the same body at the same nominal size, and
+         * each was capped against its half of it by `capLabelToSpan` — which shrinks by the
+         * text's *own* width. So two fields of different lengths came out at two sizes, and
+         * the gap opened as the map zoomed out: the span shrinks in pixels, so the longer
+         * label starts being capped while the shorter one is still at full size.
+         *
+         * Asserted at two resolutions, because one is exactly the condition under which the
+         * old code looked fine — at a wide enough span neither is capped and both sit at the
+         * shared scale by accident.
+         */
+        const sizes = (resolution: number) => {
+            const paints = convoyPaint(TacticalGraphicName.MovingConvoy)(
+                runFeature(TacticalGraphicName.MovingConvoy,
+                    {weapon: 'M1A2 ABRAMS HEAVY BRIGADE', additionalInfo: '5'},
+                    [[0, 0], [4000, 0]]),
+                {...context, resolution} as PaintContext,
+            );
+            return ['M1A2 ABRAMS HEAVY BRIGADE', '5'].map(t => paints.find(p => p.text?.text === t)!.text!.scale!);
+        };
+        for (const resolution of [1, 10]) {
+            const [v, h] = sizes(resolution);
+            expect(h).toBeCloseTo(v, 10);
+        }
+        // ...and the shared size is the tighter of the two, so the long one still fits.
+        expect(sizes(10)[0]).toBeLessThan(sizes(1)[0] * 1.0001);
+    });
+
     it('never lets V and H meet in the middle of the body', () => {
         // Each has half the body; a long equipment type shrinks rather than colliding.
         const paints = convoyPaint(TacticalGraphicName.MovingConvoy)(

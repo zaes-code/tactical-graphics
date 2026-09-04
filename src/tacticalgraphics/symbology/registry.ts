@@ -465,10 +465,20 @@ const AIRSPACE_COORDINATION_AREAS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
 ];
 
-/** The two whose Template letters a minor axis, a major axis and a rotation. */
-const MARITIME_AXIS_AREAS: readonly TacticalGraphicName[] = [
+/**
+ * The graphics whose Template letters `AM`, `AM1` and `AN` and whose Example prints all
+ * three under the symbol.
+ *
+ * The two ellipses, plus **240802**, which was left out of the first pass and should not have
+ * been: its Example is the one that spells the block out in full — `AM = 60 Metres`,
+ * `AM1 = 112 Metres`, `AN = 1200 mils` — and it letters all three boxes on its Template.
+ * (User's report, 2026-09-04.) What each of the three *means* differs between the two
+ * plates; that reading lives with the paint. @see axisAmplifierPaint
+ */
+const AXIS_AMPLIFIER_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.LaunchAreaEllipse,
     TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.TargetAreaRectangular,
 ];
 
 /** The maritime areas whose plate prints `<literal> - T` inside the shape. */
@@ -522,7 +532,7 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
      * anchor points -- so there is no `AM1` and no `AN` to print, and a block with one
      * line in it is not what the Example shows. @see axisAmplifierPaint
      */
-    if (MARITIME_AXIS_AREAS.includes(name)) return withAxisAmplifiers(actionAreaLabelPaint(name));
+    if (AXIS_AMPLIFIER_GRAPHICS.includes(name)) return withAxisAmplifiers(actionAreaLabelPaint(name));
     if (MARITIME_TITLED_AREAS.includes(name)) return actionAreaLabelPaint(name);
     if (MARITIME_UNTITLED_AREAS.includes(name)) return belowShapeLiteralPaint(getLabel(name));
     // 200300 letters a bare `N` over `W - W1` and has no designation box beneath it, so the

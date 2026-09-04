@@ -212,16 +212,22 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
 const NAVIGATIONAL_TICK_ANGLE_DEG = 40;
 
 /**
- * How long each tick is, in screen pixels.
+ * How long each tick is, **as a share of the bar** -- so the whole symbol scales with a
+ * resize rather than growing a longer bar between two fixed marks.
  *
- * 26 px is the plate's own ratio at a bar the length these are drawn at -- 0.33 of about
- * 78 px -- and sits with the library's other end furniture (a wire mark is 14, a solid
- * arrowhead 15, a route arrow row 14). @see NAVIGATIONAL_TICK_ANGLE_DEG
+ * Measured, and the measurement is the reason this is a share at all. The tick and the bar
+ * are the only two lengths the figure has, and both plate columns state them: at 600 dpi the
+ * Template is a 787 px bar with a 286 px tick and the Example a 1072 px bar with a 369 px
+ * one -- **bars differing by 36%, ratios of 0.364 and 0.344**. A fixed size would have held
+ * the tick and changed the ratio; it did not.
+ *
+ * This was a screen constant first, on the plate's *"the symbol varies only in length"* and
+ * this repo's own convention that such a phrase names a screen size. That reading was wrong
+ * here: the sentence says which dimensions a user may change -- length, and not a width --
+ * and says nothing about the furniture. Two columns drawn at two sizes do.
+ * @see NAVIGATIONAL_TICK_ANGLE_DEG
  */
-const NAVIGATIONAL_TICK_PX = 26;
-
-/** The most of the run one tick may span before both shrink. */
-const NAVIGATIONAL_TICK_MAX_SHARE = 0.35;
+const NAVIGATIONAL_TICK_SHARE = 0.354;
 
 /**
  * Navigational -- APP-06 218400.
@@ -254,12 +260,12 @@ export function navigationalLinePaint(): LinePaint {
         const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const paints: Paint[] = [{geometry: {type: 'LineString', coordinates: [from, to]}, stroke}];
 
-        const tickPx = Math.min(NAVIGATIONAL_TICK_PX, (length / context.resolution) * NAVIGATIONAL_TICK_MAX_SHARE);
-        // Below the floor the ticks are a thickening of the stroke rather than a symbol,
-        // and a bare bar is the honest thing to draw. @see DECORATION_MIN_PX
-        if (tickPx < DECORATION_MIN_PX) return paints;
-
-        const tick = tickPx * context.resolution;
+        const tick = length * NAVIGATIONAL_TICK_SHARE;
+        // Below the floor the ticks are a thickening of the stroke rather than a symbol, and
+        // a bare bar is the honest thing to draw. A proportional tick reaches this only when
+        // the whole symbol is a few pixels long, where it is the right answer anyway.
+        // @see DECORATION_MIN_PX
+        if (tick / context.resolution < DECORATION_MIN_PX) return paints;
         const theta = (NAVIGATIONAL_TICK_ANGLE_DEG * Math.PI) / 180;
         // The bar's direction turned `theta` **anticlockwise in projected space**, where +y
         // is north -- so the tick rises on screen, which is the side the Template draws it.

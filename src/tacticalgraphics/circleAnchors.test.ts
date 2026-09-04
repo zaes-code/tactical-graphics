@@ -9,7 +9,7 @@
  * |---|---|---|
  * | 18 circular areas | *"one (1) anchor point and a radius"* — no point 2 | the rim at the angle both standards draw the radius arrow |
  * | 9 arc mission tasks | *"point 2 defines the graphic's start point and radius"* | that start point |
- * | contain (151204) | points 1 and 2 are the **opening's** two ends | the second drawn anchor |
+ * | contain (151204) | points 1 and 2 are the **opening's** two ends | both of them, and no centre dot |
  *
  * The handle used to sit at 205 degrees on all of them — the arrowhead end of the lower
  * arc, which is not an anchor point on any of the three families. Measured on both
@@ -19,7 +19,7 @@
 import {renderTacticalGraphic} from './core/render';
 import {RATIO_LOCKED_MISSION_TASKS} from './core/symbology';
 import {TacticalGraphicName} from './core/type';
-import {RADIUS_ARROW_DEGREES, START_POINT_DEGREES} from './graphics/MissionTask';
+import {Contain, RADIUS_ARROW_DEGREES, START_POINT_DEGREES} from './graphics/MissionTask';
 
 /** Metres. Near the equator this is a bit under two degrees of longitude. */
 const RADIUS = 200_000;
@@ -128,11 +128,86 @@ describe('the circular areas, which have no point 2 at all', () => {
 });
 
 describe('APP-06 151204 — contain', () => {
-    it('grips the second drawn anchor, which is an end of the opening', () => {
-        const drawn = {type: 'LineString', coordinates: [[0, 0], [1.8, 0]]};
-        const handle = edgeHandle(TacticalGraphicName.Contain, drawn);
-        expect(handle[0]).toBeCloseTo(1.8, 6);
-        expect(handle[1]).toBeCloseTo(0, 6);
+    /*
+     * **Both ends of the opening, and nothing else.** The Template letters `PT. 1` against
+     * the upper end and `PT. 2` against the lower one; it letters nothing against the
+     * centre, because the centre is not a point the user places.
+     *
+     * This published `[point 2, centre]`, so one marked point had a grip, the other had
+     * none, and there was a grip on a place the plate does not name. (User's report,
+     * 2026-09-04.)
+     */
+    const handlesOf = (coordinates: Pos[]) =>
+        (new Contain()
+            .generate({type: 'Feature', properties: {}, geometry: {type: 'LineString', coordinates}} as never, {size: 1000} as never)
+            .handles.geometry as unknown as {coordinates: Pos[]}).coordinates;
+
+    it('grips both drawn anchors, which are the two ends of the opening', () => {
+        const drawn: Pos[] = [[0, 0], [1.8, 0]];
+        expect(handlesOf(drawn)).toEqual(drawn);
+    });
+
+    it('publishes two grips, not a grip and a centre dot', () => {
+        expect(handlesOf([[0, 0], [1.8, 0]])).toHaveLength(2);
+    });
+
+    const runsOf = (coordinates: Pos[]) =>
+        (new Contain()
+            .generate({type: 'Feature', properties: {}, geometry: {type: 'LineString', coordinates}} as never, {size: 1000} as never)
+            .graphic.geometry as unknown as {coordinates: Pos[][]}).coordinates;
+
+    it('draws eleven tics -- ten full length and one short beside the C', () => {
+        /*
+         * **Counted off the Template by the user (2026-09-04)**, not measured: a tic census
+         * taken at 500 dpi could not be made to agree with itself, reporting sixteen once the
+         * fitted centre moved. @see Contain.tics
+         *
+         * Two arcs plus eleven tics is thirteen runs. The old code derived the count from the
+         * letter-height spacing rule and got a few too many.
+         */
+        const runs = runsOf([[0, 0], [1.8, 0]]);
+        expect(runs).toHaveLength(13);
+        const tics = runs.slice(2);
+        const lengths = tics.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]));
+        const full = Math.max(...lengths);
+        expect(lengths.filter(l => Math.abs(l - full) < full * 0.05)).toHaveLength(10);
+        // The short one is the middle tic and half the length, so it stands off the label.
+        expect(lengths[5]).toBeCloseTo(full / 2, 5);
+    });
+
+    it('keeps every tic inside the half circle it belongs to', () => {
+        /*
+         * They ran from 75 to 285 degrees about a centre whose arc runs 90 to 270 — fifteen
+         * degrees past each end — so two of them hung off the open side with no rim behind
+         * them. (User's report, 2026-09-04.)
+         *
+         * Measured as the angle from the centre to each tic's outer end, against the two
+         * anchors, which are the ends of the opening.
+         */
+        const drawn: Pos[] = [[0, 0], [1.8, 0]];
+        /*
+         * Measured against the **chord**, not as an angle about the centre: the two anchors
+         * sit at 180 and 0 degrees, so a bare angular range wraps and a tic at -180 reads as
+         * outside a span that ends at +180. The half-plane has no such seam.
+         *
+         * Every tic must be on the arc's side of the line joining the two anchors. The two
+         * that used to hang past the ends were on the *other* side, which is exactly what a
+         * sign test sees.
+         */
+        const span = Math.hypot(drawn[1][0] - drawn[0][0], drawn[1][1] - drawn[0][1]);
+        /** How far past the chord a point sits, as a share of the opening, signed. */
+        const beyond = (p: Pos) =>
+            ((drawn[1][0] - drawn[0][0]) * (p[1] - drawn[0][1]) - (drawn[1][1] - drawn[0][1]) * (p[0] - drawn[0][0])) / span ** 2;
+        const runs = runsOf(drawn);
+        // The arc's own middle says which side the symbol is on; its two *ends* sit on the
+        // chord, so sampling one of those would read a sign out of floating-point noise.
+        const arcSide = Math.sign(beyond(runs[0][Math.floor(runs[0].length / 2)]));
+        expect(arcSide).not.toBe(0);
+        for (const [outer] of runs.slice(2)) {
+            // Signed, with a tolerance: the first and last tics sit exactly on the chord, and
+            // the two that used to overhang were a quarter of the radius past it.
+            expect(beyond(outer) * arcSide).toBeGreaterThan(-0.01);
+        }
     });
 });
 

@@ -2,7 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {allowedGestures, groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
+import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, projectedLength, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {StyleFunction} from 'ol/style/Style';
@@ -210,10 +210,38 @@ export class MissionTaskController implements TacticalGraphicHandler {
             // Armed here, immediately before the size lands: arming at drawstart alone
             // is not enough, because the holder has no size yet at that point.
             this.graphic.showMeasure?.(true, this.currentMouseCoord);
-            this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+            this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
 
         });
     };
+
+    /**
+     * What the drag describes, which is not always a centre and a radius.
+     *
+     * Nearly every graphic on this controller is drawn centre-to-edge, and for those this
+     * is the identity. Contain is not: its plate marks the two clicks as the ends of the
+     * semicircle's opening, so the frame's centre is half way along the drag and its size
+     * is half the reach. **The rule is the library's**, so MapLibre draws the same symbol
+     * from the same two clicks. @see frameFromDrag
+     *
+     * The centre is walked in projected metres, which is the space this controller already
+     * works in. It differs from the geodesic midpoint the anchor reader recovers by a few
+     * metres at any drawable scale, and the reader is what the rebuild uses — so the
+     * committed shape is the reader's either way, and this only has to put the preview in
+     * the right place.
+     */
+    private drawnFrame(radius: number, rotationDeg: number): {size: number; center: Coordinate; rotation: number} {
+        const frame = frameFromDrag(this.graphic.name, radius, rotationDeg);
+        if (!frame.reach) return {size: frame.size, center: this.center, rotation: frame.rotation};
+        const bearing = (frame.bearingDeg * Math.PI) / 180;
+        // Back to projected metres from the ground distance `drawnRadius` reported.
+        const projected = projectedLength(frame.reach, latitudeFromMercatorY(this.center[1]));
+        return {
+            size: frame.size,
+            center: [this.center[0] + projected * Math.cos(bearing), this.center[1] + projected * Math.sin(bearing)],
+            rotation: frame.rotation,
+        };
+    }
 
     onDrawEndFunc = (e: DrawEvent) => {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
@@ -221,7 +249,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
 
         // Still the draw: the floor has to reach the size that is *committed*, or a short
         // drag would be held legible right up until the click that ends it.
-        this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
         this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };

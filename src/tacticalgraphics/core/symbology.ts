@@ -702,19 +702,21 @@ const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
     TacticalGraphicName.ActiveManeuverArea,
     TacticalGraphicName.RadarSearchDoctrine,
     /*
-     * Three more on 2026-09-04, when the plates' "may be depicted as" colours were applied
-     * to the **outline** as well as the fill (user's call). While only the fill was the
-     * plate's these kept their identity, because the rim still carried it; with the rim
-     * orange or grey there is no line work left for an affiliation to colour, and a hostile
-     * launch area drawn red would be a symbol the standard does not have.
+     * Four more on 2026-09-04, when the plates' stated colours were applied to the
+     * **outline** as well as the fill (user's call). While only the fill was the plate's
+     * these kept their identity, because the rim still carried it; with the rim orange, grey
+     * or white there is no line work left for an affiliation to colour, and a hostile launch
+     * area drawn red would be a symbol the standard does not have.
      *
-     * 200600 is still not here, and the distinction is exact: its plate names a fill and a
-     * *white* border, and a white stroke is invisible on the basemaps this library's palette
-     * is built for — so its outline is the affiliation's and its identity is real.
+     * 200600 was held back for one round, on the argument that its stated *white* border is
+     * invisible on the basemaps this palette is built for. That is a rendering worry, not a
+     * reading of the plate, and the plate is what this file records: its Note says white, so
+     * the rim is white and the identity goes with it.
      */
     TacticalGraphicName.LaunchAreaEllipse,
     TacticalGraphicName.DefendedAreaEllipse,
     TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
 ]);
 
 /**
@@ -1055,11 +1057,100 @@ export function dropSizePx(name: TacticalGraphicName): number | undefined {
  * only a problem at run time.
  *
  * Derived rather than listed, because both halves are already stated: an anchor graphic is
- * centre-to-edge unless it is dropped whole. A seventh member of either list is covered by
- * construction. @see anchorDraw, which reads `vertices[0]` as the centre and `[1]` as the edge
+ * centre-to-edge unless it is dropped whole or drawn end to end. A further member of any of
+ * the three is covered by construction.
+ * @see anchorDraw, which reads `vertices[0]` as the centre and `[1]` as the edge
  */
 export function drawsCentreToEdge(name: TacticalGraphicName): boolean {
-    return usesDrawnAnchors(name) && dropSizePx(name) === undefined;
+    return usesDrawnAnchors(name) && dropSizePx(name) === undefined && !drawsEndToEnd(name);
+}
+
+/**
+ * The anchor graphics whose **two clicks are the two points the plate marks**, rather than a
+ * centre and a rim.
+ *
+ * 151204 contain is the one, and its Draw Rules say so twice: *"Points 1 and 2 define the
+ * endpoints of the semicircle's opening"* and *"Points 1 and 2 determine the diameter of the
+ * semicircle"*. Its Template letters `PT. 1` against the upper end of the opening and
+ * `PT. 2` against the lower one — there is no annotation on the centre at all, because the
+ * centre is not a point the user places.
+ *
+ * It was drawn centre-to-edge like the other five, which is self-consistent — the anchors
+ * stored were still the two opening ends — but it is not the gesture the standard describes,
+ * and a user following the Draw Rules clicks the two ends and gets a symbol twice the size
+ * they asked for, turned a quarter circle from where they aimed it. (User's report,
+ * 2026-09-04.)
+ *
+ * **The other five are deliberately not here**, and are not an oversight: this was raised for
+ * contain and each of the others needs its own plate read before it moves. Ambush is the one
+ * to look at first — 141700 makes point 1 the arrowhead's tip.
+ */
+const DRAWN_END_TO_END = new Set<TacticalGraphicName>([TacticalGraphicName.Contain]);
+
+export function drawsEndToEnd(name: TacticalGraphicName): boolean {
+    return DRAWN_END_TO_END.has(name);
+}
+
+/**
+ * Whether an anchor graphic's draw **ends on the second click**, whatever the two clicks
+ * mean.
+ *
+ * How long a draw runs and what its clicks describe are two questions, and separating them
+ * cost a graphic the first time they were conflated. `drawsCentreToEdge` answered both at
+ * once; when contain moved to an end-to-end draw it left that predicate, and MapLibre —
+ * which was using it to close the sketch — went back to waiting for a double-click and put
+ * nothing on the map. OpenLayers was unaffected, because its `Circle` interaction ends
+ * itself, so the symbol drew on one engine and not the other. Found by drawing the six
+ * review items on both engines, 2026-09-04.
+ *
+ * Derived from the other two, so a graphic that joins either list is covered here without a
+ * further edit — which is the property the conflated version only appeared to have.
+ */
+export function drawsInTwoClicks(name: TacticalGraphicName): boolean {
+    return drawsCentreToEdge(name) || drawsEndToEnd(name);
+}
+
+/**
+ * What a two-click drag actually described, for a graphic drawn from anchor points.
+ *
+ * Both engines measure the same three numbers off the drag — where the first click landed,
+ * how far the second reached, and the planar bearing between them — and then hand them to
+ * `drawnAnchors` as a centre, a size and a rotation. For a centre-to-edge graphic those are
+ * the same numbers, and this returns them untouched.
+ *
+ * For an end-to-end graphic they are not: the frame's centre is **half way along the drag**,
+ * its size is **half the reach**, and its rotation is a quarter turn off the drag, because
+ * the two clicks are the ends of the opening and the opening lies across the symbol's axis.
+ * The centre is returned as a distance and bearing from the first click rather than as a
+ * position, so each renderer walks it in the space it already works in — and neither has to
+ * restate the quarter turn.
+ *
+ * **This is here rather than in either renderer** for the reason the whole module exists: how
+ * a symbol's clicks become its frame decides what the symbol looks like, so it is a symbology
+ * fact. Stated in an OpenLayers controller, MapLibre would have gone on drawing the old one.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ */
+export interface DragFrame {
+    /** How far the frame's centre sits from the first click, in metres. */
+    reach: number;
+    /** The planar bearing to it, in degrees — 0 is east, the schema's own convention. */
+    bearingDeg: number;
+    /** The symbol's size, in metres. */
+    size: number;
+    /** The symbol's rotation, in degrees, in the same planar convention. */
+    rotation: number;
+}
+
+export function frameFromDrag(name: TacticalGraphicName, radius: number, rotationDeg: number): DragFrame {
+    if (!drawsEndToEnd(name)) return {reach: 0, bearingDeg: rotationDeg, size: radius, rotation: rotationDeg};
+    /*
+     * The quarter turn's sign is fixed by `drawnAnchors`, which lays contain's anchors at
+     * `rotation - 90` and `rotation + 90`: for the drag to land on those two, the rotation
+     * has to be the drag's bearing plus ninety. Getting the sign backwards mirrors the
+     * symbol — the `C` opens the other way — which is a different picture and a plausible
+     * one. @see CONTAIN_OPENING_QUARTER_TURN
+     */
+    return {reach: radius / 2, bearingDeg: rotationDeg, size: radius / 2, rotation: rotationDeg + 90};
 }
 
 export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
