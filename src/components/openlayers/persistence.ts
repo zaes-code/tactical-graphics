@@ -128,7 +128,33 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'bend', 'mirrored'] as const;
+export const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'bend', 'mirrored'] as const;
+
+/**
+ * The geometry inputs out of a stamped bag — **every key `GEOMETRY_KEYS` writes**.
+ *
+ * A function rather than an object literal at the call site, and exported, because the
+ * literal it replaces quietly omitted `length` and nothing could see it: `GraphicGeometryState`
+ * is a `Pick` of optional fields, so a missing key is a valid value of the type and the
+ * compiler has no opinion. The restore then always fell through to `radius`, which is fine
+ * for a file OpenLayers wrote — that engine stamps both — and wrong for one MapLibre wrote,
+ * which stamps `length` and no `radius`. A rectangular target came back at the *view
+ * resolution* instead of its own size. @see restoreTacticalGraphics
+ *
+ * `persistence.test.ts` walks `GEOMETRY_KEYS` against this, so the next key added to the
+ * write side cannot be dropped from the read side.
+ */
+export function readGeometryState(bag: Record<string, unknown>): GraphicGeometryState {
+    return {
+        radius: bag.radius as number | undefined,
+        decorationSize: bag.decorationSize as number | undefined,
+        width: bag.width as number | undefined,
+        length: bag.length as number | undefined,
+        rotation: bag.rotation as number | undefined,
+        bend: bag.bend as number | undefined,
+        mirrored: bag.mirrored as boolean | undefined,
+    };
+}
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -465,14 +491,7 @@ export function restoreTacticalGraphics(
                 f.set('symbolId', symbolId);
             });
 
-            const state: GraphicGeometryState = {
-                radius: bag.radius as number | undefined,
-                decorationSize: bag.decorationSize as number | undefined,
-                width: bag.width as number | undefined,
-                rotation: bag.rotation as number | undefined,
-                bend: bag.bend as number | undefined,
-                mirrored: bag.mirrored as boolean | undefined,
-            };
+            const state = readGeometryState(bag);
 
             // Seed the base geometry onto the holder's *own* base feature before anything
             // else. Two reasons, and they pull in opposite directions:
