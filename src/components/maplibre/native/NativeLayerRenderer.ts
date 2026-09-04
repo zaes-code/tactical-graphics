@@ -22,6 +22,7 @@ import {
     securitySymbolRevision,
     securitySymbolSidc,
     subscribeSecuritySymbolChange,
+    toSnapshot,
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
@@ -429,13 +430,16 @@ export class NativeLayerRenderer {
      * a graphic.
      */
     snapshot(): FeatureCollection {
-        return {
-            type: 'FeatureCollection',
-            features: this.graphics.map(g => ({
-                ...g.base,
-                properties: {...(g.base.properties ?? {}), role: 'base', symbolId: g.id, graphicName: g.name},
-            })),
-        };
+        /*
+         * **Through `toSnapshot`, so the version stamp cannot be forgotten.** It was: this
+         * renderer wrote a bare `FeatureCollection` while OpenLayers wrote one with
+         * `tacticalGraphicsVersion` on it, so the two engines produced files that were
+         * interchangeable in memory and not on disk. @see core/snapshot.ts
+         */
+        return toSnapshot(this.graphics.map(g => ({
+            ...g.base,
+            properties: {...(g.base.properties ?? {}), role: 'base', symbolId: g.id, graphicName: g.name},
+        })));
     }
 
     clear(): void {
