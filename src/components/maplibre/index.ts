@@ -79,6 +79,18 @@ export type {GraphicDescription} from './interaction/editGeometry';
 export {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 export type {MapLibreTacticalGraphic} from './maplibreAdapter';
 
+/*
+ * **The saved-file format, offered from this subpath as well as the other one.**
+ *
+ * `SNAPSHOT_VERSION` was an OpenLayers name because the format was stated in
+ * `openlayers/persistence.ts`, so a MapLibre-only consumer had no way to read the version
+ * off a file this renderer had just written — and this renderer was not writing one. Both
+ * halves of that are fixed: the format lives in the root entry point now, and both subpaths
+ * re-export it, which is what the façade rule asks for. @see core/snapshot.ts
+ */
+export {SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-graphics';
+export type {TacticalGraphicsSnapshot} from '@zaes/tactical-graphics';
+
 // The projection seam: MapLibre's camera as an OpenLayers `resolution`, and back.
 export {
     MERCATOR_HALF_WORLD,

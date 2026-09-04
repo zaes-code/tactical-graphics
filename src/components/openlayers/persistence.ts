@@ -73,6 +73,10 @@ import {
     normalizeDrawnBase,
     TacticalGraphicName,
     usesDrawnAnchors,
+    toSnapshot,
+    SNAPSHOT_VERSION,
+    snapshotVersionOf,
+    type TacticalGraphicsSnapshot,
 } from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
@@ -91,17 +95,26 @@ import {
     writeGraphicProperties,
 } from './graphicProperties';
 
-/** Bumped when the snapshot shape changes in a way a reader must notice. */
-export const SNAPSHOT_VERSION = 1;
+/*
+ * **The file format moved to the library**, so MapLibre can stamp the same version without
+ * importing across the renderer boundary. Re-exported here because this module's public
+ * surface has carried it since 1.3.0 and consumers import it from the `/openlayers` entry.
+ * @see core/snapshot.ts
+ */
+export {SNAPSHOT_VERSION};
 
 /** Map projection the OL features live in. Snapshots are written in 4326. */
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
 
-/** A GeoJSON FeatureCollection plus the version of the layout its properties use. */
-export interface TacticalGraphicsSnapshot extends FeatureCollection {
-    tacticalGraphicsVersion: number;
-}
+/*
+ * The snapshot type is the library's too, and **its version field is optional** — which is
+ * the honest shape for a value a *reader* takes. Files written before the stamp was shared
+ * between the engines carry no version, and refusing them would refuse collections that are
+ * structurally identical to ones this library wrote. `snapshotVersionOf` supplies the
+ * default. @see core/snapshot.ts
+ */
+export type {TacticalGraphicsSnapshot};
 
 /** One graphic that could not be restored, and why. */
 export interface RestoreFailure {
@@ -113,6 +126,16 @@ export interface RestoreFailure {
 export interface RestoreReport {
     restored: number;
     failed: RestoreFailure[];
+    /**
+     * The version the file declared, or {@link SNAPSHOT_VERSION} where it declared none.
+     *
+     * **A missing version is not an invalid file.** Every MapLibre export up to 2026-09-04
+     * carried none — the stamp lived in this module, which MapLibre cannot import — and a
+     * host assembling a collection by hand from the documented property carries none
+     * either. Both are structurally identical to what this engine writes, so they are read,
+     * and the report says what was assumed rather than leaving the caller to guess.
+     */
+    version: number;
 }
 
 export interface SerializeOptions {
@@ -263,7 +286,7 @@ export function serializeTacticalGraphics(
         }
     }
 
-    return {type: 'FeatureCollection', features, tacticalGraphicsVersion: SNAPSHOT_VERSION};
+    return toSnapshot(features);
 }
 
 /**
@@ -451,7 +474,7 @@ export function restoreTacticalGraphics(
     manager: TacticalGraphicsManager,
     snapshot: FeatureCollection,
 ): RestoreReport {
-    const report: RestoreReport = {restored: 0, failed: []};
+    const report: RestoreReport = {restored: 0, failed: [], version: snapshotVersionOf(snapshot)};
     if (!snapshot || !Array.isArray(snapshot.features)) {
         report.failed.push({error: 'not a GeoJSON FeatureCollection'});
         return report;

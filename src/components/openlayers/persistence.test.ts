@@ -522,7 +522,8 @@ describe('an empty map', () => {
 
         const to = fakeManager();
         const report = restoreTacticalGraphics(to, snapshot);
-        expect(report).toEqual({restored: 0, failed: []});
+        // The version a file declares, or the current one where it declares none.
+        expect(report).toEqual({restored: 0, failed: [], version: SNAPSHOT_VERSION});
     });
 });
 
