@@ -19,7 +19,7 @@ import {MissionTaskController} from './controllers/MissionTaskController';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {applyBaseGeometry} from './sampleGallery';
 import {readGraphicLabels} from './graphicProperties';
-import {restoreTacticalGraphics, serializeTacticalGraphics, SNAPSHOT_VERSION} from './persistence';
+import {GEOMETRY_KEYS, readGeometryState, restoreTacticalGraphics, serializeTacticalGraphics, SNAPSHOT_VERSION} from './persistence';
 
 /** The resolution graphics are "drawn" at. Baked into every decoration size. */
 const RES = 1200;
@@ -694,5 +694,79 @@ describe('a graphic saved before the anchor-point conversion', () => {
         const {to} = roundTrip(first);
         expectMetersClose(baseCoords(to.graphicControllers[0]), before);
         expect((to.graphicControllers[0].graphic as unknown as {bend: number}).bend).toBeCloseTo(0.6, 10);
+    });
+});
+
+describe('the geometry inputs a restore reads back', () => {
+    /**
+     * A bag with a distinct, recognisable value under every key the write side stamps.
+     * `mirrored` is a boolean, so it gets `true`; everything else gets its own number.
+     */
+    const stamped = Object.fromEntries(
+        GEOMETRY_KEYS.map((key, i) => [key, key === 'mirrored' ? true : (i + 1) * 1000]),
+    ) as Record<string, unknown>;
+
+    it('reads every key the write side stamps', () => {
+        /*
+         * **The assertion that was missing, and the defect it would have caught.**
+         *
+         * The restore built its state as an object literal and quietly omitted `length`.
+         * Nothing objected: `GraphicGeometryState` is a `Pick` of *optional* fields, so a
+         * missing key is a valid value of the type and the compiler has no opinion at all.
+         *
+         * The point-anchored branch reads `state.length !== undefined ? state.length / 2 :
+         * state.radius`, so it always fell to `radius` — right for a file OpenLayers wrote,
+         * which stamps both, and wrong for one MapLibre wrote, which stamps `length` and no
+         * `radius`. A rectangular target drawn on MapLibre came back on OpenLayers at the
+         * *view resolution* rather than its own size: 1,949 km of length restored as 19.6.
+         * (User's export, 2026-09-04.)
+         *
+         * Walking the key list is what makes this hold for the next key too.
+         */
+        const state = readGeometryState(stamped) as Record<string, unknown>;
+        for (const key of GEOMETRY_KEYS) {
+            expect(state[key]).toBe(stamped[key]);
+        }
+    });
+
+    it('leaves a key absent from the bag undefined rather than guessing', () => {
+        const state = readGeometryState({}) as Record<string, unknown>;
+        for (const key of GEOMETRY_KEYS) expect(state[key]).toBeUndefined();
+    });
+
+    it('restores a MapLibre-shaped bag: a length, and no radius at all', () => {
+        /*
+         * The two engines stamp different keys for the same fact, and this is the shape
+         * that broke. Asserted end to end rather than only through `readGeometryState`,
+         * because the reader alone cannot show that the size reaches the geometry.
+         */
+        const to = fakeManager();
+        const restored = restoreTacticalGraphics(to, {
+            type: 'FeatureCollection',
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [{
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-123.5, 32.3]},
+                properties: {
+                    graphicName: TacticalGraphicName.TargetAreaRectangular,
+                    symbolId: 'mlb-253',
+                    role: 'base',
+                    tacticalGraphic: {
+                        name: TacticalGraphicName.TargetAreaRectangular,
+                        length: 585_928,
+                        width: 386_712,
+                        rotation: -17.7,
+                        decorationSize: 59_381,
+                    },
+                },
+            }],
+        } as never);
+        expect(restored.failed).toHaveLength(0);
+        const bag = readGraphicLabels(
+            to.graphicControllers[0].getFeatures().find(f => f.get('role') === 'graphic')!,
+        ) as unknown as Record<string, number>;
+        // Half the length, which is what a holder that files a length spends as its size.
+        expect(bag.radius).toBeCloseTo(585_928 / 2, 0);
+        expect(bag.length).toBeCloseTo(585_928, 0);
     });
 });
