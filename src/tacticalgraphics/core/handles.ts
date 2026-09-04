@@ -150,6 +150,7 @@ export function usesDrawnAnchors(name: TacticalGraphicName): boolean {
     return DRAWN_ANCHOR_GRAPHICS.includes(name);
 }
 
+
 /**
  * Whether this graphic can be flipped to the other side of its own line.
  *
@@ -682,6 +683,8 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.BearingLineJammer]: 2,
     [TacticalGraphicName.BearingLineRadioDirectionFinder]: 2,
     [TacticalGraphicName.NavigationalRhumbLine]: 2,
+    // 218400: "requires two anchor points. Points 1 and 2 define the corner points".
+    [TacticalGraphicName.NavigationalLine]: 2,
 
     /*
      * The convoys. Both plates read "this symbol requires two anchor points. Point 1
@@ -695,6 +698,9 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // APP-06 152200: "requires three anchor points. Point 1 defines the vertex of the
     // graphic. Points 2 and 3 define the tips of the arrowheads." @see SearchArea
     [TacticalGraphicName.SearchArea]: 3,
+    // APP-06 200700, drawn rather than typed since 2026-09-04: the radar, a point on
+    // the start arc, a point on the stop arc. @see RadarSearchDoctrine
+    [TacticalGraphicName.RadarSearchDoctrine]: 3,
     [TacticalGraphicName.ObstacleBypassEasy]: 3,
     [TacticalGraphicName.ObstacleBypassDifficult]: 3,
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
@@ -763,6 +769,13 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
      * the whole symbol about the point the operator thinks of as its origin.
      */
     [TacticalGraphicName.SearchArea]: 0,
+    /*
+     * The radar search doctrine's anchor, for the third time and the same reason: point
+     * 1 is the radar and the other two are ranges measured from it, so dragging it under
+     * a reshape would move the origin the ranges are quoted against and leave the two
+     * arcs behind. It moves by translate, like the other two.
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]: 0,
 };
 
 /**
@@ -959,7 +972,9 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DefendedAreaEllipse,
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.CuedAcquisitionDoctrine,
-    TacticalGraphicName.RadarSearchDoctrine,
+    // The radar search doctrine left this list on 2026-09-04: its three anchor points
+    // are dragged individually now, so an edit drag moves a vertex rather than scaling
+    // the sector. `vertexLine` says so on both engines. @see RadarSearchDoctrine
 ];
 
 /**

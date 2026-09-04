@@ -16,6 +16,7 @@ import type {Feature, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {getPaintFunction, isPaintable} from './registry';
 import {searchAreaPaint} from './searchAreaPaints';
+import {SOLID_ARROWHEAD_HALF_ANGLE_DEG, SOLID_ARROWHEAD_PX} from './decorations';
 import {SearchArea, asSearchVee} from '../graphics/SearchArea';
 
 const context = {resolution: 100, measureText: (t: string) => t.length * 9} as unknown as PaintContext;
@@ -160,6 +161,29 @@ describe('the paint', () => {
             return Math.hypot(tip[0] - mid[0], tip[1] - mid[1]) / context.resolution;
         };
         expect(reach([[10, 5], [0, 0], [10, -5]])).toBeCloseTo(reach([[100, 50], [0, 0], [100, -50]]), 4);
+    });
+
+    it('draws the same head Fix does, not one of its own', () => {
+        /*
+         * **The user's call, 2026-09-04:** *"make arrowhead look like the fix. The current
+         * one is too wide and unlike others we've been using."* The first version measured
+         * the plate at a 46-degree half-angle and 20 px, which is correct against that
+         * drawing and unlike every other solid head in this library.
+         *
+         * Asserted as the *shape* — reach against half-width — because that is what reads
+         * as a different family, and because it holds whatever the two constants are set to.
+         * `createArrowHeadPolygon` puts the base one size back and half a size to each side,
+         * so the ratio is 2:1 and the half-angle `atan(0.5)`.
+         */
+        const [head] = fills(searchAreaPaint()(paintedFeature(), context));
+        const [tip, left, right] = (head.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
+        const mid = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+        const reach = Math.hypot(tip[0] - mid[0], tip[1] - mid[1]);
+        const halfWidth = Math.hypot(left[0] - right[0], left[1] - right[1]) / 2;
+        expect(reach / halfWidth).toBeCloseTo(2, 2);
+        expect(Math.atan(halfWidth / reach) * (180 / Math.PI)).toBeCloseTo(SOLID_ARROWHEAD_HALF_ANGLE_DEG, 2);
+        // And the same reach, so it is the family's size and not merely its proportions.
+        expect(reach / context.resolution).toBeCloseTo(SOLID_ARROWHEAD_PX, 6);
     });
 
     it('shrinks the head rather than swamping a short arm', () => {

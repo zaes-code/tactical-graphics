@@ -179,6 +179,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ActiveManeuverArea]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.CuedAcquisitionDoctrine]: TacticalGraphicCategory.Areas,
     [TacticalGraphicName.RadarSearchDoctrine]: TacticalGraphicCategory.Areas,
+    // A line, not an area -- the one member of group 21 that is drawn line work.
+    [TacticalGraphicName.NavigationalLine]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.BearingLine]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.BearingLineElectronic]: TacticalGraphicCategory.Lines,
     [TacticalGraphicName.BearingLineElectromagneticWarfare]: TacticalGraphicCategory.Lines,

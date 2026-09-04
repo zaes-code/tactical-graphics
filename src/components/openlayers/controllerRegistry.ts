@@ -421,7 +421,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.CuedAcquisitionDoctrine]:               rectangularTarget,
     [TacticalGraphicName.NoAttackZone]:                          circularArea,
     [TacticalGraphicName.ActiveManeuverArea]:                    circularArea,
-    [TacticalGraphicName.RadarSearchDoctrine]:                   rangeFan,
+    /*
+     * **Not `rangeFan` any more.** 200700 is drawn from three anchor points since
+     * 2026-09-04 — the radar, the start arc, the stop arc — so it is a vertex line like
+     * fields of fire and the search area: each grip is the point it was placed as, and the
+     * radar is inert under a reshape. @see RadarSearchDoctrine, anchorVertex
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]:                   vertexLine(3, 3, 0),
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 
@@ -481,6 +487,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.BearingLineJammer]: line(2),
     [TacticalGraphicName.BearingLineRadioDirectionFinder]: line(2),
     [TacticalGraphicName.NavigationalRhumbLine]: line(2),
+    // APP-06 218400 -- two anchor points, "varies only in length", the same family.
+    [TacticalGraphicName.NavigationalLine]: line(2),
     [TacticalGraphicName.LightLine]: line(),
     [TacticalGraphicName.LineGeneric]: line(),
     [TacticalGraphicName.HandoverLine]: line(),

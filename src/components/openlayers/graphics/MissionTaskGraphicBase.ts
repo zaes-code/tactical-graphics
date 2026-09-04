@@ -4,6 +4,10 @@ import type {Position} from 'geojson';
 import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, hookFromAnchors, hookPose, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
     drawnAnchorFrame,
     drawnAnchors,
     groundLength,
@@ -33,6 +37,7 @@ import {
     getAreaLabelStylesFn,
     activeManeuverAreaStyleFunc,
     cuedAcquisitionDoctrineStyleFunc,
+    maritimeFilledAreaStyleFunc,
     getMissionTaskStyleFn,
     limitedAccessAreaStyleFunc,
     turnStyleFunc,
@@ -205,6 +210,19 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         }
         if (name === TacticalGraphicName.CuedAcquisitionDoctrine) {
             this.graphic.setStyle(cuedAcquisitionDoctrineStyleFunc());
+        }
+        /*
+         * The two ellipses that carry a fill. **`getStyleFromLabels` never runs for a
+         * point-anchored holder** -- its graphic feature keeps `createFeature`'s plain
+         * stroke unless something here replaces it -- so the arm added there for
+         * `polygonRect`'s rectangle does nothing for these two. `paintParity` named both.
+         * @see maritimeFilledAreaPaint
+         */
+        if (name === TacticalGraphicName.LaunchAreaEllipse) {
+            this.graphic.setStyle(maritimeFilledAreaStyleFunc(name, LAUNCH_AREA_COLOR, LAUNCH_AREA_FILL));
+        }
+        if (name === TacticalGraphicName.DefendedAreaEllipse) {
+            this.graphic.setStyle(maritimeFilledAreaStyleFunc(name, DEFENDED_AREA_COLOR, DEFENDED_AREA_FILL));
         }
         // Turn is a GeometryCollection — stroked curve plus filled arrowhead —
         // so it needs a fill as well as a stroke, and not the default blue one.

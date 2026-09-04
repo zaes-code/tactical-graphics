@@ -346,7 +346,7 @@ export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstratio
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
 export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
-export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, rhumbLinePaint} from './symbology/maritimeLinePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbLinePaint} from './symbology/maritimeLinePaints';
 export type {MobilityGlyph} from './symbology/sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -389,10 +389,17 @@ export {
     CUED_ACQUISITION_FILL,
     RADAR_SEARCH_FILL,
     RADAR_SEARCH_STROKE,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
     activeManeuverAreaPaint,
     cuedAcquisitionDoctrinePaint,
     radarSearchDoctrinePaint,
     radarSearchLabelPaint,
+    axisAmplifierPaint,
+    maritimeFilledAreaPaint,
+    withAxisAmplifiers,
 } from './symbology/maritimeAreaPaints';
 export {convoyPaint} from './symbology/convoyPaints';
 export {searchAreaPaint} from './symbology/searchAreaPaints';
@@ -407,6 +414,7 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
+export {drawsCentreToEdge} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
 // turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
 export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';

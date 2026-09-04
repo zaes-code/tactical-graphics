@@ -551,6 +551,9 @@ const additionalLineGraphics = [
      */
     TacticalGraphicName.MovingConvoy,
     TacticalGraphicName.HaltedConvoy,
+    // APP-06 218400. Two anchor points and nothing else in the base; the bar and its two
+    // ticks are all built in screen space. @see navigationalLinePaint
+    TacticalGraphicName.NavigationalLine,
 ];
 additionalLineGraphics.forEach(name => TacticalGraphicsRegistry.register(new Phaseline(name)));
 

@@ -205,6 +205,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.MunitionFlightPath,
     TacticalGraphicName.NamedAreaOfInterest,
     TacticalGraphicName.NamedAreaOfInterestLine,
+    TacticalGraphicName.NavigationalLine,
     TacticalGraphicName.NavigationalRhumbLine,
     TacticalGraphicName.Neutralize,
     TacticalGraphicName.NoAttackZone,

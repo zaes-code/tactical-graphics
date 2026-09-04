@@ -1159,6 +1159,20 @@ export enum TacticalGraphicName {
     ActiveManeuverArea = 'ActiveManeuverArea',                          // APP-06 200500 Active Manoeuvre Area
     CuedAcquisitionDoctrine = 'CuedAcquisitionDoctrine',                // APP-06 200600 Cued Acquisition Doctrine
     RadarSearchDoctrine = 'RadarSearchDoctrine',                        // APP-06 200700 Radar Search Doctrine
+    /**
+     * APP-06 218400. **A drawn line filed under "Maritime Control Points"**, and the
+     * reason the point/shape split has to be read per code rather than per entity group.
+     *
+     * Its Draw Rules say "requires two anchor points. Points 1 and 2 define the corner
+     * points of the symbol" and "the symbol varies only in length" -- a two-point line
+     * whose furniture is a screen size, exactly like the convoys. Group 21 is otherwise
+     * 106 framed point icons, which is why a group-level filter hid it; the abatis
+     * (280100) and the overhead wire (282003) are the same shape of exception and were
+     * already built. A sweep of every symbol-set-25 plate for a multi-anchor draw rule
+     * finds exactly those three in the six Points groups and nothing else.
+     * @see tmp/pdfs/scan_anchor_rules.py
+     */
+    NavigationalLine = 'NavigationalLine',                              // APP-06 218400 Navigational
     MinimumSafeDistanceZone = 'MinimumSafeDistanceZone',                          // APP-06 272100
     MinimumSafeDistanceMultipleStrike = 'MinimumSafeDistanceMultipleStrike',      // APP-06 272101
     RadiationDoseRateContourLine = 'RadiationDoseRateContourLine',                // APP-06 272200
@@ -1304,6 +1318,12 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.ActiveManeuverArea]: 'active maneuver area',
     [TacticalGraphicName.CuedAcquisitionDoctrine]: 'cued acquisition doctrine',
     [TacticalGraphicName.RadarSearchDoctrine]: 'radar search doctrine',
+    /*
+     * The plate's Control Measure cell reads just `NAVIGATIONAL`, which is not a name a
+     * picker can show beside 300 others. `navigational line` says what it is -- the
+     * symbol is a line -- and keeps the standard's own word first.
+     */
+    [TacticalGraphicName.NavigationalLine]: 'navigational line',
     /** APP-06's Control Measure cell reads `SEARCH AREA/ RECONNAISSANCE AREA`. */
     [TacticalGraphicName.SearchArea]: 'search area / reconnaissance area',
     [TacticalGraphicName.MinimumSafeDistanceZone]: 'minimum safe distance zone',

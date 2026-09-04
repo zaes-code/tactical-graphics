@@ -10,33 +10,30 @@
  */
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {LINE_WIDTH} from '../core/symbology';
-import {DECORATION_MIN_PX, solidArrowHead} from './decorations';
+import {
+    ARROWHEAD_MAX_SHARE,
+    DECORATION_MIN_PX,
+    SOLID_ARROWHEAD_HALF_ANGLE_DEG,
+    SOLID_ARROWHEAD_PX,
+    solidArrowHead,
+} from './decorations';
 import {amplifierDash, lineColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
-/**
- * Half the angle between the head's barbs, in degrees — **measured**, not the 135° the
- * generators' default arrowhead uses.
+/*
+ * **The head is Fix's head, and none of its numbers live here.**
  *
- * Off the plate: the head reaches 0.196 of the arm back from the tip and 0.205 of it out to
- * either side, so `atan(0.205 / 0.196)` = 46.2°. That is a notably broad head, and it is
- * what makes this symbol read as a search rather than as a movement arrow at a glance.
- */
-const SEARCH_HEAD_HALF_ANGLE_DEG = 46.2;
-
-/**
- * The head's reach back from the tip along the arm, in screen pixels.
+ * The first version measured the plate — a 46-degree half-angle and a 20 px reach — and
+ * drew something correct against that drawing and unlike every other arrowhead in this
+ * library. A broad, stubby head reads as a different family of symbol; the user's call
+ * (2026-09-04) is that it should match the ones already in use.
  *
- * A screen constant for the standing reason — the arms vary in length independently, and a
- * head that was a share of one arm would come out a different size on each. 20 px is a
- * little over `SOLID_ARROWHEAD_PX`, because this head is broad rather than long and reads
- * smaller than its length suggests.
+ * So it takes `SOLID_ARROWHEAD_PX` and `ARROWHEAD_MAX_SHARE`, the same two constants
+ * `screenSizedArrowHead` applies to Fix, tactical fix and ferry crossing, and the half-angle
+ * the generators' own `createArrowHeadPolygon` produces. Nothing to keep in step: change
+ * the family's head and this changes with it.
  */
-const SEARCH_HEAD_LENGTH_PX = 20;
-
-/** Ceiling on the head as a share of its own arm, so a short arm is not all head. */
-const SEARCH_HEAD_MAX_SHARE = 0.3;
 
 export function searchAreaPaint(): LinePaint {
     return (feature, context) => {
@@ -55,15 +52,15 @@ export function searchAreaPaint(): LinePaint {
             // The arm end to end, not the stepped path: the step nearly doubles how far
             // the pen travels, and a share of the traversal would let the head reach full
             // size on an arm half as long as it thinks. Same correction `screenSizedArrowHead`
-            // takes as `measure: 'reach'`. @see ai/current-task.md, the fix arrowhead
+            // takes as `measure: 'reach'`.
             const reachPx = Math.hypot(tip[0] - path[0][0], tip[1] - path[0][1]) / context.resolution;
-            const lengthPx = Math.min(SEARCH_HEAD_LENGTH_PX, reachPx * SEARCH_HEAD_MAX_SHARE);
+            const lengthPx = Math.min(SOLID_ARROWHEAD_PX, reachPx * ARROWHEAD_MAX_SHARE);
             if (lengthPx < DECORATION_MIN_PX) continue;
 
             // `solidArrowHead` takes the **barb** length, which is the hypotenuse of the
             // reach and the half-width, so it is longer than the head's own reach.
-            const barb = (lengthPx * context.resolution) / Math.cos((SEARCH_HEAD_HALF_ANGLE_DEG * Math.PI) / 180);
-            const ring = solidArrowHead(from, tip, barb, SEARCH_HEAD_HALF_ANGLE_DEG);
+            const barb = (lengthPx * context.resolution) / Math.cos((SOLID_ARROWHEAD_HALF_ANGLE_DEG * Math.PI) / 180);
+            const ring = solidArrowHead(from, tip, barb, SOLID_ARROWHEAD_HALF_ANGLE_DEG);
             if (ring) paints.push({geometry: {type: 'Polygon', coordinates: [ring]}, fill: {color}});
         }
 

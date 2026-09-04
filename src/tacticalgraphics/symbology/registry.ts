@@ -40,7 +40,7 @@ import {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 import {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './psyOpsPaints';
 import {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint} from './minePaints';
-import {BEARING_LINES, bearingLinePaint, rhumbLinePaint} from './maritimeLinePaints';
+import {BEARING_LINES, bearingLinePaint, navigationalLinePaint, rhumbLinePaint} from './maritimeLinePaints';
 import {sectorModifierLabelPaint} from './sectorModifierPaints';
 import {obstacleBypassPaint} from './obstacleBypassPaints';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
@@ -53,10 +53,15 @@ import {retrogradeTaskPaint} from './retrogradePaints';
 import {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './airPaints';
 import {aegisSingleTargetPaint} from './aegisTargetPaints';
 import {
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
     activeManeuverAreaPaint,
     cuedAcquisitionDoctrinePaint,
+    maritimeFilledAreaPaint,
     radarSearchDoctrinePaint,
-    radarSearchLabelPaint,
+    withAxisAmplifiers,
 } from './maritimeAreaPaints';
 import {convoyPaint} from './convoyPaints';
 import {searchAreaPaint} from './searchAreaPaints';
@@ -236,9 +241,9 @@ const DEFAULT_AREA_GRAPHICS: readonly TacticalGraphicName[] = [
      * they belong in this list rather than in `maritimeAreaPaints` -- which carries only
      * the three whose plate names a colour of their own. @see maritimeAreaPaints
      */
-    TacticalGraphicName.LaunchAreaEllipse,
-    TacticalGraphicName.DefendedAreaEllipse,
-    TacticalGraphicName.DefendedAreaRectangle,
+    // 200101, 200201 and 200202 are **not** here any more: each carries the fill its own
+    // plate names, so each is registered below. The two ship areas of interest keep the
+    // plain outline, because their plate names no colour. @see maritimeFilledAreaPaint
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.ShipAreaOfInterestRectangle,
     TacticalGraphicName.BombArea,
@@ -460,6 +465,12 @@ const AIRSPACE_COORDINATION_AREAS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
 ];
 
+/** The two whose Template letters a minor axis, a major axis and a rotation. */
+const MARITIME_AXIS_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+];
+
 /** The maritime areas whose plate prints `<literal> - T` inside the shape. */
 const MARITIME_TITLED_AREAS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.LaunchAreaEllipse,
@@ -505,6 +516,13 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
      * the airhead line's case. Reading the two pairs as one family is the mistake here:
      * their Templates differ in both the text and where it sits.
      */
+    /*
+     * **The two ellipses carry the axis block; the rectangle does not.** 200202's
+     * Template letters `T` and `AM` only -- its length and orientation come off the two
+     * anchor points -- so there is no `AM1` and no `AN` to print, and a block with one
+     * line in it is not what the Example shows. @see axisAmplifierPaint
+     */
+    if (MARITIME_AXIS_AREAS.includes(name)) return withAxisAmplifiers(actionAreaLabelPaint(name));
     if (MARITIME_TITLED_AREAS.includes(name)) return actionAreaLabelPaint(name);
     if (MARITIME_UNTITLED_AREAS.includes(name)) return belowShapeLiteralPaint(getLabel(name));
     // 200300 letters a bare `N` over `W - W1` and has no designation box beneath it, so the
@@ -937,15 +955,25 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
      * fixed colour rather than to the affiliation, 200600 carries a fill, and the convoys
      * and the search area synthesize their whole outline in screen space.
      */
+    registry[TacticalGraphicName.LaunchAreaEllipse] =
+        {graphic: maritimeFilledAreaPaint(LAUNCH_AREA_COLOR, LAUNCH_AREA_FILL)};
+    registry[TacticalGraphicName.DefendedAreaEllipse] =
+        {graphic: maritimeFilledAreaPaint(DEFENDED_AREA_COLOR, DEFENDED_AREA_FILL)};
+    registry[TacticalGraphicName.DefendedAreaRectangle] =
+        {graphic: maritimeFilledAreaPaint(DEFENDED_AREA_COLOR, DEFENDED_AREA_FILL)};
     registry[TacticalGraphicName.ActiveManeuverArea] = {graphic: activeManeuverAreaPaint()};
     registry[TacticalGraphicName.CuedAcquisitionDoctrine] = {graphic: cuedAcquisitionDoctrinePaint()};
-    registry[TacticalGraphicName.RadarSearchDoctrine] = {
-        graphic: radarSearchDoctrinePaint(),
-        label: radarSearchLabelPaint(),
-    };
+    /*
+     * **One painter, no label slot.** 200700 is drawn from three anchor points since
+     * 2026-09-04, which puts it on a line holder — and a line holder draws everything off
+     * the one geometry. Its `T` rides the graphic's own collection, so registering a label
+     * painter as well would draw the designation twice on MapLibre and once here.
+     */
+    registry[TacticalGraphicName.RadarSearchDoctrine] = {graphic: radarSearchDoctrinePaint()};
     registry[TacticalGraphicName.MovingConvoy] = {graphic: convoyPaint(TacticalGraphicName.MovingConvoy)};
     registry[TacticalGraphicName.HaltedConvoy] = {graphic: convoyPaint(TacticalGraphicName.HaltedConvoy)};
     registry[TacticalGraphicName.SearchArea] = {graphic: searchAreaPaint()};
+    registry[TacticalGraphicName.NavigationalLine] = {graphic: navigationalLinePaint()};
 
     registry[TacticalGraphicName.CoordinatedFireLine] = {graphic: coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine)};
     registry[TacticalGraphicName.EngineerWorkLine] = {graphic: engineerWorkLinePaint(TacticalGraphicName.EngineerWorkLine)};
@@ -1118,6 +1146,12 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         ...SPECIAL_AREA_GRAPHICS,
         ...CIRCULAR_AREA_GRAPHICS,
         ...CIRCULAR_HATCHED_WHEN_PLANNED,
+        // Registered on their own for their fills, so outside the four family lists --
+        // and an area's labels live on a separate feature, which with no painter simply
+        // does not draw. @see the note above
+        TacticalGraphicName.LaunchAreaEllipse,
+        TacticalGraphicName.DefendedAreaEllipse,
+        TacticalGraphicName.DefendedAreaRectangle,
         TacticalGraphicName.BattlePosition,
         TacticalGraphicName.BattlePositionPreparedButNotOccupied,
         TacticalGraphicName.StrongPoint,

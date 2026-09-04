@@ -15,6 +15,8 @@ import {
     engineerWorkLineStyle,
     escortOrDemonstrationStyleFunc,
     bearingLineStyleFunc,
+    navigationalLineStyleFunc,
+    radarSearchDoctrineStyleFunc,
     convoyStyleFunc,
     searchAreaStyleFunc,
     ferryCrossingStyleFunc,
@@ -123,6 +125,17 @@ export class LineGraphicBase implements LineGraphic {
                     return bearingLineStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.NavigationalRhumbLine:
                     return rhumbLineStyleFunc()(feature, resolution);
+                case TacticalGraphicName.NavigationalLine:
+                    return navigationalLineStyleFunc()(feature, resolution);
+                /*
+                 * 200700 moved onto this holder when its draw went to three anchor
+                 * points, and a line holder puts nothing on a label feature -- so the
+                 * sector and its `T` come out of one collection here. Without this arm
+                 * it fell through to the generic line style and drew **nothing at all**,
+                 * because that style has no case for a polygon. @see rendersSomething
+                 */
+                case TacticalGraphicName.RadarSearchDoctrine:
+                    return radarSearchDoctrineStyleFunc()(feature, resolution);
                 /*
                  * The convoys and the search area -- **the second of the two edits again**.
                  * The block arrow, the open triangle and the stepped V with its solid heads

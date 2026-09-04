@@ -379,6 +379,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ActiveManeuverArea]: APP6_ONLY, // APP-06 200500 Active Manoeuvre Area
     [TacticalGraphicName.CuedAcquisitionDoctrine]: APP6_ONLY, // APP-06 200600 Cued Acquisition Doctrine
     [TacticalGraphicName.RadarSearchDoctrine]: APP6_ONLY, // APP-06 200700 Radar Search Doctrine
+    [TacticalGraphicName.NavigationalLine]: APP6_ONLY, // APP-06 218400 Navigational
     /*
      * APP-06 152200. `search area` appears six times in FM 1-02.2 and not once as a symbol:
      * every hit is the glossary phrase "target acquisition search areas" or "weapons
