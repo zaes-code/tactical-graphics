@@ -31,6 +31,37 @@ describe('per-handle vertex dragging', () => {
         expect(typeof c.handleVertexDrag).toBe('function');
     });
 
+    it('gives every two-point vertex line a grip on both ends', () => {
+        /*
+         * **A grip on each end, because each end can be dragged.**
+         *
+         * The constructor sets `hidesStartHandle` on any two-point line — "two vertices is
+         * one segment: show only the handle on the far end" — which is right while the only
+         * gesture is a stretch anchored there, and wrong the moment the vertex itself moves.
+         * MapLibre published both all along, so this was a **cross-engine difference on
+         * every `vertexLine(2, …)` graphic**: the convoys, the navigational line, `Fix`, the
+         * follow tasks. Reported on the convoys — *"maplibre has two red handles (correct)
+         * and openlayers has only 1"* (user, 2026-09-04).
+         */
+        for (const name of [TacticalGraphicName.MovingConvoy, TacticalGraphicName.HaltedConvoy,
+                            TacticalGraphicName.NavigationalLine, TacticalGraphicName.Fix,
+                            TacticalGraphicName.FollowAndAssume]) {
+            const c = getController(name, RES) as LineGraphicController;
+            expect(c.dragsVertices).toBe(true);
+            expect(c.graphic.hidesStartHandle).toBe(false);
+        }
+    });
+
+    it('leaves the single handle on a two-point line that does not drag vertices', () => {
+        // The other half: with no vertex to move, the near handle would do nothing, so the
+        // constructor's rule still stands for those. A bearing line, not a phase line —
+        // `hidesStartHandle` is set for `maxPoints === 2` and a phase line has no limit, so
+        // it is `undefined` there and the assertion would be about the wrong thing.
+        const c = getController(TacticalGraphicName.BearingLine, RES) as LineGraphicController;
+        expect(c.dragsVertices).toBe(false);
+        expect(c.graphic.hidesStartHandle).toBe(true);
+    });
+
     it('moves only the grabbed vertex', () => {
         const c = build(TacticalGraphicName.FieldsOfFire);
         c.handleVertexDrag!(2, [260_000, 40_000]);

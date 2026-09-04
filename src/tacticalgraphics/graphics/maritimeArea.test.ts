@@ -155,15 +155,34 @@ describe('the radar search doctrine sector', () => {
         expect(Math.min(...r)).toBeCloseTo(10, 0);
     });
 
-    it('still gives a two-point base a start range rather than a wedge apex', () => {
+    it('draws a bare arc from a two-point base, not a sector', () => {
         /*
-         * A graphic drawn before the change, or a sketch mid-draw. Zero would put the apex
-         * on the anchor point and draw a pie slice, which is a different picture from every
-         * plate this symbol has. @see RSD_DEFAULT_START_SHARE
+         * **A sketch between the first click and the second.** (User's call, 2026-09-04.)
+         *
+         * The base holds the radar and one distance, and which of the plate's two ranges
+         * that distance *is* has not been decided yet — so closing a sector round it puts a
+         * second arc on the map at a range nobody gave, and the whole figure jumps when the
+         * next click lands. One range, one mark.
+         *
+         * It used to fall back to `RSD_DEFAULT_START_SHARE` and draw the whole annulus,
+         * which is still what a *typed* band does: stating a range is a decision, and the
+         * test below holds that half.
          */
-        const r = radiiKm(ringOf(sketched));
-        expect(Math.min(...r)).toBeGreaterThan(1);
-        expect(Math.min(...r)).toBeLessThan(Math.max(...r));
+        const members = (rsd.generateGraphics(sketched, undefined) as Feature<GeometryCollection>).geometry.geometries;
+        const shapes = members.map(m => m.type);
+        expect(shapes).toContain('LineString');
+        expect(shapes).not.toContain('Polygon');
+        // ...and it is the arc at the drawn range, all of it at one radius.
+        const arc = members.find(m => m.type === 'LineString') as LineString;
+        const radii = arc.coordinates.map(c => metres([0, 0], c) / 1000);
+        expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(0.5);
+    });
+
+    it('closes the sector as soon as a range is typed, however few points there are', () => {
+        // Stating a range is a decision, so a two-point base with a band is not a sketch.
+        const shapes = (rsd.generateGraphics(sketched, bands([10_000, 40_000])) as Feature<GeometryCollection>)
+            .geometry.geometries.map(m => m.type);
+        expect(shapes).toContain('Polygon');
     });
 
     it('opens an equal angle either side of the search axis', () => {

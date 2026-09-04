@@ -406,21 +406,40 @@ describe('the navigational line — APP-06 218400', () => {
         return Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1]);
     };
 
-    it('scales the ticks with the bar, so a resize moves the whole symbol', () => {
+    it('holds the ticks at one size however long the bar is', () => {
         /*
-         * **The user's call, 2026-09-04, and the plate agrees.** These were a screen constant
-         * on the reading that "the symbol varies only in length" names a fixed size -- so a
-         * resize grew a longer bar between two marks that never moved.
-         *
-         * Both plate columns state both lengths, at two different sizes: a 787 px bar with a
-         * 286 px tick and a 1072 px bar with a 369 px one, measured at 600 dpi. The bars
-         * differ by 36% and the ratios are 0.364 and 0.344, so the tick is a share.
+         * **Two gestures, two answers.** These were a screen constant, went to a share of
+         * the bar for one round, and came back. The plate's two columns *do* state both
+         * lengths at two sizes and the ratios agree within six per cent, so a share is a
+         * defensible reading of the drawing — but it grows the ticks every time the bar is
+         * lengthened, and *"the symbol varies only in length"* is the sentence that says
+         * they should not. Dragging the red handle is the user lengthening the line.
+         * (User's call, 2026-09-04.)
          */
-        expect(tickLength([[0, 0], [40_000, 0]])).toBeCloseTo(10 * tickLength([[0, 0], [4000, 0]]), 6);
+        expect(tickLength([[0, 0], [40_000, 0]])).toBeCloseTo(tickLength([[0, 0], [4000, 0]]), 6);
     });
 
-    it('holds the plate proportion', () => {
-        expect(tickLength([[0, 0], [4000, 0]]) / 4000).toBeCloseTo(0.354, 3);
+    it('scales the ticks with a stamped decoration size, which is what a resize changes', () => {
+        // The other half of the split: a vertex drag leaves `decorationSize` alone and the
+        // resize gesture multiplies it. @see DECORATION_PX
+        const withSize = (decorationSize: number) => {
+            const feature = {
+                geometry: {type: 'LineString', coordinates: [[0, 0], [40_000, 0]]},
+                properties: {name: TacticalGraphicName.NavigationalLine, decorationSize},
+            } as unknown as PaintFeature;
+            const [, tick] = navigationalLinePaint()(feature, context)
+                .filter(p => p.geometry.type === 'LineString')
+                .map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates);
+            return Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1]);
+        };
+        expect(withSize(1000)).toBeCloseTo(1000, 6);
+        expect(withSize(2000)).toBeCloseTo(2 * withSize(1000), 6);
+    });
+
+    it('holds the plate proportion at the drawing zoom', () => {
+        // 26 px of tick, which is the plate's own ratio at a bar the length these are drawn
+        // at, and sits with the library's other end furniture.
+        expect(tickLength([[0, 0], [40_000, 0]]) / RESOLUTION).toBeCloseTo(26, 6);
     });
 
     it('falls back to a bare bar when a tick would be under the visibility floor', () => {

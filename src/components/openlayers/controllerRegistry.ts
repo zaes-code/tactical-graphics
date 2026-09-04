@@ -488,7 +488,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.BearingLineRadioDirectionFinder]: line(2),
     [TacticalGraphicName.NavigationalRhumbLine]: line(2),
     // APP-06 218400 -- two anchor points, "varies only in length", the same family.
-    [TacticalGraphicName.NavigationalLine]: line(2),
+    /*
+     * **A vertex line, so the red handle lengthens the bar and leaves the ticks.**
+     *
+     * `line(2)` gave it no vertex handles at all, so every drag went through the stretch
+     * path and scaled the whole symbol -- the ticks with it. Its plate says the symbol
+     * "varies only in length", which is exactly the gesture that had no way to happen.
+     * (User's call, 2026-09-04.) The follow tasks have been `vertexLine(2, 2)` for the same
+     * reason, and `editStretches` still lets a drag on the *body* resize.
+     */
+    [TacticalGraphicName.NavigationalLine]: vertexLine(2, 2),
     [TacticalGraphicName.LightLine]: line(),
     [TacticalGraphicName.LineGeneric]: line(),
     [TacticalGraphicName.HandoverLine]: line(),
@@ -753,8 +762,10 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * vertex-arrangement one. @see BASE_VERTEX_COUNT, which states the same count for both
      * engines
      */
-    [TacticalGraphicName.MovingConvoy]:     line(2),
-    [TacticalGraphicName.HaltedConvoy]:     line(2),
+    // Vertex lines for the same reason as 218400: the red handle makes the convoy longer,
+    // and the body width is a `decorationSize` only the resize gesture touches.
+    [TacticalGraphicName.MovingConvoy]:     vertexLine(2, 2),
+    [TacticalGraphicName.HaltedConvoy]:     vertexLine(2, 2),
 
     // ── Circular / point target control measures ─────────────────────────────
     // [TacticalGraphicName.TargetReferencePoint]: circularArea,

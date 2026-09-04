@@ -69,6 +69,24 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.WireSingleConcertina]: 14,
     [TacticalGraphicName.WireDoubleStrandConcertina]: 14,
     [TacticalGraphicName.WireTripleStrandConcertina]: 14,
+
+    /*
+     * **The three whose furniture must survive a vertex drag.** (User's call, 2026-09-04.)
+     *
+     * 218400's ticks and the two convoys' body widths were briefly shares of the drawn run,
+     * so lengthening the line by dragging its red handle fattened the symbol — and a line
+     * the user is lengthening is a line, not a bigger symbol. Being in this table makes each
+     * of them a `decorationSize`: fixed against a vertex drag, and scaled by the resize
+     * gesture, which multiplies it. Exactly what `Fix` above has always done, and for the
+     * same reason.
+     *
+     * The convoys' two numbers keep the plates' relationship to each other -- 50/448 against
+     * 60/483, so the halted body is about a tenth deeper than the moving one -- while both
+     * are now screen sizes rather than shares. @see convoyPaints
+     */
+    [TacticalGraphicName.NavigationalLine]: 26,
+    [TacticalGraphicName.MovingConvoy]: 13,
+    [TacticalGraphicName.HaltedConvoy]: 14,
 };
 
 /**

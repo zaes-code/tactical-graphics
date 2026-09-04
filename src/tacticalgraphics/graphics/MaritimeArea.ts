@@ -266,6 +266,28 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
             return out;
         };
 
+        /*
+         * **One range known: draw the arc, and only the arc.** (User's call, 2026-09-04.)
+         *
+         * Between the first click and the second the base holds the radar and one distance,
+         * and which of the plate's two ranges that distance *is* has not been decided yet.
+         * Closing a sector around it puts a second arc on the map at a range the user has
+         * not given — a picture of a symbol they have not finished describing — and the
+         * whole figure then jumps when the next click lands.
+         *
+         * So the preview is the bare quarter arc the sweep already defines: one range, one
+         * mark. The full annulus arrives with the third point, which is the click that
+         * settles which range is which. A typed band is a decision too, so a stated range
+         * closes the sector however many points the base carries.
+         */
+        const known = base.geometry.coordinates.length >= 3 || (opts?.bands?.length ?? 0) > 0;
+        if (!known) {
+            return this.asGeometryCollectionFeature([
+                {type: 'LineString', coordinates: arc(stop, false)},
+                this.labelAnchor(center, stop, stop, leftAz, rightAz),
+            ]);
+        }
+
         // Out along the far arc, back along the near one. With a zero start range the
         // near arc collapses onto the centre, which closes the wedge at its apex.
         const ring = start > 0 ? [...arc(stop, false), ...arc(start, true)] : [...arc(stop, false), center];
