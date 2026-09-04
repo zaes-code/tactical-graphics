@@ -108,8 +108,9 @@
     "check:tracker": "python scripts/gen-readme-graphics-table.py --check",
     "gen:app6-review": "python scripts/gen-app6-review-sheet.py",
     "check:app6-review": "python scripts/gen-app6-review-sheet.py --check",
+    "check:tracker-hierarchy": "python scripts/gen-tracker-hierarchy.py --check",
     "check:docs": "npm run check:thumbnails && npm run check:field-matrix && npm run check:readme-samples",
-    "check:docs:internal": "npm run check:docs && npm run check:conformance && npm run check:tracker && npm run check:app6-review",
+    "check:docs:internal": "npm run check:docs && npm run check:conformance && npm run check:tracker && npm run check:app6-review && npm run check:tracker-hierarchy",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
