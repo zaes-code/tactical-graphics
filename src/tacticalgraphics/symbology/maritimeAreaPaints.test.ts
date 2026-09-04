@@ -23,6 +23,7 @@ import {getPaintFunction, isPaintable} from './registry';
 import {withHiddenAmplifiers} from './paintFunctions';
 import {
     ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_COLOR,
     CUED_ACQUISITION_FILL,
     RADAR_SEARCH_FILL,
     RADAR_SEARCH_STROKE,
@@ -112,9 +113,34 @@ describe('the colours the plates state outright', () => {
          */
         expect(supportsHostility(TacticalGraphicName.ActiveManeuverArea)).toBe(false);
         expect(supportsHostility(TacticalGraphicName.RadarSearchDoctrine)).toBe(false);
-        // 200600 keeps its identity: only its *fill* is stated, and its outline is drawn
-        // in the affiliation colour rather than the plate's invisible white.
-        expect(supportsHostility(TacticalGraphicName.CuedAcquisitionDoctrine)).toBe(true);
+        /*
+         * 200600 was the exception for one round, on the argument that its stated *white*
+         * border is invisible on the basemaps this palette is built for, so its rim could
+         * carry an affiliation. The user's call (2026-09-04) is that the plate says white —
+         * *"Cued Acquisition Doctrine symbol has a white border (RGB: 255,255,255)"* — and
+         * the identity goes with the rim.
+         */
+        expect(supportsHostility(TacticalGraphicName.CuedAcquisitionDoctrine)).toBe(false);
+        expect(cuedAcquisitionDoctrinePaint()(ringFeature(TacticalGraphicName.CuedAcquisitionDoctrine, {hostility: 'hostileFaker'}), context)[0].stroke?.color)
+            .toBe(CUED_ACQUISITION_COLOR);
+    });
+
+    it('prints 240802 in the units its own Example uses, which are not the ellipses\'', () => {
+        /*
+         * **Two plates letter `AM` / `AM1` / `AN` and mean different things by them.** The
+         * ellipses call theirs axis *radii* and state `AN` counter-clockwise from east;
+         * 240802 calls its two *"the target length (AM1) in metres and target width (AM) in
+         * metres"* — full figures — and states `AN` as a compass attitude **in mils**.
+         *
+         * Numbers chosen so each mistake is visible: halving would print `20 km`, and
+         * reading the angle as degrees would print `60` where the answer is 1067.
+         */
+        const feature = anchorFeature(TacticalGraphicName.TargetAreaRectangular, {width: 40_000, length: 224_000, rotation: 30});
+        const drawn = textsOf(getPaintFunction(TacticalGraphicName.TargetAreaRectangular)!.label!(feature, context)).join('\n');
+        expect(drawn).toContain('AM = 40 km');
+        expect(drawn).toContain('AM1 = 224 km');
+        // 90 - 30 = 60 degrees of compass attitude, and 60 degrees is 1067 mils.
+        expect(drawn).toContain('AN = 1067 mils');
     });
 
     it.each([
@@ -149,12 +175,20 @@ describe('the colours the plates state outright', () => {
         expect(supportsHostility(name)).toBe(false);
     });
 
-    it('fills the cued acquisition doctrine and outlines it in the affiliation colour', () => {
-        // The plate says a white border, which is invisible on this library's basemaps, so
-        // the outline is deliberately the ordinary one and the fill carries the symbol.
+    it('gives the cued acquisition doctrine the white border its Note states, and the grey fill', () => {
+        /*
+         * **This assertion used to be `not.toBe(CUED_ACQUISITION_FILL)`**, which is true of
+         * the affiliation colour and true of white — so it passed before the border changed
+         * and passed after, and could not have caught either. Naming the colour is the whole
+         * value of the test.
+         *
+         * *"Cued Acquisition Doctrine symbol has a white border (RGB: 255,255,255) with a
+         * 75% transparent Grey fill"*, and its Note 2 adds that the grey panel behind the
+         * Template is only there so the white can be seen.
+         */
         const [box] = cuedAcquisitionDoctrinePaint()(ringFeature(TacticalGraphicName.CuedAcquisitionDoctrine), context);
         expect(box.fill?.color).toBe(CUED_ACQUISITION_FILL);
-        expect(box.stroke?.color).not.toBe(CUED_ACQUISITION_FILL);
+        expect(box.stroke?.color).toBe(CUED_ACQUISITION_COLOR);
     });
 
     it('gives the radar search doctrine both the stated cyan border and its fill', () => {

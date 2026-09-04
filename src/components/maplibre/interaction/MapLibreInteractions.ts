@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, drawsCentreToEdge, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -681,9 +681,15 @@ export class MapLibreInteractions {
          * of derived points, so they fell past the `Point` branch below into the multi-click
          * path and waited for a double-click — while OpenLayers drew each of them with a
          * `Circle` interaction that ends itself, and the panel promised "2 points (center →
-         * edge)". Two clicks put nothing on the map at all. @see drawsCentreToEdge
+         * edge)". Two clicks put nothing on the map at all.
+         *
+         * **It asks `drawsInTwoClicks`, not `drawsCentreToEdge`**, and the difference is not
+         * cosmetic: contain moved to an end-to-end draw on 2026-09-04, left the
+         * centre-to-edge list, and immediately stopped drawing here while OpenLayers went on
+         * drawing it — because what this branch needs to know is *how long the draw runs*,
+         * and that predicate had been answering *what the clicks mean*. @see drawsInTwoClicks
          */
-        if (drawsCentreToEdge(name)) {
+        if (drawsInTwoClicks(name)) {
             if (!this.sketch.length) {
                 this.sketch.push(position);
                 return;
@@ -1043,17 +1049,33 @@ export class MapLibreInteractions {
             };
         }
 
-        const center = toMercator([vertices[0][0], vertices[0][1]]);
+        const center0 = toMercator([vertices[0][0], vertices[0][1]]);
         const edge = toMercator([vertices[1][0], vertices[1][1]]);
-        const dx = edge[0] - center[0];
-        const dy = edge[1] - center[1];
+        const dx = edge[0] - center0[0];
+        const dy = edge[1] - center0[1];
         // A real distance, like every other drawn size. @see mercator.ts
         const radius = groundLength(Math.hypot(dx, dy), vertices[0][1]);
         if (!(radius > 0)) return undefined;
 
-        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const size = this.legibleRadius(name, radius, vertices[0][1]);
-        const anchors = drawnAnchors(name, {center: vertices[0], size, rotation});
+        const rotationDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /*
+         * **Not every one of the six is drawn centre-to-edge**, and which are is the
+         * library's answer rather than this file's. Contain's plate marks its two clicks as
+         * the ends of the semicircle's opening, so its frame sits half way along the drag at
+         * half the reach, a quarter turn round. @see frameFromDrag
+         */
+        const drag = frameFromDrag(name, radius, rotationDeg);
+        const size = this.legibleRadius(name, drag.size, vertices[0][1]);
+        // Walked in projected metres and converted back, which is the space this file
+        // measured the drag in -- the same two lines OpenLayers' controller runs, because
+        // each renderer walks its own coordinates and only the *rule* is shared.
+        const bearing = (drag.bearingDeg * Math.PI) / 180;
+        const reach = projectedLength(drag.reach, vertices[0][1]);
+        const center = drag.reach
+            ? toLonLat([center0[0] + reach * Math.cos(bearing), center0[1] + reach * Math.sin(bearing)])
+            : vertices[0];
+        const rotation = drag.rotation;
+        const anchors = drawnAnchors(name, {center, size, rotation});
         if (!anchors) return undefined;
 
         return {

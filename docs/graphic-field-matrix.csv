@@ -87,7 +87,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "critical friendly zone circular",CriticalFriendlyZoneCircular,"FM 1-02.2 + APP-06",241403,Y,,,,Y,,Y,Y,,,,,,,,,,Y,,,
 "critical friendly zone irregular",CriticalFriendlyZoneIrregular,"FM 1-02.2 + APP-06",241401,Y,,,,Y,,Y,Y,,,,,,,,,,,,,
 "critical friendly zone rectangular",CriticalFriendlyZoneRectangular,"FM 1-02.2 + APP-06",241402,Y,,,,Y,,Y,Y,,,,,,,,Y,,,,,
-"cued acquisition doctrine",CuedAcquisitionDoctrine,"APP-06",200600,,,,,Y,,,,,,,,,,,Y,Y,,,,
+"cued acquisition doctrine",CuedAcquisitionDoctrine,"APP-06",200600,,,,,,,,,,,,,,,,Y,Y,,,,
 "dead space area circular",DeadSpaceAreaCircular,"FM 1-02.2 + APP-06",241503,Y,,,,Y,,Y,Y,,,,,,,,,,Y,,,
 "dead space area irregular",DeadSpaceAreaIrregular,"FM 1-02.2 + APP-06",241501,Y,,,,Y,,Y,Y,,,,,,,,,,,,,
 "dead space area rectangular",DeadSpaceAreaRectangular,"FM 1-02.2 + APP-06",241502,Y,,,,Y,,Y,Y,,,,,,,,Y,,,,,

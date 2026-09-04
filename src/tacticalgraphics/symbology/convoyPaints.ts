@@ -215,8 +215,22 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
         // Half the body each, so the two cannot meet in the middle however long either is.
         const insideScale = (value: string) =>
             capLabelToSpan(context, value, fontStyle, scale, (neck / res) / 2);
-        if (weapon) paints.push(text(at(neck * FIELD_V_ALONG, 0), weapon, 'middle', insideScale(weapon)));
-        if (info) paints.push(text(at(neck * FIELD_H_ALONG, 0), info, 'middle', insideScale(info)));
+        /*
+         * **One scale for the pair, and it is the tighter of the two.**
+         *
+         * `V` and `H` sit side by side inside the same body at the same nominal size, so a
+         * per-label cap made them two sizes: `capLabelToSpan` shrinks by the text's own
+         * width, and the two fields hold different strings. `M1A2` beside `RESUPPLY` came
+         * out with the shorter one visibly larger, and the gap opened as the map zoomed
+         * out -- the span shrinks in pixels, so the longer label starts being capped while
+         * the shorter one is still at full size. (User's report, 2026-09-04.)
+         *
+         * Taking the minimum is what keeps them one row of text: the pair renders at the
+         * largest size at which **both** fit their half of the body.
+         */
+        const pairScale = Math.min(weapon ? insideScale(weapon) : scale, info ? insideScale(info) : scale);
+        if (weapon) paints.push(text(at(neck * FIELD_V_ALONG, 0), weapon, 'middle', pairScale));
+        if (info) paints.push(text(at(neck * FIELD_H_ALONG, 0), info, 'middle', pairScale));
 
         /*
          * `W - W1` hangs under the body, centred on it -- the same "start - end" join every

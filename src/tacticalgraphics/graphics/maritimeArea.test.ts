@@ -182,10 +182,61 @@ describe('the radar search doctrine sector', () => {
         expect(turf.bearing(turf.point([0, 0]), turf.point(label))).toBeCloseTo(90, 0);
     });
 
-    it('publishes the three drawn points as its grips', () => {
+    it('publishes the three drawn points as its grips when they are already on the axis', () => {
         const base = drawn(30, 80);
         const handles = (rsd.generateHandles(base, undefined) as Feature<MultiPoint>).geometry.coordinates;
-        expect(handles).toEqual(base.geometry.coordinates);
+        expect(handles[0]).toEqual(base.geometry.coordinates[0]);
+        for (const i of [1, 2]) {
+            expect(metres(handles[i], base.geometry.coordinates[i])).toBeLessThan(1);
+        }
+    });
+
+    it('pulls a start point that was clicked off the axis back onto it', () => {
+        /*
+         * **The plate gives this symbol one anchor point that "defines the axis of angular
+         * rotation", and two ranges measured along it** — one line, three points on it.
+         * Drawing takes three clicks as an affordance and nothing stops the middle one
+         * landing to the side, so the raw distance was taken and the base zig-zagged across
+         * a symbol that is a straight run by definition. (User's report, 2026-09-04.)
+         *
+         * The start point here is 30 km out on a bearing 40 degrees off the stop point's, so
+         * its reach along the axis is `30 cos 40` = 22.98 km, and the grip belongs there.
+         */
+        const off: Feature<LineString> = {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [0, 0],
+                    turf.destination(turf.point([0, 0]), 30, 50, {units: 'kilometers'}).geometry.coordinates,
+                    turf.destination(turf.point([0, 0]), 80, 90, {units: 'kilometers'}).geometry.coordinates,
+                ],
+            },
+        };
+        const handles = (rsd.generateHandles(off, undefined) as Feature<MultiPoint>).geometry.coordinates;
+        expect(metres([0, 0], handles[1]) / 1000).toBeCloseTo(30 * Math.cos((40 * Math.PI) / 180), 0);
+        // ...and on the axis, which is the bearing to the stop point.
+        expect(turf.bearing(turf.point([0, 0]), turf.point(handles[1]))).toBeCloseTo(90, 0);
+    });
+
+    it('keeps the range when the start point is dragged square across the axis', () => {
+        // The projection's point: a drag with no along-axis component changes nothing.
+        const at = (bearing: number): Feature<LineString> => ({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [0, 0],
+                    turf.destination(turf.point([0, 0]), 30, bearing, {units: 'kilometers'}).geometry.coordinates,
+                    turf.destination(turf.point([0, 0]), 80, 90, {units: 'kilometers'}).geometry.coordinates,
+                ],
+            },
+        });
+        const reach = (f: Feature<LineString>) =>
+            metres([0, 0], (rsd.generateHandles(f, undefined) as Feature<MultiPoint>).geometry.coordinates[1]);
+        expect(reach(at(70))).toBeCloseTo(reach(at(110)), 0);
     });
 
     it('publishes three grips for a two-point base too, so editing does not change', () => {

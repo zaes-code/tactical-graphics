@@ -126,6 +126,22 @@ export type GraphicFieldSet = {
      * unaffected.
      */
     rangeFan: boolean;
+    /**
+     * How many bands the fan editor offers, when the plate fixes the number.
+     *
+     * Omitted, the editor is what `rangeFan` has always been: a list a user adds rings to
+     * and removes them from, which is right for the two weapon/sensor fans — their plates
+     * draw an arbitrary stack of arcs.
+     *
+     * **200700 is not that graphic.** Its Size/Shape names four numbers and exactly two of
+     * them are ranges — *"a search axis azimuth, a start range, a stop range, and a stop
+     * relative bearing"* — so an "add range band" button offers a third ring the standard
+     * has no reading for. Setting this to 2 renders one row per named range, labelled, with
+     * no add, no remove, and none of the per-band altitude and label the fans carry.
+     *
+     * The storage is unchanged either way: `labels.rangeFan.bands`, first band to last.
+     */
+    fixedBands?: number;
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -970,8 +986,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
      * a two-ring sector, so they are edited through the range-fan editor rather than
      * through four fields of their own. @see RadarSearchDoctrine for why that is a
      * description of the plate and not a shortcut.
+     *
+     * **Two bands, fixed.** The editor's add and remove offered a third ring, which the
+     * plate has no reading for — the two are named individually, as a start range and a
+     * stop range. @see fixedBands
      */
-    [TacticalGraphicName.RadarSearchDoctrine]: {...NAME_FIELD_ONLY, rangeFan: true},
+    [TacticalGraphicName.RadarSearchDoctrine]: {...NAME_FIELD_ONLY, rangeFan: true, fixedBands: 2},
     /*
      * APP-06 152200 letters **one** box, `A`, and `A` is the tactical symbol indicator --
      * an associated unit symbol centred over point 1, not text. There is no field here for

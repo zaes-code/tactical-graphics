@@ -95,7 +95,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | critical friendly zone circular | FM 1-02.2 + APP-06 | 241403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | critical friendly zone irregular | FM 1-02.2 + APP-06 | 241401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | critical friendly zone rectangular | FM 1-02.2 + APP-06 | 241402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| cued acquisition doctrine | APP-06 | 200600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| cued acquisition doctrine | APP-06 | 200600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
 | dead space area circular | FM 1-02.2 + APP-06 | 241503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | dead space area irregular | FM 1-02.2 + APP-06 | 241501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | dead space area rectangular | FM 1-02.2 + APP-06 | 241502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
@@ -327,4 +327,4 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | zone of responsibility irregular | APP-06 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of responsibility rectangular | APP-06 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 
-| **Totals** | | | 179 | 6 | 20 | 27 | 268 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 35 | 5 | 27 | 3 | 3 | 3 |
+| **Totals** | | | 179 | 6 | 20 | 27 | 267 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 35 | 5 | 27 | 3 | 3 | 3 |

@@ -133,7 +133,17 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
         labels.secondDesignation = stored.secondDesignation ?? '';
         labels.grid = stored.grid;
     }
-    if (fields.rangeFan) {
+    /*
+     * **A fixed-band graphic is seeded by its own geometry, so it is not seeded here.**
+     *
+     * 200700 is drawn from three anchor points, and its two ranges are the distances
+     * between them — the drawing is the authority, and there is nothing in the selection to
+     * reconstruct them from. Writing a bag here would put a typed override on a graphic the
+     * user never typed into, and the generator prefers a typed range to a drawn one, so
+     * opening the dialog and pressing OK would move the arcs. Left undefined, the editor
+     * shows the ranges as placeholders and commits a pair only once one is edited.
+     */
+    if (fields.rangeFan && fields.fixedBands === undefined) {
         // First time opening the editor on this fan: seed a single band at the drawn
         // radius so pressing OK does not snap the geometry to the fallback. Both
         // `graphicSize` and a band's range are metres as of 3.2.0 — this divided by a
@@ -1085,8 +1095,34 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.rangeFan &&
                                     (() => {
                                         const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
-                                        const bands = config.bands ?? [];
                                         const isSector = selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector;
+                                        /*
+                                         * **A plate that names its ranges gets one row each, and no list.**
+                                         *
+                                         * 200700 states four numbers, two of them ranges, so "+ Add Band"
+                                         * offered a third ring the standard cannot read. `fixedBands` says
+                                         * how many the plate names; the fans leave it unset and keep the
+                                         * list they have always had. @see GraphicFieldSet.fixedBands
+                                         */
+                                        const fixedBands = fields.fixedBands;
+                                        const storedBands = config.bands ?? [];
+                                        /*
+                                         * The rows a fixed-band graphic shows when nothing is stored: the
+                                         * outermost at the size it was drawn, the rest stepped in evenly.
+                                         * These are what the user sees before typing, so they have to be
+                                         * the drawn shape rather than a flat 1 km ladder -- and they are
+                                         * not written anywhere until an edit commits the pair.
+                                         */
+                                        const drawnRange = selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000;
+                                        const bands =
+                                            fixedBands === undefined
+                                                ? storedBands
+                                                : Array.from(
+                                                      {length: fixedBands},
+                                                      (_, i) => storedBands[i] ?? {range: Math.round((drawnRange * (i + 1)) / fixedBands)},
+                                                  );
+                                        const bandLabel = (i: number) =>
+                                            fixedBands === 2 ? ['Start Range (m)', 'Stop Range (m)'][i] : 'Range (m)';
 
                                         const updateConfig = (next: RangeFanConfig) => {
                                             setPendingChanges(prev => ({
@@ -1130,7 +1166,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
 
                                         return (
                                             <>
-                                                <Box sx={{minWidth: 180, mt: 2, mb: 1, fontWeight: 'bold'}}>Range Bands</Box>
+                                                <Box sx={{minWidth: 180, mt: 2, mb: 1, fontWeight: 'bold'}}>
+                                                    {fixedBands === undefined ? 'Range Bands' : 'Search Ranges'}
+                                                </Box>
                                                 {bands.map((band, i) => (
                                                     <Box
                                                         key={i}
@@ -1143,10 +1181,10 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                     >
                                                         <Box sx={{display: 'flex', gap: 1, alignItems: 'flex-start'}}>
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
-                                                                <InputLabel htmlFor={`band-range-${i}`}>Range (m)</InputLabel>
+                                                                <InputLabel htmlFor={`band-range-${i}`}>{bandLabel(i)}</InputLabel>
                                                                 <OutlinedInput
                                                                     id={`band-range-${i}`}
-                                                                    label="Range (m)"
+                                                                    label={bandLabel(i)}
                                                                     type="number"
                                                                     inputProps={{step: 100, min: 0, inputMode: 'numeric'}}
                                                                     value={band.range ?? ''}
@@ -1163,6 +1201,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                     }}
                                                                 />
                                                             </FormControl>
+                                                            {fixedBands === undefined && (
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
                                                                 <InputLabel htmlFor={`band-alt-${i}`}>Altitude</InputLabel>
                                                                 <OutlinedInput
@@ -1177,6 +1216,8 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                     }}
                                                                 />
                                                             </FormControl>
+                                                            )}
+                                                            {fixedBands === undefined && (
                                                             <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
                                                                 <InputLabel htmlFor={`band-label-${i}`}>Label</InputLabel>
                                                                 <OutlinedInput
@@ -1186,6 +1227,8 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                     onChange={e => updateBand(i, {label: e.target.value})}
                                                                 />
                                                             </FormControl>
+                                                            )}
+                                                            {fixedBands === undefined && (
                                                             <Button
                                                                 size="small"
                                                                 color="inherit"
@@ -1195,6 +1238,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                             >
                                                                 ×
                                                             </Button>
+                                                            )}
                                                         </Box>
                                                         {isSector && (
                                                             <Box sx={{display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start'}}>
@@ -1226,11 +1270,13 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                         )}
                                                     </Box>
                                                 ))}
-                                                <Box sx={{mt: 1}}>
-                                                    <Button size="small" variant="outlined" onClick={addBand}>
-                                                        + Add Band
-                                                    </Button>
-                                                </Box>
+                                                {fixedBands === undefined && (
+                                                    <Box sx={{mt: 1}}>
+                                                        <Button size="small" variant="outlined" onClick={addBand}>
+                                                            + Add Band
+                                                        </Button>
+                                                    </Box>
+                                                )}
 
                                                 {isSector && (
                                                     <Box sx={{minWidth: 180, mt: 2}}>

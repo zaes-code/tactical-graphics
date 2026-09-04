@@ -401,21 +401,30 @@ describe('the navigational line — APP-06 218400', () => {
         }
     });
 
-    it('holds the ticks at one screen size however long the bar is', () => {
-        // "The symbol varies only in length", so the run is the only thing that grows.
-        const lengthOf = (coordinates: ProjectedPosition[]) => {
-            const [, tick] = segments(coordinates);
-            return Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1]);
-        };
-        expect(lengthOf([[0, 0], [4000, 0]])).toBeCloseTo(lengthOf([[0, 0], [40_000, 0]]), 6);
+    const tickLength = (coordinates: ProjectedPosition[]) => {
+        const [, tick] = segments(coordinates);
+        return Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1]);
+    };
+
+    it('scales the ticks with the bar, so a resize moves the whole symbol', () => {
+        /*
+         * **The user's call, 2026-09-04, and the plate agrees.** These were a screen constant
+         * on the reading that "the symbol varies only in length" names a fixed size -- so a
+         * resize grew a longer bar between two marks that never moved.
+         *
+         * Both plate columns state both lengths, at two different sizes: a 787 px bar with a
+         * 286 px tick and a 1072 px bar with a 369 px one, measured at 600 dpi. The bars
+         * differ by 36% and the ratios are 0.364 and 0.344, so the tick is a share.
+         */
+        expect(tickLength([[0, 0], [40_000, 0]])).toBeCloseTo(10 * tickLength([[0, 0], [4000, 0]]), 6);
     });
 
-    it('shrinks them rather than letting one span the whole bar', () => {
-        const [, tick] = segments([[0, 0], [400, 0]]);
-        expect(Math.hypot(tick[1][0] - tick[0][0], tick[1][1] - tick[0][1])).toBeLessThan(400 * 0.4);
+    it('holds the plate proportion', () => {
+        expect(tickLength([[0, 0], [4000, 0]]) / 4000).toBeCloseTo(0.354, 3);
     });
 
     it('falls back to a bare bar when a tick would be under the visibility floor', () => {
+        // Only when the whole symbol is a few pixels long, which a share makes rare.
         expect(segments([[0, 0], [60, 0]])).toEqual([[[0, 0], [60, 0]]]);
     });
 });

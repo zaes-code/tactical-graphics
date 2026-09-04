@@ -386,6 +386,7 @@ export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceA
 export {aegisSingleTargetPaint} from './symbology/aegisTargetPaints';
 export {
     ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_COLOR,
     CUED_ACQUISITION_FILL,
     RADAR_SEARCH_FILL,
     RADAR_SEARCH_STROKE,
@@ -414,7 +415,8 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
-export {drawsCentreToEdge} from './core/symbology';
+export {drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag} from './core/symbology';
+export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
 // turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
 export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
