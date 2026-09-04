@@ -1615,6 +1615,11 @@ Everything still being worked towards. A graphic is listed here until it is draw
 |---|---|
 | Halted Convoy | Mobility and Countermobility Control Measures |
 | Moving Convoy | Mobility and Countermobility Control Measures |
+| Deceive / Decoy / Dummy / Feint | Point Symbols |
+| Decoy / Dummy / Deception | Point Symbols |
+| Protection Of Cultural Property, Enhanced | Point Symbols |
+| Protection Of Cultural Property, General | Point Symbols |
+| Protection Of Cultural Property, Special | Point Symbols |
 
 ---
 
