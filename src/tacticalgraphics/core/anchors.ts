@@ -805,11 +805,16 @@ export function constrainRectangleAxis(previous: Position[] | undefined, next: P
 /**
  * A rectangle drawn with two clicks, squared up.
  *
- * **The first drawing is always straight**, running due east or due west from point 1 at
- * the length the operator dragged. A zone clicked out a few pixels off level came out
- * visibly askew, and nothing about a fire-support area is diagonal by default — so it is
- * levelled on the draw and turned afterwards, by the gesture whose job that is.
- * (User's call, 2026-08-27.)
+ * **Nothing calls this any more, and that is the point of saying so here.** Both renderers
+ * used it on the draw, so a zone clicked out at an angle came out level and had to be turned
+ * by a separate gesture (user's call, 2026-08-27) — while the rectangular target, whose drag
+ * sets `rotation` directly, never behaved that way. One family of rectangles took its
+ * orientation from the draw and the other nineteen refused to. **Reversed on 2026-09-04**:
+ * the drawn axis is the rectangle's axis, on both engines and for all twenty.
+ *
+ * Kept exported because it is a correct, tested utility and removing an export is a breaking
+ * change — but wiring it back into a draw path would undo a decision, not fix a bug.
+ * `rectangleDrawParity.test.ts` asserts the axis survives the draw.
  *
  * The direction is kept: drag east and point 2 lands east.
  */

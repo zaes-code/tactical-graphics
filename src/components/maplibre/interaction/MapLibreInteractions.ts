@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -992,15 +992,15 @@ export class MapLibreInteractions {
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        // A rectangular zone is drawn level and turned afterwards, and this is the draw:
-        // `previewDraw` and the commit both come through here, so the preview cannot
-        // disagree with what the last click produces. Levelling in `normalizeDrawnBase`
-        // instead squared the axis up again on every rebuild, which undid each rotate.
-        // @see levelRectangleAxis
+        // What the user clicked becomes what is stored, for a rectangle too: the drawn
+        // axis is the rectangle's axis as of 2026-09-04, the way the rectangular target has
+        // always behaved. They used to be squared up here and turned by a later gesture.
+        // `previewDraw` and the commit both come through this function, so the preview
+        // cannot disagree with what the last click produces.
         const tidied = wants === 'LineString'
             ? this.minimumFirstSegment(name, normalizeDrawnBase(name, vertices, resolutionOf(this.map)))
             : vertices;
-        const geometry = buildBase(wants, isRectangular(name) ? levelRectangleAxis(tidied) : tidied);
+        const geometry = buildBase(wants, tidied);
         if (!geometry) return undefined;
 
         const properties: TacticalGraphicProperties = {
