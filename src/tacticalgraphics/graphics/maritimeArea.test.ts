@@ -17,7 +17,7 @@
  */
 import {TacticalGraphicName} from '../core/type';
 import {EllipticalArea, RadarSearchDoctrine} from './MaritimeArea';
-import type {Feature, GeometryCollection, LineString, MultiPoint, Point, Polygon, Position} from 'geojson';
+import type {Feature, GeometryCollection, MultiPoint, Point, Polygon, Position} from 'geojson';
 import * as turf from '../core/turf';
 
 const at = (lon: number, lat: number): Feature<Point> => ({
@@ -89,179 +89,123 @@ describe('the ellipse', () => {
 describe('the radar search doctrine sector', () => {
     const rsd = new RadarSearchDoctrine();
 
-    /** A base as the operator draws it: the radar, then a point on each arc. */
-    const drawn = (startKm: number, stopKm: number, bearingDeg = 90): Feature<LineString> => ({
-        type: 'Feature',
-        geometry: {
-            type: 'LineString',
-            coordinates: [
-                [0, 0],
-                turf.destination(turf.point([0, 0]), startKm, bearingDeg, {units: 'kilometers'}).geometry.coordinates,
-                turf.destination(turf.point([0, 0]), stopKm, bearingDeg, {units: 'kilometers'}).geometry.coordinates,
-            ],
-        },
-        properties: {},
-    });
+    /**
+     * The base as 200700 describes it: **one anchor point**, the radar.
+     *
+     * *"This symbol requires one anchor point that defines the axis of angular rotation."*
+     * Everything that gives the sector its size and aim is a number beside it, not a place:
+     * a search axis azimuth, a start range, a stop range and a stop relative bearing.
+     */
+    const radar: Feature<Point> = {type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {}};
 
-    /** The old two-point base — a graphic drawn before 2026-09-04, or a sketch mid-draw. */
-    const sketched: Feature<LineString> = {
-        type: 'Feature',
-        geometry: {type: 'LineString', coordinates: [[0, 0], [0.72, 0]]},
-        properties: {},
-    };
-
+    /** Ranges in metres, the unit both range-fan plates state. @see RangeFanBand.range */
     const bands = (ranges: number[], extra: object = {}) =>
         ({bands: ranges.map(range => ({range})), centerAzimuthDeg: 90, ...extra});
+
     /**
      * The sector's ring, out of the collection the generator emits.
      *
-     * It emits **two** members — the annulus and field `T`'s anchor — because 200700 lives
-     * on a line holder now, and a line holder draws everything off one geometry.
+     * It emits **two** members — the annulus and field `T`'s anchor — because the paint
+     * places `T` from the anchor rather than reconstructing it from the ring.
      * @see RadarSearchDoctrine.generateGraphics
      */
-    const ringOf = (base: Feature<LineString>, opts: object = {}) => {
-        const members = (rsd.generateGraphics(base, opts as never) as Feature<GeometryCollection>).geometry.geometries;
+    const ringOf = (opts: object) => {
+        const members = (rsd.generateGraphics(radar, opts as never) as Feature<GeometryCollection>).geometry.geometries;
         const ring = members.find(m => m.type === 'Polygon') as Polygon;
         return ring.coordinates[0] as Position[];
     };
     const radiiKm = (ring: Position[]) => ring.map(p => metres([0, 0], p) / 1000);
 
-    it('takes both ranges off the three drawn points', () => {
-        /*
-         * **The change of 2026-09-04.** The first version drew from the radar straight to
-         * the stop range and defaulted the near arc; the near arc is where the search
-         * begins, so it is a placement. (User's call.)
-         */
-        const r = radiiKm(ringOf(drawn(30, 80)));
-        expect(Math.max(...r)).toBeCloseTo(80, 0);
-        expect(Math.min(...r)).toBeCloseTo(30, 0);
+    it('takes both ranges off the typed bands', () => {
+        // The near band is the start range and the far one the stop range — the two the
+        // plate names individually. @see fixedBands
+        const r = radiiKm(ringOf(bands([20_000, 60_000])));
+        expect(Math.min(...r)).toBeCloseTo(20, 1);
+        expect(Math.max(...r)).toBeCloseTo(60, 1);
     });
 
-    it('aims the sector where it was drawn', () => {
-        const bearings = ringOf(drawn(30, 80, 200))
-            .filter(p => metres([0, 0], p) > 70_000)
-            .map(p => (turf.bearing(turf.point([0, 0]), turf.point(p)) + 360) % 360);
-        // The fan's own default opening is 90 degrees, so a sector aimed at 200 runs
-        // 155..245 — the drag sets the direction and the editor keeps the width.
-        expect(Math.min(...bearings)).toBeCloseTo(155, 0);
-        expect(Math.max(...bearings)).toBeCloseTo(245, 0);
+    it('seeds the stop range from the reach the draw measured', () => {
+        // Before any band is typed, `size` is the only range there is: the distance the
+        // operator dragged out from the radar.
+        const r = radiiKm(ringOf({size: 40_000}));
+        expect(Math.max(...r)).toBeCloseTo(40, 1);
     });
 
-    it('lets a typed band override the drag', () => {
-        // The precedence the rectangular target's width already uses: typed wins, drawn is
-        // the fallback, so nothing in the dialog is dead.
-        const r = radiiKm(ringOf(drawn(30, 80), bands([10_000, 40_000])));
-        expect(Math.max(...r)).toBeCloseTo(40, 0);
-        expect(Math.min(...r)).toBeCloseTo(10, 0);
+    it('lets a typed band override the drawn reach', () => {
+        const r = radiiKm(ringOf(bands([10_000, 25_000], {size: 90_000})));
+        expect(Math.max(...r)).toBeCloseTo(25, 1);
     });
 
-    it('draws a bare arc from a two-point base, not a sector', () => {
-        /*
-         * **A sketch between the first click and the second.** (User's call, 2026-09-04.)
-         *
-         * The base holds the radar and one distance, and which of the plate's two ranges
-         * that distance *is* has not been decided yet — so closing a sector round it puts a
-         * second arc on the map at a range nobody gave, and the whole figure jumps when the
-         * next click lands. One range, one mark.
-         *
-         * It used to fall back to `RSD_DEFAULT_START_SHARE` and draw the whole annulus,
-         * which is still what a *typed* band does: stating a range is a decision, and the
-         * test below holds that half.
-         */
-        const members = (rsd.generateGraphics(sketched, undefined) as Feature<GeometryCollection>).geometry.geometries;
-        const shapes = members.map(m => m.type);
-        expect(shapes).toContain('LineString');
-        expect(shapes).not.toContain('Polygon');
-        // ...and it is the arc at the drawn range, all of it at one radius.
-        const arc = members.find(m => m.type === 'LineString') as LineString;
-        const radii = arc.coordinates.map(c => metres([0, 0], c) / 1000);
-        expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(0.5);
-    });
-
-    it('closes the sector as soon as a range is typed, however few points there are', () => {
-        // Stating a range is a decision, so a two-point base with a band is not a sketch.
-        const shapes = (rsd.generateGraphics(sketched, bands([10_000, 40_000])) as Feature<GeometryCollection>)
-            .geometry.geometries.map(m => m.type);
-        expect(shapes).toContain('Polygon');
+    it('aims the sector along the search axis azimuth', () => {
+        // Due east: every point of the ring sits at a positive longitude.
+        const ring = ringOf(bands([20_000, 60_000], {centerAzimuthDeg: 90}));
+        expect(ring.every(p => p[0] > -1e-6)).toBe(true);
     });
 
     it('opens an equal angle either side of the search axis', () => {
-        // "The stop relative bearing is an equal angle either side of the search axis."
-        const opts = {bands: [{range: 30_000}, {range: 80_000, leftAzimuthDeg: 60, rightAzimuthDeg: 120}]};
-        const bearings = ringOf(drawn(30, 80), opts)
-            .filter(p => metres([0, 0], p) > 70_000)
-            .map(p => (turf.bearing(turf.point([0, 0]), turf.point(p)) + 360) % 360);
-        expect(Math.min(...bearings)).toBeCloseTo(60, 0);
-        expect(Math.max(...bearings)).toBeCloseTo(120, 0);
+        /*
+         * "The stop relative bearing is an equal angle either side of the search axis" —
+         * so the axis bisects the opening, and the two edges are derived from it rather
+         * than stored, which is what stops them drifting apart from the aim.
+         */
+        const opts = bands([20_000, 60_000], {centerAzimuthDeg: 90});
+        const ring = ringOf(opts);
+        const outer = ring.filter(p => metres([0, 0], p) > 40_000);
+        const bearings = outer.map(p => turf.bearing(turf.point([0, 0]), turf.point(p)));
+        const left = Math.min(...bearings);
+        const right = Math.max(...bearings);
+        expect((left + right) / 2).toBeCloseTo(90, 4);
+    });
+
+    it('draws a bare arc until a range is known, not a closed sector', () => {
+        /*
+         * Between the drop and the first range there is one distance and no decision about
+         * which of the plate's two it is. Closing a sector around it would put a second arc
+         * on the map at a range nobody gave. (User's call, 2026-09-04.)
+         */
+        const members = (rsd.generateGraphics(radar, {} as never) as Feature<GeometryCollection>).geometry.geometries;
+        expect(members.some(m => m.type === 'Polygon')).toBe(false);
+        expect(members.some(m => m.type === 'LineString')).toBe(true);
     });
 
     it('anchors field T between the two arcs, on the axis', () => {
-        const label = (rsd.generateLabels(drawn(30, 80), undefined) as Feature<Point>).geometry.coordinates;
-        expect(metres([0, 0], label) / 1000).toBeCloseTo(55, 0);
-        expect(turf.bearing(turf.point([0, 0]), turf.point(label))).toBeCloseTo(90, 0);
+        // "Field T should be positioned in the centre of the search area aligned with the
+        // search axis" — so out in front of the radar, not on it.
+        const opts = bands([20_000, 60_000], {centerAzimuthDeg: 90});
+        const at = (rsd.generateLabels(radar, opts as never) as Feature<Point>).geometry.coordinates;
+        const reach = metres([0, 0], at);
+        expect(reach).toBeGreaterThan(20_000);
+        expect(reach).toBeLessThan(60_000);
+        expect(turf.bearing(turf.point([0, 0]), turf.point(at))).toBeCloseTo(90, 3);
     });
 
-    it('publishes the three drawn points as its grips when they are already on the axis', () => {
-        const base = drawn(30, 80);
-        const handles = (rsd.generateHandles(base, undefined) as Feature<MultiPoint>).geometry.coordinates;
-        expect(handles[0]).toEqual(base.geometry.coordinates[0]);
-        for (const i of [1, 2]) {
-            expect(metres(handles[i], base.geometry.coordinates[i])).toBeLessThan(1);
+    it('publishes the radar and one grip per arc, all on the axis', () => {
+        /*
+         * `[centre, start, stop]` is the range-fan contract: `publishHandles` demotes the
+         * centre to the inert dot and leaves one draggable rim per band, in ascending band
+         * order, which is what `setBandRange` indexes into. @see RangeFanGraphicBase
+         */
+        const opts = bands([20_000, 60_000], {centerAzimuthDeg: 90});
+        const grips = (rsd.generateHandles(radar, opts as never) as Feature<MultiPoint>).geometry.coordinates;
+        expect(grips).toHaveLength(3);
+        expect(grips[0]).toEqual([0, 0]);
+        expect(metres([0, 0], grips[1])).toBeCloseTo(20_000, -2);
+        expect(metres([0, 0], grips[2])).toBeCloseTo(60_000, -2);
+        for (const g of grips.slice(1)) {
+            expect(turf.bearing(turf.point([0, 0]), turf.point(g))).toBeCloseTo(90, 3);
         }
     });
 
-    it('pulls a start point that was clicked off the axis back onto it', () => {
+    it('reads the near band as the start range whichever order the two were typed', () => {
         /*
-         * **The plate gives this symbol one anchor point that "defines the axis of angular
-         * rotation", and two ranges measured along it** — one line, three points on it.
-         * Drawing takes three clicks as an affordance and nothing stops the middle one
-         * landing to the side, so the raw distance was taken and the base zig-zagged across
-         * a symbol that is a straight run by definition. (User's report, 2026-09-04.)
-         *
-         * The start point here is 30 km out on a bearing 40 degrees off the stop point's, so
-         * its reach along the axis is `30 cos 40` = 22.98 km, and the grip belongs there.
+         * `resolveBands` sorts on every render, so which of the two is the start range is
+         * decided by distance rather than by the row it was typed into — a near arc outside
+         * the far one is not a shape, and this is what stops one being described.
          */
-        const off: Feature<LineString> = {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-                type: 'LineString',
-                coordinates: [
-                    [0, 0],
-                    turf.destination(turf.point([0, 0]), 30, 50, {units: 'kilometers'}).geometry.coordinates,
-                    turf.destination(turf.point([0, 0]), 80, 90, {units: 'kilometers'}).geometry.coordinates,
-                ],
-            },
-        };
-        const handles = (rsd.generateHandles(off, undefined) as Feature<MultiPoint>).geometry.coordinates;
-        expect(metres([0, 0], handles[1]) / 1000).toBeCloseTo(30 * Math.cos((40 * Math.PI) / 180), 0);
-        // ...and on the axis, which is the bearing to the stop point.
-        expect(turf.bearing(turf.point([0, 0]), turf.point(handles[1]))).toBeCloseTo(90, 0);
-    });
-
-    it('keeps the range when the start point is dragged square across the axis', () => {
-        // The projection's point: a drag with no along-axis component changes nothing.
-        const at = (bearing: number): Feature<LineString> => ({
-            type: 'Feature',
-            properties: {},
-            geometry: {
-                type: 'LineString',
-                coordinates: [
-                    [0, 0],
-                    turf.destination(turf.point([0, 0]), 30, bearing, {units: 'kilometers'}).geometry.coordinates,
-                    turf.destination(turf.point([0, 0]), 80, 90, {units: 'kilometers'}).geometry.coordinates,
-                ],
-            },
-        });
-        const reach = (f: Feature<LineString>) =>
-            metres([0, 0], (rsd.generateHandles(f, undefined) as Feature<MultiPoint>).geometry.coordinates[1]);
-        expect(reach(at(70))).toBeCloseTo(reach(at(110)), 0);
-    });
-
-    it('publishes three grips for a two-point base too, so editing does not change', () => {
-        const handles = (rsd.generateHandles(sketched, undefined) as Feature<MultiPoint>).geometry.coordinates;
-        expect(handles).toHaveLength(3);
-        expect(handles[0]).toEqual([0, 0]);
-        expect(metres([0, 0], handles[1])).toBeLessThan(metres([0, 0], handles[2]));
+        const typedFarFirst = radiiKm(ringOf(bands([90_000, 30_000])));
+        const typedNearFirst = radiiKm(ringOf(bands([30_000, 90_000])));
+        expect(Math.min(...typedFarFirst)).toBeCloseTo(30, 1);
+        expect(Math.max(...typedFarFirst)).toBeCloseTo(90, 1);
+        expect(typedFarFirst).toEqual(typedNearFirst);
     });
 });

@@ -471,8 +471,16 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.DefendedAreaEllipse,
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.CuedAcquisitionDoctrine,
-    // 200700 is no longer sized by a rim drag -- it is three placed points -- so there
-    // is no radius under the cursor to report. @see RadarSearchDoctrine
+    /*
+     * **200700 is back on 2026-09-05.** It left on 2026-09-04 with the note "no longer
+     * sized by a rim drag -- it is three placed points -- so there is no radius under the
+     * cursor to report", which was true of that day's contract and is not of this one: the
+     * plate gives it one anchor point and typed ranges, so it is dropped and dragged out
+     * again, and the reach under the cursor is once more the whole feedback the gesture
+     * has. Its ranges are still edited as bands rather than through a radius field, which
+     * is why it belongs in this set and not in `RADIUS_GRAPHICS`. @see RadarSearchDoctrine
+     */
+    TacticalGraphicName.RadarSearchDoctrine,
 ]);
 
 /**
@@ -890,7 +898,10 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
-    TacticalGraphicName.RoadblockCompleteExecuted,
+    // **Roadblock complete left on 2026-09-05.** It refused rotation because it was
+    // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
+    // that had no orientation of its own. It is drawn from a centreline now, and its
+    // bearing is that line's. @see RoadblockComplete
     // Its four arrows sit in the quadrants; on the cardinals it is a picture APP-06 344300
     // does not draw. Same reason as the crossed tasks below it. @see Defeat
     TacticalGraphicName.Defeat,
@@ -1014,9 +1025,11 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // The demonstration's leg. The U's opening follows from it, so this one number
     // fixes the whole symbol. @see Demonstration
     [TacticalGraphicName.Demonstration]: 70,
-    // Twice the crossed tasks', which was only the number these were specified from
-    // rather than the size they landed on.
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
+    // **Roadblock complete is not dropped either, as of 2026-09-05**, for the same reason
+    // and with the same consequence: 271204's plate letters three anchor points and its
+    // inherited rule gives it a centreline, so the draw waits for the second click rather
+    // than finishing on the first. It sat here at 100 px — twice the crossed tasks', which
+    // was only the number it was specified from rather than a size it landed on.
     // The security operations are **not dropped** as of 2026-08-29: the operator draws one
     // arrow and the other is derived, so there is no one-click size to state. Removing
     // them from here is what tells a renderer to wait for the second point instead of
@@ -1089,6 +1102,7 @@ const DRAWN_END_TO_END = new Set<TacticalGraphicName>([TacticalGraphicName.Conta
 export function drawsEndToEnd(name: TacticalGraphicName): boolean {
     return DRAWN_END_TO_END.has(name);
 }
+
 
 /**
  * Whether an anchor graphic's draw **ends on the second click**, whatever the two clicks

@@ -128,9 +128,12 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         }
         // Scaled but not turned: each covers ground, and each has one doctrinal
         // orientation. @see RESIZE_ONLY_SYMBOLS
+        // **Roadblock complete left this group on 2026-09-05.** It refused rotation while
+        // it was dropped whole at a fixed 45-degree bearing — a symbol with no orientation
+        // of its own has nothing to turn. Drawn from a centreline it has one, and turns
+        // like the three demolition states it shares a rule with. @see RoadblockComplete
         for (const name of [
             TacticalGraphicName.Airfield,
-            TacticalGraphicName.RoadblockCompleteExecuted,
             TacticalGraphicName.Defeat,
             TacticalGraphicName.Destroy,
             TacticalGraphicName.Interdict,
