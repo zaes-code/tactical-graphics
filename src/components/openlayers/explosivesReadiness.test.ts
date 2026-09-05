@@ -1,12 +1,11 @@
 import Feature from 'ol/Feature';
 import MultiLineString from 'ol/geom/MultiLineString';
 import Point from 'ol/geom/Point';
-import {TacticalGraphicName, renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, baseVertexCount, renderTacticalGraphic} from '@zaes/tactical-graphics';
 import {barSymbolStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {PointDropController} from './controllers/MissionTaskController';
 
 const PLANNED = TacticalGraphicName.ExplosivesPlannedStateOfReadiness;
 const SAFE = TacticalGraphicName.ExplosivesStateOfReadiness1Safe;
@@ -135,11 +134,20 @@ describe('explosives states of readiness', () => {
 
 describe('roadblock complete (executed)', () => {
     const NAME = TacticalGraphicName.RoadblockCompleteExecuted;
-    const geom = (): number[][][] => {
+
+    /**
+     * A drawn centreline running due east, plus a half-width.
+     *
+     * **271204 is drawn, not dropped, as of 2026-09-05.** Its own Draw Rules cell is empty
+     * and the row inherits 271201's — the centreline-and-width rule that governs the whole
+     * demolition block — and its Template letters PT 1, PT 2 and PT 3 against the crosses.
+     * @see RoadblockComplete
+     */
+    const geom = (width = 2000): number[][][] => {
         const out: any = renderTacticalGraphic({
             type: 'Feature',
-            geometry: {type: 'Point', coordinates: [0, 0]},
-            properties: {tacticalGraphic: {name: NAME, radius: 1000}},
+            geometry: {type: 'LineString', coordinates: [[0, 0], [0.09, 0]]},
+            properties: {tacticalGraphic: {name: NAME, width}},
         } as any);
         return out.graphic.geometry.coordinates;
     };
@@ -155,26 +163,43 @@ describe('roadblock complete (executed)', () => {
         expect(leans.filter(l => l < 0).length).toBe(2);
     });
 
-    it('keeps the crosses level and side by side', () => {
+    it('keeps the crosses level and side by side along the drawn axis', () => {
         const bars = geom();
-        // Within each lean, the pair shares its Y range - displaced east/west, not
+        // Within each lean, the pair shares its Y range - displaced along the axis, not
         // perpendicular, which would set one cross diagonally above the other.
         for (const [i, j] of [[0, 1], [2, 3]]) {
-            expect(bars[i][0][1]).toBeCloseTo(bars[j][0][1], 9);
-            expect(bars[i][1][1]).toBeCloseTo(bars[j][1][1], 9);
+            expect(bars[i][0][1]).toBeCloseTo(bars[j][0][1], 6);
+            expect(bars[i][1][1]).toBeCloseTo(bars[j][1][1], 6);
             expect(bars[i][0][0]).toBeLessThan(bars[j][0][0]);
         }
     });
 
-    // Read off the plate: `1 + SEPARATION_RATIO / cos45`. Too wide and it stops reading as
-    // one overlapping symbol and becomes two separate X's, which is what 0.42 gave.
-    it('matches the plate proportions', () => {
-        const all = geom().flat();
-        const xs = all.map(c => c[0]);
-        const ys = all.map(c => c[1]);
-        const aspect = (Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys));
-        expect(aspect).toBeGreaterThan(1.2);
-        expect(aspect).toBeLessThan(1.36);
+    it('turns with the line it was drawn along', () => {
+        /*
+         * The whole point of leaving the point-drop: a roadblock could only ever be laid
+         * across a road running the default way. Drawn north-east, the symbol goes with it.
+         */
+        const out: any = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[0, 0], [0.06, 0.06]]},
+            properties: {tacticalGraphic: {name: NAME, width: 2000}},
+        } as any);
+        const bars: number[][][] = out.graphic.geometry.coordinates;
+        // The two crosses' midpoints lie on the drawn axis, so their offset is diagonal.
+        const mid = (b: number[][]) => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+        const [a, c] = [mid(bars[0]), mid(bars[1])];
+        expect(c[0] - a[0]).toBeGreaterThan(0);
+        expect(c[1] - a[1]).toBeGreaterThan(0);
+    });
+
+    it('spreads the crosses by the width, not by a locked ratio', () => {
+        // Point 3 sets the separation. It used to be pinned at the plate's own proportion,
+        // which is now only the default a freshly drawn symbol opens at.
+        const spread = (bars: number[][][]) => {
+            const mid = (b: number[][]) => (b[0][0] + b[1][0]) / 2;
+            return Math.abs(mid(bars[1]) - mid(bars[0]));
+        };
+        expect(spread(geom(6000))).toBeGreaterThan(spread(geom(2000)) * 2);
     });
 
     it('draws every bar solid', () => {
@@ -184,16 +209,11 @@ describe('roadblock complete (executed)', () => {
         for (const st of styles) expect(st.getStroke().getLineDash()).toBeFalsy();
     });
 
-    it('is dropped by a single click, resizable, never rotated', () => {
+    it('is drawn from two points with a width handle, and turns', () => {
         const controller: any = getController(NAME, 20);
-        expect(controller).toBeInstanceOf(PointDropController);
-        expect(controller.type).toBe('Point');
-        const size = controller.graphic.size;
-        controller.handleResize(400);
-        expect(controller.graphic.size).not.toBe(size);
-        const rotation = controller.graphic.rotation;
-        controller.handleRotate(45);
-        expect(controller.graphic.rotation).toBe(rotation);
+        expect(controller.maxPoints).toBe(2);
+        expect(controller.type).toBe('LineString');
+        expect(baseVertexCount(NAME)).toBe(2);
     });
 
     it('carries affiliation and nothing else', () => {

@@ -5,7 +5,7 @@ import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import openlayersAdapter from "../openlayersAdapter";
-import {getRangeFanLabelStyleFn, LINE_WIDTH, readHostilityColor} from "../openlayerStyles";
+import {getRangeFanLabelStyleFn, LINE_WIDTH, radarSearchDoctrineStyleFunc, readHostilityColor} from "../openlayerStyles";
 import {resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
@@ -61,18 +61,33 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
     ) {
         super(name, size, drawingResolution);
 
-        // Range fans render the geometry as plain strokes — nothing fancy
-        // (no fill, no per-feature label baked into the line).
-        this.graphic.setStyle((feature) => {
-            const color = readHostilityColor(feature);
-            return new Style({
-                stroke: new Stroke({color, width: LINE_WIDTH()}),
+        /*
+         * **The radar search doctrine rides this holder but paints itself.**
+         *
+         * 200700 is the same kind of symbol as the sector fan — one anchor point, ranges
+         * stated as numbers, an axis and an opening — so it wants the band editor, the rim
+         * handles and the inert centre this class provides. What it does not want is the
+         * fan's stroke: it has a filled cyan sector of its own, and its field `T` rides the
+         * graphic's own geometry collection rather than a separate label feature, so
+         * attaching the fan's label style would draw a designation the paint has already
+         * drawn. @see radarSearchDoctrinePaint, RadarSearchDoctrine
+         */
+        if (name === TacticalGraphicName.RadarSearchDoctrine) {
+            this.graphic.setStyle(radarSearchDoctrineStyleFunc());
+        } else {
+            // Range fans render the geometry as plain strokes — nothing fancy
+            // (no fill, no per-feature label baked into the line).
+            this.graphic.setStyle((feature) => {
+                const color = readHostilityColor(feature);
+                return new Style({
+                    stroke: new Stroke({color, width: LINE_WIDTH()}),
+                });
             });
-        });
 
-        // Band metadata is stamped on the label feature by updateGeometry; the
-        // style function reads it (and any amplifiers) straight off the feature.
-        this.label.setStyle(getRangeFanLabelStyleFn(name));
+            // Band metadata is stamped on the label feature by updateGeometry; the
+            // style function reads it (and any amplifiers) straight off the feature.
+            this.label.setStyle(getRangeFanLabelStyleFn(name));
+        }
 
         writeGraphicProperties([this.graphic, this.label, this.handles], name, this.graphicLabels);
     }

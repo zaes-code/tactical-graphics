@@ -661,15 +661,35 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Two segments, three points. The only graphic here that is not two points.
     [TacticalGraphicName.FieldsOfFire]: 3,
 
+
     // Two points: a start and an end, and the symbol is built between them.
     //
-    // **Abatis joined on 2026-08-21.** Its path is `[start, apex, ...tail]`, so a
-    // two-point base draws exactly the three segments the symbol has — the two sides of
-    // the chevron and the long run behind it. Left free-form, every extra vertex the user
-    // dropped added another segment to the tail and the obstacle stopped being one
-    // chevron on one line.
-    [TacticalGraphicName.Abatis]: 2,
+    /*
+     * **Abatis left again on 2026-09-05**, and the standard is why: 280100 reads *"at
+     * least two anchor points, points 1 and 2, to define the line. Additional points can
+     * be defined to extend the line."* It was capped at two on 2026-08-21 on the reading
+     * that extra vertices "added another segment to the tail and the obstacle stopped
+     * being one chevron on one line" — but that *is* the symbol. The Example draws abatis
+     * marks on roads that bend, and the generator was already built for it: `path` slices
+     * the tail with `lineSliceAlong`, which keeps the intermediate vertices so the
+     * obstacle follows the road instead of straightening to its endpoints. One chevron
+     * near the start, then the route. @see Abatis.path
+     */
     [TacticalGraphicName.FerryCrossing]: 2,
+    /*
+     * 140800: *"requires three anchor points. Points 1 and 2 define the endpoints of the
+     * infiltration lane and point 3 defines one side of the lane."* Points 1 and 2 are the
+     * centreline, so two vertices is the whole of what is drawn — the third is the width
+     * handle. It had no cap at all until 2026-09-05, so the centreline took as many
+     * vertices as the operator kept clicking.
+     */
+    [TacticalGraphicName.InfiltrationLane]: 2,
+    /*
+     * 271204's own Draw Rules cell is empty and the row inherits 271201's, which gives the
+     * whole demolition block a centreline and a width. It was dropped on one point until
+     * 2026-09-05. @see RoadblockComplete
+     */
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 2,
     [TacticalGraphicName.PassageLane]: 2,
     // 290600: "Point 1 defines the entry point and Point 2 defines the exit point."
     [TacticalGraphicName.SafeLaneOrGap]: 2,
@@ -756,9 +776,6 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // APP-06 152200: "requires three anchor points. Point 1 defines the vertex of the
     // graphic. Points 2 and 3 define the tips of the arrowheads." @see SearchArea
     [TacticalGraphicName.SearchArea]: 3,
-    // APP-06 200700, drawn rather than typed since 2026-09-04: the radar, a point on
-    // the start arc, a point on the stop arc. @see RadarSearchDoctrine
-    [TacticalGraphicName.RadarSearchDoctrine]: 3,
     [TacticalGraphicName.ObstacleBypassEasy]: 3,
     [TacticalGraphicName.ObstacleBypassDifficult]: 3,
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
@@ -827,13 +844,6 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
      * the whole symbol about the point the operator thinks of as its origin.
      */
     [TacticalGraphicName.SearchArea]: 0,
-    /*
-     * The radar search doctrine's anchor, for the third time and the same reason: point
-     * 1 is the radar and the other two are ranges measured from it, so dragging it under
-     * a reshape would move the origin the ranges are quoted against and leave the two
-     * arcs behind. It moves by translate, like the other two.
-     */
-    [TacticalGraphicName.RadarSearchDoctrine]: 0,
 };
 
 /**
@@ -1029,9 +1039,14 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DefendedAreaEllipse,
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.CuedAcquisitionDoctrine,
-    // The radar search doctrine left this list on 2026-09-04: its three anchor points
-    // are dragged individually now, so an edit drag moves a vertex rather than scaling
-    // the sector. `vertexLine` says so on both engines. @see RadarSearchDoctrine
+    /*
+     * **The radar search doctrine came back on 2026-09-05**, by becoming point-anchored
+     * again rather than by changing its mind: 200700 gives it one anchor point and states
+     * its ranges as numbers, so there are no vertices to drag and an edit drag scales the
+     * sector. It had left this list on 2026-09-04, when it was briefly three drawn points.
+     * @see RadarSearchDoctrine
+     */
+    TacticalGraphicName.RadarSearchDoctrine,
 ];
 
 /**

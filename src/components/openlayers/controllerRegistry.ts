@@ -427,7 +427,20 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * fields of fire and the search area: each grip is the point it was placed as, and the
      * radar is inert under a reshape. @see RadarSearchDoctrine, anchorVertex
      */
-    [TacticalGraphicName.RadarSearchDoctrine]:                   vertexLine(3, 3, 0),
+    /*
+     * **One anchor point and four typed numbers**, which is what 200700 asks for: *"requires
+     * one anchor point that defines the axis of angular rotation"*, with the size and shape
+     * *"determined by additional numeric values, a search axis azimuth, a start range, a
+     * stop range, and a stop relative bearing."*
+     *
+     * So it takes the range-fan contract rather than a vertex line: dropped on its radar,
+     * dragged out to seed the stop range, and edited afterwards through the band editor the
+     * field registry has always offered it — or by the rim handle on each of its two arcs,
+     * which writes the metres it lands on. It was three drawn vertices for a day; those
+     * encoded the same four numbers as geometry, where the plate states them as values.
+     * (User's call, 2026-09-05.) @see RadarSearchDoctrine, RangeFanGraphicBase
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]:                   rangeFan,
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 
@@ -440,7 +453,18 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.SupportingAxisOfAdvance]:    movement(),
     [TacticalGraphicName.Counterattack]:       movement(),
     [TacticalGraphicName.CounterattackByFire]: movement(),
-    [TacticalGraphicName.InfiltrationLane]:     movement(),
+    /*
+     * **Two drawn vertices, not a free-form run.** 140800: *"This symbol requires three
+     * anchor points. Points 1 and 2 define the endpoints of the infiltration lane and
+     * point 3 defines one side of the lane."* Points 1 and 2 are the centreline and point
+     * 3 is the width, which is the movement contract exactly — so the cap belongs here,
+     * as it already does on the demolition family. Uncapped, the centreline took as many
+     * vertices as the operator kept clicking, which the rule does not allow. (2026-09-05.)
+     *
+     * The draw closes on the second click and the two rails appear at the seeded width,
+     * ready to be dragged by the offset handle. @see InfiltrationLane
+     */
+    [TacticalGraphicName.InfiltrationLane]:     movement(2),
 
     // ── Engineer / crossing (movement base, max 2 pts) ────────────────────
     [TacticalGraphicName.Bridge]:          movement(2),
@@ -607,22 +631,40 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Exploitation]: block,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
-    // Abatis takes a drawn route with as many vertices as the road needs, so it is a
-    // plain line graphic — `line()` with no vertex cap. @see ai/app-6.md "F1"
-    // **The end handle moves that vertex; the resize icon scales the whole obstacle.**
-    // Its two points are the run, and lengthening the run is what a user means by
-    // dragging its end — the chevron is a decoration with its own size, not something
-    // the drag should be stretching. Scaling everything together is the affordance's
-    // job. @see vertexLine
-    [TacticalGraphicName.Abatis]:                 vertexLine(2, 2),
+    /*
+     * Abatis takes a drawn route with as many vertices as the road needs. @see ai/app-6.md "F1"
+     *
+     * **Uncapped, because 280100 says so outright**: *"This symbol requires at least two
+     * anchor points, points 1 and 2, to define the line. Additional points can be defined
+     * to extend the line."* Fifty-two rules carry that sentence and this was the only
+     * graphic in the library that capped it — its own family (both anti-tank ditches, all
+     * nine wire obstacles, the fortified line) has always been uncapped. The comment here
+     * already said "`line()` with no vertex cap" while the code said two. (2026-09-05.)
+     *
+     * **Still `vertexLine`, not `line()`**, because the rest of the note below is about the
+     * grip and remains true: the end handle moves that vertex; the resize icon scales the
+     * whole obstacle. Its points are the run, and lengthening the run is what a user means
+     * by dragging its end — the chevron is a decoration with its own size, not something
+     * the drag should be stretching. Scaling everything together is the affordance's job.
+     * `0` is the "no maximum" argument. @see vertexLine
+     */
+    [TacticalGraphicName.Abatis]:                 vertexLine(0, 2),
     // The demolition family is a drawn centerline with a width, so it takes the
     // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: movement(2),
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: movement(2),
-    // Roadblock complete stays point-dropped: its symbol is two overlapping X's,
-    // which no centerline-and-width rule in APP-06 describes. @see ai/app-6.md "F2"
-    [TacticalGraphicName.RoadblockCompleteExecuted]: pointDrop,
+    /*
+     * **Roadblock complete joins them, as of 2026-09-05.** It was point-dropped on the
+     * reading that "no centerline-and-width rule in APP-06 describes" two overlapping X's.
+     * The plate says otherwise: 271204's Template letters **PT 1, PT 2 and PT 3** on the
+     * crosses, and its own Draw Rules cell is *empty* — the row inherits 271201's rule,
+     * the very centreline-and-width one, along with the rest of the block. A point-dropped
+     * symbol also could not be laid across a road running any way but the default, which
+     * is the same defect that moved the three readiness states off a fixed 45 degrees.
+     * @see RoadblockComplete for how the three points are read.
+     */
+    [TacticalGraphicName.RoadblockCompleteExecuted]: movement(2),
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),
