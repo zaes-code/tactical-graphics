@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, drawsTipFirst, editStretches} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, drawsTipFirst, editStretches, usesCornerAnchors} from '@zaes/tactical-graphics';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -197,10 +197,36 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     getCenter() {
-        // The pivot end, which is p0 for a plain line and the last vertex for a graphic
-        // whose points are stored tip-first. @see pivotCoordinate
         const coords = this.graphic.base.getGeometry()!.getCoordinates();
-        return pivotCoordinate(this.resolvedName(), coords) ?? coords[0];
+        const name = this.resolvedName();
+
+        /*
+         * **A corner-anchored symbol turns and scales about the middle of its two corners.**
+         *
+         * Read from the library rather than restated, because MapLibre reads the same rule
+         * out of `rotationAnchor` and a pivot stated twice is a pivot that drifts — a
+         * fields-of-fire once rotated about its middle on one engine and its left leg on
+         * the other, from the same drag. @see usesCornerAnchors
+         *
+         * A plain average is right here and a Mercator midpoint is right in the library,
+         * because these coordinates are **already** projected metres. The two agree by
+         * construction; that is the point of doing it in the projected frame there.
+         *
+         * **`pivotCoordinate` is deliberately left alone.** Its other job is telling
+         * `visiblePathHandles` which handle sits on the pivot and is therefore redundant,
+         * and a two-vertex graphic hides one that way. Whether both corners should be
+         * grabbable is a real question and a separate one — how many handles a graphic
+         * publishes is not the same switch as what a gesture turns about.
+         */
+        if (usesCornerAnchors(name) && coords.length >= 2) {
+            const a = coords[0];
+            const b = coords[coords.length - 1];
+            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as Coordinate;
+        }
+
+        // Otherwise the pivot end, which is p0 for a plain line and the last vertex for a
+        // graphic whose points are stored tip-first. @see pivotCoordinate
+        return pivotCoordinate(name, coords) ?? coords[0];
     }
 
     getBaseGeometry(): number[] | number[][] | number[][][] {
