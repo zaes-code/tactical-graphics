@@ -32,7 +32,6 @@ import {
     crossedMissionTaskLabelStyleFn,
     crossedMissionTaskStyleFunc,
     defeatStyleFunc,
-    fightingPositionStyleFunc,
     freeFireAreaCircularStyleFunc,
     getAreaLabelStylesFn,
     activeManeuverAreaStyleFunc,
@@ -177,9 +176,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             // Restoring rebuilds through `getController(name, drawingResolution)`, so the
             // resolution has to ride on the base feature too — it is the only one saved.
             this.base.set('drawingResolution', drawingResolution);
-        }
-        if (name === TacticalGraphicName.FightingPosition) {
-            this.graphic.setStyle(fightingPositionStyleFunc(name));
         }
         // The airfield is a one-point static symbol: two crossed arms pinned to a screen
         // size, and its designation set *beside* them rather than through the crossing,

@@ -347,7 +347,6 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Neutralize]:                                   BOTH,      // APP-06 341600 Neutralize
     [TacticalGraphicName.SupportByFire]:                                BOTH,      // APP-06 152100 Support by Fire
     [TacticalGraphicName.Suppress]:                                     BOTH,      // APP-06 342800 Suppress
-    [TacticalGraphicName.FightingPosition]:                             FM_ONLY,
     [TacticalGraphicName.BearingLine]: APP6_ONLY, // APP-06 220100 Bearing Line
     [TacticalGraphicName.BearingLineElectronic]: APP6_ONLY, // APP-06 220101 Bearing Line, Electronic
     [TacticalGraphicName.BearingLineElectromagneticWarfare]: APP6_ONLY, // APP-06 220102 Bearing Line, Electromagnetic Warfare (EW)

@@ -1768,17 +1768,6 @@ export function movementToContactStyleFunc(): StyleFunction {
 }
 
 /**
- * FightingPosition: stroke-only render of the 3-sided rectangle (left, top,
- * right walls — open at the bottom). The graphic feature's geometry is a
- * LineString of 4 points produced by `FightingPosition.generateGraphics`,
- * so a single Stroke is enough — no fill, no per-point label.
- */
-/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
-export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return asStyleFunction(plainOutlinePaint(), name);
-}
-
-/**
  * Abatis: a drawn route carrying one fixed-size chevron. The whole symbol is in the
  * geometry, so a plain stroke draws it.
  *

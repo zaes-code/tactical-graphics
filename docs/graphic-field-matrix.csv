@@ -125,7 +125,6 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "ferry crossing",FerryCrossing,"FM 1-02.2 + APP-06",290700,,,,,Y,,,,,,,,,,,,,,,,
 "fields of fire / sector of fire",FieldsOfFire,"FM 1-02.2 + APP-06",140500,Y,,,,Y,,,,,,,,,,,,,,,,
 "fighter engagement zone",FighterEngagementZone,"APP-06",171400,Y,,,,Y,Y,Y,Y,,,,,,Y,Y,,,,,,
-"fighting position",FightingPosition,"FM 1-02.2",,,,,,Y,,,,,,,,,,,,,Y,,,
 "final coordination line",FinalCoordinationLine,"FM 1-02.2 + APP-06",140700,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "final protective fire",FinalProtectiveFire,"FM 1-02.2 + APP-06",240703,Y,Y,,,Y,,,,,,,,,,,,,,,Y,
 "fire support area circular",FireSupportAreaCircular,"FM 1-02.2 + APP-06",241003,Y,,,,Y,,Y,Y,,,,,,,,,,Y,,,

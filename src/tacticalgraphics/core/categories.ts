@@ -126,7 +126,6 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.Screen]:                           TacticalGraphicCategory.EnablingOperationsPlanning,
 
     // ── Field Fortification Symbols ─────────────────────────────────────────── OK
-    [TacticalGraphicName.FightingPosition]:                 TacticalGraphicCategory.FieldFortification, // TODO: not in ui yet
     [TacticalGraphicName.FortifiedLine]:                    TacticalGraphicCategory.FieldFortification, // TODO: not in ui yet
 
     // ── Fire Support Coordination Control Measures ──────────────────────────── OK

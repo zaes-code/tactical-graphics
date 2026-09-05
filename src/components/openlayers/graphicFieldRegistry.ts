@@ -1052,8 +1052,6 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.GroupOrSeriesOfTargets]: NAME_FIELD_ONLY,
 
     // ── Field fortification ────────────────────────────────────────────────
-    // FightingPosition: only rotation + size are user-editable; no labels.
-    [TacticalGraphicName.FightingPosition]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedLine]: SHAPE_ONLY,
 
     [TacticalGraphicName.BaseDefenseZone]: SHAPE_ONLY,

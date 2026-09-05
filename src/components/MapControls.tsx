@@ -927,7 +927,6 @@ function getPointHint(name: TacticalGraphicName): string | null {
         name === TacticalGraphicName.Ambush ||
         name === TacticalGraphicName.MovementToContact ||
         name === TacticalGraphicName.Pursuit ||
-        name === TacticalGraphicName.FightingPosition ||
         name === TacticalGraphicName.BaseDefenseZone ||
         name === TacticalGraphicName.TacticalTurn ||
         name === TacticalGraphicName.Turn ||

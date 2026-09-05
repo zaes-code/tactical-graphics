@@ -309,7 +309,6 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.Neutralize]:                                  '341600',  // Neutralize
     [TacticalGraphicName.SupportByFire]:                               '152100',  // Support by Fire
     [TacticalGraphicName.Suppress]:                                    '342800',  // Suppress
-    [TacticalGraphicName.FightingPosition]:                            null,
     [TacticalGraphicName.BearingLine]:                                       '220100',  // Bearing Line
     [TacticalGraphicName.BearingLineElectronic]:                             '220101',  // Bearing Line, Electronic
     [TacticalGraphicName.BearingLineElectromagneticWarfare]:                 '220102',  // Bearing Line, Electromagnetic Warfare (EW)

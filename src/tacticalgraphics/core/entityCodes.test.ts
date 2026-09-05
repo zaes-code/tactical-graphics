@@ -47,9 +47,11 @@ describe('GRAPHIC_ENTITY_CODES', () => {
 
     it('leaves exactly the FM 1-02.2-only graphics uncoded', () => {
         const uncoded = names().filter((n) => GRAPHIC_ENTITY_CODES[n] === null);
-        // Nine since `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
-        // gap", a different symbol. @see specifications.test.ts, FM_ONLY_GRAPHICS
-        expect(uncoded).toHaveLength(9);
+        // Nine when `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
+        // gap", a different symbol. **Eight since 2026-09-05**: `FightingPosition` was
+        // retired as a duplicate of `FortifiedPosition`, which draws the same bracket and
+        // is in both publications. @see ai/excluded-graphics.md, specifications.test.ts
+        expect(uncoded).toHaveLength(8);
         for (const name of uncoded) {
             expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2]);
         }
