@@ -30,6 +30,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
+import {amplifiersHidden} from '../amplifierVisibility';
 import {buildTacticalGraphic} from './maplibreAdapter';
 import {resolutionOf} from './projection';
 
@@ -128,7 +129,8 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
             renderer.clear();
             const resolution = resolutionOf(map);
             for (const feature of snapshot.features ?? []) {
-                const stored = (feature.properties ?? {})[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
+                const props = feature.properties ?? {};
+                const stored = props[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
                 // @see applyAmplifierAliases — a snapshot may predate the 3.0.0 rename.
                 const properties = stored && applyAmplifierAliases(stored);
                 if (!properties?.name || !feature.geometry) continue;
@@ -136,7 +138,22 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                 // restored as drawn output, which is what makes a graphic saved in the
                 // other engine arrive **editable** rather than as a picture of itself.
                 const graphic = buildTacticalGraphic(properties.name, feature.geometry, properties, resolution);
-                if (graphic) renderer.add(graphic);
+                if (!graphic) continue;
+
+                /*
+                 * **The saved `symbolId` is the graphic's identity, and it was being thrown
+                 * away here.** `buildTacticalGraphic` mints a fresh `mlb-N`, so a graphic
+                 * handed over from OpenLayers arrived under a new name — while OpenLayers'
+                 * own restore has always adopted the incoming id. The two directions
+                 * disagreed, and anything the host keys by id lost track of the graphic on
+                 * one leg of the round trip.
+                 *
+                 * Which is exactly what happened to the "name only" choice: it is remembered
+                 * per graphic id, so it survived OpenLayers → MapLibre and not the way back.
+                 */
+                const id = typeof props.symbolId === 'string' && props.symbolId ? props.symbolId : graphic.id;
+                renderer.add({...graphic, id, graphic: {...graphic.graphic, hideAmplifiers: amplifiersHidden(id) || undefined},
+                    labels: graphic.labels ? {...graphic.labels, hideAmplifiers: amplifiersHidden(id) || undefined} : undefined});
             }
             options.onChange?.();
         },
