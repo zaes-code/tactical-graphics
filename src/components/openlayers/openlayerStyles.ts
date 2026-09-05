@@ -2403,9 +2403,11 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.BlueKillBoxCircular:
         case TacticalGraphicName.PurpleKillBoxRectangular:
         case TacticalGraphicName.PurpleKillBoxCircular:
-            // Prefix over name, centered; the two DTGs outside the bounding box's
-            // upper-left. A rectangle's corner is a real vertex and a circle has none,
-            // so the box is the right anchor for both.
+            // Prefix over name, centered; the two DTGs on one line outside the shape's
+            // upper-left corner. Which corner that is depends on the shape rather than on
+            // the variant — a rectangle keeps the angle it was drawn on, so its bounding
+            // box's top edge is the highest corner's height and not its top-left one's.
+            // @see outsideCornerAnchor
             return asStyleFunction(zoneLabelPaint(name, false), name);
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneIrregular:
@@ -2418,8 +2420,8 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.DeadSpaceAreaIrregular:
         case TacticalGraphicName.BlueKillBoxIrregular:
         case TacticalGraphicName.PurpleKillBoxIrregular:
-            // Same layout, but the DTGs anchor on the real upper-left *vertex*: a
-            // bounding-box corner can sit far outside an irregular shape.
+            // Same layout; the anchor lands on the real upper-left *vertex* here, since a
+            // bounding-box corner can sit far outside an irregular shape. @see outsideCornerAnchor
             return asStyleFunction(zoneLabelPaint(name, true), name);
         case TacticalGraphicName.GroupOrSeriesOfTargets:
             return asStyleFunction(groupOrSeriesOfTargetsLabelPaint(name), name);
