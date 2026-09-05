@@ -10,7 +10,7 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
-    defaultStandoffMetres,
+    usesStandoffWidth,
     drawnAnchorFrame,
     drawnAnchors,
     drawnSizeMeters,
@@ -323,16 +323,26 @@ function sizeDefaults(
     // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
     const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
 
-    // A graphic whose `width` is a standoff rather than a half-width seeds it from the
-    // library, so both engines open the same symbol with the same gap. Without this the
-    // multiple-strike zone would start at MapLibre's generic 20 px offset here and at half
-    // a screen inch on OpenLayers. @see defaultStandoffMetres
-    const standoff = defaultStandoffMetres(name, drawingResolution ?? 0);
+    /*
+     * **A graphic whose `width` is a standoff gets no width from here at all.**
+     *
+     * This used to seed one — half a screen inch, matching OpenLayers — and that was the
+     * wrong place for it, because `sizeDefaults` runs on every build: a draw, a rebuild
+     * *and a restore*. For the multiple-strike zone the absence of a width is not a gap to
+     * fill, it is the legacy two-ring description saying it carries both rings itself, so
+     * filling it made the generator read those points as one traced ring and the symbol
+     * came back a self-crossing star. The seed now belongs to the draw path, which is the
+     * only caller that means "this graphic is new". @see MapLibreInteractions.graphicFrom
+     *
+     * It must fall through the generic default below as well — a standoff is not half of
+     * anything, so 20 px of half-width would be a different number meaning a different
+     * thing. @see usesStandoffWidth
+     */
+    const filesStandoff = usesStandoffWidth(name);
 
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined && standoff !== undefined ? {width: standoff} : {}),
-        ...(supplied.width === undefined && standoff === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && !filesStandoff && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),

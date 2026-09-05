@@ -36,6 +36,13 @@ export const MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX = 48;
 /**
  * The standoff a graphic should start with, in metres, or `undefined` if it files none.
  *
+ * **Spend it only while a graphic is being drawn.** A restore must not: a saved graphic
+ * either carries a width, in which case there is nothing to seed, or it carries none —
+ * and for the multiple-strike zone *that absence is the legacy two-ring format*, whose
+ * base holds both rings end to end. Seeding a standoff there makes the generator read
+ * those points as one traced ring and the symbol comes back as a self-crossing star.
+ * Both renderers did exactly that until 2026-09-05. @see usesStandoffWidth
+ *
  * Both renderers call this rather than each seeding its own number. OpenLayers reached for
  * half a screen inch while MapLibre would have defaulted to its generic 20 px offset, and
  * the same symbol drawn on the two engines would have opened with different gaps — the
@@ -45,8 +52,22 @@ export const MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX = 48;
  * resolution, which is 1/cos(latitude) too large.
  */
 export function defaultStandoffMetres(name: string, groundResolution: number): number | undefined {
-    if (name !== TacticalGraphicName.MinimumSafeDistanceMultipleStrike) return undefined;
+    if (!usesStandoffWidth(name)) return undefined;
     return MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX * groundResolution;
+}
+
+/**
+ * Whether this graphic's `width` is a **standoff between two rings** rather than a
+ * half-width.
+ *
+ * The distinction decides two different things and both engines need it: what a generic
+ * width default would mean here (nothing — a standoff is not half of anything), and
+ * whether the absence of a width is *meaningful*. For this one graphic it is: no width is
+ * how the legacy two-ring description says it carries both rings itself, so **a renderer
+ * that invents one destroys the format**. @see MinimumSafeDistanceMultipleStrike
+ */
+export function usesStandoffWidth(name: string): boolean {
+    return name === TacticalGraphicName.MinimumSafeDistanceMultipleStrike;
 }
 
 /** How many points each circle is drawn with. */

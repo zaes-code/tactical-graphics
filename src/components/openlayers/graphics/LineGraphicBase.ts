@@ -386,7 +386,8 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
-     * The standoff between the multiple-strike zone's two rings, in metres.
+     * The standoff between the multiple-strike zone's two rings, in metres, or `undefined`
+     * when the graphic files none.
      *
      * Three sources, in order: a distance replayed by a restore, one the operator typed in
      * the dialog, and failing both a seed of half a screen inch at the resolution the
@@ -394,13 +395,27 @@ export class LineGraphicBase implements LineGraphic {
      * carries it and this returns it unchanged — so the gap is a real distance from the
      * first render and does not move when the operator zooms.
      *
+     * **And only while the operator is authoring the shape.** A restore that carries no
+     * width is the *legacy two-ring description*, whose base holds both rings end to end,
+     * and seeding a standoff into it makes the generator read those points as a single
+     * traced ring — the symbol comes back as a self-crossing star with a second star
+     * offset around it. `SafeDistanceZone` promises that such a graphic "still renders
+     * exactly as it did"; this is the line that has to keep that promise, and it did not
+     * until 2026-09-05. `shapingFromGesture` is the same flag the minimum-length floors
+     * use, and for the same reason: the seed belongs to the gesture that authors geometry.
+     *
+     * Returning `undefined` rather than `0` matters — `updateGraphic` stamps whatever this
+     * gives it, and a filed `width: 0` would show up in the dialog and make the next call
+     * take the `filed` branch on a number that means "none".
+     *
      * `groundLength`, not the bare resolution: a pixel size times the raw number is a
      * projected length and comes out 1/cos(latitude) too large. @see graphicSize
      */
-    private standoff(filed: number | undefined): number {
+    private standoff(filed: number | undefined): number | undefined {
         if (this.standoffOverride !== undefined) return this.standoffOverride;
         if (filed !== undefined) return filed;
-        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude())) ?? 0;
+        if (!this.shapingFromGesture) return undefined;
+        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
     }
 
     /**
