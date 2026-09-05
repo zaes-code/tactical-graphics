@@ -150,6 +150,51 @@ export function usesDrawnAnchors(name: TacticalGraphicName): boolean {
     return DRAWN_ANCHOR_GRAPHICS.includes(name);
 }
 
+/**
+ * Two-anchor symbols whose points 1 and 2 are **corners**, so neither end is the pivot.
+ *
+ * The default rule below — a line turns and scales about its first vertex — reads that
+ * vertex as *"where the user started drawing, and where the symbol grows from"*. That is
+ * right for a path: an axis of advance stretches along its bearing from p0, and moving p0
+ * would slide it off the thing it was drawn against. It is wrong for a symbol the standard
+ * describes as a *shape between two corners*, because such a symbol has no growing end —
+ * anchoring on one makes a resize walk it sideways out of one corner, which is what a user
+ * reported for the mine cluster on 2026-09-05: the ratio was right and the symbol moved.
+ *
+ * **Membership is a plate reading, not a shape.** These are exactly the rows whose Anchor
+ * Points paragraph says *corners*, found by extracting that paragraph for all 309 coded
+ * graphics — three of them, and no near-misses:
+ *
+ * | Code | Graphic | The plate's words |
+ * |---|---|---|
+ * | 218400 | navigational line | *"Points 1 and 2 define the corner points of the symbol."* |
+ * | 290400 | mine cluster | *"Points 1 and 2 define the corners of the symbol."* |
+ * | 291000 | fortified position | *"Points 1 and 2 define the corners on the front of the symbol."* |
+ *
+ * **The neighbours that read almost the same and are deliberately out.** Ferry crossing and
+ * raft site *"define the tips"* — a tip is a feature, not a corner, though both ends carry
+ * the same one. Bearing line and linear target *"define the endpoints"*. Trip wire is the
+ * clearest exclusion of all: its points *"define the length and orientation"* and point 2
+ * sits **at the mine**, so one end is a real place and pivoting there is meaningful. The
+ * nineteen rectangular zones say points 1 and 2 *"will be located in the centre"* of their
+ * two ends and are already out of the stretch path entirely, having two gestures of their
+ * own. @see NO_EDIT_STRETCH
+ *
+ * `Contain` reaches the same midpoint by the other door, {@link DRAWN_ANCHOR_GRAPHICS},
+ * which carries per-name frames this list deliberately does not need: two corners have a
+ * midpoint and nothing else to work out.
+ */
+const CORNER_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.NavigationalLine,
+    TacticalGraphicName.MineCluster,
+    TacticalGraphicName.FortifiedPosition,
+];
+
+/** @see CORNER_ANCHOR_GRAPHICS */
+export function usesCornerAnchors(name: TacticalGraphicName | undefined): boolean {
+    return name !== undefined && CORNER_ANCHOR_GRAPHICS.includes(name);
+}
+
 
 /**
  * Whether this graphic can be flipped to the other side of its own line.
@@ -478,6 +523,19 @@ export function rotationAnchor(
     if (name !== undefined && usesDrawnAnchors(name)) {
         const centre = drawnAnchorFrame(name, positions)?.center;
         if (centre) return [centre[0], centre[1]];
+    }
+    /*
+     * **A corner-anchored symbol turns about the midpoint of its two corners.**
+     *
+     * Taken in the **Mercator frame**, not in degrees, for the reason the polygon case
+     * below spells out: the pivot has to be the point OpenLayers computes from the same
+     * base in projected metres, and the midpoint of 0 deg and 60 deg is 33 deg on screen
+     * against 30 deg in degrees. @see CORNER_ANCHOR_GRAPHICS
+     */
+    if (usesCornerAnchors(name) && (geometry.type === 'LineString' || geometry.type === 'MultiLineString')) {
+        const [aLon, aLat] = positions[0];
+        const [bLon, bLat] = positions[positions.length - 1];
+        return [(aLon + bLon) / 2, latitudeOf((mercatorY(aLat) + mercatorY(bLat)) / 2)];
     }
     /*
      * **A tip-first graphic turns about its rear, which is its *last* vertex.**
