@@ -6,7 +6,7 @@
  * 300-line switch statement.
  */
 
-import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, dropSizePx, groundLength} from '@zaes/tactical-graphics';
+import {CROSSED_HALF_WIDTH_PX, TacticalGraphicName, allowedGestures, drawClickCount, dropSizePx, groundLength} from '@zaes/tactical-graphics';
 import {TacticalGraphicHandler} from './openlayersAdapter';
 import {AreaGraphicBase} from './graphics/AreaGraphicBase';
 import {RectangularAreaGraphicBase} from './graphics/RectangularAreaGraphicBase';
@@ -31,7 +31,7 @@ import {Boundary} from './graphics/Boundary';
 import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
+import {AnchorClickController, MissionTaskController, PointDropController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 
 /**
@@ -157,8 +157,14 @@ const missionTask = (name: TacticalGraphicName, res: number) => {
 // Turn adds a bend handle on top of the mission-task model. `editStretches` is
 // on for the same reason as the circles — an edit-mode drag would otherwise
 // pan the map — and the bend handle rides the manager's per-handle drag hook.
+/*
+ * **Three clicks: the tip, the rear, then the bend.** 270504's Template letters PT 1,
+ * PT 2 and PT 3 whatever its "requires two anchor points" sentence says, and point 3
+ * "indicates on which side of the line the arc is placed". It was drawn centre-to-edge
+ * until 2026-09-05. @see AnchorClickController, anchorsFromClicks
+ */
 const turn = (name: TacticalGraphicName, res: number) => {
-    const controller = new MissionTaskController(new TurnGraphicBase(name, res, res));
+    const controller = new AnchorClickController(new TurnGraphicBase(name, res, res), drawClickCount(name) ?? 3);
     controller.editStretches = true;
     return controller;
 };
@@ -166,8 +172,13 @@ const turn = (name: TacticalGraphicName, res: number) => {
 // Envelopment follows Turn exactly: point-anchored, drawn center-to-edge so the
 // first click places it and the second sizes it, with a second handle for the
 // half circle's radius riding the manager's per-handle drag hook.
+/*
+ * **Three clicks: the run's two ends, then the diameter.** 343500 names four points, but
+ * the fourth only "defines which side of the line the arc is on" — which point 3 already
+ * says — so it is constructed at the arc's apex rather than asked for.
+ */
 const envelopment = (name: TacticalGraphicName, res: number) => {
-    const controller = new MissionTaskController(new EnvelopmentGraphicBase(name, res, res));
+    const controller = new AnchorClickController(new EnvelopmentGraphicBase(name, res, res), drawClickCount(name) ?? 3);
     controller.editStretches = true;
     return controller;
 };
@@ -177,8 +188,15 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
 // own layout. @see PursuitGraphicBase
 // Ambush recovers its center from the chord of its arc, so it reads and writes its own
 // point layout too. @see AmbushGraphicBase
+/*
+ * **Two clicks: the arrowhead's tip, then one end of the curved back.** 141700 names three
+ * points, and its own constraints — the arrow perpendicular to the chord, meeting its
+ * midpoint — leave a family of symbols rather than one. The remaining freedom is closed by
+ * holding the shape and letting the click set only the size, so point 3 is constructed.
+ * (User's call, 2026-09-05.) @see ambushAnchors
+ */
 const ambush = (name: TacticalGraphicName, res: number) => {
-    const controller = new MissionTaskController(new AmbushGraphicBase(name, res, res));
+    const controller = new AnchorClickController(new AmbushGraphicBase(name, res, res), drawClickCount(name) ?? 2);
     controller.editStretches = true;
     return controller;
 };
@@ -191,8 +209,13 @@ const contain = (name: TacticalGraphicName, res: number) => {
     return controller;
 };
 
+/*
+ * **Three clicks: the run's two ends, then the hook.** 344000's arc "is always
+ * perpendicular to the line", so the third click is taken for its distance across the run
+ * and its side, and put on that perpendicular. @see pursuitAnchors
+ */
 const pursuit = (name: TacticalGraphicName, res: number) => {
-    const controller = new MissionTaskController(new PursuitGraphicBase(name, res, res));
+    const controller = new AnchorClickController(new PursuitGraphicBase(name, res, res), drawClickCount(name) ?? 3);
     controller.editStretches = true;
     return controller;
 };

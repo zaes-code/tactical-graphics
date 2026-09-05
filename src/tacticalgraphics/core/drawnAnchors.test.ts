@@ -100,18 +100,40 @@ describe('the point these turn about', () => {
         .filter((name): name is TacticalGraphicName => name in TacticalGraphicName)
         .filter(usesDrawnAnchors);
 
-    it.each(family)('is the centre of %s, not its first anchor', name => {
+    it.each(family.filter(n => n !== TacticalGraphicName.Ambush))(
+        'is the centre of %s, not its first anchor',
+        name => {
+            const centre: [number, number] = [7, 45];
+            const anchors = drawnAnchors(name, {center: centre, size: 60_000, rotation: 15})!;
+            const geometry = {type: 'LineString', coordinates: anchors};
+
+            const pivot = rotationAnchor(geometry, name);
+            expect(pivot[0]).toBeCloseTo(centre[0], 2);
+            expect(pivot[1]).toBeCloseTo(centre[1], 2);
+
+            // And without the name it is the old rule, which is what every ordinary drawn
+            // line still gets.
+            expect(rotationAnchor(geometry)).toEqual(anchors[0]);
+        },
+    );
+
+    /**
+     * **Ambush is the exception, and it is a doctrinal one.**
+     *
+     * 141700's back "encompasses the ambush position" while "the arrowhead typically points
+     * at the target", so the thing an operator turns is the aim and the thing that must stay
+     * on the ground is the position. Point 2 is an end of that back. Turning about the
+     * frame's centre swung the ambush itself off the place it was put. (User's call,
+     * 2026-09-05.)
+     */
+    it('is point 2 for Ambush, which is where the position sits', () => {
         const centre: [number, number] = [7, 45];
-        const anchors = drawnAnchors(name, {center: centre, size: 60_000, rotation: 15})!;
+        const anchors = drawnAnchors(TacticalGraphicName.Ambush, {center: centre, size: 60_000, rotation: 15})!;
         const geometry = {type: 'LineString', coordinates: anchors};
 
-        const pivot = rotationAnchor(geometry, name);
-        expect(pivot[0]).toBeCloseTo(centre[0], 2);
-        expect(pivot[1]).toBeCloseTo(centre[1], 2);
-
-        // And without the name it is the old rule, which is what every ordinary drawn
-        // line still gets.
-        expect(rotationAnchor(geometry)).toEqual(anchors[0]);
+        expect(rotationAnchor(geometry, TacticalGraphicName.Ambush)).toEqual(anchors[1]);
+        // Not the centre, which is what the rest of the family uses.
+        expect(rotationAnchor(geometry, TacticalGraphicName.Ambush)[0]).not.toBeCloseTo(centre[0], 2);
     });
 
     it('leaves an ordinary drawn line on its first vertex', () => {

@@ -520,6 +520,17 @@ export function rotationAnchor(
      * pivoted them about the centre — `MissionTaskController.getCenter` says so in as many
      * words — and this is that rule, in the half both engines read.
      */
+    /*
+     * **Ambush turns about point 2**, not about its centre. (User's call, 2026-09-05.)
+     *
+     * 141700's point 2 is one end of the curved back, and the back "encompasses the ambush
+     * position" while "the arrowhead typically points at the target" — so what an operator
+     * turns is the aim, about the position, and the position is where the arc sits rather
+     * than where the frame's centre falls. Turning about the centre swung the ambush
+     * itself off the ground it was placed on.
+     */
+    if (name === TacticalGraphicName.Ambush && positions.length >= 2) return positions[1];
+
     if (name !== undefined && usesDrawnAnchors(name)) {
         const centre = drawnAnchorFrame(name, positions)?.center;
         if (centre) return [centre[0], centre[1]];
@@ -661,6 +672,19 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Two segments, three points. The only graphic here that is not two points.
     [TacticalGraphicName.FieldsOfFire]: 3,
 
+    /*
+     * **The four placed point by point, from 2026-09-05.** These are the anchor counts the
+     * plates state, and they are what the *base stores* — not what the operator clicks.
+     * Ambush spends two clicks and envelopment three, because in each the last point the
+     * standard names carries no decision and is constructed. MapLibre's draw asks whether
+     * `normalizeDrawnBase(name, sketch).length` has reached the number here, so the two
+     * disagreeing is exactly how a derived point is expressed. @see anchorsFromClicks
+     */
+    [TacticalGraphicName.Ambush]: 3,
+    [TacticalGraphicName.Turn]: 3,
+    [TacticalGraphicName.TacticalTurn]: 3,
+    [TacticalGraphicName.Envelopment]: 4,
+    [TacticalGraphicName.Pursuit]: 3,
 
     // Two points: a start and an end, and the symbol is built between them.
     //

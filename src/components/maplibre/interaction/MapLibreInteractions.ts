@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -736,7 +736,10 @@ export class MapLibreInteractions {
         // the double-click a free-form line ends on, so waiting for one meant a
         // fields-of-fire could not be drawn here at all: five clicks, no graphic.
         // @see baseVertexCount
-        const wanted = baseVertexCount(name);
+        // **The clicks, which are not always the points.** Ambush stores three anchors and
+        // is drawn with two; comparing the sketch against the stored count waited for a
+        // third click that never comes. @see drawClickCount
+        const wanted = drawClickCount(name) ?? baseVertexCount(name);
         if (wanted !== undefined && this.sketch.length >= wanted) {
             this.finishDraw(this.sketch.slice(0, wanted));
             return;
@@ -1051,6 +1054,15 @@ export class MapLibreInteractions {
         name: TacticalGraphicName,
         vertices: Position[],
     ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        /*
+         * **The four placed point by point never come through here.** `anchorDraw` reads a
+         * two-click drag as a centre and a rim; ambush, turn, envelopment and pursuit are
+         * drawn by clicking the plate's own anchor points as of 2026-09-05, so they take
+         * the ordinary vertex path and `normalizeDrawnBase` turns those clicks into the
+         * stored anchors — the same function OpenLayers runs at its own door.
+         * @see drawsByAnchorClicks, anchorsFromClicks
+         */
+        if (drawsByAnchorClicks(name)) return undefined;
         if (!usesDrawnAnchors(name) || !vertices.length) return undefined;
 
         // A drop has one vertex and states its own size, so there is no second point to

@@ -930,7 +930,19 @@ export class TacticalGraphicsManager {
 
     handlePointDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        let center = this.activeController.getBaseGeometry() as number[];
+        /*
+         * **The controller's centre, not its raw base geometry.**
+         *
+         * `calculateDeltaAngle` reads `center[0]` and `center[1]` as numbers. That held
+         * while every point-anchored graphic kept a `Point` base — but the drawn-anchor
+         * family stores APP-06's anchor points in a `LineString`, so `getBaseGeometry`
+         * hands back an array *of* coordinates and both reads are arrays. The arithmetic
+         * then produces `NaN` and the rotation silently does nothing, which is what a user
+         * reported for ambush on 2026-09-05 once it started being drawn point by point.
+         * `getCenter` is the question actually being asked here and every controller
+         * answers it with a single coordinate.
+         */
+        const center = this.activeController.getCenter() as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.

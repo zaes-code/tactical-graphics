@@ -415,7 +415,7 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
-export {drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag} from './core/symbology';
+export {drawClickCount, drawsByAnchorClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag} from './core/symbology';
 export {SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
