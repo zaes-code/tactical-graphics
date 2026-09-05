@@ -569,13 +569,23 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 )}
 
                                 {/*
-                                 * **Offered for every graphic, like hostility.** Any
-                                 * graphic can carry amplifiers, and whether to show them
-                                 * is a choice about this graphic on this map rather than
-                                 * a property of the symbol — so there is no per-graphic
-                                 * field flag deciding whether the control appears.
-                                 * @see TacticalGraphicProperties.hideAmplifiers
+                                 * **Only where there is a name to fall back to.**
+                                 *
+                                 * The switch reads "name only", and for 140 of the 319
+                                 * graphics there is no name: their plates letter no
+                                 * designation at all — the wire obstacles, the bearing
+                                 * lines, the anti-tank ditches. Flipping it there hides
+                                 * whatever amplifiers the graphic does carry and leaves
+                                 * nothing in their place, which is not what the control
+                                 * says it does. (User's call, 2026-09-04.)
+                                 *
+                                 * It was offered on every graphic on the argument that
+                                 * amplifier visibility is a choice about the map rather
+                                 * than a property of the symbol. That is still true; it is
+                                 * just not a choice worth offering when the answer can
+                                 * only be "show nothing". @see GraphicFieldSet.identifier1
                                  */}
+                                {fields.identifier1 && (
                                 <Box sx={{mt: 1}}>
                                     <FormControlLabel
                                         control={
@@ -593,6 +603,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                         label="Name only — hide other amplifiers"
                                     />
                                 </Box>
+                                )}
 
                                 {fields.hostility && (
                                     <Box sx={{minWidth: 180, mt: 1}}>

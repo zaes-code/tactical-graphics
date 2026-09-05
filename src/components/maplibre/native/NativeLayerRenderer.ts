@@ -26,7 +26,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry, withDrawingResolution, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry, carryPaintFlags, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {
     GRAPHIC_ID_PROPERTY,
     bucketPaintsInto,
@@ -574,7 +574,7 @@ export class NativeLayerRenderer {
             // "now" — so the scale computes as 1.0 forever and the label never grows.
             // @see withDrawingResolution
             if (rebuilt) {
-                this.graphics[i] = withDrawingResolution({...rebuilt, id: graphic.id}, graphic.graphic.drawingResolution);
+                this.graphics[i] = carryPaintFlags(graphic, {...rebuilt, id: graphic.id});
             }
         }
     }

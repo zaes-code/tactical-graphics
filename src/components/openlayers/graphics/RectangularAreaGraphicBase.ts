@@ -9,7 +9,6 @@ import {
     carriesRectangleLength,
     constrainRectangleAxis,
     groundLength,
-    levelRectangleAxis,
     latitudeFromMercatorY,
 } from '@zaes/tactical-graphics';
 import {
@@ -196,18 +195,24 @@ export class RectangularAreaGraphicBase implements LineGraphic {
         const previous = this.lastAxis;
         const incoming = base.getGeometry()?.getCoordinates();
         /*
-         * **Level while drawing, held to its own axis while editing.**
+         * **The drawn axis is the rectangle's axis, and it always was for 240802.**
          *
-         * `LineGraphicController` republishes the base on every pointer move, so this is
-         * also the preview — and the preview followed the mouse in any direction while
-         * the committed geometry came out level, which is a symbol that changes shape at
-         * the moment of the last click. Levelling here makes the two the same thing.
-         * (User's call, 2026-08-27.) @see levelRectangleAxis, constrainRectangleAxis
+         * These were squared up on the draw — point 2 kept its longitude and took point 1's
+         * latitude — so a zone came out level however it was clicked, and turning it was a
+         * separate gesture afterwards. (User's call, 2026-08-27; reversed 2026-09-04.) The
+         * rectangular target has never worked that way: its drag sets `rotation` directly,
+         * so one family of rectangles took its orientation from the draw and the other
+         * nineteen refused to. **All of them take it now.**
+         *
+         * Editing still holds the axis: `constrainRectangleAxis` keeps a vertex drag on the
+         * line the rectangle already has, so dragging an end lengthens it rather than
+         * shearing it. Drawing sets that axis; editing respects it.
+         * @see constrainRectangleAxis, levelRectangleAxis
          */
         if (incoming?.length === 2 && !this.rotating) {
             const lonLat = incoming.map(c => toLonLat(c)) as Position[];
             const held = this.drawing
-                ? levelRectangleAxis(lonLat)
+                ? lonLat
                 : previous?.length === 2 ? constrainRectangleAxis(previous, lonLat) : lonLat;
             base = new Feature(new LineString(held.map(c => fromLonLat(c as Coordinate))));
         }
