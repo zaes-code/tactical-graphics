@@ -478,7 +478,13 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             };
             // Same hook, longer line.
             expect(lineOf(1.8, 0.25)).toBeGreaterThan(lineOf(0.9, 0.25) * 1.9);
-            expect(hookOf(1.8, 0.25)).toBeCloseTo(hookOf(0.9, 0.25), 0);
+            // **As a ratio, not a metre count.** Point 3 is projected onto the
+            // perpendicular at point 2 as of 2026-09-05, and a projection on a sphere
+            // leaves a residual that scales with the symbol — 5 m on a 27 km hook here.
+            // The claim is that the hook does not follow the line, and a half-metre
+            // absolute tolerance was only ever measuring the old exact construction.
+            // @see pursuitAnchors
+            expect(hookOf(1.8, 0.25) / hookOf(0.9, 0.25)).toBeCloseTo(1, 3);
             // Same line, bigger hook — the proportion the dropped form fixed at 2.4.
             expect(hookOf(0.9, 0.5)).toBeGreaterThan(hookOf(0.9, 0.25) * 1.9);
         });

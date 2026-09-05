@@ -17,7 +17,7 @@
  * the catalog renders them from a generic line. This test is the guard that was missing.
  */
 
-import {baseVertexCount, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {baseVertexCount, drawClickCount, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 
 /** The `maxPoints` a graphic's OpenLayers controller enforces, if it enforces one. */
@@ -35,8 +35,19 @@ describe('the two draw limits agree', () => {
         expect(names.length).toBeGreaterThan(200);
     });
 
+    /**
+     * **The limit is the click count, which is usually the stored count.**
+     *
+     * OpenLayers hands `maxPoints` straight to `Draw`, so what it caps is *clicks*; the
+     * library's `baseVertexCount` is what the base ends up *holding*. For almost every
+     * graphic those are one number. They part company only where a point the standard
+     * names carries no decision and is constructed instead of asked for — ambush spends
+     * two clicks on three anchors, envelopment three on four — and `drawClickCount` is
+     * that fact, stated once so both engines close a draw on the same click.
+     * @see anchorsFromClicks
+     */
     it.each(names)('%s caps its draw the same way in both halves', name => {
-        expect(openLayersLimit(name)).toBe(baseVertexCount(name));
+        expect(openLayersLimit(name)).toBe(drawClickCount(name) ?? baseVertexCount(name));
     });
 
     it('really does cap the fixed-anchor graphics, rather than agreeing on nothing', () => {

@@ -17,7 +17,7 @@
  * rather than against the six names: **whatever OpenLayers ends on the second click, the
  * library has to say so.**
  */
-import {TacticalGraphicName, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, dropSizePx, frameFromDrag, listTacticalGraphicNames, usesDrawnAnchors}
+import {TacticalGraphicName, drawsByAnchorClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, dropSizePx, frameFromDrag, listTacticalGraphicNames, usesDrawnAnchors}
     from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
@@ -44,18 +44,41 @@ function drawsWithACircle(name: TacticalGraphicName): boolean {
      * `drawsCentreToEdge` back to itself and check nothing.
      */
     if (controller instanceof PointDropController) return false;
-    return controller instanceof MissionTaskController && controller.geomHandleType === 'Circle';
+    /*
+     * **`type`, not `geomHandleType`.** The question here is what OpenLayers *draws* with,
+     * and `type` is the field the manager hands to `new Draw(...)`; `geomHandleType` routes
+     * the edit drags afterwards. They were the same value on every controller until
+     * 2026-09-05, when the four placed point by point started drawing as lines while still
+     * editing as point-anchored symbols — and reading the wrong one then counted them as
+     * circle draws. @see AnchorClickController
+     */
+    return controller instanceof MissionTaskController && controller.type === 'Circle';
 }
 
 describe('a centre-to-edge draw is a library fact', () => {
-    it('names the anchor graphics that are neither dropped whole nor drawn end to end', () => {
-        expect(names.filter(drawsCentreToEdge).sort()).toEqual([
-            TacticalGraphicName.Ambush,
-            TacticalGraphicName.Envelopment,
-            TacticalGraphicName.Pursuit,
-            TacticalGraphicName.TacticalTurn,
-            TacticalGraphicName.Turn,
-        ].sort());
+    /**
+     * **Nothing is drawn centre-to-edge any more, and that is the finished state.**
+     *
+     * The model existed because the anchor family's points were *derived* from a drag
+     * rather than placed. Contain left on 2026-09-04, when a user reported that following
+     * the Draw Rules produced a symbol twice the size they aimed at; the note in
+     * `symbology.ts` recorded that the other five each needed their own plate read first.
+     * That read happened on 2026-09-05 and all five moved: ambush, turn, tactical turn,
+     * envelopment and pursuit are placed point by point now. @see drawsByAnchorClicks
+     *
+     * The predicate is kept rather than deleted because it is still the question the
+     * renderers ask — and an empty answer is a fact worth pinning, so that a graphic
+     * quietly falling back into the old model shows up here.
+     */
+    it('finds no graphic still drawn centre-to-edge', () => {
+        expect(names.filter(drawsCentreToEdge)).toEqual([]);
+    });
+
+    it('accounts for every anchor graphic as dropped, end to end, or placed point by point', () => {
+        const unaccounted = names
+            .filter(usesDrawnAnchors)
+            .filter(n => dropSizePx(n) === undefined && !drawsEndToEnd(n) && !drawsByAnchorClicks(n));
+        expect(unaccounted).toEqual([]);
     });
 
     it('excludes contain, whose two clicks are the two points its plate marks', () => {

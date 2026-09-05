@@ -1074,7 +1074,10 @@ export function dropSizePx(name: TacticalGraphicName): number | undefined {
  * @see anchorDraw, which reads `vertices[0]` as the centre and `[1]` as the edge
  */
 export function drawsCentreToEdge(name: TacticalGraphicName): boolean {
-    return usesDrawnAnchors(name) && dropSizePx(name) === undefined && !drawsEndToEnd(name);
+    return usesDrawnAnchors(name)
+        && dropSizePx(name) === undefined
+        && !drawsEndToEnd(name)
+        && !drawsByAnchorClicks(name);
 }
 
 /**
@@ -1103,6 +1106,61 @@ export function drawsEndToEnd(name: TacticalGraphicName): boolean {
     return DRAWN_END_TO_END.has(name);
 }
 
+/**
+ * The anchor graphics an operator places **point by point**, rather than by dragging a
+ * frame out from a centre.
+ *
+ * Contain left the centre-to-edge model on 2026-09-04 because a user following the Draw
+ * Rules clicked the two points the plate marks and got a symbol twice the size they asked
+ * for, turned a quarter circle. The note here recorded that the other five each needed
+ * their own plate read before they followed. **Four of them followed on 2026-09-05**
+ * (user's call), leaving Contain — which is end-to-end, a different two-click meaning —
+ * and nothing else on the centre-to-edge draw.
+ *
+ * What each takes is its plate's own numbering, and how many clicks that is depends on how
+ * many of those points carry a decision: ambush spends two, the other three spend three,
+ * and the points with no freedom left are constructed rather than clicked.
+ * @see anchorsFromClicks, which is where the click sequence becomes the stored anchors
+ */
+const DRAWN_BY_ANCHOR_CLICKS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Ambush,
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.Pursuit,
+]);
+
+/** @see DRAWN_BY_ANCHOR_CLICKS */
+export function drawsByAnchorClicks(name: TacticalGraphicName): boolean {
+    return DRAWN_BY_ANCHOR_CLICKS.has(name);
+}
+
+/**
+ * How many clicks a draw takes, where that is **not** the number of points it stores.
+ *
+ * The two counts are the same for almost every graphic, and where they differ it is
+ * because a point the standard names carries no decision and is constructed. Ambush
+ * spends two clicks on a three-point symbol; envelopment three on a four-point one.
+ *
+ * **Both engines closed a draw on the wrong number without this.** MapLibre compared the
+ * raw click count against `baseVertexCount` and so waited for a third ambush click that
+ * never comes; OpenLayers passes the number straight to `Draw`'s `maxPoints`, and a
+ * literal in the factory would have been the same fact written twice. Undefined means
+ * "the stored count is the click count", which is the ordinary case.
+ * @see anchorsFromClicks, baseVertexCount
+ */
+const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.Ambush]: 2,
+    [TacticalGraphicName.Turn]: 3,
+    [TacticalGraphicName.TacticalTurn]: 3,
+    [TacticalGraphicName.Envelopment]: 3,
+    [TacticalGraphicName.Pursuit]: 3,
+};
+
+/** @see DRAW_CLICKS */
+export function drawClickCount(name: TacticalGraphicName): number | undefined {
+    return DRAW_CLICKS[name];
+}
 
 /**
  * Whether an anchor graphic's draw **ends on the second click**, whatever the two clicks
