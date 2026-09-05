@@ -139,7 +139,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "ford, difficult",FordDifficult,"FM 1-02.2 + APP-06",271600,,,,,Y,,,,,,,,,,,,,,,,
 "ford, easy",FordEasy,"FM 1-02.2 + APP-06",271500,,,,,Y,,,,,,,,,,,,,,,,
 "fortified area",FortifiedArea,"FM 1-02.2 + APP-06",151000,Y,,,,Y,,,,,,,,,,,,,,,,
-"fortified position",FortifiedPosition,"APP-06",291000,,,,,Y,,,,,,,,,,,,,,,,
+"fortified/fighting position",FortifiedPosition,"FM 1-02.2 + APP-06",291000,,,,,Y,,,,,,,,,,,,,,,,
 "fortified/trench line",FortifiedLine,"FM 1-02.2 + APP-06",290900,,,,,Y,,,,,,,,,,,,,,,,
 "forward arming and refueling point",ForwardArmingAndRefuelingPoint,"FM 1-02.2 + APP-06",310300,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "forward edge of battle area",ForwardEdgeOfBattleArea,"FM 1-02.2 + APP-06",140400,Y,,,,Y,Y,,,,,,,,,,,,,,,

@@ -1563,7 +1563,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Anti-Tank Ditch - Under Construction | Protection Lines |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Protection Lines |
 | Ferry Crossing | Protection Lines |
-| Fortified Position | Protection Lines |
+| Fortified/Fighting Position | Protection Lines |
 | Fortified/Trench Line | Protection Lines |
 | Mine Cluster | Protection Lines |
 | Mineline | Protection Lines |

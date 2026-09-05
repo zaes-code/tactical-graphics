@@ -1333,7 +1333,14 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.MineCluster]: 'mine cluster',
     [TacticalGraphicName.TripWire]: 'trip wire',
     [TacticalGraphicName.RaftSite]: 'raft site',
-    [TacticalGraphicName.FortifiedPosition]: 'fortified position',
+    /*
+     * **Both publications' names, because it is one symbol under two of them.** APP-06
+     * Table 8-18 calls 291000 a *fortified position*; FM 1-02.2 Table 5-22 calls the same
+     * bracket a *fighting position*, and draws it identically -- flat front edge, two legs,
+     * "typically faces enemy forces" in both. An operator trained on one manual should find
+     * it under the word they know. (User's call, 2026-09-05.)
+     */
+    [TacticalGraphicName.FortifiedPosition]: 'fortified/fighting position',
     [TacticalGraphicName.LineGeneric]: 'line, generic',
     [TacticalGraphicName.AirfieldZone]: 'airfield zone',
     [TacticalGraphicName.SeverelyRestrictedTerrain]: 'severely restricted terrain',

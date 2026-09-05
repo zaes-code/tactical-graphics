@@ -147,7 +147,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | ford, difficult | FM 1-02.2 + APP-06 | 271600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | ford, easy | FM 1-02.2 + APP-06 | 271500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fortified area | FM 1-02.2 + APP-06 | 151000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fortified position | APP-06 | 291000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fortified/fighting position | FM 1-02.2 + APP-06 | 291000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fortified/trench line | FM 1-02.2 + APP-06 | 290900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | forward arming and refueling point | FM 1-02.2 + APP-06 | 310300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | forward edge of battle area | FM 1-02.2 + APP-06 | 140400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |

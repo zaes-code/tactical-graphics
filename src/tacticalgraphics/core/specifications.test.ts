@@ -124,7 +124,6 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     // Same words, different thing; this stays APP-06 only. @see the retagging note below.
     TacticalGraphicName.MineCluster,
     TacticalGraphicName.RaftSite,
-    TacticalGraphicName.FortifiedPosition,
     TacticalGraphicName.NamedAreaOfInterestLine,
     // The toxic-industrial-material variants only. Their four parents moved to BOTH on
     // 2026-09-03 -- FM table 5-28 draws all four -- but the manual has no TIM subtype.

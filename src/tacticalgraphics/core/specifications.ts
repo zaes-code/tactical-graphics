@@ -306,7 +306,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.MineCluster]:                                  APP6_ONLY, // APP-06 290400 Mine Cluster
     [TacticalGraphicName.TripWire]:                                     BOTH,      // APP-06 290500 Trip Wire -- FM table 5-20 "tripwire"
     [TacticalGraphicName.RaftSite]:                                     APP6_ONLY, // APP-06 290800 Raft Site
-    [TacticalGraphicName.FortifiedPosition]:                            APP6_ONLY, // APP-06 291000 Fortified Position
+    [TacticalGraphicName.FortifiedPosition]:                            BOTH,      // APP-06 291000 Fortified Position
     [TacticalGraphicName.TacticalFix]:                                  BOTH,      // APP-06 341100 Fix
     [TacticalGraphicName.TacticalTurn]:                                 BOTH,      // APP-06 344700 Turn
     [TacticalGraphicName.Block]:                                        BOTH,      // APP-06 270501 Block
