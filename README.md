@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**319 graphics** are implemented and verified today, covering **332 doctrinal variants**, across 21 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**318 graphics** are implemented and verified today, covering **331 doctrinal variants**, across 21 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
@@ -117,7 +117,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **54 of the 319 graphics need a geometry input as well**:
+`name` is always required, and **53 of the 318 graphics need a geometry input as well**:
 the point-anchored ones (mission tasks, range fans, fighting positions, the circular
 areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
 `decorationSize`. Without them you get a turf error rather than a default — see
@@ -1240,7 +1240,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 319 supported names.
+the 318 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1386,7 +1386,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Zone Of Responsibility, Rectangular | Fires Areas |
 | Common Sensor Boundary | FM 1-02.2 only |
 | Delay Line | FM 1-02.2 only |
-| Fighting Position | FM 1-02.2 only |
 | Gap | FM 1-02.2 only |
 | Kill Zone | FM 1-02.2 only |
 | Movement To Contact | FM 1-02.2 only |

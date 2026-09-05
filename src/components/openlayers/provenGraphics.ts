@@ -129,7 +129,6 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.FerryCrossing,
     TacticalGraphicName.FieldsOfFire,
     TacticalGraphicName.FighterEngagementZone,
-    TacticalGraphicName.FightingPosition,
     TacticalGraphicName.FinalCoordinationLine,
     TacticalGraphicName.FinalProtectiveFire,
     TacticalGraphicName.FireSupportAreaCircular,

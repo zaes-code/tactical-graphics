@@ -721,7 +721,6 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Ambush]: ambush,
 
     // ── Field fortification ────────────────────────────────────────────────
-    [TacticalGraphicName.FightingPosition]: missionTask,
     [TacticalGraphicName.FortifiedLine]:    line(),
 
     // ── Range fans (point-based, multi-band doctrinal renderer) ────────────

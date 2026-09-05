@@ -10,7 +10,6 @@ import {TacticalGraphicName} from './type';
 const FM_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.CommonSensorBoundary,
     TacticalGraphicName.DelayLine,
-    TacticalGraphicName.FightingPosition,
     /*
      * **Not APP-06 290600, despite the name.** 290600 is "safe lane or gap" -- a lane
      * *through* an obstacle, drawn as a bar with a splayed cross at each end, lettered

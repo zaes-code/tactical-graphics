@@ -49,7 +49,7 @@ import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackF
 import {FollowTask} from "../graphics/FollowTask";
 import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
-import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
+import {FortifiedLine} from "../graphics/FieldFortification";
 import {Exploitation} from "../graphics/Exploitation";
 import {
     Ambush,
@@ -498,7 +498,6 @@ TacticalGraphicsRegistry.register(new WeaponRangeFanCircular());
 TacticalGraphicsRegistry.register(new WeaponRangeFanSector());
 
 // Field fortification
-TacticalGraphicsRegistry.register(new FightingPosition());
 TacticalGraphicsRegistry.register(new FortifiedLine());
 
 // Additional mission task block arrows (same geometry as Block, distinguished by name/label)

@@ -1267,7 +1267,6 @@ export enum TacticalGraphicName {
     Suppress = 'Suppress',
 
     // Field Fortification Symbols
-    FightingPosition = 'FightingPosition',
     FortifiedLine = 'FortifiedLine',
 }
 

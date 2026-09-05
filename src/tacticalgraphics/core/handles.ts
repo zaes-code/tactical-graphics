@@ -996,7 +996,6 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaCircular,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.FieldsOfFire,
-    TacticalGraphicName.FightingPosition,
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
     TacticalGraphicName.Isolate,
