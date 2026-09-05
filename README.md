@@ -1609,15 +1609,12 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 ## Upcoming graphics
 
-Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against the plate that defines it — FM 1-02.2, APP-06, or both — **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done. Several are already selectable in the demo app; treat anything here as work in progress rather than capability.
+Everything still being worked towards. A graphic is listed here until it is drawable, its shape and labels are signed off against the plate that defines it — FM 1-02.2, APP-06, or both — **and** its edit handles are finished — so this covers both graphics that have not been started and ones that are partly done.
+
+**The list is empty**: every graphic this library tracks has met all three. It is kept because the next addition starts here.
 
 | Graphic | Entity |
 |---|---|
-| Deceive / Decoy / Dummy / Feint | Deception |
-| Decoy / Dummy / Deception | Deception |
-| Protection Of Cultural Property, Enhanced | Protection of Cultural Property |
-| Protection Of Cultural Property, General | Protection of Cultural Property |
-| Protection Of Cultural Property, Special | Protection of Cultural Property |
 
 ---
 
