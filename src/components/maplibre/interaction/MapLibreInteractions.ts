@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -987,7 +987,7 @@ export class MapLibreInteractions {
      */
     private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
         const drawn = this.anchorDraw(name, vertices);
-        if (drawn) return buildTacticalGraphic(name, drawn.geometry, drawn.properties, resolutionOf(this.map));
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
@@ -1011,7 +1011,25 @@ export class MapLibreInteractions {
             ...this.sizeFromDraw(name, wants, vertices),
         };
 
-        return buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties), resolutionOf(this.map));
+    }
+
+    /**
+     * Opens a newly drawn standoff-width graphic with a gap, and leaves every other build
+     * alone.
+     *
+     * **Here rather than in `sizeDefaults`, because only this function means "new".** That
+     * one runs on a restore and a rebuild too, and for the multiple-strike zone an absent
+     * width is not a gap to fill — it is the legacy two-ring description saying its base
+     * carries both rings. Seeding one there made the generator read those points as a
+     * single traced ring and the symbol came back as a self-crossing star, on both engines.
+     * OpenLayers gates the same seed on `shapingFromGesture`; this is that gate here.
+     * @see usesStandoffWidth, LineGraphicBase.standoff
+     */
+    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties): TacticalGraphicProperties {
+        if (!usesStandoffWidth(name) || properties.width !== undefined) return properties;
+        const standoff = defaultStandoffMetres(name, resolutionOf(this.map));
+        return standoff === undefined ? properties : {...properties, width: standoff};
     }
 
     /**
