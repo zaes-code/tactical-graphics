@@ -10,7 +10,7 @@ import type {Feature, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import * as turf from '../core/turf';
 import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
-import {allowedGestures, dropSizePx, hasDerivedAnchors} from '../core/symbology';
+import {allowedGestures, drawClickCount, dropSizePx, hasDerivedAnchors} from '../core/symbology';
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
@@ -150,24 +150,45 @@ describe('APP-06 343300 — demonstration', () => {
         expect(meters(parts[0][1], parts[2][0]) / SIZE).toBeCloseTo(0.7, 2);
     });
 
-    it('reads all four points instead of recomputing two of them', () => {
+    it('normalizes a splayed four-point base into parallel legs of one length', () => {
         /*
-         * **The reversal.** This used to assert that a base whose four points had been placed
-         * freehand *resolved back* to a canonical shape — equal legs, a fixed 0.7 opening —
-         * because points 3 and 4 were derived from 1 and 2. That is not what 343300 says:
-         * *"Points 1 and 2 and points 3 and 4 determine the length of each side"* is two
-         * lengths, and nothing in the rule makes the sides parallel. All four are read now.
-         * (User's call, 2026-09-06.)
+         * **The operator states three things, and the fourth follows.** An earlier pass read
+         * all four points freehand, on the reading that *"Points 1 and 2 and points 3 and 4
+         * determine the length of each side"* is two independent lengths. It draws a symbol
+         * nobody recognises: the legs splay, the turn goes oval, and the Template shows one
+         * figure. The shape is held to the user's rule instead (2026-09-06): *"the lines
+         * across from each other must be parallel and same size at all times"*.
+         *
+         * So points 1 and 2 are the operator's exactly, point 3 is read for its distance
+         * across the first leg and squared onto the perpendicular at point 2, and point 4 is
+         * point 3 displaced by point 2 → point 1. @see hairpinAnchors
          */
         const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
         const parts = (drop(0, placed).graphic.geometry as MultiLineString).coordinates;
-        // Each of the four lands where it was put: leg 1 is P1→P2 and leg 2 is P3→P4.
+        // The first leg is the operator's, end to end.
         expect(meters(parts[0][0], placed[0])).toBeLessThan(1);
         expect(meters(parts[0][1], placed[1])).toBeLessThan(1);
-        expect(meters(parts[2][0], placed[2])).toBeLessThan(1);
-        expect(meters(parts[2][1], placed[3])).toBeLessThan(1);
-        // …and the two sides are free to differ, which is the whole point of placing them.
-        expect(meters(parts[0][0], parts[0][1])).not.toBeCloseTo(meters(parts[2][0], parts[2][1]), -1);
+        // The second is the same length, and opposed — which is what the picture is.
+        expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(meters(parts[0][0], parts[0][1]), -1);
+        const out = turf.bearing(turf.point(parts[0][0]), turf.point(parts[0][1]));
+        const back = turf.bearing(turf.point(parts[2][0]), turf.point(parts[2][1]));
+        expect(Math.abs(((out - back + 360) % 360) - 180)).toBeLessThan(1);
+        // The turn's diameter leaves point 2 square to the leg, so the arc is tangent to both.
+        const across = turf.bearing(turf.point(parts[0][1]), turf.point(parts[2][0]));
+        expect(Math.abs((((across - out + 360) % 360) - 90) % 180)).toBeLessThan(1);
+    });
+
+    it('is idempotent — normalizing an already-normal base changes nothing', () => {
+        // The base is re-derived on every render, so a save, a restore and a redraw all run
+        // it again. A normalization that moved the shape a little each time would walk it
+        // away from where it was drawn over a session of edits.
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const corners = (base: Position[]): Position[] => {
+            const parts = (drop(0, base).graphic.geometry as MultiLineString).coordinates;
+            return [parts[0][0], parts[0][1], parts[2][0], parts[2][1]];
+        };
+        const settled = corners(placed);
+        corners(settled).forEach((point, i) => expect(meters(point, settled[i])).toBeLessThan(1));
     });
 
     it('still resolves a base written before the four were placed', () => {
@@ -208,27 +229,42 @@ describe('APP-06 343300 — demonstration', () => {
         }
     });
 
-    it('puts a grip on each of the four points, in the plate\'s own order', () => {
-        // It published `[edge, centre]` — the point-anchored contract — while the symbol was
-        // dropped whole, so the only draggable mark scaled a shape the operator could not
-        // otherwise change. Every point is placed now, so every point is grabbable.
+    it('puts a grip on each of the three placed points, and none on the derived fourth', () => {
+        /*
+         * It published `[edge, centre]` — the point-anchored contract — while the symbol was
+         * dropped whole, so the only draggable mark scaled a shape the operator could not
+         * otherwise change. Three points are placed now and each is grabbable; point 4 is
+         * where "parallel and the same length" puts it, and a grip on a derived point is a
+         * grip that cannot move it. That is 343500 envelopment's contract too.
+         * @see hairpinFourthPoint, ANCHOR_VERTEX
+         */
         const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
         const rendered = drop(0, placed);
         const handles = (rendered.handles.geometry as {coordinates: Position[]}).coordinates;
-        expect(handles).toHaveLength(4);
-        handles.forEach((h, i) => expect(meters(h, placed[i])).toBeLessThan(1));
+        expect(handles).toHaveLength(3);
+        const parts = (rendered.graphic.geometry as MultiLineString).coordinates;
+        // Grips 1 and 2 are the operator's own points; grip 3 is the squared bend, which is
+        // where the second leg actually starts — not the raw click, which drifted along it.
+        expect(meters(handles[0], placed[0])).toBeLessThan(1);
+        expect(meters(handles[1], placed[1])).toBeLessThan(1);
+        expect(meters(handles[2], parts[2][0])).toBeLessThan(1);
     });
 
-    it('is drawn in four clicks, and every point can be modified', () => {
+    it('is drawn in three clicks and stored as four, with every placed point modifiable', () => {
         /*
          * **It was a one-click drop.** `dropSizePx` gave it a leg length from which the U's
          * opening and all three other points followed, so the operator stated position and
          * nothing else — and `modify` was off, because there was no vertex whose movement
-         * meant anything. 343300 names four anchor points; the draw asks for four and each
-         * one is draggable. (User's call, 2026-09-06.)
+         * meant anything.
+         *
+         * 343300 names four anchor points and the base still stores four, which is what
+         * `baseVertexCount` is for. The **draw** asks for three: point 4 carries no decision,
+         * so asking for it is asking the operator to hit a point that is already determined.
+         * (User's call, 2026-09-06: "Only 3 clicks, we'll auto-calculate the 4th point".)
          */
         expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeUndefined();
         expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(drawClickCount(TacticalGraphicName.Demonstration)).toBe(3);
         expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
         expect(allowedGestures(TacticalGraphicName.Demonstration)).toEqual({
             translate: true,

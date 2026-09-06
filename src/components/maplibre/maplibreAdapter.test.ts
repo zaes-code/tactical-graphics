@@ -585,13 +585,15 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
         });
 
-        it('reads all four points, and rewrites none of them', () => {
+        it('squares a splayed base back to parallel legs, on this engine too', () => {
             /*
-             * **The reversal, on this engine too.** It used to assert that points 3 and 4 were
-             * *overwritten* with a canonical layout derived from points 1 and 2 — equal legs, a
-             * fixed opening. 343300 says *"Points 1 and 2 and points 3 and 4 determine the
-             * length of each side"*, which is two lengths, and says nothing about the sides
-             * being parallel. Each point is the operator's as of 2026-09-06.
+             * **The constraint has to hold on both engines, because neither drag knows this
+             * shape.** MapLibre and OpenLayers both move a base vertex straight to the pointer,
+             * so a shape whose legs must stay parallel and equal can only be held by re-deriving
+             * the base on every render — which is where this asserts it. An earlier pass read all
+             * four points freehand and the legs splayed under exactly this drag.
+             * (User's call, 2026-09-06: "dragging point 2 or 3 breaks parallely of those
+             * points".) @see hairpinAnchors
              */
             const placed = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
             const built = buildTacticalGraphic(
@@ -601,10 +603,25 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
                 RESOLUTION,
             )!;
             const anchors = (built.base.geometry as {coordinates: number[][]}).coordinates;
-            placed.forEach((point, i) => {
+            expect(anchors).toHaveLength(4);
+            // Points 1 and 2 are the operator's; 3 is squared and 4 follows from the three.
+            placed.slice(0, 2).forEach((point, i) => {
                 expect(anchors[i][0]).toBeCloseTo(point[0], 4);
                 expect(anchors[i][1]).toBeCloseTo(point[1], 4);
             });
+            // **On the ground, not in degrees.** A degree of longitude is shorter at the far
+            // leg's higher latitude, so two legs of one length measure 0.9% apart under a
+            // plain `hypot` — enough to fail an assertion that the geometry satisfies.
+            const ground = (a: number[], b: number[]) => {
+                const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+                return Math.hypot((b[0] - a[0]) * scale, b[1] - a[1]);
+            };
+            const bearing = (a: number[], b: number[]) => {
+                const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+                return Math.atan2((b[0] - a[0]) * scale, b[1] - a[1]);
+            };
+            expect(Math.abs(bearing(anchors[0], anchors[1]) - bearing(anchors[3], anchors[2]))).toBeLessThan(0.02);
+            expect(ground(anchors[2], anchors[3]) / ground(anchors[0], anchors[1])).toBeCloseTo(1, 2);
             expect(paintTacticalGraphic(built, context).length).toBeGreaterThan(0);
         });
     });

@@ -111,7 +111,17 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // 270502 numbers the longest arrow's tip third, which is where ours already was.
     // @see Block, blockAnchors
     TacticalGraphicName.Penetration,                      // 341800 Penetrate
-    TacticalGraphicName.ReliefInPlace,                    // 341900 "Point 1 defines the tip of the first arrowhead"
+    // **341900 left on 2026-09-06**, for the same reason the two blocks did. It was here
+    // because the standard numbers the first arrowhead's tip as point 1 while the old
+    // two-point generator drew that arrow on the *last* vertex. The base carries all four
+    // points in the standard's own order now, so a reversal hands the generator
+    // `[P4, P3, P2, P1]` and draws the hairpin backwards -- reported as "RIP is drawing
+    // points in the wrong order based on template". A legacy two-point save still needs the
+    // flip and gets it in `ReliefInPlace.points`, the one place that can tell the two base
+    // shapes apart. @see ReliefInPlace
+    //
+    // 343300 demonstration was never here: its point 1 is an arrowhead tip too, but its
+    // four points were derived rather than placed until 2026-09-06 and no reversal applied.
 
     // -- The V --
     // 140500 is the one that does not read "tip first": "Point 1 defines the **vertex**

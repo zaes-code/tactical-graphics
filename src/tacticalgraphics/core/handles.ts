@@ -815,6 +815,15 @@ export function rotationPivot(
         const positions = flattenPositions(geometry.coordinates);
         if (positions.length >= 1) return positions[0];
     }
+    /*
+     * **343300 and 341900 turn about point 1**, the arrowhead tip — the end the operator
+     * places first and the one the symbol is read from. Turning about the frame's centre
+     * swung the tip off the ground it was drawn on. (User's call, 2026-09-06.)
+     */
+    if (name === TacticalGraphicName.Demonstration || name === TacticalGraphicName.ReliefInPlace) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 1) return positions[0];
+    }
     return rotationAnchor(geometry, name);
 }
 
@@ -1164,6 +1173,15 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
      * the whole symbol about the point the operator thinks of as its origin.
      */
     [TacticalGraphicName.SearchArea]: 0,
+    /*
+     * **343300 and 341900's fourth point is derived, so it gets a dot rather than a grip.**
+     *
+     * The operator places three; point 4 is wherever "parallel and the same length" puts it.
+     * A draggable grip on it would offer a freedom the shape does not have, and taking it
+     * would break the parallel the symbol is. @see hairpinAnchors
+     */
+    [TacticalGraphicName.Demonstration]: 3,
+    [TacticalGraphicName.ReliefInPlace]: 3,
 };
 
 /**
