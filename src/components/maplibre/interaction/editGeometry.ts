@@ -93,6 +93,17 @@ function pivotOf(description: GraphicDescription): Position {
     return centerOf(description.geometry, description.properties.name);
 }
 
+/**
+ * The point a **rotate** turns about, which is the frame origin for all but a couple of
+ * graphics. @see rotationPivot for why it is a separate question.
+ */
+function turningPointOf(description: GraphicDescription): Position {
+    return rotationPivot(
+        description.geometry as {type: string; coordinates: unknown},
+        description.properties.name,
+    );
+}
+
 /** Moves a graphic by the metric offset between two lon/lat points. */
 export function translate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
     const [fromX, fromY] = toMercator([from[0], from[1]]);
@@ -124,7 +135,11 @@ export function translate(description: GraphicDescription, from: Position, to: P
  * catalog, which reads as a broken gesture rather than a wrong branch.
  */
 export function rotate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
-    const center = toMercator(pivotOf(description) as [number, number]);
+    // **`turningPointOf`, not `pivotOf`.** Every other gesture in this file measures from
+    // the symbol's frame origin — a resize scales from it, `setBend` and `setReach` read
+    // their cursor offsets against it — so that point cannot also carry "but this symbol
+    // turns about somewhere else". Turn is where the two differ. @see rotationPivot
+    const center = toMercator(turningPointOf(description) as [number, number]);
     // **A grab on the pivot rotates by the direction of the drag**, which is what
     // OpenLayers does: its start angle there is `atan2(0, 0)` = 0, so the graphic turns
     // to face wherever the cursor went. Reproduced explicitly rather than left to
@@ -580,6 +595,62 @@ export function setBend(
         : clamp((dx * Math.sin(theta) + dy * -Math.cos(theta)) / size);
 
     return {...description, properties: {...description.properties, bend}};
+}
+
+/**
+ * Moves **one end of a chord to the cursor and leaves the other where it is** — the rear
+ * handle. The twin of `setReach`, and the difference between them is the whole point of the
+ * two roles existing: `setReach` measures from the centre, so it moves both ends at once,
+ * while this pins the far end and lengthens the symbol from it.
+ *
+ * 270504's point 2 is the rear of the arrow, and grabbing the back of an arrow to make it
+ * longer should not also drag its head backwards. (User's call, 2026-09-05.)
+ *
+ * Rebuilt through `drawnAnchorFrame` rather than by hand, so the centre, the half-length and
+ * the bearing are the same three numbers the library would read back off the new chord —
+ * geodesically, which is what `bowFromAnchors` does and what the anchors were written with.
+ * Computing a Mercator midpoint here instead would put the centre metres away from where
+ * every other reader thinks it is. `withAnchorGeometry` then expands the two ends back into
+ * the plate's three points, so `bend` has to survive the round trip explicitly.
+ */
+export function setExtend(
+    description: GraphicDescription,
+    cursor: Position,
+    anchoredIndex = 0,
+): GraphicDescription {
+    const name = description.properties.name;
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString' || !geometry.coordinates?.length) return description;
+
+    const current = drawnAnchorFrame(name, geometry.coordinates);
+    /*
+     * **Which end stays put depends on how the symbol numbers its points**, so it is the
+     * library's answer rather than this file's. Turn stores `[tip, rear, …]` and its grip is
+     * the rear, so index 0 holds; Envelopment stores `[point 1, point 2, …]` and its grip
+     * *is* point 1, so index 1 holds. The chord is rebuilt with each end back in its own
+     * slot, or the two points would swap meaning on the way out. @see HandleContract.extendAnchor
+     */
+    const anchored = geometry.coordinates[anchoredIndex];
+    if (!anchored) return description;
+    const chord: Position[] = [];
+    chord[anchoredIndex] = anchored;
+    chord[anchoredIndex === 0 ? 1 : 0] = [cursor[0], cursor[1]];
+
+    const next = drawnAnchorFrame(name, chord);
+    if (!next || !(next.size > 0)) return description;
+
+    return {
+        ...description,
+        geometry: {type: 'LineString', coordinates: chord},
+        properties: {
+            ...description.properties,
+            radius: next.size,
+            rotation: next.rotation,
+            // The two-point chord carries no bow, so the depth has to be carried over or
+            // the curve would snap to its default the moment the rear was touched.
+            bend: description.properties.bend ?? current?.bend,
+        },
+    };
 }
 
 /**

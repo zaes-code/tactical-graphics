@@ -2,8 +2,8 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, GeometryCollection, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
-import {BowFrame, bowFromAnchors} from "../core/anchors";
-import {toRadians} from "../core/math";
+import {BowFrame, anchorsForBow, bowFromAnchors} from "../core/anchors";
+import {toDegrees, toRadians} from "../core/math";
 import * as turf from '../core/turf';
 
 /**
@@ -46,6 +46,39 @@ const LABEL_GAP_RATIO = 0.16;
 export function clampTurnBend(bend: number): number {
     const magnitude = Math.min(TURN_MAX_BEND, Math.max(TURN_MIN_BEND, Math.abs(bend)));
     return bend < 0 ? -magnitude : magnitude;
+}
+
+/**
+ * `bend` from how far the bend handle has been dragged off the chord.
+ *
+ * **The factor of two is the Bézier, not a fudge.** The handle is anchor point 3, which
+ * sits at the curve's *apex*; the curve is a quadratic Bézier, so its apex is half way to
+ * the control point that `bend` measures. A reader that took the offset at face value moved
+ * the curve half as far as the cursor, which reads as the handle slipping.
+ *
+ * `clockwiseOffset` is the cursor's signed distance from the chord, measured toward the side
+ * `bendLine` bows to — the same convention `bowFromAnchors` uses when it reads the stored
+ * point back, which is why that function's formula and this one are the same arithmetic.
+ * Stated here because both renderers do this drag and a rule stated twice drifts.
+ * @see anchorsForBow, ai/conventions.md "A symbology fact never lives in a holder"
+ */
+export function turnBendFromOffset(clockwiseOffset: number, size: number): number {
+    if (!(size > 0)) return TURN_DEFAULT_BEND;
+    return clampTurnBend((2 * clockwiseOffset) / size);
+}
+
+/**
+ * `bend` in the shape a renderer's bend drag hands it — the twin of `envelopmentBendFrom`.
+ *
+ * `perpendicular` is measured to the **left** of the chord, which is the convention the
+ * renderers' local frame uses; `bendLine` bows the other way, so the sign flips on the way
+ * in. That flip is the same one `bowFromAnchors` applies when it reads the stored point
+ * back, and it lives here so neither engine has to remember which way round it goes.
+ */
+export function turnBendFrom(along: number, perpendicular: number, size: number, currentBend: number): number {
+    void along;
+    if (!(size > 0)) return clampTurnBend(currentBend);
+    return turnBendFromOffset(-perpendicular, size);
 }
 
 /**
@@ -185,19 +218,33 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
     }
 
     /**
-     * `[bendHandle, arrowTip, center]` — center last, per the point-graphic
-     * convention. The index order is a contract: `TurnGraphicBase.setBandRange`
-     * switches on it.
+     * **The three handles are the three anchor points** — `[tip, rear, bend]`, APP-06
+     * 270504's own numbering. The index order is a contract: `TurnGraphicBase.setBandRange`
+     * and `handleContract` both switch on it.
      *
-     * - **`[0]` bend** is the Bézier's control point: on the perpendicular
-     *   through the chord's midpoint, at `bend × size`. That is twice as far
-     *   out as the curve's apex, which is the point — it keeps the handle off
-     *   the curve and clear of the "T" sitting on it. Dragging it away from the
-     *   chord sharpens the turn; dragging it across flips the direction.
-     * - **`[1]` arrow tip** is the far end of the chord, which is exactly where
-     *   `createArrowHeadPolygon` puts the point of the head. Dragging it sets
-     *   both `size` and `rotation` — it is where the turn ends, so it is the
-     *   one handle that means something at the arrowhead.
+     * - **`[0]` point 1, the arrowhead's tip.** The far end of the chord, which is exactly
+     *   where `createArrowHeadPolygon` puts the point of the head. Dragging it sets both
+     *   `size` and `rotation`.
+     * - **`[1]` point 2, the rear.** The other end of the chord. It had no handle at all
+     *   until 2026-09-05, so the one end of the symbol an operator would naturally grab to
+     *   make it longer was the one end that could not be grabbed. (User's report.)
+     * - **`[2]` point 3, the bend.** On the curve's apex. Dragging it away from the chord
+     *   sharpens the turn; dragging it across flips the direction.
+     *
+     * ## Why this is `anchorsForBow` rather than its own arithmetic
+     *
+     * It used to be `[control, tip, center]`: a bend handle at `|bend| × size` — the
+     * Bézier's *control* point, deliberately twice as far out as the curve — plus the tip,
+     * plus the centre, which `publishHandles` then demoted to an inert dot. So the symbol
+     * published one grip that was **1384 km off its own curve** at a chord half-length of
+     * 1.3 Mm, one that was on it, and one dot that did nothing; and the handles disagreed
+     * with the anchor points the base stored, which is the disagreement the user saw as
+     * "point 3 is on the line but not while editing".
+     *
+     * Emitting the stored anchors directly removes the second statement rather than
+     * correcting it — the handles cannot drift from the geometry because they *are* the
+     * geometry. It also drops the centre, which is what leaves exactly three marks.
+     * @see anchorsForBow, bowFromAnchors
      */
     generateHandles(base: Feature<any>, opts?: TurnOptions): Feature<MultiPoint> {
         const {center, angle, size, bend} = this.frame(base, opts);

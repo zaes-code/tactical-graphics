@@ -517,16 +517,22 @@ export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
  * The bend an arrow-tip drag asks for, from the cursor's position about the graphic's
  * own frame.
  *
- * **The perpendicular offset, as a turn's bend handle uses.** This used to read the
- * distance *along* the approach instead, and it had to: the handle sat on the arrow tip,
- * on the axis, where the perpendicular carries no radius at all. Moving the handle to the
- * arc's apex — one radius off the axis — makes its own offset the radius and its own sign
- * the flank, so dragging it across the run flips the hook, which is what the handle
- * looks like it should do and previously did not.
+ * **The distance along the axis carries the radius; the offset across it carries only the
+ * flank.** Point 3 is the arrowhead's tip and sits *on* the axis, at `size + 2 * radius` from
+ * the frame origin — so the radius is half of however far past the run's end the cursor is,
+ * and the perpendicular carries no radius at all.
  *
- * `along` is no longer read. It stays in the signature because both engines call this
- * through `applyHandleRole` and a shrinking argument list is a worse change than an
- * unused one; the parameter documents what the frame offers.
+ * This read the perpendicular for the magnitude between 2026-09-05 and 2026-09-06, on the
+ * belief that the grip had been moved off the axis to the arc's apex. It never was, and the
+ * pairing failed both ways: dragging *along* the run changed nothing (measured — eight 15 px
+ * steps moved the handle 0 px and left `bend` at 0.12), while the first pixel *across* it took
+ * the perpendicular from 0 to a full radius and snapped the hook open. Moving the grip to
+ * match was the wrong half to change: point 3 is a placed anchor point and the plate puts it
+ * on the axis. (User's report, 2026-09-06.)
+ *
+ * The flank still comes from the perpendicular, past a threshold, so dragging the tip across
+ * the run turns the hook over — and a grip resting on the axis cannot flip on jitter alone.
+ * @see ENVELOPMENT_FLIP_THRESHOLD, anchorsForRunAndArc
  *
  * All planar, in projected meters — the frame both renderers edit in.
  */
@@ -536,14 +542,14 @@ export function envelopmentBendFrom(
     size: number,
     currentBend: number,
 ): number {
-    void along;
     if (!(size > 0)) return clampEnvelopmentBend(currentBend);
 
-    const radius = Math.abs(perpendicular);
+    // `along` is measured from the frame origin and the tip sits at `size + 2 * radius`,
+    // so the radius is half the reach past the run's end. Never negative: dragging the tip
+    // back through the run's end collapses the arc rather than turning it inside out.
+    const radius = Math.max(0, (along - size) / 2);
     const current = Math.sign(currentBend) || 1;
-    // A handle resting on the axis must not flip on jitter alone; below the threshold it
-    // keeps the flank it had. @see ENVELOPMENT_FLIP_THRESHOLD
-    const side = radius > size * ENVELOPMENT_FLIP_THRESHOLD * 0.1 ? Math.sign(perpendicular) : current;
+    const side = Math.abs(perpendicular) > size * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perpendicular) : current;
     return clampEnvelopmentBend((side || 1) * (radius / size));
 }
 
@@ -707,12 +713,33 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * back from the centre along the approach — so it carries no grip of its own; the centre
      * is the move affordance. (User's call, 2026-08-27.)
      */
+    /**
+     * `[arcTip, lineEnd, point1]` — one grip per thing an operator can change.
+     *
+     * The third used to be the frame's centre, which `publishHandles` demotes to the grey
+     * inert dot: a mark in the middle of the run that cannot be dragged, while **point 1 —
+     * "the beginning of the straight line" — had no grip at all**. The dot is gone and point
+     * 1 has it instead, so all three marks do something. (User's call, 2026-09-05.)
+     *
+     * Translate is unaffected: it reads `centerCoordinate()`, which is holder state, not the
+     * dot that used to sit on it.
+     */
     generateHandles(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
-        const {center, angle, size, radius} = this.frame(base, opts);
+        const {center, angle, size, radius, side} = this.frame(base, opts);
         return this.asMultiPointFeature([
+            /*
+             * **Point 3 — the arrowhead's tip**, which is where `anchorsForRunAndArc` puts it:
+             * `at(size + 2 * radius, 0)`, on the axis. It is a point the operator placed, so it
+             * gets the grip; point 4, the apex, is derived and gets none.
+             *
+             * The tip was briefly moved off the axis to the frame's own perpendicular, on a
+             * misreading of `envelopmentBendFrom`'s comment — which left a grip floating above
+             * the run touching nothing, and point 3 with no grip at all. (User's report,
+             * 2026-09-06.) The reader was the half that was wrong, and it is fixed there.
+             */
             this.at(center, angle, size + 2 * radius, 0),
             this.at(center, angle, size, 0),
-            center,
+            this.at(center, angle, -size, 0),
         ]);
     }
 
