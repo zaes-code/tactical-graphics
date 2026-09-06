@@ -212,6 +212,34 @@ describe('APP-06 343300 — demonstration', () => {
         }
     });
 
+    it('bulges the turn away from the arrowheads on BOTH sides of the first leg', () => {
+        /*
+         * **The side the turn falls on is the operator's, and the side it bulges to is not.**
+         * Point 3 can be dragged across the first leg, which mirrors the whole symbol; the
+         * turn still has to close the two legs from outside. Both generators passed a
+         * hardcoded flip to `createSemicircle`, so one of the two handednesses came out with
+         * the arc folded back between the legs — a flattened Z where the plate draws a U.
+         * (User's report, 2026-09-06: "demonstration is turning the arch inwards when dragged
+         * across".) @see turnBulgesLeft
+         *
+         * Mirrored point 3s, so the two runs differ in nothing but the side.
+         */
+        for (const third of [[-75.4, 39.6], [-75.4, 37.8]] as Position[]) {
+            const parts = (drop(0, [[-77.0, 38.7], [-76.0, 38.7], third]).graphic.geometry as MultiLineString).coordinates;
+            const [tip1, bend1] = parts[0];
+            const bend2 = parts[2][0];
+            const apex = parts[1][Math.floor(parts[1].length / 2)];
+            // Along the legs' own axis the apex is past both bends, never behind them.
+            const axis = turf.bearing(turf.point(tip1), turf.point(bend1));
+            const along = (point: Position) =>
+                meters(tip1, point) * Math.cos(((turf.bearing(turf.point(tip1), turf.point(point)) - axis) * Math.PI) / 180);
+            expect(along(apex)).toBeGreaterThan(Math.max(along(bend1), along(bend2)));
+            // …and by half the opening, which is what makes it a half circle rather than a
+            // chord with a nudge: an arc on the wrong side clears the bends by nothing.
+            expect(along(apex) - along(bend1)).toBeCloseTo(meters(bend1, bend2) / 2, -2);
+        }
+    });
+
     it('bulges the turn away from the arrowheads, at every rotation', () => {
         // A turn on the wrong side folds back between the legs and the U reads as a
         // flattened Z. Derived points fix the handedness, so this is a guard on the

@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, HookFrame, hookFromAnchors, runAndArcFromAnchors} from "../core/anchors";
+import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, hairpinAnchors, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {halfWidthFromSide, sidePoint} from "./ExplosivesReadiness";
 import {toRadians} from "../core/math";
@@ -1405,7 +1405,10 @@ export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
             chord,
             span / 2,
             ReliefInPlace.CURVE_STEPS,
-            true,
+            // Away from the arrowheads, whichever side point 3 was dragged to. A hardcoded
+            // flag here drew the turn back between the legs on one of the two handednesses.
+            // @see turnBulgesLeft
+            turnBulgesLeft(p1, p2, p3),
         ) as Position[];
 
         /*
