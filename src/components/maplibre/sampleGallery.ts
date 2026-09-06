@@ -13,6 +13,7 @@ import {
     acrossPointAtEnd,
     drawsAsHairpin,
     hairpinBase,
+    synthesizedBase,
     normalizeDrawnBase,
     carriesSeparationInBase,
     frontEdgeBase,
@@ -159,19 +160,9 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * it: infiltration is in this family and also needs its point 2 *off* the chord, because
      * that offset is what bends its S — a plain front edge draws it straight.
      */
-    if (carriesSeparationInBase(name) || drawsAsHairpin(name) || name === TacticalGraphicName.Pursuit) {
-        const base: Geometry = {
-            type: 'LineString',
-            coordinates: storedOrder(
-                name,
-                // A hairpin's four stored points are three clicks, so it wants its own base
-                // rather than the front edge's fourth point. @see hairpinBase
-                drawsAsHairpin(name)
-                    ? hairpinBase([lon, lat], runHalf)
-                    : frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3, acrossPointAtEnd(name) ? 1 : 0.5),
-            ),
-        };
-        return [base, line, ring, point];
+    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3);
+    if (stated) {
+        return [{type: 'LineString', coordinates: storedOrder(name, stated)}, line, ring, point];
     }
 
     /*

@@ -24,7 +24,7 @@ import {
     listTacticalGraphicNames,
     renderTacticalGraphic,
 } from '@zaes/tactical-graphics';
-import {baseVertexCount, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {acrossPointAtEnd, baseVertexCount, generatorOrder, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {Feature, Position} from 'geojson';
 import {sampleFeatureCollection} from './sampleGallery';
 
@@ -258,5 +258,72 @@ describe('the shared sample sheet stores drawable bases', () => {
             });
         }
         expect(stray).toEqual([]);
+    });
+});
+
+/**
+ * # A cane arrow is sampled like a cane arrow, on both sheets
+ *
+ * Eight graphics draw the same picture — a straight run with a half circle hooked off its
+ * far end — and 344000 pursuit is one of them. It kept coming out unlike its siblings
+ * because the two sweeps each carried their own chain of `if`s over the same library
+ * predicates: MapLibre was given an inline `name === Pursuit` and the OpenLayers sweep
+ * never got the clause at all, so pursuit was a cane arrow on one sheet and a shallow V on
+ * the other, through three separate reports. ("Pursuit, use the same cane base for this 3
+ * point graphic. I've asked for that several times now.")
+ *
+ * What is asserted is the shape a reader can see: the same layout, to the same proportions,
+ * as the seven retrograde arrows. `synthesizedBase` is now the one answer both sheets ask
+ * for, so a graphic added to the family is laid out with it or the difference shows here.
+ */
+describe('pursuit is laid out as the cane arrow it is', () => {
+    /** The seven retrograde arrows, which draw the identical picture. @see acrossPointAtEnd */
+    const CANES = [
+        TacticalGraphicName.Delay,
+        TacticalGraphicName.Retirement,
+        TacticalGraphicName.Withdraw,
+        TacticalGraphicName.WithdrawUnderPressure,
+        TacticalGraphicName.ForwardPassageOfLines,
+        TacticalGraphicName.RearwardPassageOfLines,
+        TacticalGraphicName.Disengage,
+    ];
+
+    /**
+     * A base reduced to what its shape *is*, independent of where the cell sits: the run's
+     * length, and the third point's distance across it as a share of that run.
+     */
+    const shapeOf = (name: TacticalGraphicName, stored: number[][]) => {
+        // **Through the generator's own order**, not the stored one. Thirty-two graphics
+        // store their points tip-first and the canes are among them; pursuit is not, so a
+        // positional read compares point 1 of one against point 3 of the other and reports
+        // two identical layouts as different. @see generatorOrder, TIP_FIRST_GRAPHICS
+        const base = generatorOrder(name, stored as Position[]) as number[][];
+        const [p1, p2, p3] = base;
+        const scale = Math.cos((p1[1] * Math.PI) / 180);
+        const run = Math.hypot((p2[0] - p1[0]) * scale, p2[1] - p1[1]);
+        const across = Math.hypot((p3[0] - p2[0]) * scale, p3[1] - p2[1]);
+        return {points: base.length, acrossOverRun: +(across / run).toFixed(3)};
+    };
+
+    it('gives pursuit the same three-point layout as the seven retrograde arrows', () => {
+        const reference = shapeOf(CANES[0], sampleBase(CANES[0]));
+        // The family agrees with itself first, or the comparison below means nothing.
+        for (const name of CANES) expect(shapeOf(name, sampleBase(name))).toEqual(reference);
+        expect(shapeOf(TacticalGraphicName.Pursuit, sampleBase(TacticalGraphicName.Pursuit))).toEqual(reference);
+    });
+
+    it('hooks pursuit\'s arc off point 2, where the arc actually is', () => {
+        // The third point is the far end of the arc's diameter and the arc hooks off point
+        // 2, so a mid-run third point puts the grip half a symbol from the mark it holds -
+        // which is why a swept cane could not be dragged from point 3 while a hand-drawn one
+        // could. @see acrossPointAtEnd
+        expect(acrossPointAtEnd(TacticalGraphicName.Pursuit)).toBe(true);
+        const base = generatorOrder(TacticalGraphicName.Pursuit, sampleBase(TacticalGraphicName.Pursuit) as Position[]) as number[][];
+        const scale = Math.cos((base[0][1] * Math.PI) / 180);
+        const along = (p: number[]) =>
+            (((p[0] - base[0][0]) * scale) * ((base[1][0] - base[0][0]) * scale) + (p[1] - base[0][1]) * (base[1][1] - base[0][1]));
+        // Point 3 sits at point 2's end of the run, not in the middle of it.
+        const run = along(base[1]);
+        expect(along(base[2]) / run).toBeCloseTo(1, 1);
     });
 });

@@ -27,6 +27,7 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
+import {carriesSeparationInBase} from './handles';
 import geometryService from './GeometryService';
 import {
     anchorsForArcAndArrow,
@@ -227,6 +228,46 @@ export function hairpinBase(center: Position, half: number): Position[] {
     // The legs take the cell's full width — the turn's bulge overshoots it by a quarter,
     // which is what an arrowhead does on every other line sample too.
     return [[cx - half, cy + across / 2], [cx + half, cy + across / 2], [cx + half, cy - across / 2]];
+}
+
+/**
+ * The base a synthesiser owes this graphic — a sample sweep, a thumbnail, a fixture.
+ *
+ * **The single answer, because the question was being answered three times and drifted.**
+ * The OpenLayers sweep, MapLibre's `candidateGeometries` and the catalog generator each
+ * carried their own chain of `if`s over the same library predicates, and a clause added to
+ * one was simply absent from the others. 344000 pursuit is what that cost: it is a cane
+ * arrow like the seven retrograde graphics, MapLibre was given an inline
+ * `name === Pursuit` to put it on the front edge with them, and the OpenLayers sweep never
+ * got the clause at all — so it kept drawing pursuit as a shallow V, unlike every sibling
+ * it shares a shape with, through three separate reports. (User, 2026-09-06: "Pursuit, use
+ * the same cane base for this 3 point graphic. I've asked for that several times now.")
+ *
+ * A renderer must not decide this. `undefined` means "nothing here describes a layout for
+ * it" and the caller keeps its own default, which is the ordinary case.
+ *
+ * @param center the middle of the drawn figure, in the caller's own units
+ * @param half   its half-length, likewise — so this works in lon/lat and in metres alike
+ * @param points how many the base stores, where the caller knows. @see baseVertexCount
+ */
+export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3): Position[] | undefined {
+    if (drawsAsHairpin(name)) return hairpinBase(center, half);
+    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
+    return undefined;
+}
+
+/**
+ * Whether this graphic's points are a **front edge and a distance across it**.
+ *
+ * `carriesSeparationInBase` is the library's own statement of that shape and is almost the
+ * whole answer. 344000 pursuit is the exception: its plate numbers the points the same way
+ * — a straight run, then a point stating the arc — but it reads its own frame rather than a
+ * stored separation, so it is not in that list and must be named here. It is the same
+ * picture as the seven cane arrows, and a sheet that lays it out differently shows the odd
+ * one out. @see synthesizedBase, acrossPointAtEnd
+ */
+export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
+    return carriesSeparationInBase(name) || name === TacticalGraphicName.Pursuit;
 }
 
 /** Whether this graphic is drawn as a hairpin. @see hairpinBase, hairpinAnchors */
