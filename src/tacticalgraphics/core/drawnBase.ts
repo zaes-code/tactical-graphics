@@ -284,6 +284,46 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
          * The arc is perpendicular to the line for these too, so the third click keeps only
          * its across-axis component — the same projection, at the same point 2.
          */
+        /*
+         * **270501 / 340100 block — three clicks: the vertical line's two ends, then the
+         * horizontal line's free end.**
+         *
+         * *"Points 1 and 2 define the endpoints of the symbol's vertical line. Point 3
+         * defines the endpoint of the symbol's horizontal line."* The projection is stated
+         * outright, and 340100 states it twice over: the horizontal line's length is found
+         * *"by plotting point 3 on a plane extending perpendicularly from the midpoint of the
+         * vertical line"*, and *"will project perpendicularly from the midpoint"*.
+         *
+         * So the click's component **along** the bar is discarded and only its distance
+         * across it survives — the same reading pursuit's third click gets, and for the same
+         * reason: the symbol is a T, and a stem that met the bar at any other angle would not
+         * be one. @see Block
+         */
+        case TacticalGraphicName.Block:
+        case TacticalGraphicName.TacticalBlock:
+            return blockAnchors(clicks);
+
+        /*
+         * **270502 / 341000 disrupt — three clicks: the vertical line's two ends, then the
+         * tip of the longest arrow.**
+         *
+         * *"Points 1 and 2 define the end points of the symbol's vertical line. Point 3
+         * defines the tip of the longest arrow."*
+         *
+         * **The projection is an interpretation here, where block states it.** Disrupt's own
+         * cell says only that point 3 *"determines its length"*; it is the Template that
+         * draws all three arrows square to the bar, and its sibling 270501 — one row above,
+         * same table, same vertical-line-plus-stem construction — that says in words to plot
+         * point 3 on the perpendicular. Read any other way the three arrows would splay, and
+         * the plate draws them parallel. @see Disrupt
+         *
+         * Measured at point 2 rather than at the midpoint, because the longest arrow is the
+         * one point 3 tips and the Template springs it from the point 2 end of the bar.
+         */
+        case TacticalGraphicName.Disrupt:
+        case TacticalGraphicName.TacticalDisrupt:
+            return disruptAnchors(clicks);
+
         case TacticalGraphicName.Delay:
         case TacticalGraphicName.Retirement:
         case TacticalGraphicName.Withdraw:
@@ -451,6 +491,66 @@ function sideAnchors(clicks: Position[]): Position[] | undefined {
  * was saved on; it grows its third point the first time someone edits it, which is the
  * moment they choose that side themselves.
  */
+/**
+ * The distance from `from` to `at`, measured **across** `axis` only.
+ *
+ * Signed: the magnitude is how far off the line the point fell and the sign is which side.
+ * The component along the axis is dropped, which is what "plot point 3 on a plane extending
+ * perpendicularly" asks for. Shared by the two graphics whose stem leaves a bar at a right
+ * angle. @see blockAnchors, disruptAnchors
+ */
+function acrossAxis(from: Position, at: Position, axis: number): number {
+    const reach = turf.distance(turf.point(from), turf.point(at), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return 0;
+    const toPoint = turf.bearing(turf.point(from), turf.point(at));
+    const across = reach * Math.sin(((toPoint - axis) * Math.PI) / 180);
+    return isFinite(across) ? across : 0;
+}
+
+/**
+ * 270501 / 340100's three points, with the third pulled onto the perpendicular at the
+ * vertical line's **midpoint**.
+ *
+ * The head of the T is points 1 and 2; the stem runs from the middle of that bar out to
+ * point 3. Only the stem's *length* and *side* are the operator's to state, so the click is
+ * read for those two things and placed square to the bar.
+ */
+function blockAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [top, bottom, click] = clicks;
+
+    const bar = turf.bearing(turf.point(top), turf.point(bottom));
+    const middle = turf.midpoint(turf.point(top), turf.point(bottom)).geometry.coordinates as Position;
+    const across = acrossAxis(middle, click, bar);
+    if (across === 0) return undefined;
+
+    const stem = turf.destination(turf.point(middle), Math.abs(across), bar + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [top, bottom, stem];
+}
+
+/**
+ * 270502 / 341000's three points, with the third pulled onto the perpendicular at **point 2**.
+ *
+ * Point 3 tips the longest arrow, and the Template springs that arrow from the point 2 end of
+ * the vertical line — so the perpendicular is taken there rather than at the middle, and the
+ * stored point lands exactly where the arrowhead is drawn.
+ */
+function disruptAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [first, second, click] = clicks;
+
+    const bar = turf.bearing(turf.point(first), turf.point(second));
+    const across = acrossAxis(second, click, bar);
+    if (across === 0) return undefined;
+
+    const tip = turf.destination(turf.point(second), Math.abs(across), bar + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [first, second, tip];
+}
+
 function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
     if (clicks.length < 3) return undefined;
     const [tip, join, click] = clicks;

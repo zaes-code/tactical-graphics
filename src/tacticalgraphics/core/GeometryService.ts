@@ -1791,8 +1791,9 @@ class GeometryService {
 
         let middleArrow = this.computeArrowheadPoints(base[base.length - 2], base[base.length - 1], size / 2, 45);
         let bearing = turf.bearing(topArrow.geometry.coordinates[0][1], bottomArrow.geometry.coordinates[0][1]);
-        let top = turf.destination(topArrow.geometry.coordinates[0][1], size * .75, bearing - 180, {units: 'meters'})
-        let bottom = turf.destination(bottomArrow.geometry.coordinates[0][1], size * .75, bearing, {units: 'meters'})
+        const overhang = halfHeight === undefined ? size * .75 : Math.max(halfHeight - Math.abs(size), 0);
+        let top = turf.destination(topArrow.geometry.coordinates[0][1], overhang, bearing - 180, {units: 'meters'})
+        let bottom = turf.destination(bottomArrow.geometry.coordinates[0][1], overhang, bearing, {units: 'meters'})
 
         return turf.multiLineString([
             ...topArrow.geometry.coordinates,

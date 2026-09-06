@@ -1,6 +1,6 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
-import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
+import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import * as turf from '../core/turf';
 
@@ -17,6 +17,75 @@ import * as turf from '../core/turf';
  * previous size while still reading as the doctrinal shape.
  */
 const FIRE_POSITION_BAR_RATIO = 0.45;
+
+/**
+ * Feather length as a share of the bar's half-length, and arrowhead length in the same
+ * units — the two proportions 152100's plate leaves to the picture once its four points are
+ * placed. Both carried over from `GeometryService`'s FIRE_POSITION_* set, which measured
+ * them off the FM 1-02.2 table 6-1 constructs; the anchor points changed on 2026-09-06, the
+ * decoration did not.
+ */
+const SBF_FEATHER_RATIO = 0.95;
+const SBF_ARROWHEAD_RATIO = 0.52;
+
+/**
+ * 152100 support by fire, from the four points its Draw Rules name.
+ *
+ * > This symbol requires four anchor points. Points 1 and 2 define the endpoints of the
+ * > straight line on the back side of the symbol. Points 3 and 4 define the tips of the
+ * > arrowheads.
+ * >
+ * > Points 1 and 2 determine the length of the straight line on the back side of the symbol.
+ * > **The rear of the arrows should connect to points 1 and 2.**
+ *
+ * So every line in the symbol is stated: the bar is point 1 to point 2, and one arrow rises
+ * from each of its ends to the tip the operator placed. Nothing is derived but the feathers
+ * swept back off the bar's ends and the arrowheads, which are decoration.
+ *
+ * **It was a two-point graphic until 2026-09-06** — a shaft, off which the bar, both arrows
+ * and their spread were all computed by ratio. The arrowheads "indicate the left and right
+ * limits of coverage that the firing position is meant to support", and a limit of coverage
+ * derived from a ratio is not a limit anybody stated.
+ *
+ * Returned as one polyline for the bracket plus a shaft and a head per arrow.
+ * `firePositionStyles` strokes the whole collection, so the order carries no meaning here.
+ */
+function supportByFireFromAnchors(coords: Position[]): Position[][] {
+    const [rearLeft, rearRight, tipLeft, tipRight] = coords;
+
+    const bar = turf.bearing(turf.point(rearLeft), turf.point(rearRight));
+    const barHalf = turf.distance(turf.point(rearLeft), turf.point(rearRight), {units: 'meters'}) / 2;
+
+    /*
+     * Which side the arrows rise on, so the feathers sweep back the other way. Taken from the
+     * across-bar component of point 1 -> point 3: the plate draws the feathers opposite the
+     * arrows, and a symbol drawn "upside down" has to keep them there.
+     */
+    const toTip = turf.bearing(turf.point(rearLeft), turf.point(tipLeft));
+    const side = Math.sign(Math.sin(((toTip - bar) * Math.PI) / 180)) || 1;
+
+    const featherLength = barHalf * SBF_FEATHER_RATIO;
+    const feather = (from: Position, bearing: number): Position =>
+        turf.destination(turf.point(from), featherLength, bearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+
+    // Back along the bar and away from the arrows, 45 degrees off each end.
+    const bracket = [
+        feather(rearLeft, bar + 180 + 45 * side),
+        rearLeft,
+        rearRight,
+        feather(rearRight, bar - 45 * side),
+    ];
+
+    const headLength = barHalf * SBF_ARROWHEAD_RATIO;
+    return [
+        bracket,
+        [rearLeft, tipLeft],
+        geometryService.computeArrowheadPoints(rearLeft, tipLeft, headLength, 45),
+        [rearRight, tipRight],
+        geometryService.computeArrowheadPoints(rearRight, tipRight, headLength, 45),
+    ];
+}
 
 /**
  * Block-arrow mission task graphic with a configurable name.
@@ -75,12 +144,22 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
             return geometryService.getAttackByFireSymbol(base.geometry.coordinates, this.barHalf(base));
         }
         if (this.name === TacticalGraphicName.SupportByFire) {
-            return geometryService.getSupportByFireSymbol(base.geometry.coordinates, this.barHalf(base));
+            const coords = base.geometry.coordinates;
+            // Four placed points as of 2026-09-06. A base saved before that describes a shaft
+            // and nothing else, and the ratio-built symbol is what it still draws as.
+            if (coords.length >= 4) return this.asMultiLineStringFeature(supportByFireFromAnchors(coords));
+            return geometryService.getSupportByFireSymbol(coords, this.barHalf(base));
         }
         return geometryService.getBlockArrow(base, opts.size);
     }
 
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
+        if (this.name === TacticalGraphicName.SupportByFire && base.geometry.coordinates.length >= 4) {
+            // `[point 1, point 2, point 3, point 4]` — the bar's two ends and both arrow tips,
+            // every one placed. There is no width to drag any more: the bar was a ratio of the
+            // shaft and it is two anchor points now. @see handleContract
+            return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
+        }
         if (this.isFirePosition()) {
             // [offsetHandle (dropped by the openlayers Block holder — the symbol is
             //  ratio-locked, so there is no width to drag), startHandle, endHandle]
