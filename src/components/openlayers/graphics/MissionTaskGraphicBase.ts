@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import { anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -838,36 +838,6 @@ export class ContainGraphicBase extends MissionTaskGraphicBase {
     }
 }
 
-/**
- * Ambush — a 120 degree arc with an arrow off its back.
- *
- * Carries `arrowReach` for the same reason Pursuit carries `lineRatio`: APP-06 141700
- * makes point 1 the arrowhead's actual tip, so how far the arrow reaches is a
- * proportion the user set by drawing, and a holder that knew only centre / size /
- * rotation would snap it back to the family default on the next regeneration.
- */
-export class AmbushGraphicBase extends MissionTaskGraphicBase {
-    private arrowReach = ARC_ARROW_DEFAULT_REACH;
-
-    protected anchorPoints(): Position[] {
-        return drawnAnchors(this.name, {
-            center: toLonLat(this.center) as Position,
-            size: this.size,
-            rotation: this.rotation,
-            arrowReach: this.arrowReach,
-        }) ?? [];
-    }
-
-    protected adoptAnchors(coords: Position[]): boolean {
-        const frame = arcAndArrowFromAnchors(coords);
-        if (!frame) return false;
-        this.center = fromLonLat(frame.center as Coordinate);
-        this.rotation = (frame.angle * 180) / Math.PI;
-        this.arrowReach = frame.arrowReach;
-        this.updateGeom({size: frame.radius});
-        return true;
-    }
-}
 
 export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
     graphicLabels: GraphicLabels = {designation: ''};

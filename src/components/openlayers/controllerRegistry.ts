@@ -14,7 +14,6 @@ import {
     CircularAreaGraphicBase,
     RectangularTargetGraphicBase,
     EnvelopmentGraphicBase,
-    AmbushGraphicBase,
     ContainGraphicBase,
         MissionTaskGraphicBase,
     TurnGraphicBase,
@@ -23,6 +22,8 @@ import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
 import {pursuitStyleFunc} from './openlayerStyles';
+import {asStyleFunction} from './paintToOpenLayers';
+import {getPaintFunction} from '@zaes/tactical-graphics';
 import {Exfiltrate} from './graphics/Exfiltrate';
 import {ReliefInPlace} from './graphics/ReliefInPlace';
 import {Block} from './graphics/Block';
@@ -272,18 +273,32 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
 // own layout. @see PursuitGraphicBase
 // Ambush recovers its center from the chord of its arc, so it reads and writes its own
 // point layout too. @see AmbushGraphicBase
-/*
- * **Two clicks: the arrowhead's tip, then one end of the curved back.** 141700 names three
- * points, and its own constraints — the arrow perpendicular to the chord, meeting its
- * midpoint — leave a family of symbols rather than one. The remaining freedom is closed by
- * holding the shape and letting the click set only the size, so point 3 is constructed.
- * (User's call, 2026-09-05.) @see ambushAnchors
+/**
+ * 141700 ambush: **three clicks, and a grip that drags its own point.**
+ *
+ * It was an `AnchorClickController` over `AmbushGraphicBase` with `editStretches` set, which
+ * routes every edit drag through `handleCircleDrag` — a scale about the centre. So the arrow
+ * tip could not be lengthened on its own: grabbing it resized the whole symbol, arc and all.
+ * The frame carries the arrow's reach as a number of its own, so nothing about the geometry
+ * required that; it was the gesture. (User's call, 2026-09-06: "allow the user to drag point
+ * 1 to lengthen the arrow line w/o resizing wholesomely. Only the resize icon should resize
+ * wholesomely.")
+ *
+ * A vertex drag on point 1 now moves point 1: `normalizeDrawnBase` squares it back onto the
+ * bisector and the reader reads a longer reach off it, leaving the chord — and therefore the
+ * arc's radius — untouched. Whole-graphic scaling is still offered, through the resize
+ * affordance, which is where it belongs. @see squareOntoBisector, RetrogradeTask
+ *
+ * The holder is the generic drawn-line one, given 141700's own paint from the registry, for
+ * the reason 344000 pursuit takes it: the shape is in the points, and a frame-reading holder
+ * decomposes every drag into scalars and lays all of them back out.
  */
-const ambush = (name: TacticalGraphicName, res: number) => {
-    const controller = new AnchorClickController(new AmbushGraphicBase(name, res, res), drawClickCount(name) ?? 2);
-    controller.editStretches = true;
-    return controller;
-};
+const ambush = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(
+        new RetrogradeTask(name, sizing * 20, res, asStyleFunction(getPaintFunction(name)!.graphic, name)),
+        drawClickCount(name) ?? 3,
+        name,
+    ).enableVertexDragging(3);
 
 // Contain draws the two ends of its arc rather than a center and an edge, so it needs
 // its own holder for the same reason envelopment and pursuit do. @see ContainGraphicBase

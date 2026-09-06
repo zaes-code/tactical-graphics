@@ -28,7 +28,6 @@ import {
     getColorByHostility,
     resetTacticalGraphicsConfig,
     supportsHostility,
-    usesDrawnAnchors,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 
@@ -557,16 +556,17 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             /*
              * **A LineString base is the claim; `usesDrawnAnchors` is not.** That list routes
              * the centre / size / rotation machinery a graphic needs when its points are read
-             * back as a *frame*, and a graphic can outgrow it: 344000 pursuit left on
-             * 2026-09-06 so that its three points would be dragged as vertices, the way the
-             * seven cane arrows it draws the same picture as already were. It takes a drawn
-             * base exactly as before — it just no longer decomposes one.
-             * @see Pursuit.generateHandles, DRAWN_ANCHOR_GRAPHICS
+             * back as a *frame*, and a graphic can outgrow it — 344000 pursuit and 141700
+             * ambush both left on 2026-09-06, so that their points would be dragged as
+             * vertices rather than decomposed into scalars and laid back out. Each still takes
+             * a drawn base exactly as before; neither decomposes one.
+             *
+             * So the membership is not asserted per name any more. What every converted
+             * graphic owes is the base *shape*, and that is what this checks.
+             * @see DRAWN_ANCHOR_GRAPHICS, squareOntoBisector
              */
             for (const [name] of CONVERTED) {
                 expect(baseGeometryFor(name)).toBe('LineString');
-                if (name === TacticalGraphicName.Pursuit) continue;
-                expect(usesDrawnAnchors(name)).toBe(true);
             }
         });
     });
