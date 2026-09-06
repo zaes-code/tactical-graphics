@@ -66,6 +66,19 @@ export interface HandleContract {
      */
     offsetAfterVertices?: boolean;
     /**
+     * Which anchor point an `extend` drag pins, by index. Defaults to 0.
+     *
+     * An `extend` grip lengthens the symbol from the *other* end of its chord, so a reader
+     * has to know which end that is — and the two graphics that carry the role number their
+     * points in opposite directions. Turn stores `[tip, rear, bend]`, so the grip is the rear
+     * and the tip (index 0) stays. Envelopment stores `[point 1, point 2, ...]` and its grip
+     * *is* point 1, so point 2 (index 1) stays.
+     *
+     * Stated here rather than by name in a renderer, because which end a drag holds still is
+     * a fact about the symbol. @see setExtend
+     */
+    extendAnchor?: number;
+    /**
      * Which way a mirror drag is measured, for a point-anchored graphic.
      *
      * - `across` (the default) — the flip reflects the symbol **across** its own axis,
@@ -318,19 +331,6 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Exploitation]: Math.SQRT2,
 };
 
-/** The two curve-and-arrow tasks: `[bend, tip]`. */
-const BENT_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.TacticalTurn,
-    // **Envelopment is one of these after all.** Its registry entry looks like a plain
-    // mission task, which is what this list was briefly trimmed on — but
-    // `EnvelopmentGraphicBase.setBandRange` is the implementation, and it reads handle 0
-    // as a bend and handle 1 as a reach exactly as declared here. Trimming it made
-    // MapLibre resize freely from a handle OpenLayers bends with, so the same drag grew
-    // the graphic 4.6x in one engine and 1.5x in the other. @see envelopmentBendFrom
-    TacticalGraphicName.Envelopment,
-];
-
 /**
  * One handle per band, so the roles list has no fixed length.
  *
@@ -402,8 +402,39 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;
     }
-    if (BENT_GRAPHICS.includes(name)) {
-        return {roles: ['bend', 'reach']};
+    /**
+     * **Turn's three grips are APP-06 270504's three anchor points**: `[tip, rear, bend]`.
+     *
+     * Separate from Envelopment's contract below, which publishes `[bend, reach, extend]` —
+     * the same three jobs in a different order, because the two generators emit their grips
+     * in a different order. That is why they cannot share a line.
+     *
+     * Point 2 had no role at all until 2026-09-05 because it had no handle: the generator
+     * emitted `[control, tip, centre]` and the rear of the symbol was simply not grabbable.
+     * `extend` is what it wants rather than `reach` — grabbing the back of an arrow and
+     * pulling should lengthen it from the front, not scale it about its middle.
+     * (User's report.) @see Turn.generateHandles
+     */
+    if (name === TacticalGraphicName.Turn || name === TacticalGraphicName.TacticalTurn) {
+        return {roles: ['reach', 'extend', 'bend']};
+    }
+    /**
+     * **343500's three grips: the arc, the run's end, and the run's beginning.**
+     *
+     * `[bend, reach, extend]`, in the order `Envelopment.generateHandles` emits them.
+     * Handle 0 bends the semicircle and handle 1 sets the approach's length and aim — that
+     * pairing is `EnvelopmentGraphicBase.setBandRange`'s implementation and predates this.
+     * Trimming Envelopment out of this contract once made MapLibre resize freely from a
+     * handle OpenLayers bends with, so the same drag grew the symbol 4.6x on one engine and
+     * 1.5x on the other. @see envelopmentBendFrom
+     *
+     * Handle 2 is new: point 1, *"the beginning of the straight line"*, which had no grip
+     * while a dot that does nothing sat on the frame's centre. `extend` rather than `reach`
+     * for the same reason Turn's rear takes it — pulling the back of an arrow should lengthen
+     * it from the front rather than scale it about its middle. (User's call, 2026-09-05.)
+     */
+    if (name === TacticalGraphicName.Envelopment) {
+        return {roles: ['bend', 'reach', 'extend'], extendAnchor: 1};
     }
     /*
      * **A rectangle's two anchor points, then its width.**
@@ -601,6 +632,47 @@ export function rotationAnchor(
     }
     const midpoint: [number, number] = [(minX + maxX) / 2, latitudeOf((minY + maxY) / 2)];
     return pointInRing(positions, midpoint) ? midpoint : averageOf(positions);
+}
+
+/**
+ * The point a **rotate gesture** turns the symbol about.
+ *
+ * Almost always {@link rotationAnchor}, and this delegates to it. The two are separated
+ * because that function answers a broader question than its name suggests: every renderer
+ * uses it as the symbol's *frame origin* — the point a resize scales from, and the point
+ * `setBend` and `setReach` measure their cursor offsets against. So it cannot also be the
+ * place to say "but this one turns about something else": moving Turn's answer to its bend
+ * point would have measured its bend, its reach and its resize from there too, which is
+ * three broken gestures to fix one.
+ *
+ * Turn is the case that forced the split. 270504's point 3 is the bow, and an operator
+ * swinging a turn is aiming it about the curve rather than about the chord's midpoint.
+ * (User's call, 2026-09-05.)
+ *
+ * **Ambush is deliberately not here.** Its "turn about point 2" rule lives in
+ * `rotationAnchor` itself, where it also moves that symbol's frame origin — which is what
+ * it wants, and it has been signed off drawn that way. Left alone rather than tidied into
+ * this function on the way past.
+ */
+export function rotationPivot(
+    geometry: {type: string; coordinates: unknown},
+    name?: TacticalGraphicName,
+): [number, number] {
+    if (name === TacticalGraphicName.Turn || name === TacticalGraphicName.TacticalTurn) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 3) return positions[2];
+    }
+    /*
+     * **343500 turns about point 1**, the beginning of the straight line — the end the
+     * operator placed first and the one the symbol is anchored to on the ground. Turning it
+     * about the run's midpoint swung the start of the approach off the position it was drawn
+     * from. Point 1 is anchor 0. (User's call, 2026-09-05.) @see anchorsForRunAndArc
+     */
+    if (name === TacticalGraphicName.Envelopment) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 1) return positions[0];
+    }
+    return rotationAnchor(geometry, name);
 }
 
 /** Mercator y for a latitude in degrees, in radians-worth of units. */

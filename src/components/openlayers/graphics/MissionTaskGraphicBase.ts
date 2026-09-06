@@ -50,6 +50,7 @@ import openlayersAdapter from "../openlayersAdapter";
 import {
     envelopmentBendFrom,
     clampTurnBend,
+    turnBendFromOffset,
     ENVELOPMENT_DEFAULT_BEND,
     clampEnvelopmentBend,
     TacticalGraphicName,
@@ -76,10 +77,20 @@ import {
  */
 const TURN_LABEL_GAP_METERS = 0;
 /** Index of the arrowhead-tip handle in `Turn.generateHandles`' output. */
-const TURN_TIP_HANDLE = 1;
+/**
+ * Turn's grips, in `Turn.generateHandles`' order — APP-06 270504's own point numbering.
+ *
+ * The tip used to be index 1 and the bend index 0, with the centre trailing at 2 and being
+ * demoted to an inert dot. The generator now publishes the three anchor points instead, so
+ * the indices follow the plate. @see Turn.generateHandles, handleContract
+ */
+const TURN_TIP_HANDLE = 0;
+const TURN_REAR_HANDLE = 1;
 
 /** Index of the line-end handle in `Envelopment.generateHandles`' output. */
 const ENVELOPMENT_LINE_HANDLE = 1;
+/** Point 1, the beginning of the straight line. @see Envelopment.generateHandles */
+const ENVELOPMENT_REAR_HANDLE = 2;
 /**
  * How far off the approach the cursor must be, as a share of the circle's own
  * radius, before a drag counts as a decision to swap flanks.
@@ -1025,7 +1036,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
     }
 
     /**
-     * Drags one of Turn's two shape handles.
+     * Drags one of Turn's three shape handles.
      *
      * Reached through `MissionTaskController.handleBandResize`, the manager's
      * hook for "this graphic's handles are not interchangeable — hand the
@@ -1033,17 +1044,19 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
      * name; the mechanism is general and this is the second user. A resize drag
      * that starts on the *graphic* rather than on a handle still scales the
      * whole thing, because the manager only routes here when a handle set was
-     * grabbed (`activeHandleIndex >= 0`).
+     * grabbed (`activeHandleIndex >= 0`) — which is what leaves the resize
+     * gesture exactly as it was.
      *
-     * Index order is `Turn.generateHandles`' contract — `[bend, arrowTip]`,
-     * the center having been split off onto the inert feature by
-     * `publishHandles`, which preserves order.
+     * Index order is `Turn.generateHandles`' contract, which is the plate's:
+     * `[tip, rear, bend]`. No centre is published any more, so `publishHandles`
+     * demotes nothing and the three indices arrive here unshifted.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
         const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
+        const theta = (this.rotation * Math.PI) / 180;
 
         if (handleIndex === TURN_TIP_HANDLE) {
             // The tip is the far end of the chord, so the cursor gives both of
@@ -1056,15 +1069,44 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
             return;
         }
 
-        // Bend: the cursor's signed perpendicular distance from the chord, over
-        // `size` — so the handle tracks the pointer exactly, and dragging
-        // across the chord flips which way the turn bends. Chord direction from
-        // `rotation` (planar degrees, 0 = east), then the clockwise
-        // perpendicular, the side `bendLine` bows toward.
-        const theta = (this.rotation * Math.PI) / 180;
+        if (handleIndex === TURN_REAR_HANDLE) {
+            /*
+             * **The rear moves and the tip stays put** — the symbol extends from its own
+             * arrowhead rather than scaling about its middle. That is the difference
+             * between this and the tip grip above, and it is why the two are separate
+             * roles: grabbing the back of an arrow and pulling should make it longer, not
+             * make it bigger in both directions at once. (User's call, 2026-09-05.)
+             *
+             * Rebuilt from the two chord ends rather than from a delta, so the grip lands
+             * exactly under the cursor at any length: the new chord is tip → cursor, and
+             * the centre, half-length and bearing all fall out of it.
+             */
+            const anchors = this.base.getGeometry()?.getCoordinates() as Coordinate[] | undefined;
+            if (!anchors?.length) return;
+            /*
+             * **Read back through `adoptAnchors`, in degrees, not rebuilt in map units.**
+             *
+             * The obvious version reconstructs the tip as `centre + size x (cos, sin)` in
+             * projected metres and takes the midpoint there. It is wrong by the Mercator
+             * scale factor, because `size` is spent geodesically the moment `anchorPoints`
+             * writes the base back — measured, a rear drag slid the "fixed" tip 10.7 km on a
+             * 3.3 Mm chord. Handing the two chord ends to the same reader a restore uses
+             * keeps one arithmetic for the whole family, and it is the same reader MapLibre's
+             * `setExtend` calls. A two-point chord carries no bow, so `bend` is left alone.
+             */
+            this.adoptAnchors([toLonLat(anchors[0]) as Position, toLonLat(coordinate) as Position]);
+            return;
+        }
+
+        // Bend: the cursor's signed perpendicular distance from the chord, read through
+        // the library's own rule so MapLibre cannot disagree about how far one drag bends
+        // a turn. Chord direction from `rotation` (planar degrees, 0 = east), then the
+        // clockwise perpendicular, the side `bendLine` bows toward.
+        // @see turnBendFromOffset — and note the handle is the *apex*, not the control
+        // point, so the offset is half the bend's own depth.
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
-        this.bend = clampTurnBend((dx * perpX + dy * perpY) / this.size);
+        this.bend = turnBendFromOffset(dx * perpX + dy * perpY, this.size);
         this.republishFromState();
     }
 }
@@ -1204,15 +1246,36 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     }
 
     /**
-     * Drags one of Envelopment's two shape handles, in the order
-     * `Envelopment.generateHandles` emits them: `[arrowTip, lineEnd]`, the center
-     * having been split onto the inert feature by `publishHandles`.
+     * Drags one of Envelopment's three shape handles, in the order
+     * `Envelopment.generateHandles` emits them: `[arrowTip, lineEnd, point1]`. The third
+     * used to be the frame's centre, which `publishHandles` split onto the inert feature;
+     * it is point 1 now, so every mark on the symbol does something.
      */
     setBandRange(handleIndex: number, coordinate: Coordinate): void {
         const center = this.centerCoordinate();
         if (!center || this.size <= 0) return;
         const dx = coordinate[0] - center[0];
         const dy = coordinate[1] - center[1];
+
+        if (handleIndex === ENVELOPMENT_REAR_HANDLE) {
+            /*
+             * **Point 1 moves and the run's far end stays put** — the approach lengthens
+             * backwards from the semicircle rather than scaling about its middle, which is
+             * the same rule Turn's rear grip follows and the reason `extend` is a role of
+             * its own. (User's call, 2026-09-05.)
+             *
+             * Rebuilt from the two ends of the run through `adoptAnchors`, for the reason
+             * that branch spells out: `size` is spent geodesically when `anchorPoints`
+             * writes the base back, so reconstructing the far end in projected metres slides
+             * the "fixed" end by the Mercator scale factor. The chord handed over is
+             * `[cursor, point 2]` — point 1 first, which is this symbol's own numbering — and
+             * `bend` is left alone, so the arc keeps its proportion. @see anchorsForRunAndArc
+             */
+            const anchors = this.base.getGeometry()?.getCoordinates() as Coordinate[] | undefined;
+            if (!anchors || anchors.length < 2) return;
+            this.adoptAnchors([toLonLat(coordinate) as Position, toLonLat(anchors[1]) as Position]);
+            return;
+        }
 
         if (handleIndex === ENVELOPMENT_LINE_HANDLE) {
             // The line's end carries both of the approach's inputs: how long it

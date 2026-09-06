@@ -447,9 +447,35 @@ export class AnchorClickController extends MissionTaskController {
      * one will. A sketch too short to describe anything is skipped rather than guessed at.
      */
     onDrawStartFunc = (e: DrawEvent) => {
-        // The legibility floor belongs to this gesture and no other, exactly as it does
-        // on the circle draw. @see minimumDrawnRadiusPx
-        this.graphic.sizingFromDraw = true;
+        /*
+         * **The legibility floor is not armed here, and that is the point.**
+         *
+         * It was, to match the circle draw — but a click-placed draw previews on every
+         * pointer move, so flooring the preview pins `size` at the floor while the cursor
+         * keeps going: measured on a turn, the symbol stood still at 478 km through the
+         * first 120 px of drag while the cursor slid from 0.70 to 1.14 of its own bounding
+         * box, then lurched into tracking once the chord outgrew the floor. "The cursor
+         * seems to be in the middle of the graphic making it seem jumpy and not smooth."
+         * (User's report, 2026-09-05.)
+         *
+         * MapLibre applies no floor on this path — `legibleRadius` sits on the
+         * centre-to-edge frame, which the anchor-click family left — and its preview tracks
+         * the cursor exactly, which is the behaviour the user signed off on for ambush. So
+         * the floor moves to `onDrawEndFunc`, where the circle draw already has it and where
+         * this graphic's own doc says it belongs: *committed* at a readable size.
+         * @see minimumDrawnRadiusPx, onDrawEndFunc
+         */
+        /*
+         * **And so does the read-out.** The circle draw armed it in its own `onDrawStartFunc`,
+         * so every graphic that moved to a click-placed draw silently lost the distance label
+         * it used to show while being drawn — the operator was placing points with no measure
+         * of what they were making. (User's report, 2026-09-05.)
+         *
+         * Armed for the whole family rather than per graphic: `showMeasure` already asks
+         * `showsSizeReadout(name)`, which is the library's own table of which symbols report a
+         * distance, so arming one that does not is a no-op. @see refreshMeasure
+         */
+        this.graphic.showMeasure?.(true);
         this.sketch = e.feature as Feature<LineString> | undefined;
     };
 
@@ -497,7 +523,7 @@ export class AnchorClickController extends MissionTaskController {
      * which is why the manager only does that on `drawend`.
      * @see TacticalGraphicsManager.normalizeDrawnGeometry
      */
-    private preview(projected: Coordinate[]): void {
+    protected preview(projected: Coordinate[]): void {
         if (projected.length < 2) return;
         const name = this.graphic.name;
         if (!name) return;
@@ -535,14 +561,21 @@ export class AnchorClickController extends MissionTaskController {
         this.handleTranslate(dx, dy);
     }
 
-    /** Where the library says this symbol turns, in projected metres. @see rotationAnchor */
+    /**
+     * Where the library says this symbol **turns**, in projected metres.
+     *
+     * `rotationPivot`, not `rotationAnchor`: the second is the symbol's frame origin, which
+     * a resize scales from and which `setBend` and `setReach` measure against, so it is not
+     * free to say where a rotate turns. Turn is the graphic where the two part company.
+     * @see rotationPivot
+     */
     private pivot(): Coordinate | undefined {
         const geometry = this.graphic.base?.getGeometry?.();
         if (!(geometry instanceof LineString)) return undefined;
         const anchors = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
         if (anchors.length < 2) return undefined;
         return fromLonLat(
-            rotationAnchor({type: 'LineString', coordinates: anchors}, this.graphic.name) as Coordinate,
+            rotationPivot({type: 'LineString', coordinates: anchors}, this.graphic.name) as Coordinate,
         );
     }
 

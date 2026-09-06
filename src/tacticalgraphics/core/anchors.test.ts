@@ -2,6 +2,9 @@ import {Position} from 'geojson';
 import * as turf from './turf';
 import {anchorsForArcAndArrow, anchorsForBow, anchorsForRunAndArc, anchorsFromFrame, arcAndArrowFromAnchors, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors} from './anchors';
 import geometryService from './GeometryService';
+import {TacticalGraphicName} from './type';
+import {handleContract, handleRole, rotationAnchor, rotationPivot} from './handles';
+import {turnBendFromOffset} from '../graphics/Turn';
 
 /**
  * The conversion has to be exact in both directions, because a restore round-trips
@@ -219,5 +222,131 @@ describe('arc-and-arrow anchor points', () => {
         // radius without a center point — the property the whole reader rests on.
         const [, upper, lower] = anchorsForArcAndArrow(CENTER, 4000, 0);
         expect(meters(upper, lower)).toBeCloseTo(2 * 4000 * Math.sin(Math.PI / 3), 1);
+    });
+});
+
+/**
+ * # Turn's edit-mode grips
+ *
+ * Everything here is a *fact about how the symbol edits*, which both renderers read, so it
+ * belongs beside the geometry rather than in either holder. Each assertion below pins one
+ * of the four things a user reported wrong on 2026-09-05.
+ */
+describe('270504 edits through its own anchor points', () => {
+    const CENTRE: Position = [-0.1, 51.5];
+    const SIZE = 4000;
+
+    it('gives point 2 a grip that extends, and keeps the bend on point 3', () => {
+        /*
+         * `[tip, rear, bend]`, matching `Turn.generateHandles`. The rear had **no role at
+         * all** before, because it had no handle: the generator published
+         * `[control, tip, centre]`, so the one end of the symbol an operator reaches for to
+         * make a turn longer was the one end that could not be grabbed.
+         *
+         * `extend` rather than `reach`: `reach` measures from the centre and so moves both
+         * ends, which would drag the arrowhead backwards as the tail was pulled out.
+         */
+        for (const name of [TacticalGraphicName.Turn, TacticalGraphicName.TacticalTurn]) {
+            expect([0, 1, 2].map(i => handleRole(name, i))).toEqual(['reach', 'extend', 'bend']);
+        }
+    });
+
+    it('leaves envelopment on the contract it already had', () => {
+        // It shares `BENT_GRAPHICS` with the turns and publishes `[bend, reach]` in the
+        // other order, with no rear to grab — so the two families cannot share a line.
+        expect([0, 1].map(i => handleRole(TacticalGraphicName.Envelopment, i))).toEqual(['bend', 'reach']);
+    });
+
+    it('turns about point 3 without moving the point every other gesture measures from', () => {
+        /*
+         * **The two questions are separate and this is the graphic that proves it.**
+         * `rotationAnchor` is the symbol's frame origin: a resize scales from it, and
+         * `setBend` and `setReach` read their cursor offsets against it. Moving *its* answer
+         * to the bow — the obvious way to make a rotate turn about point 3 — would have
+         * measured the bend, the reach and the resize from there too.
+         */
+        const anchors = anchorsForBow(CENTRE, SIZE, 0, 0.5);
+        const geometry = {type: 'LineString', coordinates: anchors};
+
+        const pivot = rotationPivot(geometry, TacticalGraphicName.Turn);
+        expect(pivot[0]).toBeCloseTo(anchors[2][0], 9);
+        expect(pivot[1]).toBeCloseTo(anchors[2][1], 9);
+
+        // ...while the frame origin stays the chord's midpoint, which is what resize uses.
+        const origin = rotationAnchor(geometry, TacticalGraphicName.Turn);
+        expect(meters(origin, CENTRE)).toBeLessThan(1);
+        expect(meters(origin, anchors[2])).toBeGreaterThan(SIZE / 10);
+    });
+
+    /**
+     * **343500 turns about point 1**, the beginning of the straight line.
+     *
+     * The end the operator placed first is the one the approach is anchored to on the
+     * ground; turning about the run's midpoint swung the start of it off that position.
+     * Same split as Turn's — the *frame origin* stays the midpoint, because that is what
+     * resize, `setBend` and `setReach` measure from. (User's call, 2026-09-05.)
+     */
+    it('turns an envelopment about point 1, without moving its frame origin', () => {
+        const anchors = anchorsForRunAndArc(CENTRE, SIZE, SIZE / 2, 0, 1);
+        const geometry = {type: 'LineString', coordinates: anchors};
+
+        const pivot = rotationPivot(geometry, TacticalGraphicName.Envelopment);
+        expect(pivot[0]).toBeCloseTo(anchors[0][0], 9);
+        expect(pivot[1]).toBeCloseTo(anchors[0][1], 9);
+
+        const origin = rotationAnchor(geometry, TacticalGraphicName.Envelopment);
+        expect(meters(origin, CENTRE)).toBeLessThan(1);
+        expect(meters(origin, anchors[0])).toBeGreaterThan(SIZE / 10);
+    });
+
+    /**
+     * **Three grips, and the third says which end of the run holds still.**
+     *
+     * `extend` lengthens a symbol from the *other* end of its chord, and the two graphics
+     * that carry the role number their points in opposite directions — so which end that is
+     * has to be stated rather than assumed to be index 0. @see HandleContract.extendAnchor
+     */
+    it('gives envelopment a grip per thing it can change, and pins point 2 when point 1 is dragged', () => {
+        const contract = handleContract(TacticalGraphicName.Envelopment);
+        expect(contract.roles).toEqual(['bend', 'reach', 'extend']);
+        expect(contract.extendAnchor).toBe(1);
+        expect([0, 1, 2].map(i => handleRole(TacticalGraphicName.Envelopment, i)))
+            .toEqual(['bend', 'reach', 'extend']);
+
+        // Turn takes the default, because its grip is the rear and its point 1 is the tip.
+        expect(handleContract(TacticalGraphicName.Turn).extendAnchor).toBeUndefined();
+    });
+
+    it('defaults to the frame origin for everything that names no other pivot', () => {
+        /*
+         * **Pursuit is the example now.** Envelopment was, until it named point 1 as its own
+         * pivot on 2026-09-05 — which is the case this test exists to be the foil for, so the
+         * example had to move to a graphic that still takes the default rather than the
+         * assertion being relaxed. @see rotationPivot
+         */
+        const anchors = anchorsFromFrame(CENTRE, SIZE, 0);
+        const geometry = {type: 'LineString', coordinates: anchors};
+        expect(rotationPivot(geometry, TacticalGraphicName.Pursuit))
+            .toEqual(rotationAnchor(geometry, TacticalGraphicName.Pursuit));
+    });
+
+    it('reads a bend drag against the apex, not against the control point', () => {
+        /*
+         * The grip is anchor point 3, which sits at the curve's apex — half way to the
+         * Bézier control point `bend` measures. A reader that took the offset at face value
+         * bent the curve half as far as the cursor moved.
+         *
+         * Stated as a round trip so it cannot drift from `anchorsForBow`: put the handle
+         * where the generator would, read it back, and the bend has to be the one that
+         * placed it.
+         */
+        for (const bend of [0.3, 0.8, -0.5]) {
+            const apexOffset = (bend * SIZE) / 2;
+            // `bendLine` bows clockwise of the chord, which is the sign convention
+            // `turnBendFromOffset` takes.
+            expect(turnBendFromOffset(apexOffset, SIZE)).toBeCloseTo(bend, 6);
+        }
+        // Half the offset would be the old reading, and it is a different curve.
+        expect(turnBendFromOffset((0.8 * SIZE) / 2, SIZE)).not.toBeCloseTo(0.4, 3);
     });
 });
