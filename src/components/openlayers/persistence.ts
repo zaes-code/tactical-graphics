@@ -65,7 +65,7 @@ import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
-import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
+import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojson';
 import {
     applyAmplifierAliases,
     axisFromRectangleRing,
@@ -73,6 +73,8 @@ import {
     normalizeDrawnBase,
     TacticalGraphicName,
     usesDrawnAnchors,
+    baseGeometryFor,
+    drawnAnchors,
     toSnapshot,
     SNAPSHOT_VERSION,
     snapshotVersionOf,
@@ -319,6 +321,36 @@ export function applyRestoredGeometry(
         if (axis) {
             base = new Feature(new LineString([fromLonLat(axis.p1 as Coordinate), fromLonLat(axis.p2 as Coordinate)]));
             if (state.width === undefined) state = {...state, width: Math.round(axis.halfWidth * 2)};
+        }
+    }
+
+    /*
+     * **A graphic that used to be dropped, saved as the single point it was dropped on.**
+     *
+     * The shim below does this for the frame-editing holders, and it is keyed on
+     * `MissionTaskController` — so a graphic that leaves that family takes its own legacy
+     * files with it. 344000 pursuit did exactly that on 2026-09-06, when it was made to edit
+     * as the cane arrow it draws: every pursuit saved before then is a `Point` plus a radius
+     * and a rotation, and it silently stopped upgrading.
+     *
+     * Done here instead, before any controller branch, because the question is about the
+     * *base* and not about who holds it: a graphic whose base is a `LineString` now, handed a
+     * `Point`, is a file from before its conversion. `drawnAnchors` is the library's own
+     * layout for each of them, which is the same function the holders wrote their points with
+     * — so the upgraded symbol is the one that was saved, not an approximation of it.
+     * @see drawnAnchors, baseGeometryFor
+     */
+    const restoredGeometry = base.getGeometry();
+    if (restoredName && restoredGeometry instanceof Point && baseGeometryFor(restoredName) === 'LineString') {
+        const anchors = drawnAnchors(restoredName, {
+            center: toLonLat(restoredGeometry.getCoordinates() as Coordinate) as Position,
+            size: state.radius ?? 0,
+            rotation: state.rotation ?? 0,
+            bend: state.bend,
+            mirrored: state.mirrored,
+        });
+        if (anchors?.length) {
+            base = new Feature(new LineString(anchors.map((c: Position) => fromLonLat(c as Coordinate))));
         }
     }
 

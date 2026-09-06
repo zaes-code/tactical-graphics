@@ -140,10 +140,18 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     // their point 3 states which side the arc falls on, so dragging it across the line *is*
     // the flip, and a grip whose only job is to flip is no longer something they need.
     // @see RetrogradeTask
-    // These three carry the handle elsewhere in their own contracts below, but they
-    // mirror just the same, and `supportsMirror` is the question a panel or a test asks.
+    // 344000 left on 2026-09-06, last of the family and for the identical reason: its own
+    // rule says *"Point 3 defines the diameter and orientation of the 180 degree circular
+    // arc"*, so dragging that point across the line **is** the flip. It kept the grip after
+    // its seven siblings and 152800 dropped theirs, which put a *mirror* handle at index 0
+    // where every sibling has a shape vertex — so the one gesture a user reaches for first,
+    // dragging the arc's end, did something entirely different on this symbol.
+    // (User's report: "pursuit point 3 drag still doesn't behave like other cane graphics
+    // […] I'm trying to have consistency across similar graphics".)
+    //
+    // This one carries the handle elsewhere in its own contract below, but it mirrors just
+    // the same, and `supportsMirror` is the question a panel or a test asks.
     TacticalGraphicName.Abatis,
-    TacticalGraphicName.Pursuit,
     // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
     // so the flip is a placed point rather than an amplifier and there is no mirror gesture
     // left to advertise. @see MobileDefense.frame
@@ -179,8 +187,13 @@ const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     // **343300 left on 2026-09-06.** Its four points are placed now, not derived, so it is an
     // ordinary drawn line whose vertices are its shape — it needs none of the centre / size /
     // rotation machinery this list exists to route. @see Demonstration
+    //
+    // **344000 left on 2026-09-06**, the same way and for the same reason. Its holder
+    // decomposed every drag into centre / size / rotation / mirrored / lineRatio and laid the
+    // three points back out from them, so dragging one point moved the other two — which is
+    // what made it feel unlike the seven cane arrows it draws the same picture as. Its points
+    // are its shape now. @see Pursuit.generateHandles
     TacticalGraphicName.Envelopment,
-    TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Turn,
 ];
@@ -515,14 +528,6 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     // something to grab. @see Abatis.generateHandles
     if (name === TacticalGraphicName.Abatis) {
         return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
-    }
-    // **First, like the retrograde tasks.** A pursuit's hook is its cane: the part that
-    // hangs off the line and swaps sides when the graphic reflects. Its generator emits
-    // that end first, so the mirror handle is index 0 here for the same reason it is
-    // there, and a user reaches for the same place on every graphic that flips.
-    // @see Pursuit.generateHandles
-    if (name === TacticalGraphicName.Pursuit) {
-        return {roles: ['mirror', 'shape'], repeating: 'shape'};
     }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;
@@ -1562,6 +1567,17 @@ export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
         isMovementGraphic(name) ||
         name === TacticalGraphicName.MobileDefense ||
         CANE_ARROW_GRAPHICS.includes(name) ||
+        /*
+         * **344000 is named rather than derived, for 152800's reason.** It draws the same
+         * picture as the seven cane arrows and its point 3 states the same fact — the
+         * distance across the drawn line and which side — but it is not in
+         * `CANE_ARROW_GRAPHICS`, because that list is one shared APP-06 rule and pursuit's
+         * numbers the points the other way round: *"Point 1 defines the beginning of the
+         * straight line"* where the seven make point 1 the arrowhead's tip. Same shape,
+         * opposite numbering, so it is named here instead of joining a list whose doc it
+         * would falsify. @see Pursuit, usesFrontEdgeBase
+         */
+        name === TacticalGraphicName.Pursuit ||
         /*
          * **The four bracket mission tasks state it in points 1 and 2, not in point 3.**
          *

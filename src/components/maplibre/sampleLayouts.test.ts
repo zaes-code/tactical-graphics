@@ -24,7 +24,7 @@ import {
     listTacticalGraphicNames,
     renderTacticalGraphic,
 } from '@zaes/tactical-graphics';
-import {acrossPointAtEnd, baseVertexCount, generatorOrder, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {acrossPointAtEnd, baseVertexCount, carriesSeparationInBase, generatorOrder, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import type {Feature, Position} from 'geojson';
 import {sampleFeatureCollection} from './sampleGallery';
 
@@ -325,5 +325,69 @@ describe('pursuit is laid out as the cane arrow it is', () => {
         // Point 3 sits at point 2's end of the run, not in the middle of it.
         const run = along(base[1]);
         expect(along(base[2]) / run).toBeCloseTo(1, 1);
+    });
+});
+
+/**
+ * # A cane arrow *edits* like a cane arrow
+ *
+ * The layout tests above are about the picture. This is about the gesture, which is what a
+ * user actually notices: pursuit drew correctly and still felt wrong, because it was the
+ * last of the family holding a **mirror** grip at index 0 where every sibling has a shape
+ * vertex — so dragging the arc's end flipped the symbol instead of moving the point, and its
+ * holder decomposed each drag into centre / size / rotation / mirrored / lineRatio and laid
+ * all three points back out, moving the two the user had not touched.
+ * ("pursuit point 3 drag still doesn't behave like other cane graphics […] The graphic does
+ * look correct, is just the editing of it seems different.")
+ *
+ * The contract is what both renderers read to decide what a grip does, so it is the thing to
+ * assert — a picture test cannot see any of this.
+ */
+describe('a cane arrow edits like a cane arrow', () => {
+    const FAMILY = [
+        TacticalGraphicName.Delay,
+        TacticalGraphicName.Retirement,
+        TacticalGraphicName.Withdraw,
+        TacticalGraphicName.WithdrawUnderPressure,
+        TacticalGraphicName.ForwardPassageOfLines,
+        TacticalGraphicName.RearwardPassageOfLines,
+        TacticalGraphicName.Disengage,
+        TacticalGraphicName.Pursuit,
+    ];
+
+    it.each(FAMILY.map(n => [String(n), n] as const))('%s publishes three shape grips', (_label, name) => {
+        // No `mirror`, no `offset`: every grip moves a point the operator placed. Point 3
+        // states which side the arc falls on, so dragging it across the line *is* the flip.
+        expect(handleContract(name).roles).toEqual(['shape', 'shape', 'shape']);
+    });
+
+    it.each(FAMILY.map(n => [String(n), n] as const))('%s drags its vertices, not a frame', (_label, name) => {
+        // `usesDrawnAnchors` routes the centre / size / rotation machinery a frame-read
+        // graphic needs. A member of this family reads its points as its shape, so a drag
+        // moves the point it grabbed and leaves the other two where they are.
+        expect(usesDrawnAnchors(name)).toBe(false);
+        expect(carriesSeparationInBase(name)).toBe(true);
+        expect(baseVertexCount(name)).toBe(3);
+    });
+
+    it('moves only the point that was dragged', () => {
+        /*
+         * The property the contract exists to give. A frame-reading holder recomputed all
+         * three points from the scalars it decomposed a drag into, so moving point 3 moved
+         * points 1 and 2 with it — which is the whole of what "the editing seems different"
+         * was. Asserted through the library's own normalizer, which is what both engines run
+         * on an edited base.
+         */
+        for (const name of FAMILY) {
+            const base: Position[] = [[-0.8, 20], [0.4, 20], [0.4, 19.6]];
+            const dragged: Position[] = [base[0], base[1], [0.4, 19.2]];
+            const settled = normalizeDrawnBase(name, dragged);
+            expect(settled[0][0]).toBeCloseTo(base[0][0], 6);
+            expect(settled[0][1]).toBeCloseTo(base[0][1], 6);
+            expect(settled[1][0]).toBeCloseTo(base[1][0], 6);
+            expect(settled[1][1]).toBeCloseTo(base[1][1], 6);
+            // …and the point that was dragged actually moved.
+            expect(Math.abs(settled[2][1] - base[2][1])).toBeGreaterThan(0.2);
+        }
     });
 });
