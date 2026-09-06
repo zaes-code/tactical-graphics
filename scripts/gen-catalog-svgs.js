@@ -123,6 +123,7 @@ const {
     isPaintable,
     baseGeometryFor,
     baseVertexCount,
+    carriesSeparationInBase,
     storedOrder,
     getDisplayName,
     GRAPHIC_CATEGORIES,
@@ -419,6 +420,30 @@ function makeBase(name) {
     // more so, since the catalog exists to be compared against one. @see beanRing
     if (type === 'Polygon') return {type: 'Polygon', coordinates: [beanRing()]};
     const n = Math.max(2, (baseVertexCount && baseVertexCount(name)) || 2);
+    /*
+     * **A front edge and a point across it, where that is what the points mean.**
+     *
+     * Thirteen graphics moved onto their plates' anchor points on 2026-09-05/06, and for all
+     * of them points 1 and 2 are the ends of a *straight* edge with the last point stating a
+     * distance across it. The arc below hands those points 1 and 2 as its left and middle
+     * samples and the last point as its right end, so the symbol is thumbnailed on half its
+     * width at the wrong aspect — the same defect the in-app sample sweep had, found by a user
+     * on 2026-09-06 and fixed in `sampleGallery.ts` the same way.
+     *
+     * `carriesSeparationInBase` is the library's own statement of which graphics mean this.
+     * Fields of fire and the search area are not in it and keep the arc, which is right: their
+     * points really do describe a vee.
+     */
+    if (carriesSeparationInBase && carriesSeparationInBase(name)) {
+        const across = D * 0.9;
+        const edge = [[LON - D * 1.4, LAT + across / 2], [LON + D * 1.4, LAT + across / 2]];
+        const tips = n >= 4
+            // 152100's four: the back line, then the two arrowhead tips in front of it.
+            ? [[LON - D * 1.05, LAT - across / 2], [LON + D * 1.05, LAT - across / 2]]
+            : [[LON, LAT - across / 2]];
+        const anchors = [...edge, ...tips];
+        return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};
+    }
     const pts = [];
     // A gentle arc rather than a straight run — it shows that the arrows and
     // corridors actually bend, which a straight line hides.
