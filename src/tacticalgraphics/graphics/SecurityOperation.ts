@@ -148,10 +148,35 @@ export function securityOperationAnchors(coords: readonly Position[] | undefined
     if (coords.length >= 4) return coords.slice(0, 4) as Position[];
 
     const tip = coords[0];
-    const inner = coords[coords.length - 1];
+    const inner = coords[1];
     const arm = turf.distance(turf.point(tip), turf.point(inner), {units: 'meters'});
     if (!(arm > 0)) return undefined;
 
+    /*
+     * **Three points is the operator placing point 3, so point 3 is where they put it.**
+     *
+     * Only point 4 is still missing, and it previews as an arm of the same length carrying
+     * on outward — the direction point 2 → point 3 already states, which is the gap's own
+     * axis. Placing point 3 on that axis therefore previews exactly the symmetric form, and
+     * moving it off previews the oblique one the operator is actually drawing.
+     *
+     * Without this the third click read through the two-point branch below, which takes the
+     * *last* point as arm 1's inner end — so the cursor dragged point 2 around and point 3
+     * never appeared until the click landed. (User's report, 2026-09-06: "click 3 is still
+     * dragging on point 2 location [...] after click 2 the active handle should go to point
+     * 3 location".)
+     */
+    if (coords.length === 3) {
+        const otherInner = coords[2];
+        const outward = turf.bearing(turf.point(inner), turf.point(otherInner));
+        if (!Number.isFinite(outward)) return undefined;
+        return [tip, inner, otherInner, at(otherInner, outward, arm, 0)];
+    }
+
+    /*
+     * **Two points is one arm, and the other is its mirror** — the shape this graphic was
+     * until 2026-09-06, so it is what an old save holds and what the second click previews.
+     */
     const inward = turf.bearing(turf.point(tip), turf.point(inner));
     const otherInner = at(inner, inward, arm * 2 * HALF_GAP_RATIO, 0);
     return [tip, inner, otherInner, at(otherInner, inward, arm, 0)];
