@@ -1313,15 +1313,24 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // interaction mode and does its angle/scale maths against the base
         // point, never against the handle the user grabbed.
         /*
-         * **A grip on each of the three points, once all three are placed.** 141700 became a
-         * three-click graphic on 2026-09-06 — points 2 and 3 are the curved back's own
-         * endpoints — so the lower arc end is a point the operator put down and needs a grip
-         * like the other two. The pair below already landed exactly on points 1 and 2; it was
-         * only point 3 that had none. @see squareOntoBisector
+         * **A grip on each of the three points, read the way the drawing reads them.**
+         *
+         * 141700 became a three-click graphic on 2026-09-06 — points 2 and 3 are the curved
+         * back's own endpoints — so the lower arc end is a point the operator put down and
+         * needs a grip like the other two.
+         *
+         * **Through the reader, not off the raw base.** A rotate writes turned coordinates
+         * straight onto the base without passing them through `normalizeDrawnBase`, and a
+         * turn computed in projected metres does not leave a geodesic 120 degree arc exactly
+         * consistent. The drawing re-reads and settles them; publishing the raw pair meant the
+         * grips were placed from one description and the arc from another, so point 3's dot
+         * sat off the symbol after a rotation. (User's report, 2026-09-06.)
+         * @see arcAndArrowAnchorsFromClicks
          */
         const coords = base.geometry?.coordinates;
         if (Array.isArray(coords?.[0]) && coords.length >= 3) {
-            return this.asMultiPointFeature((coords as Position[]).slice(0, 3));
+            const settled = arcAndArrowAnchorsFromClicks(coords as Position[]);
+            if (settled) return this.asMultiPointFeature(settled);
         }
 
         const read = this.frame(base, opts);
