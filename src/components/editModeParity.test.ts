@@ -131,14 +131,8 @@ describe('the affordances a graphic offers', () => {
         [TacticalGraphicName.Neutralize, {rotate: false, resize: true}],
         [TacticalGraphicName.Suppress, {rotate: false, resize: true}],
         [TacticalGraphicName.Airfield, {rotate: false, resize: true}],
-        /*
-         * **Roadblock complete turns as of 2026-09-05.** It refused rotation while it was
-         * dropped whole at a fixed 45-degree bearing — there was no orientation to turn.
-         * It is drawn from a centreline now, exactly like the three demolition readiness
-         * states it shares a rule with, so its bearing is that line's and rotating it means
-         * something. @see RoadblockComplete
-         */
-        [TacticalGraphicName.RoadblockCompleteExecuted, {rotate: true, resize: true}],
+        // 271204 is excluded — see ai/excluded-graphics.md. Its row is removed rather than
+        // skipped: a commented enum member is not a member, so the table cannot name it.
     ] as const)('offers %s exactly the gestures its symbol allows', (name, expected) => {
         const gestures = allowedGestures(name);
         expect({rotate: gestures.rotate, resize: gestures.resize}).toEqual(expected);

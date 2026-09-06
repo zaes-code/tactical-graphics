@@ -17,7 +17,16 @@ const names = () => Object.keys(GRAPHIC_ENTITY_CODES) as TacticalGraphicName[];
 const codesFromSpecificationComments = (): Map<string, string> => {
     const source = readFileSync(join(__dirname, 'specifications.ts'), 'utf8');
     const found = new Map<string, string>();
-    const pattern = /\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ APP-06 (\d{6})/g;
+    /*
+     * **A commented-out entry is not an entry.** An excluded graphic keeps its line here,
+     * commented, so the exclusion is a switch rather than a deletion — see
+     * `ai/excluded-graphics.md`. A parser that reads the line anyway then demands a code
+     * from a registry the graphic has left, which is a failure about nothing.
+     *
+     * `^\s*` with the `m` flag is what makes "at the start of the line" the test, so a
+     * commented entry is skipped while a live one with its trailing comment still matches.
+     */
+    const pattern = /^\s*\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ APP-06 (\d{6})/gm;
     let match = pattern.exec(source);
     while (match) {
         found.set(match[1], match[2]);
@@ -93,7 +102,8 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 310 assignments over 309 distinct codes -- 141100 is the one shared pair.
-        expect(codes).toHaveLength(309);
+        // 309 assignments over 308 distinct codes -- 141100 is the one shared pair. Was 310
+        // over 309 until 271204 was switched off. @see ai/excluded-graphics.md
+        expect(codes).toHaveLength(308);
     });
 });

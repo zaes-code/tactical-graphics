@@ -235,7 +235,8 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:           '271201',  // Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:             '271202',  // Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: '271203',  // Explosives, State of Readiness 2 (Armed but Passable)
-    [TacticalGraphicName.RoadblockCompleteExecuted]:                   '271204',  // Roadblock Complete (Executed)
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]:                   '271204',  // Roadblock Complete (Executed)
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:              '290201',  // Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:            '290203',  // Antitank Ditch Reinforced, with Antitank Mines

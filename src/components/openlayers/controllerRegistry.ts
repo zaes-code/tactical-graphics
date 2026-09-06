@@ -714,7 +714,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * is the same defect that moved the three readiness states off a fixed 45 degrees.
      * @see RoadblockComplete for how the three points are read.
      */
-    [TacticalGraphicName.RoadblockCompleteExecuted]: movement(2),
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]: demolition,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),

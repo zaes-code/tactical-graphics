@@ -890,9 +890,22 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Gap]: 2,
     [TacticalGraphicName.FordEasy]: 2,
     [TacticalGraphicName.FordDifficult]: 2,
-    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 2,
-    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 2,
-    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 2,
+    /*
+     * **The demolition block places all three of its points, from 2026-09-05.** 271201
+     * states them and 271204 inherits the rule: *"Points 1 and 2 define the endpoints of
+     * the symbol and point 3 defines the location of one side of the symbol"*, with
+     * *"points 1 and 2 determine the centreline of the symbol and point 3 determines its
+     * width."*
+     *
+     * Point 3 was a derived offset handle, and the separation it set was carried as a
+     * `width` amplifier beside the base. It is a stored vertex now, so the separation comes
+     * out of the coordinates and there is nothing to keep in step with them. (User's call.)
+     */
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 3,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 3,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 3,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]: 3,
     [TacticalGraphicName.MineCluster]: 2,
     [TacticalGraphicName.TripWire]: 2,
     [TacticalGraphicName.RaftSite]: 2,

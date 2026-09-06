@@ -769,7 +769,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: SHAPE_ONLY,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: SHAPE_ONLY,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: SHAPE_ONLY,
-    [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: SHAPE_ONLY,
