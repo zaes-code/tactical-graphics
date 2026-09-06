@@ -181,12 +181,12 @@ const barAndStem = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * 152000 attack by fire: **two clicks, and a grip on each of the three points they make.**
  *
- * The draw is capped at two because its own Size/Shape constraints construct the third — the
- * same trade 141700 ambush makes — and vertex dragging is enabled for all three, because once
- * they are stored each is the operator's. @see firePositionAnchors
+ * Points 2 and 3 give the back line its length and its orientation, so both are placed; the
+ * arrow is squared onto their perpendicular bisector rather than aimed. The second click
+ * previews the third. @see firePositionAnchors
  */
 const attackByFire = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new Block(name, sizing * 20, res), 2, name).enableVertexDragging(3);
+    new LineGraphicController(new Block(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
 const firePosition = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 4, name).enableVertexDragging(4);

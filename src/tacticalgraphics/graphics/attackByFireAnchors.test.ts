@@ -38,7 +38,7 @@ const gap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 const anchors = (clicks: Position[]) => normalizeDrawnBase(NAME, clicks);
 
 describe('152000 reads two clicks into the three points its plate names', () => {
-    it('keeps the tip and the clicked end exactly, and constructs only the third', () => {
+    it('keeps the tip and the clicked end exactly while previewing, at two clicks', () => {
         const [tip, two, three] = anchors(CLICKS);
         expect(anchors(CLICKS)).toHaveLength(3);
         expect(meters(tip, CLICKS[0])).toBeLessThan(1);
@@ -46,6 +46,42 @@ describe('152000 reads two clicks into the three points its plate names', () => 
         // so the second click means the same thing every time.
         expect(meters(two, CLICKS[1])).toBeLessThan(1);
         expect(meters(three, CLICKS[1])).toBeGreaterThan(1);
+    });
+
+    it('keeps points 2 and 3 exactly where they were placed, at three clicks', () => {
+        /*
+         * **The back line is the operator's, length and orientation both.** *"Points 2 and 3
+         * determine the length of the straight line on the back side of the symbol."* Two
+         * clicks had to guess one of them; three do not. (User's call: "let's let the user
+         * pick point 3 as documentation says. That will let them decide length of line 2,3".)
+         */
+        for (const back of [[[0, 0.05], [0, -0.05]], [[0.01, 0.09], [-0.03, -0.02]]] as Position[][]) {
+            const placed: Position[] = [CLICKS[0], back[0], back[1]];
+            const [, two, three] = anchors(placed);
+            expect(meters(two, back[0])).toBeLessThan(1);
+            expect(meters(three, back[1])).toBeLessThan(1);
+        }
+    });
+
+    it('squares point 1 onto the bisector of the back line, wherever it was clicked', () => {
+        /*
+         * Three free points over-constrain the arrow — it cannot start at point 1, meet the
+         * midpoint *and* stand square unless one of them gives. Point 1 does, and it is read
+         * for the one thing the symbol can express: how far the arrow reaches from the
+         * middle. Its component along the back line is dropped rather than stored and
+         * ignored. ("Arrowline needs to always be at the middle/center of line 2,3.")
+         */
+        const back: Position[] = [[0, 0.05], [0, -0.05]];
+        const middle = turf.midpoint(turf.point(back[0]), turf.point(back[1])).geometry.coordinates as Position;
+        // Three very different aims for point 1, including two well off the bisector.
+        for (const aim of [[0.08, 0], [0.08, 0.04], [0.06, -0.05]] as Position[]) {
+            const [one] = anchors([aim, back[0], back[1]]);
+            const axis = turf.bearing(turf.point(middle), turf.point(one));
+            const line = turf.bearing(turf.point(back[0]), turf.point(back[1]));
+            expect(Math.abs(gap(axis, line) - 90)).toBeLessThan(0.5);
+            // …and the reach it kept is the across-component of the aim, not its full length.
+            expect(meters(one, middle)).toBeLessThanOrEqual(meters(aim, middle) + 1);
+        }
     });
 
     it('satisfies both of the plate\'s constraints exactly', () => {
@@ -79,8 +115,8 @@ describe('152000 reads two clicks into the three points its plate names', () => 
         expect(meters(anchors(dragged)[2], dragged[2])).toBeLessThan(1);
     });
 
-    it('spends two clicks on a three-point symbol, with a grip on each', () => {
-        expect(drawClickCount(NAME)).toBe(2);
+    it('places all three of its points, with a grip on each', () => {
+        expect(drawClickCount(NAME)).toBe(3);
         expect(baseVertexCount(NAME)).toBe(3);
         expect(handleContract(NAME).roles).toEqual(['shape', 'shape', 'shape']);
 

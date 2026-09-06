@@ -1314,13 +1314,14 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * judged finished by that. @see securityOperationAnchors, sketchIsComplete
      */
     /*
-     * **152000 spends two clicks on a three-point symbol**, exactly as 141700 ambush does and
-     * for the identical reason: *"The rear of the arrowhead line shall connect to the midpoint
-     * of the line between points 2 and 3. The arrowhead line shall be perpendicular to the
-     * line formed by points 2 and 3."* Those close the third point once the first two are
-     * down. @see firePositionAnchors
+     * **152000 places all three**, because points 2 and 3 are what its Size/Shape cell gives
+     * the back line's length *and* orientation to. Two clicks would have to guess one of
+     * them. What gives way instead is point 1, which is read for its reach from the middle
+     * and squared onto the perpendicular bisector — so the plate's other two sentences hold
+     * by construction. The two-click form survives as the preview.
+     * (User's call, 2026-09-06.) @see firePositionAnchors
      */
-    [TacticalGraphicName.AttackByFire]: 2,
+    [TacticalGraphicName.AttackByFire]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,
