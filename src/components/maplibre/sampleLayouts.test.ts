@@ -390,4 +390,70 @@ describe('a cane arrow edits like a cane arrow', () => {
             expect(Math.abs(settled[2][1] - base[2][1])).toBeGreaterThan(0.2);
         }
     });
+
+    it('draws nothing from a single click, like its siblings', () => {
+        /*
+         * **A whole symbol on click 1 is a dropped graphic, not a draw in progress.** Pursuit
+         * fell through to its dropped form on a one-point path, so a full default-sized hook
+         * appeared the instant the map was clicked and then jumped when the run was stated.
+         * The seven canes show nothing, because their fallback is driven by the drawn line.
+         * (User's report: "can we stop adding the previous full graphic on click 1?")
+         */
+        for (const name of FAMILY) {
+            const one = renderTacticalGraphic({
+                type: 'Feature',
+                properties: {tacticalGraphic: {name, radius: 180_000, rotation: 0}},
+                geometry: {type: 'LineString', coordinates: [[-0.8, 20]]},
+            } as Feature);
+            const parts = (one.graphic.geometry as {coordinates?: unknown[]}).coordinates ?? [];
+            expect(parts).toHaveLength(0);
+        }
+    });
+
+    it('previews from two clicks, off the run the operator drew', () => {
+        // …and it is a preview, not a default: the hook is a share of the drawn run, so it
+        // follows the cursor rather than sitting at a fixed size. @see hookAnchorsFromClicks
+        for (const run of [1.2, 3.6]) {
+            const two = renderTacticalGraphic({
+                type: 'Feature',
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Pursuit, radius: 180_000, rotation: 0}},
+                geometry: {type: 'LineString', coordinates: [[-0.8, 20], [-0.8 + run, 20]]},
+            } as Feature);
+            const parts = (two.graphic.geometry as {coordinates: number[][][]}).coordinates;
+            expect(parts.length).toBeGreaterThan(0);
+            const line = parts[0];
+            expect(Math.hypot(line[1][0] - line[0][0], line[1][1] - line[0][1])).toBeCloseTo(run, 2);
+        }
+    });
+
+    it('holds the arc square to the run however point 3 is dragged', () => {
+        /*
+         * **The one freedom 344000 does not give this symbol.** *"The 180 degree circular arc
+         * is always perpendicular to the line"*, so point 3 is read for its distance across
+         * the run and its side, and its component *along* the run is discarded. Both engines
+         * drag a base vertex straight to the pointer, so the constraint can only live in the
+         * re-derivation — and pursuit's generator read its three points raw, which is why an
+         * edited hook came out as a bent line with no arc at all rather than a semicircle.
+         * (User's report, 2026-09-06: "the arch can be dragged around, unlike the other
+         * canes".) @see hookAnchorsFromClicks
+         */
+        const angle = (a: number[], b: number[]) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+        for (const name of FAMILY) {
+            // Point 3 dragged well along the run as well as across it.
+            for (const third of [[0.4, 19.4], [1.9, 19.1], [-0.6, 20.8]] as Position[]) {
+                const rendered = renderTacticalGraphic({
+                    type: 'Feature',
+                    properties: {tacticalGraphic: {name, radius: 40_000, rotation: 0}},
+                    geometry: {type: 'LineString', coordinates: [[-0.8, 20], [0.4, 20], third]},
+                } as Feature);
+                const parts = (rendered.graphic.geometry as {coordinates: number[][][]}).coordinates;
+                const run = parts.find(part => part.length === 2)!;
+                const arc = parts.reduce((a, b) => (b.length > a.length ? b : a), parts[0]);
+                const chord = angle(arc[0], arc[arc.length - 1]);
+                const gap = Math.abs(((angle(run[0], run[1]) - chord + 540) % 360) - 180);
+                // A diameter square to the run reads 90; anything else is a bent hook.
+                expect(Math.abs(gap - 90)).toBeLessThan(3);
+            }
+        }
+    });
 });

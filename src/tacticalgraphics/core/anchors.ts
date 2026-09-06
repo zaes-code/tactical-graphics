@@ -714,6 +714,68 @@ export function turnBulgesLeft(tip: Position, bend: Position, far: Position): bo
     return (((leg - chord + 540) % 360) - 180) > 0;
 }
 
+/**
+ * The hook a half-drawn pursuit shows, as a share of the run it hangs off.
+ *
+ * A preview default and nothing more — 344000 states no size for the arc, and click 3 sets
+ * it. A quarter keeps the semicircle clearly subordinate to the straight portion, which is
+ * the proportion the plate's own Template draws. @see hookAnchorsFromClicks
+ */
+export const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
+
+/**
+ * 344000's three points from an operator's clicks — **including a half-placed set.**
+ *
+ * Two readings, and the second is why this lives here rather than in the draw path alone:
+ *
+ * 1. **Two clicks already describe a pursuit, so one is drawn.** The run is stated the
+ *    moment the cursor leaves the first click, and the third point is constructed at a
+ *    share of it until the operator states it. That is a **preview convention and not a
+ *    reading of the plate** — 344000 gives the hook no default size — and click 3 replaces
+ *    it with the measured value.
+ * 2. **Three clicks: the third is pulled onto the perpendicular at point 2.** The click is
+ *    read for how far it is across the run, which is the arc's diameter, and which side it
+ *    fell on. Its component *along* the run is discarded — that is the freedom the standard
+ *    does not give this symbol, and honouring it bent the hook off square.
+ *
+ * **Fewer than two points draws nothing**, which is the whole reason this moved out of the
+ * draw path. `normalizeDrawnBase` runs at draw *end*, so mid-draw the generator saw the raw
+ * sketch, failed to read a hook from one point, and fell through to the *dropped* form — a
+ * default-sized symbol parked on click 1, appearing whole the instant the map was clicked.
+ * The seven cane arrows show nothing there, because their fallback is driven by the line the
+ * operator drew rather than by a size. (User's report, 2026-09-06: "can we stop adding the
+ * previous full graphic on click 1? Do the same we do for other cane graphics".)
+ */
+export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    const [start, join] = clicks;
+    const runBearing = turf.bearing(turf.point(start), turf.point(join));
+
+    if (clicks.length === 2) {
+        const run = turf.distance(turf.point(start), turf.point(join), {units: 'meters'});
+        if (!isFinite(run) || run <= 0) return undefined;
+        const tip = turf.destination(turf.point(join), run * PURSUIT_PREVIEW_HOOK_SHARE, runBearing + 90, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        return [start, join, tip];
+    }
+
+    const click = clicks[2];
+    const toClick = turf.bearing(turf.point(join), turf.point(click));
+    const reach = turf.distance(turf.point(join), turf.point(click), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    // The component across the run, signed: its magnitude is the diameter and its sign is
+    // the flank the hook turns to.
+    const across = reach * Math.sin(((toClick - runBearing) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const tip = turf.destination(turf.point(join), Math.abs(across), runBearing + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [start, join, tip];
+}
+
 /** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
 export const PARALLEL_LEGS_HALF_OPENING = 0.35;
 

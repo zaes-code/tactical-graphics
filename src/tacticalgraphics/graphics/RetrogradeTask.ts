@@ -142,6 +142,9 @@ export class RetrogradeTask extends TacticalGraphicsBase<PointGraphicOptions> {
         if (!frame) {
             const graphic = geometryService.getCaneArrow(base, opts.size, opts.size, opts.mirrored ?? false);
             const cane = graphic.geometry.coordinates[graphic.geometry.coordinates.length - 1];
+            // A one-click base draws no cane, so there is no grip to publish either.
+            // @see GeometryService.getCaneArrow
+            if (!cane?.length) return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 1));
             return this.asMultiPointFeature([cane[cane.length - 1], base.geometry.coordinates[1]]);
         }
         return this.asMultiPointFeature([frame.far, frame.join, frame.tip]);
