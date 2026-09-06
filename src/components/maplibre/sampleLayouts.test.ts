@@ -24,6 +24,8 @@ import {
     listTacticalGraphicNames,
     renderTacticalGraphic,
 } from '@zaes/tactical-graphics';
+import {baseVertexCount, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import type {Feature, Position} from 'geojson';
 import {sampleFeatureCollection} from './sampleGallery';
 
 /**
@@ -170,5 +172,91 @@ describe('the symbols whose furniture is a screen size get a longer run', () => 
                 return base.length === 2 && reachOf(base) > ordinary * 1.01;
             });
         expect(longer).toEqual([]);
+    });
+});
+
+/**
+ * # The shared sheet stores the base a draw would
+ *
+ * `sampleFeatureCollection` is what **both** engines restore from, so a base it gets wrong
+ * is wrong twice. Every sweep defect reported over 2026-09-05/06 was of that kind — squat
+ * symbols, two grips where a hand-drawn graphic had three, a grip half a symbol from any
+ * stored point — and in each case the symbol drawn by hand was already correct.
+ *
+ * `normalizeDrawnBase` is the door every draw and every restore comes in by, and it is
+ * idempotent. So running it over the sheet's own base is the comparison that was missing:
+ * anything it *moves* is a shape no draw can produce.
+ *
+ * Stated in degrees, which is what `candidateGeometries` lays out in, so there is no
+ * projection slack to allow for — unlike the OpenLayers sweep, which works in metres.
+ * @see sampleGallery.test.ts, "the sweep stores the base a draw would"
+ */
+describe('the shared sample sheet stores drawable bases', () => {
+    /** What `sampleFeatureCollection` validates its candidates with. @see SAMPLE_RADIUS_M */
+    const SAMPLE_RADIUS_M = 180_000;
+
+    const NAMES = listTacticalGraphicNames() as TacticalGraphicName[];
+
+    it('hands every graphic a base its own normalizer leaves alone', () => {
+        const moved: string[] = [];
+        for (const name of NAMES) {
+            const base = sampleBase(name);
+            if (base.length < 2) continue;
+            const settled = normalizeDrawnBase(name, base as Position[]);
+            const span = Math.max(reachOf(base), 1e-9);
+            const worst = settled.length === base.length
+                ? Math.max(...settled.map((p, i) => Math.hypot(p[0] - base[i][0], p[1] - base[i][1])))
+                : Infinity;
+            // A thousandth of the symbol's own reach. The layouts are built in the same
+            // units the normalizer reads, so anything above that is a different shape.
+            if (worst / span > 1e-3) moved.push(`${name} (${base.length} -> ${settled.length})`);
+        }
+        expect(moved).toEqual([]);
+    });
+
+    it('publishes every grip on a point the base actually stores', () => {
+        /*
+         * A handle that is not on a vertex is a handle a vertex drag cannot pick up — which
+         * is exactly what "the sweep ones can't be dragged from point 3" was. Only for the
+         * graphics whose grips *are* their vertices: one publishing a derived frame says so
+         * through `usesDrawnAnchors`, and its grips are not vertices by design.
+         */
+        const stray: string[] = [];
+        for (const name of NAMES) {
+            if (usesDrawnAnchors(name) || isRectangular(name) || baseVertexCount(name) === undefined) continue;
+            const base = sampleBase(name);
+            if (base.length < 2) continue;
+            let handles;
+            try {
+                handles = renderTacticalGraphic({
+                    type: 'Feature',
+                    // The same amplifiers the sheet validates its candidate with. Without
+                    // them the arrow generators get an undefined size and produce NaN
+                    // coordinates, which is the probe's fault and not the sheet's.
+                    properties: {tacticalGraphic: {name, radius: SAMPLE_RADIUS_M, rotation: 0}},
+                    geometry: {type: 'LineString', coordinates: base},
+                } as Feature).handles?.geometry;
+            } catch (error) {
+                // A base the sheet stores that its own generator refuses is the same defect
+                // one vertex further on, so it is reported rather than thrown.
+                stray.push(`${name} does not render: ${(error as Error).message}`);
+                continue;
+            }
+            if (!handles || handles.type !== 'MultiPoint') continue;
+            const span = Math.max(reachOf(base), 1e-9);
+            const contract = handleContract(name);
+            handles.coordinates.forEach((handle, index) => {
+                // **Only the grips the library says are vertices.** `handleContract` is what
+                // both renderers read to decide what a grip *does*, and an `offset` or
+                // `mirror` grip is a derived mark by design — the block family's width handle
+                // sits three sizes off the base on purpose. Asking those to be on a vertex
+                // would be asserting that the contract does not work.
+                const role = contract.roles[index] ?? contract.repeating;
+                if (role !== 'shape') return;
+                const nearest = Math.min(...base.map(b => Math.hypot(handle[0] - b[0], handle[1] - b[1])));
+                if (nearest / span > 0.05) stray.push(`${name} ${(100 * nearest / span).toFixed(0)}%`);
+            });
+        }
+        expect(stray).toEqual([]);
     });
 });
