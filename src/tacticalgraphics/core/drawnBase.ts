@@ -562,6 +562,27 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
          * (User's call, 2026-09-06.) @see BRACKET_GRAPHICS
          */
         case TacticalGraphicName.Penetration:
+        /*
+         * **The three obstacle bypasses carry the bracket tasks' sentence word for word.**
+         *
+         * 270601: *"Points 1 and 2 define the tips of the arrowheads and point 3 defines the
+         * rear of the symbol"*, and *"Points 1 and 2 determine the symbol's height and point
+         * 3 determines its length. The vertical line at the rear of the symbol shall be the
+         * same length as the opening and shall be perpendicular to the parallel lines"*.
+         * 270602 and 270603 inherit it; only the rear bar's form differs between the three.
+         *
+         * So the same projection, for the same reason: the rear bar is fixed square to the
+         * opening and the same length as it, which leaves point 3 with nothing to say except
+         * how far back the rear sits. An along-edge component in the click cannot reach the
+         * picture — `ObstacleBypass.generateGraphics` already drops it with a `cos(skew)` —
+         * so storing it only put the grip out beside the symbol instead of on the middle of
+         * the rear bar, where the plate's PT.3 leader lands. (User's report, 2026-09-06:
+         * "obstacle center handle (point 3) [...] is not centered on that line but rather
+         * where user clicked".) @see ObstacleBypass
+         */
+        case TacticalGraphicName.ObstacleBypassEasy:
+        case TacticalGraphicName.ObstacleBypassDifficult:
+        case TacticalGraphicName.ObstacleBypassImpossible:
             return sideAnchors(clicks);
 
         default:

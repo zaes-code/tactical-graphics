@@ -686,16 +686,29 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
     [TacticalGraphicName.MobilityCorridor]:                 line(),
-    // Three anchor points: two arrow tips and the rear. Handle 2 is the rear, which is
-    // the one that moves the whole shape.
     // Centre, then the two radii. Handle 0 is the centre and moves the whole zone.
     [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3, 0),
     // An even number of points, half per ring, so the draw cannot be capped.
     // Six was the old pair traced end to end. Zone 1 alone is a polygon, so three.
     [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 3, 0),
-    [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3, 2),
-    [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3, 2),
-    [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3, 2),
+    /*
+     * **Three anchor points, and every one of them reshapes.**
+     *
+     * Point 3 was declared the anchor here until 2026-09-06 — "the one that moves the whole
+     * shape" — which made it *inert* under a reshape, because the manager refuses the anchor
+     * rather than letting it scale. So the one grip APP-06 270601 gives the symbol's length,
+     * *"point 3 determines its length"*, was the one grip that could not change it. Moving
+     * the whole graphic is what translate mode is for. (User's report, 2026-09-06: "it is not
+     * letting the user drag to lengthen the graphic".)
+     *
+     * It was also a renderer-local answer to a question the library owns: `anchorVertex` has
+     * never listed these three, so MapLibre let point 3 lengthen the symbol all along and the
+     * two engines disagreed. Saying nothing here is what makes them agree.
+     * @see ANCHOR_VERTEX, ai/conventions.md "A symbology fact never lives in a holder"
+     */
+    [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3),
+    [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3),
+    [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3),
     [TacticalGraphicName.Mineline]:                         line(),
     [TacticalGraphicName.MineCluster]:                      line(2),
     [TacticalGraphicName.TripWire]:                         line(2),
