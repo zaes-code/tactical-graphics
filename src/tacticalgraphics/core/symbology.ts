@@ -1308,6 +1308,15 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Demonstration]: 3,
     [TacticalGraphicName.ReliefInPlace]: 3,
     /*
+     * **342201/2/3 take four clicks, one per anchor point.** Stated here even though it
+     * equals `baseVertexCount`, because `normalizeDrawnBase` *upgrades* a two-point base for
+     * these — an old save, laid out as the mirror it used to derive — and a draw must not be
+     * judged finished by that. @see securityOperationAnchors, sketchIsComplete
+     */
+    [TacticalGraphicName.Cover]: 4,
+    [TacticalGraphicName.Guard]: 4,
+    [TacticalGraphicName.Screen]: 4,
+    /*
      * **200700 is here despite storing a single point.** Its three clicks are read into an
      * azimuth and two ranges rather than into anchor points, so it is not in
      * `DRAWN_BY_ANCHOR_CLICKS` — but how many clicks the draw takes is the same question for

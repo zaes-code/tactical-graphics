@@ -1155,12 +1155,18 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Seize]: 4,
-    // Cover, guard and screen: point 1 at an arrowhead and point 2 at that arrow's inner
-    // end. The second arrow is derived from them, so the base is two points however many
-    // anchor points APP-06 numbers. @see SecurityOperation
-    [TacticalGraphicName.Cover]: 2,
-    [TacticalGraphicName.Guard]: 2,
-    [TacticalGraphicName.Screen]: 2,
+    /*
+     * **Cover, guard and screen: the four anchor points 342201 numbers, all placed.**
+     *
+     * Two until 2026-09-06 — point 1 at an arrowhead, point 2 at that arrow's inner end,
+     * and the second arrow mirrored from them. That made the two arrows always equal and
+     * always collinear, which the plate's Size/Shape cell explicitly does not ask for:
+     * *"The length and orientation of the arrows can vary independently."*
+     * @see securityOperationAnchors
+     */
+    [TacticalGraphicName.Cover]: 4,
+    [TacticalGraphicName.Guard]: 4,
+    [TacticalGraphicName.Screen]: 4,
 
     [TacticalGraphicName.FollowAndAssume]: 2,
     [TacticalGraphicName.FollowAndSupport]: 2,

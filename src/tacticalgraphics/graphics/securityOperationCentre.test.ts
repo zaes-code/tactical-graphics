@@ -24,7 +24,7 @@ import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {rotationAnchor, rotationPivot} from '../core/handles';
 import {TacticalGraphicName} from '../core/type';
-import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from './SecurityOperation';
+import {SECURITY_OPERATION_GRAPHICS, securityOperationAnchors, securityOperationBaseCentre} from './SecurityOperation';
 
 /** One arm drawn west to east: the arrowhead, then its inner end. */
 const TIP: Position = [-2, 10];
@@ -87,5 +87,83 @@ describe('a security operation turns and scales about its middle', () => {
         // is exactly why it is worth pinning that it is *not* treated like them.
         expect(SECURITY_OPERATION_GRAPHICS).not.toContain(TacticalGraphicName.Escort);
         expect(rotationAnchor(BASE, TacticalGraphicName.Escort)).toEqual(TIP);
+    });
+});
+
+describe('342201: the two arrows vary independently', () => {
+    /*
+     * > Size/Shape. Points 1 and 2 and Points 3 and 4 determine the length of the arrows.
+     * > **The length and orientation of the arrows can vary independently.**
+     * >
+     * > Orientation. […] The tactical symbol indicator is centred between point 2 and point 3.
+     *
+     * The operator drew one arm until 2026-09-06 and the second was mirrored from it, so the
+     * two were always equal in length and always collinear. Both of those are things the
+     * plate says need not hold. (User's call: "we need to let them pick the 4 points".)
+     */
+    const P1: Position = [-2, 10];
+    const P2: Position = [0.4, 10];
+    /** Point 3 nowhere near the mirror's place, and point 4 on a different bearing. */
+    const P3: Position = [1.2, 10.9];
+    const P4: Position = [2.6, 12.4];
+    const FOUR = [P1, P2, P3, P4];
+
+    const rendered = (coordinates: Position[]) =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Screen}},
+            geometry: {type: 'LineString', coordinates},
+        } as Feature);
+
+    it('keeps each arrow at the length and bearing its own two points give it', () => {
+        const parts = (rendered(FOUR).graphic.geometry as MultiLineString).coordinates;
+        // The generator emits `[arm, head, arm, head]`; each arm runs from its inner end out.
+        const [armA, , armB] = parts;
+        // **Measured as a ratio, because an arm is a folded polyline.** `ARM_PROFILE` steps
+        // sideways before the arrowhead, so an arm's end-to-end distance is its length times
+        // sqrt(1 + depth^2) — about 1.2% longer. That factor is the same for both arms and
+        // cancels here, where comparing either against its own two points would not.
+        const endToEnd = (line: Position[]) => meters(line[0], line[line.length - 1]);
+        expect(endToEnd(armB) / endToEnd(armA)).toBeCloseTo(meters(P3, P4) / meters(P2, P1), 2);
+        // Each starts exactly at its own inner end, which is not folded and is exact.
+        expect(meters(armA[0], P2)).toBeLessThan(1);
+        expect(meters(armB[0], P3)).toBeLessThan(1);
+        // …and the two lengths differ, which the old mirrored construction could not express.
+        expect(Math.abs(endToEnd(armA) - endToEnd(armB))).toBeGreaterThan(meters(P2, P1) * 0.1);
+        const bearing = (line: Position[]) =>
+            turf.bearing(turf.point(line[0]), turf.point(line[line.length - 1]));
+        const opposed = Math.abs(Math.abs(bearing(armA) - bearing(armB)) - 180);
+        expect(opposed).toBeGreaterThan(5);
+    });
+
+    it('centres the symbol between points 2 and 3, wherever they are', () => {
+        // The plate names this construction outright. It is also the only one that always
+        // has an answer: the two arms' axes extended meet at the same place while they are
+        // symmetric, and nowhere at all once they are parallel.
+        const centre = rotationAnchor({type: 'LineString', coordinates: FOUR}, TacticalGraphicName.Screen);
+        const midpoint = turf.midpoint(turf.point(P2), turf.point(P3)).geometry.coordinates as Position;
+        expect(meters(centre, midpoint)).toBeLessThan(1);
+    });
+
+    it('publishes a grip on each of the four, where they were put', () => {
+        const handles = (rendered(FOUR).handles.geometry as {coordinates: Position[]}).coordinates;
+        expect(handles).toHaveLength(4);
+        FOUR.forEach((point, i) => expect(meters(handles[i], point)).toBeLessThan(1));
+    });
+
+    it('upgrades a two-point save without moving it', () => {
+        /*
+         * The one property that makes the change safe: every screen already saved is two
+         * points, and the second arm is laid out as the mirror the generator used to derive.
+         * The old centre sat `HALF_GAP_RATIO` of an arm beyond point 2, and the derived
+         * point 3 sits twice that — so the plate's midpoint lands exactly where the old
+         * centre was, and the picture does not move.
+         */
+        const two = [TIP, INNER];
+        const four = securityOperationAnchors(two)!;
+        expect(four).toHaveLength(4);
+        const before = JSON.stringify((rendered(two).graphic.geometry as MultiLineString).coordinates);
+        const after = JSON.stringify((rendered(four).graphic.geometry as MultiLineString).coordinates);
+        expect(after).toEqual(before);
     });
 });
