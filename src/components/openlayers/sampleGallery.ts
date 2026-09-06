@@ -31,6 +31,8 @@
 import {Feature} from 'ol';
 import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import {
@@ -41,7 +43,11 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     acrossPointAtEnd,
+    drawsAsHairpin,
+    hairpinBase,
     carriesSeparationInBase,
+    drawsByAnchorClicks,
+    normalizeDrawnBase,
     frontEdgeBase,
     getDisplayName,
     groundLength,
@@ -751,7 +757,29 @@ export function applyBaseGeometry(
         // line handed to one of those puts its head on the *west* end — a sheet of arrows
         // pointing back the way the standard's own plates draw them coming. @see storedOrder
         const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow, name)) as Coordinate[];
-        handler.setBaseFeature(lineFeature(path, symbolId, name));
+        /*
+         * **The base a draw would have produced, not a hand-laid imitation of one.**
+         *
+         * A graphic whose clicks are read into anchor points stores something other than the
+         * clicks — 343300 and 341900 place three and store four, with the fourth derived so
+         * their two straights stay parallel. Handed the raw path, the sample stored a
+         * fourth point the generator then ignored, so a save-and-restore *normalised* it and
+         * the base moved once. `normalizeDrawnBase` is the same function the manager runs on
+         * `drawend`, so this is that base rather than one that merely resembles it.
+         */
+        /*
+         * **Through 4326 and back, because the library speaks degrees.** `normalizeDrawnBase`
+         * is turf all the way down and these are projected metres; handed metres its distance
+         * and bearing guards fail and it returns the path untouched, which looks exactly like
+         * a graphic that needed no normalising. The manager's own `normalizeDrawnGeometry`
+         * converts for the same reason. @see ai/conventions.md, "no turf on projected coords"
+         */
+        const stored = drawsByAnchorClicks(name)
+            ? (normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(
+                  c => fromLonLat(c as Coordinate),
+              ) as Coordinate[])
+            : path;
+        handler.setBaseFeature(lineFeature(stored, symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }
@@ -791,6 +819,9 @@ function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?
     if (name && carriesSeparationInBase(name)) {
         return frontEdgeBase([cx, cy], half, pts, acrossPointAtEnd(name) ? 1 : 0.5) as Coordinate[];
     }
+    // Two legs and a turn. The quadrilateral below normalises into a symbol half this wide,
+    // which is correct and unreadable beside its neighbours. @see hairpinBase
+    if (name && drawsAsHairpin(name)) return hairpinBase([cx, cy], half) as Coordinate[];
     if (pts === 3) {
         return [
             [cx - half, cy + half * 0.2],

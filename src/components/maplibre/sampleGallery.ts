@@ -11,6 +11,8 @@ import {
     AltitudeDatum,
     baseVertexCount,
     acrossPointAtEnd,
+    drawsAsHairpin,
+    hairpinBase,
     carriesSeparationInBase,
     frontEdgeBase,
     isRectangular,
@@ -161,7 +163,11 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
             type: 'LineString',
             coordinates: storedOrder(
                 name,
-                frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3, acrossPointAtEnd(name) ? 1 : 0.5),
+                // A hairpin's four stored points are three clicks, so it wants its own base
+                // rather than the front edge's fourth point. @see hairpinBase
+                drawsAsHairpin(name)
+                    ? hairpinBase([lon, lat], runHalf)
+                    : frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3, acrossPointAtEnd(name) ? 1 : 0.5),
             ),
         };
         return [base, line, ring, point];
