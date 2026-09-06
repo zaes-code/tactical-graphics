@@ -594,6 +594,7 @@ export function setBend(
         )
         : clamp((dx * Math.sin(theta) + dy * -Math.cos(theta)) / size);
 
+
     return {...description, properties: {...description.properties, bend}};
 }
 

@@ -1,7 +1,7 @@
 import Feature from 'ol/Feature';
 import MultiLineString from 'ol/geom/MultiLineString';
 import Point from 'ol/geom/Point';
-import {TacticalGraphicName, baseVertexCount, renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, baseVertexCount, carriesSeparationInBase, editStretches, renderTacticalGraphic} from '@zaes/tactical-graphics';
 import {barSymbolStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import {getController} from './controllerRegistry';

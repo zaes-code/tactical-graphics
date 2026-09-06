@@ -32,6 +32,7 @@ import {
     clampEnvelopmentBend,
     envelopmentBendFrom,
     clampTurnBend,
+    turnBendFrom,
     RANGE_FAN_BAND_OFFSET,
     handleContract,
     handleRole,
@@ -1694,8 +1695,12 @@ export class MapLibreInteractions {
          * radius long. The handle is the anchor here, and its own bearing is whatever
          * `rotation` put it at — which is precisely what makes the two engines agree.
          */
-        const edge = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
-        this.renderer.setMeasure([center, edge]);
+        const rim = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
+        // For a named band the line stops **on that ring**, projected along centre → rim, so
+        // the label — which MapLibre derives from the line's own length — states the range
+        // the hand is changing rather than the outermost one.
+        const edge = bandIndex === undefined ? rim : projectOnto(center, rim, radius);
+        this.renderer.setMeasure([center, edge], bandCaption(graphic, bandIndex));
     }
 
     private readonly onPointerUp = (): void => {

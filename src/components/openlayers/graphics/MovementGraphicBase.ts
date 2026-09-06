@@ -199,16 +199,24 @@ export class MovementGraphicBase implements LineGraphic {
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
         this.graphic.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, 2), pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
+        /*
+         * **As many path handles as the base has vertices**, which is two for the movement
+         * family and three for the demolition block, whose point 3 became a placed vertex
+         * on 2026-09-05. A fixed `slice(0, 2)` published the first two and left the third
+         * to the offset handle below — right while that point was derived, and wrong once
+         * it is one of the points the operator placed. @see BASE_VERTEX_COUNT
+         */
+        const pathHandles = baseVertexCount(this.graphicName) ?? 2;
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, pathHandles), pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
 
         // A generator that emits fewer than three handle points is declaring that
         // the graphic has no width to drag — its shape follows entirely from its
         // two endpoints (MobileDefense, which emits just the far one). Leave the
         // offset handle without a geometry and drop it from getFeatures(), so it
         // neither renders nor resolves to this controller on a pointer-down.
-        this.hasOffsetHandle = handleCoords.length > 2;
+        this.hasOffsetHandle = handleCoords.length > pathHandles;
         if (this.hasOffsetHandle) {
-            this.offsetHandle.setGeometry(new Point(handleCoords[2]));
+            this.offsetHandle.setGeometry(new Point(handleCoords[pathHandles]));
         }
 
         this.labels.setGeometry(labels);

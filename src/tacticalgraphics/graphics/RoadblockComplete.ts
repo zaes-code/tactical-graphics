@@ -28,14 +28,11 @@ import {halfWidthFromSide, sidePoint} from './ExplosivesReadiness';
  */
 const SEPARATION_RATIO = 0.2;
 
-/** How far each bar leans off the drawn axis. */
-const BAR_LEAN_DEG = 45;
-
 /**
  * Roadblock complete (executed) - FM 1-02.2 table 5-19, APP-06 271204.
  *
- * Two overlapping crosses: four bars, a leaning pair each way, displaced along the drawn
- * axis so the crosses sit side by side and share their middle.
+ * One cross with both of its arms doubled: four bars, a leaning pair each way, the pair
+ * displaced **across** the drawn centreline so the two arms cross at the middle.
  *
  * **Drawn from a centreline and a width, like the three readiness states it sits with.**
  * It was dropped on one point at a fixed 45-degree bearing until 2026-09-05, on the reading

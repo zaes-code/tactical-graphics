@@ -699,11 +699,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * `0` is the "no maximum" argument. @see vertexLine
      */
     [TacticalGraphicName.Abatis]:                 vertexLine(0, 2),
-    // The demolition family is a drawn centerline with a width, so it takes the
-    // movement contract: two vertices plus an offset handle. @see ai/app-6.md "F2"
-    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: movement(2),
-    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: movement(2),
-    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: movement(2),
+    /*
+     * The demolition family is a drawn centreline with a width. **All three of its points
+     * are placed as of 2026-09-05**: 271201 names them, and the third — which sets how far
+     * apart the rails sit — was a derived offset handle with the separation carried beside
+     * the base as a `width`. It is a stored vertex now, so the rails separate and contract
+     * live as the third click is aimed. @see sideAnchors, ai/app-6.md "F2"
+     */
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: demolition,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: demolition,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: demolition,
     /*
      * **Roadblock complete joins them, as of 2026-09-05.** It was point-dropped on the
      * reading that "no centerline-and-width rule in APP-06 describes" two overlapping X's.

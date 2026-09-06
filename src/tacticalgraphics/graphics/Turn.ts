@@ -17,8 +17,8 @@ export const TURN_DEFAULT_BEND = 0.5;
  *
  * **The floor was 0.15 and is now 0.02.** It was there to keep a bow that still reads as
  * a turn rather than a straight line, which is a fair thing to want — but the bend handle
- * sits at `|bend| x size` from the centre, so the floor is also a wall the *handle* stops
- * at: measured on a 300 px chord, it tracked the cursor exactly for 100 px and then froze
+ * sits a fixed share of `|bend| x size` from the centre, so the floor is also a wall the
+ * *handle* stops at: measured on a 300 px chord, it tracked the cursor exactly for 100 px and then froze
  * dead while the pointer kept going, and picked up again from where it had stopped on the
  * way back. A handle that stops following is the same silent refusal a floor on a resize
  * was, and it reads as the drag accelerating away from the graphic.
@@ -248,11 +248,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      */
     generateHandles(base: Feature<any>, opts?: TurnOptions): Feature<MultiPoint> {
         const {center, angle, size, bend} = this.frame(base, opts);
-        // `bendLine` bows toward `bearing + 90`, i.e. clockwise of the chord's
-        // direction, which is a planar angle of `rotation − 90`.
-        const control = geometryService.translateCoordinates(center, Math.abs(bend) * size, angle - Math.sign(bend) * Math.PI / 2);
-        const tip = geometryService.translateCoordinates(center, size, angle);
-        return this.asMultiPointFeature([control, tip, center]);
+        return this.asMultiPointFeature(anchorsForBow(center, size, toDegrees(angle), bend));
     }
 
     generateLabels(base: Feature<any>, opts?: TurnOptions): Feature<Point> {
