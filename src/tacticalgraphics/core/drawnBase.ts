@@ -246,6 +246,9 @@ export function hairpinBase(center: Position, half: number): Position[] {
  */
 export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3): Position[] | undefined {
     if (drawsAsHairpin(name)) return hairpinBase(center, half);
+    // Its point 1 is an arrowhead where the rest of its family's is an edge end, so the front
+    // edge's order is wrong for it however right the positions are. @see firePositionBase
+    if (name === TacticalGraphicName.AttackByFire) return firePositionBase(center, half);
     if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
     return undefined;
 }
@@ -262,6 +265,35 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
 export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
     return carriesSeparationInBase(name);
 }
+
+/**
+ * The base 152000 attack by fire expects, for anything that has to synthesise one.
+ *
+ * **Its point roles are the reverse of the block family's it otherwise sits with.** Block and
+ * disrupt give points 1 and 2 to the vertical line the enemy runs into and point 3 to the
+ * stem; 152000 gives point 1 to the *arrowhead's tip* and points 2 and 3 to the back line. So
+ * `frontEdgeBase` lays out the right three positions in the wrong order for it — the sheet
+ * read an edge end as the tip, and squaring point 1 onto the back line's own bisector then
+ * collapsed the symbol to half its width.
+ *
+ * The tip is placed at the far end of the run so the arrow reads left to right like every
+ * other line sample, and the back line is set at the ratio the symbol draws at, so the swept
+ * graphic is the shape a hand-drawn one settles into. @see firePositionAnchors
+ */
+export function firePositionBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const back = half * FIRE_POSITION_SAMPLE_BAR_RATIO;
+    return [[cx - half, cy], [cx + half, cy - back], [cx + half, cy + back]];
+}
+
+/**
+ * The back line's half-height in a synthesised sample, as a share of the run.
+ *
+ * The same 0.45 the symbol has always been drawn at — kept here rather than imported so this
+ * module states a *layout*, not a dependency on the generator's own proportions, which are
+ * free to change without moving the sheet. @see FIRE_POSITION_BAR_RATIO
+ */
+const FIRE_POSITION_SAMPLE_BAR_RATIO = 0.45;
 
 /** Whether this graphic is drawn as a hairpin. @see hairpinBase, hairpinAnchors */
 export function drawsAsHairpin(name: TacticalGraphicName): boolean {

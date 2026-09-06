@@ -19,38 +19,58 @@ import * as turf from '../core/turf';
 const FIRE_POSITION_BAR_RATIO = 0.45;
 
 /**
- * APP-06 152000's three anchor points from two clicks: the tip, and one end of the back line.
+ * APP-06 152000's three anchor points, from however many clicks are down.
  *
  * > Anchor Points: This symbol requires three anchor points. Point 1 is the tip of the
  * > arrowhead. Points 2 and 3 define the endpoints of the straight line on the back side of
  * > the symbol.
  * >
- * > Size/Shape: […] The rear of the arrowhead line shall connect to the midpoint of the line
+ * > Size/Shape: Points 2 and 3 determine the length of the straight line on the back side of
+ * > the symbol. The rear of the arrowhead line shall connect to the midpoint of the line
  * > between points 2 and 3. The arrowhead line shall be perpendicular to the line formed by
  * > points 2 and 3.
  *
- * **Those last two sentences are 141700 ambush's, word for word**, and they have the same
- * consequence: they leave a *family* of symbols rather than one. Fix the tip and one end of
- * the back line and the remaining freedom is which way the axis runs — every choice satisfies
- * "perpendicular" and "midpoint". Ambush closes it by holding the shape and letting the click
- * set only the size, and this does the same, with the ratio the symbol is already drawn at.
- * (User's call, 2026-09-06: "attack by fire should be same behaviour as ambush".)
+ * **All three are placed, and it is point 1 that gives way.** Points 2 and 3 set the back
+ * line's length *and* its orientation, exactly as the Size/Shape cell says. That leaves the
+ * arrow over-constrained — it must start at point 1, meet the midpoint, and stand square to
+ * the back line, which three free points cannot all satisfy — so point 1 is read for the one
+ * thing the symbol can express: **how far it reaches from the middle**. Its component along
+ * the back line is discarded and it is set on the perpendicular bisector, which makes both of
+ * the plate's sentences true by construction rather than by the operator's aim. (User's call,
+ * 2026-09-06: "let the user pick point 3 as documentation says […] arrowline needs to always
+ * be at the middle/center of line 2,3".)
  *
- * The arithmetic is a right triangle: the axis makes `atan(ratio)` with the click, so the
- * shaft is `span / sqrt(1 + ratio^2)` and the bar's half-height is `ratio` times that. The
- * click is kept **exactly** as point 2 and point 3 is its mirror across the axis, so the two
- * ends are the same distance out by construction rather than by rounding.
+ * That is `sideAnchors`' arithmetic, about the midpoint instead of an edge's end — the same
+ * projection the bracket tasks and the obstacle bypasses apply to *their* third point, for
+ * the same reason: a component the symbol cannot draw is better dropped than stored.
+ *
+ * **Two clicks preview it.** The tip and one end of the back line leave a family of symbols
+ * rather than one, so the preview closes it the way 141700 ambush does — the shape is held at
+ * the ratio the symbol is already drawn at and the click sets only the size — and the third
+ * click replaces that guess with a placed point. The arithmetic there is a right triangle:
+ * the axis makes `atan(ratio)` with the click, so the shaft is `span / sqrt(1 + ratio^2)`.
  */
 export function firePositionAnchors(clicks: Position[] | undefined): Position[] | undefined {
     if (!clicks || clicks.length < 2) return undefined;
-    /*
-     * **Three points are three placed points.** Only the *draw* constructs point 3; once it
-     * is stored it is the operator's, and a base that already has it is returned untouched.
-     * Recomputing it here from points 1 and 2 would have made a drag of the back line's far
-     * end spring back on every render — which is the shape of defect this same reader is
-     * meant to prevent, one point further on.
-     */
-    if (clicks.length >= 3) return clicks.slice(0, 3);
+
+    if (clicks.length >= 3) {
+        const [tip, one, two] = clicks;
+        const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
+        const back = turf.bearing(turf.point(one), turf.point(two));
+        const reach = turf.distance(turf.point(middle), turf.point(tip), {units: 'meters'});
+        if (!Number.isFinite(reach) || reach <= 0) return undefined;
+
+        // The tip's component *across* the back line: its magnitude is how far the arrow
+        // reaches and its sign is the side the arrow leaves on.
+        const toTip = turf.bearing(turf.point(middle), turf.point(tip));
+        const across = reach * Math.sin(((toTip - back) * Math.PI) / 180);
+        if (!Number.isFinite(across) || across === 0) return undefined;
+
+        const squared = turf.destination(turf.point(middle), Math.abs(across), back + Math.sign(across) * 90, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        return [squared, one, two];
+    }
 
     const [tip, click] = clicks;
     const span = turf.distance(turf.point(tip), turf.point(click), {units: 'meters'});
