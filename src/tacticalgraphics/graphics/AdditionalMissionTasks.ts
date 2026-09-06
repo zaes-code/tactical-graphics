@@ -3,6 +3,7 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import * as turf from '../core/turf';
+import {squareOntoBisector} from '../core/anchors';
 
 /**
  * The bar half-height of a fire-position symbol, as a fraction of the shaft the
@@ -55,21 +56,8 @@ export function firePositionAnchors(clicks: Position[] | undefined): Position[] 
 
     if (clicks.length >= 3) {
         const [tip, one, two] = clicks;
-        const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
-        const back = turf.bearing(turf.point(one), turf.point(two));
-        const reach = turf.distance(turf.point(middle), turf.point(tip), {units: 'meters'});
-        if (!Number.isFinite(reach) || reach <= 0) return undefined;
-
-        // The tip's component *across* the back line: its magnitude is how far the arrow
-        // reaches and its sign is the side the arrow leaves on.
-        const toTip = turf.bearing(turf.point(middle), turf.point(tip));
-        const across = reach * Math.sin(((toTip - back) * Math.PI) / 180);
-        if (!Number.isFinite(across) || across === 0) return undefined;
-
-        const squared = turf.destination(turf.point(middle), Math.abs(across), back + Math.sign(across) * 90, {
-            units: 'meters',
-        }).geometry.coordinates as Position;
-        return [squared, one, two];
+        const squared = squareOntoBisector(tip, one, two);
+        return squared ? [squared, one, two] : undefined;
     }
 
     const [tip, click] = clicks;

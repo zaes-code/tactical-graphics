@@ -1293,6 +1293,18 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
         // point, never against the handle the user grabbed.
+        /*
+         * **A grip on each of the three points, once all three are placed.** 141700 became a
+         * three-click graphic on 2026-09-06 — points 2 and 3 are the curved back's own
+         * endpoints — so the lower arc end is a point the operator put down and needs a grip
+         * like the other two. The pair below already landed exactly on points 1 and 2; it was
+         * only point 3 that had none. @see squareOntoBisector
+         */
+        const coords = base.geometry?.coordinates;
+        if (Array.isArray(coords?.[0]) && coords.length >= 3) {
+            return this.asMultiPointFeature((coords as Position[]).slice(0, 3));
+        }
+
         const {center, rotation, radius: r, reach} = this.frame(base, opts);
         const arcEnd = geometryService.createCircularArc(center, rotation, r, 60, 61, 1)[0];
         const arrowTip = geometryService.createCircularArc(center, rotation, reach * r, 0, 1, 1)[0];

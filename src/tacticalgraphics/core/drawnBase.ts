@@ -36,6 +36,7 @@ import {
     ARC_ARROW_DEFAULT_REACH,
     bowFromAnchors,
     hookAnchorsFromClicks,
+    squareOntoBisector,
     hairpinAnchors,
     runAndArcFromAnchors,
 } from './anchors';
@@ -655,6 +656,23 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
  */
 function ambushAnchors(clicks: Position[]): Position[] | undefined {
     if (clicks.length < 2) return undefined;
+
+    /*
+     * **Three clicks place all three points**, as of 2026-09-06 — the same change 152000
+     * attack by fire took the same day, on the same pair of sentences. Points 2 and 3 are the
+     * arc's own endpoints, so placing both is what lets the operator set the curved back's
+     * span *and* which way it faces; the arc's radius follows from the chord, since it spans
+     * a known 120 degrees. Point 1 is squared onto their bisector, which is also exactly what
+     * `arcAndArrowFromAnchors` assumes when it solves for the centre — it walks the geodesic
+     * from the chord's midpoint through the tip, and that is the symmetry axis only if the
+     * tip is on it. @see squareOntoBisector
+     */
+    if (clicks.length >= 3) {
+        const [tip, one, two] = clicks;
+        const squared = squareOntoBisector(tip, one, two);
+        return squared ? [squared, one, two] : undefined;
+    }
+
     const [tip, click] = clicks;
     const reach = ARC_ARROW_DEFAULT_REACH;
 
