@@ -28,10 +28,17 @@ import {drawsTipFirst} from './drawOrder';
  * - `reach` — sets both size and bearing from one cursor position: the far end of
  *   a chord carries how long it is and which way it points.
  * - `band` — sets one range-fan band's range, by index.
+ * - `extend` — moves **one end of a two-ended symbol**, leaving the other where it is. The
+ *   grip is an anchor point and it follows the cursor; the far end is the anchor. Distinct
+ *   from `reach`, which measures from the centre and so moves *both* ends at once.
+ * - `opening` — sets a sector's half-angle, **symmetrically about its axis**. One grip for
+ *   one number, which is what 200700's *stop relative bearing* is: "an equal angle either
+ *   side of the search axis". Distinct from `band`, which moves a distance, and from the
+ *   weapon fan's per-band arc ends, which are two independent absolute bearings.
  * - `mirror` — turns the symbol over, without moving a vertex. Dragging it must not
  *   resize: it is a reflection, not a dimension. @see MIRROR_HANDLE_AT_0
  */
-export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band' | 'mirror';
+export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'extend' | 'band' | 'mirror' | 'opening';
 
 export interface HandleContract {
     /** Role of each handle, by index. */
@@ -434,6 +441,23 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     }
     if (RANGE_FANS.includes(name)) {
         return {roles: [], repeating: 'band'};
+    }
+    /**
+     * **200700: the radar, its two ranges, and the opening.**
+     *
+     * Not in `RANGE_FANS` — those publish a rim per band and nothing else, and this publishes
+     * a fixed four with a different last one. Index 0 is the radar, which is inert; 1 and 2
+     * are the start and stop ranges, which is the `band` role at the same
+     * `RANGE_FAN_BAND_OFFSET` the fans use; 3 is the *stop relative bearing*.
+     *
+     * Stated here because it is what MapLibre routes drags by. Left out, all four grips
+     * resolved to the default `shape`, which that switch drops on the floor — so 200700 could
+     * be drawn on MapLibre and then not edited at all, while OpenLayers, which dispatches its
+     * rims through the holder instead, worked. (User's report, 2026-09-05.)
+     * @see RadarSearchDoctrine.generateHandles, setSectorOpening
+     */
+    if (name === TacticalGraphicName.RadarSearchDoctrine) {
+        return {roles: ['band', 'band', 'band', 'opening']};
     }
     return SHAPE_ONLY;
 }

@@ -649,10 +649,22 @@ export class NativeLayerRenderer {
      * Editor chrome, so it lives in its own source rather than in the paint buckets:
      * it must never reach `snapshot`, a sample sweep or a restored map.
      */
-    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null): void {
+    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null, caption?: string): void {
         this.measure = line;
+        this.measureCaption = caption;
         this.realizeEditorMarks();
     }
+
+    /**
+     * A word naming which dimension the read-out is reporting, or nothing.
+     *
+     * Nothing for a circle, whose single figure needs no explaining. A symbol with more than
+     * one dimension has to say which is moving: 200700 has a start range and a stop range,
+     * and an unlabelled figure beside one of them does not say which the drag is changing.
+     * `MissionTaskGraphicBase.measureCaption` is the same rule on the other engine, and the
+     * rendered text is assembled the same way — caption, space, distance.
+     */
+    private measureCaption?: string;
 
     /**
      * Marks where a drag would add a vertex, or clears the mark.
@@ -838,7 +850,7 @@ export class NativeLayerRenderer {
             }]
             : []);
 
-        this.setData('measure', this.measure ? measureFeatures(this.measure) : []);
+        this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption) : []);
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{

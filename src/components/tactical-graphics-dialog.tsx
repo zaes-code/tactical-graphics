@@ -134,24 +134,48 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
         labels.grid = stored.grid;
     }
     /*
-     * **A fixed-band graphic is seeded by its own geometry, so it is not seeded here.**
+     * **What the graphic actually carries, before anything is invented for it.**
      *
-     * 200700 is drawn from three anchor points, and its two ranges are the distances
-     * between them — the drawing is the authority, and there is nothing in the selection to
-     * reconstruct them from. Writing a bag here would put a typed override on a graphic the
-     * user never typed into, and the generator prefers a typed range to a drawn one, so
-     * opening the dialog and pressing OK would move the arcs. Left undefined, the editor
-     * shows the ranges as placeholders and commits a pair only once one is edited.
+     * This skipped a fixed-band graphic entirely, on the reading that 200700's ranges were
+     * the distances between three drawn anchor points and so had nothing in the selection to
+     * reconstruct them from. That stopped being true when 200700 went back to storing one
+     * anchor point and its four numbers: the ranges are `rangeFan.bands` now, they are right
+     * there in the selection, and skipping them left the editor showing its own placeholders
+     * — a start range of 1000 m against a symbol drawn at 1455 km — which pressing OK would
+     * then have written back over the real pair. (User's report, 2026-09-05.)
+     *
+     * The original point survives in the second branch: a fan with no typed bands still gets
+     * no invented ones, because the generator prefers a typed range to a drawn one and a bag
+     * written here would be a typed override the user never asked for.
      */
-    if (fields.rangeFan && fields.fixedBands === undefined) {
-        // First time opening the editor on this fan: seed a single band at the drawn
-        // radius so pressing OK does not snap the geometry to the fallback. Both
-        // `graphicSize` and a band's range are metres as of 3.2.0 — this divided by a
-        // thousand, which was right while bands were kilometres and now seeds a fan a
-        // thousand times too small. @see RangeFanBand.range
-        labels.rangeFan = stored.rangeFan ?? {
-            bands: [{range: selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000}],
-        };
+    /*
+     * 200700's four numbers, carried into the dialog as themselves.
+     *
+     * They have to be listed here like every other field: this bag is a **whitelist**, and
+     * `writeGraphicProperties` replaces the amplifier bag rather than merging it — so a value
+     * the dialog does not carry through is a value the next edit drops. Left out, the modal
+     * opened on its own placeholders and OK wrote them over the real four.
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    if (fields.stopRelativeBearing) {
+        labels.searchAxisAzimuthDeg = stored.searchAxisAzimuthDeg;
+        labels.startRange = stored.startRange;
+        labels.stopRange = stored.stopRange;
+        labels.stopRelativeBearingDeg = stored.stopRelativeBearingDeg;
+    }
+    if (fields.rangeFan) {
+        if (stored.rangeFan) {
+            labels.rangeFan = stored.rangeFan;
+        } else if (fields.fixedBands === undefined) {
+            // First time opening the editor on this fan: seed a single band at the drawn
+            // radius so pressing OK does not snap the geometry to the fallback. Both
+            // `graphicSize` and a band's range are metres as of 3.2.0 — this divided by a
+            // thousand, which was right while bands were kilometres and now seeds a fan a
+            // thousand times too small. @see RangeFanBand.range
+            labels.rangeFan = {
+                bands: [{range: selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000}],
+            };
+        }
     }
 
     return labels;
@@ -1106,7 +1130,32 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 {fields.rangeFan &&
                                     (() => {
                                         const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
-                                        const isSector = selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector;
+                                        /*
+                                         * **A sector is a shape, and two graphics have it.** This asked the name
+                                         * and got the weapon fan alone, so 200700 — which is a sector by every
+                                         * reading of its plate — was offered neither an axis nor an opening, and
+                                         * its modal carried two of the four numbers the standard names.
+                                         * @see stopRelativeBearing
+                                         */
+                                        const relativeBearing = !!fields.stopRelativeBearing;
+                                        /*
+                                         * **200700 is edited as its own four numbers.** It rode the fans'
+                                         * bands until 2026-09-05; the saved file now names them the way the
+                                         * plate does, and this reads and writes those directly rather than
+                                         * translating in and out of a different symbol's amplifiers.
+                                         * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+                                         */
+                                        const radar = pendingChanges.labels as {
+                                            searchAxisAzimuthDeg?: number;
+                                            startRange?: number;
+                                            stopRange?: number;
+                                            stopRelativeBearingDeg?: number;
+                                        };
+                                        const setRadar = (patch: Record<string, number | undefined>) =>
+                                            setPendingChanges(prev => ({...prev, labels: {...prev.labels, ...patch}}));
+                                        const isSector =
+                                            selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector || relativeBearing;
+                                        const axisLabel = relativeBearing ? 'Search Axis Azimuth (° from N)' : 'Center Azimuth (° from N)';
                                         /*
                                          * **A plate that names its ranges gets one row each, and no list.**
                                          *
@@ -1168,6 +1217,47 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                             if (bands.length <= 1) return; // keep at least one band
                                             updateConfig({...config, bands: bands.filter((_, i) => i !== index)});
                                         };
+                                        /*
+                                         * The opening, as the half-angle either side of the axis.
+                                         *
+                                         * Read off the outermost band, because that is the one 200700's *stop*
+                                         * relative bearing belongs to, and defaulted to the same 45 degrees the
+                                         * generator opens an untouched wedge at. Only the angle *between* the
+                                         * two stored bearings is meaningful — the generator re-centres the pair
+                                         * on the search axis — so it is written about zero and the axis field
+                                         * stays the only thing that aims the symbol.
+                                         */
+                                        const normAz = (deg: number) => ((deg % 360) + 360) % 360;
+                                        /*
+                                         * **The axis in force, which is not always the typed one.**
+                                         *
+                                         * `resolveCenterAzimuth` reads `centerAzimuthDeg ?? 90 - rotation`, so a
+                                         * sector that has only ever been drawn and turned has no typed azimuth at
+                                         * all — and the field sat empty while the symbol plainly pointed
+                                         * somewhere. (User's report, 2026-09-05.) Showing the same fallback the
+                                         * generator uses is what makes the box agree with the picture.
+                                         *
+                                         * Typing into it still writes `centerAzimuthDeg` and still wins; a rotate
+                                         * afterwards drops that value and the reading falls back here again.
+                                         * @see RangeFanGraphicBase.handleRotate
+                                         */
+                                        const axisInForce =
+                                            radar.searchAxisAzimuthDeg !== undefined
+                                                // A tenth of a degree in the box. The stored value keeps its
+                                                // precision; a drag produces a float and 17 digits in a 90px
+                                                // field reads as noise, exactly as it did for the ranges.
+                                                ? Math.round(radar.searchAxisAzimuthDeg * 10) / 10
+                                                : config.centerAzimuthDeg !== undefined
+                                                  ? config.centerAzimuthDeg
+                                                  : measured.rotation !== undefined
+                                                    ? Math.round(normAz(90 - measured.rotation) * 10) / 10
+                                                    : undefined;
+                                        const outerBand = bands[bands.length - 1];
+                                        const halfAngle =
+                                            outerBand?.leftAzimuthDeg !== undefined && outerBand?.rightAzimuthDeg !== undefined
+                                                ? Math.round((normAz(outerBand.rightAzimuthDeg - outerBand.leftAzimuthDeg) / 2) * 10) / 10
+                                                : 45;
+
                                         const parseAzimuthInput = (raw: string): number | undefined => {
                                             const v = raw.replace(/[^0-9.\-]/g, '');
                                             if (v === '' || v === '-' || v === '.') return undefined;
@@ -1198,17 +1288,30 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                                     label={bandLabel(i)}
                                                                     type="number"
                                                                     inputProps={{step: 100, min: 0, inputMode: 'numeric'}}
-                                                                    value={band.range ?? ''}
+                                                                    // Whole metres in the box. A range measured off a drag is a
+                                                                    // float, and a 17-digit number in a 90px field reads as noise;
+                                                                    // the stored value keeps its precision until someone types.
+                                                                    value={
+                                                                        relativeBearing
+                                                                            ? Math.round(
+                                                                                  (i === 0 ? radar.startRange : radar.stopRange) ??
+                                                                                      band.range ??
+                                                                                      0,
+                                                                              )
+                                                                            : band.range !== undefined
+                                                                              ? Math.round(band.range)
+                                                                              : ''
+                                                                    }
                                                                     onChange={e => {
                                                                         const v = e.target.value;
-                                                                        if (v === '') {
-                                                                            updateBand(i, {range: 0});
+                                                                        const metres = v === '' ? 0 : parseFloat(v);
+                                                                        if (!Number.isFinite(metres)) return;
+                                                                        // 200700 writes the plate's own field; a fan writes its band.
+                                                                        if (relativeBearing) {
+                                                                            setRadar(i === 0 ? {startRange: metres} : {stopRange: metres});
                                                                             return;
                                                                         }
-                                                                        const metres = parseFloat(v);
-                                                                        if (Number.isFinite(metres)) {
-                                                                            updateBand(i, {range: metres});
-                                                                        }
+                                                                        updateBand(i, {range: metres});
                                                                     }}
                                                                 />
                                                             </FormControl>
@@ -1292,18 +1395,46 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 {isSector && (
                                                     <Box sx={{minWidth: 180, mt: 2}}>
                                                         <FormControl fullWidth variant="outlined">
-                                                            <InputLabel htmlFor="center-azimuth-input">Center Azimuth (° from N)</InputLabel>
+                                                            <InputLabel htmlFor="center-azimuth-input">{axisLabel}</InputLabel>
                                                             <OutlinedInput
                                                                 id="center-azimuth-input"
-                                                                label="Center Azimuth (° from N)"
+                                                                label={axisLabel}
                                                                 inputProps={{inputMode: 'decimal'}}
-                                                                value={config.centerAzimuthDeg !== undefined ? String(config.centerAzimuthDeg) : ''}
-                                                                onChange={e =>
-                                                                    updateConfig({
-                                                                        ...config,
-                                                                        centerAzimuthDeg: parseAzimuthInput(e.target.value),
-                                                                    })
-                                                                }
+                                                                value={axisInForce !== undefined ? String(axisInForce) : ''}
+                                                                onChange={e => {
+                                                                    const az = parseAzimuthInput(e.target.value);
+                                                                    if (relativeBearing) {
+                                                                        setRadar({searchAxisAzimuthDeg: az});
+                                                                        return;
+                                                                    }
+                                                                    updateConfig({...config, centerAzimuthDeg: az});
+                                                                }}
+                                                            />
+                                                        </FormControl>
+                                                    </Box>
+                                                )}
+
+                                                {/*
+                                                  * **The fourth of 200700's four numbers.** The plate states one
+                                                  * *stop relative bearing* — "an equal angle either side of the
+                                                  * search axis" — so it is typed once and written onto every band
+                                                  * as a symmetric pair. @see stopRelativeBearing
+                                                  */}
+                                                {relativeBearing && (
+                                                    <Box sx={{minWidth: 180, mt: 2}}>
+                                                        <FormControl fullWidth variant="outlined">
+                                                            <InputLabel htmlFor="relative-bearing-input">Stop Relative Bearing (°)</InputLabel>
+                                                            <OutlinedInput
+                                                                id="relative-bearing-input"
+                                                                label="Stop Relative Bearing (°)"
+                                                                type="number"
+                                                                inputProps={{step: 1, min: 1, max: 179, inputMode: 'decimal'}}
+                                                                value={String(radar.stopRelativeBearingDeg ?? halfAngle)}
+                                                                onChange={e => {
+                                                                    const half = parseFloat(e.target.value);
+                                                                    if (!Number.isFinite(half)) return;
+                                                                    setRadar({stopRelativeBearingDeg: Math.min(179, Math.max(1, half))});
+                                                                }}
                                                             />
                                                         </FormControl>
                                                     </Box>

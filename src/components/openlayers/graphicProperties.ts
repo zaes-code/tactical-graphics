@@ -136,5 +136,15 @@ export function readGraphicGeometryState(feature: FeatureLike): GraphicGeometryS
     if (rotation !== undefined) state.rotation = rotation;
     if (bend !== undefined) state.bend = bend;
     if (mirrored !== undefined) state.mirrored = mirrored;
+    /*
+     * **200700's four numbers are shape inputs too**, and this is a whitelist — a value not
+     * copied out here never reaches `applyRestoredGeometry`, so a saved radar search doctrine
+     * came back at a fallback size however faithfully it had been written.
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    if (bag.searchAxisAzimuthDeg !== undefined) state.searchAxisAzimuthDeg = bag.searchAxisAzimuthDeg;
+    if (bag.startRange !== undefined) state.startRange = bag.startRange;
+    if (bag.stopRange !== undefined) state.stopRange = bag.stopRange;
+    if (bag.stopRelativeBearingDeg !== undefined) state.stopRelativeBearingDeg = bag.stopRelativeBearingDeg;
     return state;
 }

@@ -1,12 +1,15 @@
 import {Stroke, Style} from "ol/style";
 import {Coordinate} from "ol/coordinate";
+import {fromLonLat, toLonLat} from "ol/proj";
+import type {Position} from "geojson";
 import {MultiLineString, MultiPoint} from "ol/geom";
-import {RangeFanOptions, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {RadarSearchFrame, RangeFanOptions, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
+import {latitudeFromMercatorY, projectedLength} from '@zaes/tactical-graphics';
 import openlayersAdapter from "../openlayersAdapter";
 import {getRangeFanLabelStyleFn, LINE_WIDTH, radarSearchDoctrineStyleFunc, readHostilityColor} from "../openlayerStyles";
-import {resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
+import {RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, radarSectorOpening, resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
 /**
@@ -93,17 +96,163 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
     }
 
     /**
+     * Which band the current gesture is moving, or nothing when it is not moving one.
+     *
+     * A fan has a range per ring, so "the size" is not one number and the inherited read-out
+     * — which reports `size`, the outermost — named the wrong ring for every drag but the
+     * last one. Dragging 200700's *start* range showed the stop range's figure sitting still
+     * while the arc under the hand moved. @see measureStated
+     */
+    private measuringBand?: number;
+
+    /** The range of the band being dragged, which is the number the hand is changing. */
+    protected measureStated(): number {
+        const band = this.bandBeingDragged();
+        return band?.range ?? super.measureStated();
+    }
+
+    /**
+     * Names the ring, because a two-ring symbol's figure does not say which is moving.
+     *
+     * 200700's two are named individually by its plate — a start range and a stop range — so
+     * those are the words. A weapon fan's rings are an arbitrary stack with no doctrinal
+     * names, so it keeps the bare figure it has always shown. @see fixedBands
+     */
+    protected measureCaption(): string | undefined {
+        if (this.measuringBand === undefined) return super.measureCaption();
+        if (this.name !== TacticalGraphicName.RadarSearchDoctrine) return super.measureCaption();
+        return ['Start', 'Stop'][this.measuringBand] ?? undefined;
+    }
+
+    /** The line stops on the ring being dragged, not on the outermost one. */
+    protected measureEdge(): Coordinate | undefined {
+        const band = this.bandBeingDragged();
+        const anchor = this.gestureAnchor;
+        const center = this.centerCoordinate();
+        if (!band || !anchor || !center) return super.measureEdge();
+
+        // Projected metres, like the parent: the line lives in EPSG:3857 and a ground
+        // distance laid out raw falls short by cos(latitude). @see mercator.ts
+        const reach = projectedLength(band.range, latitudeFromMercatorY(center[1]));
+        const dx = anchor[0] - center[0];
+        const dy = anchor[1] - center[1];
+        const len = Math.hypot(dx, dy);
+        if (!(len > 0) || !(reach > 0)) return super.measureEdge();
+        return [center[0] + (dx / len) * reach, center[1] + (dy / len) * reach];
+    }
+
+    private bandBeingDragged(): {range: number} | undefined {
+        if (this.measuringBand === undefined) return undefined;
+        if (this.isRadarSearch) {
+            if (!this.radar) return undefined;
+            // 200700 has two named ranges rather than a stack of rings. @see radar
+            const range = this.measuringBand === 0 ? this.radar.startRange : this.radar.stopRange;
+            return range === undefined ? undefined : {range};
+        }
+        return resolveBands(this.currentOptions())[this.measuringBand];
+    }
+
+    /**
      * Re-runs geometry generation with the current `graphicLabels.rangeFan`
      * config merged in. Called both by the parent's drag pipeline (size /
      * rotation changes) and by setLabel (bands / azimuths changed).
      */
+    /**
+     * 200700's four numbers — **the whole description of the symbol**, and what it saves as.
+     *
+     * It used to be held as the fans' `rangeFan` bands with the axis smuggled into `rotation`
+     * and the opening into a pair of absolute band azimuths, because it shares this holder.
+     * The saved file then described a radar search doctrine in a different symbol's terms,
+     * and two of the four values the plate names appeared nowhere under their own names.
+     * (User's report, 2026-09-05.) @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     *
+     * `startRange` is absent between the second click and the third, which is what the
+     * generator reads as "half drawn" and draws a bare arc for.
+     */
+    private radar?: {
+        searchAxisAzimuthDeg: number;
+        startRange?: number;
+        stopRange: number;
+        stopRelativeBearingDeg: number;
+    };
+
+    /** The four, as generator options — empty for the two weapon fans, which have none. */
+    private radarOptions(): Partial<RangeFanOptions> {
+        return this.radar ? {...this.radar} : {};
+    }
+
+    /** Whether this holder is carrying 200700 rather than one of the two weapon fans. */
+    private get isRadarSearch(): boolean {
+        return this.name === TacticalGraphicName.RadarSearchDoctrine;
+    }
+
+    /**
+     * Keeps 200700's stated ranges in step with an inherited **resize**.
+     *
+     * A resize is the one gesture that moves the symbol's size without going through a grip
+     * that names a range: it drives `size` on the holder, which every point-anchored graphic
+     * has. With the ranges stated separately, a resized 200700 drew at the new size and *saved*
+     * at the old one — it came back its original size, which is what
+     * `manipulateRoundTrip.test.ts` caught. Both ranges scale, because a resize scales the
+     * whole symbol rather than moving one arc.
+     */
+    private syncRadarState(): void {
+        if (!this.isRadarSearch || !(this.size > 0)) return;
+
+        /*
+         * **Every 200700 carries its four, however it was made.** A graphic built without a
+         * draw — the sample gallery, a thumbnail, a host constructing one, `manipulateRoundTrip`
+         * — never reaches `applyRadarSearchFrame`, so it had no stated shape and saved an empty
+         * bag: it drew correctly off the inherited `size` and `rotation` and came back at a
+         * fallback size. Seeded from those two, with the plate's own default proportions.
+         */
+        if (!this.radar) {
+            this.radar = {
+                searchAxisAzimuthDeg: normAz(90 - this.rotation),
+                startRange: this.size * RSD_DEFAULT_START_SHARE,
+                stopRange: this.size,
+                stopRelativeBearingDeg: RSD_DEFAULT_RELATIVE_BEARING_DEG,
+            };
+            return;
+        }
+
+        /*
+         * **`searchAxisAzimuthDeg` and `rotation` are one bearing**, and this is the one place
+         * that says so. Every inherited gesture drives `rotation` — the rotate affordance, a
+         * restore, the selection box — while the generator reads the azimuth, so maintaining
+         * the identity here rather than inside each gesture is what stops the symbol turning
+         * under some routes and not others. The dialog writes the azimuth and sets `rotation`
+         * from it, so the invariant holds in both directions. @see setLabel
+         */
+        const axis = normAz(90 - this.rotation);
+
+        /*
+         * **A resize moves `size` without naming a range.** It is the one gesture that changes
+         * the symbol's scale outside a grip, so both ranges scale with it — otherwise a resized
+         * 200700 drew at the new size and saved at the old one.
+         */
+        const stop = this.radar.stopRange;
+        const scale = stop > 0 && Math.abs(this.size - stop) > 1e-6 ? this.size / stop : 1;
+        this.radar = {
+            ...this.radar,
+            searchAxisAzimuthDeg: axis,
+            startRange: this.radar.startRange === undefined ? undefined : this.radar.startRange * scale,
+            stopRange: this.size,
+        };
+    }
+
     updateGeometry = () => {
+        this.syncRadarState();
         const rangeFan = this.graphicLabels?.rangeFan;
         const opts: RangeFanOptions = {
             size: this.size,
             rotation: this.rotation,
             bands: rangeFan?.bands,
             centerAzimuthDeg: rangeFan?.centerAzimuthDeg,
+            // 200700 is described by its own four numbers; the band fields above stay for the
+            // two weapon fans, and for a 200700 restored from a snapshot written before
+            // 2026-09-05, whose four are still in that shape. @see RadarSearchDoctrine.frame
+            ...this.radarOptions(),
         };
         const tacticalGraphic = openlayersAdapter.getTacticalGraphic(
             this.name,
@@ -142,8 +291,170 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         this.publishGeometryState();
     };
 
+    /**
+     * Takes 200700's three clicks, already read into its four numbers.
+     *
+     * **The axis goes into `rotation`, not into `centerAzimuthDeg`.** Both reach
+     * `resolveCenterAzimuth` and `centerAzimuthDeg` wins — which is exactly why the drawn
+     * axis must not be filed there: the rotate gesture turns `rotation`, so an axis stamped
+     * as a centre azimuth would outrank every rotation the user then applied and the symbol
+     * would sit still under a drag that visibly moved its handle. `rotation` is degrees
+     * counter-clockwise from east, so the azimuth converts on the way in.
+     * @see rotationToAzimuth, radarSearchFromClicks
+     *
+     * One range means the operator has clicked twice and the second arc is undecided; the
+     * generator draws the bare arc for that. Two closes the sector. Either way the bands are
+     * the amplifier the band editor already edits, so a symbol drawn this way and one typed
+     * into the dialog are the same symbol. @see RadarSearchDoctrine.frame
+     */
+    applyRadarSearchFrame(frame: RadarSearchFrame): void {
+        const stop = frame.ranges[frame.ranges.length - 1];
+        if (!Number.isFinite(stop) || stop <= 0) return;
+
+        this.radar = {
+            searchAxisAzimuthDeg: normAz(frame.centerAzimuthDeg),
+            // Absent until the third click settles which of the two ranges is which.
+            startRange: frame.ranges.length > 1 ? frame.ranges[0] : undefined,
+            stopRange: stop,
+            stopRelativeBearingDeg: this.radar?.stopRelativeBearingDeg ?? RSD_DEFAULT_RELATIVE_BEARING_DEG,
+        };
+        /*
+         * **`rotation` still tracks the axis**, even though it is no longer what the symbol
+         * is saved as. Every gesture the holder inherits — translate, resize, the selection
+         * box — measures against it, so leaving it stale would make the symbol turn under a
+         * resize. The generator reads `searchAxisAzimuthDeg` and ignores it.
+         */
+        this.updateGeom({
+            center: fromLonLat(frame.center as Coordinate),
+            size: stop,
+            rotation: normAz(90 - frame.centerAzimuthDeg),
+        });
+        this.publishRadar();
+    }
+
+    /** Stamps the four numbers on every feature, which is what a save and the dialog read. */
+    private publishRadar(): void {
+        writeGraphicProperties(this.getFeatures(), this.name, this.graphicLabels, this.radarOptions());
+    }
+
+    /**
+     * Turns the symbol, and hands the axis back to the gesture.
+     *
+     * 200700's search axis has two possible homes and `centerAzimuthDeg` outranks `rotation`
+     * — so a typed azimuth would otherwise pin the symbol against every later rotate, which
+     * is the trap `applyRadarSearchFrame` avoids by never writing it. The modal *does* write
+     * it, because the plate names the azimuth and an operator has to be able to state it. So
+     * the two are ordered rather than merged: **typing wins until a rotate, and a rotate
+     * takes it back** by dropping the typed value, after which the axis is the drawn bearing
+     * again. The modal shows whichever is in force, so the field is never blank and never
+     * disagrees with the symbol. @see resolveCenterAzimuth
+     */
+    handleRotate(delta: number): void {
+        /*
+         * **The axis is a stated value now, so a turn has to restate it.**
+         *
+         * `rotation` is still advanced, because every inherited gesture measures against it,
+         * but the generator reads `searchAxisAzimuthDeg` — so a rotate that only moved
+         * `rotation` would turn the frame and leave the sector pointing where it was. The two
+         * are kept in step here, which is the one place a turn happens.
+         *
+         * A rotate is also the answer to "what if the operator typed an azimuth and then
+         * dragged?": the drag wins, because it rewrites the same field.
+         */
+        // The axis follows `rotation` through `syncRadarState`, which `updateGeom` runs — one
+        // statement of the identity rather than one per gesture. @see syncRadarState
+        this.updateGeom({rotation: this.rotation + delta});
+        if (this.isRadarSearch) {
+            this.publishRadar();
+            return;
+        }
+        writeGraphicProperties(this.getFeatures(), this.name, this.graphicLabels, {
+            radius: this.size,
+            rotation: this.rotation,
+        });
+    }
+
+    /**
+     * What a 200700 is written to a file as: **its own four numbers and nothing else.**
+     *
+     * The inherited stamp files `radius` and `rotation`, which for this symbol are a second
+     * copy of the stop range and the search axis — the same "one fact stated twice" the
+     * demolition block's `width` was, and the reason a consumer reading the GeoJSON found a
+     * range fan's amplifiers instead of the values the plate names. (User's report,
+     * 2026-09-05.)
+     *
+     * The two weapon fans are untouched: they really are described by bands and a drawn
+     * radius. @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    protected publishGeometryState(extra?: Parameters<MissionTaskGraphicBase['publishGeometryState']>[0]): void {
+        if (!this.isRadarSearch) return super.publishGeometryState(extra);
+        writeGraphicProperties(this.getFeatures(), this.name, this.graphicLabels, {
+            ...this.radarOptions(),
+            ...extra,
+        });
+    }
+
+    /**
+     * Adopts a restored 200700's four numbers off the base feature.
+     *
+     * Restore seeds the base geometry and replays the amplifiers; the four are geometry
+     * inputs, so they arrive stamped on the base rather than through `setLabel`. Reading them
+     * here — the one door a restore comes through — is what keeps the round trip closed
+     * without persistence needing to know this symbol exists.
+     *
+     * A snapshot written before 2026-09-05 carries none of them and falls through to the
+     * generator's own reading of the bands and the rotation. @see RadarSearchDoctrine.frame
+     */
+    /**
+     * Adopts a restored 200700's four numbers.
+     *
+     * Called by `applyRestoredGeometry` before it rebuilds the frame, because a
+     * point-anchored graphic restores through `updateGeom` — there is no `setBaseFeature` on
+     * that path to read them off the base. A snapshot written before 2026-09-05 carries none
+     * of them and falls through to the generator's own reading of the bands and the rotation.
+     * @see RadarSearchDoctrine.frame
+     */
+    adoptStatedShape(state: Partial<TacticalGraphicProperties>): void {
+        if (!this.isRadarSearch) return;
+        if (state.stopRange === undefined || state.searchAxisAzimuthDeg === undefined) return;
+        this.radar = {
+            searchAxisAzimuthDeg: normAz(state.searchAxisAzimuthDeg),
+            startRange: state.startRange,
+            stopRange: state.stopRange,
+            stopRelativeBearingDeg: state.stopRelativeBearingDeg ?? RSD_DEFAULT_RELATIVE_BEARING_DEG,
+        };
+        this.size = state.stopRange;
+        this.rotation = normAz(90 - state.searchAxisAzimuthDeg);
+    }
+
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
+        /*
+         * **The dialog edits 200700's four numbers, so they arrive here.**
+         *
+         * They are geometry inputs rather than amplifiers, but they ride the label bag for the
+         * same reason `rangeFan` does — it is the bag a properties dialog writes. Adopted into
+         * the holder's own state so the next render and the next save both see them, and
+         * republished below through `publishRadar` rather than as `radius`/`rotation`.
+         */
+        if (this.isRadarSearch) {
+            const typed = labels as Partial<TacticalGraphicProperties>;
+            if (typed.stopRange !== undefined || typed.searchAxisAzimuthDeg !== undefined) {
+                const stopRange = Math.max(typed.stopRange ?? this.radar?.stopRange ?? this.size, 1);
+                this.radar = {
+                    searchAxisAzimuthDeg: normAz(typed.searchAxisAzimuthDeg ?? this.radar?.searchAxisAzimuthDeg ?? 0),
+                    startRange: typed.startRange ?? this.radar?.startRange,
+                    stopRange,
+                    stopRelativeBearingDeg:
+                        typed.stopRelativeBearingDeg ?? this.radar?.stopRelativeBearingDeg ?? RSD_DEFAULT_RELATIVE_BEARING_DEG,
+                };
+                this.size = stopRange;
+                this.rotation = normAz(90 - this.radar.searchAxisAzimuthDeg);
+            }
+            this.updateGeometry();
+            this.publishRadar();
+            return;
+        }
         // Bands or azimuths may have changed → geometry must be redrawn,
         // not just the labels restyled.
         this.updateGeometry();
@@ -187,12 +498,46 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
          * over a bare index. @see WeaponRangeFanSector.generateHandles
          */
         const bandCount = resolveBands(this.currentOptions()).length;
+        /*
+         * **200700 publishes one arc grip, not two per band.** Its opening is a single number
+         * — a *stop relative bearing* that is "an equal angle either side of the search axis"
+         * — so there is one thing to drag and it moves both edges. The sector fan's
+         * `left, right per band` arithmetic below would read this index as band 0's left edge
+         * and open the wedge only one way. @see RadarSearchDoctrine.generateHandles
+         */
+        if (this.isRadarSearch) {
+            /*
+             * **Two range grips, then the opening** — a fixed three, because 200700's shape is
+             * four stated numbers rather than a stack of rings. Asking `resolveBands` how many
+             * there are answers 1 (its fallback single band), which sent the stop-range grip to
+             * the opening. @see RadarSearchDoctrine.generateHandles
+             */
+            const ranges = 2;
+            if (handleIndex >= ranges) {
+                // The opening swings an angle; the read-out formats a distance, so it stays
+                // off rather than reporting a range nobody is changing.
+                this.measuringBand = undefined;
+                this.showMeasure(false);
+                this.setRadarHalfAngle(coordinate);
+            } else {
+                this.setRadarRange(handleIndex, coordinate);
+                this.measuringBand = handleIndex;
+                this.showMeasure(true, coordinate);
+            }
+            return;
+        }
         if (handleIndex >= bandCount) {
             const arcHandle = handleIndex - bandCount;
+            // An arc end swings a bearing, not a range — same reasoning as 200700's opening.
+            this.measuringBand = undefined;
+            this.showMeasure(false);
             this.setBandAzimuth(arcHandle >> 1, arcHandle % 2 === 0 ? 'left' : 'right', coordinate);
             return;
         }
         const bandIndex = handleIndex;
+        // A rim drag sets that band's range, which is exactly what a read-out reports.
+        this.measuringBand = bandIndex;
+        this.showMeasure(true, coordinate);
 
         // `getTurfDistance` is kilometers by contract and stays that way — it is a general
         // adapter method. Bands are metres as of 3.2.0, so the conversion is explicit here
@@ -299,6 +644,75 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * one edge is stated the other stops tracking it and the wedge changes width by however
      * far the drag went, on the side nobody touched.
      */
+    /**
+     * Drags 200700's start or stop arc to the cursor, along the search axis.
+     *
+     * Only the *distance* from the radar counts: the axis is the symbol's own and is moved by
+     * the rotate gesture, so a grip dragged off it states a range and not a new bearing —
+     * the same discipline the third click is read with. @see radarSearchFromClicks
+     *
+     * Kept apart by {@link BAND_SEPARATION_FRACTION}, so the near arc cannot be pushed
+     * through the far one and leave the sector inside out.
+     */
+    private setRadarRange(which: number, coordinate: Coordinate): void {
+        const center = this.centerCoordinate();
+        if (!center || !this.radar) return;
+        const metres =
+            openlayersAdapter.getTurfDistance(
+                openlayersAdapter.coordinateToTurfPoint(center),
+                openlayersAdapter.coordinateToTurfPoint(coordinate),
+            ) * 1000;
+        if (!Number.isFinite(metres) || metres <= 0) return;
+
+        /*
+         * **Kept apart**, so the near arc cannot be pushed through the far one and leave the
+         * sector inside out — the same proportional gap the fans' rings keep, and there is no
+         * arc under the cursor to drag back with once it has crossed.
+         */
+        const gap = this.radar.stopRange * BAND_SEPARATION_FRACTION;
+        const start = this.radar.startRange ?? 0;
+        const next =
+            which === 0
+                ? {startRange: Math.min(Math.max(metres, gap), Math.max(gap, this.radar.stopRange - gap))}
+                : {stopRange: Math.max(metres, start + gap)};
+
+        this.radar = {...this.radar, ...next};
+        // The stop range is also the holder's `size`, which is what the label scale and the
+        // selection box read, and what a legacy consumer still expects to find.
+        this.size = this.radar.stopRange;
+        this.updateGeometry();
+        this.publishRadar();
+    }
+
+    /**
+     * Opens or closes 200700's sector, **symmetrically**.
+     *
+     * The plate gives one number for the opening — a *stop relative bearing*, "an equal angle
+     * either side of the search axis" — so the grip states a half-angle and both edges take
+     * it. Written onto the outer band as a pair of azimuths because that is the field the
+     * band editor and the saved amplifiers already carry; `frame` re-centres the pair on the
+     * axis on every render, so only the angle between them survives and a rotate still turns
+     * the symbol. @see RadarSearchDoctrine.frame
+     */
+    private setRadarHalfAngle(coordinate: Coordinate): void {
+        const center = this.centerCoordinate();
+        if (!center || !this.radar) return;
+        // The same reading MapLibre makes, and a geodesic one: the grip is placed with
+        // `turf.destination`, so anything else fails to round-trip. @see radarSectorOpening
+        const edges = radarSectorOpening(
+            toLonLat(center) as Position,
+            this.radar.searchAxisAzimuthDeg,
+            toLonLat(coordinate) as Position,
+        );
+        if (!edges) return;
+
+        // The pair comes back symmetric about the axis, so either edge states the angle.
+        const half = normAz(edges.rightAzimuthDeg - this.radar.searchAxisAzimuthDeg);
+        this.radar = {...this.radar, stopRelativeBearingDeg: half > 180 ? 360 - half : half};
+        this.updateGeometry();
+        this.publishRadar();
+    }
+
     private setBandAzimuth(bandIndex: number, side: 'left' | 'right', coordinate: Coordinate): void {
         const center = this.centerCoordinate();
         if (!center) return;

@@ -10,6 +10,8 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
+    carriesSeparationInBase,
+    statesShapeAsRangeBands,
     usesStandoffWidth,
     drawnAnchorFrame,
     drawnAnchors,
@@ -340,9 +342,19 @@ function sizeDefaults(
      */
     const filesStandoff = usesStandoffWidth(name);
 
+    /*
+     * **And a graphic described entirely by range bands has no width either.** Every
+     * dimension a fan or 200700 has is a typed number, so the generic half-width was a field
+     * in the file that the generator ignores and the other engine never writes — twice the
+     * radius, on every saved 200700. @see statesShapeAsRangeBands
+     */
+    const bandsStateTheShape = statesShapeAsRangeBands(name);
+
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined && !filesStandoff && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && !filesStandoff && !statesItsOwnSize && !separationInBase && !bandsStateTheShape
+            ? {width: halfWidth * 2}
+            : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),
