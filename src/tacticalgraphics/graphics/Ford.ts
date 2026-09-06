@@ -6,6 +6,22 @@ import {
 } from "../core/type";
 import geometryService from "../core/GeometryService";
 import {Coordinate} from "../core/type";
+import {Position} from "geojson";
+import {parallelRailFrame} from "../core/anchors";
+
+/**
+ * The centreline and half-separation of a ford's two bars, from wherever they are stated.
+ *
+ * 271500's Template letters `PT 1` and `PT 2` at the ends of one bar and `PT 3` on the other,
+ * so the separation is a point the operator places. It was a `radius` amplifier — a number
+ * with nowhere to put it — and a base written that way still resolves through it.
+ * @see parallelRailFrame
+ */
+function railsOf(base: Feature<LineString>, opts?: MovementGraphicOptions): {centre: Position[]; half: number} {
+    const drawn = parallelRailFrame(base.geometry.coordinates as Position[]);
+    if (drawn) return drawn;
+    return {centre: base.geometry.coordinates as Position[], half: opts?.radius || 20};
+}
 
 export class Ford extends TacticalGraphicsBase {
 
@@ -13,27 +29,23 @@ export class Ford extends TacticalGraphicsBase {
     type: string = "MultiLineString";
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        const {centre, half: radius} = railsOf(base, opts);
 
-        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, radius);
+        const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
         return this.asMultiLineStringFeature([
             ...geometryService.lineStringToDashes(leftArrowBase, [radius / 3, radius / 3]).geometry.coordinates,
             ...geometryService.lineStringToDashes(rightArrowBase, [radius / 3, radius / 3]).geometry.coordinates]);
     }
 
+    /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        const coords = base.geometry.coordinates as Position[];
+        if (coords.length >= 3) return this.asMultiPointFeature(coords.slice(0, 3));
 
-        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, radius);
-        return this.asMultiPointFeature(
-            [
-                base.geometry.coordinates[0],
-                base.geometry.coordinates[base.geometry.coordinates.length - 1],
-                leftArrowBase[leftArrowBase.length - 1]
-            ]);
+        const {centre, half} = railsOf(base, opts);
+        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, half);
+        return this.asMultiPointFeature([coords[0], coords[coords.length - 1], leftArrowBase[leftArrowBase.length - 1]]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -48,15 +60,14 @@ export class FordHard extends TacticalGraphicsBase {
     type: string = "MultiLineString";
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        const {centre, half: radius} = railsOf(base, opts);
 
-        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, radius);
+        const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
 
         let upperDash = geometryService.lineStringToDashes(leftArrowBase, [radius / 3, radius / 3]);
         let lowerDash = geometryService.lineStringToDashes(rightArrowBase, [radius / 3, radius / 3]);
-        let zigzag = geometryService.generateZigZag(baseCoords, 10, radius / 2.5, 5);
+        let zigzag = geometryService.generateZigZag(centre, 10, radius / 2.5, 5);
         return this.asMultiLineStringFeature([
             ...upperDash.geometry.coordinates,
             ...lowerDash.geometry.coordinates,
@@ -64,17 +75,14 @@ export class FordHard extends TacticalGraphicsBase {
         ]);
     }
 
+    /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
+        const coords = base.geometry.coordinates as Position[];
+        if (coords.length >= 3) return this.asMultiPointFeature(coords.slice(0, 3));
 
-        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(baseCoords, radius);
-        return this.asMultiPointFeature(
-            [
-                base.geometry.coordinates[0],
-                base.geometry.coordinates[base.geometry.coordinates.length - 1],
-                leftArrowBase[leftArrowBase.length - 1]
-            ]);
+        const {centre, half} = railsOf(base, opts);
+        const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, half);
+        return this.asMultiPointFeature([coords[0], coords[coords.length - 1], leftArrowBase[leftArrowBase.length - 1]]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {

@@ -120,8 +120,16 @@ describe('what the block family files', () => {
         },
     );
 
-    /** The families that genuinely have rails keep theirs. */
-    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge, TacticalGraphicName.MainAxisOfAdvance])(
+    /**
+     * The families whose rails are set by an amplifier keep theirs.
+     *
+     * **271100 bridge left on 2026-09-06.** It has rails, but its plate gives their
+     * separation an anchor point — *"points 1 and 2 define one side of the gap and points 3
+     * and 4 define the opposite side"* — so a `width` beside them is the second copy
+     * `carriesSeparationInBase` exists to prevent. A corridor's and an axis of advance's
+     * widths really are amplifiers, and they still get one. @see parallelRailAnchors
+     */
+    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.MainAxisOfAdvance])(
         'still gives %s its width',
         name => {
             expect(buildTacticalGraphic(name, LINE, {}, RES)!.properties.width).toBeGreaterThan(0);

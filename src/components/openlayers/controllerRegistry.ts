@@ -227,6 +227,17 @@ const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
 const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
+/**
+ * The two-rail crossings: **three clicks, and a grip on each point they store.**
+ *
+ * They were `movement(2)` — a drawn centreline with the rails offset by a `radius` amplifier,
+ * so the gap between them was a number nobody could place. Their plates give it an anchor
+ * point. @see parallelRailAnchors
+ */
+const crossing = (stored: number) => (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), drawClickCount(name) ?? 3, name)
+        .enableVertexDragging(stored);
+
 const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new AirCorridor(name, sizing * 20, res));
 
@@ -597,11 +608,11 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.InfiltrationLane]:     demolition,
 
     // ── Engineer / crossing (movement base, max 2 pts) ────────────────────
-    [TacticalGraphicName.Bridge]:          movement(2),
-    [TacticalGraphicName.Gap]:             movement(2),
-    [TacticalGraphicName.AssaultCrossing]: movement(2),
-    [TacticalGraphicName.FordEasy]:            movement(2),
-    [TacticalGraphicName.FordDifficult]:        movement(2),
+    [TacticalGraphicName.Bridge]:          crossing(4),
+    [TacticalGraphicName.Gap]:             crossing(4),
+    [TacticalGraphicName.AssaultCrossing]: crossing(4),
+    [TacticalGraphicName.FordEasy]:            crossing(3),
+    [TacticalGraphicName.FordDifficult]:        crossing(3),
 
     // ── Simple line graphics ───────────────────────────────────────────────
     [TacticalGraphicName.PhaseLine]:                        line(),

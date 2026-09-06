@@ -57,6 +57,8 @@ describe('the two draw limits agree', () => {
         expect(capped.length).toBeGreaterThan(40);
         expect(baseVertexCount(TacticalGraphicName.Capture)).toBe(4);
         expect(baseVertexCount(TacticalGraphicName.ObstacleBypassEasy)).toBe(3);
-        expect(baseVertexCount(TacticalGraphicName.Bridge)).toBe(2);
+        // 271100 became four on 2026-09-06 — two points a side, as its own rule numbers
+        // them — drawn with three clicks and the fourth derived. @see parallelRailAnchors
+        expect(baseVertexCount(TacticalGraphicName.Bridge)).toBe(4);
     });
 });
