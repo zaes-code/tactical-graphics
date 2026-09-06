@@ -956,6 +956,130 @@ export function publishesAnchorHandleOnly(name: TacticalGraphicName): boolean {
     return ANCHOR_ONLY_HANDLE_GRAPHICS.has(name);
 }
 
+// ── The hashed line between a graphic's anchor points ─────────────────────────
+
+/**
+ * The dash of the hashed construction line, in screen pixels.
+ *
+ * Screen pixels, so the hatching holds its density at every zoom — the same rule the
+ * radius read-out and the draw sketch follow. Here rather than in either renderer so the
+ * two draw one mark and not two that look alike. @see anchorConnectorRun
+ */
+export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
+
+/**
+ * The graphics whose drawn base is a **centreline the symbol never draws**, so the editor
+ * hashes it between the anchor points while the graphic is selected.
+ *
+ * Reported by the user, 2026-09-06: *"all graphics with parallel lines like gap/bridge/
+ * assault crossing, convoy graphics, explosives graphics need a hashed line between
+ * vertices like corridors and main axis of advance (family)"*.
+ *
+ * **What the mark is.** Every one of these is built by offsetting rails either side of a
+ * line the operator placed, and that line is then not part of the picture — so once the
+ * symbol is drawn there is nothing on screen saying where the anchor points went. The
+ * corridors and the axis-of-advance family had the mark already, but by accident rather
+ * than by statement: their controllers set no vertex cap, so OpenLayers' `Modify` was
+ * installed over their bases and un-hid them. Every family the user named is capped at the
+ * number of points its plate gives it, which switched the same base off — the two
+ * questions had become one switch. @see LineGraphicController, `base.set('base', false)`
+ *
+ * **Editor chrome, not line work.** It says "these are the points you placed", the same
+ * thing the handles and the radius read-out say — it appears with the selection, is absent
+ * from `renderTacticalGraphic`, from a snapshot, from the thumbnails and from the sample
+ * gallery, and it is drawn in the editor's own dash rather than in any symbol's.
+ *
+ * **Both renderers read this**, which is the reason it is here rather than in a holder: on
+ * OpenLayers it decides which base features un-hide, on MapLibre it decides which graphics
+ * put a line in the connector source. MapLibre drew no base at all before this.
+ *
+ * Deliberately **not** every graphic whose base is hidden. Three groups the user named
+ * turned out not to qualify and are left off rather than forced in:
+ *
+ * - **Passage lane and safe lane or gap** lay their splayed arms either side of a run they
+ *   also *draw* — `passageLineGraphic` emits `[start, end]` as one of its three sub-lines.
+ *   A hashed line there would be a second line on top of a solid one.
+ * - **Ferry crossing** is a plain line with an end mark; its base is the symbol.
+ * - **Roadblock complete (executed)** is switched off. @see ai/excluded-graphics.md
+ */
+const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
+    // The eight air-coordinating corridors: rails tangent to a circle at every turning
+    // point, and the turning points themselves are the centreline. @see CORRIDOR_GRAPHICS
+    TacticalGraphicName.AirCorridor,
+    TacticalGraphicName.LowLevelTransitRoute,
+    TacticalGraphicName.MinimumRiskRoute,
+    TacticalGraphicName.SafeLane,
+    TacticalGraphicName.SpecialCorridor,
+    TacticalGraphicName.StandardUseArmyAircraftFlightRoute,
+    TacticalGraphicName.TransitCorridor,
+    TacticalGraphicName.UnmannedAircraftCorridor,
+
+    // The axis-of-advance family and the two casings drawn the same way. The infiltration
+    // lane is the one of these that had *lost* the mark: it takes three placed points as
+    // of 2026-09-05, which capped its controller and switched its base off.
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.AviationAxisOfAdvance,
+    TacticalGraphicName.AttackHelicopterAxisOfAdvance,
+    TacticalGraphicName.AvenueOfApproach,
+    TacticalGraphicName.Counterattack,
+    TacticalGraphicName.CounterattackByFire,
+    TacticalGraphicName.InfiltrationLane,
+
+    // The crossings: two rails offset from the drawn line, solid on bridge, gap and
+    // assault crossing and dashed on the two fords.
+    TacticalGraphicName.Bridge,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.AssaultCrossing,
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+
+    // The convoys: a body laid symmetrically about the run, rear to tip.
+    TacticalGraphicName.MovingConvoy,
+    TacticalGraphicName.HaltedConvoy,
+
+    // The demolition bar symbols — APP-06 271201's centreline and width.
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+]);
+
+/** @see ANCHOR_CONNECTOR_GRAPHICS */
+export function drawsAnchorConnector(name: TacticalGraphicName): boolean {
+    return ANCHOR_CONNECTOR_GRAPHICS.has(name);
+}
+
+/**
+ * The graphics whose base carries a **side point after the run** — points 1 and 2 are the
+ * centreline and point 3 only says how far apart the rails sit.
+ *
+ * The connector follows the centreline, so it has to stop at point 2. Drawing the stored
+ * base whole would hash a spur out to the width handle, which is not a run between anchor
+ * points and is not what any of these symbols is laid along. These are exactly the names
+ * `anchorsFromClicks` routes to `sideAnchors`. @see ai/app-6.md, 271201's draw rule
+ */
+const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
+    TacticalGraphicName.InfiltrationLane,
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+]);
+
+/**
+ * The run of a base the hashed construction line follows: the whole base for most, points
+ * 1 and 2 alone for the demolition family. @see SIDE_POINT_AFTER_RUN
+ *
+ * Generic in the position type, and deliberately so — both renderers call this with
+ * *projected* coordinates, which are not the `Position` degrees the rest of this module
+ * deals in. Nothing here does geometry; it selects which of the operator's points the mark
+ * runs between, which is the same answer in any projection.
+ */
+export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: readonly T[]): T[] {
+    if (SIDE_POINT_AFTER_RUN.has(name) && coordinates.length >= 3) return coordinates.slice(0, 2);
+    return [...coordinates];
+}
+
 /** How far a security operation's arm reaches from the centre, in screen pixels. */
 const SECURITY_OPERATION_REACH_PX =
     SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
