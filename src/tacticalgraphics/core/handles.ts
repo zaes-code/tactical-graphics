@@ -17,6 +17,7 @@
 import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
+import {reservedLeadPx} from './decorationSizes';
 
 /**
  * What dragging a handle does.
@@ -1455,6 +1456,73 @@ const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
 export function editStretches(name: TacticalGraphicName): boolean {
     if (NO_EDIT_STRETCH.includes(name)) return false;
     return EDIT_STRETCHES.includes(name) || baseVertexCount(name) !== undefined;
+}
+
+/**
+ * Whether a new base vertex may be inserted where the cursor is.
+ *
+ * **Reported as "abatis should not accept vertices within the triangle opening"** (user,
+ * 2026-09-06), and it did, on both engines: a drag anywhere on the drawn route inserted a
+ * point, the head of the route is the chevron's own opening, and a point placed in there
+ * destroys the tooth. `Abatis.path` builds the mark by walking the *first `size` metres of
+ * the base* — apex over the midpoint, foot at the far end, the tail sliced off after it —
+ * so a vertex inside that stretch bends the line the tooth is measured along and the
+ * symbol comes out as a kink with a stray tick beside it.
+ *
+ * It is refused rather than corrected because there is nothing to correct to: 280100's
+ * extra anchor points *"extend the line"*, and the line does not exist yet where the
+ * chevron is. Everything past the tooth still takes as many vertices as the road needs.
+ *
+ * **In the map-agnostic half because both renderers gate on it.** OpenLayers asks through
+ * `Modify`'s `insertVertexCondition`, MapLibre through `grabSegment`; each already had its
+ * own answer to "may this graphic take a vertex at all" and neither could have had this one
+ * without writing `name === Abatis` in a renderer.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ *
+ * **Screen pixels, in whatever planar space the caller measures.** The reserved stretch is
+ * a screen constant — the tooth holds its size as the obstacle lengthens — so the two
+ * engines pass their own projected pixels rather than a ground distance, and the same
+ * gesture is refused at the same place at every zoom. `at` is where the new vertex would
+ * land, which both renderers already compute to draw the hint that offers it.
+ *
+ * Graphics that reserve nothing answer `true` for every point, which is all but one.
+ */
+export function acceptsInsertedVertex(
+    name: TacticalGraphicName,
+    basePixels: readonly (readonly [number, number])[],
+    at: readonly [number, number],
+): boolean {
+    const lead = reservedLeadPx(name);
+    if (lead === undefined || basePixels.length < 2) return true;
+
+    // How far along the run the candidate sits, and how long the run is — one walk, because
+    // the cap below needs both. The nearest segment is found here rather than trusted from
+    // the caller: OpenLayers has no segment index to hand, only a coordinate.
+    let travelled = 0;
+    let along = -1;
+    let nearest = Infinity;
+    for (let i = 1; i < basePixels.length; i++) {
+        const [ax, ay] = basePixels[i - 1];
+        const [bx, by] = basePixels[i];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const span = Math.hypot(dx, dy);
+        if (span > 0) {
+            const t = Math.min(1, Math.max(0, ((at[0] - ax) * dx + (at[1] - ay) * dy) / (span * span)));
+            const distance = Math.hypot(at[0] - (ax + t * dx), at[1] - (ay + t * dy));
+            if (distance < nearest) {
+                nearest = distance;
+                along = travelled + t * span;
+            }
+        }
+        travelled += span;
+    }
+    if (along < 0) return true;
+
+    // **Capped at half the run, exactly as the generator caps it.** `Abatis.path` never lets
+    // the tooth eat more than half the obstacle, so on a route drawn barely longer than the
+    // chevron the reserved stretch shrinks with it rather than swallowing the whole line.
+    return along > Math.min(lead, travelled / 2);
 }
 
 /** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
