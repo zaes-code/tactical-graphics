@@ -18,6 +18,7 @@ import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
 import {reservedLeadPx} from './decorationSizes';
+import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
 
 /**
  * What dragging a handle does.
@@ -727,6 +728,25 @@ export function rotationAnchor(
      * itself off the ground it was placed on.
      */
     if (name === TacticalGraphicName.Ambush && positions.length >= 2) return positions[1];
+
+    /*
+     * **Cover, guard and screen turn and scale about their middle.**
+     *
+     * Their base is one drawn arm — point 1 the arrowhead, point 2 its inner end — and the
+     * second arm is mirrored about the gap, so the *symbol* runs on past point 2 while the
+     * rule below would pivot on point 1. That put the axis of rotation out at one arrowhead,
+     * at the far end of a symbol 410 px across, and made a resize scale from there too: the
+     * whole graphic swung and grew about a corner of itself instead of about the unit symbol
+     * in its middle. (User's call, 2026-09-06 - "the axis of rotation and resize [...] need
+     * to go off the center of the graphic where the symbol may or may not be".)
+     *
+     * The middle is `HALF_GAP_RATIO` of an arm beyond point 2, which is the generator's own
+     * arithmetic and is called rather than repeated. @see securityOperationBaseCentre
+     */
+    if (name !== undefined && SECURITY_OPERATION_GRAPHICS.includes(name)) {
+        const centre = securityOperationBaseCentre(positions);
+        if (centre) return [centre[0], centre[1]];
+    }
 
     if (name !== undefined && usesDrawnAnchors(name)) {
         const centre = drawnAnchorFrame(name, positions)?.center;
