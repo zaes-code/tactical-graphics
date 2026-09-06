@@ -513,9 +513,15 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             }
         });
 
-        it('offers the arrowhead tip and the line start as handles', () => {
+        it('offers a grip on each of its three anchor points', () => {
+            /*
+             * `[tip, join, start]`. Point 2 — "the end of the straight line portion" — had no
+             * grip: the list was `[tip, start]`, so the join an operator reaches for to move
+             * where the hook begins was the one place on the symbol that could not be grabbed,
+             * and pursuit was the only cane arrow of eight publishing two. (2026-09-06.)
+             */
             expect(buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(0.9, 0.25), {}, RESOLUTION)!.handles)
-                .toHaveLength(2);
+                .toHaveLength(3);
         });
     });
 

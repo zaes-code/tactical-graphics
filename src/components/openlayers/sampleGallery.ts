@@ -40,6 +40,7 @@ import {
     TacticalGraphicCategory,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    acrossPointAtEnd,
     carriesSeparationInBase,
     frontEdgeBase,
     getDisplayName,
@@ -788,7 +789,7 @@ function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?
      * do describe a vee, are not in it and keep the V.
      */
     if (name && carriesSeparationInBase(name)) {
-        return frontEdgeBase([cx, cy], half, pts) as Coordinate[];
+        return frontEdgeBase([cx, cy], half, pts, acrossPointAtEnd(name) ? 1 : 0.5) as Coordinate[];
     }
     if (pts === 3) {
         return [

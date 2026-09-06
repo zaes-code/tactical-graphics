@@ -291,6 +291,33 @@ describe('Envelopment', () => {
             properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment}},
         });
 
+    it('never draws an arrowhead larger than the arc it sits on', () => {
+        /*
+         * `headSize` is a screen size converted to metres at the drawing zoom, while the arc
+         * is a distance the operator set with point 3 — nothing ties the two together, so a
+         * small envelopment asks for a head bigger than its own hook and reads as an
+         * arrowhead with a curve stuck to it. (User's report, 2026-09-06.)
+         *
+         * A ceiling, not a size: a modest head passes through untouched.
+         */
+        const arm = (decorationSize: number): number => {
+            const out = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForRunAndArc(CENTRE, SIZE, RADIUS, 0, 1)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, decorationSize}},
+            });
+            const head = (out.graphic as Feature<MultiLineString>).geometry.coordinates[2];
+            return turf.distance(turf.point(head[0]), turf.point(head[1]), {units: 'meters'});
+        };
+        const small = arm(RADIUS * 0.2);
+        const huge = arm(RADIUS * 8);
+        // The small one is not clamped...
+        expect(small).toBeLessThan(huge);
+        // ...and the huge one is, to the same figure an even huger one gives.
+        expect(arm(RADIUS * 40)).toBeCloseTo(huge, 3);
+        expect(huge).toBeLessThan(RADIUS * 2);
+    });
+
     it('grips point 3, the arrowhead tip, and reads the bend along the axis', () => {
         /*
          * **The jumpy handle, as a measurement — and the wrong half fixed first.**

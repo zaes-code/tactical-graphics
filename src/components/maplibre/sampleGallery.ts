@@ -10,6 +10,7 @@ import {
     supportsHostility,
     AltitudeDatum,
     baseVertexCount,
+    acrossPointAtEnd,
     carriesSeparationInBase,
     frontEdgeBase,
     isRectangular,
@@ -126,7 +127,17 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * is the base a user's drawing would have produced rather than an imitation of one.
      * @see usesDrawnAnchors
      */
-    if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
+    /*
+     * **Pursuit is a cane arrow and should be sampled as one.** It is in the anchor family,
+     * so it took `anchorLine`'s frame-built base while the seven graphics it shares a shape
+     * with — a straight run, a half-circle hooked off its end — took the front edge. Two
+     * layouts for one picture, and the odd one out was visibly unlike its siblings in the
+     * sheet. (User's report, 2026-09-06: "pursue should be like those other cane graphics".)
+     * Its own rule numbers the points the same way: a run, then a point stating the arc.
+     */
+    if (usesDrawnAnchors(name) && name !== TacticalGraphicName.Pursuit) {
+        return [anchorLine(lon, lat), line, ring, point];
+    }
 
     const roles = ROLE_SAMPLE_LAYOUTS[name];
     if (roles) return [roles(lon, lat), line, ring, point];
@@ -145,10 +156,13 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * it: infiltration is in this family and also needs its point 2 *off* the chord, because
      * that offset is what bends its S — a plain front edge draws it straight.
      */
-    if (carriesSeparationInBase(name)) {
+    if (carriesSeparationInBase(name) || name === TacticalGraphicName.Pursuit) {
         const base: Geometry = {
             type: 'LineString',
-            coordinates: storedOrder(name, frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3)),
+            coordinates: storedOrder(
+                name,
+                frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3, acrossPointAtEnd(name) ? 1 : 0.5),
+            ),
         };
         return [base, line, ring, point];
     }

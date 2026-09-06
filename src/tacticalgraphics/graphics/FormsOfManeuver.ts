@@ -461,10 +461,22 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      * The mission-task convention's center handle stays deliberately absent. It rendered
      * in the middle of the empty space inside the hook, and it is not load-bearing.
      */
+    /**
+     * `[tip, join, start]` — a grip on each of 344000's three anchor points.
+     *
+     * Point 2, "the end of the straight line portion", had none: the list was `[tip, start]`,
+     * so the join an operator reaches for to change where the hook begins was the one place
+     * on the symbol that could not be grabbed. Its seven sibling cane arrows all publish
+     * three, and a user reading the sample sheet saw the odd one out. (2026-09-06.)
+     *
+     * The tip stays at index 0, which is what `MIRROR_HANDLE_AT_0` and pursuit's own contract
+     * name as the grip that flips the hook; `join` takes index 1 and `start` moves to 2, both
+     * of which the contract's `repeating: 'shape'` already covers.
+     */
     generateHandles(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiPoint> {
         const frame = this.frame(base, opts);
         if (!frame) return this.asMultiPointFeature([]);
-        return this.asMultiPointFeature([frame.tip, frame.start]);
+        return this.asMultiPointFeature([frame.tip, frame.join, frame.start]);
     }
 
     /**
@@ -496,6 +508,22 @@ export const ENVELOPMENT_MIN_BEND = 0.12;
 export const ENVELOPMENT_MAX_BEND = 1.2;
 /** Arrowhead length as a fraction of `size`, when `headSize` is not supplied. */
 const ENVELOPMENT_HEAD_RATIO = 0.3;
+
+/**
+ * The most of the arc's own radius 343500's arrowhead may take up.
+ *
+ * `headSize` is a **screen** size converted to metres at the zoom the graphic was drawn at,
+ * while the arc is a drawn distance the operator set with point 3 — so the two are not tied
+ * to one another, and a small envelopment asks for a head bigger than the hook it sits on.
+ * The result reads as an arrowhead with a curve stuck to it. (User's report, 2026-09-06:
+ * "the arrow tip is sometimes bigger than the arch which looks wrong".)
+ *
+ * A legibility cap rather than a plate reading — the standard dimensions neither — so it is
+ * a ceiling and not a size: an ordinary envelopment is unaffected and only the ones that
+ * would look wrong are pulled back. Four fifths keeps the head clearly subordinate to the
+ * curve while still reading as an arrowhead at the smallest sizes the sweep draws.
+ */
+const ENVELOPMENT_HEAD_MAX_OF_RADIUS = 0.8;
 /** Arc sampling density — enough that the half circle reads smooth at any zoom. */
 const ENVELOPMENT_ARC_STEPS = 48;
 /** Segments in Pursue's semicircle. Matches the arc the dropped form drew. */
@@ -668,7 +696,10 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
         const size = opts?.size ?? 1;
         const [start, end] = this.axis(base, opts);
         const arc = this.arc(base, opts);
-        const headSize = opts?.headSize ?? size * ENVELOPMENT_HEAD_RATIO;
+        // Never larger than the arc it sits on. @see ENVELOPMENT_HEAD_MAX_OF_RADIUS
+        const {radius} = this.frame(base, opts);
+        const asked = opts?.headSize ?? size * ENVELOPMENT_HEAD_RATIO;
+        const headSize = radius > 0 ? Math.min(asked, radius * ENVELOPMENT_HEAD_MAX_OF_RADIUS) : asked;
         const arrowHead = geometryService.computeArrowheadPoints(arc[arc.length - 2], arc[arc.length - 1], headSize, 45);
         return this.asMultiLineStringFeature([[start, end], arc, arrowHead]);
     }

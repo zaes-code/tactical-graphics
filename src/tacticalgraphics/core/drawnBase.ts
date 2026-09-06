@@ -186,14 +186,34 @@ const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
  * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
  * search area are not in it and want a vee, which is a different shape and stays theirs.
  */
-export function frontEdgeBase(center: Position, half: number, points = 3): Position[] {
+export function frontEdgeBase(center: Position, half: number, points = 3, acrossAt = 0.5): Position[] {
     const [cx, cy] = center;
     const across = half * 0.55;
     const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
     if (points >= 4) {
         return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
     }
-    return [...edge, [cx, cy - across]];
+    // `acrossAt` slides the third point along the edge, 0 at point 1 and 1 at point 2. It is
+    // 0.5 for the graphics whose third point states a rear or a width — the distance is all
+    // that is read, so the middle is the tidiest place to show it — and 1 for the ones whose
+    // plate puts that point at an *end*: 270502's is "the tip of the longest arrow", which is
+    // the arrow at point 2. Put in the middle, its grip drew half a symbol away from the tip
+    // it holds. @see acrossPointAtEnd
+    return [...edge, [cx - half + 2 * half * acrossAt, cy - across]];
+}
+
+/**
+ * Whether this graphic's across-the-edge point belongs at the **point-2 end** rather than
+ * the middle, for anything synthesising a base. @see frontEdgeBase
+ *
+ * 270502 disrupt states it outright — point 3 is "the tip of the longest arrow", and the
+ * longest arrow is the one at point 2. Handed a mid-edge third point the symbol still draws
+ * correctly, because the generator reads only the distance across; but the *grip* is
+ * published on the arrowhead the picture actually has, so base and handle sat half a symbol
+ * apart in every sample. (User's report, 2026-09-06: "sweep shows handles out of place".)
+ */
+export function acrossPointAtEnd(name: TacticalGraphicName): boolean {
+    return name === TacticalGraphicName.Disrupt || name === TacticalGraphicName.TacticalDisrupt;
 }
 
 /** Degrees CCW from east, which is the unit `anchorsFor*` take. */

@@ -123,6 +123,7 @@ const {
     isPaintable,
     baseGeometryFor,
     baseVertexCount,
+    acrossPointAtEnd,
     carriesSeparationInBase,
     frontEdgeBase,
     storedOrder,
@@ -436,7 +437,7 @@ function makeBase(name) {
      * points really do describe a vee.
      */
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
-        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n);
+        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n, acrossPointAtEnd && acrossPointAtEnd(name) ? 1 : 0.5);
         return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};
     }
     const pts = [];
