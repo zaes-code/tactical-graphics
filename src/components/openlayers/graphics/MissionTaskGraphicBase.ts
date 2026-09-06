@@ -1030,9 +1030,13 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
     protected persistedGeometryState(): GraphicGeometryState {
         // `headSize` used to be omitted, on the grounds that a restore rebuilt it from
         // the `renderer` bag's `drawingResolution`. That bag is gone, so it has to travel
-        // as what it is — a distance in meters. `bend` is portable either way: a Cesium
-        // view would need it to draw the same curve.
-        return {bend: this.bend, decorationSize: this.headSize};
+        // as what it is — a distance in meters, and one the anchor points cannot supply.
+        //
+        // **`bend` no longer travels**: it is `radius / size`, and `bowFromAnchors` reads
+        // both back out of the stored points. It was carried on the grounds that another
+        // view would need it to draw the same curve — but another view gets the same curve
+        // from the same points, which is the whole reason the base holds them.
+        return {decorationSize: this.headSize};
     }
 
     /**
@@ -1239,10 +1243,10 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     }
 
     protected persistedGeometryState(): GraphicGeometryState {
-        // `headSize` is derived from `drawingResolution`, which the renderer bag
-        // already carries. `bend` is portable — it is the shape, not a rendering
-        // choice, and another view would need it to draw the same hook.
-        return {bend: this.bend, decorationSize: this.headSize};
+        // The arrowhead only. `bend` is `radius / size` and `runAndArcFromAnchors` reads
+        // both back out of the four stored points, so carrying it is a second copy of the
+        // shape. @see MissionTaskGraphicBase.publishGeometryState
+        return {decorationSize: this.headSize};
     }
 
     /**

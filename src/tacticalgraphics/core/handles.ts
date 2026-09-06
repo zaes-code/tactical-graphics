@@ -258,6 +258,16 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    /*
+     * **Roadblock complete joined on 2026-09-05**, when it stopped being dropped on one
+     * point and took the same centreline-and-side contract as the three readiness states
+     * it shares 271201's rule with. It is drawn by `movement(3)` and held by
+     * `MovementGraphicBase`, so the family it belongs to is this one — and saying so is
+     * what stops a renderer stamping it a `width` its own third point already carries.
+     * @see carriesSeparationInBase, RoadblockComplete
+     */
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.RoadblockCompleteExecuted,
     // FlankAttack and DoubleEnvelopment are routed here by the controller registry
     // but are commented out of the enum — see ai/excluded-graphics.md. Listing them
     // would not compile, which is the enum doing its job.
@@ -375,6 +385,33 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
 export function handleContract(name: TacticalGraphicName): HandleContract {
     if (CORRIDOR_GRAPHICS.includes(name)) {
         return {roles: [], repeating: 'shape', offsetAfterVertices: true, offsetScale: 1};
+    }
+    /*
+     * **Three shape handles where the third point is a vertex, not an offset.**
+     *
+     * The movement family's third handle is a *derived* width grip, so it is an `offset`:
+     * dragging it writes a number beside the base. The demolition block's third point is a
+     * placed vertex as of 2026-09-05 and there is no number to write — dragging it moves
+     * the point, and the generator measures the separation from where it lands.
+     *
+     * MapLibre is what this reaches. It routes a handle drag by its role, so calling the
+     * side grip an `offset` sent the drag to a width that no longer exists and the handle
+     * did nothing at all — while OpenLayers, which drags vertices through its own
+     * `dragsVertices` path, worked. Reported as "sideline/width dragging works on
+     * openlayers but not maplibre" (user, 2026-09-05), and it is the same shape of defect
+     * `handleRole`'s own note describes for the corridors. @see carriesSeparationInBase
+     */
+    /*
+     * **152800 answers here too, and its history is worth keeping.** It published
+     * `[end, mirror]` until 2026-09-06 — one grip that resized and one whose only job was to
+     * flip the symbol across its own axis, because the side of the arc was a hidden
+     * `mirrored` amplifier with no point to state it. The plate states it: point 3 gives the
+     * arc its diameter *and* which side it falls on, so dragging that point across the line
+     * *is* the flip, and a grip that exists only to flip is not a thing the symbol needs. Its
+     * own branch returned this same triple and has been folded in. @see MobileDefense.frame
+     */
+    if (carriesSeparationInBase(name)) {
+        return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
     }
     if (MOVEMENT_GRAPHICS.includes(name)) {
         return {roles: ['shape', 'shape', 'offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
@@ -1188,6 +1225,23 @@ const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
      * zone put 400 km on the width as well. (User's call, 2026-08-27.)
      */
     ...RECTANGULAR_GRAPHICS,
+    /*
+     * **The demolition block, for the same reason, from 2026-09-05.** Its three points are
+     * two jobs: dragging an end sets the symbol's length and dragging the side point sets
+     * how far apart the rails sit. Letting a stray drag scale the whole graphic moved both
+     * at once — reported as "the middle-outer drag changes the width but also resizes the
+     * whole graphic". The resize affordance still scales it, which is the control that
+     * means to. @see carriesSeparationInBase
+     */
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.RoadblockCompleteExecuted,
+    // 140800 joined the same contract on 2026-09-05 and needs the same protection: its
+    // ends set the lane's length and its side point sets the width, and a stray drag that
+    // scaled the whole graphic would move both. @see carriesSeparationInBase
+    TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.MobileDefense,
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,
@@ -1228,24 +1282,31 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
     return ANCHOR_VERTEX[name];
 }
 
+/**
+ * Whether this graphic's **separation lives in its base** rather than beside it as a width.
+ *
+ * The movement family carries a `width` amplifier because its base is a centreline and
+ * nothing in it says how far the rails sit apart. The demolition block stopped being like
+ * that on 2026-09-05: 271201 gives point 3 that job — *"point 3 defines the location of one
+ * side of the symbol"* — and it is a stored vertex, so the distance is measured from the
+ * coordinates. A renderer that stamps a width beside them is keeping a second copy of a
+ * number the base already carries, and the two drift. (User's call.)
+ *
+ * Derived from the vertex count rather than listed: a graphic of this shape with three base
+ * points has nowhere else for the third to be. @see halfWidthFromSide
+ *
+ * **152800 is named rather than derived**, because it is the one member that is not a
+ * movement graphic — `isMovementGraphic` is false for it, so the derivation alone missed it
+ * and it went on stamping a `width` its generator ignores. Its point 3 states exactly what
+ * the block's does: the distance across the drawn line, and which side. (User's call,
+ * 2026-09-06.) @see MobileDefense.frame
+ */
+export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
+    if ((baseVertexCount(name) ?? 2) < 3) return false;
+    return isMovementGraphic(name) || name === TacticalGraphicName.MobileDefense;
+}
+
 /** How many points this graphic's base takes, or `undefined` for no limit. */
 export function baseVertexCount(name: TacticalGraphicName): number | undefined {
     return BASE_VERTEX_COUNT[name];
 }
-    /*
-     * **The demolition block, for the same reason, from 2026-09-05.** Its three points are
-     * two jobs: dragging an end sets the symbol's length and dragging the side point sets
-     * how far apart the rails sit. Letting a stray drag scale the whole graphic moved both
-     * at once — reported as "the middle-outer drag changes the width but also resizes the
-     * whole graphic". The resize affordance still scales it, which is the control that
-     * means to. @see carriesSeparationInBase
-     */
-    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
-    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
-    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
-    // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.RoadblockCompleteExecuted,
-    // 140800 joined the same contract on 2026-09-05 and needs the same protection: its
-    // ends set the lane's length and its side point sets the width, and a stray drag that
-    // scaled the whole graphic would move both. @see carriesSeparationInBase
-    TacticalGraphicName.InfiltrationLane,
