@@ -324,7 +324,12 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
      * states, so the family's leading `offset` grip has nothing left to set.
      * @see Block, Disrupt, supportByFireFromAnchors
      */
-    TacticalGraphicName.Penetration,
+    /*
+     * **341800 penetrate left on 2026-09-06**, for the reason the four brackets did the same
+     * day: its rule is 340500 clear's word for word — points 1 and 2 the vertical line's
+     * endpoints, point 3 the rear — so the perpendicular the offset handle used to drag is a
+     * pair of points the operator states. @see BRACKET_GRAPHICS, frontEdgeFrame
+     */
     TacticalGraphicName.Exploitation,
     TacticalGraphicName.AttackByFire,
     // Follow and assume / follow and support are deliberately absent: they are no
@@ -438,6 +443,13 @@ const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Bypass,
     TacticalGraphicName.Canalize,
     TacticalGraphicName.Clear,
+    /*
+     * **341800 penetrate is a fifth, and its rule is clear's word for word.** *"Points 1 and
+     * 2 define the endpoints of the symbol's vertical line. Point 3 defines the rear of the
+     * symbol."* Only the drawing past that differs — one arrow rather than three — which is
+     * the generator's business and not this contract's. (User's call, 2026-09-06.)
+     */
+    TacticalGraphicName.Penetration,
 ];
 
 /**
@@ -1164,6 +1176,8 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      * *"The length and orientation of the arrows can vary independently."*
      * @see securityOperationAnchors
      */
+    // 341800's three, on 340500 clear's rule. @see BRACKET_GRAPHICS
+    [TacticalGraphicName.Penetration]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,

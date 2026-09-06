@@ -1,9 +1,16 @@
 /**
- * # The four bracket mission tasks state a height and a length, separately
+ * # The bracket mission tasks state a height and a length, separately
  *
  * APP-06 340200 breach, 340300 bypass, 340500 clear and 340400 canalize by inheritance all
  * carry the same Size/Shape sentence: *"Points 1 and 2 determine the symbol's height and
  * point 3 determines its length."* Two dimensions, two places.
+ *
+ * **341800 penetrate joined them on 2026-09-06**, and it is the same rule word for word —
+ * points 1 and 2 the vertical line's endpoints, point 3 the rear, height and length stated
+ * separately. Only the drawing past that differs: one arrow rather than three. It was the
+ * last of the block family carrying a derived width handle for a dimension its own plate
+ * gives an anchor point. (User's call: "penetration should be the same behaviour as clear
+ * with its 3 points".)
  *
  * All four were ratio-locked at 0.3 until 2026-09-06 — the height *was* the length times a
  * constant — so the plates' two independent numbers were one, and the third anchor point had
@@ -20,6 +27,7 @@ const FOUR = [
     TacticalGraphicName.Bypass,
     TacticalGraphicName.Canalize,
     TacticalGraphicName.Clear,
+    TacticalGraphicName.Penetration,
 ];
 
 /** A front edge running due north, with the rear out to the west. */

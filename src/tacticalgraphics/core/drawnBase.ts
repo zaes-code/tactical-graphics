@@ -554,6 +554,14 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.Bypass:
         case TacticalGraphicName.Canalize:
         case TacticalGraphicName.Clear:
+        /*
+         * **341800 penetrate reads them the same way**, on the same sentence: *"The arrow
+         * will project perpendicularly from the midpoint of the vertical line."* An
+         * along-edge offset in point 3 has nowhere to go in a symbol whose arrow leaves the
+         * midpoint square, so it is projected out here rather than stored and ignored.
+         * (User's call, 2026-09-06.) @see BRACKET_GRAPHICS
+         */
+        case TacticalGraphicName.Penetration:
             return sideAnchors(clicks);
 
         default:
