@@ -1354,7 +1354,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                             </Button>
                                                             )}
                                                         </Box>
-                                                        {isSector && (
+                                                        {isSector && !relativeBearing && (
                                                             <Box sx={{display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start'}}>
                                                                 <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
                                                                     <InputLabel htmlFor={`band-left-az-${i}`}>Left Az (° from N)</InputLabel>

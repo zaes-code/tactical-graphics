@@ -89,7 +89,8 @@ describe('mirroring', () => {
         expect(handleRole(TacticalGraphicName.Pursuit, 1)).toBe('shape');
     });
 
-    it('puts the other two where their own generators emit one', () => {
+    it('puts the abatis mirror where its own generator emits one', () => {
+        // Mobile defence used to be the other half of this pair. @see the list above
         expect(handleRole(TacticalGraphicName.Abatis, 2)).toBe('mirror');
     });
 

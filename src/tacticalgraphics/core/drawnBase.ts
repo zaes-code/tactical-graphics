@@ -157,6 +157,15 @@ export function normalizeDrawnBase(
     return deduped;
 }
 
+/**
+ * The hook a half-drawn pursuit shows, as a share of the run it hangs off.
+ *
+ * A preview default and nothing more — 344000 states no size for the arc, and click 3 sets
+ * it. A quarter keeps the semicircle clearly subordinate to the straight portion, which is
+ * the proportion the plate's own template draws. @see pursuitAnchors
+ */
+const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
+
 /** Degrees CCW from east, which is the unit `anchorsFor*` take. */
 const degrees = (radians: number): number => (radians * 180) / Math.PI;
 
@@ -243,15 +252,6 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.Pursuit:
             return pursuitAnchors(clicks);
 
-        default:
-            return undefined;
-    }
-}
-
-/**
- * 141700's three points from two clicks: the tip, and one end of the curved back.
- *
- * *"Points 2 and 3 define the endpoints of the curved line on the back side of the
         /*
          * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**
          *
@@ -298,6 +298,15 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.InfiltrationLane:
             return sideAnchors(clicks);
 
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * 141700's three points from two clicks: the tip, and one end of the curved back.
+ *
+ * *"Points 2 and 3 define the endpoints of the curved line on the back side of the
  * symbol. The rear of the arrowhead line shall connect to the midpoint of the line
  * between points 2 and 3. The arrowhead line shall be perpendicular to the line formed by
  * points 2 and 3."* Those constraints leave a family of symbols rather than one, so the
@@ -353,15 +362,6 @@ function ambushAnchors(clicks: Position[]): Position[] | undefined {
     return toPointTwo(left) <= toPointTwo(right) ? left : right;
 }
 
-/**
- * 344000's three points, with the third pulled onto the perpendicular at point 2.
- *
- * The click is read for two things and only two: how far it is across the run, which is
- * the arc's diameter, and which side of the run it fell on. Its component *along* the run
- * is discarded — that is the degree of freedom the standard does not give this symbol,
- * and honouring it bent the hook off square. @see hookFromAnchors
- */
-function pursuitAnchors(clicks: Position[]): Position[] | undefined {
 /**
  * The demolition block's three points, with the third pulled square off the centreline.
  *
@@ -436,6 +436,41 @@ function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
     return [tip, join, far];
 }
 
+/**
+ * 344000's three points, with the third pulled onto the perpendicular at point 2.
+ *
+ * The click is read for two things and only two: how far it is across the run, which is
+ * the arc's diameter, and which side of the run it fell on. Its component *along* the run
+ * is discarded — that is the degree of freedom the standard does not give this symbol,
+ * and honouring it bent the hook off square. @see hookFromAnchors
+ */
+function pursuitAnchors(clicks: Position[]): Position[] | undefined {
+    /*
+     * **Two clicks already describe a pursuit, so draw one.** (User's report, 2026-09-05.)
+     *
+     * The run is stated the moment the cursor leaves the first click, and the operator was
+     * placing it against an empty map: nothing rendered until the third click, because
+     * anything short of three points came back `undefined` here and the holder fell through
+     * to the *dropped* form — a default-sized hook parked on point 1, which is not the symbol
+     * being drawn.
+     *
+     * So the third point is constructed at a share of the run until the operator states it.
+     * That is a **preview convention and not a reading of the plate** — 344000 gives the hook
+     * no default size, and the moment click 3 lands the measured value replaces this one.
+     * Building it as a point rather than as a separate preview path is what keeps one
+     * description of the symbol: the half-drawn pursuit goes through exactly the arithmetic
+     * below that the finished one does.
+     */
+    if (clicks.length === 2) {
+        const [start, join] = clicks;
+        const run = turf.distance(turf.point(start), turf.point(join), {units: 'meters'});
+        if (!isFinite(run) || run <= 0) return undefined;
+        const runBearing = turf.bearing(turf.point(start), turf.point(join));
+        const tip = turf.destination(turf.point(join), run * PURSUIT_PREVIEW_HOOK_SHARE, runBearing + 90, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        return [start, join, tip];
+    }
     if (clicks.length < 3) return undefined;
     const [start, join, click] = clicks;
 

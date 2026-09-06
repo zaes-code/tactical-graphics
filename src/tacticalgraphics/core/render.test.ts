@@ -393,7 +393,7 @@ describe('Turn', () => {
 
     it('puts the arrow-tip handle on the point of the arrowhead', () => {
         const {handles, graphic} = turn();
-        const tip = ((handles.geometry as any).coordinates as number[][])[1];
+        const tip = ((handles.geometry as any).coordinates as number[][])[0];
         const [curve] = (graphic.geometry as any).geometries;
         const curveEnd = (curve.coordinates[1] as number[][]).slice(-1)[0];
         expect(tip[0]).toBeCloseTo(curveEnd[0], 6);

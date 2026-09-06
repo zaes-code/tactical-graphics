@@ -1163,7 +1163,12 @@ function isScreenSized(name: TacticalGraphicName): boolean {
  * and `text-rotate` lays it along the line — which is what OpenLayers' `placement:
  * 'line'` produces and what the read-out has always looked like there.
  */
-function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition]): Feature[] {
+/** `Start 20 km`, or just `20 km`. The same assembly `createMeasureFeature` uses. */
+function withCaption(caption: string | undefined, distance: string): string {
+    return caption ? `${caption} ${distance}` : distance;
+}
+
+function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition], caption?: string): Feature[] {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
 
@@ -1199,7 +1204,10 @@ function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition]): Fe
             // one the operator reads and the dialog states. @see mercator.ts
             properties: {
                 ...shared,
-                label: formatDistance(groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))),
+                label: withCaption(
+                    caption,
+                    formatDistance(groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))),
+                ),
                 rotation,
             },
         },
