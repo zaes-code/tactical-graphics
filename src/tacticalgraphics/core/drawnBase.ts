@@ -166,6 +166,36 @@ export function normalizeDrawnBase(
  */
 const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
 
+/**
+ * The base a graphic whose points are a **front edge and a point across it** expects, for
+ * anything that has to synthesise one — a sample sweep, a thumbnail, a round-trip fixture.
+ *
+ * Points 1 and 2 are the ends of a straight edge; the remaining point states a distance
+ * across it, and a fourth (152100's) makes that two tips rather than one. `center` is the
+ * middle of the drawn figure and `half` its half-length, both in the caller's own units, so
+ * this works in lon/lat and in projected metres alike.
+ *
+ * **Stated here because it is a fact about the base, and it was being guessed three times.**
+ * The in-app sweep laid three points along a shallow V, the catalog thumbnails laid them
+ * along a gentle arc, and MapLibre's `candidateGeometries` handed out a plain two-point line
+ * — each of which *builds* for these graphics, so each drew the legacy fallback rather than
+ * the shape the plate describes. Thirteen graphics were squat in the sweep, squat in the
+ * picker, and asserted against the wrong shape in five round-trip suites, all at once.
+ * (User's report, 2026-09-06: "the sweep is still drawing an older format".)
+ *
+ * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
+ * search area are not in it and want a vee, which is a different shape and stays theirs.
+ */
+export function frontEdgeBase(center: Position, half: number, points = 3): Position[] {
+    const [cx, cy] = center;
+    const across = half * 0.55;
+    const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
+    if (points >= 4) {
+        return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
+    }
+    return [...edge, [cx, cy - across]];
+}
+
 /** Degrees CCW from east, which is the unit `anchorsFor*` take. */
 const degrees = (radians: number): number => (radians * 180) / Math.PI;
 

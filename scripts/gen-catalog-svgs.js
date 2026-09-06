@@ -124,6 +124,7 @@ const {
     baseGeometryFor,
     baseVertexCount,
     carriesSeparationInBase,
+    frontEdgeBase,
     storedOrder,
     getDisplayName,
     GRAPHIC_CATEGORIES,
@@ -434,14 +435,8 @@ function makeBase(name) {
      * Fields of fire and the search area are not in it and keep the arc, which is right: their
      * points really do describe a vee.
      */
-    if (carriesSeparationInBase && carriesSeparationInBase(name)) {
-        const across = D * 0.9;
-        const edge = [[LON - D * 1.4, LAT + across / 2], [LON + D * 1.4, LAT + across / 2]];
-        const tips = n >= 4
-            // 152100's four: the back line, then the two arrowhead tips in front of it.
-            ? [[LON - D * 1.05, LAT - across / 2], [LON + D * 1.05, LAT - across / 2]]
-            : [[LON, LAT - across / 2]];
-        const anchors = [...edge, ...tips];
+    if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
+        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n);
         return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};
     }
     const pts = [];

@@ -9,6 +9,9 @@ import {
     getDisplayName,
     supportsHostility,
     AltitudeDatum,
+    baseVertexCount,
+    carriesSeparationInBase,
+    frontEdgeBase,
     isRectangular,
     storedOrder,
     anchorsFromFrame,
@@ -125,6 +128,31 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      */
     if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
 
+    const roles = ROLE_SAMPLE_LAYOUTS[name];
+    if (roles) return [roles(lon, lat), line, ring, point];
+
+    /*
+     * **And the thirteen whose points are a front edge and a distance across it.** Same trap
+     * as the anchor family above and the same shape of fix: a two-point line *builds* for all
+     * of them, so "the first candidate that builds wins" took it and every one drew its legacy
+     * fallback — squat, about half its proper width. This is the sweep the app restores from,
+     * so it is what a user sees. (User's report, 2026-09-06.)
+     *
+     * `frontEdgeBase` is the library's own statement of the shape, shared with the OpenLayers
+     * sample harness and the catalog thumbnails, which were each guessing it separately.
+     *
+     * **After the table above, not before it.** A graphic with a layout written for it keeps
+     * it: infiltration is in this family and also needs its point 2 *off* the chord, because
+     * that offset is what bends its S — a plain front edge draws it straight.
+     */
+    if (carriesSeparationInBase(name)) {
+        const base: Geometry = {
+            type: 'LineString',
+            coordinates: storedOrder(name, frontEdgeBase([lon, lat], runHalf, baseVertexCount(name) ?? 3)),
+        };
+        return [base, line, ring, point];
+    }
+
     /*
      * **And another eight whose points are numbered roles rather than a path.** The rule
      * here is "the first candidate that builds wins", and a two-point line *builds* for all
@@ -142,8 +170,6 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      *
      * Each layout below is written in the order the standard numbers the points.
      */
-    const roles = ROLE_SAMPLE_LAYOUTS[name];
-    if (roles) return [roles(lon, lat), line, ring, point];
 
     return [line, ring, point];
 }
