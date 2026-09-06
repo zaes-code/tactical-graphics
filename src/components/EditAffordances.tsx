@@ -38,7 +38,8 @@ import {Box, Tooltip} from '@mui/material';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
-import type {AllowedGestures, GestureKind, SelectionBox} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS} from '@zaes/tactical-graphics';
+import type {AllowedGestures, GestureKind, SelectionBox, TacticalGraphicName} from '@zaes/tactical-graphics';
 import type {MapEngineHandle} from './mapEngine';
 
 /**
@@ -71,6 +72,28 @@ const EDGE_MARGIN_PX = 8;
 type Corner = 'top-left' | 'top-right' | 'bottom-right';
 
 /**
+ * The gestures that hang off a centre-symbol graphic's **middle** rather than its corners.
+ *
+ * Cover, guard and screen are pinned at 410 x 29 px, so their extent is a long thin strip
+ * and its corners are half a viewport apart. The rotate and resize buttons landed out at
+ * the far ends of the bar, nowhere near the thing they act on — while the middle, where the
+ * host's injected symbol sits, is both what the eye reads the graphic from and what a rotate
+ * turns about. (User's call, 2026-09-06: "rotate and resize icons need to go off the center
+ * of the graphic where the symbol may or may not be".)
+ *
+ * **Move is deliberately not here.** It keeps the top-left, which is where a selection's
+ * origin reads from on every other graphic; only the two gestures whose meaning is the
+ * centre move to it.
+ *
+ * @see CENTER_SYMBOL_GRAPHICS — the library's own statement of which graphics those are,
+ * and it is the user's phrase exactly: the centre is *where the symbol may or may not be*,
+ * since the host injects it and registering no provider draws none. Read rather than
+ * restated as a second list, which is how the same rule ends up true of one family and not
+ * its neighbour.
+ */
+const CENTRE_ANCHORED_GESTURES: readonly GestureKind[] = ['rotate', 'resize'];
+
+/**
  * The buttons, and where each sits on the frame.
  *
  * Move is top-left because it is the one a user reaches for most and the top-left is
@@ -101,6 +124,8 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
      */
     const frameRef = useRef<HTMLDivElement | null>(null);
     const [frame, setFrame] = useState<{width: number; height: number}>({width: 0, height: 0});
+    /** Which graphic is selected, for the placement rule below. @see CENTRE_ANCHORED_GESTURES */
+    const [selectedName, setSelectedName] = useState<TacticalGraphicName | undefined>(undefined);
 
     /**
      * Re-measures the box.
@@ -117,6 +142,7 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
         }
         setBox(engine.selectionBox());
         setGestures(engine.selectionGestures());
+        setSelectedName(engine.getSelection()?.name);
         const element = frameRef.current;
         if (element) setFrame({width: element.clientWidth, height: element.clientHeight});
     }, [engine, active]);
@@ -167,11 +193,24 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
      * nearest where it belongs, which keeps its meaning readable — the resize button is
      * still the bottom-right one — while remaining clickable.
      */
-    const place = (corner: Corner) => {
-        const left = box!.x - BOX_PADDING_PX;
-        const top = box!.y - BOX_PADDING_PX;
-        const right = left + box!.width + BOX_PADDING_PX * 2;
-        const bottom = top + box!.height + BOX_PADDING_PX * 2;
+    const place = (corner: Corner, kind: GestureKind) => {
+        /*
+         * **A centre-symbol graphic's rotate and resize hang off a point, not a box.** The
+         * frame collapses to the middle of the extent, so the two buttons sit just off the
+         * symbol they act on instead of at the ends of a 410 px bar. Everything below is
+         * unchanged — the same corner rule and the same clamping — applied to a zero-size
+         * box. @see CENTRE_ANCHORED_GESTURES
+         */
+        const centred = !!selectedName
+            && CENTER_SYMBOL_GRAPHICS.has(selectedName)
+            && CENTRE_ANCHORED_GESTURES.includes(kind);
+        const midX = box!.x + box!.width / 2;
+        const midY = box!.y + box!.height / 2;
+
+        const left = (centred ? midX : box!.x) - BOX_PADDING_PX;
+        const top = (centred ? midY : box!.y) - BOX_PADDING_PX;
+        const right = left + (centred ? 0 : box!.width) + BOX_PADDING_PX * 2;
+        const bottom = top + (centred ? 0 : box!.height) + BOX_PADDING_PX * 2;
 
         const rawX = corner.endsWith('left') ? left - BUTTON_OFFSET_PX : right + BUTTON_GAP_PX;
         const rawY = corner.startsWith('top') ? top - BUTTON_OFFSET_PX : bottom + BUTTON_GAP_PX;
@@ -238,7 +277,7 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
                         }}
                         sx={{
                             position: 'absolute',
-                            ...place(corner),
+                            ...place(corner, kind),
                             pointerEvents: 'auto',
                             width: BUTTON_PX,
                             height: BUTTON_PX,
