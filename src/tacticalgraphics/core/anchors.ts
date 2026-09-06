@@ -584,7 +584,6 @@ export function arcAndArrowAnchorsFromClicks(clicks: Position[] | undefined): Po
     if (!clicks || clicks.length < 2) return undefined;
 
     if (clicks.length >= 3) {
-        const [tip, one, two] = clicks;
         /*
          * **The tip is not squared onto a bisector here, deliberately.**
          *
@@ -602,17 +601,25 @@ export function arcAndArrowAnchorsFromClicks(clicks: Position[] | undefined): Po
          */
         const frame = arcAndArrowFromAnchors(clicks.slice(0, 3));
         if (!frame) return undefined;
-        if (frame.arrowReach >= ARC_ARROW_MIN_REACH) return [tip, one, two];
 
-        // Too close: the arrowhead would be drawn inside the bulge it is leaving. Push the tip
-        // out along the axis it already sits on, which changes nothing else about the symbol.
-        const held = turf.destination(
-            turf.point(frame.center),
-            ARC_ARROW_MIN_REACH * frame.radius,
-            turf.bearing(turf.point(frame.center), turf.point(tip)),
-            {units: 'meters'},
-        ).geometry.coordinates as Position;
-        return [held, one, two];
+        /*
+         * **The points come back off the frame, not out of the clicks.**
+         *
+         * A 120 degree arc symmetric about the arrow's axis has exactly two ends, and where
+         * they are is settled once the centre, the radius and the aim are — so points 2 and 3
+         * are not independent of each other however freely they are placed. Handing back the
+         * raw clicks let the *stored* pair drift away from the pair the generator draws: a
+         * drag of point 3 tilted the axis, the drawn arc moved to stay symmetric about it, and
+         * the grip stayed behind on a coordinate that was no longer on the symbol. (User's
+         * report, 2026-09-06: "point 3 handle falls out of the graphic during editing".)
+         *
+         * Re-deriving them is what makes the base and the drawing one description. It is also
+         * idempotent by construction — frame to points to frame is the identity — so a base
+         * that is already consistent passes through untouched, which a reading that runs on
+         * every render has to be.
+         */
+        const reach = Math.max(frame.arrowReach, ARC_ARROW_MIN_REACH);
+        return anchorsForArcAndArrow(frame.center, frame.radius, (frame.angle * 180) / Math.PI, reach);
     }
 
     const [tip, click] = clicks;
