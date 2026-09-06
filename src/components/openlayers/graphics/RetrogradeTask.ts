@@ -78,8 +78,18 @@ export class RetrogradeTask implements LineGraphic {
          * than listed, so a graphic that grows a label paint later needs no edit here.
          * @see paintTacticalGraphic, pursuitPaint
          */
+        /*
+         * **Styled either way, because an unstyled feature is not an invisible one.** An
+         * OpenLayers feature with no style falls back to the library default — a 5 px circle,
+         * white at 40% inside a #3399CC stroke — and it draws that at every coordinate of
+         * whatever geometry it holds. This feature held none until 2026-09-06, so the missing
+         * style cost nothing; giving it the generator's label points put a small hollow blue
+         * dot on the arc of all seven cane arrows, outside edit mode and in every screenshot.
+         * (User's report, 2026-09-06.) An explicit empty style says "draws nothing" and means
+         * it.
+         */
         const labelPaint = getPaintFunction(name)?.label;
-        if (labelPaint) this.labels.setStyle(asStyleFunction(labelPaint, name));
+        this.labels.setStyle(labelPaint ? asStyleFunction(labelPaint, name) : () => []);
     }
 
     updateGeometry = () => {
