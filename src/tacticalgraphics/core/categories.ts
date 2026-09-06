@@ -205,7 +205,8 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: TacticalGraphicCategory.MobilityAndCountermobility,
-    [TacticalGraphicName.RoadblockCompleteExecuted]: TacticalGraphicCategory.MobilityAndCountermobility,
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchCompleted]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: TacticalGraphicCategory.MobilityAndCountermobility,

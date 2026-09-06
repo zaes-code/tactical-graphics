@@ -1068,7 +1068,12 @@ export enum TacticalGraphicName {
     ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
     ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
     ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',
-    RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
+    // Excluded — see ai/excluded-graphics.md. APP-06 271204's Draw Rules cell is empty and
+    // the row inherits 271201's, so the Template is the only statement of how its three
+    // points lay four strokes out — and three readings of it produced three different
+    // pictures. Switched off until the construction is settled rather than shipping a
+    // symbol we are guessing at. (User's call, 2026-09-05.)
+    // RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
     AntiTankDitchUnderConstruction = 'AntiTankDitchUnderConstruction',
     AntiTankDitchCompleted = 'AntiTankDitchCompleted',
     AntiTankDitchReinforcedWithMines = 'AntiTankDitchReinforcedWithMines',
@@ -1369,7 +1374,8 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 'Explosives, State of Readiness 2 (Armed but Passable)',

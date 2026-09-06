@@ -260,7 +260,6 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.RestrictiveFireLine,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Retirement,
-    TacticalGraphicName.RoadblockCompleteExecuted,
     TacticalGraphicName.Route,
     TacticalGraphicName.SafeLane,
     TacticalGraphicName.SafeLaneOrGap,

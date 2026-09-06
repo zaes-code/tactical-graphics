@@ -241,7 +241,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // unchanged — only how the geometry gets built moved.
         // The readiness states differ only in which bar is dashed - a stroke property,
         // so it cannot live in the geometry.
-        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable || name === TacticalGraphicName.RoadblockCompleteExecuted) {
+        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable) {
             this.graphic.setStyle(barSymbolStyleFunc(name));
         }
         if (name === TacticalGraphicName.Envelopment) {

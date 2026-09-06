@@ -270,7 +270,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:            BOTH,      // APP-06 271201 Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:              BOTH,      // APP-06 271202 Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]:  BOTH,      // APP-06 271203 Explosives, State of Readiness 2 (Armed but Passable)
-    [TacticalGraphicName.RoadblockCompleteExecuted]:                    BOTH,      // APP-06 271204 Roadblock Complete (Executed)
+    // Excluded — see ai/excluded-graphics.md
+    // [TacticalGraphicName.RoadblockCompleteExecuted]:                    BOTH,      // APP-06 271204 Roadblock Complete (Executed)
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:               BOTH,      // APP-06 290201 Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                       BOTH,      // APP-06 290202 Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:             BOTH,      // APP-06 290203 Antitank Ditch Reinforced, with Antitank Mines

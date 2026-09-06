@@ -8,7 +8,7 @@ This library complements [milsymbol](https://github.com/spatialillusions/milsymb
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
-**318 graphics** are implemented and verified today, covering **331 doctrinal variants**, across 21 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
+**317 graphics** are implemented and verified today, covering **330 doctrinal variants**, across 21 categories — see [Supported graphics](#supported-graphics) for the full catalog, and [Upcoming graphics](#upcoming-graphics) for what's next. Release history is in the [changelog](CHANGELOG.md).
 
 ![The demo's sample sweep, framed on the middle of the block it draws](docs/images/sample-gallery.png)
 
@@ -117,7 +117,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **53 of the 318 graphics need a geometry input as well**:
+`name` is always required, and **53 of the 317 graphics need a geometry input as well**:
 the point-anchored ones (mission tasks, range fans, fighting positions, the circular
 areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
 `decorationSize`. Without them you get a turf error rather than a default — see
@@ -1247,7 +1247,7 @@ Feature has no "properties.tacticalGraphic" object. Add one naming the graphic,
 e.g. {"tacticalGraphic": {"name": "PhaseLine"}}.
 
 Unknown tactical graphic "AxisOfAdvnce". Call listTacticalGraphicNames() to see
-the 318 supported names.
+the 317 supported names.
 
 Graphic "Secure" expects a Point base geometry, got LineString.
 
@@ -1562,7 +1562,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Radiation Dose Rate Contour Line | Protection Areas |
 | Radiological Contaminated Area | Protection Areas |
 | Radiological Contaminated Area, Toxic Industrial Material | Protection Areas |
-| Roadblock Complete (executed) | Protection Areas |
 | Turn | Protection Areas |
 | Unexploded Explosive Ordnance (UXO) Area | Protection Areas |
 | Anti-Tank Ditch - Completed | Protection Lines |
@@ -1621,6 +1620,7 @@ Everything still being worked towards. A graphic is listed here until it is draw
 
 | Graphic | Entity |
 |---|---|
+| Roadblock Complete (executed) | Protection Areas |
 
 ---
 

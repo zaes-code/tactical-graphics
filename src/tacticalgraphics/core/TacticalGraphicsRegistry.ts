@@ -72,7 +72,8 @@ import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
 import {WireObstacle} from "../graphics/WireObstacle";
 import {ExplosivesReadiness} from "../graphics/ExplosivesReadiness";
-import {RoadblockComplete} from "../graphics/RoadblockComplete";
+// Excluded — see ai/excluded-graphics.md
+// import {RoadblockComplete} from "../graphics/RoadblockComplete";
 import {AntiTankDitch} from "../graphics/AntiTankDitch";
 
 // Class used to provide a map between the Tactical Graphic Name and the generator that creates the GeoJSON representation of it.
@@ -112,7 +113,8 @@ TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripl
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesPlannedStateOfReadiness));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness1Safe));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable));
-TacticalGraphicsRegistry.register(new RoadblockComplete());
+// Excluded — see ai/excluded-graphics.md
+// TacticalGraphicsRegistry.register(new RoadblockComplete());
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchUnderConstruction));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchCompleted));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchReinforcedWithMines));

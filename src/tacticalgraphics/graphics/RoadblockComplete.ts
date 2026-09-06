@@ -1,7 +1,18 @@
+/**
+ * # Switched off — see `ai/excluded-graphics.md`
+ *
+ * APP-06 271204 is excluded as of 2026-09-05. Its enum member is commented out, so this class
+ * is registered by nothing and its `name` is a string literal standing in for the member.
+ * The code is kept whole rather than deleted because the exclusion is expected to be
+ * temporary: the plate's Draw Rules cell is empty and the Template alone did not settle how
+ * three points lay four strokes out. What *is* established, and the proof that constrains
+ * every candidate reading, is written up in that file.
+ */
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
-import {MovementGraphicOptions, TacticalGraphicName} from '../core/type';
+import {MovementGraphicOptions} from '../core/type';
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojson';
 import * as turf from '../core/turf';
+import {halfWidthFromSide, sidePoint} from './ExplosivesReadiness';
 
 /**
  * Separation between the two crosses, as a fraction of a bar's span, when nothing is typed.
@@ -39,58 +50,121 @@ const BAR_LEAN_DEG = 45;
  * > Points 1 and 2 determine the **centreline** of the symbol and point 3 determines its
  * > **width**.
  *
- * So points 1 and 2 give the axis the crosses are laid along - its bearing is the symbol's
- * orientation and its length is a bar's span - and point 3, arriving as the half-width,
- * sets how far the two crosses are pushed apart. A roadblock can now be laid across a road
- * running any way at all, which is the same thing the readiness states gained when they
- * stopped being point-anchored. @see ExplosivesReadiness, ai/app-6.md "F2"
+ * So points 1 and 2 give the centreline - its bearing is the symbol's orientation and its
+ * length is a bar's span - and point 3, **a placed vertex since 2026-09-05 rather than a
+ * filed width**, sets how far apart the two crosses sit across it. A roadblock can now be
+ * laid across a road running any way at all, which is the same thing the readiness states
+ * gained when they stopped being point-anchored. @see ExplosivesReadiness, ai/app-6.md "F2"
  *
- * **Which of points 1, 2 and 3 is which is an interpretation**, because the row states no
- * rule of its own and the inherited one was written for a two-rail symbol rather than a
- * four-bar one. This reading is the one that keeps the plate's picture and matches the
- * family's contract; it is recorded here rather than left to be re-derived.
- *
- * Bars come out west-to-east within each lean, which is the order `BAR_SYMBOL_DASHES`
- * indexes. Nothing dashes here, but the ordering is what makes that table meaningful.
+ * **One reading is still an interpretation**, and it is worth naming: the template draws
+ * points 1 and 2 as the two ends of a *stroke*, where the inherited rule calls them the
+ * centreline. This generator follows the rule, exactly as the three readiness states do -
+ * the bars straddle the line rather than lying on it - so that the whole block is one
+ * construction. What the template settles, and what was wrong before, is the *direction*
+ * point 3 displaces in: across the centreline, not along it.
  */
 export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptions> {
-    name: string = TacticalGraphicName.RoadblockCompleteExecuted;
+    // Excluded — see ai/excluded-graphics.md. The class is kept whole so the exclusion is a
+    // switch rather than a deletion; the literal stands in for the commented enum member.
+    name: string = 'RoadblockCompleteExecuted';
     type: string = 'LineString';
 
     /**
      * The four bars: both leaning one way first, then both the other.
      *
-     * Displaced along the drawn axis rather than perpendicular to each bar's own bearing.
-     * A perpendicular offset slides the second bar *along* its lean, so the two crosses
-     * would sit diagonally apart instead of level - the same trap the readiness states hit.
+     * **Two crosses displaced ACROSS the drawn axis**, which is what makes the plate's
+     * picture: one X with each of its arms doubled, rather than two X's standing side by
+     * side. They were displaced *along* the axis until 2026-09-05, which drew the second
+     * reading. (User's report: "the only diff is that this one needs a mirrored copy
+     * across".)
+     *
+     * The template settles it. Measured off 271204's own Template raster, the four strokes
+     * are two parallel pairs, and the anchor letters land on:
+     *
+     * | Letter | Where it sits on the template |
+     * |---|---|
+     * | PT 1 | one end of a single stroke |
+     * | PT 2 | the other end of that same stroke |
+     * | PT 3 | the **crossing point of the other two strokes** |
+     *
+     * and the crossing of the remaining pair falls on the midpoint of PT 1 - PT 2, to within
+     * a stroke width. So the symbol is a cross centred on the centreline's midpoint plus a
+     * second cross centred at point 3, and point 3 is across the centreline rather than
+     * along it. That is exactly the readiness states' construction with a cross in place of
+     * each rail, which is why it can share their reader. @see halfWidthFromSide
+     *
+     * The offset is taken from the axis rather than from each bar's own bearing: a
+     * perpendicular to the *bar* slides it along its own lean, so the crosses would sit
+     * diagonally apart instead of level - the trap the readiness states hit.
+     */
+    /**
+     * The four strokes: **the two diagonals of the box points 1, 2 and 3 describe, doubled.**
+     *
+     * This is the explosives' own construction with one addition. Those take points 1 and 2
+     * as the ends of a centreline and point 3 as the half-width, and draw a rail either side;
+     * 271204 takes the same box and draws its **diagonals** instead, then mirrors the pair —
+     * which is the doubled X the plate shows. (User's call, 2026-09-05.)
+     *
+     * **Why the ends matter.** The strokes used to be laid out from the centre at a fixed
+     * lean, half a span long each way, so the figure's extent had nothing to do with where
+     * points 1 and 2 were: the two grips sat outside the drawing and the third floated beside
+     * it. Building the strokes off the box corners puts every handle back on the symbol,
+     * which is the property the explosives already had and the one a user reported missing.
+     *
+     * @see ExplosivesReadiness.rails — the same box, the sides instead of the diagonals
      */
     private bars(base: Feature<LineString>, opts?: MovementGraphicOptions): Position[][] {
         const coords = base.geometry.coordinates;
-        const first = coords[0];
-        const last = coords[coords.length - 1];
+        const [first, last] = [coords[0], coords[1]];
 
-        const centre = turf.point([(first[0] + last[0]) / 2, (first[1] + last[1]) / 2]);
         const span = Math.max(turf.distance(turf.point(first), turf.point(last), {units: 'meters'}), 1);
-        const half = span / 2;
         const axis = turf.bearing(turf.point(first), turf.point(last));
 
-        // `radius` is the half-width the movement family fills from the public `width`,
-        // and here that is the gap from the middle out to one cross. Absent, the plate's
-        // own proportion stands in.
-        const gap = Math.max(opts?.radius ?? (span * SEPARATION_RATIO) / 2, 1);
+        /*
+         * **The half-width comes off point 3**, exactly as it does for the readiness states —
+         * *"points 1 and 2 determine the centreline of the symbol and point 3 determines its
+         * width"*. A graphic saved before point 3 became a placed vertex has two points and a
+         * filed width and still reads; with neither, the plate's own proportion stands in.
+         * @see halfWidthFromSide
+         */
+        const half = coords.length >= 3 || opts?.radius
+            ? Math.max(halfWidthFromSide(coords, opts), 1)
+            : Math.max((span * SEPARATION_RATIO) / 2, 1);
 
-        const bar = (alongAxis: number, lean: number): Position[] => {
-            const anchor = turf.destination(centre, gap, alongAxis, {units: 'meters'});
-            return [
-                turf.destination(anchor, half, axis + lean + 180, {units: 'meters'}).geometry.coordinates as Position,
-                turf.destination(anchor, half, axis + lean, {units: 'meters'}).geometry.coordinates as Position,
-            ];
-        };
-        // Behind the middle, then ahead of it, for each lean.
-        return [
-            bar(axis + 180, BAR_LEAN_DEG), bar(axis, BAR_LEAN_DEG),
-            bar(axis + 180, -BAR_LEAN_DEG), bar(axis, -BAR_LEAN_DEG),
-        ];
+        // The box: each end of the centreline pushed out to either side of it.
+        const corner = (end: Position, side: number): Position =>
+            turf.destination(turf.point(end), half, axis + side * 90, {units: 'meters'}).geometry.coordinates as Position;
+        const nearLeft = corner(first, -1);
+        const nearRight = corner(first, +1);
+        const farLeft = corner(last, -1);
+        const farRight = corner(last, +1);
+
+        /*
+         * Each diagonal, and its mirror image in the centreline — which is the same pair of
+         * corners taken the other way round, so the two cross at the box's middle and the
+         * figure is symmetric about the line the operator drew.
+         *
+         * Near-left first, which is the order `BAR_SYMBOL_DASHES` indexes. Nothing dashes
+         * here, but the family's ordering is what makes that table meaningful.
+         */
+        /*
+         * **Twice, displaced along the axis** — the plate's X has each arm doubled, which
+         * reads as two crossings rather than one. It cannot be done inside a single box: a
+         * stroke parallel to a diagonal keeps both ends on the end edges only when it *is*
+         * that diagonal, so the doubling has to move the whole X. Displaced along the drawn
+         * axis and symmetrically about the middle, so the figure stays centred on the line
+         * the operator drew and points 1 and 2 stay its mid-edge grips. (User's call,
+         * 2026-09-05.)
+         */
+        const shift = (stroke: Position[], side: number): Position[] =>
+            stroke.map(
+                point =>
+                    turf.destination(turf.point(point), half / 2, axis + (side < 0 ? 180 : 0), {units: 'meters'})
+                        .geometry.coordinates as Position,
+            );
+        const down = [nearLeft, farRight];
+        const up = [nearRight, farLeft];
+        return [shift(down, -1), shift(down, +1), shift(up, -1), shift(up, +1)];
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
@@ -99,17 +173,11 @@ export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptio
         return this.asMultiLineStringFeature(this.bars(base, opts));
     }
 
-    /**
-     * `[start, end, width]` - the movement family's contract: the two vertices the user
-     * drew, plus one handle that sets how far apart the crosses sit. The width handle rides
-     * the outer end of the first bar, so the thing being dragged is on the symbol rather
-     * than out in space. @see ExplosivesReadiness.generateHandles
-     */
+    /** `[start, end, side]` — all three placed. @see ExplosivesReadiness.generateHandles */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const coords = base.geometry.coordinates;
         if (coords.length < 2) return this.asMultiPointFeature(coords);
-        const firstBar = this.bars(base, opts)[0];
-        return this.asMultiPointFeature([coords[0], coords[coords.length - 1], firstBar[0]]);
+        return this.asMultiPointFeature([coords[0], coords[1], sidePoint(coords, opts)]);
     }
 
     /** No amplifiers: affiliation and nothing else. */
