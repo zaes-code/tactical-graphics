@@ -579,25 +579,27 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
         });
 
-        it('reads point 1 and point 2, and rewrites points 3 and 4 from them', () => {
-            // Drawn freehand: the second leg splayed away and the opening is wrong. The
-            // canonical layout is written back over it, and the two points that carry the
-            // description are the two left alone.
-            const drifted = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
+        it('reads all four points, and rewrites none of them', () => {
+            /*
+             * **The reversal, on this engine too.** It used to assert that points 3 and 4 were
+             * *overwritten* with a canonical layout derived from points 1 and 2 — equal legs, a
+             * fixed opening. 343300 says *"Points 1 and 2 and points 3 and 4 determine the
+             * length of each side"*, which is two lengths, and says nothing about the sides
+             * being parallel. Each point is the operator's as of 2026-09-06.
+             */
+            const placed = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
             const built = buildTacticalGraphic(
                 TacticalGraphicName.Demonstration,
-                {type: 'LineString', coordinates: drifted},
+                {type: 'LineString', coordinates: placed},
                 {},
                 RESOLUTION,
             )!;
             const anchors = (built.base.geometry as {coordinates: number[][]}).coordinates;
-            expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
-            expect(anchors[1][0]).toBeCloseTo(0.2, 4);
-            expect(anchors[2]).not.toEqual(drifted[2]);
-            expect(anchors[3]).not.toEqual(drifted[3]);
-            // …and the description follows the points, as it does for the rest of the
-            // family: the leg length is what the base says, not what a caller stamped.
-            expect(built.base.properties?.tacticalGraphic?.radius).toBeGreaterThan(0);
+            placed.forEach((point, i) => {
+                expect(anchors[i][0]).toBeCloseTo(point[0], 4);
+                expect(anchors[i][1]).toBeCloseTo(point[1], 4);
+            });
+            expect(paintTacticalGraphic(built, context).length).toBeGreaterThan(0);
         });
     });
 

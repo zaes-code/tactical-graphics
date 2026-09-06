@@ -123,9 +123,18 @@ describe('APP-06 343300 — demonstration', () => {
         expect(parts[1].length).toBeGreaterThan(3);
     });
 
-    it('carries four anchor points, and the base is where they live', () => {
+    it('carries four anchor points, placed rather than derived', () => {
+        /*
+         * 343300 names four — *"Point 1 defines the tip of the arrowhead. Point 2 defines the
+         * end of the straight line portion of the first arrow. Points 3 and 4 define the
+         * length of the second straight line"* — and all four are the operator's as of
+         * 2026-09-06. It left `DRAWN_ANCHOR_GRAPHICS` with them: that list routes the centre /
+         * size / rotation machinery a *derived* layout needs, and there is no layout left.
+         */
         expect(baseGeometryFor(TacticalGraphicName.Demonstration)).toBe('LineString');
-        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(true);
+        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
+        // The old layout survives as the reader for files written before the change.
         expect(anchorsForParallelLegs(ANCHOR, SIZE, 0)).toHaveLength(4);
     });
 
@@ -141,18 +150,36 @@ describe('APP-06 343300 — demonstration', () => {
         expect(meters(parts[0][1], parts[2][0]) / SIZE).toBeCloseTo(0.7, 2);
     });
 
-    it('recomputes points 3 and 4 rather than reading them', () => {
-        // A base written while the four were placed freehand — legs splayed, opening
-        // wrong — resolves to the canonical shape rather than to what it had drifted
-        // into. This is what "auto-calculated" has to mean if it is to mean anything.
-        const drifted: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
-        const parts = (drop(0, drifted).graphic.geometry as MultiLineString).coordinates;
+    it('reads all four points instead of recomputing two of them', () => {
+        /*
+         * **The reversal.** This used to assert that a base whose four points had been placed
+         * freehand *resolved back* to a canonical shape — equal legs, a fixed 0.7 opening —
+         * because points 3 and 4 were derived from 1 and 2. That is not what 343300 says:
+         * *"Points 1 and 2 and points 3 and 4 determine the length of each side"* is two
+         * lengths, and nothing in the rule makes the sides parallel. All four are read now.
+         * (User's call, 2026-09-06.)
+         */
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const parts = (drop(0, placed).graphic.geometry as MultiLineString).coordinates;
+        // Each of the four lands where it was put: leg 1 is P1→P2 and leg 2 is P3→P4.
+        expect(meters(parts[0][0], placed[0])).toBeLessThan(1);
+        expect(meters(parts[0][1], placed[1])).toBeLessThan(1);
+        expect(meters(parts[2][0], placed[2])).toBeLessThan(1);
+        expect(meters(parts[2][1], placed[3])).toBeLessThan(1);
+        // …and the two sides are free to differ, which is the whole point of placing them.
+        expect(meters(parts[0][0], parts[0][1])).not.toBeCloseTo(meters(parts[2][0], parts[2][1]), -1);
+    });
+
+    it('still resolves a base written before the four were placed', () => {
+        // Two points and a size is a file from before 2026-09-06 — a dropped demonstration
+        // saved as its derived four, or a mid-draw sketch. Those keep rendering through the
+        // old layout rather than failing to draw. @see anchorsForParallelLegs
+        const legacy: Position[] = [[-77.0, 38.7], [-76.0, 38.7]];
+        const parts = (drop(0, legacy).graphic.geometry as MultiLineString).coordinates;
+        expect(parts).toHaveLength(3);
         const leg1 = meters(parts[0][0], parts[0][1]);
         expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(leg1, -1);
         expect(meters(parts[0][1], parts[2][0]) / leg1).toBeCloseTo(0.7, 2);
-        // Points 1 and 2 are the ones that *are* read, so they are untouched.
-        expect(meters(parts[0][0], drifted[0])).toBeLessThan(1);
-        expect(meters(parts[0][1], drifted[1])).toBeLessThan(1);
     });
 
     it('holds the two legs parallel and opposed at every rotation', () => {
@@ -181,32 +208,34 @@ describe('APP-06 343300 — demonstration', () => {
         }
     });
 
-    it('puts the edge handle on point 2 and the move handle on the anchor', () => {
-        // `[edge, centre]` — the point-anchored contract. The edge is the far end of the
-        // first leg, which is the one anchor point a resize has any reason to grab.
-        const rendered = drop();
-        const parts = (rendered.graphic.geometry as MultiLineString).coordinates;
+    it('puts a grip on each of the four points, in the plate\'s own order', () => {
+        // It published `[edge, centre]` — the point-anchored contract — while the symbol was
+        // dropped whole, so the only draggable mark scaled a shape the operator could not
+        // otherwise change. Every point is placed now, so every point is grabbable.
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const rendered = drop(0, placed);
         const handles = (rendered.handles.geometry as {coordinates: Position[]}).coordinates;
-        expect(handles).toHaveLength(2);
-        expect(meters(handles[0], parts[0][1])).toBeLessThan(1);
-        expect(meters(handles[1], ANCHOR)).toBeLessThan(1);
+        expect(handles).toHaveLength(4);
+        handles.forEach((h, i) => expect(meters(h, placed[i])).toBeLessThan(1));
     });
 
-    it('is dropped, not drawn — one click, and it turns and resizes afterwards', () => {
-        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeGreaterThan(0);
-        // A four-point base normally means four things to drag. Not this one: the other
-        // three follow from the first, so the whole symbol moves, turns and scales
-        // together and there is no vertex to modify. @see hasDerivedAnchors
-        expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(true);
+    it('is drawn in four clicks, and every point can be modified', () => {
+        /*
+         * **It was a one-click drop.** `dropSizePx` gave it a leg length from which the U's
+         * opening and all three other points followed, so the operator stated position and
+         * nothing else — and `modify` was off, because there was no vertex whose movement
+         * meant anything. 343300 names four anchor points; the draw asks for four and each
+         * one is draggable. (User's call, 2026-09-06.)
+         */
+        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeUndefined();
+        expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
         expect(allowedGestures(TacticalGraphicName.Demonstration)).toEqual({
             translate: true,
             rotate: true,
             resize: true,
-            modify: false,
+            modify: true,
         });
-        // …and the draw still ends on the first click, which is a rule about clicks and
-        // not about how many points the base ends up holding.
-        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBeUndefined();
     });
 
     it('holds DEM inside the leg it is set in, at every zoom', () => {

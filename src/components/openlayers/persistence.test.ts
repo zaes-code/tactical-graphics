@@ -596,7 +596,7 @@ describe('a graphic saved before the anchor-point conversion', () => {
      * freehand still loads, and comes back as the canonical shape — which is what
      * "auto-calculated" means once the ratios stop being an input.
      */
-    it('snaps a freehand demonstration onto the ratios it is now fixed at', () => {
+    it('restores a four-point demonstration exactly as it was drawn', () => {
         const to = fakeManager();
         // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
         const drawn = {
@@ -631,18 +631,23 @@ describe('a graphic saved before the anchor-point conversion', () => {
         expect(base).toBeInstanceOf(LineString);
         const anchors = (base as LineString).getCoordinates().map(c => toLonLat(c));
         expect(anchors).toHaveLength(4);
-        // Points 1 and 2 are the two that are read, and they have not moved.
-        expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
-        expect(anchors[0][1]).toBeCloseTo(51.5, 6);
-        expect(anchors[1][0]).toBeCloseTo(0.2, 4);
-        // Points 3 and 4 were rewritten from them, so the legs come back equal. Within a
-        // percent, and as a ratio: these are *projected* metres, and the second leg sits a
-        // quarter of a degree further north, where Mercator's scale factor is 0.8% larger.
-        // Asserting equality here would be asserting the projection.
+        /*
+         * **All four come back where they were put.** This asserted the opposite until
+         * 2026-09-06: points 3 and 4 were rewritten from 1 and 2, so a splayed U "snapped" to
+         * equal parallel legs. 343300 gives each side its own length and says nothing about
+         * the two being parallel, so a restore that straightened them was discarding what the
+         * operator drew. @see Demonstration
+         */
+        const drawnPoints = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
+        drawnPoints.forEach((point, i) => {
+            expect(anchors[i][0]).toBeCloseTo(point[0], 4);
+            expect(anchors[i][1]).toBeCloseTo(point[1], 4);
+        });
+        // ...and the two legs stay as different as they were drawn.
         const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
         const parts = (rebuilt as MultiLineString).getCoordinates();
         const legLength = (part: number[][]) => Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]);
-        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 1);
+        expect(legLength(parts[2]) / legLength(parts[0])).not.toBeCloseTo(1, 1);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {

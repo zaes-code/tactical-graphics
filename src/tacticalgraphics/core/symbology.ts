@@ -866,9 +866,15 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
  * points the standard names; the version before that refused a *rotate* inside
  * `PointDropController`, where only OpenLayers could see it. @see allowedGestures
  */
-const DERIVED_ANCHOR_GRAPHICS = new Set<TacticalGraphicName>([
-    TacticalGraphicName.Demonstration,
-]);
+/**
+ * **Empty as of 2026-09-06**, and kept because the category is real.
+ *
+ * The demonstration was its only member and left when its four points became placed rather
+ * than laid out from one centre. A graphic whose points are derived is still a thing this
+ * library could hold — the predicate is what a renderer asks — so an empty answer is a fact
+ * worth pinning rather than a table to delete. Same reasoning as `ROTATE_ONLY_SYMBOLS`.
+ */
+const DERIVED_ANCHOR_GRAPHICS = new Set<TacticalGraphicName>([]);
 
 /** @see DERIVED_ANCHOR_GRAPHICS */
 export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
@@ -1022,9 +1028,11 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Neutralize]: 50,
     [TacticalGraphicName.Suppress]: 50,
     [TacticalGraphicName.Airfield]: 34,
-    // The demonstration's leg. The U's opening follows from it, so this one number
-    // fixes the whole symbol. @see Demonstration
-    [TacticalGraphicName.Demonstration]: 70,
+    // **The demonstration is not dropped either, as of 2026-09-06.** Its leg used to be this
+    // one number, from which the U's opening and both other points followed — so the whole
+    // symbol was fixed and the operator placed only its position. 343300 names four anchor
+    // points and each is placed now, so the draw takes four clicks and finishes on the last.
+    // @see Demonstration, BASE_VERTEX_COUNT
     // **Roadblock complete is not dropped either, as of 2026-09-05**, for the same reason
     // and with the same consequence: 271204's plate letters three anchor points and its
     // inherited rule gives it a centreline, so the draw waits for the second click rather

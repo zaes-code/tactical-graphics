@@ -163,8 +163,17 @@ const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
     // Three anchor points, each meaning something. @see GeometryService.createSCurve
     new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3, 0);
 
+/*
+ * **Four placed points, as 341900 names them** — the two arrowhead tips and the two arrow
+ * ends. It was a two-point line plus a `size` amplifier that set the U's height, which
+ * forced the arrows parallel and equal and left points 3 and 4 nowhere. (User's call,
+ * 2026-09-06.)
+ *
+ * It keeps its own holder rather than moving to `vertexLine`: the `RIP` break is cut by a
+ * style this holder attaches, and a generic line holder does not know to. @see ReliefInPlace
+ */
 const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 2, name);
+    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 4, name).enableVertexDragging(4);
 
 const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new AirCorridor(name, sizing * 20, res));
@@ -626,8 +635,13 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FollowAndSupport]:                 vertexLine(2, 2),
     // Centre first, then the two ends -- the order the standard numbers them.
     [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
-    // Dropped whole, not drawn: its four points are one fixed shape. @see Demonstration
-    [TacticalGraphicName.Demonstration]:                    demonstrationDrop,
+    /*
+     * **Four placed points, each with a grip.** 343300 names four anchor points and this was
+     * a one-click drop that laid all four out from a single centre, so the operator stated
+     * position and nothing else. `vertexLine(4, 4)` is the same contract Capture and Seize
+     * take. (User's call, 2026-09-06.) @see Demonstration
+     */
+    [TacticalGraphicName.Demonstration]:                    vertexLine(4, 4),
     [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
