@@ -45,6 +45,7 @@ import {
     acrossPointAtEnd,
     drawsAsHairpin,
     hairpinBase,
+    synthesizedBase,
     carriesSeparationInBase,
     drawsByAnchorClicks,
     normalizeDrawnBase,
@@ -801,27 +802,16 @@ const BYPASS_POINTS = new Set<TacticalGraphicName>([
 function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?: TacticalGraphicName): Coordinate[] {
     if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
     /*
-     * **A front edge and a point across it, for the graphics whose third point means that.**
+     * **Whatever the library says this graphic's points are**, rather than a chain of `if`s
+     * over its predicates — which is what stood here, and what drifted from the MapLibre
+     * sweep's own copy of the same chain until pursuit was a cane arrow on one sheet and a
+     * shallow V on the other. @see synthesizedBase
      *
-     * Thirteen graphics moved onto their plates' anchor points on 2026-09-05/06, and for every
-     * one of them points 1 and 2 are the ends of a *straight* edge — an opening, a vertical
-     * line, a centreline — with the last point stating a distance across it. The shallow V
-     * below hands those points 1 and 2 as the V's left half and point 3 as its right end, so
-     * the symbol is drawn on half the width at a quarter of the intended aspect: breach came
-     * out 0.765 x 0.624 where its own Template is 2:1, and every one of the thirteen was
-     * squat in the sample sweep, in its thumbnail, and in five round-trip suites.
-     * (User's report, 2026-09-06 — "the sweep is still drawing an older format".)
-     *
-     * `carriesSeparationInBase` is the library's own statement of which graphics mean this,
-     * and it separates them exactly: fields of fire and the search area, whose points really
-     * do describe a vee, are not in it and keep the V.
+     * The V below is the answer for a graphic whose points really do describe one — fields
+     * of fire and the search area — and for nothing else.
      */
-    if (name && carriesSeparationInBase(name)) {
-        return frontEdgeBase([cx, cy], half, pts, acrossPointAtEnd(name) ? 1 : 0.5) as Coordinate[];
-    }
-    // Two legs and a turn. The quadrilateral below normalises into a symbol half this wide,
-    // which is correct and unreadable beside its neighbours. @see hairpinBase
-    if (name && drawsAsHairpin(name)) return hairpinBase([cx, cy], half) as Coordinate[];
+    const stated = name && synthesizedBase(name, [cx, cy], half, pts);
+    if (stated) return stated as Coordinate[];
     if (pts === 3) {
         return [
             [cx - half, cy + half * 0.2],
