@@ -44,14 +44,41 @@ describe('141700 places all three of its anchor points', () => {
         expect(baseVertexCount(NAME)).toBe(3);
     });
 
-    it('keeps points 2 and 3 exactly where they were placed', () => {
-        // They are the curved line's own endpoints, so placing both is what lets the operator
-        // set its span and which way it faces. Two clicks had to construct one of them.
+    it('keeps the chord the clicks describe, and lands its ends on the arc', () => {
+        /*
+         * **Points 2 and 3 are not independent of each other, and cannot be.** A 120 degree
+         * arc symmetric about the arrow's axis has exactly two ends, settled once the centre,
+         * the radius and the aim are — so three clicks carry one more number than the symbol
+         * can hold, and the reading absorbs it. What it keeps is what the operator was
+         * actually stating: the chord's length, and where its middle is.
+         *
+         * That absorption is what puts the grips on the graphic. Handing back the raw clicks
+         * let the stored pair drift from the pair the generator draws, and the grip stayed
+         * behind on a coordinate no longer on the symbol. (User's report: "point 3 handle
+         * falls out of the graphic during editing".)
+         */
         for (const back of [[[0, 0.05], [0, -0.05]], [[0.01, 0.09], [-0.03, -0.02]]] as Position[][]) {
+            const clicked = meters(back[0], back[1]);
             const [, two, three] = anchors([CLICKS[0], back[0], back[1]]);
-            expect(meters(two, back[0])).toBeLessThan(1);
-            expect(meters(three, back[1])).toBeLessThan(1);
+            expect(meters(two, three) / clicked).toBeCloseTo(1, 2);
+
+            // Both ends sit on the arc the frame describes, which is the property that keeps
+            // a grip on the line work.
+            const frame = arcAndArrowFromAnchors([CLICKS[0], two, three])!;
+            expect(Math.abs(meters(frame.center, two) - frame.radius) / frame.radius).toBeLessThan(0.01);
+            expect(Math.abs(meters(frame.center, three) - frame.radius) / frame.radius).toBeLessThan(0.01);
         }
+    });
+
+    it('moves nothing at all when the three clicks already agree', () => {
+        // The absorption only bites on a placement the symbol cannot hold. Put the tip on the
+        // chord's own bisector — which is where the plate puts it — and every point is kept.
+        const back: Position[] = [[0, 0.05], [0, -0.05]];
+        const onAxis: Position = [0.08, 0];
+        const [one, two, three] = anchors([onAxis, back[0], back[1]]);
+        expect(meters(two, back[0])).toBeLessThan(1);
+        expect(meters(three, back[1])).toBeLessThan(1);
+        expect(meters(one, onAxis)).toBeLessThan(1);
     });
 
     it('connects the arrow to the chord’s midpoint without moving the tip', () => {
