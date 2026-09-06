@@ -259,15 +259,14 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
 /**
  * Whether this graphic's points are a **front edge and a distance across it**.
  *
- * `carriesSeparationInBase` is the library's own statement of that shape and is almost the
- * whole answer. 344000 pursuit is the exception: its plate numbers the points the same way
- * — a straight run, then a point stating the arc — but it reads its own frame rather than a
- * stored separation, so it is not in that list and must be named here. It is the same
- * picture as the seven cane arrows, and a sheet that lays it out differently shows the odd
- * one out. @see synthesizedBase, acrossPointAtEnd
+ * `carriesSeparationInBase` is the library's own statement of that shape and is now the
+ * whole answer. It briefly was not: 344000 pursuit had to be named here, because it drew
+ * the cane arrows' picture while reading its own frame rather than a stored separation. It
+ * joined that predicate on 2026-09-06 when its editing was made to match its siblings', and
+ * the exception went with it. @see synthesizedBase, acrossPointAtEnd
  */
 export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
-    return carriesSeparationInBase(name) || name === TacticalGraphicName.Pursuit;
+    return carriesSeparationInBase(name);
 }
 
 /** Whether this graphic is drawn as a hairpin. @see hairpinBase, hairpinAnchors */

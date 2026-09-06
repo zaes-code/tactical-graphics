@@ -554,9 +554,19 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
         });
 
         it('declares each of them as taking a drawn base', () => {
+            /*
+             * **A LineString base is the claim; `usesDrawnAnchors` is not.** That list routes
+             * the centre / size / rotation machinery a graphic needs when its points are read
+             * back as a *frame*, and a graphic can outgrow it: 344000 pursuit left on
+             * 2026-09-06 so that its three points would be dragged as vertices, the way the
+             * seven cane arrows it draws the same picture as already were. It takes a drawn
+             * base exactly as before — it just no longer decomposes one.
+             * @see Pursuit.generateHandles, DRAWN_ANCHOR_GRAPHICS
+             */
             for (const [name] of CONVERTED) {
-                expect(usesDrawnAnchors(name)).toBe(true);
                 expect(baseGeometryFor(name)).toBe('LineString');
+                if (name === TacticalGraphicName.Pursuit) continue;
+                expect(usesDrawnAnchors(name)).toBe(true);
             }
         });
     });

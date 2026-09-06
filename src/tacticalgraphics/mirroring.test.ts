@@ -48,7 +48,7 @@ const mirrorable = () => listTacticalGraphicNames().filter(n => supportsMirror(n
 describe('mirroring', () => {
     it('names the two graphics that still flip', () => {
         /*
-         * **152800 left this list on 2026-09-06, and the seven cane arrows followed it.**
+         * **152800 left this list on 2026-09-06, then the seven cane arrows, then 344000.**
          *
          * It is the interesting departure: none of them lost the ability to face either way,
          * they stopped expressing it with an amplifier. Every one of their plates gives point
@@ -56,10 +56,19 @@ describe('mirroring', () => {
          * that point across the line is the flip, and a `mirrored` flag plus a grip whose
          * only purpose was to toggle it were a second way of saying what the geometry says.
          *
-         * What is left is the two whose side genuinely is not in their points: an abatis
-         * chevron and a pursuit hook. @see MobileDefense.frame, RetrogradeTask
+         * Pursuit was the last out, and the straggler is what made the case. Its rule says
+         * exactly the same thing — *"Point 3 defines the diameter and orientation of the 180
+         * degree circular arc"* — but it kept the grip after its seven siblings dropped
+         * theirs, which left a **mirror** handle at index 0 where every sibling has a shape
+         * vertex. So the first gesture anyone tries on a cane arrow, dragging the arc's end,
+         * did something different on this one symbol. (User's report, 2026-09-06: "I'm trying
+         * to have consistency across similar graphics".)
+         *
+         * What is left is the one graphic whose side genuinely is not in its points: an
+         * abatis chevron, whose base is a free-form route and whose tooth hangs off it.
+         * @see MobileDefense.frame, RetrogradeTask, Pursuit.generateHandles
          */
-        expect(mirrorable().sort()).toEqual(['Abatis', 'Pursuit']);
+        expect(mirrorable().sort()).toEqual(['Abatis']);
     });
 
     it('gives each of them exactly one mirror handle', () => {
@@ -82,12 +91,20 @@ describe('mirroring', () => {
         }
     });
 
-    it('puts pursuit on its hook, first, like the retrograde tasks', () => {
-        // The hook is a pursuit's cane — the part that hangs off the line and swaps
-        // sides — and its generator emits that end first. A user reaching to flip a
-        // graphic should find the handle in the same place on all of them.
-        expect(handleRole(TacticalGraphicName.Pursuit, 0)).toBe('mirror');
-        expect(handleRole(TacticalGraphicName.Pursuit, 1)).toBe('shape');
+    it('leaves pursuit three shape grips, in its base\'s own order', () => {
+        /*
+         * **The reversal, and the reason the whole list matters.** This asserted the
+         * opposite: grip 0 was a `mirror`, because the generator emitted the hook's tip
+         * first and a flip handle went where the flip was. That made the grip on the arc's
+         * end flip the symbol, while the same grip on any of pursuit's seven siblings drags
+         * point 3 — and point 3 *is* the flip, so the handle was a second way of saying what
+         * moving it already says. Grips are `[start, join, tip]` now: index N is base point
+         * N, which is what a vertex drag on either engine assumes.
+         * @see Pursuit.generateHandles
+         */
+        const {roles} = handleContract(TacticalGraphicName.Pursuit);
+        expect(roles).toEqual(['shape', 'shape', 'shape']);
+        expect(handleRole(TacticalGraphicName.Pursuit, 0)).toBe('shape');
     });
 
     it('puts the abatis mirror where its own generator emits one', () => {

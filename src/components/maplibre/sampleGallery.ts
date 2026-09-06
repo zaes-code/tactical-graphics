@@ -134,7 +134,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * sheet. (User's report, 2026-09-06: "pursue should be like those other cane graphics".)
      * Its own rule numbers the points the same way: a run, then a point stating the arc.
      */
-    if (usesDrawnAnchors(name) && name !== TacticalGraphicName.Pursuit) {
+    if (usesDrawnAnchors(name)) {
         return [anchorLine(lon, lat), line, ring, point];
     }
 

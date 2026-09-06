@@ -8,6 +8,7 @@ import {
     retroGradeTaskStyleFunc
 } from '../openlayerStyles';
 import {MultiPoint} from "ol/geom";
+import type {StyleFunction} from 'ol/style/Style';
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
@@ -42,14 +43,25 @@ export class RetrogradeTask implements LineGraphic {
     /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
     hidesStartHandle?: boolean;
 
-    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
+    /**
+     * @param style the paint to attach, for a graphic that draws this shape with its own.
+     *
+     * **344000 pursuit is why this is a parameter.** It is a cane arrow — a straight run with
+     * a half circle hooked off its end — and it edits like one: three placed points, every
+     * one a plain vertex. The only thing it does not share is the paint, since its arrowhead
+     * carries a crossbar the seven retrograde tasks have none of. Copying this holder to
+     * change one line would have made the *editing* a fact stated twice, which is the drift
+     * that had pursuit behaving unlike its siblings in the first place.
+     * (User's report, 2026-09-06.) @see pursuitStyleFunc
+     */
+    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number, style?: StyleFunction) {
         this.name = name;
         this.size = size;
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
         }
         this.setSymbolId('');
-        this.graphic.setStyle(retroGradeTaskStyleFunc(getLabel(name)));
+        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));
     }
 
     updateGeometry = () => {

@@ -16,13 +16,13 @@ import {
     EnvelopmentGraphicBase,
     AmbushGraphicBase,
     ContainGraphicBase,
-    PursuitGraphicBase,
         MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
+import {pursuitStyleFunc} from './openlayerStyles';
 import {Exfiltrate} from './graphics/Exfiltrate';
 import {ReliefInPlace} from './graphics/ReliefInPlace';
 import {Block} from './graphics/Block';
@@ -284,15 +284,21 @@ const contain = (name: TacticalGraphicName, res: number) => {
 };
 
 /*
- * **Three clicks: the run's two ends, then the hook.** 344000's arc "is always
+ * **Three clicks: the run's two ends, then the hook** — and then it edits exactly as the
+ * seven retrograde arrows do, because it is the same symbol. 344000's arc "is always
  * perpendicular to the line", so the third click is taken for its distance across the run
  * and its side, and put on that perpendicular. @see pursuitAnchors
+ *
+ * It was an `AnchorClickController` over `PursuitGraphicBase` until 2026-09-06, which
+ * decomposed every drag into centre / size / rotation / mirrored / lineRatio and laid all
+ * three points back out from them — so dragging one point moved the other two, and the grip
+ * on the arc's end *flipped* the hook instead of moving it. The seven siblings drag their
+ * vertices. (User's report: "I'm trying to have consistency across similar graphics".)
+ * @see RetrogradeTask, carriesSeparationInBase
  */
-const pursuit = (name: TacticalGraphicName, res: number) => {
-    const controller = new AnchorClickController(new PursuitGraphicBase(name, res, res), drawClickCount(name) ?? 3);
-    controller.editStretches = true;
-    return controller;
-};
+const pursuit = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new RetrogradeTask(name, sizing * 20, res, pursuitStyleFunc(name)), 3, name)
+        .enableVertexDragging(3);
 
 /**
  * Every one-click graphic: the crossed mission tasks, the airfield, the completed

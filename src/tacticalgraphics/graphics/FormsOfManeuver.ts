@@ -462,21 +462,27 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      * in the middle of the empty space inside the hook, and it is not load-bearing.
      */
     /**
-     * `[tip, join, start]` — a grip on each of 344000's three anchor points.
+     * `[start, join, tip]` — a grip on each of 344000's three anchor points, **in the order
+     * the base stores them**.
      *
-     * Point 2, "the end of the straight line portion", had none: the list was `[tip, start]`,
-     * so the join an operator reaches for to change where the hook begins was the one place
-     * on the symbol that could not be grabbed. Its seven sibling cane arrows all publish
-     * three, and a user reading the sample sheet saw the odd one out. (2026-09-06.)
+     * Two changes, both about being the same symbol as its siblings:
      *
-     * The tip stays at index 0, which is what `MIRROR_HANDLE_AT_0` and pursuit's own contract
-     * name as the grip that flips the hook; `join` takes index 1 and `start` moves to 2, both
-     * of which the contract's `repeating: 'shape'` already covers.
+     * Point 2, *"the end of the straight line portion"*, had no grip at all — the list was
+     * `[tip, start]`, so the join an operator reaches for to move where the hook begins was
+     * the one place on the symbol that could not be grabbed.
+     *
+     * And the order was reversed. With the tip at index 0 it took `MIRROR_HANDLE_AT_0`, so
+     * the grip on the arc's end **flipped the hook** rather than moving the point, while the
+     * same grip on any of the seven cane arrows drags point 3. Point 3 states which side the
+     * arc falls on, so dragging it across the line already *is* the flip; the mirror grip had
+     * nothing left to do. Index N is base point N now, which is what every sibling publishes
+     * and what a vertex drag on either engine assumes.
+     * (User's report, 2026-09-06.) @see carriesSeparationInBase, MIRROR_HANDLE_GRAPHICS
      */
     generateHandles(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiPoint> {
         const frame = this.frame(base, opts);
         if (!frame) return this.asMultiPointFeature([]);
-        return this.asMultiPointFeature([frame.tip, frame.join, frame.start]);
+        return this.asMultiPointFeature([frame.start, frame.join, frame.tip]);
     }
 
     /**
