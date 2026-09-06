@@ -18,6 +18,7 @@
 
 import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName, listTacticalGraphicNames, renderTacticalGraphic} from '../index';
 import type {Feature} from 'geojson';
+import * as turf from './turf';
 
 /**
  * Most coordinates one graphic may produce.
@@ -87,10 +88,26 @@ describe('geometry budget', () => {
         // The other half of the clamp: a period that is too fine gets widened, and a
         // clamp set too aggressively would collapse the rails into single lines.
         for (const name of [TacticalGraphicName.FordEasy, TacticalGraphicName.FordDifficult]) {
+            /*
+             * **Three points, because that is what a ford is now.** Its bars' separation was a
+             * `radius` amplifier and is an anchor point as of 2026-09-06, so a two-point base
+             * is a half-drawn symbol whose gap is a preview default — which is not the thing
+             * this test measures.
+             *
+             * **A narrow gap, because a fine dash period is the subject.** The dash length is
+             * a third of the half-separation, so the wider the bars sit the fewer dashes they
+             * carry — 360 km of gap draws 8 of them across this base and asserts nothing about
+             * the clamp. The `radius: 180_000` this used to pass never reached the generator
+             * as a separation at all; what it exercised was the small default.
+             * @see parallelRailFrame
+             */
+            const bar = (LONG_BASE as {coordinates: number[][]}).coordinates;
+            const across = turf.destination(turf.point(bar[bar.length - 1]), 12_000, 0, {units: 'meters'})
+                .geometry.coordinates;
             const rendered = renderTacticalGraphic({
                 type: 'Feature',
-                geometry: LONG_BASE,
-                properties: {[TACTICAL_GRAPHIC_KEY]: {name, radius: 180_000, rotation: 0}},
+                geometry: {type: 'LineString', coordinates: [...bar, across]},
+                properties: {[TACTICAL_GRAPHIC_KEY]: {name, rotation: 0}},
             } as Feature);
 
             const geometry = rendered.graphic.geometry as {type: string; coordinates: unknown[]};

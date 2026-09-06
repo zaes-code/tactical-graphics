@@ -7,7 +7,7 @@ import {
 import geometryService from "../core/GeometryService";
 import {Coordinate} from "../core/type";
 import {Position} from "geojson";
-import {parallelRailFrame} from "../core/anchors";
+import {parallelRailAnchors, parallelRailFrame} from "../core/anchors";
 
 /**
  * The centreline and half-separation of a ford's two bars, from wherever they are stated.
@@ -18,9 +18,16 @@ import {parallelRailFrame} from "../core/anchors";
  * @see parallelRailFrame
  */
 function railsOf(base: Feature<LineString>, opts?: MovementGraphicOptions): {centre: Position[]; half: number} {
-    const drawn = parallelRailFrame(base.geometry.coordinates as Position[]);
+    const coords = base.geometry.coordinates as Position[];
+    /*
+     * **Through the clicks reader, so the preview is the symbol being drawn.** Two points are
+     * one bar with the other previewed beside it — not a centreline with both bars straddling
+     * it, which is what the raw fallback below makes of them and what put the drawing cursor
+     * down the middle of a line the symbol does not have. @see parallelRailAnchors
+     */
+    const drawn = parallelRailFrame(parallelRailAnchors(coords, 3) ?? coords);
     if (drawn) return drawn;
-    return {centre: base.geometry.coordinates as Position[], half: opts?.radius || 20};
+    return {centre: coords, half: opts?.radius || 20};
 }
 
 export class Ford extends TacticalGraphicsBase {
