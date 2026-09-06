@@ -40,6 +40,7 @@ import {
     TacticalGraphicCategory,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    carriesSeparationInBase,
     getDisplayName,
     groundLength,
     isRectangular,
@@ -747,7 +748,7 @@ export function applyBaseGeometry(
         // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
         // line handed to one of those puts its head on the *west* end — a sheet of arrows
         // pointing back the way the standard's own plates draw them coming. @see storedOrder
-        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow)) as Coordinate[];
+        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow, name)) as Coordinate[];
         handler.setBaseFeature(lineFeature(path, symbolId, name));
     } else {
         throw new Error('unclassified controller');
@@ -767,8 +768,37 @@ const BYPASS_POINTS = new Set<TacticalGraphicName>([
  * Line vertices centered on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
-function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
+function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?: TacticalGraphicName): Coordinate[] {
     if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
+    /*
+     * **A front edge and a point across it, for the graphics whose third point means that.**
+     *
+     * Thirteen graphics moved onto their plates' anchor points on 2026-09-05/06, and for every
+     * one of them points 1 and 2 are the ends of a *straight* edge — an opening, a vertical
+     * line, a centreline — with the last point stating a distance across it. The shallow V
+     * below hands those points 1 and 2 as the V's left half and point 3 as its right end, so
+     * the symbol is drawn on half the width at a quarter of the intended aspect: breach came
+     * out 0.765 x 0.624 where its own Template is 2:1, and every one of the thirteen was
+     * squat in the sample sweep, in its thumbnail, and in five round-trip suites.
+     * (User's report, 2026-09-06 — "the sweep is still drawing an older format".)
+     *
+     * `carriesSeparationInBase` is the library's own statement of which graphics mean this,
+     * and it separates them exactly: fields of fire and the search area, whose points really
+     * do describe a vee, are not in it and keep the V.
+     */
+    if (name && carriesSeparationInBase(name)) {
+        const across = half * 0.55;
+        if (pts >= 4) {
+            // 152100's four: the back line, then the two arrowhead tips out in front of it.
+            return [
+                [cx - half, cy],
+                [cx + half, cy],
+                [cx - half * 0.75, cy - across],
+                [cx + half * 0.75, cy - across],
+            ];
+        }
+        return [[cx - half, cy], [cx + half, cy], [cx, cy - across]];
+    }
     if (pts === 3) {
         return [
             [cx - half, cy + half * 0.2],
