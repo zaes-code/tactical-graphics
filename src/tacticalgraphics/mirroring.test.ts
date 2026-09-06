@@ -43,13 +43,20 @@ const geometryOf = (name: TacticalGraphicName, mirrored: boolean) =>
 const mirrorable = () => listTacticalGraphicNames().filter(n => supportsMirror(n as TacticalGraphicName));
 
 describe('mirroring', () => {
-    it('names the ten graphics that flip', () => {
+    it('names the nine graphics that flip', () => {
+        /*
+         * **152800 left this list on 2026-09-06**, and it is the interesting departure: it
+         * did not lose the ability to face either way, it stopped expressing that with an
+         * amplifier. Its plate gives point 3 the job — *"Point 3 defines which side of the
+         * line the arc is on"* — so dragging that point across the line is the flip, and a
+         * `mirrored` flag plus a grip whose only purpose was to toggle it were a second way
+         * of saying something the geometry now says. @see MobileDefense.frame
+         */
         expect(mirrorable().sort()).toEqual([
             'Abatis',
             'Delay',
             'Disengage',
             'ForwardPassageOfLines',
-            'MobileDefense',
             'Pursuit',
             'RearwardPassageOfLines',
             'Retirement',
@@ -84,7 +91,13 @@ describe('mirroring', () => {
 
     it('puts the other two where their own generators emit one', () => {
         expect(handleRole(TacticalGraphicName.Abatis, 2)).toBe('mirror');
-        expect(handleRole(TacticalGraphicName.MobileDefense, 1)).toBe('mirror');
+    });
+
+    it('leaves mobile defence three shape grips and no mirror', () => {
+        // The flip is point 3 now, so all three grips move the symbol's own anchors and
+        // none of them exists purely to turn it over. @see MobileDefense.generateHandles
+        const {roles} = handleContract(TacticalGraphicName.MobileDefense);
+        expect(roles).toEqual(['shape', 'shape', 'shape']);
     });
 
     it('actually changes the drawn geometry for every one of them', () => {
