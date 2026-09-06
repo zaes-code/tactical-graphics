@@ -543,9 +543,14 @@ function setOpacity(rgba: string, opacity: number): string {
  * The underlying geometry for each tactical graphic — what the user drew, and what the
  * `Modify` interaction edits.
  *
- * **It is a construction line.** On the families built from a centreline the symbol never
- * draws — the corridors, the axes, the crossings, the convoys, the demolition bar symbols —
- * it is the only thing on screen saying where the anchor points went. @see drawsAnchorConnector
+ * **It is a construction line, and it draws in the inert-handle color.** On the families
+ * built from a centreline the symbol never draws — the corridors, the axes, the crossings,
+ * the convoys, the demolition bar symbols — it is the only thing on screen saying where the
+ * anchor points went, which makes it the same class of chrome as a handle dot or the radius
+ * read-out. So it must stay legible *as* chrome: it took the hostility color at 35% opacity
+ * until 2026-09-06, and a hostile graphic then drew a pale red construction line straight
+ * along its own red casing. FM 1-02.2's color rule reddens a control measure's *lines*;
+ * this is not one of them. (User's call.) @see drawsAnchorConnector, getInertHandleColor
  *
  * The mark follows `anchorConnectorRun`, so the demolition family hashes its centreline
  * rather than running a spur out to the width point stored beyond it.
@@ -564,7 +569,7 @@ export const createBaseFeature = () => {
             ? anchorConnectorRun(name, geometry.getCoordinates())
             : undefined;
         return modifyStyle(
-            setOpacity(readHostilityColor(feature), .35),
+            getInertHandleColor(),
             run && run.length !== (geometry as LineString).getCoordinates().length ? new LineString(run) : undefined,
         );
     });
