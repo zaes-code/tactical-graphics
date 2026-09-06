@@ -511,6 +511,14 @@ export interface ArcAndArrowFrame {
  * `undefined` when the click carries no across-component at all — it is on the back line, so
  * there is no side to read and no arrow to draw — leaving the caller to keep what it had.
  */
+/**
+ * How far off the bisector a point may sit and still count as on it, as a share of its reach.
+ *
+ * A thousandth: far below anything an operator can aim at, and far above the drift a geodesic
+ * round trip introduces. @see squareOntoBisector
+ */
+const ON_BISECTOR_TOLERANCE = 1e-3;
+
 export function squareOntoBisector(tip: Position, one: Position, two: Position): Position | undefined {
     const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
     const back = turf.bearing(turf.point(one), turf.point(two));
@@ -521,9 +529,115 @@ export function squareOntoBisector(tip: Position, one: Position, two: Position):
     const across = reach * Math.sin(((toTip - back) * Math.PI) / 180);
     if (!isFinite(across) || across === 0) return undefined;
 
+    /*
+     * **A point already on the bisector is left exactly where it is.**
+     *
+     * Walking out and back is not the identity on a sphere: the projection is geodesic, so
+     * re-deriving a tip that needs no correction still moves it a few parts in a thousand of
+     * the radius. That is invisible once, and it is not invisible on a base that goes back
+     * through this reader on every render — it walks. Returning the point untouched when its
+     * along-component is already negligible keeps the reading idempotent to the metre.
+     */
+    const along = reach * Math.cos(((toTip - back) * Math.PI) / 180);
+    if (Math.abs(along) < reach * ON_BISECTOR_TOLERANCE) return tip;
+
     return turf.destination(turf.point(middle), Math.abs(across), back + Math.sign(across) * 90, {
         units: 'meters',
     }).geometry.coordinates as Position;
+}
+
+/**
+ * The least the arrow may reach, as a multiple of the arc's radius.
+ *
+ * **The arrowhead has to clear the arc.** The arrow runs from the chord's midpoint at `0.5r`
+ * out to `reach * r`, and its head is `0.25r` long at 30 degrees — so the barbs sit
+ * `0.25r * cos(30) = 0.217r` back from the tip. For them to fall outside the arc at all the
+ * tip must reach past `1.217r`, and below that the head is drawn *inside* the bulge it is
+ * supposed to be leaving. A little over that, so the head clears rather than grazes.
+ *
+ * Enforced in the reading rather than in the drawing, which is what makes it hold for an edit
+ * as well as a draw: both engines drag a base vertex straight to the pointer, and every
+ * render goes back through here. (User's call, 2026-09-06: "don't ever let the arrow tip fall
+ * into the arch during drawing or editing".)
+ */
+export const ARC_ARROW_MIN_REACH = 1.25;
+
+/**
+ * 141700's three anchor points from an operator's clicks — **including a half-placed set.**
+ *
+ * Two clicks are the tip and one end of the curved back, which leave a family of symbols
+ * rather than one: every choice of axis satisfies both of the plate's constraints. The shape
+ * is held at the arc's own 120 degrees and the dropped form's reach, so the click sets only
+ * the size — a preview convention, replaced the moment the third click lands.
+ *
+ * Three clicks place all three. Points 2 and 3 are the arc's own endpoints, so the chord they
+ * make fixes the radius; point 1 is squared onto their bisector and then **held out past the
+ * arc**, so the arrowhead can never be drawn inside the bulge.
+ * @see squareOntoBisector, ARC_ARROW_MIN_REACH
+ *
+ * Fewer than two points draws nothing. It lives here rather than in the draw path alone
+ * because the *generator* needs it too: `normalizeDrawnBase` runs at draw end, so mid-draw
+ * the generator saw a raw sketch, failed to read a frame from it and fell through to the
+ * dropped form — a default-sized symbol parked on the first click.
+ */
+export function arcAndArrowAnchorsFromClicks(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+
+    if (clicks.length >= 3) {
+        const [tip, one, two] = clicks;
+        /*
+         * **The tip is not squared onto a bisector here, deliberately.**
+         *
+         * 152000 attack by fire needs that, because its back line is straight and its arrow
+         * has to stand at a right angle to it. 141700's back is an *arc*, and
+         * `arcAndArrowFromAnchors` already solves for the centre by walking the geodesic from
+         * the chord's midpoint through the tip — so that line *is* the symmetry axis whatever
+         * the tip's aim, and "the rear of the arrowhead line shall connect to the midpoint"
+         * holds by construction.
+         *
+         * Squaring it as well was measured moving a correctly built ambush by 2.6% of its
+         * radius: the projection is planar and the construction is geodesic, which is the same
+         * mismatch that function's own comment warns about. A reading that moves a symbol it
+         * was handed correct is a reading that walks it, since it runs on every render.
+         */
+        const frame = arcAndArrowFromAnchors(clicks.slice(0, 3));
+        if (!frame) return undefined;
+        if (frame.arrowReach >= ARC_ARROW_MIN_REACH) return [tip, one, two];
+
+        // Too close: the arrowhead would be drawn inside the bulge it is leaving. Push the tip
+        // out along the axis it already sits on, which changes nothing else about the symbol.
+        const held = turf.destination(
+            turf.point(frame.center),
+            ARC_ARROW_MIN_REACH * frame.radius,
+            turf.bearing(turf.point(frame.center), turf.point(tip)),
+            {units: 'meters'},
+        ).geometry.coordinates as Position;
+        return [held, one, two];
+    }
+
+    const [tip, click] = clicks;
+    const reach = ARC_ARROW_DEFAULT_REACH;
+    const span = meters(tip, click);
+    if (!isFinite(span) || span <= 0) return undefined;
+
+    // Law of cosines on tip-centre-end, with the arc's half-span fixed at 60 degrees.
+    const radius = span / Math.sqrt(reach * reach + 1 - 2 * reach * Math.cos((ARC_HALF_SPAN_DEG * Math.PI) / 180));
+    if (!(radius > 0)) return undefined;
+    const offset =
+        (Math.asin(Math.min(1, (radius * Math.sin((ARC_HALF_SPAN_DEG * Math.PI) / 180)) / span)) * 180) / Math.PI;
+
+    const toClick = turf.bearing(turf.point(tip), turf.point(click));
+    const candidate = (sign: number): Position[] => {
+        const centre = turf.destination(turf.point(tip), reach * radius, toClick + sign * offset, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        const aim = turf.bearing(turf.point(centre), turf.point(tip));
+        return anchorsForArcAndArrow(centre, radius, 90 - aim, reach);
+    };
+    // The click is point 2, so the centre's side is chosen by which candidate puts index 1
+    // nearest the cursor — measuring index 1 alone is what makes the click mean one thing.
+    const [plus, minus] = [candidate(1), candidate(-1)];
+    return meters(plus[1], click) <= meters(minus[1], click) ? plus : minus;
 }
 
 /** The arc's half-span. @see ArcAndArrowFrame */

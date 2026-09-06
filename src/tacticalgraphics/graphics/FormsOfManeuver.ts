@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, hairpinAnchors, hookAnchorsFromClicks, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
+import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowAnchorsFromClicks, arcAndArrowFromAnchors, hairpinAnchors, hookAnchorsFromClicks, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {halfWidthFromSide, sidePoint} from "./ExplosivesReadiness";
 import {toRadians} from "../core/math";
@@ -1216,14 +1216,29 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
      */
     private static readonly ARROWHEAD_LINE_HASH = 4;
 
-    /** The circle behind the arc, read off the drawn points or from the options. */
-    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} {
+    /**
+     * The circle behind the arc, read off the drawn points or from the options.
+     *
+     * **A drawn path is read, never replaced.** One click is a draw in progress; two are a
+     * half-placed symbol and preview through the same reader the third click will use. It
+     * fell through to the *dropped* form on both — a default-sized ambush parked on click 1,
+     * which then jumped when the points were stated. (User's report, 2026-09-06: "the preview
+     * while drawing is wrong, unlike before".) @see arcAndArrowAnchorsFromClicks
+     */
+    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} | undefined {
         const coords = base.geometry?.coordinates;
         const anchored = Array.isArray(coords?.[0]);
-        const drawn = anchored ? arcAndArrowFromAnchors(coords as Position[]) : undefined;
-        if (drawn) {
+        if (anchored) {
+            const anchors = arcAndArrowAnchorsFromClicks(coords as Position[]);
+            const drawn = anchors ? arcAndArrowFromAnchors(anchors) : undefined;
+            if (!drawn) return undefined;
             return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI, radius: drawn.radius, reach: drawn.arrowReach};
         }
+        /*
+         * **A `Point` base is the dropped form** — a file written before 2026-09-05, or
+         * hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so this
+         * is the reader of last resort rather than the ordinary path.
+         */
         return {
             center: (anchored ? coords[0] : coords) as Position,
             rotation: opts.rotation ?? 0,
@@ -1233,7 +1248,11 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const {center, rotation, radius: r, reach} = this.frame(base, opts);
+        const read = this.frame(base, opts);
+        // One click is a draw that has only just started, and draws nothing rather than a
+        // default-sized symbol parked where the cursor happened to be.
+        if (!read) return this.asMultiLineStringFeature([]);
+        const {center, rotation, radius: r, reach} = read;
 
         // Point at polar (distance, planar angle) from center, with `rotation` applied.
         const polar = (dist: number, planarDeg: number): Position => {
@@ -1305,14 +1324,16 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
             return this.asMultiPointFeature((coords as Position[]).slice(0, 3));
         }
 
-        const {center, rotation, radius: r, reach} = this.frame(base, opts);
+        const read = this.frame(base, opts);
+        if (!read) return this.asMultiPointFeature(Array.isArray(coords?.[0]) ? (coords as Position[]).slice(0, 1) : []);
+        const {center, rotation, radius: r, reach} = read;
         const arcEnd = geometryService.createCircularArc(center, rotation, r, 60, 61, 1)[0];
         const arrowTip = geometryService.createCircularArc(center, rotation, reach * r, 0, 1, 1)[0];
         return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
-        return this.asPointFeature(this.frame(base, opts).center);
+        return this.asPointFeature(this.frame(base, opts)?.center ?? [0, 0]);
     }
 }
 

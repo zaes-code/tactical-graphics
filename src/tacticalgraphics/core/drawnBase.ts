@@ -30,13 +30,11 @@ import {generatorOrder, storedOrder} from './drawOrder';
 import {carriesSeparationInBase} from './handles';
 import geometryService from './GeometryService';
 import {
-    anchorsForArcAndArrow,
     anchorsForBow,
     anchorsForRunAndArc,
-    ARC_ARROW_DEFAULT_REACH,
     bowFromAnchors,
     hookAnchorsFromClicks,
-    squareOntoBisector,
+    arcAndArrowAnchorsFromClicks,
     hairpinAnchors,
     runAndArcFromAnchors,
 } from './anchors';
@@ -661,79 +659,14 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
 }
 
 /**
- * 141700's three points from two clicks: the tip, and one end of the curved back.
+ * 141700's three points, stated once. @see arcAndArrowAnchorsFromClicks
  *
- * *"Points 2 and 3 define the endpoints of the curved line on the back side of the
- * symbol. The rear of the arrowhead line shall connect to the midpoint of the line
- * between points 2 and 3. The arrowhead line shall be perpendicular to the line formed by
- * points 2 and 3."* Those constraints leave a family of symbols rather than one, so the
- * remaining freedom is closed the way the user asked for: **the shape is held and only its
- * size changes**, at the arc's own 120 degrees and the dropped form's arrow reach.
- *
- * The geometry, in the plane the symbol is small enough to live in: the tip sits
- * `reach * r` from the centre and each arc end sits `r` from it, 60 degrees off the axis.
- * So the triangle tip-centre-end has sides `reach * r`, `r` and the clicked distance, and
- * for the default reach of 2 that gives `|click| = r * sqrt(3)` with the centre lying 30
- * degrees off the line from the tip to the click.
- *
- * **Both rotations are tried and the nearer kept.** Which side the centre falls on decides
- * whether the clicked point becomes point 2 or point 3, and choosing by measurement rather
- * than by a sign convention means the arc always opens around the click the user made.
+ * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * this runs at draw end, and mid-draw the generator was falling through to the dropped form
+ * rather than previewing the symbol being drawn.
  */
 function ambushAnchors(clicks: Position[]): Position[] | undefined {
-    if (clicks.length < 2) return undefined;
-
-    /*
-     * **Three clicks place all three points**, as of 2026-09-06 — the same change 152000
-     * attack by fire took the same day, on the same pair of sentences. Points 2 and 3 are the
-     * arc's own endpoints, so placing both is what lets the operator set the curved back's
-     * span *and* which way it faces; the arc's radius follows from the chord, since it spans
-     * a known 120 degrees. Point 1 is squared onto their bisector, which is also exactly what
-     * `arcAndArrowFromAnchors` assumes when it solves for the centre — it walks the geodesic
-     * from the chord's midpoint through the tip, and that is the symmetry axis only if the
-     * tip is on it. @see squareOntoBisector
-     */
-    if (clicks.length >= 3) {
-        const [tip, one, two] = clicks;
-        const squared = squareOntoBisector(tip, one, two);
-        return squared ? [squared, one, two] : undefined;
-    }
-
-    const [tip, click] = clicks;
-    const reach = ARC_ARROW_DEFAULT_REACH;
-
-    const span = turf.distance(turf.point(tip), turf.point(click), {units: 'meters'});
-    if (!isFinite(span) || span <= 0) return undefined;
-
-    // Law of cosines on tip-centre-end, with the arc's half-span fixed at 60 degrees.
-    const radius = span / Math.sqrt(reach * reach + 1 - 2 * reach * Math.cos((60 * Math.PI) / 180));
-    if (!(radius > 0)) return undefined;
-    const offset = degrees(Math.asin(Math.min(1, (radius * Math.sin((60 * Math.PI) / 180)) / span)));
-
-    const toClick = turf.bearing(turf.point(tip), turf.point(click));
-    const candidate = (sign: number): Position[] => {
-        const centre = turf.destination(turf.point(tip), reach * radius, toClick + sign * offset, {
-            units: 'meters',
-        }).geometry.coordinates as Position;
-        const aim = turf.bearing(turf.point(centre), turf.point(tip));
-        return anchorsForArcAndArrow(centre, radius, 90 - aim, reach);
-    };
-
-    /*
-     * **The click is point 2, not "one of the two arc ends".**
-     *
-     * `anchorsForArcAndArrow` returns `[tip, +60 degrees, -60 degrees]`, so index 1 is
-     * point 2 and index 2 is point 3. Choosing the centre's side by whichever end came out
-     * nearer the cursor meant the click became point 3 half the time — the arc then opened
-     * the other way round from the one the operator drew, which reads as the symbol
-     * flipping for no reason. Measuring index 1 alone is what makes the second click mean
-     * the same thing every time. (User's report, 2026-09-05.)
-     */
-    const toPointTwo = (points: Position[]): number =>
-        turf.distance(turf.point(points[1]), turf.point(click), {units: 'meters'});
-    const left = candidate(+1);
-    const right = candidate(-1);
-    return toPointTwo(left) <= toPointTwo(right) ? left : right;
+    return arcAndArrowAnchorsFromClicks(clicks);
 }
 
 /**
