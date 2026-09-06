@@ -1339,6 +1339,14 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Bridge]: 3,
     [TacticalGraphicName.Gap]: 3,
     [TacticalGraphicName.AssaultCrossing]: 3,
+    /*
+     * **Named even though it equals their stored count**, which this table usually omits. The
+     * reader previews a two-click sketch as three points now, and MapLibre asks the
+     * *normalized* sketch whether a draw is finished — so without this a ford's draw ended on
+     * its second click. @see sketchIsComplete, parallelRailAnchors
+     */
+    [TacticalGraphicName.FordEasy]: 3,
+    [TacticalGraphicName.FordDifficult]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,

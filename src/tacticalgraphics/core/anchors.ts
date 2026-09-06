@@ -936,7 +936,16 @@ export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[
 }
 
 /**
- * The anchor points of a **two-rail crossing**, from the three clicks that place them.
+ * The gap a half-drawn crossing shows, as a share of the bar the operator has placed.
+ *
+ * A preview convention and nothing else: none of these plates states a default separation,
+ * and the third click sets it. A third of the bar keeps both rails legible without the
+ * figure reading as a square. @see parallelRailAnchors
+ */
+const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
+
+/**
+ * The anchor points of a **two-rail crossing**, from the clicks that place them.
  *
  * APP-06 271500 ford easy and 271600 ford difficult letter `PT 1` and `PT 2` at the ends of
  * one bar and `PT 3` on the other; 271100 bridge and 271300 assault crossing say it in words —
@@ -957,15 +966,35 @@ export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[
  * is `hairpinFourthPoint`'s mirror image: a hairpin's legs *oppose*, and these are parallel.
  */
 export function parallelRailAnchors(clicks: Position[] | undefined, stored = 4): Position[] | undefined {
-    if (!clicks || clicks.length < 3) return undefined;
-    const [one, two, click] = clicks;
+    if (!clicks || clicks.length < 2) return undefined;
+    const [one, two] = clicks;
 
     const along = turf.bearing(turf.point(one), turf.point(two));
-    const reach = meters(two, click);
-    if (!isFinite(reach) || reach <= 0) return undefined;
+    const bar = meters(one, two);
+    if (!isFinite(bar) || bar <= 0) return undefined;
 
-    const toClick = turf.bearing(turf.point(two), turf.point(click));
-    const across = reach * Math.sin(((toClick - along) * Math.PI) / 180);
+    /*
+     * **Two clicks are one bar, and the far one previews beside it.**
+     *
+     * This is what the operator has between the second and third clicks, and points 1 and 2
+     * are *"one side of the gap"* — so the bar is drawn on the line they are dragging along.
+     * Read as a centreline instead, the two bars straddled the cursor and the symbol was
+     * drawn through a line that is not part of it. (User's report, 2026-09-06: "when drawing
+     * it, it seems we're actually drawing via the invisible middle line. The drawing cursor
+     * should be along points 1, 2".)
+     *
+     * The gap is a **preview default and nothing more** — no plate here states one, and the
+     * third click replaces it with a measured value.
+     */
+    const across = clicks.length >= 3
+        ? (() => {
+              const click = clicks[2];
+              const reach = meters(two, click);
+              if (!isFinite(reach) || reach <= 0) return 0;
+              const toClick = turf.bearing(turf.point(two), turf.point(click));
+              return reach * Math.sin(((toClick - along) * Math.PI) / 180);
+          })()
+        : bar * RAIL_PREVIEW_GAP_SHARE;
     if (!isFinite(across) || across === 0) return undefined;
 
     // Square across from point 2, which is where the plate's own PT 3 leader lands.

@@ -72,9 +72,14 @@ const AFFECTED: [string, TacticalGraphicName][] = [
     ['FieldsOfFire', TacticalGraphicName.FieldsOfFire],
     ['PassageLane', TacticalGraphicName.PassageLane],
     ['FerryCrossing', TacticalGraphicName.FerryCrossing],
-    ['Bridge', TacticalGraphicName.Bridge],
-    ['Gap', TacticalGraphicName.Gap],
-    ['AssaultCrossing', TacticalGraphicName.AssaultCrossing],
+    /*
+     * **The two-rail crossings left on 2026-09-06.** How far they reach from the drawn line
+     * *was* `decorationSize`, because their rails were offset from a centreline by it — and
+     * their plates give that separation an anchor point instead, so the reach is a placed
+     * distance now and scaling the amplifier no longer moves it. That is the change, not a
+     * regression: a decoration is a size the renderer picks, and this one is the operator's.
+     * @see parallelRailAnchors, carriesSeparationInBase
+     */
 ];
 
 describe('decorationSize is a distance in meters', () => {

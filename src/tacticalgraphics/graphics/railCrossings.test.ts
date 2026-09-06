@@ -135,4 +135,35 @@ describe('the two-rail crossings place their separation', () => {
             expect(legacy.coordinates.length).toBeGreaterThan(0);
         },
     );
+
+    it.each(FAMILY.map(n => [String(n), n] as const))(
+        '%s previews with a bar on the line being dragged, not straddling it',
+        (_label, name) => {
+            /*
+             * **Two clicks are one bar.** Read as a centreline, the two bars straddled the
+             * cursor and the operator was dragging along a line the symbol does not contain.
+             * (User's report, 2026-09-06: "when drawing it, it seems we're actually drawing
+             * via the invisible middle line. The drawing cursor should be along points 1,2".)
+             *
+             * A supplied `radius` is ignored here on purpose: mid-draw it is the holder's own
+             * screen default, not a saved separation, and honouring it would put the preview
+             * at a width the operator never asked for. @see parallelRailAnchors
+             */
+            const bar: Position[] = [CLICKS[0], CLICKS[1]];
+            const drawn = renderTacticalGraphic({
+                type: 'Feature',
+                properties: {tacticalGraphic: {name, radius: 40_000}},
+                geometry: {type: 'LineString', coordinates: bar},
+            } as Feature).graphic.geometry as MultiLineString;
+
+            const line = turf.lineString(bar);
+            const offsets = drawn.coordinates
+                .flat()
+                .map(c => turf.pointToLineDistance(turf.point(c as Position), line, {units: 'meters'}));
+            // One bar lies on the line the operator is dragging…
+            expect(Math.min(...offsets)).toBeLessThan(meters(bar[0], bar[1]) / 100);
+            // …and the other previews clear of it.
+            expect(Math.max(...offsets)).toBeGreaterThan(meters(bar[0], bar[1]) / 10);
+        },
+    );
 });
