@@ -610,6 +610,110 @@ export function anchorsForParallelLegs(
     return [tip, at(size, 0), at(size, opening), at(0, opening)];
 }
 
+/**
+ * # The hairpin's fourth point, which is not placed — 343300 and 341900
+ *
+ * Both plates number four anchor points and both draw the same figure: two straights joined
+ * by a half turn, with points 1 and 4 the free ends and points 2 and 3 the two ends of the
+ * turn's chord.
+ *
+ * **The operator places three and this derives the fourth**, so the two straights are
+ * parallel and the same length *by construction* rather than by a rule applied afterwards.
+ * Point 4 is point 3 displaced by the vector point 2 → point 1: the second straight is the
+ * first one translated across the chord.
+ *
+ * ## What this costs, said plainly
+ *
+ * The plates grant four free points — "points 3 and 4 determine the length of the second
+ * straight line" reads as a length of its own — so a literal reading lets the second
+ * straight differ from the first in both length and direction. This derivation gives that
+ * up. Every figure either Template *draws* is still reachable, because both draw the
+ * straights parallel and equal; what is no longer reachable is a splayed or lopsided
+ * hairpin, which is the shape the freehand version drifted into and which neither plate
+ * shows. (User's call, 2026-09-06: "the lines MUST be parallel to each other".)
+ *
+ * Geodesically, not by adding degrees: the displacement is taken as a distance and a bearing
+ * off point 2 and replayed from point 3, so the second straight is the same length as the
+ * first at any latitude. Adding the coordinate difference instead stretches it by
+ * `1 / cos(latitude)` — the same trap `anchorsForParallelLegs` documents for chained hops.
+ */
+export function hairpinFourthPoint(p1: Position, p2: Position, p3: Position): Position {
+    const reach = turf.distance(turf.point(p2), turf.point(p1), {units: 'meters'});
+    if (!(reach > 0)) return p3;
+    const bearing = turf.bearing(turf.point(p2), turf.point(p1));
+    return turf.destination(turf.point(p3), reach, bearing, {units: 'meters'}).geometry.coordinates as Position;
+}
+
+/**
+ * The hairpin's four canonical points from the three that carry a decision.
+ *
+ * Two readings happen here, and both are the reading the generator was going to perform
+ * anyway — this stores the points where the drawing already puts them:
+ *
+ * 1. **Point 3 is squared.** Its component *along* the first leg is dropped and only its
+ *    distance across, and the side it fell on, survive. The turn is a half circle tangent to
+ *    both straights, so its diameter has to leave point 2 at a right angle; an oblique chord
+ *    draws an arc that meets each leg in a kink. This is `mobileDefenceAnchors`' arithmetic
+ *    exactly, for 152800's exact reason — *"the 180 degree circular arc is always
+ *    perpendicular to the line"* — and 152800 is the graphic these two are built to match.
+ * 2. **Point 4 is derived** from the squared point 3. @see hairpinFourthPoint
+ *
+ * So a drag of point 1 sets both legs' length and their shared aim, a drag of point 2 moves
+ * the join, and a drag of point 3 sizes the turn and picks its side — which is the whole of
+ * what either plate's Size/Shape cell describes, and no drag of any of them can splay the
+ * legs or open the turn obliquely.
+ *
+ * Returns `undefined` below three points, so a half-finished draw shows what it has rather
+ * than a guess. A point 3 that lands exactly on the leg's own axis is kept as it is: there
+ * is no side to read from it, and inventing one would jump the symbol under the cursor.
+ */
+export function hairpinAnchors(points: Position[]): Position[] | undefined {
+    if (points.length < 3) return undefined;
+    const [p1, p2, click] = points;
+
+    const axis = turf.bearing(turf.point(p2), turf.point(p1));
+    const reach = turf.distance(turf.point(p2), turf.point(click), {units: 'meters'});
+    if (!(reach > 0)) return undefined;
+
+    const toClick = turf.bearing(turf.point(p2), turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    const p3 = isFinite(across) && across !== 0
+        ? (turf.destination(turf.point(p2), Math.abs(across), axis + Math.sign(across) * 90, {units: 'meters'})
+              .geometry.coordinates as Position)
+        : click;
+
+    return [p1, p2, p3, hairpinFourthPoint(p1, p2, p3)];
+}
+
+/**
+ * Which way `createSemicircle` must bulge so the turn closes the hairpin.
+ *
+ * **The side is not a convention, it is read off the shape.** Both 343300 and 341900 close
+ * two parallel legs with a half turn, and the turn has to bulge *past* the bends, away from
+ * the arrowheads — bulging back between the legs draws a flattened Z, not a U. Both
+ * generators passed a hardcoded `true`, which is right for exactly one handedness: point 3
+ * on one side of the first leg. Drag it across to the other side and the same flag puts the
+ * arc on the inside, which is the shape the user reported on 2026-09-06 ("demonstration is
+ * turning the arch inwards when dragged across").
+ *
+ * `createSemicircle` offsets to `chord - 90` by default and `chord + 90` when flipped, so
+ * the question is which of those two points along the legs. The chord is perpendicular to
+ * the legs by construction (@see hairpinAnchors), so one of them is the leg direction and
+ * the other is its reverse; comparing against the tip → bend heading picks the right one at
+ * any rotation and on either side.
+ *
+ * @param tip   point 1, the arrowhead — the end the turn must bulge *away* from
+ * @param bend  point 2, where the first leg ends and the turn begins
+ * @param far   point 3, the other end of the turn's diameter
+ */
+export function turnBulgesLeft(tip: Position, bend: Position, far: Position): boolean {
+    const leg = turf.bearing(turf.point(tip), turf.point(bend));
+    const chord = turf.bearing(turf.point(bend), turf.point(far));
+    // Positive quarter-turn from the chord to the leg means the leg lies at `chord + 90`,
+    // which is the flipped side. Normalized to (-180, 180] so it works across due north.
+    return (((leg - chord + 540) % 360) - 180) > 0;
+}
+
 /** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
 export const PARALLEL_LEGS_HALF_OPENING = 0.35;
 

@@ -15,7 +15,7 @@ import * as turf from '../core/turf';
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {IBaseGraphicOptions, TacticalGraphicName} from '../core/type';
 import {toDegrees} from '../core/math';
-import {anchorsForParallelLegs, parallelLegsFromAnchors} from '../core/anchors';
+import {anchorsForParallelLegs, hairpinAnchors, parallelLegsFromAnchors, turnBulgesLeft} from '../core/anchors';
 import geometryService from '../core/GeometryService';
 
 /** How many points the demonstration's turn is drawn with. */
@@ -143,10 +143,10 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
         const across = turf.bearing(turf.point(bend1), turf.point(bend2));
         const span = turf.distance(turf.point(bend1), turf.point(bend2), {units: 'meters'});
 
-        // `true` puts the bulge on the far side of the chord from the tips — the U rather
-        // than a flattened Z. With the points derived the handedness is fixed by
-        // construction, so there is nothing left to infer from the drawing order.
-        const turn = geometryService.createSemicircle(bend1, bend2, across, span / 2, TURN_STEPS, true);
+        // The bulge goes on the far side of the chord from the tips — the U rather than a
+        // flattened Z — and **which side that is depends on where point 3 was dragged to**,
+        // so it is read off the shape rather than hardcoded. @see turnBulgesLeft
+        const turn = geometryService.createSemicircle(bend1, bend2, across, span / 2, TURN_STEPS, turnBulgesLeft(tip1, bend1, bend2));
 
         return this.asMultiLineStringFeature([[tip1, bend1], turn as Position[], [bend2, tip2]]);
     }
