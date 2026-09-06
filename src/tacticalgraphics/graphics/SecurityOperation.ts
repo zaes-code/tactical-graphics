@@ -106,6 +106,48 @@ const HALF_GAP_RATIO = 0.21;
  */
 const LABEL_INSET_RATIO = 0.04;
 
+/**
+ * The three graphics drawn this way. @see securityOperationBaseCentre
+ *
+ * Exported because the *gestures* need to know them — `rotationAnchor` turns and scales
+ * these about their middle rather than an end — and a second list of the same three names
+ * somewhere else is how a rule ends up true of two of them.
+ */
+export const SECURITY_OPERATION_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+];
+
+/**
+ * The middle of a cover, guard or screen, read from the base the operator drew.
+ *
+ * **Not the midpoint of the two drawn points.** The operator draws *one* arm — point 1 the
+ * arrowhead, point 2 its inner end — and the second arm is mirrored about the gap, so the
+ * symbol runs on past point 2 and its middle sits `HALF_GAP_RATIO` of an arm beyond it.
+ * That is where the two letters meet and where the host's injected unit symbol goes.
+ *
+ * Stated here, beside the ratio it uses, because three separate things need it and each was
+ * a chance to restate the arithmetic: the generator laying the arms out, `securityPaints`
+ * placing the symbol, and now the rotate and resize gestures. The paint layer reads its own
+ * from the *rendered* inner ends, which is the same point arrived at from the other side —
+ * this one answers from the base, which is all a gesture has. (User's call, 2026-09-06: the
+ * axis of rotation and resize belongs at "the center of the graphic where the symbol may or
+ * may not be".)
+ *
+ * `undefined` for a base too short to describe an arm, so a caller falls back rather than
+ * pivoting on a guess.
+ */
+export function securityOperationBaseCentre(coords: readonly Position[] | undefined): Position | undefined {
+    if (!coords || coords.length < 2) return undefined;
+    const tip = coords[0];
+    const inner = coords[coords.length - 1];
+    const arm = turf.distance(turf.point(tip), turf.point(inner), {units: 'meters'});
+    if (!(arm > 0)) return undefined;
+    const inward = turf.bearing(turf.point(tip), turf.point(inner));
+    return at(inner, inward, arm * HALF_GAP_RATIO, 0);
+}
+
 /** The arrowhead's barb, as a share of the arm's length, and its half-angle in degrees. */
 const ARROW_HEAD_RATIO = SECURITY_OPERATION_PX.arrowHeadLength / ARM_PX;
 const ARROW_HEAD_DEGREE = SECURITY_OPERATION_PX.arrowHeadDegree;
@@ -178,7 +220,9 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
         if (!(arm > 0)) return undefined;
 
         const inward = turf.bearing(turf.point(tip), turf.point(inner));
-        const centre = at(inner, inward, arm * HALF_GAP_RATIO, 0);
+        // The same construction `securityOperationBaseCentre` publishes, called through it so
+        // the drawing and the gestures cannot disagree about where the middle is.
+        const centre = securityOperationBaseCentre(coords) ?? inner;
         return {tip, inner, arm, inward, centre};
     }
 
