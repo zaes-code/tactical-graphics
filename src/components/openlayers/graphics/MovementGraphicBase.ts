@@ -29,8 +29,10 @@ import {decorationMeters} from './decorationPx';
  * inherited `leftArrowHeadBase` sits.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // Handle sits on the rail itself, one radius off the center line.
-    [TacticalGraphicName.InfiltrationLane]: 1,
+    // Empty since 2026-09-05, when 140800 — its only entry — stopped deriving a width
+    // handle and started storing point 3 as a vertex. Kept because the mechanism is real:
+    // a graphic that draws its offset handle N widths out needs 1/N of the drag, and the
+    // next one to do so belongs here. @see handles.ts OFFSET_SCALE, the portable twin
 };
 
 /**
@@ -196,9 +198,19 @@ export class MovementGraphicBase implements LineGraphic {
         // drawing resolution. Published after the offset-handle test above so the write
         // covers the feature set that actually exists.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
-            // Stamped as a full width; `offset` is the half-width the generator takes.
-            width: this.offset * 2,
-            mirrored: this.mirrored,
+            /*
+             * **Neither the width nor the side, where the base's third point states both.**
+             *
+             * `width` came off on 2026-09-05; `mirrored` stayed and should not have. The three
+             * point graphics — the demolition block, the infiltration lane and 152800 — all
+             * ignore it: rendering each with `mirrored` true and false gives byte-identical
+             * geometry, because which side the symbol falls on *is* where point 3 was placed.
+             * A stamped flag beside it is a second copy of the same fact, and the pair drift.
+             * (User's call, 2026-09-06.) @see separationIsInTheBase
+             */
+            ...(this.separationIsInTheBase
+                ? {}
+                : {width: this.offset * 2, mirrored: this.mirrored}),
         });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {

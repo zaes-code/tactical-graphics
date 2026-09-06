@@ -911,43 +911,40 @@ export class InfiltrationLane extends MovementGraphicBase {
     protected tipOverhang: number = 0;
 
     /**
-     * `[p0, p1, railEnd]` — the width handle sits on the end of the left rail,
-     * i.e. on the graphic, rather than the inherited point a further `radius`
-     * out into empty space.
+     * `[start, end, side]` — the three points the plate names, all of them placed.
      *
-     * The handle is now one radius off the center line instead of two, so the
-     * renderer has to halve its drag sensitivity to compensate — see
-     * `OFFSET_SCALE` in the OpenLayers `MovementGraphicBase`.
+     * The third is derived back onto the centreline's perpendicular rather than published
+     * where it was clicked, so the grip stays on the rail it sets while the ends are dragged
+     * around it. @see sidePoint
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const leftRail = geometryService.computeParallelLineString(baseCoords, radius);
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftRail[leftRail.length - 1]]);
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature(coords);
+        return this.asMultiPointFeature([coords[0], coords[1], sidePoint(coords, opts)]);
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius: number = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const leftRail: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightRail: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const coords = base.geometry.coordinates;
+        // Mid-draw the interaction hands us a one-point sketch on every pointer move.
+        if (coords.length < 2) return this.asMultiLineStringFeature([]);
+        const ends = this.centreline(base);
+        const half = halfWidthFromSide(coords, opts);
+        const leftRail = geometryService.computeParallelLineString(ends, half) as Position[];
+        const rightRail = geometryService.computeParallelLineString(ends, -half) as Position[];
         return this.asMultiLineStringFeature([leftRail, rightRail]);
     }
 
     /**
-     * Label span centered on the middle of the center-most segment. The style
-     * function uses the span for rotation + scale and anchors the text at the
-     * midpoint with textAlign:'center'.
+     * Label span across the middle of the centreline. The style function uses the span for
+     * rotation and scale and anchors the text at the midpoint with `textAlign: 'center'`.
      */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const numSegments = baseCoords.length - 1;
-        if (numSegments < 1) return this.asMultiPointFeature([baseCoords[0], baseCoords[0]]);
-        const centerIdx = Math.floor((numSegments - 1) / 2);
-        const segStart = baseCoords[centerIdx];
-        const segEnd = baseCoords[centerIdx + 1];
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(segStart, segEnd, 0.5, radius));
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature([coords[0], coords[0]]);
+        const [segStart, segEnd] = this.centreline(base);
+        return this.asMultiPointFeature(
+            geometryService.labelCoordsAtFraction(segStart, segEnd, 0.5, halfWidthFromSide(coords, opts)),
+        );
     }
 }
 
@@ -1057,12 +1054,41 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         //
         // The MissionTask convention's center handle is deliberately absent: it
         // rendered in the hollow of the arc with nothing under it, and it is not
+/**
+ * 140800 — two parallel rails, **built from three placed points like the demolition block.**
+ *
+ * APP-06 states the same contract 271201 states for the readiness states, word for word:
+ *
+ * > This symbol requires three anchor points. Points 1 and 2 define the endpoints of the
+ * > infiltration lane and point 3 defines one side of the lane.
+ *
+ * So it is the same construction, and it shares the block's helpers rather than restating
+ * them: `halfWidthFromSide` measures the separation off point 3 and `sidePoint` puts the
+ * grip back on the rail. (User's call, 2026-09-05.)
+ *
+ * **What changed.** It was a two-point centreline carrying its separation beside it as a
+ * `width` amplifier, dragged by a *derived* offset handle riding the end of the left rail —
+ * so the number the plate puts in a coordinate lived in two places at once, and the draw
+ * ended on the second click with the width never asked for. Point 3 is a stored vertex now:
+ * the rails separate and contract live as the third click is aimed, and there is no second
+ * copy of the width to drift. @see ExplosivesReadiness, carriesSeparationInBase
+ *
+ * **Only points 1 and 2 make the centreline.** The rails used to be offset from the whole
+ * base, which was right while every vertex was centreline and is wrong now that the last
+ * one is the side — offsetting from all three would bend both rails towards point 3.
+ */
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
         // point, never against the handle the user grabbed.
         const {center, rotation, radius: r, reach} = this.frame(base, opts);
         const arcEnd = geometryService.createCircularArc(center, rotation, r, 60, 61, 1)[0];
         const arrowTip = geometryService.createCircularArc(center, rotation, reach * r, 0, 1, 1)[0];
+    /** The centreline the plate names: points 1 and 2, never point 3. */
+    private centreline(base: Feature<LineString>): Position[] {
+        const coords = base.geometry.coordinates;
+        return [coords[0], coords[1]];
+    }
+
         return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 

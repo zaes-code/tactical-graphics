@@ -487,17 +487,17 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Counterattack]:       movement(),
     [TacticalGraphicName.CounterattackByFire]: movement(),
     /*
-     * **Two drawn vertices, not a free-form run.** 140800: *"This symbol requires three
-     * anchor points. Points 1 and 2 define the endpoints of the infiltration lane and
-     * point 3 defines one side of the lane."* Points 1 and 2 are the centreline and point
-     * 3 is the width, which is the movement contract exactly — so the cap belongs here,
-     * as it already does on the demolition family. Uncapped, the centreline took as many
-     * vertices as the operator kept clicking, which the rule does not allow. (2026-09-05.)
+     * **Three placed points, exactly like the demolition block.** 140800: *"This symbol
+     * requires three anchor points. Points 1 and 2 define the endpoints of the infiltration
+     * lane and point 3 defines one side of the lane."* That is 271201's rule in the same
+     * words, so it takes the same factory. (User's call, 2026-09-05.)
      *
-     * The draw closes on the second click and the two rails appear at the seeded width,
-     * ready to be dragged by the offset handle. @see InfiltrationLane
+     * It was `movement(2)`: the draw closed on the second click and the rails appeared at a
+     * seeded width for a *derived* offset handle to drag afterwards, with the number filed
+     * beside a base that already described it. Now the third click places the point and the
+     * rails separate and contract live as it is aimed. @see InfiltrationLane, demolition
      */
-    [TacticalGraphicName.InfiltrationLane]:     movement(2),
+    [TacticalGraphicName.InfiltrationLane]:     demolition,
 
     // ── Engineer / crossing (movement base, max 2 pts) ────────────────────
     [TacticalGraphicName.Bridge]:          movement(2),
