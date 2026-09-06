@@ -488,6 +488,44 @@ export interface ArcAndArrowFrame {
     arrowReach: number;
 }
 
+/**
+ * Point 1 set on the perpendicular bisector of points 2 and 3, keeping its reach.
+ *
+ * **The projection two of APP-06's symbols need, for one shared pair of sentences.** 141700
+ * ambush and 152000 attack by fire both say it:
+ *
+ * > The rear of the arrowhead line shall connect to the midpoint of the line between points 2
+ * > and 3. The arrowhead line shall be perpendicular to the line formed by points 2 and 3.
+ *
+ * Three freely placed points cannot satisfy both — the arrow would have to start at point 1,
+ * meet the midpoint *and* stand square, which is one condition too many. Points 2 and 3 are
+ * what the plate gives the back line's length and orientation to, so point 1 is the one that
+ * yields: it is read for the one thing the symbol can express, **how far the arrow reaches
+ * from the middle**, and its component along the back line is dropped rather than stored and
+ * ignored. Both sentences then hold by construction rather than by the operator's aim.
+ * (User's call, 2026-09-06.)
+ *
+ * The same arithmetic `sideAnchors` performs for the bracket tasks and the obstacle bypasses,
+ * about a midpoint instead of an edge's end.
+ *
+ * `undefined` when the click carries no across-component at all — it is on the back line, so
+ * there is no side to read and no arrow to draw — leaving the caller to keep what it had.
+ */
+export function squareOntoBisector(tip: Position, one: Position, two: Position): Position | undefined {
+    const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
+    const back = turf.bearing(turf.point(one), turf.point(two));
+    const reach = turf.distance(turf.point(middle), turf.point(tip), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    const toTip = turf.bearing(turf.point(middle), turf.point(tip));
+    const across = reach * Math.sin(((toTip - back) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    return turf.destination(turf.point(middle), Math.abs(across), back + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+}
+
 /** The arc's half-span. @see ArcAndArrowFrame */
 const ARC_HALF_SPAN_DEG = 60;
 /** Where the dropped form put the tip: two radii out along the axis. */

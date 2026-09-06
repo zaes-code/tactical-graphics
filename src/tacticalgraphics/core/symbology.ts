@@ -1290,7 +1290,14 @@ export function drawsByAnchorClicks(name: TacticalGraphicName): boolean {
  * @see anchorsFromClicks, baseVertexCount
  */
 const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.Ambush]: 2,
+    /*
+     * **141700 places all three**, as of 2026-09-06. Points 2 and 3 are the curved back's own
+     * endpoints — *"Points 2 and 3 define the endpoints of the curved line"* — so both are
+     * the operator's, and the arc's radius follows from the chord they make. Point 1 gives
+     * way instead, squared onto their bisector. The two-click form survives as the preview.
+     * @see squareOntoBisector, ambushAnchors
+     */
+    [TacticalGraphicName.Ambush]: 3,
     [TacticalGraphicName.Turn]: 3,
     [TacticalGraphicName.TacticalTurn]: 3,
     [TacticalGraphicName.Envelopment]: 3,
