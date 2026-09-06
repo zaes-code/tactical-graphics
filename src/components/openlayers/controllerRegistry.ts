@@ -17,8 +17,7 @@ import {
     AmbushGraphicBase,
     ContainGraphicBase,
     PursuitGraphicBase,
-    DemonstrationGraphicBase,
-    MissionTaskGraphicBase,
+        MissionTaskGraphicBase,
     TurnGraphicBase,
 } from './graphics/MissionTaskGraphicBase';
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
@@ -312,14 +311,6 @@ const pursuit = (name: TacticalGraphicName, res: number) => {
  */
 const pointDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
     dropped(name, res, sizing, (n, size) => new MissionTaskGraphicBase(n, size, res));
-
-/**
- * The demonstration: dropped like the rest, but its base carries the four anchor points
- * APP-06 describes it by rather than the single click that placed them.
- * @see DemonstrationGraphicBase
- */
-const demonstrationDrop = (name: TacticalGraphicName, res: number, sizing: number) =>
-    dropped(name, res, sizing, (n, size) => new DemonstrationGraphicBase(n, size, res));
 
 const dropped = (
     name: TacticalGraphicName,

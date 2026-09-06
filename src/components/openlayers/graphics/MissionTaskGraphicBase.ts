@@ -8,7 +8,6 @@ import { anchorsFromFrame, arcAndArrowFromAnchors, ARC_ARROW_DEFAULT_REACH, bowF
     DEFENDED_AREA_FILL,
     LAUNCH_AREA_COLOR,
     LAUNCH_AREA_FILL,
-    drawnAnchorFrame,
     drawnAnchors,
     groundLength,
     minimumDrawnRadiusPx,
@@ -808,38 +807,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         this.center = fromLonLat(frame.center as Coordinate);
         this.rotation = (frame.angle * 180) / Math.PI;
         this.updateGeom({size: frame.size});
-    }
-}
-
-/**
- * Demonstration — four anchor points that are **derived rather than placed**.
- *
- * APP-06 343300 describes the symbol by four points, so the base carries four; but they
- * are one shape at one set of proportions, so the operator places only the first and the
- * other three follow. That makes this holder the plain centre / size / rotation kind
- * wearing a four-point base — `anchorPoints` writes them from state and `adoptAnchors`
- * reads the state back out of points 1 and 2, ignoring 3 and 4 because they are derived.
- *
- * The pair still has to be exact inverses, which is why both go through the library's own
- * statement of the layout rather than restating it here.
- * @see anchorsForParallelLegs, hasDerivedAnchors
- */
-export class DemonstrationGraphicBase extends MissionTaskGraphicBase {
-    protected anchorPoints(): Position[] {
-        return drawnAnchors(this.name, {
-            center: toLonLat(this.center) as Position,
-            size: this.size,
-            rotation: this.rotation,
-        }) ?? [];
-    }
-
-    protected adoptAnchors(coords: Position[]): boolean {
-        const frame = drawnAnchorFrame(this.name, coords);
-        if (!frame) return false;
-        this.center = fromLonLat(frame.center as Coordinate);
-        this.rotation = frame.rotation ?? 0;
-        this.updateGeom({size: frame.size});
-        return true;
     }
 }
 
