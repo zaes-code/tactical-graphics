@@ -25,6 +25,7 @@ import type {Feature, MultiPoint, Position} from 'geojson';
 import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {normalizeDrawnBase} from '../core/drawnBase';
+import {ARC_ARROW_MIN_REACH, anchorsForArcAndArrow, arcAndArrowFromAnchors} from '../core/anchors';
 import {drawClickCount} from '../core/symbology';
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {TacticalGraphicName} from '../core/type';
@@ -53,14 +54,44 @@ describe('141700 places all three of its anchor points', () => {
         }
     });
 
-    it('squares point 1 onto the bisector, wherever it was clicked', () => {
-        const back: Position[] = [[0, 0.05], [0, -0.05]];
-        const middle = turf.midpoint(turf.point(back[0]), turf.point(back[1])).geometry.coordinates as Position;
-        for (const aim of [[0.08, 0], [0.08, 0.04], [0.06, -0.05]] as Position[]) {
-            const [one] = anchors([aim, back[0], back[1]]);
-            const axis = turf.bearing(turf.point(middle), turf.point(one));
-            const line = turf.bearing(turf.point(back[0]), turf.point(back[1]));
-            expect(Math.abs(gap(axis, line) - 90)).toBeLessThan(0.5);
+    it('connects the arrow to the chord’s midpoint without moving the tip', () => {
+        /*
+         * **141700 does not need point 1 squared, and squaring it does harm.**
+         *
+         * 152000 attack by fire does need it: its back is a straight line and the arrow has
+         * to stand at a right angle to it. This one's back is an *arc*, and
+         * `arcAndArrowFromAnchors` already solves for the centre by walking the geodesic from
+         * the chord's midpoint through the tip — so that line is the symmetry axis whatever
+         * the aim, and the plate's "the rear of the arrowhead line shall connect to the
+         * midpoint" holds by construction.
+         *
+         * Adding a projection on top was measured moving a correctly built ambush by 2.6% of
+         * its radius, because the projection is planar and the construction is geodesic. A
+         * reading that shifts a symbol it was handed correct is one that walks it, since it
+         * runs on every render — so what is asserted is that it does not.
+         */
+        const built = anchorsForArcAndArrow([-1.5, 51.2], 200_000, 30, 2);
+        const read = anchors(built);
+        read.forEach((p, i) => expect(meters(p, built[i])).toBeLessThan(1));
+    });
+
+    it('never lets the arrowhead fall inside the arc', () => {
+        /*
+         * The arrow runs from the chord's midpoint at `0.5r` out to `reach * r`, and its head
+         * is `0.25r` long at 30 degrees — so the barbs sit `0.217r` back from the tip and the
+         * head is drawn *inside* the bulge for any reach below about 1.22. Held just clear of
+         * that, in the reading rather than the drawing, so it holds for an edit as well as a
+         * draw. (User's call: "don't ever let the arrow tip fall into the arch during drawing
+         * or editing.") @see ARC_ARROW_MIN_REACH
+         */
+        const centre: Position = [-1.5, 51.2];
+        const radius = 200_000;
+        for (const asked of [3, 1.8, 1.3, 1.1, 0.6, 0.05]) {
+            const read = anchors(anchorsForArcAndArrow(centre, radius, 30, asked));
+            const frame = arcAndArrowFromAnchors(read)!;
+            expect(frame.arrowReach).toBeGreaterThanOrEqual(ARC_ARROW_MIN_REACH - 0.01);
+            // …and a reach that already clears it is left exactly alone.
+            if (asked >= ARC_ARROW_MIN_REACH) expect(frame.arrowReach).toBeCloseTo(asked, 2);
         }
     });
 
