@@ -41,6 +41,7 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     carriesSeparationInBase,
+    frontEdgeBase,
     getDisplayName,
     groundLength,
     isRectangular,
@@ -787,17 +788,7 @@ function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?
      * do describe a vee, are not in it and keep the V.
      */
     if (name && carriesSeparationInBase(name)) {
-        const across = half * 0.55;
-        if (pts >= 4) {
-            // 152100's four: the back line, then the two arrowhead tips out in front of it.
-            return [
-                [cx - half, cy],
-                [cx + half, cy],
-                [cx - half * 0.75, cy - across],
-                [cx + half * 0.75, cy - across],
-            ];
-        }
-        return [[cx - half, cy], [cx + half, cy], [cx, cy - across]];
+        return frontEdgeBase([cx, cy], half, pts) as Coordinate[];
     }
     if (pts === 3) {
         return [
