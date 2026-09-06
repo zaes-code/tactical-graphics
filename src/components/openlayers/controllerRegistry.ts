@@ -380,15 +380,15 @@ const radarSearch = (name: TacticalGraphicName, res: number) => {
 };
 
 /**
- * Cover, guard and screen: **two clicks and no handles.**
+ * Cover, guard and screen: **four clicks, and a grip on each.**
  *
- * They were placed on one anchor at a fixed screen size until 2026-08-29. APP-06 gives them
- * four anchor points — two per arrow — and the operator now draws the first arrow while the
- * generator derives the second, so the pair cannot disagree. `line(2)` is the ordinary
- * fixed-vertex line controller: an edit drag scales the whole symbol, which is what these
- * want, and the generator publishes no handle points so none are drawn. @see SecurityOperation
+ * They were placed on one anchor at a fixed screen size until 2026-08-29, then drawn as one
+ * arm with the second mirrored from it. APP-06 342201 gives them four anchor points, two per
+ * arrow, and says the two arrows *"can vary independently"* in length and orientation — which
+ * a mirrored pair cannot do. Every point is placed and every point is draggable as of
+ * 2026-09-06. @see SecurityOperation, securityOperationAnchors
  */
-const securityOp = line(2);
+const securityOp = vertexLine(4, 4);
 
 // ─── registry ─────────────────────────────────────────────────────────────────
 

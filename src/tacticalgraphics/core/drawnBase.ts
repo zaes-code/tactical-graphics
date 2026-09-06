@@ -39,6 +39,7 @@ import {
     hairpinAnchors,
     runAndArcFromAnchors,
 } from './anchors';
+import {securityOperationAnchors} from '../graphics/SecurityOperation';
 import * as turf from './turf';
 
 /**
@@ -423,6 +424,20 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.Demonstration:
         case TacticalGraphicName.ReliefInPlace:
             return hairpinAnchors(clicks);
+
+        /*
+         * **342201/2/3 place all four, and a two-point base is an old save.**
+         *
+         * The upgrade lays the second arm out as the mirror the generator used to derive, so
+         * a saved graphic comes back the shape it was saved as and gains two grips it never
+         * had. It runs on restore and on every rebuild, not only at draw end — which is why
+         * `DRAW_CLICKS` names four for these: a two-click sketch normalizes to four points
+         * and would otherwise read as a finished draw. @see securityOperationAnchors
+         */
+        case TacticalGraphicName.Cover:
+        case TacticalGraphicName.Guard:
+        case TacticalGraphicName.Screen:
+            return securityOperationAnchors(clicks);
 
         /*
          * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**

@@ -990,12 +990,25 @@ export class MapLibreInteractions {
     private sketchIsComplete(): boolean {
         const name = this.drawing;
         if (!name) return false;
+        /*
+         * **How many clicks the draw asks for, where the library says so.**
+         *
+         * `DRAW_CLICKS` exists to state exactly this, and asking it directly is both simpler
+         * and safer than inferring it. The rule below infers: it normalizes the sketch and
+         * calls the draw finished once the base is *implied* — right for a fields of fire,
+         * whose two points are a whole V because the second leg follows from them, and wrong
+         * for any graphic whose normalizer also **upgrades an older base**. 342201's does:
+         * two points are an old save that lays out as four, so an inferred rule ended its
+         * draw on the second of four clicks.
+         *
+         * Equivalent wherever `drawClickCount` is already defined — ambush 2 of 3, envelop 3
+         * of 4, the hairpins 3 of 4 — since each of those normalizes exactly its click count
+         * up to its vertex count. It only changes the answer where the two disagree, which
+         * is the case this is for. @see drawClickCount, normalizeDrawnBase
+         */
+        const clicks = drawClickCount(name);
+        if (clicks !== undefined) return this.sketch.length >= clicks;
         const wanted = baseVertexCount(name);
-        // Asked of the **normalized** sketch, not the raw one, so a graphic that defines
-        // part of its own base counts as finished once the rest is implied: two points
-        // of a fields-of-fire are a whole V, because the second leg follows from them.
-        // Deriving it here rather than listing the exceptions keeps one source for what
-        // a complete base is. @see normalizeDrawnBase
         return wanted === undefined ? this.sketch.length >= 2 : normalizeDrawnBase(name, this.sketch).length === wanted;
     }
 

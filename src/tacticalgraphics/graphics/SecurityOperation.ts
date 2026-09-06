@@ -120,32 +120,67 @@ export const SECURITY_OPERATION_GRAPHICS: readonly TacticalGraphicName[] = [
 ];
 
 /**
- * The middle of a cover, guard or screen, read from the base the operator drew.
+ * The four anchor points APP-06 342201 names, from however many the base carries.
  *
- * **Not the midpoint of the two drawn points.** The operator draws *one* arm — point 1 the
- * arrowhead, point 2 its inner end — and the second arm is mirrored about the gap, so the
- * symbol runs on past point 2 and its middle sits `HALF_GAP_RATIO` of an arm beyond it.
- * That is where the two letters meet and where the host's injected unit symbol goes.
+ * > Anchor Points. This symbol requires four points. Point 1 and Point 2 define the ends of
+ * > one arrow and Point 3 and Point 4 define the ends of the other arrow. Point 1 and Point
+ * > 4 define the ends of their respective arrowheads.
+ * >
+ * > Size/Shape. Points 1 and 2 and Points 3 and 4 determine the length of the arrows. **The
+ * > length and orientation of the arrows can vary independently.**
  *
- * Stated here, beside the ratio it uses, because three separate things need it and each was
- * a chance to restate the arithmetic: the generator laying the arms out, `securityPaints`
- * placing the symbol, and now the rotate and resize gestures. The paint layer reads its own
- * from the *rendered* inner ends, which is the same point arrived at from the other side —
- * this one answers from the base, which is all a gesture has. (User's call, 2026-09-06: the
- * axis of rotation and resize belongs at "the center of the graphic where the symbol may or
- * may not be".)
+ * Four placed points as of 2026-09-06. The operator drew *one* arm before that and the other
+ * was mirrored from it, so the two always agreed in length and lay on one axis — which the
+ * Size/Shape cell explicitly does not ask for. A screen whose two arms face different
+ * distances along different bearings is the ordinary case, and it could not be drawn.
+ * (User's call: "the draw rules say that line 1,2 length and line 3,4 can vary in length and
+ * direction […] we need to let them pick the 4 points".)
+ *
+ * **A shorter base is the old form, and upgrades in place.** Two points are point 1 and
+ * point 2; the other arm is laid out as the mirror this used to derive, so every saved
+ * graphic comes back the shape it was saved as and gains two grips. The derived point 3 sits
+ * `2 x HALF_GAP_RATIO` of an arm past point 2 — which is exactly what puts the old centre,
+ * `HALF_GAP_RATIO` beyond point 2, midway between points 2 and 3 where the plate wants it.
+ * So the upgrade moves nothing.
+ */
+export function securityOperationAnchors(coords: readonly Position[] | undefined): Position[] | undefined {
+    if (!coords || coords.length < 2) return undefined;
+    if (coords.length >= 4) return coords.slice(0, 4) as Position[];
+
+    const tip = coords[0];
+    const inner = coords[coords.length - 1];
+    const arm = turf.distance(turf.point(tip), turf.point(inner), {units: 'meters'});
+    if (!(arm > 0)) return undefined;
+
+    const inward = turf.bearing(turf.point(tip), turf.point(inner));
+    const otherInner = at(inner, inward, arm * 2 * HALF_GAP_RATIO, 0);
+    return [tip, inner, otherInner, at(otherInner, inward, arm, 0)];
+}
+
+/**
+ * The middle of a cover, guard or screen — **midway between points 2 and 3.**
+ *
+ * > Orientation. […] The tactical symbol indicator is centred between point 2 and point 3.
+ *
+ * The plate says it outright, and it is the one construction that always has an answer. The
+ * two arms' axes *extended* meet at the same place whenever the arms are symmetric, which is
+ * the only shape this graphic could take until 2026-09-06 — but with the arms independent
+ * that intersection is undefined for parallel arms and runs away to infinity as they
+ * approach parallel, which is a centre that leaves the graphic. The midpoint does not.
+ *
+ * Stated here, beside the ratio the fallback uses, because three separate things need it and
+ * each was a chance to restate the arithmetic: the generator laying the arms out,
+ * `securityPaints` placing the symbol, and the rotate and resize gestures. The paint layer
+ * reads its own from the *rendered* inner ends, which is the same point arrived at from the
+ * other side — this one answers from the base, which is all a gesture has.
  *
  * `undefined` for a base too short to describe an arm, so a caller falls back rather than
  * pivoting on a guess.
  */
 export function securityOperationBaseCentre(coords: readonly Position[] | undefined): Position | undefined {
-    if (!coords || coords.length < 2) return undefined;
-    const tip = coords[0];
-    const inner = coords[coords.length - 1];
-    const arm = turf.distance(turf.point(tip), turf.point(inner), {units: 'meters'});
-    if (!(arm > 0)) return undefined;
-    const inward = turf.bearing(turf.point(tip), turf.point(inner));
-    return at(inner, inward, arm * HALF_GAP_RATIO, 0);
+    const anchors = securityOperationAnchors(coords);
+    if (!anchors) return undefined;
+    return turf.midpoint(turf.point(anchors[1]), turf.point(anchors[2])).geometry.coordinates as Position;
 }
 
 /** The arrowhead's barb, as a share of the arm's length, and its half-angle in degrees. */
@@ -194,36 +229,36 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
     }
 
     /**
-     * The symbol's frame, from the drawn arm.
+     * The symbol's frame: **two arms that are read, not one arm and its mirror.**
      *
-     * `tip` is point 1 and `inner` is point 2, so the axis runs *inward* from the arrowhead
-     * — which is the direction everything else is measured along. A base with one point, or
-     * two points on top of each other, has no axis and produces nothing rather than a
-     * degenerate symbol.
+     * Each arm carries its own inner end, its own outward bearing and its own length, which
+     * is what "the length and orientation of the arrows can vary independently" asks for.
+     * A base with one point, or an arm of zero length, has no axis and produces nothing
+     * rather than a degenerate symbol.
+     *
+     * **Neither arm's length comes from `opts.size`.** A resize on a fixed-vertex line
+     * scales the *base*, so the drawn arms already carry the new lengths and reading a
+     * second number would fight them. `LineGraphicBase` passes its decoration scalar as
+     * `size`, which for these is a few hundred metres — taken as the half-extent it drew the
+     * whole symbol as a speck. @see securityOperationHalfExtent for the number that
+     * describes the size.
      */
     private frame(base: Feature<LineString>) {
-        const coords = base.geometry?.coordinates ?? [];
-        if (coords.length < 2) return undefined;
+        const anchors = securityOperationAnchors(base.geometry?.coordinates);
+        if (!anchors) return undefined;
+        const [tip, inner, otherInner, otherTip] = anchors;
 
-        const tip = coords[0];
-        const inner = coords[coords.length - 1];
-        /*
-         * **The arm is what was drawn, and nothing else sets it.**
-         *
-         * Not `opts.size`: a resize on a fixed-vertex line scales the *base*, so the drawn
-         * arm already carries the new length and reading a second number would fight it.
-         * `LineGraphicBase` passes its decoration scalar as `size`, which for these is a
-         * few hundred metres — taken as the half-extent it drew the whole symbol as a
-         * speck. @see securityOperationHalfExtent for the number that describes the size.
-         */
         const arm = turf.distance(turf.point(tip), turf.point(inner), {units: 'meters'});
-        if (!(arm > 0)) return undefined;
+        const otherArm = turf.distance(turf.point(otherInner), turf.point(otherTip), {units: 'meters'});
+        if (!(arm > 0) || !(otherArm > 0)) return undefined;
 
-        const inward = turf.bearing(turf.point(tip), turf.point(inner));
-        // The same construction `securityOperationBaseCentre` publishes, called through it so
-        // the drawing and the gestures cannot disagree about where the middle is.
-        const centre = securityOperationBaseCentre(coords) ?? inner;
-        return {tip, inner, arm, inward, centre};
+        // Each arm's *outward* bearing: from its own inner end toward its own arrowhead.
+        const outward = turf.bearing(turf.point(inner), turf.point(tip));
+        const otherOutward = turf.bearing(turf.point(otherInner), turf.point(otherTip));
+        // Called through the shared statement so the drawing and the gestures cannot
+        // disagree about where the middle is. @see securityOperationBaseCentre
+        const centre = securityOperationBaseCentre(anchors) ?? inner;
+        return {tip, inner, otherInner, otherTip, arm, otherArm, outward, otherOutward, centre};
     }
 
     /** One arm, from its inner end outward along `bearing`, with the arrowhead at its tip. */
@@ -249,12 +284,9 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
         const f = this.frame(base);
         if (!f) return this.asMultiLineStringFeature([]);
 
-        // The drawn arm runs outward from its inner end, back toward point 1; the derived
-        // arm runs outward the other way from the far side of the gap. Mirrored, not
-        // rotated, so both steps fall on the same side — which is the shipped profile.
-        const outward = f.inward + 180;
-        const innerLeft = at(f.centre, outward, f.arm * HALF_GAP_RATIO, 0);
-        const innerRight = at(f.centre, f.inward, f.arm * HALF_GAP_RATIO, 0);
+        // Each arm runs outward from its own inner end toward its own arrowhead. Those are
+        // points 2 and 3 as placed — no longer a gap measured either side of the centre,
+        // since the two arms need not be the same length or lie on one axis.
         /*
          * **The second arm's fold is mirrored, so the symbol turns about its centre.**
          *
@@ -270,19 +302,22 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
          * shipped, not a reproduction of it, and it is recorded as one.
          */
         return this.asMultiLineStringFeature([
-            ...this.arm(innerLeft, outward, f.arm, false),
-            ...this.arm(innerRight, f.inward, f.arm, true),
+            ...this.arm(f.inner, f.outward, f.arm, false),
+            ...this.arm(f.otherInner, f.otherOutward, f.otherArm, true),
         ]);
     }
 
     /**
-     * **No handles.** The operator moves the symbol and resizes it whole; there is nothing
-     * to drag a vertex to, because every point but the two drawn ones is derived and
-     * dragging one of those alone would break the symmetry the symbol is built on.
-     * (User's call, 2026-08-29.)
+     * **A grip on each of the four anchor points**, which is what makes the arms independent.
+     *
+     * It published none until 2026-09-06: the second arm was mirrored from the first, so
+     * dragging any one point alone would have broken the symmetry the symbol was built on,
+     * and the operator moved and resized it whole instead. 342201 asks for the opposite —
+     * *"the length and orientation of the arrows can vary independently"* — so each end of
+     * each arrow is placed and each is grabbable. @see securityOperationAnchors
      */
-    generateHandles(): Feature<MultiPoint> {
-        return this.asMultiPointFeature([]);
+    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
+        return this.asMultiPointFeature(securityOperationAnchors(base.geometry?.coordinates) ?? []);
     }
 
     /** The two letters, set just inside each arm's inner end. */
@@ -290,10 +325,14 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
         const f = this.frame(base);
         if (!f) return this.asMultiPointFeature([]);
 
-        const inset = f.arm * (HALF_GAP_RATIO - LABEL_INSET_RATIO);
-        return this.asMultiPointFeature([
-            at(f.centre, f.inward + 180, inset, 0),
-            at(f.centre, f.inward, inset, 0),
-        ]);
+        /*
+         * **Measured from each arm's own inner end, inward toward the centre**, rather than
+         * out from the centre along one shared axis. With the arms independent there is no
+         * shared axis to measure along, and each letter belongs to the arm it labels — which
+         * is what `LABEL_INSET_RATIO` already says.
+         */
+        const inset = (from: Position, arm: number) =>
+            at(from, turf.bearing(turf.point(from), turf.point(f.centre)), arm * LABEL_INSET_RATIO, 0);
+        return this.asMultiPointFeature([inset(f.inner, f.arm), inset(f.otherInner, f.otherArm)]);
     }
 }
