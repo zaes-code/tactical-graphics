@@ -34,6 +34,7 @@ import {
     anchorsForRunAndArc,
     ARC_ARROW_DEFAULT_REACH,
     bowFromAnchors,
+    hairpinAnchors,
     runAndArcFromAnchors,
 } from './anchors';
 import * as turf from './turf';
@@ -378,6 +379,18 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
          */
         case TacticalGraphicName.Pursuit:
             return pursuitAnchors(clicks);
+
+        /*
+         * **343300 and 341900 — three clicks: the arrowhead tip, the turn, the far leg.**
+         *
+         * Point 4 is derived so the two straights are parallel and equal by construction, and
+         * point 3 is squared onto the perpendicular at point 2 for the same reason 152800's
+         * is: the half circle is tangent to both legs, so its diameter has to leave point 2 at
+         * a right angle. @see hairpinAnchors
+         */
+        case TacticalGraphicName.Demonstration:
+        case TacticalGraphicName.ReliefInPlace:
+            return hairpinAnchors(clicks);
 
         /*
          * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**

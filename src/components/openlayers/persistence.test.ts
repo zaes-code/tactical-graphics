@@ -591,12 +591,12 @@ describe('a graphic saved before the anchor-point conversion', () => {
     });
 
     /**
-     * The demonstration is in the family for a different reason: its four points are
-     * derived from the first rather than placed. A file written while they were drawn
-     * freehand still loads, and comes back as the canonical shape — which is what
+     * The demonstration is in the family for a different reason: only three of its four
+     * points are placed, and the fourth is constructed. A file written while all four were
+     * read freehand still loads, and comes back as the canonical shape — which is what
      * "auto-calculated" means once the ratios stop being an input.
      */
-    it('restores a four-point demonstration exactly as it was drawn', () => {
+    it('restores a four-point demonstration, squaring a splayed one as it goes', () => {
         const to = fakeManager();
         // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
         const drawn = {
@@ -632,22 +632,33 @@ describe('a graphic saved before the anchor-point conversion', () => {
         const anchors = (base as LineString).getCoordinates().map(c => toLonLat(c));
         expect(anchors).toHaveLength(4);
         /*
-         * **All four come back where they were put.** This asserted the opposite until
-         * 2026-09-06: points 3 and 4 were rewritten from 1 and 2, so a splayed U "snapped" to
-         * equal parallel legs. 343300 gives each side its own length and says nothing about
-         * the two being parallel, so a restore that straightened them was discarding what the
-         * operator drew. @see Demonstration
+         * **The first two come back where they were put, and the shape squares up around
+         * them.** A splayed file is one written while all four points were read freehand, or
+         * hand-authored GeoJSON, or a drag on the other engine that got away — and a
+         * demonstration whose legs splay is not the symbol. It is re-derived on load rather
+         * than drawn as filed, which is the same treatment 343500 gives its fourth point.
+         * @see hairpinAnchors
          */
-        const drawnPoints = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
-        drawnPoints.forEach((point, i) => {
-            expect(anchors[i][0]).toBeCloseTo(point[0], 4);
-            expect(anchors[i][1]).toBeCloseTo(point[1], 4);
-        });
-        // ...and the two legs stay as different as they were drawn.
+        expect(anchors[0][0]).toBeCloseTo(-0.6, 4);
+        expect(anchors[0][1]).toBeCloseTo(51.5, 4);
+        expect(anchors[1][0]).toBeCloseTo(0.2, 4);
+        expect(anchors[1][1]).toBeCloseTo(51.5, 4);
+        // ...and the two legs come back parallel and the same length.
         const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
         const parts = (rebuilt as MultiLineString).getCoordinates();
-        const legLength = (part: number[][]) => Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]);
-        expect(legLength(parts[2]) / legLength(parts[0])).not.toBeCloseTo(1, 1);
+        // **Measured back in degrees, because EPSG:3857 is not a length.** Mercator inflates
+        // by 1/cos(latitude), and the two legs sit at different latitudes — so equal legs
+        // measure 0.9% apart in projected metres, which is enough to fail an assertion the
+        // geometry actually satisfies. @see ai/conventions.md, the projected-coords rule
+        const legLength = (part: number[][]) => {
+            const [a, b] = part.map(c => toLonLat(c));
+            const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+            return Math.hypot((b[0] - a[0]) * scale, b[1] - a[1]);
+        };
+        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 2);
+        const heading = (part: number[][]) => Math.atan2(part[1][1] - part[0][1], part[1][0] - part[0][0]);
+        const opposed = Math.abs(Math.abs(heading(parts[2]) - heading(parts[0])) - Math.PI);
+        expect(opposed).toBeLessThan(0.02);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {

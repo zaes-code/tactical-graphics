@@ -1340,26 +1340,58 @@ export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
     private static readonly CURVE_STEPS = 32;
 
     /**
-     * The four points, as placed.
+     * The four points APP-06 341900 names — **three placed, the fourth constructed**, on the
+     * same rule 343300 gets and through the same reader.
      *
-     * A base with fewer than four is one written before 2026-09-06 — two points and a
-     * `size` — and resolves through the old parallel-leg layout so nothing saved stops
-     * rendering. `size * 3` was the U's height then and is kept exactly, or a restored
-     * symbol would come back a different shape from the one that was saved.
+     * Point 1 is the upper arrowhead's tip, point 2 the upper straight's curve end, point 3
+     * the lower straight's curve end — the one carrying the second arrowhead, pointing back
+     * into the turn — and point 4 the lower straight's free end. The two arrows oppose each
+     * other: one formation leaving, one arriving, which is what the symbol says.
+     *
+     * Point 4 is therefore point 3 displaced by point 2 → point 1, and point 3 is read only
+     * for its distance across the first leg and its side. @see hairpinAnchors
+     *
+     * A base of two points is one written before 2026-09-06 — two points and a `size` — and
+     * resolves through the old parallel-leg layout so nothing saved stops rendering.
+     * `size * 3` was the U's height then and is kept exactly, or a restored symbol would come
+     * back a different shape from the one that was saved.
      */
     private points(base: Feature<LineString>, opts?: PointGraphicOptions): Position[] {
         const coords = base.geometry.coordinates;
+        /*
+         * **Re-derived on every render, never read past point 3** — the same statement
+         * 343300 makes, from the same function, so the two cannot drift apart.
+         * @see Demonstration.points
+         */
+        const anchors = hairpinAnchors(coords);
+        if (anchors) return anchors;
         if (coords.length >= 4) return coords.slice(0, 4);
 
-        const p4 = coords[0];
-        const p3 = coords[coords.length - 1];
+        /*
+         * **Two points are a half-drawn symbol, and they read forward.**
+         *
+         * This is what the operator sees between click 1 and click 2, so the arrows have to
+         * point the way the finished graphic will — the first stored point is the tip, which
+         * is the plate's own numbering. It read the pair *end-for-end* until 2026-09-06,
+         * because 341900 was in `TIP_FIRST_GRAPHICS` and its two-point saves were stored
+         * reversed; leaving that flip here made the preview draw backwards and snap round on
+         * click 3, which is exactly what a user reported ("the graphic appears wrong direction
+         * after click 1 and then correct/flips after click 2"). A one-day-old two-point save
+         * comes back mirrored as a result, and that is the right trade: a wrong preview is on
+         * every draw, and 341900 stores four points now.
+         *
+         * The third point is a **preview default and nothing more** — click 3 sets the turn's
+         * depth and picks its side, the way 344000's hook works before its own third click.
+         * `size * 3` was the U's height under the old layout and is kept, so a symbol restored
+         * from two points comes back the depth it was saved at. @see PURSUIT_PREVIEW_HOOK_SHARE
+         */
+        const [p1, p2] = [coords[0], coords[coords.length - 1]];
         const height = Math.max(opts?.size ?? 20, 1) * 3;
-        const across = turf.bearing(turf.point(p4), turf.point(p3)) + 90;
-        const out = (from: Position): Position =>
-            turf.destination(turf.point(from), height, across, {units: 'meters'}).geometry.coordinates as Position;
-        // Legacy order maps onto the plate's: the old `p0` is P4, `p1` is P3, and the
-        // offset pair are P1 and P2. @see the class doc
-        return [out(p4), out(p3), p3, p4];
+        const across = turf.bearing(turf.point(p1), turf.point(p2)) + 90;
+        const preview = turf.destination(turf.point(p2), height, across, {units: 'meters'}).geometry.coordinates as Position;
+        // Through the same reader the finished symbol uses, so the preview cannot be a
+        // different shape from the thing it is previewing. @see hairpinAnchors
+        return hairpinAnchors([p1, p2, preview]) ?? [p1, p2, preview, p1];
     }
 
     generateGraphics(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiLineString> {
@@ -1395,9 +1427,12 @@ export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
         ]);
     }
 
-    /** A grip on each of the four points the plate names, in their own order. */
+    /**
+     * A grip on each of the three placed points; point 4 is derived and gets none.
+     * @see Demonstration.generateHandles, hairpinFourthPoint
+     */
     generateHandles(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(this.points(base, opts));
+        return this.asMultiPointFeature(this.points(base, opts).slice(0, 3));
     }
 
     generateLabels(base: Feature<LineString>, _opts: PointGraphicOptions): Feature<any> {

@@ -1136,6 +1136,9 @@ const DRAWN_BY_ANCHOR_CLICKS = new Set<TacticalGraphicName>([
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.Pursuit,
+    // Three clicks read into four stored anchors. @see hairpinAnchors
+    TacticalGraphicName.Demonstration,
+    TacticalGraphicName.ReliefInPlace,
 ]);
 
 /** @see DRAWN_BY_ANCHOR_CLICKS */
@@ -1163,6 +1166,18 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalTurn]: 3,
     [TacticalGraphicName.Envelopment]: 3,
     [TacticalGraphicName.Pursuit]: 3,
+    /*
+     * **343300 and 341900 are placed with three clicks and stored as four.**
+     *
+     * Their plates number four anchor points, but the fourth carries no decision: the two
+     * straights must stay parallel and the same length, so point 4 is wherever that puts it.
+     * Asking for it is asking the operator to hit a point that is already determined, and
+     * letting them miss it is how the legs came out splayed. Derived instead, exactly as
+     * 343500 envelopment derives its fourth. (User's call, 2026-09-06: "let the user pick 3
+     * points. The 4 point will be auto-generated".) @see hairpinAnchors
+     */
+    [TacticalGraphicName.Demonstration]: 3,
+    [TacticalGraphicName.ReliefInPlace]: 3,
     /*
      * **200700 is here despite storing a single point.** Its three clicks are read into an
      * azimuth and two ranges rather than into anchor points, so it is not in

@@ -84,7 +84,7 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
     type: string = 'LineString';
 
     /**
-     * The four points APP-06 343300 names, **as the operator placed them**.
+     * The four points APP-06 343300 names — **three placed, the fourth constructed.**
      *
      * > Anchor Points. This symbol requires four anchor points. Point 1 defines the tip of
      * > the arrowhead. Point 2 defines the end of the straight line portion of the first
@@ -93,27 +93,42 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
      * > Size/Shape. Points 1 and 2 and points 3 and 4 determine the length of each side.
      * > Points 2 and 3 shall be connected by a smooth, curved line.
      *
-     * So the base carries `[P1, P2, P3, P4]` and this reads them straight through. **Each
-     * side has its own length** — the rule says "the length of each side", not one length
-     * for both — and nothing in it makes the two sides parallel.
+     * The Template draws one figure: two straights of equal length, parallel, closed by a
+     * half turn on the chord from point 2 to point 3. **Point 4 is where that figure puts
+     * it** — point 3 displaced by point 2 → point 1 — so it carries no decision of its own
+     * and is derived rather than clicked, the way 343500's fourth point is. Point 3 is read
+     * for its distance across the first leg and the side it fell on, which is the reading
+     * 152800 gets and for the same reason: the turn is tangent to both straights.
+     *
+     * The operator therefore places three points and drags three grips, and the legs cannot
+     * splay or come out unequal at any point in between. (User's call, 2026-09-06: "the
+     * lines across from each other must be parallel and same size at all times"; and "let's
+     * draw these 2 like we do canes where we just let the user pick 3 points".)
+     * @see hairpinAnchors, which states both readings once for this graphic and 341900
      *
      * ## What this replaced
      *
      * A one-click drop. The four points existed, but `anchorsForParallelLegs` laid all of
      * them out from a single centre at a fixed leg length and a fixed opening, so the
-     * operator stated position and nothing else: the two sides were forced parallel and
-     * equal, which the plate does not say, and points 2, 3 and 4 could not be placed at all.
-     * (User's call, 2026-09-06.)
+     * operator stated position and nothing else and none of the four could be placed.
      *
      * ## The fallback, which is what keeps old files readable
      *
-     * A base with fewer than four points is one written before that change — a dropped
-     * demonstration saved as its derived four, or a mid-draw sketch. Those resolve through
-     * the old layout, so nothing saved stops rendering and a half-finished draw still shows
-     * a symbol. @see anchorsForParallelLegs
+     * A base of two points is one written before that change — a dropped demonstration saved
+     * as its base. It resolves through the old layout, so nothing saved stops rendering and a
+     * half-finished draw still shows a symbol. @see anchorsForParallelLegs
      */
     private points(base: Feature<LineString>, opts?: IBaseGraphicOptions): Position[] {
         const coordinates = base.geometry.coordinates;
+        /*
+         * **Re-derived on every render, never read past point 3.** A stored point 4 that
+         * disagrees — a legacy file, a synthesised sample, hand-written GeoJSON — is ignored
+         * rather than drawn, and so is any along-leg drift in point 3. Doing it here rather
+         * than only at draw time is what makes the constraint hold under an edit: both
+         * engines drag a base vertex straight, and neither of them knows this shape.
+         */
+        const anchors = hairpinAnchors(coordinates);
+        if (anchors) return anchors;
         if (coordinates.length >= 4) return coordinates.slice(0, 4);
 
         const drawn = parallelLegsFromAnchors(coordinates);
@@ -137,14 +152,17 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
     }
 
     /**
-     * **A grip on each of the four points the plate names**, in their own order.
+     * **A grip on each of the three points the operator places** — point 4 gets none.
      *
      * It published `[edge, centre]` — the point-anchored contract — while the symbol was
      * dropped whole, so the only draggable mark scaled a shape the operator could not
-     * otherwise change. Every point is placed now, so every point is grabbable.
+     * otherwise change. Points 1, 2 and 3 are placed now and each is grabbable; point 4 is
+     * derived from them, and a grip on a derived point is a grip that cannot move it. That is
+     * envelopment's contract too: three placed, the fourth computed and ungrabbed.
+     * @see hairpinFourthPoint
      */
     generateHandles(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiPoint> {
-        return this.asMultiPointFeature(this.points(base, opts));
+        return this.asMultiPointFeature(this.points(base, opts).slice(0, 3));
     }
 
     /** The first leg, which is where the paint cuts its break for `DEM`. */

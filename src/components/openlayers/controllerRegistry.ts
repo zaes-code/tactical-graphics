@@ -207,8 +207,15 @@ const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
  * It keeps its own holder rather than moving to `vertexLine`: the `RIP` break is cut by a
  * style this holder attaches, and a generic line holder does not know to. @see ReliefInPlace
  */
+/**
+ * 341900: three clicks, four stored points, and the fourth is not draggable.
+ *
+ * `enableVertexDragging(3)` rather than 4 — point 4 is derived so the two straights stay
+ * parallel and the same length, and a grip on it would offer a freedom the shape does not
+ * have. @see hairpinAnchors, ANCHOR_VERTEX
+ */
 const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 4, name).enableVertexDragging(4);
+    new LineGraphicController(new ReliefInPlace(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
 const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new AirCorridor(name, sizing * 20, res));
@@ -676,7 +683,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * position and nothing else. `vertexLine(4, 4)` is the same contract Capture and Seize
      * take. (User's call, 2026-09-06.) @see Demonstration
      */
-    [TacticalGraphicName.Demonstration]:                    vertexLine(4, 4),
+    // Three clicks; the fourth point is derived and inert. @see hairpinAnchors, ANCHOR_VERTEX
+    [TacticalGraphicName.Demonstration]:                    vertexLine(3, 3, 3),
     [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
     [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
     [TacticalGraphicName.DecisionLine]:                     line(),
