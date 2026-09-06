@@ -117,7 +117,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **46 of the 317 graphics need a geometry input as well**:
+`name` is always required, and **40 of the 317 graphics need a geometry input as well**:
 the point-anchored ones (mission tasks, range fans, fighting positions, the circular
 areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
 `decorationSize`. Without them you get a turf error rather than a default — see

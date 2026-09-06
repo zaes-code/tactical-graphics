@@ -296,18 +296,22 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
  * alone.
  */
 const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.TacticalBlock,
-    TacticalGraphicName.Breach,
-    TacticalGraphicName.Bypass,
-    TacticalGraphicName.Canalize,
-    TacticalGraphicName.Clear,
-    TacticalGraphicName.TacticalDisrupt,
+    /*
+     * Breach, bypass, canalize and clear left on 2026-09-06. Their APP-06 rules give them
+     * three placed anchor points — two for the opening and one for the rear — so there is no
+     * derived offset handle to put first, and their three grips are all `shape`.
+     * @see frontEdgeFrame
+     *
+     * **Block, disrupt and support by fire left the same day, for the same reason.** 270501
+     * and 340100 place the bar's two ends and the stem's far end; 270502 and 341000 place the
+     * bar and the longest arrow's tip; 152100 places the bar's ends *and* both arrow tips.
+     * In every case the perpendicular the offset handle used to drag is a point the operator
+     * states, so the family's leading `offset` grip has nothing left to set.
+     * @see Block, Disrupt, supportByFireFromAnchors
+     */
     TacticalGraphicName.Penetration,
     TacticalGraphicName.Exploitation,
-    TacticalGraphicName.Block,
-    TacticalGraphicName.Disrupt,
     TacticalGraphicName.AttackByFire,
-    TacticalGraphicName.SupportByFire,
     // Follow and assume / follow and support are deliberately absent: they are no
     // longer block arrows and carry their own two-point handles. @see FollowTask
 ];
@@ -329,14 +333,23 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
  */
 export const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.AttackByFire]: 0.4,
-    [TacticalGraphicName.SupportByFire]: 0.4,
-    [TacticalGraphicName.Breach]: 0.3,
-    [TacticalGraphicName.Bypass]: 0.3,
-    [TacticalGraphicName.Canalize]: 0.3,
-    [TacticalGraphicName.Clear]: 0.3,
-    [TacticalGraphicName.TacticalDisrupt]: 0.3,
-    // The table 5-19 twin behaves exactly as the mission task it copies.
-    [TacticalGraphicName.Disrupt]: 0.3,
+    /*
+     * **Breach, bypass, canalize and clear are no longer ratio-locked** (2026-09-06).
+     *
+     * A lock says the aspect ratio is not the user's to change. All four plates say the
+     * opposite, in the same sentence: *"Points 1 and 2 determine the symbol's height and
+     * point 3 determines its length."* Two dimensions, stated separately and placed
+     * separately — which is exactly what a fixed height/length ratio forbids. They took
+     * their height from 0.3 of the drawn length instead, so the third anchor point had
+     * nothing to do and the opening could not be sized at all. @see frontEdgeFrame
+     *
+     * **Disrupt and support by fire went with them**, on the same sentence. 270502 and 341000
+     * read *"Points 1 and 2 determine the height of the symbol and point 3 determines its
+     * length"*, and 152100 places all four of its points outright — a symbol whose height and
+     * length are both stated cannot also have them locked to each other. Disrupt took its
+     * height from 0.3 of the drawn length and support by fire its bar from 0.4, so in both the
+     * third and fourth anchor points had nothing to do. @see Disrupt, supportByFireFromAnchors
+     */
 };
 
 /** The locked perpendicular-size / base-length ratio, or undefined. @see RATIO_LOCK */
@@ -351,9 +364,8 @@ export function ratioLockOf(name: TacticalGraphicName): number | undefined {
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // The handle is the end of the front line, drawn at 3 × size.
     [TacticalGraphicName.Penetration]: 1 / 3,
-    // The handle is the end of the crossbar, drawn at 1 × size.
-    [TacticalGraphicName.TacticalBlock]: 1,
-    [TacticalGraphicName.Block]: 1,
+    // Block's crossbar handle left on 2026-09-06: the crossbar is points 1 and 2 now, so
+    // there is no derived width for an offset grip to drag. @see Block
     // The handle is an arrowhead wing, `size × sin 45°` off the base line.
     [TacticalGraphicName.Exploitation]: Math.SQRT2,
 };
@@ -398,10 +410,50 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.UnmannedAircraftCorridor,
 ];
 
+/**
+ * The four bracket mission tasks: three placed anchor points, every one of them a grip.
+ *
+ * 340200 breach, 340300 bypass, 340500 clear and 340400 canalize by inheritance each give
+ * points 1 and 2 to a front edge and point 3 to the rear. They were in `BLOCK_GRAPHICS`
+ * until 2026-09-06, whose contract puts a derived *offset* handle first — a width grip for a
+ * symbol whose width is now two of its own anchor points. @see frontEdgeFrame
+ */
+const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Breach,
+    TacticalGraphicName.Bypass,
+    TacticalGraphicName.Canalize,
+    TacticalGraphicName.Clear,
+];
+
+/**
+ * Block, disrupt and support by fire: the rest of the block family whose anchor points are
+ * placed rather than derived, as of 2026-09-06.
+ *
+ * 270501 and 340100 give points 1 and 2 to the vertical line the enemy runs into and point 3
+ * to the stem; 270502 and 341000 give the same two to the vertical line and point 3 to the
+ * longest arrow's tip; 152100 places its bar's two ends *and* both arrowhead tips. In every
+ * one the perpendicular that used to be a derived `size` is a pair of anchor points, so
+ * there is no width to default and no offset grip to put first.
+ *
+ * Kept apart from `BRACKET_GRAPHICS` because the two groups are not the same shape — a
+ * bracket's point 3 is its rear, these three have no rear — and the reasons they left the
+ * block contract read differently even though the effect is the same.
+ */
+const PLACED_BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Block,
+    TacticalGraphicName.TacticalBlock,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.TacticalDisrupt,
+    TacticalGraphicName.SupportByFire,
+];
+
 /** What each handle of `name` does. */
 export function handleContract(name: TacticalGraphicName): HandleContract {
     if (CORRIDOR_GRAPHICS.includes(name)) {
         return {roles: [], repeating: 'shape', offsetAfterVertices: true, offsetScale: 1};
+    }
+    if (BRACKET_GRAPHICS.includes(name)) {
+        return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
     }
     /*
      * **The two four-point hairpins: every grip is a placed anchor point.**
@@ -619,6 +671,22 @@ export function isMovementGraphic(name: TacticalGraphicName): boolean {
  * near-match for OpenLayers' `Polygon.getInteriorPoint`, not a reimplementation of
  * it; the two agree to well under a pixel on the shapes this library draws.
  */
+/**
+ * Graphics that pivot on their **last** vertex without being tip-first.
+ *
+ * `drawsTipFirst` answers two questions at once — which order the points are stored in, and
+ * which end the symbol turns about — and for the two blocks those parted company on
+ * 2026-09-06. 270501 and 340100 number the bar first, so the stored order is the plate's and
+ * the generator reads it straight; but the end a T should swing about is still the free end
+ * of its stem, which is where it swung before and is now simply the last of three points
+ * rather than the last of two. Listing them keeps the gesture exactly as it was while the
+ * reversal that used to imply it is gone. @see Block, drawOrder.ts
+ */
+const PIVOTS_ON_LAST_VERTEX: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Block,
+    TacticalGraphicName.TacticalBlock,
+];
+
 export function rotationAnchor(
     geometry: {type: string; coordinates: unknown},
     /**
@@ -682,7 +750,10 @@ export function rotationAnchor(
      * same coordinate these pivoted on before the renumbering, so the gesture is
      * unchanged — only the index it lives at moved. @see drawOrder.ts
      */
-    if (drawsTipFirst(name) && (geometry.type === 'LineString' || geometry.type === 'MultiLineString')) {
+    if (
+        (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) &&
+        (geometry.type === 'LineString' || geometry.type === 'MultiLineString')
+    ) {
         return positions[positions.length - 1];
     }
     if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
@@ -893,18 +964,41 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.LinearSmokeTarget]: 2,
 
     // The block family: the bar is drawn across the line the user gives it.
-    [TacticalGraphicName.TacticalBlock]: 2,
-    [TacticalGraphicName.Breach]: 2,
-    [TacticalGraphicName.Bypass]: 2,
-    [TacticalGraphicName.Canalize]: 2,
-    [TacticalGraphicName.Clear]: 2,
-    [TacticalGraphicName.TacticalDisrupt]: 2,
+    /*
+     * **Three, as 340100 and 270501 both state**: "Points 1 and 2 define the endpoints of the
+     * symbol's vertical line. Point 3 defines the endpoint of the symbol's horizontal line."
+     * Held at two until 2026-09-06, and the two it had were the *stem* — so the bar was a
+     * screen constant laid across the far end and neither its length nor its position was the
+     * operator's to state. @see Block, blockAnchors
+     */
+    [TacticalGraphicName.TacticalBlock]: 3,
+    /*
+     * 340200, 340300, 340500 and 340400-by-inheritance each state three: two for the front
+     * opening and one for the rear. @see frontEdgeFrame
+     */
+    [TacticalGraphicName.Breach]: 3,
+    [TacticalGraphicName.Bypass]: 3,
+    [TacticalGraphicName.Canalize]: 3,
+    [TacticalGraphicName.Clear]: 3,
+    /*
+     * **Three, as 341000 and 270502 both state**: points 1 and 2 the vertical line's ends,
+     * point 3 the tip of the longest arrow. Held at two along the arrows, which left the bar
+     * derived from `size`. @see Disrupt, disruptAnchors
+     */
+    [TacticalGraphicName.TacticalDisrupt]: 3,
     [TacticalGraphicName.Penetration]: 2,
     [TacticalGraphicName.Exploitation]: 2,
-    [TacticalGraphicName.Block]: 2,
-    [TacticalGraphicName.Disrupt]: 2,
+    [TacticalGraphicName.Block]: 3,
+    [TacticalGraphicName.Disrupt]: 3,
     [TacticalGraphicName.AttackByFire]: 2,
-    [TacticalGraphicName.SupportByFire]: 2,
+    /*
+     * **Four, which is what 152100 asks for**: "Points 1 and 2 define the endpoints of the
+     * straight line on the back side of the symbol. Points 3 and 4 define the tips of the
+     * arrowheads." It was two — a shaft — off which the bar, both arrows and their spread were
+     * all computed by ratio, so the "left and right limits of coverage" the arrowheads are
+     * supposed to indicate were limits nobody stated. @see supportByFireFromAnchors
+     */
+    [TacticalGraphicName.SupportByFire]: 4,
 
     /*
      * **The seven cane arrows: three, not two.** APP-06 gives each of them "three anchor
@@ -1378,7 +1472,34 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
  */
 export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
     if ((baseVertexCount(name) ?? 2) < 3) return false;
-    return isMovementGraphic(name) || name === TacticalGraphicName.MobileDefense || CANE_ARROW_GRAPHICS.includes(name);
+    return (
+        isMovementGraphic(name) ||
+        name === TacticalGraphicName.MobileDefense ||
+        CANE_ARROW_GRAPHICS.includes(name) ||
+        /*
+         * **The four bracket mission tasks state it in points 1 and 2, not in point 3.**
+         *
+         * The separation still lives in the base, which is what this predicate is for — it is
+         * the *opening*, and 340200/340300/340500 give its two ends their own anchor points
+         * ("points 1 and 2 determine the symbol's height"). Point 3 gives the length instead.
+         * Different points, same fact: a `width` stamped beside them is a second copy.
+         *
+         * Left out, MapLibre defaulted one — 97,839 m on a breach — where OpenLayers wrote
+         * none, so the same symbol saved differently on the two engines. It had been masked
+         * by `ratioLockedSize`, which cleared the width as a side effect and stopped doing so
+         * when these four left `RATIO_LOCK`. @see frontEdgeFrame
+         */
+        BRACKET_GRAPHICS.includes(name) ||
+        /*
+         * **Block, disrupt and support by fire, for the same reason and with the same
+         * symptom.** Their vertical line — support by fire's back line — is points 1 and 2,
+         * so the perpendicular is stated and a `width` beside it is a second copy. Disrupt
+         * and support by fire had it masked by `RATIO_LOCK` in exactly the way the four
+         * brackets did, and block never defaulted one only because it was never locked.
+         * @see PLACED_BLOCK_GRAPHICS
+         */
+        PLACED_BLOCK_GRAPHICS.includes(name)
+    );
 }
 
 /** How many points this graphic's base takes, or `undefined` for no limit. */

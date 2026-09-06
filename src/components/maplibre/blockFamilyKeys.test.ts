@@ -55,10 +55,15 @@ describe('what the block family files', () => {
      * **And a stale one from a snapshot cannot win.** That is why the derivation is spread
      * after the caller's properties: it answers the question outright rather than deferring
      * to whatever a file happened to carry.
+     *
+     * Asserted on the one member still ratio-locked. It used to read `Disrupt`, which left
+     * `RATIO_LOCK` on 2026-09-06 along with support by fire and the four brackets — and
+     * `ratioLockedSize` is what does the clearing, so only a locked name still does it.
      */
     it('overrides a radius and a width that arrive with the description', () => {
+        expect(ratioLockOf(TacticalGraphicName.AttackByFire)).toBeDefined();
         const built = buildTacticalGraphic(
-            TacticalGraphicName.Disrupt,
+            TacticalGraphicName.AttackByFire,
             LINE,
             {radius: 999_000, width: 999_000},
             RES,
@@ -67,6 +72,30 @@ describe('what the block family files', () => {
         expect(built!.properties.width).toBeUndefined();
         expect(built!.properties.decorationSize).toBeGreaterThan(0);
     });
+
+    /**
+     * **A member whose points are placed does not need the clearing, because the numbers are
+     * inert.** Nothing derives its shape from `radius` or `width` any more — the base carries
+     * the anchor points the plate names — so a stale pair riding in from an old snapshot
+     * changes no ink. That is the guarantee that replaced the guard, and it is the stronger
+     * of the two: the old one depended on a lock that had to be remembered.
+     */
+    it.each([TacticalGraphicName.Disrupt, TacticalGraphicName.SupportByFire, TacticalGraphicName.Breach])(
+        'draws the same symbol whatever stale size rides along — %s',
+        name => {
+            const points = {
+                [TacticalGraphicName.Disrupt]: [[0, 0.05], [0, -0.05], [0.08, 0]],
+                [TacticalGraphicName.SupportByFire]: [[-0.05, 0], [0.05, 0], [-0.07, 0.12], [0.07, 0.12]],
+                [TacticalGraphicName.Breach]: [[0, 0.05], [0, -0.05], [0.08, 0]],
+            }[name as string]!;
+            const base = {type: 'LineString' as const, coordinates: points};
+            const clean = buildTacticalGraphic(name, base, {}, RES);
+            const stale = buildTacticalGraphic(name, base, {radius: 999_000, width: 999_000}, RES);
+            // The *ink*, not the bag: a stale snapshot still carries its old `radius` and
+            // `width` in `properties`, and the point is precisely that nothing reads them.
+            expect(JSON.stringify(stale!.graphic.geometry)).toEqual(JSON.stringify(clean!.graphic.geometry));
+        },
+    );
 
     /** The families that genuinely have rails keep theirs. */
     it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge, TacticalGraphicName.MainAxisOfAdvance])(

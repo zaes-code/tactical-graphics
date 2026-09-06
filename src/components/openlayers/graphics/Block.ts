@@ -66,6 +66,18 @@ export class Block implements LineGraphic {
     /** @see LineGraphic.offsetScale — read off the controller by the manager. */
     offsetScale?: number;
     private ratioLock: number | undefined;
+
+    /**
+     * Whether this graphic's base holds the anchor points its plate names, rather than a
+     * two-point axis plus a size derived beside it.
+     *
+     * True for the four bracket mission tasks once drawn, and false for one of them restored
+     * from a snapshot written before 2026-09-06 — which is the point of asking the geometry
+     * rather than the registry. @see updateGeometry
+     */
+    private get anchorsAreInTheBase(): boolean {
+        return (this.base.getGeometry()?.getCoordinates()?.length ?? 0) >= 3;
+    }
     /**
      * Suspends the `MIN_BASE_PX` floor below while a snapshot is rebuilt.
      *
@@ -213,8 +225,10 @@ export class Block implements LineGraphic {
     }
 
     getFeatures(): Feature[] {
-        if (this.ratioLock !== undefined) {
-            // Drop the offset handle entirely so it never renders or accepts drags.
+        // A ratio-locked graphic has no width to drag, and one whose base carries its own
+        // anchor points has no *derived* handle at all — in both cases the offset handle is
+        // dropped entirely so it never renders or accepts a drag.
+        if (this.ratioLock !== undefined || this.anchorsAreInTheBase) {
             return [this.graphic, this.handles, this.labels, this.base];
         }
         return [this.graphic, this.handles, this.labels, this.base, this.offsetHandle];

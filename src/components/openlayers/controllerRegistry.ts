@@ -148,6 +148,41 @@ const block = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 2, name);
 
 /**
+ * The four bracket mission tasks: three placed points, every one of them grabbable.
+ *
+ * Capped at two until 2026-09-06, with the opening's height derived as a locked 0.3 of the
+ * drawn length — so the third anchor point APP-06 gives them could not be placed, and the
+ * height and the length their plates state *separately* were one number. Same holder as
+ * `block`, which draws them; only the draw and the grips change.
+ * @see frontEdgeFrame, Breach
+ */
+const bracket = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 3, name).enableVertexDragging(3);
+
+/**
+ * Block and disrupt: three placed points, every one of them grabbable.
+ *
+ * Capped at two until 2026-09-06, and the two were the *stem* — block's crossbar was a screen
+ * constant laid across the far end, disrupt's vertical line the same. Both plates place that
+ * line instead: "Points 1 and 2 define the endpoints of the symbol's vertical line."
+ * Same holder as `block`, which draws them; only the draw and the grips change.
+ * @see Block, Disrupt, blockAnchors, disruptAnchors
+ */
+const barAndStem = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 3, name).enableVertexDragging(3);
+
+/**
+ * 152100 support by fire: **four** placed points — the bar's two ends and both arrow tips.
+ *
+ * The only four-point member of this family, and the one the user's three-point list turned
+ * out not to cover: its plate asks for four outright. It was two, off which the bar, both
+ * arrows and their spread were computed by ratio, so the "left and right limits of coverage"
+ * its arrowheads indicate were limits nobody had stated. @see supportByFireFromAnchors
+ */
+const firePosition = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 4, name).enableVertexDragging(4);
+
+/**
  * The seven cane arrows: three placed points, every one of them grabbable.
  *
  * Capped at two until 2026-09-06, with the arc's diameter carried as a `size` amplifier and
@@ -692,12 +727,12 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.UnmannedAircraftCorridor]:                  corridor,
 
     // ── Block/Breach/Bypass family (max 2 pts) ─────────────────────────────
-    [TacticalGraphicName.TacticalBlock]:       block,
-    [TacticalGraphicName.Breach]:      block,
-    [TacticalGraphicName.Bypass]:      block,
-    [TacticalGraphicName.Canalize]:    block,
-    [TacticalGraphicName.Clear]:       block,
-    [TacticalGraphicName.TacticalDisrupt]:     block,
+    [TacticalGraphicName.TacticalBlock]:       barAndStem,
+    [TacticalGraphicName.Breach]:      bracket,
+    [TacticalGraphicName.Bypass]:      bracket,
+    [TacticalGraphicName.Canalize]:    bracket,
+    [TacticalGraphicName.Clear]:       bracket,
+    [TacticalGraphicName.TacticalDisrupt]:     barAndStem,
     [TacticalGraphicName.Penetration]: block,
     [TacticalGraphicName.Exploitation]: block,
 
@@ -782,8 +817,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // differing only in that they draw no letter, so each takes the identical
     // controller. They do not share one factory: Turn is point-anchored while
     // the other three are drawn as a two-point line.
-    [TacticalGraphicName.Block]:    block,
-    [TacticalGraphicName.Disrupt]:  block,
+    [TacticalGraphicName.Block]:    barAndStem,
+    [TacticalGraphicName.Disrupt]:  barAndStem,
     [TacticalGraphicName.Fix]:      vertexLine(2, 2),
     [TacticalGraphicName.Turn]:     turn,
 
@@ -848,7 +883,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Additional mission task block arrows ────────────────────────────────
     [TacticalGraphicName.AttackByFire]:     block,
-    [TacticalGraphicName.SupportByFire]:    block,
+    [TacticalGraphicName.SupportByFire]:    firePosition,
     // Excluded — see ai/excluded-graphics.md
     // [TacticalGraphicName.FollowAndAssume]:  block,
     // [TacticalGraphicName.FollowAndSupport]: block,
