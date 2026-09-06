@@ -209,6 +209,28 @@ export function securityOperationBaseCentre(coords: readonly Position[] | undefi
 }
 
 /** The arrowhead's barb, as a share of the arm's length, and its half-angle in degrees. */
+/**
+ * What the fold does to the straight line between an arm's two anchor points.
+ *
+ * `ARM_PROFILE` steps sideways by `ARROW_DEPTH_PX` before the arrowhead, so an arm's inner
+ * end and its tip are **not** on one axis — the inner end sits on the upper run and the tip
+ * on the lower one. 342201's Template draws exactly that: `PT. 2` points at the inner end
+ * beside the letter, and `PT. 1` at the tip of the arrowhead, a step below it.
+ *
+ * Both of those are points the operator places, so the arm has to be built to land on both.
+ * The chord between them therefore runs `FOLD_ANGLE_DEG` off the arm's own axis and is
+ * `FOLD_CHORD_STRETCH` times its length — which is all it takes to invert: the axis is the
+ * chord turned back by that angle, and the arm is the chord divided by that factor.
+ *
+ * Before this the profile was laid along the *chord* and the drawn tip came out a step
+ * beside point 1 — about 15% of an arm — so the handle an operator grabs to move an
+ * arrowhead did not sit on the arrowhead. (User's call, 2026-09-06: "point 1 and point 4
+ * should be where the arrow tip is and where the handles should be".)
+ */
+const FOLD_DEPTH_RATIO = ARROW_DEPTH_PX / ARM_PX;
+const FOLD_ANGLE_DEG = (Math.atan(FOLD_DEPTH_RATIO) * 180) / Math.PI;
+const FOLD_CHORD_STRETCH = Math.sqrt(1 + FOLD_DEPTH_RATIO * FOLD_DEPTH_RATIO);
+
 const ARROW_HEAD_RATIO = SECURITY_OPERATION_PX.arrowHeadLength / ARM_PX;
 const ARROW_HEAD_DEGREE = SECURITY_OPERATION_PX.arrowHeadDegree;
 
@@ -286,10 +308,24 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
         return {tip, inner, otherInner, otherTip, arm, otherArm, outward, otherOutward, centre};
     }
 
-    /** One arm, from its inner end outward along `bearing`, with the arrowhead at its tip. */
-    private arm(innerEnd: Position, bearing: number, arm: number, mirrored: boolean): Position[][] {
-        const across = (value: number) => (mirrored ? -value : value) * arm;
+    /**
+     * One arm, spanning **its own two anchor points**: the inner end and the arrowhead's tip.
+     *
+     * The axis is recovered from the chord rather than given, because the fold means the two
+     * ends do not lie on it. @see FOLD_ANGLE_DEG
+     */
+    private arm(innerEnd: Position, tip: Position, mirrored: boolean): Position[][] {
+        const side = mirrored ? -1 : 1;
+        const chord = turf.distance(turf.point(innerEnd), turf.point(tip), {units: 'meters'});
+        const bearing = turf.bearing(turf.point(innerEnd), turf.point(tip)) + side * FOLD_ANGLE_DEG;
+        const arm = chord / FOLD_CHORD_STRETCH;
+
+        const across = (value: number) => side * value * arm;
         const line = ARM_PROFILE.map(([along, lateral]) => at(innerEnd, bearing, along * arm, across(lateral)));
+        // **Pinned, not merely arrived at.** The construction above lands on the tip to
+        // floating-point precision; assigning it makes "the handle is on the arrowhead" exact
+        // rather than nearly true, which is what a grip has to be to look right.
+        line[line.length - 1] = tip;
 
         // The barb sits on the last segment, opening back down it. Built from the two points
         // that segment runs between, so it follows the step rather than the axis.
@@ -327,8 +363,8 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
          * shipped, not a reproduction of it, and it is recorded as one.
          */
         return this.asMultiLineStringFeature([
-            ...this.arm(f.inner, f.outward, f.arm, false),
-            ...this.arm(f.otherInner, f.otherOutward, f.otherArm, true),
+            ...this.arm(f.inner, f.tip, false),
+            ...this.arm(f.otherInner, f.otherTip, true),
         ]);
     }
 

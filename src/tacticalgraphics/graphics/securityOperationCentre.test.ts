@@ -195,4 +195,37 @@ describe('342201: the two arrows vary independently', () => {
         const asSketch = securityOperationAnchors([TIP, INNER, onAxis[2]])!;
         onAxis.forEach((point, i) => expect(meters(asSketch[i], point)).toBeLessThan(1));
     });
+
+    it('draws each arrowhead tip exactly on the point that placed it', () => {
+        /*
+         * > Point 1 and Point 4 define the ends of their respective arrowheads.
+         *
+         * 342201's Template letters `PT. 1` at the tip of the arrowhead and `PT. 2` at the
+         * inner end beside the letter — a step above it, because the arm folds between them.
+         * The profile was laid along the *chord* between the two, which put the drawn tip a
+         * step beside point 1: about 15% of an arm, so the grip an operator reaches for to
+         * move an arrowhead did not sit on the arrowhead. (User's call: "point 1 and point 4
+         * should be where the arrow tip is and where the handles should be".)
+         */
+        const parts = (rendered(FOUR).graphic.geometry as MultiLineString).coordinates;
+        const [armA, headA, armB, headB] = parts;
+        // The arm's own last point is the tip...
+        expect(meters(armA[armA.length - 1], P1)).toBeLessThan(0.01);
+        expect(meters(armB[armB.length - 1], P4)).toBeLessThan(0.01);
+        // ...and so is the middle of the barb, which is the arrowhead proper.
+        expect(meters(headA[1], P1)).toBeLessThan(0.01);
+        expect(meters(headB[1], P4)).toBeLessThan(0.01);
+    });
+
+    it('keeps the fold, so an arm is not just a straight line to its tip', () => {
+        // Pinning both ends must not flatten the step: the fold is what tells these three
+        // apart from a plain double-headed arrow, and it survived a straightening once
+        // before. @see ARM_PROFILE
+        const [armA] = (rendered(FOUR).graphic.geometry as MultiLineString).coordinates;
+        expect(armA.length).toBeGreaterThanOrEqual(4);
+        const chord = turf.bearing(turf.point(armA[0]), turf.point(armA[armA.length - 1]));
+        const firstRun = turf.bearing(turf.point(armA[0]), turf.point(armA[1]));
+        // The opening run leaves the chord by the fold's own angle, not along it.
+        expect(Math.abs(firstRun - chord)).toBeGreaterThan(3);
+    });
 });
