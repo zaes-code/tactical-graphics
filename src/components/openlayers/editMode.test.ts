@@ -506,23 +506,47 @@ describe('the width handle', () => {
 });
 
 /**
- * The retrograde family publishes `handleCoords[0]` — the contract's `mirror` handle —
- * as its own offset feature and `slice(1)` as `handles`. Without the declared shift the
- * arrow tip arrives at `handleRole` as index 0 and is answered "mirror", so the manager
- * claims its drag as a flip and the handle does nothing at all.
+ * A holder that peels a handle off the contract's list into a feature of its own has to say
+ * so, or every index after it arrives at `handleRole` one place early and is answered with
+ * the wrong role.
+ *
+ * **The seven cane arrows stopped doing that on 2026-09-06.** They published the contract's
+ * `mirror` handle as a separate offset feature and `slice(1)` as `handles`, so without the
+ * shift the arrow tip arrived as index 0, was answered "mirror", and the manager claimed its
+ * drag as a flip — the handle did nothing at all. They have three shape grips and no mirror
+ * now, so there is nothing to peel off and no shift to declare. @see RetrogradeTask
  */
 describe('a handle index is a contract index', () => {
+    /**
+     * **341900 no longer shifts either, as of 2026-09-06.** Its holder peeled `handleCoords[0]`
+     * off to an offset handle — the U's height, a number beside the base — so every published
+     * index sat one behind the contract's. The plate names four anchor points and each is
+     * placed now, so there is no offset to peel and the two index spaces are the same one.
+     * Asserted rather than dropped, because "this used to shift and must not any more" is
+     * exactly what a regression would undo. @see ReliefInPlace
+     */
+    it('relief in place declares no shift, now that all four grips are vertices', () => {
+        const manager = stubbedManager();
+        const handler = build(manager, TacticalGraphicName.ReliefInPlace, 'a');
+        expect(handler.handleIndexOffset ?? 0).toBe(0);
+    });
+
+    /**
+     * The cane arrows publish the contract's list unchanged now, so they belong with the
+     * graphics below that declare no shift — asserted here rather than dropped, because
+     * "this used to shift and must not any more" is the thing a regression would undo.
+     */
     it.each([
         TacticalGraphicName.Retirement,
         TacticalGraphicName.Withdraw,
         TacticalGraphicName.WithdrawUnderPressure,
         TacticalGraphicName.ForwardPassageOfLines,
         TacticalGraphicName.RearwardPassageOfLines,
-        TacticalGraphicName.ReliefInPlace,
-    ])('%s declares the shift its holder applied', name => {
+        TacticalGraphicName.Delay,
+        TacticalGraphicName.Disengage,
+    ])('%s no longer shifts, because it no longer peels a handle off', name => {
         const manager = stubbedManager();
-        const handler = build(manager, name, 'a');
-        expect(handler.handleIndexOffset).toBe(1);
+        expect(build(manager, name, 'a').handleIndexOffset ?? 0).toBe(0);
     });
 
     /** A holder that renders the contract list unchanged must not claim a shift. */

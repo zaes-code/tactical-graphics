@@ -274,6 +274,23 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
          * 152800's arc is tangent to *both* of its parallel straights, so its diameter has to
          * leave point 2 at a right angle. @see mobileDefenceAnchors
          */
+        /*
+         * **The seven cane arrows read their clicks the same way**, because APP-06 states
+         * their Anchor Points and Size/Shape in the same words as 152800's, minus the barbs
+         * clause: point 1 the arrowhead tip, point 2 the end of the straight line, point 3
+         * the diameter and side of the 180 degree arc. 342500 has no cell of its own and
+         * inherits 342400's. @see RetrogradeTask, which quotes the paragraph in full
+         *
+         * The arc is perpendicular to the line for these too, so the third click keeps only
+         * its across-axis component — the same projection, at the same point 2.
+         */
+        case TacticalGraphicName.Delay:
+        case TacticalGraphicName.Retirement:
+        case TacticalGraphicName.Withdraw:
+        case TacticalGraphicName.WithdrawUnderPressure:
+        case TacticalGraphicName.Disengage:
+        case TacticalGraphicName.ForwardPassageOfLines:
+        case TacticalGraphicName.RearwardPassageOfLines:
         case TacticalGraphicName.MobileDefense:
             return mobileDefenceAnchors(clicks);
 
@@ -405,6 +422,12 @@ function sideAnchors(clicks: Position[]): Position[] | undefined {
  *
  * Written to match `MobileDefense.frame` bearing for bearing, so the point that is stored
  * and the point that is drawn are the same point.
+ *
+ * **Shared with the seven cane arrows** as of 2026-09-06 — delay, retirement, withdraw,
+ * withdraw under pressure, disengage and the two passages of lines all state this rule in
+ * the same words, and `RetrogradeTask.frame` reads its three the same way round. Nothing
+ * here is 152800-specific; the name is kept because that is the plate the reading was
+ * derived from. @see RetrogradeTask
  *
  * **Three clicks only.** A two-point base is left exactly as it is: the only ones in
  * existence are the ellipses saved before 2026-09-06, and the side their arc fell on is in

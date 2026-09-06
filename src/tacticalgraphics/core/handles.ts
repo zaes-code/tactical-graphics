@@ -116,8 +116,14 @@ export interface HandleContract {
  */
 const MIRROR_HANDLE_AT_0: HandleContract = {roles: ['mirror', 'shape'], repeating: 'shape'};
 
-/** The graphics that wear it. @see MIRROR_HANDLE_AT_0 */
-const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+/**
+ * The seven tasks drawn as a straight line with a 180 degree cane on its back end.
+ *
+ * One APP-06 rule between them, quoted in full on the generator: point 1 the arrowhead tip,
+ * point 2 the end of the straight line, point 3 the arc's diameter and side. 342500 has no
+ * Draw Rules cell and inherits 342400's. @see RetrogradeTask
+ */
+const CANE_ARROW_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
     TacticalGraphicName.WithdrawUnderPressure,
@@ -125,6 +131,14 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Retirement,
     TacticalGraphicName.ForwardPassageOfLines,
     TacticalGraphicName.RearwardPassageOfLines,
+];
+
+/** The graphics that wear it. @see MIRROR_HANDLE_AT_0 */
+const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    // The seven cane arrows left on 2026-09-06, for the reason 152800 left the day before:
+    // their point 3 states which side the arc falls on, so dragging it across the line *is*
+    // the flip, and a grip whose only job is to flip is no longer something they need.
+    // @see RetrogradeTask
     // These three carry the handle elsewhere in their own contracts below, but they
     // mirror just the same, and `supportsMirror` is the question a panel or a test asks.
     TacticalGraphicName.Abatis,
@@ -402,6 +416,12 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
      * `handleRole`'s own note describes for the corridors. @see carriesSeparationInBase
      */
     /*
+     * **The seven cane arrows answer here too.** All three of their grips are placed anchor
+     * points, so all three are `shape`. They published `[mirror, shape]` until 2026-09-06:
+     * one grip that only turned the symbol over and one for the arrowhead, with the arc's
+     * own diameter reachable from neither, though APP-06 gives all seven a third anchor
+     * point that states it. @see RetrogradeTask
+     *
      * **152800 answers here too, and its history is worth keeping.** It published
      * `[end, mirror]` until 2026-09-06 — one grip that resized and one whose only job was to
      * flip the symbol across its own axis, because the side of the arc was a hidden
@@ -1307,6 +1327,13 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
  *
  * Derived from the vertex count rather than listed: a graphic of this shape with three base
  * points has nowhere else for the third to be. @see halfWidthFromSide
+ *
+ * **The seven cane arrows joined on 2026-09-06.** Their point 3 states the diameter of the
+ * 180 degree arc and which side of the line it falls on - a distance measured across the
+ * drawn line, which is what this predicate is about, even though the thing it separates is
+ * an arc rather than a pair of rails. Without them MapLibre went on defaulting a `width`
+ * their generator ignores, while OpenLayers wrote none: the two engines saved the same
+ * symbol differently. @see RetrogradeTask
  *
  * **152800 is named rather than derived**, because it is the one member that is not a
  * movement graphic — `isMovementGraphic` is false for it, so the derivation alone missed it
