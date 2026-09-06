@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -1718,6 +1718,13 @@ export class MapLibreInteractions {
      * OpenLayers, which inserts on a phase line and an assembly area and refuses on a
      * fields-of-fire; this reproduces that split from the same two library facts rather
      * than from a list. @see baseVertexCount, editStretches
+     *
+     * **A graphic that takes vertices need not take one *here*.** An abatis's route runs
+     * through its own chevron, so the head of the line is inside the symbol and a point
+     * dropped in there breaks the tooth. `acceptsInsertedVertex` is that third fact, asked
+     * of the place the vertex would actually land. Refusing here also takes the hint marker
+     * away with it, so nothing offers an insertion that would be refused.
+     * @see updateVertexHint
      */
     private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
         if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
@@ -1728,7 +1735,15 @@ export class MapLibreInteractions {
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return -1;
 
-        return this.nearestSegment(graphic, point)?.index ?? -1;
+        const near = this.nearestSegment(graphic, point);
+        if (!near) return -1;
+
+        const toPixel = (position: Position): [number, number] => {
+            const projected = this.map.project([position[0], position[1]]);
+            return [projected.x, projected.y];
+        };
+        if (!acceptsInsertedVertex(graphic.name, positions.map(toPixel), toPixel(near.position))) return -1;
+        return near.index;
     }
 
     /**

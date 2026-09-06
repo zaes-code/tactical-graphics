@@ -114,6 +114,34 @@ export function hasBakedDecoration(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * The graphics whose fixed decoration is built **on the head of the drawn base itself**,
+ * so the first stretch of the line is inside the symbol rather than beside it.
+ *
+ * Abatis is the one, and 280100 is why: the route runs *into* the chevron and out the
+ * other side, so the first `size` metres of the base are the tooth's own opening — the
+ * two legs and the gap between them. A vertex placed in there is a vertex inside the
+ * symbol. @see Abatis.path
+ *
+ * Distinct from every other entry in `DECORATION_PX`. A bridge's ticks, a wire's crosses
+ * and the convoys' body all hang *off* the line and leave it whole underneath, so a
+ * vertex anywhere along those is a bend in a road and nothing more.
+ */
+const HEAD_DECORATION_GRAPHICS: readonly TacticalGraphicName[] = [TacticalGraphicName.Abatis];
+
+/**
+ * How much of this graphic's base, from its first point, its own furniture occupies — in
+ * screen pixels at the drawing zoom — or `undefined` for a graphic that reserves nothing.
+ *
+ * Read off `DECORATION_PX` rather than restated, because it *is* the decoration's size:
+ * the chevron spans exactly the `size` the renderer hands the generator, and a second copy
+ * of 26 here would be a number that could drift from the one being drawn.
+ * @see HEAD_DECORATION_GRAPHICS, acceptsInsertedVertex
+ */
+export function reservedLeadPx(name: TacticalGraphicName): number | undefined {
+    return HEAD_DECORATION_GRAPHICS.includes(name) ? DECORATION_PX[name] : undefined;
+}
+
+/**
  * Arrowhead length in screen pixels at the drawing zoom, for the two point-anchored
  * curves that take it as a **flat distance** rather than a fraction of their size.
  *
