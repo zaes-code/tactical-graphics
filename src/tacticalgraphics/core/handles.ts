@@ -307,8 +307,6 @@ export function ratioLockOf(name: TacticalGraphicName): number | undefined {
  * sets. A handle drawn three widths out needs a third of the drag.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // The handle sits on the rail itself, one radius off the center line.
-    [TacticalGraphicName.InfiltrationLane]: 1,
     // The handle is the end of the front line, drawn at 3 × size.
     [TacticalGraphicName.Penetration]: 1 / 3,
     // The handle is the end of the crossbar, drawn at 1 × size.
@@ -726,12 +724,17 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FerryCrossing]: 2,
     /*
      * 140800: *"requires three anchor points. Points 1 and 2 define the endpoints of the
-     * infiltration lane and point 3 defines one side of the lane."* Points 1 and 2 are the
-     * centreline, so two vertices is the whole of what is drawn — the third is the width
-     * handle. It had no cap at all until 2026-09-05, so the centreline took as many
-     * vertices as the operator kept clicking.
+     * infiltration lane and point 3 defines one side of the lane."*
+     *
+     * **Three, because the third point is one of them.** This was 2 on the reading that
+     * points 1 and 2 are "the whole of what is drawn" and the third is a width handle — but
+     * the standard calls it an anchor point, and the demolition block, whose rule 271201
+     * states in the same words, has stored it as a vertex since 2026-09-05. Holding it at 2
+     * kept the separation in a `width` amplifier beside a base that already described it,
+     * which is the second copy `carriesSeparationInBase` exists to prevent, and ended the
+     * draw on the second click with the width never asked for. (User's call, 2026-09-05.)
      */
-    [TacticalGraphicName.InfiltrationLane]: 2,
+    [TacticalGraphicName.InfiltrationLane]: 3,
     /*
      * 271204's own Draw Rules cell is empty and the row inherits 271201's, which gives the
      * whole demolition block a centreline and a width. It was dropped on one point until
@@ -1159,3 +1162,20 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
 export function baseVertexCount(name: TacticalGraphicName): number | undefined {
     return BASE_VERTEX_COUNT[name];
 }
+    /*
+     * **The demolition block, for the same reason, from 2026-09-05.** Its three points are
+     * two jobs: dragging an end sets the symbol's length and dragging the side point sets
+     * how far apart the rails sit. Letting a stray drag scale the whole graphic moved both
+     * at once — reported as "the middle-outer drag changes the width but also resizes the
+     * whole graphic". The resize affordance still scales it, which is the control that
+     * means to. @see carriesSeparationInBase
+     */
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.RoadblockCompleteExecuted,
+    // 140800 joined the same contract on 2026-09-05 and needs the same protection: its
+    // ends set the lane's length and its side point sets the width, and a stray drag that
+    // scaled the whole graphic would move both. @see carriesSeparationInBase
+    TacticalGraphicName.InfiltrationLane,

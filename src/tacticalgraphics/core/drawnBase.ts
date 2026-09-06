@@ -252,6 +252,52 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
  * 141700's three points from two clicks: the tip, and one end of the curved back.
  *
  * *"Points 2 and 3 define the endpoints of the curved line on the back side of the
+        /*
+         * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**
+         *
+         * The same constraint pursuit's third click carries, for the same geometric reason:
+         * 152800's arc is tangent to *both* of its parallel straights, so its diameter has to
+         * leave point 2 at a right angle. The click is read for how far across the line it is
+         * and which side it fell on, and placed on that perpendicular — a point off it
+         * describes a hairpin that does not close.
+         *
+         * The one difference from 344000 is which end is numbered first: mobile defence's
+         * point 1 is the arrowhead tip, pursuit's is the line's beginning. That is a matter
+         * for `TIP_FIRST_GRAPHICS`, which already lists 152800, and not for the arithmetic
+         * here — the clicks arrive in the standard's own order either way, and the
+         * perpendicular is measured at point 2 in both. @see MobileDefense.frame
+         */
+        /*
+         * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**
+         *
+         * The same constraint pursuit's third click carries, for the same geometric reason:
+         * 152800's arc is tangent to *both* of its parallel straights, so its diameter has to
+         * leave point 2 at a right angle. @see mobileDefenceAnchors
+         */
+        case TacticalGraphicName.MobileDefense:
+            return mobileDefenceAnchors(clicks);
+
+        /*
+         * **The demolition block — three clicks: the two ends, then the separation.**
+         *
+         * 271201, and 271204 by inheritance: *"Points 1 and 2 define the endpoints of the
+         * symbol and point 3 defines the location of one side of the symbol"*, with points
+         * 1 and 2 the centreline and point 3 its width. Only how far point 3 lies *across*
+         * the centreline means anything — its component along it would slide the handle up
+         * and down a rail without changing the symbol — so it is put on the perpendicular
+         * at the centreline's midpoint, which is the middle of the side it names.
+         */
+        case TacticalGraphicName.ExplosivesPlannedStateOfReadiness:
+        case TacticalGraphicName.ExplosivesStateOfReadiness1Safe:
+        case TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable:
+        // Excluded — see ai/excluded-graphics.md
+        // case TacticalGraphicName.RoadblockCompleteExecuted:
+        // 140800 states the same rule in the same words — *"points 1 and 2 define the
+        // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
+        // so it reads its clicks the same way. (User's call, 2026-09-05.)
+        case TacticalGraphicName.InfiltrationLane:
+            return sideAnchors(clicks);
+
  * symbol. The rear of the arrowhead line shall connect to the midpoint of the line
  * between points 2 and 3. The arrowhead line shall be perpendicular to the line formed by
  * points 2 and 3."* Those constraints leave a family of symbols rather than one, so the
