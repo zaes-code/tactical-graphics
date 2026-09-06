@@ -313,6 +313,20 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
         // so it reads its clicks the same way. (User's call, 2026-09-05.)
         case TacticalGraphicName.InfiltrationLane:
+        /*
+         * **The four bracket mission tasks read their clicks the same way.** 340200 breach,
+         * 340300 bypass and 340500 clear each give points 1 and 2 to a front edge — the
+         * opening, the arrowhead tips, the vertical line — and point 3 to the rear; 340400
+         * canalize has an empty Draw Rules cell and inherits 340300's. Only how far point 3
+         * lies *across* that edge means anything, because all three state that the rear line
+         * is "the same height as the opening and parallel to it", so nothing in the symbol
+         * can express an along-edge offset. That is the projection `sideAnchors` performs.
+         * @see frontEdgeFrame, Canalize for the inheritance reading
+         */
+        case TacticalGraphicName.Breach:
+        case TacticalGraphicName.Bypass:
+        case TacticalGraphicName.Canalize:
+        case TacticalGraphicName.Clear:
             return sideAnchors(clicks);
 
         default:
