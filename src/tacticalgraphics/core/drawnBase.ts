@@ -213,8 +213,43 @@ export function frontEdgeBase(center: Position, half: number, points = 3, across
  * apart in every sample. (User's report, 2026-09-06: "sweep shows handles out of place".)
  */
 export function acrossPointAtEnd(name: TacticalGraphicName): boolean {
-    return name === TacticalGraphicName.Disrupt || name === TacticalGraphicName.TacticalDisrupt;
+    return ACROSS_POINT_AT_END.includes(name);
 }
+
+/**
+ * The graphics whose across-the-edge point sits at the **point-2 end**. @see acrossPointAtEnd
+ *
+ * Two shapes, one consequence. 270502 disrupt puts point 3 at "the tip of the longest arrow",
+ * and that arrow is the one at point 2. The cane arrows, mobile defence and pursuit put it at
+ * the far end of the arc's **diameter**, and the arc hooks off point 2 — so for all of them
+ * the third point belongs beside point 2, not half way along the run.
+ *
+ * Put in the middle, the generator still draws the symbol correctly, because it reads only
+ * the distance across. But the *grip* is published where the arc actually is, so one handle
+ * per graphic sat about half a symbol away from any stored point — and a handle that is not
+ * on a point cannot drag it. Measured on the cane arrows: one grip 0.482 off the nearest base
+ * point with the mid-edge base, 0 with this one. That is why every sample-drawn cane could
+ * not be dragged from point 3 while a hand-drawn one was fine — a hand-drawn base puts the
+ * point where the arc is, because that is where the operator clicked. (User's report,
+ * 2026-09-06.)
+ */
+const ACROSS_POINT_AT_END: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.TacticalDisrupt,
+    // The eight cane arrows: a straight run with a half circle hooked off point 2.
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.Retirement,
+    TacticalGraphicName.Withdraw,
+    TacticalGraphicName.WithdrawUnderPressure,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+    TacticalGraphicName.Disengage,
+    TacticalGraphicName.MobileDefense,
+    // Pursuit's own grips are re-derived so it reads correctly either way, but it is the same
+    // symbol as the seven above and a user reading the sheet should not be able to tell which
+    // of them was laid out differently. @see Pursuit
+    TacticalGraphicName.Pursuit,
+];
 
 /** Degrees CCW from east, which is the unit `anchorsFor*` take. */
 const degrees = (radians: number): number => (radians * 180) / Math.PI;
