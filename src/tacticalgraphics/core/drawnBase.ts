@@ -40,6 +40,7 @@ import {
     runAndArcFromAnchors,
 } from './anchors';
 import {securityOperationAnchors} from '../graphics/SecurityOperation';
+import {firePositionAnchors} from '../graphics/AdditionalMissionTasks';
 import * as turf from './turf';
 
 /**
@@ -584,6 +585,16 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.ObstacleBypassDifficult:
         case TacticalGraphicName.ObstacleBypassImpossible:
             return sideAnchors(clicks);
+
+        /*
+         * **152000 attack by fire: two clicks, three points** — the tip, then one end of the
+         * back line, with the other end its mirror. Its Size/Shape cell carries 141700
+         * ambush's two constraints word for word, so it has ambush's remaining freedom and
+         * closes it the same way: the shape is held and the click sets only the size.
+         * (User's call, 2026-09-06.) @see firePositionAnchors
+         */
+        case TacticalGraphicName.AttackByFire:
+            return firePositionAnchors(clicks);
 
         default:
             return undefined;

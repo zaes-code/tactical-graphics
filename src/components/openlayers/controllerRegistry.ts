@@ -178,6 +178,16 @@ const barAndStem = (name: TacticalGraphicName, res: number, sizing: number) =>
  * arrows and their spread were computed by ratio, so the "left and right limits of coverage"
  * its arrowheads indicate were limits nobody had stated. @see supportByFireFromAnchors
  */
+/**
+ * 152000 attack by fire: **two clicks, and a grip on each of the three points they make.**
+ *
+ * The draw is capped at two because its own Size/Shape constraints construct the third — the
+ * same trade 141700 ambush makes — and vertex dragging is enabled for all three, because once
+ * they are stored each is the operator's. @see firePositionAnchors
+ */
+const attackByFire = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 2, name).enableVertexDragging(3);
+
 const firePosition = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 4, name).enableVertexDragging(4);
 
@@ -901,7 +911,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.WeaponSensorRangeFanSector]:   rangeFan,
 
     // ── Additional mission task block arrows ────────────────────────────────
-    [TacticalGraphicName.AttackByFire]:     block,
+    // Two clicks, three placed points, every one grabbable. @see firePositionAnchors
+    [TacticalGraphicName.AttackByFire]:     attackByFire,
     [TacticalGraphicName.SupportByFire]:    firePosition,
     // Excluded — see ai/excluded-graphics.md
     // [TacticalGraphicName.FollowAndAssume]:  block,

@@ -19,6 +19,58 @@ import * as turf from '../core/turf';
 const FIRE_POSITION_BAR_RATIO = 0.45;
 
 /**
+ * APP-06 152000's three anchor points from two clicks: the tip, and one end of the back line.
+ *
+ * > Anchor Points: This symbol requires three anchor points. Point 1 is the tip of the
+ * > arrowhead. Points 2 and 3 define the endpoints of the straight line on the back side of
+ * > the symbol.
+ * >
+ * > Size/Shape: […] The rear of the arrowhead line shall connect to the midpoint of the line
+ * > between points 2 and 3. The arrowhead line shall be perpendicular to the line formed by
+ * > points 2 and 3.
+ *
+ * **Those last two sentences are 141700 ambush's, word for word**, and they have the same
+ * consequence: they leave a *family* of symbols rather than one. Fix the tip and one end of
+ * the back line and the remaining freedom is which way the axis runs — every choice satisfies
+ * "perpendicular" and "midpoint". Ambush closes it by holding the shape and letting the click
+ * set only the size, and this does the same, with the ratio the symbol is already drawn at.
+ * (User's call, 2026-09-06: "attack by fire should be same behaviour as ambush".)
+ *
+ * The arithmetic is a right triangle: the axis makes `atan(ratio)` with the click, so the
+ * shaft is `span / sqrt(1 + ratio^2)` and the bar's half-height is `ratio` times that. The
+ * click is kept **exactly** as point 2 and point 3 is its mirror across the axis, so the two
+ * ends are the same distance out by construction rather than by rounding.
+ */
+export function firePositionAnchors(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    /*
+     * **Three points are three placed points.** Only the *draw* constructs point 3; once it
+     * is stored it is the operator's, and a base that already has it is returned untouched.
+     * Recomputing it here from points 1 and 2 would have made a drag of the back line's far
+     * end spring back on every render — which is the shape of defect this same reader is
+     * meant to prevent, one point further on.
+     */
+    if (clicks.length >= 3) return clicks.slice(0, 3);
+
+    const [tip, click] = clicks;
+    const span = turf.distance(turf.point(tip), turf.point(click), {units: 'meters'});
+    if (!Number.isFinite(span) || span <= 0) return undefined;
+
+    const stretch = Math.sqrt(1 + FIRE_POSITION_BAR_RATIO * FIRE_POSITION_BAR_RATIO);
+    const shaft = span / stretch;
+    const skew = (Math.atan(FIRE_POSITION_BAR_RATIO) * 180) / Math.PI;
+    const axis = turf.bearing(turf.point(tip), turf.point(click)) - skew;
+
+    const middle = turf.destination(turf.point(tip), shaft, axis, {units: 'meters'}).geometry.coordinates as Position;
+    // Point 3 is point 2 reflected through the middle, which is what makes the middle their
+    // midpoint exactly — the plate's own words — rather than to floating-point precision.
+    const back = turf.distance(turf.point(middle), turf.point(click), {units: 'meters'});
+    const away = turf.bearing(turf.point(middle), turf.point(click)) + 180;
+    const other = turf.destination(turf.point(middle), back, away, {units: 'meters'}).geometry.coordinates as Position;
+    return [tip, click, other];
+}
+
+/**
  * Feather length as a share of the bar's half-length, and arrowhead length in the same
  * units — the two proportions 152100's plate leaves to the picture once its four points are
  * placed. Both carried over from `GeometryService`'s FIRE_POSITION_* set, which measured
@@ -141,7 +193,22 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<LineString | MultiLineString> {
         if (this.name === TacticalGraphicName.AttackByFire) {
-            return geometryService.getAttackByFireSymbol(base.geometry.coordinates, this.barHalf(base));
+            const coords = base.geometry.coordinates;
+            /*
+             * Three placed points as of 2026-09-06: the tip, and the back line's two ends.
+             * `getAttackByFireSymbol` wants the shaft as `[bar centre, tip]` and the bar's
+             * half-height, both of which the points give directly — the centre is the
+             * midpoint the plate names and the half-height is half the line between them.
+             * A base saved before that describes a shaft and nothing else, and the
+             * ratio-built symbol is what it still draws as. @see firePositionAnchors
+             */
+            if (coords.length >= 3) {
+                const [tip, one, two] = coords;
+                const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
+                const half = turf.distance(turf.point(one), turf.point(two), {units: 'meters'}) / 2;
+                return geometryService.getAttackByFireSymbol([middle, tip], half);
+            }
+            return geometryService.getAttackByFireSymbol(coords, this.barHalf(base));
         }
         if (this.name === TacticalGraphicName.SupportByFire) {
             const coords = base.geometry.coordinates;
@@ -159,6 +226,12 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
             // every one placed. There is no width to drag any more: the bar was a ratio of the
             // shaft and it is two anchor points now. @see handleContract
             return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
+        }
+        if (this.name === TacticalGraphicName.AttackByFire && base.geometry.coordinates.length >= 3) {
+            // `[point 1, point 2, point 3]` — the arrowhead's tip and the back line's two
+            // ends, every one placed. The bar was a ratio of the shaft and is two anchor
+            // points now, so there is no width left to drag. @see firePositionAnchors
+            return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
         }
         if (this.isFirePosition()) {
             // [offsetHandle (dropped by the openlayers Block holder — the symbol is
