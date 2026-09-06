@@ -203,6 +203,48 @@ export function frontEdgeBase(center: Position, half: number, points = 3, across
 }
 
 /**
+ * The base a **hairpin** graphic expects, for anything that has to synthesise one.
+ *
+ * 343300 demonstration and 341900 relief in place are two parallel legs closed by a half
+ * turn. Their three clicks are the first leg's tip, the first leg's bend, and a point across
+ * it that sizes the turn and picks its side — so a synthesised base states the legs along
+ * the full run and offsets the third point across, and `hairpinAnchors` fills in the fourth.
+ *
+ * **Stated here for the reason `frontEdgeBase` is.** Handed the generic four-point
+ * quadrilateral the sample sheet lays out, the normalisation squared it into a symbol half
+ * the intended width — correct, and unreadable next to its neighbours. The turn is `across`
+ * deep, so the legs are drawn a little short of the cell to leave it room.
+ *
+ * @param center the middle of the drawn figure, in the caller's own units
+ * @param half   its half-length, likewise — so this works in lon/lat and in metres alike
+ */
+export function hairpinBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const across = half * 0.5;
+    // Tip at the left, bend at the right, and the turn hanging below it: the run reads left
+    // to right like every other line sample, and the arrowheads land where the eye starts.
+    // The legs take the cell's full width — the turn's bulge overshoots it by a quarter,
+    // which is what an arrowhead does on every other line sample too.
+    return [[cx - half, cy + across / 2], [cx + half, cy + across / 2], [cx + half, cy - across / 2]];
+}
+
+/** Whether this graphic is drawn as a hairpin. @see hairpinBase, hairpinAnchors */
+export function drawsAsHairpin(name: TacticalGraphicName): boolean {
+    return HAIRPIN_GRAPHICS.includes(name);
+}
+
+/**
+ * The two graphics whose three clicks describe a hairpin. @see hairpinAnchors
+ *
+ * Both plates number four anchor points, and both store four — but the fourth carries no
+ * decision, since the legs must stay parallel and the same length. @see drawsAsHairpin
+ */
+const HAIRPIN_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Demonstration,
+    TacticalGraphicName.ReliefInPlace,
+];
+
+/**
  * Whether this graphic's across-the-edge point belongs at the **point-2 end** rather than
  * the middle, for anything synthesising a base. @see frontEdgeBase
  *

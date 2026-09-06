@@ -435,7 +435,7 @@ export {baseGeometryFor} from './core/render';
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
-export {acrossPointAtEnd, frontEdgeBase, normalizeDrawnBase} from './core/drawnBase';
+export {acrossPointAtEnd, drawsAsHairpin, frontEdgeBase, hairpinBase, normalizeDrawnBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
