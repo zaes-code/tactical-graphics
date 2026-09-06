@@ -1,5 +1,5 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, getPaintFunction, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     createBaseFeature,
@@ -9,6 +9,7 @@ import {
 } from '../openlayerStyles';
 import {MultiPoint} from "ol/geom";
 import type {StyleFunction} from 'ol/style/Style';
+import {asStyleFunction} from '../paintToOpenLayers';
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
@@ -62,6 +63,23 @@ export class RetrogradeTask implements LineGraphic {
         }
         this.setSymbolId('');
         this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));
+        /*
+         * **A separate label paint, for the graphics whose letter is not in their line work.**
+         *
+         * The seven retrograde arrows draw their own letter inside the graphic paint, so this
+         * holder never had a label feature worth styling and did not style one. 344000 pursuit
+         * does not: its paint cuts the gap for the "P" and something else has to put the
+         * letter in it. Moved onto this holder without that, it drew a run with a hole in the
+         * middle and no label at all. (User's report, 2026-09-06.)
+         *
+         * `getPaintFunction(name).label` is the library's own statement of which graphics have
+         * one — the same field MapLibre's `paintTacticalGraphic` reads to decide the identical
+         * question, which is why the letter was never missing on that engine. Asked rather
+         * than listed, so a graphic that grows a label paint later needs no edit here.
+         * @see paintTacticalGraphic, pursuitPaint
+         */
+        const labelPaint = getPaintFunction(name)?.label;
+        if (labelPaint) this.labels.setStyle(asStyleFunction(labelPaint, name));
     }
 
     updateGeometry = () => {
@@ -87,6 +105,9 @@ export class RetrogradeTask implements LineGraphic {
          * the two it has. @see RetrogradeTask.generateHandles
          */
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords, pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
+        // Only meaningful for a graphic that has a label paint; harmless for the rest, whose
+        // label feature carries no style and so draws nothing whatever geometry it holds.
+        this.labels.setGeometry(labels);
         // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a

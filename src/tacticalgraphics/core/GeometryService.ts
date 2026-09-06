@@ -1622,6 +1622,12 @@ class GeometryService {
      */
     getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowSize: number, mirrored = false) => {
         let baseCoords = base.geometry.coordinates;
+        // **A single click is a draw in progress, not a symbol.** Without this the seven cane
+        // arrows threw `coord is required` out of `turf.bearing` on the first click of every
+        // draw — invisible, because the renderer swallows it, but it meant "nothing is drawn
+        // yet" was an exception rather than an answer. 344000 returns an empty geometry there;
+        // this makes the family agree. (2026-09-06.)
+        if (baseCoords.length < 2) return turf.multiLineString([]);
         let start = baseCoords[0];
         let end = baseCoords[1];
 

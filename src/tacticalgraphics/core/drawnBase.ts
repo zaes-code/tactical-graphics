@@ -35,6 +35,7 @@ import {
     anchorsForRunAndArc,
     ARC_ARROW_DEFAULT_REACH,
     bowFromAnchors,
+    hookAnchorsFromClicks,
     hairpinAnchors,
     runAndArcFromAnchors,
 } from './anchors';
@@ -158,15 +159,6 @@ export function normalizeDrawnBase(
 
     return deduped;
 }
-
-/**
- * The hook a half-drawn pursuit shows, as a share of the run it hangs off.
- *
- * A preview default and nothing more — 344000 states no size for the arc, and click 3 sets
- * it. A quarter keeps the semicircle clearly subordinate to the straight portion, which is
- * the proportion the plate's own template draws. @see pursuitAnchors
- */
-const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
 
 /**
  * The base a graphic whose points are a **front edge and a point across it** expects, for
@@ -761,48 +753,13 @@ function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
  * is discarded — that is the degree of freedom the standard does not give this symbol,
  * and honouring it bent the hook off square. @see hookFromAnchors
  */
+/**
+ * 344000's three points, stated once. @see hookAnchorsFromClicks
+ *
+ * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * this runs at draw end, and mid-draw the generator was inventing a whole symbol from one
+ * click rather than drawing nothing.
+ */
 function pursuitAnchors(clicks: Position[]): Position[] | undefined {
-    /*
-     * **Two clicks already describe a pursuit, so draw one.** (User's report, 2026-09-05.)
-     *
-     * The run is stated the moment the cursor leaves the first click, and the operator was
-     * placing it against an empty map: nothing rendered until the third click, because
-     * anything short of three points came back `undefined` here and the holder fell through
-     * to the *dropped* form — a default-sized hook parked on point 1, which is not the symbol
-     * being drawn.
-     *
-     * So the third point is constructed at a share of the run until the operator states it.
-     * That is a **preview convention and not a reading of the plate** — 344000 gives the hook
-     * no default size, and the moment click 3 lands the measured value replaces this one.
-     * Building it as a point rather than as a separate preview path is what keeps one
-     * description of the symbol: the half-drawn pursuit goes through exactly the arithmetic
-     * below that the finished one does.
-     */
-    if (clicks.length === 2) {
-        const [start, join] = clicks;
-        const run = turf.distance(turf.point(start), turf.point(join), {units: 'meters'});
-        if (!isFinite(run) || run <= 0) return undefined;
-        const runBearing = turf.bearing(turf.point(start), turf.point(join));
-        const tip = turf.destination(turf.point(join), run * PURSUIT_PREVIEW_HOOK_SHARE, runBearing + 90, {
-            units: 'meters',
-        }).geometry.coordinates as Position;
-        return [start, join, tip];
-    }
-    if (clicks.length < 3) return undefined;
-    const [start, join, click] = clicks;
-
-    const runBearing = turf.bearing(turf.point(start), turf.point(join));
-    const toClick = turf.bearing(turf.point(join), turf.point(click));
-    const reach = turf.distance(turf.point(join), turf.point(click), {units: 'meters'});
-    if (!isFinite(reach) || reach <= 0) return undefined;
-
-    // The component across the run, signed: its magnitude is the diameter and its sign is
-    // the flank the hook turns to.
-    const across = reach * Math.sin(((toClick - runBearing) * Math.PI) / 180);
-    if (!isFinite(across) || across === 0) return undefined;
-
-    const tip = turf.destination(turf.point(join), Math.abs(across), runBearing + Math.sign(across) * 90, {
-        units: 'meters',
-    }).geometry.coordinates as Position;
-    return [start, join, tip];
+    return hookAnchorsFromClicks(clicks);
 }

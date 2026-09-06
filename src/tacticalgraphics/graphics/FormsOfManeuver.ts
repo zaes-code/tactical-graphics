@@ -3,7 +3,7 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, hairpinAnchors, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
+import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, hairpinAnchors, hookAnchorsFromClicks, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
 import geometryService from "../core/GeometryService";
 import {halfWidthFromSide, sidePoint} from "./ExplosivesReadiness";
 import {toRadians} from "../core/math";
@@ -408,10 +408,27 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      */
     private frame(base: Feature<any>, opts?: PointGraphicOptions): HookFrame | undefined {
         const coords = base.geometry?.coordinates;
-        const drawn = Array.isArray(coords?.[0]) ? hookFromAnchors(coords as Position[]) : undefined;
-        if (drawn) return drawn;
 
-        const center = (Array.isArray(coords?.[0]) ? coords[0] : coords) as Position | undefined;
+        /*
+         * **A drawn path is read, never replaced.** One click is a draw in progress, and this
+         * used to fall through to the dropped form on it — so a whole default-sized pursuit
+         * appeared the instant the map was clicked and then jumped when the run was stated.
+         * Its seven sibling cane arrows show nothing there, because their fallback is driven
+         * by the line the operator drew rather than by a `size`. Two clicks give a preview
+         * hook off the drawn run, three give the measured one, and one gives nothing.
+         * (User's report, 2026-09-06.) @see hookAnchorsFromClicks
+         */
+        if (Array.isArray(coords?.[0])) {
+            const anchors = hookAnchorsFromClicks(coords as Position[]);
+            return anchors ? hookFromAnchors(anchors) : undefined;
+        }
+
+        /*
+         * **A `Point` base is the dropped form**, which is a file written before 2026-09-05
+         * or hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so
+         * this is the reader of last resort rather than the ordinary path.
+         */
+        const center = coords as Position | undefined;
         if (!center) return undefined;
         const radius = Math.max(opts?.size ?? 1, 1);
         const side = opts?.mirrored ? -1 : 1;
