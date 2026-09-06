@@ -21,8 +21,10 @@ const build = (name: TacticalGraphicName) => {
     return c;
 };
 
+// `+ 0` normalizes the negative zero a 3857 -> 4326 -> 3857 round trip leaves behind, which
+// `toEqual` distinguishes from zero. @see LineGraphicController.settle
 const coordsOf = (c: LineGraphicController) =>
-    (c.graphic.base.getGeometry() as LineString).getCoordinates().map(p => [Math.round(p[0]), Math.round(p[1])]);
+    (c.graphic.base.getGeometry() as LineString).getCoordinates().map(p => [Math.round(p[0]) + 0, Math.round(p[1]) + 0]);
 
 describe('per-handle vertex dragging', () => {
     it('Fields of Fire opts in', () => {
@@ -101,6 +103,61 @@ describe('per-handle vertex dragging', () => {
             expect(p[1]).toBe(before[i][1] + dy);
         });
     });
+
+    it.each([TacticalGraphicName.ObstacleBypassEasy, TacticalGraphicName.ObstacleBypassDifficult,
+             TacticalGraphicName.ObstacleBypassImpossible])(
+        'lets an obstacle bypass lengthen from its rear point — %s',
+        name => {
+            /*
+             * **Point 3 declares no anchor, so the reshape reaches it.**
+             *
+             * It was `vertexLine(3, 3, 2)` until 2026-09-06 — "handle 2 is the rear, which is
+             * the one that moves the whole shape" — and the manager refuses a reshape on the
+             * anchor outright rather than letting it fall through to a scale. So the grip
+             * APP-06 270601 gives the symbol's length, *"point 3 determines its length"*, was
+             * the only grip that could not change it, while MapLibre (which reads
+             * `anchorVertex` from the library, where these were never listed) let it. (User's
+             * report: "it is not letting the user drag to lengthen the graphic".)
+             */
+            // The symbol's own layout: the two arrowhead tips on a north-south opening, the
+            // rear due west of its middle. A generic V would put point 3 nowhere the plate
+            // recognises. @see ObstacleBypass
+            const c = getController(name, RES) as LineGraphicController;
+            c.setBaseFeature(new Feature(new LineString([[0, 60_000], [0, -60_000], [-200_000, 0]])) as never);
+            expect(c.dragsVertices).toBe(true);
+            expect(c.anchorVertex).toBeUndefined();
+
+            c.handleVertexDrag!(2, [-400_000, 0]);
+            const after = coordsOf(c);
+            expect(after[0]).toEqual([0, 60_000]);   // point 1 held
+            expect(after[1]).toEqual([0, -60_000]);  // point 2 held
+            // The rear followed the cursor, so the symbol is twice as long as it was.
+            expect(after[2][0]).toBeLessThan(-390_000);
+            expect(Math.abs(after[2][1])).toBeLessThan(1_000);
+        },
+    );
+
+    it.each([TacticalGraphicName.ObstacleBypassEasy, TacticalGraphicName.ObstacleBypassDifficult,
+             TacticalGraphicName.ObstacleBypassImpossible])(
+        'holds an obstacle bypass rear grip on the middle of its bar — %s',
+        name => {
+            /*
+             * **A drag comes in by the same door a draw does.** `normalizeDrawnBase` ran on
+             * `drawend` and on restore only here, while MapLibre runs it on every build — so
+             * a rear grip dragged sideways walked off the middle of the rear bar on this
+             * engine and stayed on it on the other. Measured live before the fix: 1,454,816 m
+             * of along-bar drift for one 150 px drag. @see LineGraphicController.settle
+             */
+            const c = getController(name, RES) as LineGraphicController;
+            c.setBaseFeature(new Feature(new LineString([[0, 60_000], [0, -60_000], [-200_000, 0]])) as never);
+
+            // Straight up the rear bar — the component the symbol has nowhere to put.
+            c.handleVertexDrag!(2, [-200_000, 90_000]);
+            const after = coordsOf(c);
+            expect(Math.abs(after[2][1])).toBeLessThan(2_000);           // back on the axis
+            expect(Math.abs(after[2][0] + 200_000)).toBeLessThan(5_000); // and no shorter
+        },
+    );
 
     it('publishes three handles: two ends and an apex', () => {
         const c = build(TacticalGraphicName.FieldsOfFire);

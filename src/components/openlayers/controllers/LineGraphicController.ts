@@ -7,7 +7,9 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, drawsTipFirst, editStretches, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -32,6 +34,38 @@ export interface LineGraphic extends TacticalGraphic {
  * 3857 → 4326 → 3857 round trip, which lands far inside that.
  */
 export const SAME_POINT_EPSILON_M = 1e-3;
+
+/**
+ * A dragged base put back through the library's own reading of its points.
+ *
+ * **A vertex drag authors a base, so it comes in by the same door a draw does.** MapLibre
+ * has always run `normalizeDrawnBase` on every *build* — draw, restore, import, and after
+ * every gesture — while this engine ran it on `drawend` and on restore only. So a point the
+ * library projects onto the symbol stayed projected until the operator touched it, and then
+ * kept whatever the cursor left behind: drag an obstacle bypass's rear grip sideways and it
+ * walked off the middle of the rear bar, where APP-06 270601's PT.3 leader puts it, while
+ * the same drag on the other engine held it there. Measured on the running app, 2026-09-06:
+ * 1,454,816 m of along-bar drift here against 0 on MapLibre, for one 150 px drag.
+ *
+ * The same asymmetry reaches every graphic whose third point is a projection — the bracket
+ * tasks, block and disrupt, the cane arrows, the demolition block, the infiltration lane —
+ * so it is fixed for the family rather than for the one that was reported.
+ *
+ * **Through 4326 and back, because the library speaks degrees.** These are projected metres;
+ * handed metres, the normalizer's distance and bearing guards fail and it returns the path
+ * untouched — which looks exactly like a base that needed no tidying. The manager's
+ * `normalizeDrawnGeometry` and the sample sweep convert for the same reason.
+ *
+ * **No resolution**, which is deliberate and is what MapLibre passes on a build: the one
+ * rule that reads one — the S pair's pixel-range clamp on point 2 — belongs to the draw,
+ * and re-imposing it on every pointer move would fight the drag. A graphic the library has
+ * nothing to say about comes back exactly as it arrived.
+ */
+function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Coordinate[] {
+    if (!name || coords.length < 2) return coords;
+    const settled = normalizeDrawnBase(name, coords.map(c => toLonLat(c)) as Position[]);
+    return settled.map(c => fromLonLat(c as Coordinate));
+}
 
 /**
  * The path handles a one-segment graphic should actually show — every one except
@@ -449,7 +483,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
             const moved = coords.map((c, i) =>
                 isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
             );
-            const next = new Feature(new LineString(moved));
+            const next = new Feature(new LineString(settle(this.resolvedName(), moved)));
             // Dragging a vertex *is* authoring the shape, so the floors apply here.
             this.shapeFromGesture(true);
             try {
