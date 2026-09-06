@@ -326,6 +326,15 @@ function sizeDefaults(
     const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
 
     /*
+     * **And a graphic whose separation is a base vertex needs no width at all.** The
+     * demolition block's point 3 sets how far apart its rails sit as of 2026-09-05, so a
+     * stamped `width` here is a second copy of a number the coordinates already carry —
+     * the same defaulting mistake the multiple-strike zone's standoff was, one field over.
+     * @see carriesSeparationInBase
+     */
+    const separationInBase = carriesSeparationInBase(name);
+
+    /*
      * **A graphic whose `width` is a standoff gets no width from here at all.**
      *
      * This used to seed one — half a screen inch, matching OpenLayers — and that was the

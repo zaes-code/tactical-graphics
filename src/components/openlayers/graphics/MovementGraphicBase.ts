@@ -14,7 +14,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import { groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import { baseVertexCount, carriesSeparationInBase, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -142,11 +142,31 @@ export class MovementGraphicBase implements LineGraphic {
             }
         });
     }
+    /**
+     * Whether this graphic's separation lives in its **base** rather than beside it.
+     *
+     * The movement family carries a width as an amplifier because the base is a centreline
+     * and nothing in it says how far the rails sit apart. The demolition block is not like
+     * that as of 2026-09-05: 271201 gives point 3 the job, it is a stored vertex, and the
+     * generator measures the distance. Stamping a `width` as well would be a second copy of
+     * a number the coordinates already carry — which is how the two drift.
+     * (User's call.) @see halfWidthFromSide
+     */
+    private get separationIsInTheBase(): boolean {
+        return carriesSeparationInBase(this.graphicName);
+    }
+
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         // `radius` travels with the amplifiers — a bare write would drop the offset.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
+        writeGraphicProperties(
+            this.getFeatures(),
+            this.graphicName,
+            labels,
+            // As above: the base's third point states both. @see separationIsInTheBase
+            this.separationIsInTheBase ? {} : {width: this.offset * 2, mirrored: this.mirrored},
+        );
     };
 
     /**
