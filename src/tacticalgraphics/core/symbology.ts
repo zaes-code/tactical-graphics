@@ -1313,6 +1313,14 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * these — an old save, laid out as the mirror it used to derive — and a draw must not be
      * judged finished by that. @see securityOperationAnchors, sketchIsComplete
      */
+    /*
+     * **152000 spends two clicks on a three-point symbol**, exactly as 141700 ambush does and
+     * for the identical reason: *"The rear of the arrowhead line shall connect to the midpoint
+     * of the line between points 2 and 3. The arrowhead line shall be perpendicular to the
+     * line formed by points 2 and 3."* Those close the third point once the first two are
+     * down. @see firePositionAnchors
+     */
+    [TacticalGraphicName.AttackByFire]: 2,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,

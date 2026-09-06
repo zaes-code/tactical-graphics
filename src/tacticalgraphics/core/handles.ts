@@ -330,8 +330,12 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
      * endpoints, point 3 the rear — so the perpendicular the offset handle used to drag is a
      * pair of points the operator states. @see BRACKET_GRAPHICS, frontEdgeFrame
      */
+    /*
+     * **152000 attack by fire left on 2026-09-06**, the last of the family. Its plate places
+     * the back line's two ends, so the bar that was a ratio of the shaft — and the offset
+     * grip that dragged it — are two anchor points now. @see firePositionAnchors
+     */
     TacticalGraphicName.Exploitation,
-    TacticalGraphicName.AttackByFire,
     // Follow and assume / follow and support are deliberately absent: they are no
     // longer block arrows and carry their own two-point handles. @see FollowTask
 ];
@@ -352,7 +356,13 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
  * symbol may take.
  */
 export const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.AttackByFire]: 0.4,
+    /*
+     * **152000 left on 2026-09-06.** A lock says the aspect ratio is not the operator's to
+     * set, and its plate gives the two dimensions their own anchor points: *"Points 2 and 3
+     * determine the length of the straight line on the back side"*, with point 1 the tip.
+     * The 0.45 the symbol is drawn at survives as the *preview* proportion two clicks are
+     * read through, which is a default rather than a constraint. @see firePositionAnchors
+     */
     /*
      * **Breach, bypass, canalize and clear are no longer ratio-locked** (2026-09-06).
      *
@@ -467,6 +477,10 @@ const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
  * block contract read differently even though the effect is the same.
  */
 const PLACED_BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
+    // 152000 joined on 2026-09-06: point 1 the arrowhead's tip, points 2 and 3 the back
+    // line's ends. Two clicks rather than three, because its own constraints construct the
+    // third — but every stored point is placed once they are. @see firePositionAnchors
+    TacticalGraphicName.AttackByFire,
     TacticalGraphicName.Block,
     TacticalGraphicName.TacticalBlock,
     TacticalGraphicName.Disrupt,
@@ -1178,6 +1192,9 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      */
     // 341800's three, on 340500 clear's rule. @see BRACKET_GRAPHICS
     [TacticalGraphicName.Penetration]: 3,
+    // 152000's three: the tip and the back line's two ends. Drawn in two clicks, like the
+    // ambush whose constraints it shares. @see firePositionAnchors, DRAW_CLICKS
+    [TacticalGraphicName.AttackByFire]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,

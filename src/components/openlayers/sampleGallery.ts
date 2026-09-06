@@ -43,7 +43,6 @@ import {
     TacticalGraphicHostility,
     TacticalGraphicName,
     synthesizedBase,
-    drawsByAnchorClicks,
     normalizeDrawnBase,
     getDisplayName,
     groundLength,
@@ -770,11 +769,22 @@ export function applyBaseGeometry(
          * a graphic that needed no normalising. The manager's own `normalizeDrawnGeometry`
          * converts for the same reason. @see ai/conventions.md, "no turf on projected coords"
          */
-        const stored = drawsByAnchorClicks(name)
-            ? (normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(
-                  c => fromLonLat(c as Coordinate),
-              ) as Coordinate[])
-            : path;
+        /*
+         * **Every base, not only the anchor-click ones.** `normalizeDrawnBase` is the door
+         * every draw and every restore comes in by and it is idempotent, so a layout that is
+         * already right passes through untouched — while one that is short of what its
+         * graphic needs is completed here, exactly as an operator's clicks would be.
+         *
+         * It was gated on `drawsByAnchorClicks`, which is a different question: 152000 spends
+         * two clicks on a three-point symbol, so the harness laid out two points and stored
+         * them, and the graphic drew its *legacy* form with a derived width handle while a
+         * restore of the same file — which does normalize — came back with three points and
+         * no such handle. The sweep and the restore disagreed about the same symbol.
+         * @see sheetBase, which is this rule on the MapLibre side.
+         */
+        const stored = normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(
+            c => fromLonLat(c as Coordinate),
+        ) as Coordinate[];
         handler.setBaseFeature(lineFeature(stored, symbolId, name));
     } else {
         throw new Error('unclassified controller');
