@@ -191,24 +191,45 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
         return shaftLength * FIRE_POSITION_BAR_RATIO;
     }
 
+    /**
+     * 152000's three points, from however many the base carries — **including a half-drawn
+     * two.**
+     *
+     * `firePositionAnchors` reads two points as *the tip and one end of the back line*, which
+     * is what the operator has after the first click, so the preview is the symbol they are
+     * drawing. It read them as the legacy `[bar centre, tip]` shaft until 2026-09-06, and
+     * that pair runs the other way — so between the two clicks the bar sat on the arrowhead's
+     * own point and the arrowhead followed the cursor, which is the symbol backwards.
+     * (User's report, 2026-09-06: "after click one, point 2 needs to get the handle, then
+     * point 3 gets the handle".)
+     *
+     * A genuinely legacy two-point base is not reached this way in practice: restore and
+     * every MapLibre build run it through `normalizeDrawnBase` first and it arrives here as
+     * three. What is left for the old reading is raw GeoJSON a consumer hand-wrote, and the
+     * plate's own numbering — point 1 is the arrowhead — says this reading is the right one
+     * for that too.
+     */
+    private firePositionPoints(base: Feature<LineString>): Position[] | undefined {
+        return firePositionAnchors(base.geometry.coordinates);
+    }
+
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<LineString | MultiLineString> {
         if (this.name === TacticalGraphicName.AttackByFire) {
-            const coords = base.geometry.coordinates;
             /*
-             * Three placed points as of 2026-09-06: the tip, and the back line's two ends.
              * `getAttackByFireSymbol` wants the shaft as `[bar centre, tip]` and the bar's
-             * half-height, both of which the points give directly — the centre is the
-             * midpoint the plate names and the half-height is half the line between them.
-             * A base saved before that describes a shaft and nothing else, and the
-             * ratio-built symbol is what it still draws as. @see firePositionAnchors
+             * half-height. Both come straight out of the points: the centre is the midpoint
+             * the plate names and the half-height is half the line between points 2 and 3.
              */
-            if (coords.length >= 3) {
-                const [tip, one, two] = coords;
+            const points = this.firePositionPoints(base);
+            if (points) {
+                const [tip, one, two] = points;
                 const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
                 const half = turf.distance(turf.point(one), turf.point(two), {units: 'meters'}) / 2;
                 return geometryService.getAttackByFireSymbol([middle, tip], half);
             }
-            return geometryService.getAttackByFireSymbol(coords, this.barHalf(base));
+            // One point is a draw that has only just started, and draws nothing rather than a
+            // degenerate symbol built on a zero-length shaft.
+            return this.asMultiLineStringFeature([]);
         }
         if (this.name === TacticalGraphicName.SupportByFire) {
             const coords = base.geometry.coordinates;
@@ -227,11 +248,17 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
             // shaft and it is two anchor points now. @see handleContract
             return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
         }
-        if (this.name === TacticalGraphicName.AttackByFire && base.geometry.coordinates.length >= 3) {
-            // `[point 1, point 2, point 3]` — the arrowhead's tip and the back line's two
-            // ends, every one placed. The bar was a ratio of the shaft and is two anchor
-            // points now, so there is no width left to drag. @see firePositionAnchors
-            return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
+        if (this.name === TacticalGraphicName.AttackByFire) {
+            /*
+             * `[point 1, point 2, point 3]` — the arrowhead's tip and the back line's two
+             * ends. The bar was a ratio of the shaft and is two anchor points now, so there
+             * is no width left to drag.
+             *
+             * Read through the same resolver the drawing uses, so a half-drawn base publishes
+             * the grip on the point the operator is placing rather than none at all.
+             * @see firePositionAnchors
+             */
+            return this.asMultiPointFeature(this.firePositionPoints(base) ?? base.geometry.coordinates.slice(0, 1));
         }
         if (this.isFirePosition()) {
             // [offsetHandle (dropped by the openlayers Block holder — the symbol is
