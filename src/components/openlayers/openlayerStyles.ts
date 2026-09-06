@@ -38,9 +38,11 @@ import {
     ratioLockedLabelScale as ratioLockedLabelScaleOf,
 } from '@zaes/tactical-graphics';
 import {
+    ANCHOR_CONNECTOR_DASH_PX,
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
     LINE_WIDTH,
+    anchorConnectorRun,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
@@ -511,13 +513,20 @@ export const createMap = (target: HTMLElement) => {
     });
 };
 
-export const modifyStyle = (color: string) => {
+/**
+ * The hashed construction line drawn along a graphic's base.
+ *
+ * `geometry` overrides which run it follows, for the demolition family whose stored base
+ * ends in a width point rather than in an anchor. @see anchorConnectorRun
+ */
+export const modifyStyle = (color: string, geometry?: LineString) => {
     return new Style({
         fill: undefined,
+        geometry,
         stroke: new Stroke({
             color: color,
             width: LINE_WIDTH(),
-            lineDash: [4, 4],
+            lineDash: [...ANCHOR_CONNECTOR_DASH_PX],
         }),
     });
 };
@@ -530,14 +539,34 @@ function setOpacity(rgba: string, opacity: number): string {
     });
 }
 
-// used as the underlying geometry for each tactical graphic. Users can update this with the Modify interaction.
+/**
+ * The underlying geometry for each tactical graphic — what the user drew, and what the
+ * `Modify` interaction edits.
+ *
+ * **It is a construction line.** On the families built from a centreline the symbol never
+ * draws — the corridors, the axes, the crossings, the convoys, the demolition bar symbols —
+ * it is the only thing on screen saying where the anchor points went. @see drawsAnchorConnector
+ *
+ * The mark follows `anchorConnectorRun`, so the demolition family hashes its centreline
+ * rather than running a spur out to the width point stored beyond it.
+ */
 export const createBaseFeature = () => {
     let feature = new Feature();
     feature.setStyle((feature) => {
         let isHidden = feature.get('hidden');
 
         if (isHidden) return new Style({});
-        return modifyStyle(setOpacity(readHostilityColor(feature), .35));
+
+        const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+        const geometry = feature.getGeometry();
+        // Only a LineString has a run to trim; a polygon or a point base draws whole.
+        const run = name && geometry instanceof LineString
+            ? anchorConnectorRun(name, geometry.getCoordinates())
+            : undefined;
+        return modifyStyle(
+            setOpacity(readHostilityColor(feature), .35),
+            run && run.length !== (geometry as LineString).getCoordinates().length ? new LineString(run) : undefined,
+        );
     });
 
     feature.set('base', true);

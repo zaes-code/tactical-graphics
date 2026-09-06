@@ -1,8 +1,11 @@
 import type {Feature, FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import {
+    ANCHOR_CONNECTOR_DASH_PX,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    anchorConnectorRun,
+    drawsAnchorConnector,
     getDrawMarkerColor,
     getHandleColor,
     LINE_WIDTH,
@@ -144,6 +147,13 @@ const SKETCH_WIDTH_PX = 2;
 export const MEASURE_LAYER_ID = 'tg-measure';
 /** The "a drag here adds a vertex" marker. @see setVertexHint */
 export const VERTEX_HINT_LAYER_ID = 'tg-vertex-hint';
+/**
+ * The hashed line between a graphic's anchor points. @see realizeEditorMarks
+ *
+ * OpenLayers gets this from its base feature's own style; there is no base feature here,
+ * so it takes a source of its own like every other piece of editor chrome on this engine.
+ */
+export const CONNECTOR_LAYER_ID = 'tg-connector';
 export const MEASURE_LABEL_LAYER_ID = 'tg-measure-label';
 const MEASURE_DASH = [8, 6];
 
@@ -345,7 +355,7 @@ export class NativeLayerRenderer {
         if (this.installed) return;
         this.map.setGlyphs(GLYPHS_URL);
 
-        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint']) {
+        for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint', 'connector']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
         }
         // **The hatch goes under the solid fills, and the order is load-bearing.** These two
@@ -369,6 +379,10 @@ export class NativeLayerRenderer {
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a
         // handle is not one — the interaction layer queries these by name instead.
+        // The construction line, under the rest of the chrome: it runs through the middle
+        // of a symbol the handles sit on the ends of, so a handle must win where they
+        // meet. @see realizeEditorMarks
+        this.map.addLayer(sketchLayer(CONNECTOR_LAYER_ID, SOURCE_PREFIX + 'connector', [...ANCHOR_CONNECTOR_DASH_PX], LINE_WIDTH()));
         this.map.addLayer(sketchLayer(SKETCH_LAYER_ID, SOURCE_PREFIX + 'sketch', SKETCH_DASH, SKETCH_WIDTH_PX));
         // The radius read-out: a hashed line in the inert-handle color, with the
         // distance laid **along** it so it picks up the line's own angle. Same shape as
@@ -850,6 +864,24 @@ export class NativeLayerRenderer {
             }]
             : []);
 
+        /*
+         * **The hashed line between the anchor points**, on the families built from a
+         * centreline the symbol never draws. @see drawsAnchorConnector
+         *
+         * Read off `graphic.base`, which is the one geometry on a MapLibre graphic that is
+         * already lon/lat — everything in a GeoJSON source has to be. It is also the right
+         * geometry on the merits: the mark is the operator's own points, not anything
+         * derived from them.
+         *
+         * Scoped to `handleBearers`, so it comes and goes with the handles it explains.
+         * In `edit` — the mode this is for — that is the selected graphic alone, exactly
+         * as OpenLayers scopes it. The legacy gesture modes show it on every graphic,
+         * where OpenLayers shows it in `modify` only; those four modes make the whole map
+         * editable at once and this engine cannot tell them apart, and no host still
+         * drives them.
+         */
+        this.setData('connector', connectorFeatures(this.handleBearers()));
+
         this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption) : []);
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
@@ -1163,6 +1195,34 @@ function isScreenSized(name: TacticalGraphicName): boolean {
  * and `text-rotate` lays it along the line — which is what OpenLayers' `placement:
  * 'line'` produces and what the read-out has always looked like there.
  */
+/**
+ * The hashed line between a graphic's anchor points, for each graphic that draws one.
+ *
+ * **Read off `graphic.base`**, which is the one geometry on a MapLibre graphic that is
+ * already lon/lat — everything in a GeoJSON source has to be. It is also the right
+ * geometry on the merits: the mark is the operator's own points, not anything derived
+ * from them. `anchorConnectorRun` then trims the demolition family back to its centreline,
+ * so the mark does not spur out to the width point stored past point 2.
+ *
+ * Exported for its test. This is the whole of the MapLibre half of the connector, so
+ * testing it is testing the engine's answer; the alternative is a stub `Map` complete
+ * enough to install sources against, which asserts the same thing through more machinery.
+ * @see drawsAnchorConnector, createBaseFeature — the OpenLayers half
+ */
+export function connectorFeatures(graphics: readonly MapLibreTacticalGraphic[]): Feature[] {
+    return graphics.flatMap(graphic => {
+        const base = graphic.base.geometry;
+        if (base.type !== 'LineString' || !drawsAnchorConnector(graphic.name)) return [];
+        const run = anchorConnectorRun(graphic.name, base.coordinates);
+        if (run.length < 2) return [];
+        return [{
+            type: 'Feature' as const,
+            geometry: {type: 'LineString' as const, coordinates: run},
+            properties: {color: getInertHandleColor()},
+        }];
+    });
+}
+
 /** `Start 20 km`, or just `20 km`. The same assembly `createMeasureFeature` uses. */
 function withCaption(caption: string | undefined, distance: string): string {
     return caption ? `${caption} ${distance}` : distance;
