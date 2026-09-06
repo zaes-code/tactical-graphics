@@ -118,4 +118,53 @@ describe('152000 reads two clicks into the three points its plate names', () => 
         } as Feature);
         expect((legacy.graphic.geometry as {coordinates: unknown[]}).coordinates.length).toBeGreaterThan(0);
     });
+
+    it('previews the symbol it is drawing, not that symbol reversed', () => {
+        /*
+         * **The mid-draw reading.** After the first click the base is `[tip, cursor]`, and a
+         * two-point base used to be the legacy shaft `[bar centre, tip]` — which runs the
+         * other way. So between the clicks the bar sat on the arrowhead's own point and the
+         * arrowhead chased the cursor: the symbol backwards. (User's report: "after click
+         * one, point 2 needs to get the handle, then point 3 gets the handle".)
+         *
+         * Both are read through one function now, so what the preview draws is what lands.
+         */
+        const sketch = renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name: NAME}},
+            geometry: {type: 'LineString', coordinates: CLICKS},
+        } as Feature);
+        const parts = (sketch.graphic.geometry as {coordinates: Position[][]}).coordinates;
+
+        /*
+         * Read off the **shaft**, which `getAttackByFireSymbol` emits as `[bar centre, tip]`.
+         * The bracket's own endpoints are its swept-back feathers rather than the bar's ends,
+         * so their midpoint is not the centre — a fact that cost a first version of this
+         * assertion, which measured the wrong thing and failed on correct geometry.
+         */
+        const settled = anchors(CLICKS);
+        const middle = turf.midpoint(turf.point(settled[1]), turf.point(settled[2]))
+            .geometry.coordinates as Position;
+        const shaft = parts[1];
+        // The arrowhead end of the shaft is point 1, where the operator clicked first — the
+        // plate's own numbering — and its other end is the back line's midpoint.
+        expect(meters(shaft[1], settled[0])).toBeLessThan(1);
+        expect(meters(shaft[0], middle)).toBeLessThan(1);
+
+        // …and the grip follows the point being placed, rather than the draw showing none.
+        const grips = (sketch.handles.geometry as MultiPoint).coordinates;
+        expect(grips).toHaveLength(3);
+        expect(meters(grips[1], CLICKS[1])).toBeLessThan(1);
+    });
+
+    it('draws nothing at all from a single click', () => {
+        // One point is a shaft of zero length, which built a degenerate symbol on a division
+        // by nothing. A draw that has only just started shows nothing, as its siblings do.
+        const one = renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name: NAME}},
+            geometry: {type: 'LineString', coordinates: [CLICKS[0]]},
+        } as Feature);
+        expect((one.graphic.geometry as {coordinates: unknown[]}).coordinates).toHaveLength(0);
+    });
 });
