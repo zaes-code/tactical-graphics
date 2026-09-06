@@ -4,8 +4,7 @@
  * Reported by the user, 2026-09-06: *"all graphics with parallel lines like gap/bridge/
  * assault crossing, convoy graphics, explosives graphics need a hashed line between
  * vertices like corridors and main axis of advance (family). All those hashed lines
- * including the existing ones need to take the 'inert' color."* This is the first half —
- * where the mark is drawn; the colour follows in its own commit.
+ * including the existing ones need to take the 'inert' color."*
  *
  * Three things are stated in more than one place and so have to be checked:
  *
@@ -15,19 +14,22 @@
  *    silently lost the mark and MapLibre drew no base at all.
  * 2. **Which run it follows.** The demolition family stores a width point past point 2;
  *    drawing the base whole hashes a spur out to it.
- * 3. **What colour it is.** The mark is one dash pattern read from `ANCHOR_CONNECTOR_DASH_PX`
- *    and one colour, so a graphic cannot end up with a construction line that looks like
- *    another graphic's.
+ * 3. **What colour it is.** Editor chrome, so the inert-handle colour on every affiliation
+ *    — it used to take the hostility colour at 35% opacity and go pale red on an enemy
+ *    symbol, which reads as part of the symbol. @see ai/decisions.md, the hostility rule
  */
 
 import {Feature} from 'ol';
 import LineString from 'ol/geom/LineString';
 import {
     DEFAULT_PALETTE,
+    TacticalGraphicHostility,
     TacticalGraphicName,
     anchorConnectorRun,
+    configureTacticalGraphics,
     drawsAnchorConnector,
     listTacticalGraphicNames,
+    resetTacticalGraphicsConfig,
 } from '@zaes/tactical-graphics';
 import {createBaseFeature} from './openlayers/openlayerStyles';
 import {InteractionType, TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
@@ -210,18 +212,42 @@ describe('OpenLayers un-hides the construction line on the selected graphic', ()
 });
 
 describe('the OpenLayers style of the construction line', () => {
+    // `configureTacticalGraphics` merges, so an override survives an empty call — the
+    // reset is the only thing that drops one, and a leaked color reaches the whole file.
+    afterEach(() => resetTacticalGraphicsConfig());
+
     /** Resolves the base feature's style for a graphic with the given stored base. */
-    function styleOf(name: TacticalGraphicName, coordinates: number[][]) {
+    function styleOf(name: TacticalGraphicName, coordinates: number[][], hostility?: TacticalGraphicHostility) {
         const feature = createBaseFeature();
         feature.setGeometry(new LineString(coordinates));
         feature.set('graphicName', name);
         feature.set('hidden', false);
+        if (hostility) feature.set('hostility', hostility);
         const style = (feature.getStyle() as (f: Feature, r: number) => never)(feature, RES) as unknown as {
             getStroke: () => {getColor: () => string; getLineDash: () => number[] | null};
             getGeometry: () => LineString | undefined;
         };
         return style;
     }
+
+    it('draws in the inert-handle color, not the affiliation color', () => {
+        const style = styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]);
+        expect(style.getStroke().getColor()).toBe(DEFAULT_PALETTE.inertHandleColor);
+    });
+
+    /**
+     * The trap. A hostile control measure's *line work* is red; this is not line work, and
+     * a red construction line laid along a red casing is indistinguishable from it.
+     */
+    it('stays inert on a hostile graphic', () => {
+        const style = styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]], TacticalGraphicHostility.hostileFaker);
+        expect(style.getStroke().getColor()).toBe(DEFAULT_PALETTE.inertHandleColor);
+    });
+
+    it('follows the host\'s inert color when one is configured', () => {
+        configureTacticalGraphics({inertHandleColor: '#404040'});
+        expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]).getStroke().getColor()).toBe('#404040');
+    });
 
     it('is hashed', () => {
         expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]).getStroke().getLineDash()).toEqual([4, 4]);

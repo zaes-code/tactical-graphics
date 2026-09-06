@@ -987,7 +987,12 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  * **Editor chrome, not line work.** It says "these are the points you placed", the same
  * thing the handles and the radius read-out say — it appears with the selection, is absent
  * from `renderTacticalGraphic`, from a snapshot, from the thumbnails and from the sample
- * gallery, and it is drawn in the editor's own dash rather than in any symbol's.
+ * gallery, and it runs *through* the middle of the symbol. So it is drawn in the
+ * inert-handle colour and stays that colour on a hostile graphic. It used to take the
+ * hostility colour at 35% opacity, which is the half-way answer that is wrong both ways:
+ * too faint to read as symbology, too tinted to read as chrome. FM 1-02.2's colour rule is
+ * about a control measure's *lines*; a construction line is not one.
+ * @see getInertHandleColor, ai/decisions.md — the hostility colour rule
  *
  * **Both renderers read this**, which is the reason it is here rather than in a holder: on
  * OpenLayers it decides which base features un-hide, on MapLibre it decides which graphics
