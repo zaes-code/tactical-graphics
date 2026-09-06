@@ -147,8 +147,15 @@ const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) 
 const block = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 2, name);
 
+/**
+ * The seven cane arrows: three placed points, every one of them grabbable.
+ *
+ * Capped at two until 2026-09-06, with the arc's diameter carried as a `size` amplifier and
+ * its side as a `mirrored` flag - so the third anchor point APP-06 gives them could not be
+ * placed and the draw ended a click early. @see RetrogradeTask, mobileDefense
+ */
 const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new RetrogradeTask(name, sizing * 20, res), 2, name);
+    new LineGraphicController(new RetrogradeTask(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.

@@ -9,11 +9,14 @@
  * across all seven of the retrograde tasks, one engine flipped via a handle and the
  * other flipped via nothing at all.
  *
- * **The index is per graphic and cannot be guessed**, which is why it is declared. The
- * retrograde tasks put it first, on the cane; abatis puts it third, on the chevron's
- * apex; pursuit and mobile defense put it second. Getting it wrong is silent and looks
- * plausible — it was on the arrowhead of the retrograde tasks for a while, which flips
- * the graphic from the one part of it that does not move.
+ * **The index is per graphic and cannot be guessed**, which is why it is declared. Abatis
+ * puts it third, on the chevron's apex; pursuit puts it second, on its hook. Getting it
+ * wrong is silent and looks plausible — it sat on the arrowhead of the retrograde tasks for
+ * a while, which flips the graphic from the one part of it that does not move.
+ *
+ * **Two graphics are left.** Mobile defence and the seven cane arrows gave the job to an
+ * anchor point instead: their plates all read *"Point 3 defines which side of the line the
+ * arc is on"*, so the flip is a place rather than a flag. @see RetrogradeTask
  */
 
 import type {Position} from 'geojson';
@@ -43,26 +46,20 @@ const geometryOf = (name: TacticalGraphicName, mirrored: boolean) =>
 const mirrorable = () => listTacticalGraphicNames().filter(n => supportsMirror(n as TacticalGraphicName));
 
 describe('mirroring', () => {
-    it('names the nine graphics that flip', () => {
+    it('names the two graphics that still flip', () => {
         /*
-         * **152800 left this list on 2026-09-06**, and it is the interesting departure: it
-         * did not lose the ability to face either way, it stopped expressing that with an
-         * amplifier. Its plate gives point 3 the job — *"Point 3 defines which side of the
-         * line the arc is on"* — so dragging that point across the line is the flip, and a
-         * `mirrored` flag plus a grip whose only purpose was to toggle it were a second way
-         * of saying something the geometry now says. @see MobileDefense.frame
+         * **152800 left this list on 2026-09-06, and the seven cane arrows followed it.**
+         *
+         * It is the interesting departure: none of them lost the ability to face either way,
+         * they stopped expressing it with an amplifier. Every one of their plates gives point
+         * 3 the job — *"Point 3 defines which side of the line the arc is on"* — so dragging
+         * that point across the line is the flip, and a `mirrored` flag plus a grip whose
+         * only purpose was to toggle it were a second way of saying what the geometry says.
+         *
+         * What is left is the two whose side genuinely is not in their points: an abatis
+         * chevron and a pursuit hook. @see MobileDefense.frame, RetrogradeTask
          */
-        expect(mirrorable().sort()).toEqual([
-            'Abatis',
-            'Delay',
-            'Disengage',
-            'ForwardPassageOfLines',
-            'Pursuit',
-            'RearwardPassageOfLines',
-            'Retirement',
-            'Withdraw',
-            'WithdrawUnderPressure',
-        ]);
+        expect(mirrorable().sort()).toEqual(['Abatis', 'Pursuit']);
     });
 
     it('gives each of them exactly one mirror handle', () => {
@@ -72,12 +69,16 @@ describe('mirroring', () => {
         }
     });
 
-    it('puts the retrograde tasks on the cane, not the arrowhead', () => {
-        // Handle 0 is the cane hanging off the start; handle 1 is the far end the arrow
-        // points from. Flipping from the arrowhead is the wrong end of the symbol.
+    it('leaves the seven cane arrows three shape grips and no mirror', () => {
+        /*
+         * They published `[mirror, shape]` until 2026-09-06: one grip that only turned the
+         * symbol over and one for the arrowhead, with the arc's own diameter reachable from
+         * neither — though APP-06 gives all seven a third anchor point that states it.
+         * Now every grip moves a point the operator placed. @see RetrogradeTask
+         */
         for (const name of ['Delay', 'Withdraw', 'WithdrawUnderPressure', 'Disengage', 'Retirement', 'ForwardPassageOfLines', 'RearwardPassageOfLines'] as TacticalGraphicName[]) {
-            expect(handleRole(name, 0)).toBe('mirror');
-            expect(handleRole(name, 1)).toBe('shape');
+            expect(handleContract(name).roles).toEqual(['shape', 'shape', 'shape']);
+            expect(supportsMirror(name)).toBe(false);
         }
     });
 

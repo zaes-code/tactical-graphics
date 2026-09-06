@@ -5,9 +5,9 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
-    createOffsetHandleFeature, retroGradeTaskStyleFunc
+    retroGradeTaskStyleFunc
 } from '../openlayerStyles';
-import {MultiPoint, Point} from "ol/geom";
+import {MultiPoint} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
@@ -36,7 +36,6 @@ export class RetrogradeTask implements LineGraphic {
     graphic: Feature = createFeature();
     labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     handles: Feature = <Feature<MultiPoint>>createHandleFeature();
-    offsetHandle: Feature = <Feature<Point>>createOffsetHandleFeature();
 
     features: Feature[] = [];
     symbolId: string = '';
@@ -66,8 +65,16 @@ export class RetrogradeTask implements LineGraphic {
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
-        this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        /*
+         * **Every published grip, because every one is a point the operator placed.**
+         *
+         * This used to peel `handleCoords[0]` off into `offsetHandle` - the mirror handle,
+         * whose only job was turning the symbol over - and publish the rest. Point 3 states
+         * which side the arc falls on as of 2026-09-06, so there is nothing left to flip and
+         * all three anchor points are ordinary shape grips. A legacy two-point base publishes
+         * the two it has. @see RetrogradeTask.generateHandles
+         */
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords, pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
         // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a
@@ -77,16 +84,6 @@ export class RetrogradeTask implements LineGraphic {
         this.publish();
     };
 
-
-    /**
-     * `handles` is `handleCoords.slice(1)`: `handleCoords[0]` goes to `offsetHandle`.
-     *
-     * The generator's contract calls index 0 the `mirror` handle, so without this the
-     * manager read the arrow tip — contract index 1 — as the mirror and claimed its drag
-     * as a flip, which is why that handle appeared to do nothing.
-     * @see TacticalGraphicHandler.handleIndexOffset
-     */
-    handleIndexOffset = 1;
 
     getBaseGraphicFeature = (): Feature<LineString> => {
         return this.base;
@@ -115,14 +112,36 @@ export class RetrogradeTask implements LineGraphic {
 
     /** Republishes the amplifiers with the geometry state beside them. */
     private publish() {
-        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+        /*
+         * **`mirrored` only while the base cannot say it itself.**
+         *
+         * A three-point base states the arc's side by where point 3 is, so stamping the flag
+         * beside it would be a second copy of the same fact and the two would drift. A base
+         * saved before 2026-09-06 has two points and nothing else that carries the side, so
+         * it keeps the flag until an edit grows its third point.
+         *
+         * `decorationSize` stays either way: it sizes the arrowhead, which is a screen
+         * distance with nothing in the anchor points to recover it from.
+         */
+        const statesItsOwnSide = (this.base.getGeometry()?.getCoordinates()?.length ?? 0) >= 3;
+        /*
+         * **Dropped from the bag, not merely left out of the write.** `readGraphicLabels`
+         * returns everything stamped on the feature, geometry inputs included, so a `mirrored`
+         * written during the two-point half of the draw comes straight back in on the next
+         * publish and re-stamps itself forever. Omitting it from the second argument is not
+         * enough; it has to be taken out of the first. (Measured: every cane arrow still saved
+         * `mirrored` after a clean three-click draw.)
+         */
+        const stamped = {...readGraphicLabels(this.graphic)};
+        if (statesItsOwnSide) delete (stamped as {mirrored?: boolean}).mirrored;
+        writeGraphicProperties(this.getFeatures(), this.name, stamped, {
             decorationSize: this.size,
-            mirrored: this.mirrored,
+            ...(statesItsOwnSide ? {} : {mirrored: this.mirrored}),
         });
     }
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.handles, this.labels, this.base, this.offsetHandle];
+        return [this.graphic, this.handles, this.labels, this.base];
     }
 
 }
