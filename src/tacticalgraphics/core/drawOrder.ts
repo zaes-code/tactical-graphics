@@ -110,7 +110,10 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // point 1]` and build the T inside out. Disrupt was never here, for the matching reason:
     // 270502 numbers the longest arrow's tip third, which is where ours already was.
     // @see Block, blockAnchors
-    TacticalGraphicName.Penetration,                      // 341800 Penetrate
+    // **341800 left on 2026-09-06**, with the four brackets and for their reason: a
+    // three-point base hands the reader points 3 and 2 as its front edge if it is reversed
+    // on the way in. A two-point save still needs the flip and gets it in `legacyAxis`,
+    // which is the one place that can tell the two base shapes apart. @see frontEdgeFrame
     // **341900 left on 2026-09-06**, for the same reason the two blocks did. It was here
     // because the standard numbers the first arrowhead's tip as point 1 while the old
     // two-point generator drew that arrow on the *last* vertex. The base carries all four

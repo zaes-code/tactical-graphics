@@ -738,7 +738,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Canalize]:    bracket,
     [TacticalGraphicName.Clear]:       bracket,
     [TacticalGraphicName.TacticalDisrupt]:     barAndStem,
-    [TacticalGraphicName.Penetration]: block,
+    // Three placed points, on 340500 clear's own rule. @see BRACKET_GRAPHICS
+    [TacticalGraphicName.Penetration]: bracket,
     [TacticalGraphicName.Exploitation]: block,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
