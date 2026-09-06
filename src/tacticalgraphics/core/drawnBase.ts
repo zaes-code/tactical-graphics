@@ -362,6 +362,80 @@ function ambushAnchors(clicks: Position[]): Position[] | undefined {
  * and honouring it bent the hook off square. @see hookFromAnchors
  */
 function pursuitAnchors(clicks: Position[]): Position[] | undefined {
+/**
+ * The demolition block's three points, with the third pulled square off the centreline.
+ *
+ * The click is read for how far it lies across the line joining points 1 and 2, and for
+ * which side it fell on; its component along that line is discarded. Placed at the
+ * centreline's midpoint so the handle sits at the middle of the side it defines, rather
+ * than wherever along the rail the operator happened to click.
+ */
+function sideAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [start, end, click] = clicks;
+
+    const axis = turf.bearing(turf.point(start), turf.point(end));
+    const span = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
+    if (!isFinite(span) || span <= 0) return undefined;
+    const middle = turf.destination(turf.point(start), span / 2, axis, {units: 'meters'});
+
+    const reach = turf.distance(middle, turf.point(click), {units: 'meters'});
+    const toClick = turf.bearing(middle, turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const side = turf.destination(middle, Math.abs(across), axis + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [start, end, side];
+}
+
+/**
+ * 152800's three points, with the third pulled onto the perpendicular at point 2.
+ *
+ * **Not `pursuitAnchors`, and the difference is not cosmetic.** The two symbols carry the
+ * same constraint but number their points from opposite ends: pursuit's point 1 is the
+ * line's *beginning*, mobile defence's is the arrowhead *tip*. So pursuit measures its run
+ * as `bearing(point 1 → point 2)` and this one as `bearing(point 2 → point 1)` — and those
+ * are not the same reference. On a sphere they differ by the convergence of the meridians,
+ * four degrees over a 660 km run at 20°N, which put the click reader's perpendicular 24 km
+ * away from the generator's. The symbol still drew, because the generator projects again on
+ * every render; what it drew simply was not where the stored point said. Measured, not
+ * reasoned about: the arc's far end landed 23,674 m from point 3.
+ *
+ * Written to match `MobileDefense.frame` bearing for bearing, so the point that is stored
+ * and the point that is drawn are the same point.
+ *
+ * **Three clicks only.** A two-point base is left exactly as it is: the only ones in
+ * existence are the ellipses saved before 2026-09-06, and the side their arc fell on is in
+ * their `mirrored` amplifier, which `normalizeDrawnBase` cannot see. Constructing a third
+ * point here put every mirrored one back on the wrong side, silently. Left short, the base
+ * reaches the generator, whose own two-point fallback reads `mirrored` and draws the side it
+ * was saved on; it grows its third point the first time someone edits it, which is the
+ * moment they choose that side themselves.
+ */
+function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [tip, join, click] = clicks;
+
+    // The line's own direction, pointing at the arrowhead — the generator's `axis`.
+    const axis = turf.bearing(turf.point(join), turf.point(tip));
+    const reach = turf.distance(turf.point(join), turf.point(click), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    // The component across the line, signed: its magnitude is the arc's diameter and its
+    // sign is the side the arc falls on. The component *along* is the freedom 152800 does
+    // not have — the arc is tangent to both straights, so the diameter is square to them.
+    const toClick = turf.bearing(turf.point(join), turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const far = turf.destination(turf.point(join), Math.abs(across), axis + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [tip, join, far];
+}
+
     if (clicks.length < 3) return undefined;
     const [start, join, click] = clicks;
 

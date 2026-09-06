@@ -116,7 +116,9 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     // mirror just the same, and `supportsMirror` is the question a panel or a test asks.
     TacticalGraphicName.Abatis,
     TacticalGraphicName.Pursuit,
-    TacticalGraphicName.MobileDefense,
+    // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
+    // so the flip is a placed point rather than an amplifier and there is no mirror gesture
+    // left to advertise. @see MobileDefense.frame
 ];
 
 /**
@@ -396,10 +398,6 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     // @see Pursuit.generateHandles
     if (name === TacticalGraphicName.Pursuit) {
         return {roles: ['mirror', 'shape'], repeating: 'shape'};
-    }
-    // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
-    if (name === TacticalGraphicName.MobileDefense) {
-        return {roles: ['shape', 'mirror'], repeating: 'shape'};
     }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;
@@ -736,11 +734,11 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      */
     [TacticalGraphicName.InfiltrationLane]: 3,
     /*
-     * 271204's own Draw Rules cell is empty and the row inherits 271201's, which gives the
-     * whole demolition block a centreline and a width. It was dropped on one point until
-     * 2026-09-05. @see RoadblockComplete
+     * **152800's three anchor points**, as of 2026-09-06. It was a two-point ellipse whose
+     * only asymmetry was a hidden `mirrored` flag; the plate gives it a tip, a line end and
+     * a point stating the arc's diameter and side. @see MobileDefense
      */
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 2,
+    [TacticalGraphicName.MobileDefense]: 3,
     [TacticalGraphicName.PassageLane]: 2,
     // 290600: "Point 1 defines the entry point and Point 2 defines the exit point."
     [TacticalGraphicName.SafeLaneOrGap]: 2,

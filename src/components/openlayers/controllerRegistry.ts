@@ -97,17 +97,34 @@ const polygonRect = (name: TacticalGraphicName, res: number, sizing: number) => 
 const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), maxPts || undefined, name);
 
-// MobileDefense has no vertices worth editing: its ellipse is fully defined by
-// its two endpoints, and rotate / resize / move already reshape it from them.
-// Clearing `base` on the base feature drops it from the Modify interaction's
-// feature set (getRenderedFeaturesByProp('base')), so the "Modify vertices" mode
-// has nothing to show — no dashed axis line across the ellipse — while every
-// other edit mode still works. Draw and the sample gallery are unchanged.
-const mobileDefense = (name: TacticalGraphicName, res: number, sizing: number) => {
-    const controller = new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res));
-    controller.graphic.base.set('base', false);
-    return controller;
-};
+/**
+ * The demolition block: a drawn centreline and a placed side point, all three grabbable.
+ *
+ * `movement()` alone leaves `dragsVertices` off, which is right while a movement graphic's
+ * handles are a start, an end and a *derived* offset — the offset is not a vertex, so there
+ * is nothing to drag. Point 3 is a vertex here as of 2026-09-05, and the two ends have to
+ * move too: dragging an end should lengthen the symbol and dragging the side should widen
+ * it, each without disturbing the other. Without this the end handles did nothing an
+ * operator wanted and the side handle scaled the whole graphic. (User's report.)
+ *
+ * `enableVertexDragging` also clears `hidesStartHandle`, which the two-point constructor
+ * sets — "a point you can move needs something to grab". @see LineGraphicController
+ */
+const demolition = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), 3, name).enableVertexDragging(3);
+
+/**
+ * 152800: three placed points, every one of them grabbable.
+ *
+ * It was a two-point ellipse whose base was deliberately kept *out* of the Modify
+ * interaction — `base.set('base', false)` — on the reading that the shape was fully
+ * determined by its two endpoints and had "no vertices worth editing". The plate gives it
+ * three anchor points, and the third is the one that states the arc, so there is now
+ * something to drag and the base belongs in the set like any other drawn line.
+ * @see MobileDefense, demolition — the same shape of controller
+ */
+const mobileDefense = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), 3, name).enableVertexDragging(3);
 
 const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
     new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
