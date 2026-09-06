@@ -186,4 +186,35 @@ describe('141700 places all three of its anchor points', () => {
         // symptom. Asserted against the registry, which is the only thing a renderer reads.
         expect(usesDrawnAnchors(NAME)).toBe(false);
     });
+
+    it('publishes grips read the same way the drawing is, so a rotate cannot part them', () => {
+        /*
+         * **A rotate does not go through the normalizer.** It writes turned coordinates
+         * straight onto the base, and a turn computed in projected metres does not leave a
+         * geodesic 120 degree arc exactly consistent — so the drawing settles them on the way
+         * past. Publishing the grips off the *raw* base placed them from one description and
+         * the arc from another, and point 3's dot sat off the symbol after a rotation.
+         * (User's report, 2026-09-06: "point 3 handle goes off the graphic after rotation".)
+         *
+         * Simulated here as a base nudged off consistency, which is what a rotate leaves.
+         */
+        const settled = anchors(CLICKS);
+        const nudged: Position[] = [
+            settled[0],
+            [settled[1][0] + 0.004, settled[1][1] - 0.003],
+            [settled[2][0] - 0.002, settled[2][1] + 0.005],
+        ];
+        const rendered = renderTacticalGraphic({
+            type: 'Feature',
+            properties: {tacticalGraphic: {name: NAME}},
+            geometry: {type: 'LineString', coordinates: nudged},
+        } as Feature);
+
+        const grips = (rendered.handles.geometry as MultiPoint).coordinates;
+        const drawn = (rendered.graphic.geometry as {coordinates: Position[][]}).coordinates.flat();
+        // Every grip lies on a point the symbol actually draws.
+        for (const grip of grips) {
+            expect(Math.min(...drawn.map(d => meters(grip, d)))).toBeLessThan(1);
+        }
+    });
 });
