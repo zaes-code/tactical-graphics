@@ -26,7 +26,7 @@ import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {normalizeDrawnBase} from '../core/drawnBase';
 import {drawClickCount} from '../core/symbology';
-import {baseVertexCount} from '../core/handles';
+import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {TacticalGraphicName} from '../core/type';
 
 const NAME = TacticalGraphicName.Ambush;
@@ -90,5 +90,42 @@ describe('141700 places all three of its anchor points', () => {
     it('is idempotent, so an edit does not walk the symbol', () => {
         const settled = anchors(CLICKS);
         anchors(settled).forEach((p, i) => expect(meters(p, settled[i])).toBeLessThan(1));
+    });
+
+    it('lengthens the arrow alone when point 1 moves, leaving the arc alone', () => {
+        /*
+         * **The reach and the radius are separate numbers, and the gesture has to keep them
+         * separate.** Every edit drag ran through a scale about the centre — `editStretches`
+         * on an `AnchorClickController` — so grabbing the arrow tip resized the whole symbol,
+         * arc and all. Nothing about the geometry required that. (User's call, 2026-09-06:
+         * "allow the user to drag point 1 to lengthen the arrow line w/o resizing
+         * wholesomely. Only the resize icon should resize wholesomely.")
+         *
+         * Asserted through the library's own reader, which is what both engines run on an
+         * edited base: move point 1 out along its axis and the chord — and so the arc's
+         * radius, which follows from it — must not move at all.
+         */
+        const settled = anchors(CLICKS);
+        const chord = meters(settled[1], settled[2]);
+        const middle = turf.midpoint(turf.point(settled[1]), turf.point(settled[2]))
+            .geometry.coordinates as Position;
+        const reach = meters(middle, settled[0]);
+
+        // The tip dragged twice as far out, along the bisector it already sits on.
+        const axis = turf.bearing(turf.point(middle), turf.point(settled[0]));
+        const pulled = turf.destination(turf.point(middle), reach * 2, axis, {units: 'meters'})
+            .geometry.coordinates as Position;
+        const after = anchors([pulled, settled[1], settled[2]]);
+
+        expect(meters(after[1], after[2])).toBeCloseTo(chord, -1);
+        expect(meters(middle, after[0]) / reach).toBeCloseTo(2, 1);
+    });
+
+    it('is no longer read back as a frame, which is what made every drag a scale', () => {
+        // `DRAWN_ANCHOR_GRAPHICS` routes the centre / size / rotation machinery a graphic
+        // needs when its points are decomposed into scalars and laid back out. 141700's
+        // points are its shape, so it left — the same move 344000 pursuit made, for the same
+        // symptom. Asserted against the registry, which is the only thing a renderer reads.
+        expect(usesDrawnAnchors(NAME)).toBe(false);
     });
 });

@@ -250,6 +250,9 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
     // Its point 1 is an arrowhead where the rest of its family's is an edge end, so the front
     // edge's order is wrong for it however right the positions are. @see firePositionBase
     if (name === TacticalGraphicName.AttackByFire) return firePositionBase(center, half);
+    // Its three points are a tip and an arc's two ends, which no other layout here describes.
+    // @see arcAndArrowBase
+    if (name === TacticalGraphicName.Ambush) return arcAndArrowBase(center, half);
     if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
     return undefined;
 }
@@ -285,6 +288,29 @@ export function firePositionBase(center: Position, half: number): Position[] {
     const [cx, cy] = center;
     const back = half * FIRE_POSITION_SAMPLE_BAR_RATIO;
     return [[cx - half, cy], [cx + half, cy - back], [cx + half, cy + back]];
+}
+
+/**
+ * The base 141700 ambush expects, for anything that has to synthesise one.
+ *
+ * Its three points are the arrowhead's tip and the curved back's two endpoints, and the arc
+ * spans a known 120 degrees — so the chord fixes the radius and the whole figure follows from
+ * two numbers: where the tip is and how wide the arc is. Laid out at the dropped form's own
+ * reach of two radii, so the swept symbol is the shape a hand-drawn one settles into, and
+ * across the full run so it reads at the same size as its neighbours.
+ *
+ * The arithmetic: with the tip `reach * r` from the centre and the arc ending `r * cos(60)`
+ * beyond it, the figure spans `(reach + cos 60) * r`. Setting that to the run gives the
+ * radius, and the endpoints sit `r * sin(60)` either side of the axis. @see ambushAnchors
+ */
+export function arcAndArrowBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const reach = 2;
+    const cos60 = Math.cos((60 * Math.PI) / 180);
+    const sin60 = Math.sin((60 * Math.PI) / 180);
+    const radius = (2 * half) / (reach + cos60);
+    const arcX = cx - half + reach * radius + radius * cos60;
+    return [[cx - half, cy], [arcX, cy + radius * sin60], [arcX, cy - radius * sin60]];
 }
 
 /**

@@ -176,7 +176,13 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
  * restore shim and a test all ask the same question.
  */
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Ambush,
+    /*
+     * **141700 left on 2026-09-06**, the way 344000 pursuit did. This list routes the centre /
+     * size / rotation machinery a graphic needs when its points are read back as a *frame*,
+     * and that machinery is what made every edit drag a scale — so the arrow tip could not be
+     * lengthened without resizing the arc with it. Its three points are its shape now.
+     * @see squareOntoBisector
+     */
     TacticalGraphicName.Contain,
     // **The four points are the base; they are just not the user's to place.** The
     // demonstration is dropped on one click and points 2, 3 and 4 are derived from point
