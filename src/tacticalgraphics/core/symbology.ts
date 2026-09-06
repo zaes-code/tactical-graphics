@@ -1329,6 +1329,16 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * (User's call, 2026-09-06.) @see firePositionAnchors
      */
     [TacticalGraphicName.AttackByFire]: 3,
+    /*
+     * **Three clicks for every two-rail crossing**, whether it stores three points or four.
+     * One rail is placed end to end and the third click sets how far the other sits across
+     * it; a fourth point, where the plate numbers one, is wherever "parallel and the same
+     * length" puts it and is not worth asking for. (User's call, 2026-09-06: "just have the
+     * 4th point be auto-calculated".) @see parallelRailAnchors
+     */
+    [TacticalGraphicName.Bridge]: 3,
+    [TacticalGraphicName.Gap]: 3,
+    [TacticalGraphicName.AssaultCrossing]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,

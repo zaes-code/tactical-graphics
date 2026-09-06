@@ -439,7 +439,14 @@ describe('an affordance gesture means the whole graphic', () => {
  * never opts into `editStretches` and the grab was simply not claimed.
  */
 describe('the width handle is claimed in edit mode', () => {
-    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.Bridge])(
+    /**
+     * **271100 bridge left this list on 2026-09-06** — it has no offset handle any more. Its
+     * rails' separation was a `radius` amplifier dragged by a derived grip, and its plate
+     * gives that separation an anchor point instead, so all three of its grips are placed
+     * vertices. A corridor's width is genuinely an amplifier and still has one.
+     * @see parallelRailAnchors, carriesSeparationInBase
+     */
+    it.each([TacticalGraphicName.AirCorridor])(
         "claims %s's offset handle",
         name => {
             const manager = stubbedManager();

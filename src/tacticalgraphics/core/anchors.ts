@@ -935,6 +935,82 @@ export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[
     return [start, join, tip];
 }
 
+/**
+ * The anchor points of a **two-rail crossing**, from the three clicks that place them.
+ *
+ * APP-06 271500 ford easy and 271600 ford difficult letter `PT 1` and `PT 2` at the ends of
+ * one bar and `PT 3` on the other; 271100 bridge and 271300 assault crossing say it in words —
+ * *"Points 1 and 2 define one side of the gap and points 3 and 4 define the opposite side"* —
+ * and number four, the fourth being wherever "the opposite side" puts it.
+ *
+ * So one rail is placed end to end, and the third click states only **how far across the
+ * other rail sits, and on which side**. Its component along the rail is discarded, the way
+ * `sideAnchors` discards the same thing for the bracket tasks: two parallel rails of one
+ * length have no way to draw an along-rail offset, so storing it would keep a number the
+ * symbol cannot show and leave the grip off the bar it belongs to. (User's call, 2026-09-06:
+ * "points 1, 2 for length and point 3 to determine the parallel line […] put point 3 right
+ * across from point 2".)
+ *
+ * @param stored how many points the graphic's base holds — four for the two that number a
+ * fourth, three for the fords, whose plate letters only three. The fourth is `p3` displaced
+ * by `p1 → p2`, so the rails run the same way and are the same length by construction. This
+ * is `hairpinFourthPoint`'s mirror image: a hairpin's legs *oppose*, and these are parallel.
+ */
+export function parallelRailAnchors(clicks: Position[] | undefined, stored = 4): Position[] | undefined {
+    if (!clicks || clicks.length < 3) return undefined;
+    const [one, two, click] = clicks;
+
+    const along = turf.bearing(turf.point(one), turf.point(two));
+    const reach = meters(two, click);
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    const toClick = turf.bearing(turf.point(two), turf.point(click));
+    const across = reach * Math.sin(((toClick - along) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    // Square across from point 2, which is where the plate's own PT 3 leader lands.
+    const three = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    if (stored < 4) return [one, two, three];
+
+    const rail = meters(one, two);
+    const four = turf.destination(turf.point(three), rail, along + 180, {units: 'meters'}).geometry
+        .coordinates as Position;
+    return [one, two, three, four];
+}
+
+/**
+ * A two-rail crossing read back as the centreline and half-separation its generators draw.
+ *
+ * Those were built from a drawn centreline and a `radius` amplifier, which is the separation
+ * stated twice — once as a number nobody could see and once nowhere at all. The points carry
+ * it now, and this is the one place that converts between the two so the drawing code did not
+ * have to change. @see parallelRailAnchors
+ */
+export function parallelRailFrame(
+    coords: Position[] | undefined,
+): {centre: Position[]; half: number} | undefined {
+    if (!coords || coords.length < 3) return undefined;
+    const [one, two, three] = coords;
+
+    const along = turf.bearing(turf.point(one), turf.point(two));
+    const reach = meters(two, three);
+    if (!isFinite(reach) || !(reach > 0)) return undefined;
+
+    const toThree = turf.bearing(turf.point(two), turf.point(three));
+    const across = reach * Math.sin(((toThree - along) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    // The centreline runs half way between the rails, which is what the generators offset
+    // from in both directions.
+    const half = Math.abs(across) / 2;
+    const side = along + Math.sign(across) * 90;
+    const shift = (from: Position): Position =>
+        turf.destination(turf.point(from), half, side, {units: 'meters'}).geometry.coordinates as Position;
+    return {centre: [shift(one), shift(two)], half};
+}
+
 /** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
 export const PARALLEL_LEGS_HALF_OPENING = 0.35;
 

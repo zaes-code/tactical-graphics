@@ -482,6 +482,20 @@ const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
  * bracket's point 3 is its rear, these three have no rear — and the reasons they left the
  * block contract read differently even though the effect is the same.
  */
+/**
+ * The crossings drawn as two parallel rails, whose separation is an anchor point.
+ *
+ * 271100 bridge, 271300 assault crossing, 271500 ford easy, 271600 ford difficult, and FM's
+ * gap, which shares the bridge's generator and its picture. @see parallelRailAnchors
+ */
+const RAIL_CROSSING_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Bridge,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.AssaultCrossing,
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+];
+
 const PLACED_BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
     // 152000 joined on 2026-09-06: point 1 the arrowhead's tip, points 2 and 3 the back
     // line's ends. Two clicks rather than three, because its own constraints construct the
@@ -1201,6 +1215,21 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // 152000's three: the tip and the back line's two ends. Drawn in two clicks, like the
     // ambush whose constraints it shares. @see firePositionAnchors, DRAW_CLICKS
     [TacticalGraphicName.AttackByFire]: 3,
+    /*
+     * **The two-rail crossings, in the counts their own plates use.**
+     *
+     * 271100 bridge and 271300 assault crossing say four outright — *"points 1 and 2 define
+     * one side of the gap and points 3 and 4 define the opposite side"* — while 271500 ford
+     * easy and 271600 ford difficult letter only three on their Templates, `PT 1` and `PT 2`
+     * on one bar and `PT 3` on the other. All four are drawn with three clicks; only what
+     * they store differs. FM's gap shares the bridge's generator and its picture, so it
+     * follows it. @see parallelRailAnchors
+     */
+    [TacticalGraphicName.Bridge]: 4,
+    [TacticalGraphicName.Gap]: 4,
+    [TacticalGraphicName.AssaultCrossing]: 4,
+    [TacticalGraphicName.FordEasy]: 3,
+    [TacticalGraphicName.FordDifficult]: 3,
     [TacticalGraphicName.Cover]: 4,
     [TacticalGraphicName.Guard]: 4,
     [TacticalGraphicName.Screen]: 4,
@@ -1641,6 +1670,14 @@ export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
          * would falsify. @see Pursuit, usesFrontEdgeBase
          */
         name === TacticalGraphicName.Pursuit ||
+        /*
+         * **The two-rail crossings carry their separation in the base as of 2026-09-06.** It
+         * was a `radius` amplifier — the gap between the rails as a number with nowhere to
+         * place it — and their plates give it an anchor point. A `width` filed beside those
+         * points would be the same second copy this predicate exists to prevent.
+         * @see parallelRailAnchors
+         */
+        RAIL_CROSSING_GRAPHICS.includes(name) ||
         /*
          * **The four bracket mission tasks state it in points 1 and 2, not in point 3.**
          *

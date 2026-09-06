@@ -27,7 +27,7 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
-import {carriesSeparationInBase} from './handles';
+import {baseVertexCount, carriesSeparationInBase} from './handles';
 import geometryService from './GeometryService';
 import {
     anchorsForBow,
@@ -36,6 +36,7 @@ import {
     hookAnchorsFromClicks,
     arcAndArrowAnchorsFromClicks,
     hairpinAnchors,
+    parallelRailAnchors,
     runAndArcFromAnchors,
 } from './anchors';
 import {securityOperationAnchors} from '../graphics/SecurityOperation';
@@ -652,6 +653,22 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
          */
         case TacticalGraphicName.AttackByFire:
             return firePositionAnchors(clicks);
+
+        /*
+         * **The two-rail crossings: one rail placed end to end, the other set across it.**
+         *
+         * 271100 and 271300 number four points, two per side, and the fourth carries no
+         * decision — the rails are parallel and the same length, so it is wherever that puts
+         * it. 271500 and 271600 letter only three on their Template, the third on the far
+         * bar. Same reading either way; only how many the base stores differs, which
+         * `baseVertexCount` already says. @see parallelRailAnchors
+         */
+        case TacticalGraphicName.Bridge:
+        case TacticalGraphicName.Gap:
+        case TacticalGraphicName.AssaultCrossing:
+        case TacticalGraphicName.FordEasy:
+        case TacticalGraphicName.FordDifficult:
+            return parallelRailAnchors(clicks, baseVertexCount(name) ?? 4);
 
         default:
             return undefined;
