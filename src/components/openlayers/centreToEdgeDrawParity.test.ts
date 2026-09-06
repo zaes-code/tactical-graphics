@@ -17,7 +17,7 @@
  * rather than against the six names: **whatever OpenLayers ends on the second click, the
  * library has to say so.**
  */
-import {TacticalGraphicName, drawsByAnchorClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, dropSizePx, frameFromDrag, listTacticalGraphicNames, usesDrawnAnchors}
+import {TacticalGraphicName, baseVertexCount, drawsByAnchorClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, dropSizePx, frameFromDrag, listTacticalGraphicNames, usesDrawnAnchors}
     from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
@@ -131,11 +131,22 @@ describe('a centre-to-edge draw is a library fact', () => {
         });
     });
 
-    it('excludes the demonstration, which is dropped whole on one click', () => {
-        // Its base is four derived anchors, so it is in `DRAWN_ANCHOR_GRAPHICS` — and it is
-        // still a one-click drop. The two questions are separate. @see dropSizePx
-        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(true);
-        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeDefined();
+    it('keeps the demonstration out, now because it is drawn point by point', () => {
+        /*
+         * **The example changed; the distinction did not.** This graphic was the standing
+         * illustration that *how long a draw runs* and *what shape the base is* are two
+         * questions: its base held four derived anchors while the draw finished on one click,
+         * so it was in `DRAWN_ANCHOR_GRAPHICS` and in `DROP_SIZE_PX` at the same time.
+         *
+         * 343300 names four anchor points and each is placed as of 2026-09-06, so it is out
+         * of both lists and its draw takes four clicks. The predicate it was here to be
+         * excluded from still has to answer `false`, which is what this now pins — and the
+         * blanket assertion above ("finds no graphic still drawn centre-to-edge") is what
+         * keeps the distinction guarded generally. @see baseVertexCount, Demonstration
+         */
+        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeUndefined();
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
         expect(drawsCentreToEdge(TacticalGraphicName.Demonstration)).toBe(false);
     });
 

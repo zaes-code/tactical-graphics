@@ -174,7 +174,10 @@ const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     // the base carries and what a snapshot holds. Membership here is about the *shape of
     // the description*; whether a vertex can be dragged is a separate question, and the
     // answer for this one is no. @see DERIVED_ANCHOR_GRAPHICS
-    TacticalGraphicName.Demonstration,
+    //
+    // **343300 left on 2026-09-06.** Its four points are placed now, not derived, so it is an
+    // ordinary drawn line whose vertices are its shape — it needs none of the centre / size /
+    // rotation machinery this list exists to route. @see Demonstration
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,
@@ -399,6 +402,18 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
 export function handleContract(name: TacticalGraphicName): HandleContract {
     if (CORRIDOR_GRAPHICS.includes(name)) {
         return {roles: [], repeating: 'shape', offsetAfterVertices: true, offsetScale: 1};
+    }
+    /*
+     * **The two four-point hairpins: every grip is a placed anchor point.**
+     *
+     * 343300 and 341900 both name four, and both had none of them draggable — the
+     * demonstration was dropped whole and published `[edge, centre]`, and 341900 published a
+     * U-height offset grip plus its two base ends. Nothing either symbol is described by was
+     * grabbable. Each point moves on its own now, so there is no offset and no number beside
+     * the base to write. @see Demonstration, ReliefInPlace
+     */
+    if (name === TacticalGraphicName.Demonstration || name === TacticalGraphicName.ReliefInPlace) {
+        return {roles: ['shape', 'shape', 'shape', 'shape'], repeating: 'shape'};
     }
     /*
      * **Three shape handles where the third point is a vertex, not an offset.**
@@ -891,15 +906,35 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.AttackByFire]: 2,
     [TacticalGraphicName.SupportByFire]: 2,
 
-    // The retrograde tasks: an axis from where the force is to where it goes.
-    [TacticalGraphicName.Delay]: 2,
-    [TacticalGraphicName.Withdraw]: 2,
-    [TacticalGraphicName.WithdrawUnderPressure]: 2,
-    [TacticalGraphicName.Disengage]: 2,
-    [TacticalGraphicName.Retirement]: 2,
-    [TacticalGraphicName.ForwardPassageOfLines]: 2,
-    [TacticalGraphicName.RearwardPassageOfLines]: 2,
-    [TacticalGraphicName.ReliefInPlace]: 2,
+    /*
+     * **The seven cane arrows: three, not two.** APP-06 gives each of them "three anchor
+     * points... Point 1 defines the tip of the arrowhead. Point 2 defines the end of the
+     * straight line portion of the symbol. Point 3 defines the diameter and orientation of
+     * the 180 degree circular arc." Held at 2, the third had nowhere to live and the arc came
+     * from a `size` amplifier with a `mirrored` flag for its side - a hidden boolean where the
+     * standard names a place. (User's call, 2026-09-06.) @see RetrogradeTask
+     */
+    [TacticalGraphicName.Delay]: 3,
+    [TacticalGraphicName.Withdraw]: 3,
+    [TacticalGraphicName.WithdrawUnderPressure]: 3,
+    [TacticalGraphicName.Disengage]: 3,
+    [TacticalGraphicName.Retirement]: 3,
+    [TacticalGraphicName.ForwardPassageOfLines]: 3,
+    [TacticalGraphicName.RearwardPassageOfLines]: 3,
+    /*
+     * **341900 takes four**, one per anchor point its rule names: the two arrowhead tips and
+     * the two arrow ends. It was 2 plus a `size` amplifier that set the U's height, which
+     * forced the two arrows parallel and equal-length and left points 3 and 4 with nowhere
+     * to live. (User's call, 2026-09-06.) @see ReliefInPlace
+     */
+    [TacticalGraphicName.ReliefInPlace]: 4,
+    /*
+     * **343300 takes four too**, for the same reason and by the same rule's wording: point 1
+     * the arrowhead tip, point 2 the end of the first arrow's straight portion, points 3 and
+     * 4 the second straight line. It was a one-click drop whose four points were laid out
+     * from one centre, so the operator stated position and nothing else. @see Demonstration
+     */
+    [TacticalGraphicName.Demonstration]: 4,
 
     // Two anchor points, the symbol built between them. These were capped in the
     // OpenLayers registry and nowhere else until 2026-08-15, which is the exact failure
@@ -1343,7 +1378,7 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
  */
 export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
     if ((baseVertexCount(name) ?? 2) < 3) return false;
-    return isMovementGraphic(name) || name === TacticalGraphicName.MobileDefense;
+    return isMovementGraphic(name) || name === TacticalGraphicName.MobileDefense || CANE_ARROW_GRAPHICS.includes(name);
 }
 
 /** How many points this graphic's base takes, or `undefined` for no limit. */

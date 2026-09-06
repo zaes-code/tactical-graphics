@@ -1,5 +1,5 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
-import {Feature, LineString, MultiLineString, MultiPoint, Point} from "geojson";
+import {Feature, LineString, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
 import * as turf from "../core/turf";

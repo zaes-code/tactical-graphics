@@ -84,15 +84,38 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
     type: string = 'LineString';
 
     /**
-     * The four points, from the anchor outward.
+     * The four points APP-06 343300 names, **as the operator placed them**.
      *
-     * Read off the base when it carries them, which is every base a holder writes. The
-     * `opts` fallback is for a two-point sketch and for a caller handing in a raw anchor
-     * — points 3 and 4 are derived either way, so a base whose legs disagree with them
-     * resolves to the canonical shape rather than to whatever it had drifted into.
+     * > Anchor Points. This symbol requires four anchor points. Point 1 defines the tip of
+     * > the arrowhead. Point 2 defines the end of the straight line portion of the first
+     * > arrow. Points 3 and 4 define the length of the second straight line.
+     * >
+     * > Size/Shape. Points 1 and 2 and points 3 and 4 determine the length of each side.
+     * > Points 2 and 3 shall be connected by a smooth, curved line.
+     *
+     * So the base carries `[P1, P2, P3, P4]` and this reads them straight through. **Each
+     * side has its own length** — the rule says "the length of each side", not one length
+     * for both — and nothing in it makes the two sides parallel.
+     *
+     * ## What this replaced
+     *
+     * A one-click drop. The four points existed, but `anchorsForParallelLegs` laid all of
+     * them out from a single centre at a fixed leg length and a fixed opening, so the
+     * operator stated position and nothing else: the two sides were forced parallel and
+     * equal, which the plate does not say, and points 2, 3 and 4 could not be placed at all.
+     * (User's call, 2026-09-06.)
+     *
+     * ## The fallback, which is what keeps old files readable
+     *
+     * A base with fewer than four points is one written before that change — a dropped
+     * demonstration saved as its derived four, or a mid-draw sketch. Those resolve through
+     * the old layout, so nothing saved stops rendering and a half-finished draw still shows
+     * a symbol. @see anchorsForParallelLegs
      */
     private points(base: Feature<LineString>, opts?: IBaseGraphicOptions): Position[] {
         const coordinates = base.geometry.coordinates;
+        if (coordinates.length >= 4) return coordinates.slice(0, 4);
+
         const drawn = parallelLegsFromAnchors(coordinates);
         const tip = drawn?.tip ?? coordinates[0] ?? [0, 0];
         const size = drawn?.size ?? (opts?.size && opts.size > 0 ? opts.size : DEMONSTRATION_DEFAULT_SIZE);
@@ -113,10 +136,15 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
         return this.asMultiLineStringFeature([[tip1, bend1], turn as Position[], [bend2, tip2]]);
     }
 
-    /** `[edge, centre]` — the point-anchored contract. The edge is the first leg's far end. */
+    /**
+     * **A grip on each of the four points the plate names**, in their own order.
+     *
+     * It published `[edge, centre]` — the point-anchored contract — while the symbol was
+     * dropped whole, so the only draggable mark scaled a shape the operator could not
+     * otherwise change. Every point is placed now, so every point is grabbable.
+     */
     generateHandles(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiPoint> {
-        const [tip1, bend1] = this.points(base, opts);
-        return this.asMultiPointFeature([bend1, tip1]);
+        return this.asMultiPointFeature(this.points(base, opts));
     }
 
     /** The first leg, which is where the paint cuts its break for `DEM`. */

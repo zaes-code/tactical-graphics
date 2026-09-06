@@ -1250,58 +1250,127 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 }
 
-// ─── ReliefInPlace — sideways U with a single arrowhead ──────────────────────
-// Base: 2-point line (p0 = RIP-label end, p1 = curve end). The U's two parallel
-// legs run between p0–p1 (top) and p1b–p0b (bottom, offset perpendicular by the
-// U height); a semicircle at the p1 end connects them, and a single arrowhead
-// sits at p0b pointing outward. Output order is [top, curve, bottom, arrow] —
-// the style function relies on this order.
+/**
+ * An arrowhead's length as a share of the arrow it ends, for 341900.
+ *
+ * The plate draws heads clearly subordinate to their shafts; a fifth reads that way at every
+ * size and keeps both heads proportional when the two arrows differ in length, which the
+ * rule allows. @see ReliefInPlace
+ */
+const ARROWHEAD_LEG_SHARE = 0.2;
+
+/**
+ * # Relief in place — APP-06 341900
+ *
+ * > **Anchor Points.** This symbol requires four anchor points. Point 1 defines the tip of
+ * > the first arrowhead. Point 2 defines the end of the straight line portion of the first
+ * > arrow. Point 3 defines the tip of the second arrowhead. Point 4 defines the end of the
+ * > second arrow.
+ * >
+ * > **Size/Shape.** Points 1 and 2 and points 3 and 4 determine the length of each arrow.
+ * > Points 2 and 3 shall be connected by a smooth, curved line.
+ * >
+ * > **Orientation.** Determined by the anchor points. The unit being relieved is typically
+ * > located at the base of the curve and the unit performing the relief is typically located
+ * > at the end of the symbol. The arrowhead typically points to the location the relieved
+ * > unit should move to.
+ *
+ * So the figure is a hairpin of **two arrows pointing opposite ways**: arrow 1 runs
+ * `P2 → P1` with its head at the free end, arrow 2 runs `P4 → P3` with its head *at the
+ * curve*, and the curve joins P2 to P3. That the two heads sit at opposite ends of the
+ * hairpin is the whole point of the symbol — one unit leaving, one arriving.
+ *
+ * ## What this replaced
+ *
+ * A two-point base plus a `size` amplifier. The U's height was `size * 3` and its second leg
+ * was the first one offset perpendicular, so the two arrows were forced parallel and
+ * equal-length and points 3 and 4 existed nowhere. The rule says "the length of **each**
+ * arrow", which is two lengths, and says nothing about the legs being parallel.
+ * (User's call, 2026-09-06.)
+ *
+ * ## The one interpretation
+ *
+ * **The curve's shape.** The rule asks for "a smooth, curved line" from P2 to P3 and says no
+ * more, so a semicircle on the P2–P3 chord is a choice — the same one `Demonstration` makes
+ * for the same words, bulging away from the legs so the figure reads as a hairpin rather
+ * than a flattened Z. Kept identical to 343300's on purpose: two rules phrased alike should
+ * not produce two different curves.
+ *
+ * Output order is `[labelled leg, curve, other leg, head at P1, head at P3]` and
+ * `reliefInPlacePaint` relies on it — index 0 is the leg the `RIP` break is cut into, which
+ * per the Orientation note is the one running to the curve from the relieving unit's end.
+ * @see reliefInPlacePaint
+ */
 export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.ReliefInPlace;
     type: string = 'LineString';
 
-    private computeU(base: Feature<LineString>, opts: PointGraphicOptions) {
-        const baseCoords = base.geometry.coordinates;
-        const p0 = baseCoords[0];
-        const p1 = baseCoords[baseCoords.length - 1];
-        const size = Math.max(opts?.size ?? 20, 1);
-        const uHeight = size * 3;
+    /** How many points the joining curve is drawn with. Matches 343300's. */
+    private static readonly CURVE_STEPS = 32;
 
-        const axisBearing = turf.bearing(p0, p1);
-        const perpBearing = axisBearing + 90;
+    /**
+     * The four points, as placed.
+     *
+     * A base with fewer than four is one written before 2026-09-06 — two points and a
+     * `size` — and resolves through the old parallel-leg layout so nothing saved stops
+     * rendering. `size * 3` was the U's height then and is kept exactly, or a restored
+     * symbol would come back a different shape from the one that was saved.
+     */
+    private points(base: Feature<LineString>, opts?: PointGraphicOptions): Position[] {
+        const coords = base.geometry.coordinates;
+        if (coords.length >= 4) return coords.slice(0, 4);
 
-        const p0b = turf.destination(p0, uHeight, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const p1b = turf.destination(p1, uHeight, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const curveCenter = turf.destination(p1, uHeight / 2, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const curveCoords = turf.lineArc(
-            turf.point(curveCenter),
-            uHeight / 2,
-            axisBearing - 90,
-            axisBearing + 90,
-            {units: 'meters'},
-        ).geometry.coordinates as Position[];
-
-        return {p0, p1, p0b, p1b, size, curveCoords};
+        const p4 = coords[0];
+        const p3 = coords[coords.length - 1];
+        const height = Math.max(opts?.size ?? 20, 1) * 3;
+        const across = turf.bearing(turf.point(p4), turf.point(p3)) + 90;
+        const out = (from: Position): Position =>
+            turf.destination(turf.point(from), height, across, {units: 'meters'}).geometry.coordinates as Position;
+        // Legacy order maps onto the plate's: the old `p0` is P4, `p1` is P3, and the
+        // offset pair are P1 and P2. @see the class doc
+        return [out(p4), out(p3), p3, p4];
     }
 
-    generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const {p0, p1, p0b, p1b, size, curveCoords} = this.computeU(base, opts);
-        const topLine: Position[] = [p0, p1];
-        const bottomLine: Position[] = [p1b, p0b];
-        const bottomArrow = geometryService.computeArrowheadPoints(p1b, p0b, size, 45);
-        // Second arrow on the RIP line, tip at p1 pointing into the curve.
-        const topArrow = geometryService.computeArrowheadPoints(p0, p1, size, 45);
-        return this.asMultiLineStringFeature([topLine, curveCoords, bottomLine, bottomArrow, topArrow]);
+    generateGraphics(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiLineString> {
+        const [p1, p2, p3, p4] = this.points(base, opts);
+
+        const chord = turf.bearing(turf.point(p2), turf.point(p3));
+        const span = turf.distance(turf.point(p2), turf.point(p3), {units: 'meters'});
+        const curve = geometryService.createSemicircle(
+            p2,
+            p3,
+            chord,
+            span / 2,
+            ReliefInPlace.CURVE_STEPS,
+            true,
+        ) as Position[];
+
+        /*
+         * The arrowheads are sized off the legs they sit on rather than off a filed number,
+         * so each is proportional to its own arrow — which is what "points 1 and 2 and points
+         * 3 and 4 determine the length of each arrow" leaves them free to be.
+         */
+        const head = (from: Position, tip: Position): Position[] => {
+            const reach = turf.distance(turf.point(from), turf.point(tip), {units: 'meters'});
+            return geometryService.computeArrowheadPoints(from, tip, reach * ARROWHEAD_LEG_SHARE, 45) as Position[];
+        };
+
+        return this.asMultiLineStringFeature([
+            [p4, p3],
+            curve,
+            [p2, p1],
+            head(p2, p1),
+            head(p4, p3),
+        ]);
     }
 
-    generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // [0] = offset (U-height) handle; [1..] = base endpoint handles.
-        const {p0, p1, p1b} = this.computeU(base, opts);
-        return this.asMultiPointFeature([p1b, p0, p1]);
+    /** A grip on each of the four points the plate names, in their own order. */
+    generateHandles(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(this.points(base, opts));
     }
 
     generateLabels(base: Feature<LineString>, _opts: PointGraphicOptions): Feature<any> {
-        // Style function draws "RIP" itself in a gap along the top line; this
+        // `reliefInPlacePaint` draws "RIP" itself in a gap along the labelled leg; this
         // geometry is unused but kept for the standard handler contract.
         return this.asPointFeature(base.geometry.coordinates[0]);
     }

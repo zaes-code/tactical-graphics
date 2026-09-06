@@ -769,10 +769,30 @@ const BYPASS_POINTS = new Set<TacticalGraphicName>([
  */
 function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
     if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
+    if (pts === 3) {
+        return [
+            [cx - half, cy + half * 0.2],
+            [cx, cy - half * 0.2],
+            [cx + half, cy + half * 0.2],
+        ];
+    }
+    /*
+     * **Four or more get four**, not the three-point V truncated.
+     *
+     * This returned the V whatever it was asked for, so a graphic the library says takes four
+     * base points was sampled — and thumbnailed, and round-tripped in `persistence.test.ts` —
+     * with three, which put every four-point symbol through whatever fallback its generator
+     * keeps for a short base rather than through the shape it actually draws. 341900 found it:
+     * its four-point reading was never exercised by any sample. (2026-09-06.)
+     *
+     * A shallow open quadrilateral, so the two halves of a hairpin symbol read as two
+     * distinguishable sides rather than folding onto one line.
+     */
     return [
-        [cx - half, cy + half * 0.2],
-        [cx, cy - half * 0.2],
-        [cx + half, cy + half * 0.2],
+        [cx - half, cy + half * 0.45],
+        [cx - half * 0.2, cy - half * 0.35],
+        [cx + half * 0.2, cy - half * 0.35],
+        [cx + half, cy + half * 0.45],
     ];
 }
 
