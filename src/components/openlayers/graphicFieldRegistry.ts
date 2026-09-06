@@ -142,6 +142,24 @@ export type GraphicFieldSet = {
      * The storage is unchanged either way: `labels.rangeFan.bands`, first band to last.
      */
     fixedBands?: number;
+
+    /**
+     * The sector's opening is **one symmetric angle**, not a left and a right bearing per
+     * ring — 200700 alone.
+     *
+     * Its Size/Shape names *"a stop relative bearing"*, singular, and the plate says it is
+     * "an equal angle either side of the search axis". The range-fan editor's default is the
+     * weapon fans' shape: two absolute azimuths on every band, which for a two-ring 200700 is
+     * four fields stating one number four times over — and nothing stops a user typing four
+     * that disagree.
+     *
+     * Set, the editor offers one **Stop Relative Bearing** instead and the axis field is
+     * named for what the plate calls it. The storage is unchanged: the half-angle is written
+     * onto every band as a symmetric `leftAzimuthDeg` / `rightAzimuthDeg` pair, which is what
+     * the generator reads — and it re-centres the pair on the axis, so only the angle between
+     * them survives. @see RadarSearchDoctrine.frame, setRadarHalfAngle
+     */
+    stopRelativeBearing?: boolean;
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -990,8 +1008,19 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
      * **Two bands, fixed.** The editor's add and remove offered a third ring, which the
      * plate has no reading for — the two are named individually, as a start range and a
      * stop range. @see fixedBands
+     *
+     * **And one opening, not four bearings.** `stopRelativeBearing` collapses the fans'
+     * per-band left/right azimuths into the single relative angle 200700 states, so the modal
+     * carries exactly the four numbers the plate names and no more: the search axis azimuth,
+     * the start range, the stop range and the stop relative bearing. (User's call,
+     * 2026-09-05.) @see stopRelativeBearing
      */
-    [TacticalGraphicName.RadarSearchDoctrine]: {...NAME_FIELD_ONLY, rangeFan: true, fixedBands: 2},
+    [TacticalGraphicName.RadarSearchDoctrine]: {
+        ...NAME_FIELD_ONLY,
+        rangeFan: true,
+        fixedBands: 2,
+        stopRelativeBearing: true,
+    },
     /*
      * APP-06 152200 letters **one** box, `A`, and `A` is the tactical symbol indicator --
      * an associated unit symbol centred over point 1, not text. There is no field here for

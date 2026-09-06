@@ -556,9 +556,27 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     protected publishGeometryState(extra?: GraphicGeometryState): void {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
-            radius: this.size,
-            rotation: this.rotation,
-            mirrored: this.mirrored,
+            /*
+             * **A graphic whose base carries its anchor points states its shape once.**
+             *
+             * `radius`, `rotation` and `mirrored` are what a *point-anchored* holder is built
+             * from — a centre, a size and a bearing. The drawn-anchor family stores the plate's
+             * own points instead, and every reader takes all three back out of them:
+             * `runAndArcFromAnchors` returns centre, angle, size, radius **and** side;
+             * `bowFromAnchors` and `hookFromAnchors` do the same for their shapes. Stamping
+             * them as well is a second copy of the geometry — the defect this repo keeps
+             * finding, and the one the demolition block's `width` and 200700's `radius` both
+             * were. (User's call, 2026-09-06.)
+             *
+             * Verified by rendering all seven anchor graphics with each scalar removed: the
+             * drawn geometry is byte-identical every time. What is *not* recoverable from the
+             * points is the arrowhead size, which is a screen distance rather than a place —
+             * `persistedGeometryState` still carries it, and turn, tactical turn and
+             * envelopment need it. @see usesDrawnAnchors, adoptAnchors
+             */
+            ...(usesDrawnAnchors(this.name)
+                ? {}
+                : {radius: this.size, rotation: this.rotation, mirrored: this.mirrored}),
             ...this.persistedGeometryState(),
             ...extra,
         });

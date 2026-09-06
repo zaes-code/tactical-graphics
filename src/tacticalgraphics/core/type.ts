@@ -191,6 +191,19 @@ export interface RangeFanConfig {
 export interface RangeFanOptions extends BaseGraphicOptions {
     bands?: RangeFanBand[];
     centerAzimuthDeg?: number;
+
+    /**
+     * APP-06 200700's four numbers, named as its plate names them.
+     *
+     * Only the radar search doctrine reads these; the two weapon fans ignore them and keep
+     * their bands. They ride this options type rather than one of their own because 200700
+     * shares the fans' holder — the difference is what it is *described by*, not how it is
+     * held. @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    searchAxisAzimuthDeg?: number;
+    startRange?: number;
+    stopRange?: number;
+    stopRelativeBearingDeg?: number;
 }
 
 /**

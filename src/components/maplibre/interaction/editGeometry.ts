@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {generatorOrder, groundLength, mercatorScale, rotationAnchor} from '@zaes/tactical-graphics';
+import {drawnAnchorFrame, generatorOrder, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -628,7 +628,87 @@ const BAND_SEPARATION_FRACTION = 0.05;
  * from `radius`, so the drag drives `radius` and leaves the amplifiers alone
  * rather than inventing a band the user never typed.
  */
+/**
+ * Opens or closes a sector **symmetrically about its axis** — 200700's stop relative bearing.
+ *
+ * One grip states one number, because the plate does: "an equal angle either side of the
+ * search axis". The half-angle is the turn from the axis to the cursor, taken either way
+ * round so the grip may be dragged past the axis and out the other side, and it is written
+ * onto every band as a symmetric pair of absolute bearings — the field the band editor and
+ * the saved amplifiers already carry. `RadarSearchDoctrine.frame` re-centres that pair on
+ * the axis on every render, so only the angle between them survives and a rotate still turns
+ * the symbol.
+ *
+ * The twin of `RangeFanGraphicBase.setRadarHalfAngle`, and the numbers have to agree: both
+ * engines take the axis from the same `rotation`, and the clamp is the same.
+ */
+export function setSectorOpening(description: GraphicDescription, cursor: Position): GraphicDescription {
+    const norm = (deg: number): number => ((deg % 360) + 360) % 360;
+    // The stated axis, with the legacy `rotation` as the fallback a snapshot written before
+    // 2026-09-05 still needs. @see RadarSearchDoctrine.frame
+    const axis = norm(description.properties.searchAxisAzimuthDeg ?? 90 - (description.properties.rotation ?? 0));
+    const edges = radarSectorOpening(pivotOf(description), axis, [cursor[0], cursor[1]]);
+    if (!edges) return description;
+
+    /*
+     * **Written as the stop relative bearing**, which is the field 200700 is described by
+     * since 2026-09-05. The pair of absolute band azimuths this used to write was a range
+     * fan's way of saying the same thing, and it left the plate's own value out of the file
+     * entirely. The pair comes back symmetric about the axis, so either edge states the angle.
+     * @see TacticalGraphicProperties.stopRelativeBearingDeg
+     */
+    const half = norm(edges.rightAzimuthDeg - axis);
+    return {
+        ...description,
+        properties: {...description.properties, stopRelativeBearingDeg: half > 180 ? 360 - half : half},
+    };
+}
+
+/**
+ * Drags 200700's start or stop arc, in the fields its plate names.
+ *
+ * Only the *distance* from the radar counts: the axis is the symbol's own and is moved by the
+ * rotate gesture, so a grip dragged off it states a range and not a new bearing — the same
+ * discipline the third click is read with. The two are kept a proportional gap apart, or the
+ * near arc could be pushed through the far one and leave the sector inside out, with no arc
+ * under the cursor to drag back with. The twin of `RangeFanGraphicBase.setRadarRange`, and
+ * the numbers have to agree.
+ */
+function setRadarRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
+    const centre = toMercator(pivotOf(description) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    /*
+     * **A ground distance, because that is what a range is.** These are EPSG:3857 metres,
+     * inflated by 1/cos(latitude) — the fans' own `setBandRange` below measures the projected
+     * figure and calls it a band range, which is only right near the equator. 200700's ranges
+     * are read off its clicks geodesically by `radarSearchFromClicks` and stated in metres by
+     * its plate, so a drag has to answer in the same unit or the arc would jump the moment it
+     * was grabbed away from the equator. @see mercator.ts
+     */
+    const metres = groundLength(Math.hypot(at[0] - centre[0], at[1] - centre[1]), latitudeFromMercatorY(centre[1]));
+    if (!isFinite(metres) || metres <= 0) return description;
+
+    const props = description.properties;
+    const stop = props.stopRange ?? props.radius ?? metres;
+    const start = props.startRange ?? 0;
+    const gap = stop * BAND_SEPARATION_FRACTION;
+
+    const next =
+        index === 0
+            ? {startRange: Math.min(Math.max(metres, gap), Math.max(gap, stop - gap))}
+            : {stopRange: Math.max(metres, start + gap)};
+    return {...description, properties: {...props, ...next}};
+}
+
 export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
+    /*
+     * **200700 has two named ranges, not a stack of rings.** It shares the fans' grip role
+     * because a range grip is a range grip, but what it writes is `startRange` / `stopRange`
+     * — the fields its plate names and its file carries.
+     */
+    if (description.properties.stopRange !== undefined || description.properties.searchAxisAzimuthDeg !== undefined) {
+        return setRadarRange(description, index, cursor);
+    }
     const center = toMercator(pivotOf(description) as [number, number]);
     const at = toMercator([cursor[0], cursor[1]]);
     // Mercator metres, which is the unit a band stores as of 3.2.0 — the conversion to

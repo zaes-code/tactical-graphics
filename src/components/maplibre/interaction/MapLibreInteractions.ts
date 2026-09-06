@@ -40,7 +40,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {anchorVertex, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -49,6 +49,8 @@ import {
     resize,
     rotate,
     setBandRange,
+    setExtend,
+    setSectorOpening,
     setBend,
     setMirror,
     setOffset,
@@ -196,6 +198,75 @@ function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
  * differ by 22% at this latitude: rescaling put the end of the line nowhere near the rim
  * the user was dragging. The handle *is* the rim, so use it.
  */
+/** A band's stated range, or undefined when the graphic has no such band. */
+function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | undefined {
+    // 200700 has two named ranges rather than a stack of rings. @see radarRanges
+    const named = radarRanges(graphic.properties);
+    if (named) return named[index];
+    const bands = graphic.properties.rangeFan?.bands;
+    if (!bands || index < 0 || index >= bands.length) return undefined;
+    return [...bands].sort((a, b) => a.range - b.range)[index]?.range;
+}
+
+/**
+ * 200700's two ranges, near first, or nothing when this is not a radar search doctrine.
+ *
+ * The one place the read-out and the change-detector both ask "which distances does this
+ * symbol have", so the two cannot disagree about whether a drag moved one.
+ */
+function radarRanges(props: TacticalGraphicProperties): (number | undefined)[] | undefined {
+    if (props.stopRange === undefined && props.searchAxisAzimuthDeg === undefined) return undefined;
+    return [props.startRange, props.stopRange];
+}
+
+/**
+ * Which band a gesture just changed, or undefined when it changed none.
+ *
+ * Compared by sorted range, because that is the order the rim handles are published in and
+ * the order `setBandRange` indexes into — an unsorted comparison would name a different ring
+ * from the one under the cursor the moment two ranges crossed.
+ */
+function changedBand(before: GraphicDescription, after: GraphicDescription): number | undefined {
+    // 200700 states its two as named fields; the fans carry a sorted stack.
+    const namedBefore = radarRanges(before.properties);
+    const namedAfter = radarRanges(after.properties);
+    if (namedBefore && namedAfter) {
+        for (let i = 0; i < namedAfter.length; i++) if (namedBefore[i] !== namedAfter[i]) return i;
+        return undefined;
+    }
+    const was = [...(before.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    const now = [...(after.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    if (!was.length || was.length !== now.length) return undefined;
+    for (let i = 0; i < now.length; i++) if (was[i].range !== now[i].range) return i;
+    return undefined;
+}
+
+/**
+ * The word naming the ring, or nothing.
+ *
+ * 200700's two rings are named individually by its plate — a start range and a stop range —
+ * so an unlabelled figure beside one of them does not say which the drag is changing. A
+ * weapon fan's rings are an arbitrary stack with no doctrinal names, so it keeps the bare
+ * figure. The same split `RangeFanGraphicBase.measureCaption` makes.
+ */
+function bandCaption(graphic: MapLibreTacticalGraphic, bandIndex: number | undefined): string | undefined {
+    if (bandIndex === undefined || graphic.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
+    return ['Start', 'Stop'][bandIndex];
+}
+
+/** `reach` metres from `center` along the direction of `towards`, in projected metres. */
+function projectOnto(center: ProjectedPosition, towards: ProjectedPosition, reach: number): ProjectedPosition {
+    const dx = towards[0] - center[0];
+    const dy = towards[1] - center[1];
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) return towards;
+    // `reach` is a ground distance and these are EPSG:3857 metres, inflated by
+    // 1/cos(latitude) — laid out raw the line stops short of the ring it is measuring.
+    // @see MissionTaskGraphicBase.measureEdge, which states the same correction.
+    const projected = projectedLength(reach, latitudeFromMercatorY(center[1]));
+    return [center[0] + (dx / len) * projected, center[1] + (dy / len) * projected] as ProjectedPosition;
+}
+
 function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition): ProjectedPosition | undefined {
     let best: ProjectedPosition | undefined;
     let bestDistance = 0;
@@ -699,7 +770,14 @@ export class MapLibreInteractions {
         }
 
         const wants = baseGeometryFor(name);
-        if (wants === 'Point') {
+        /*
+         * **A `Point` base does not mean a short draw.** 200700 stores one anchor point and
+         * four numbers, and is placed with three clicks that state them — so it has to fall
+         * through to the multi-click path below, which closes it at `drawClickCount`. Read
+         * off `wants` alone it finished on the second click with the stop range unstated.
+         * @see drawsByRangeClicks, radarSearchFromClicks
+         */
+        if (wants === 'Point' && !drawsByRangeClicks(name)) {
             // **A graphic that can be resized is otherwise sized by the draw**, in two
             // clicks: the first plants the anchor, the second sets how far out it reaches
             // and which way it faces. Finishing on the first click instead dropped these at
@@ -989,6 +1067,9 @@ export class MapLibreInteractions {
      * polygon, one point of a line. The caller shows nothing rather than a half symbol.
      */
     private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
+        const ranged = this.rangeClickDraw(name, vertices);
+        if (ranged) return buildTacticalGraphic(name, ranged.geometry, ranged.properties, resolutionOf(this.map));
+
         const drawn = this.anchorDraw(name, vertices);
         if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties), resolutionOf(this.map));
 
@@ -1050,6 +1131,49 @@ export class MapLibreInteractions {
      * same symbol differently. Returns undefined for everything else, and for a first
      * click with nothing to measure yet.
      */
+    /**
+     * 200700's three clicks, read into the four numbers its plate names.
+     *
+     * The sibling of `anchorDraw` for the one graphic whose clicks are **values rather than
+     * anchor points**: the base stays a single `Point` and what the clicks state travels in
+     * the amplifiers. The reading is `radarSearchFromClicks`, which is also what the
+     * OpenLayers controller calls, so the third click cannot mean one thing here and another
+     * there. Returns undefined for every other graphic, and before there is an axis to state.
+     *
+     * **The axis rides `rotation`, not `centerAzimuthDeg`**, for the same reason it does on
+     * the other engine: `centerAzimuthDeg` outranks it, so an axis filed there would pin the
+     * symbol against every later rotate. @see RangeFanGraphicBase.applyRadarSearchFrame
+     */
+    private rangeClickDraw(
+        name: TacticalGraphicName,
+        vertices: Position[],
+    ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        if (!drawsByRangeClicks(name)) return undefined;
+        const frame = radarSearchFromClicks(vertices);
+        if (!frame) return undefined;
+        const stop = frame.ranges[frame.ranges.length - 1];
+        return {
+            geometry: {type: 'Point', coordinates: frame.center},
+            properties: {
+                name,
+                /*
+                 * **The four the plate names, and nothing else.** This wrote a `rotation`, a
+                 * `radius` and a pair of `rangeFan` bands — a range fan's description of a
+                 * different symbol, in which two of 200700's four values did not appear under
+                 * their own names at all. (User's report, 2026-09-05.) The OpenLayers holder
+                 * writes exactly these, so a graphic drawn on either engine saves identically.
+                 * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+                 */
+                searchAxisAzimuthDeg: ((frame.centerAzimuthDeg % 360) + 360) % 360,
+                // Absent until the third click settles which of the two ranges is which,
+                // which is what the generator reads as "half drawn".
+                startRange: frame.ranges.length > 1 ? frame.ranges[0] : undefined,
+                stopRange: stop,
+                stopRelativeBearingDeg: RSD_DEFAULT_RELATIVE_BEARING_DEG,
+            },
+        };
+    }
+
     private anchorDraw(
         name: TacticalGraphicName,
         vertices: Position[],
@@ -1359,6 +1483,15 @@ export class MapLibreInteractions {
         // nobody is changing. The read-out then follows the drag, reporting the radius
         // the user is dragging *to*, which is the whole point of showing it.
         if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
+        /*
+         * **A band drag changes a range, and that is a size too.** The test above is
+         * `radius`, which for a fan is the *outermost* range — so dragging 200700's start
+         * arc changed a number the read-out was not watching and reported nothing at all,
+         * while the stop arc reported. (User's report, 2026-09-05.) OpenLayers arms its own
+         * on the same gesture. @see RangeFanGraphicBase.setBandRange
+         */
+        const moved = changedBand(before, after);
+        if (moved !== undefined) this.showMeasure(next, moved);
     }
 
     /**
@@ -1497,16 +1630,27 @@ export class MapLibreInteractions {
                 // brings its own rule. @see envelopmentBendFrom
                 return byRole(name === TacticalGraphicName.Envelopment
                     ? setBend(before, to, clampEnvelopmentBend, envelopmentBendFrom)
-                    : setBend(before, to, clampTurnBend));
+                    // **Turn reads its own bend too, now that its handle is the curve's
+                    // apex rather than the Bezier's control point.** The offset is half the
+                    // bend's own depth, and the doubling belongs beside the geometry that
+                    // causes it. @see turnBendFrom
+                    : setBend(before, to, clampTurnBend, turnBendFrom));
             case 'mirror':
                 // Side only — no width, no vertex. @see setMirror
                 return byRole(setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis));
             case 'reach':
                 return byRole(setReach(before, to));
+            case 'extend':
+                // The other end of the chord, pinned. @see setExtend
+                return byRole(setExtend(before, to, handleContract(name).extendAnchor));
             case 'band':
                 // The fans put their center first, so the handle index is one ahead of
                 // the band it drives. @see RANGE_FAN_BAND_OFFSET
                 return setBandRange(before, drag.handle - RANGE_FAN_BAND_OFFSET, to);
+            case 'opening':
+                // One grip, one number, both edges — 200700's stop relative bearing.
+                // @see setSectorOpening, RangeFanGraphicBase.setRadarHalfAngle
+                return setSectorOpening(before, to);
             default:
                 return null;
         }
@@ -1523,9 +1667,15 @@ export class MapLibreInteractions {
      * holder reads the same predicate, so a graphic
      * cannot report a radius in one place and not the other.
      */
-    private showMeasure(graphic: MapLibreTacticalGraphic): void {
+    private showMeasure(graphic: MapLibreTacticalGraphic, bandIndex?: number): void {
         if (!showsSizeReadout(graphic.name)) return;
-        const radius = graphic.properties.radius;
+        /*
+         * **The ring being dragged, not the outermost one.** A fan has a range per ring, so
+         * "the size" is not one number: measuring to `radius` while the hand is on the inner
+         * arc reports a figure that is not moving. `MissionTaskGraphicBase.measureStated` is
+         * the same rule on the other engine. @see bandRangeOf
+         */
+        const radius = bandIndex === undefined ? graphic.properties.radius : bandRangeOf(graphic, bandIndex);
         if (!radius || radius <= 0) return;
 
         const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);

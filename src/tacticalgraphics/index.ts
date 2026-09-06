@@ -77,7 +77,7 @@ export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFan
  * user drag the sharpness has to clamp with the same numbers the generator
  * does, or the handle drifts off the curve at the extremes.
  */
-export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend} from './graphics/Turn';
+export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend, turnBendFrom, turnBendFromOffset} from './graphics/Turn';
 /** Envelopment's half-circle radius, exported for the same reason as Turn's bend. */
 export {
     ENVELOPMENT_DEFAULT_BEND,
@@ -405,7 +405,8 @@ export {
 export {convoyPaint} from './symbology/convoyPaints';
 export {searchAreaPaint} from './symbology/searchAreaPaints';
 export {SEARCH_AREA_ARM, SearchArea, asSearchVee} from './graphics/SearchArea';
-export {EllipticalArea, RadarSearchDoctrine} from './graphics/MaritimeArea';
+export {EllipticalArea, RadarSearchDoctrine, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, RSD_MIN_OPENING_DEG, radarSearchFromClicks, radarSectorOpening} from './graphics/MaritimeArea';
+export type {RadarSearchFrame} from './graphics/MaritimeArea';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
@@ -415,7 +416,7 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
-export {drawClickCount, drawsByAnchorClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag} from './core/symbology';
+export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
 export {SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';

@@ -31,7 +31,7 @@ import {Boundary} from './graphics/Boundary';
 import {AirCorridor} from './graphics/AirCorridor';
 import {LineGraphicBase} from './graphics/LineGraphicBase';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {AnchorClickController, MissionTaskController, PointDropController} from './controllers/MissionTaskController';
+import {AnchorClickController, MissionTaskController, PointDropController, RangeClickController} from './controllers/MissionTaskController';
 import {PolygonGraphicController} from './controllers/PolygonGraphicController';
 
 /**
@@ -293,6 +293,21 @@ const rangeFan = (name: TacticalGraphicName, res: number) => {
 };
 
 /**
+ * 200700: the range-fan holder, drawn by placing its three points.
+ *
+ * The holder is `rangeFan`'s — same bands, same rim handles, same band editor — and only the
+ * draw differs. @see RangeClickController
+ */
+const radarSearch = (name: TacticalGraphicName, res: number) => {
+    const controller = new RangeClickController(
+        new RangeFanGraphicBase(name, res, res),
+        drawClickCount(name) ?? 3,
+    );
+    controller.editStretches = true;
+    return controller;
+};
+
+/**
  * Cover, guard and screen: **two clicks and no handles.**
  *
  * They were placed on one anchor at a fixed screen size until 2026-08-29. APP-06 gives them
@@ -445,25 +460,20 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.NoAttackZone]:                          circularArea,
     [TacticalGraphicName.ActiveManeuverArea]:                    circularArea,
     /*
-     * **Not `rangeFan` any more.** 200700 is drawn from three anchor points since
-     * 2026-09-04 — the radar, the start arc, the stop arc — so it is a vertex line like
-     * fields of fire and the search area: each grip is the point it was placed as, and the
-     * radar is inert under a reshape. @see RadarSearchDoctrine, anchorVertex
-     */
-    /*
-     * **One anchor point and four typed numbers**, which is what 200700 asks for: *"requires
-     * one anchor point that defines the axis of angular rotation"*, with the size and shape
-     * *"determined by additional numeric values, a search axis azimuth, a start range, a
-     * stop range, and a stop relative bearing."*
+     * **One anchor point and four numbers, placed with three clicks.**
      *
-     * So it takes the range-fan contract rather than a vertex line: dropped on its radar,
-     * dragged out to seed the stop range, and edited afterwards through the band editor the
-     * field registry has always offered it — or by the rim handle on each of its two arcs,
-     * which writes the metres it lands on. It was three drawn vertices for a day; those
-     * encoded the same four numbers as geometry, where the plate states them as values.
-     * (User's call, 2026-09-05.) @see RadarSearchDoctrine, RangeFanGraphicBase
+     * 200700 *"requires one anchor point that defines the axis of angular rotation"*, with
+     * the size and shape *"determined by additional numeric values, a search axis azimuth, a
+     * start range, a stop range, and a stop relative bearing."* So it stores the range-fan
+     * contract — a `Point` base, bands in the amplifiers, the band editor the field registry
+     * has always offered it, and a rim handle on each of its two arcs.
+     *
+     * **How it is drawn is a separate question, and the answer is three clicks**: the radar,
+     * then each arc, with a bare arc on the map in between. It was briefly a drop-and-drag,
+     * which can only state one of the two ranges. (User's report, 2026-09-05.)
+     * @see RangeClickController, radarSearchFromClicks, RangeFanGraphicBase
      */
-    [TacticalGraphicName.RadarSearchDoctrine]:                   rangeFan,
+    [TacticalGraphicName.RadarSearchDoctrine]:                   radarSearch,
     [TacticalGraphicName.FireSupportAreaRectangular]:            polygonRect,
     [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:   polygonRect,
 

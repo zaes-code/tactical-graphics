@@ -186,6 +186,13 @@ tacticalGraphic: {
     labelGap: 0,              // the same hole in meters, for the graphics that cut it
                               // from the rendered glyph instead
     rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
+
+    // APP-06 200700 radar search doctrine, which states its whole shape as values:
+    // "a search axis azimuth, a start range, a stop range, and a stop relative bearing"
+    searchAxisAzimuthDeg: 53,  // degrees clockwise from north — the axis the sector centres on
+    startRange: 20000,         // metres from the radar to the near arc
+    stopRange: 60000,          // metres from the radar to the far arc
+    stopRelativeBearingDeg: 45,// degrees either side of the axis, so half the opening
 }
 ```
 

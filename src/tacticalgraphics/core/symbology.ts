@@ -1155,7 +1155,52 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalTurn]: 3,
     [TacticalGraphicName.Envelopment]: 3,
     [TacticalGraphicName.Pursuit]: 3,
+    /*
+     * **200700 is here despite storing a single point.** Its three clicks are read into an
+     * azimuth and two ranges rather than into anchor points, so it is not in
+     * `DRAWN_BY_ANCHOR_CLICKS` — but how many clicks the draw takes is the same question for
+     * it as for the five above, and both engines close the sketch from this number.
+     * @see radarSearchFromClicks, drawsByRangeClicks
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]: 3,
 };
+
+/**
+ * Whether a graphic's clicks are read as **numbers on a point-anchored symbol** rather than
+ * as anchor points — 200700 alone.
+ *
+ * The renderers ask two separate things when a draw starts: what geometry to collect, and
+ * what to do with it. `drawsByAnchorClicks` answers both for the anchor family — collect a
+ * line, store the anchors. 200700 needs the first half and not the second: a line of three
+ * clicks, turned into a radar, a search axis azimuth, a start range and a stop range, on a
+ * base that stays a single `Point`. Conflating the two would have put a `LineString` on a
+ * holder that reads its centre off a `Point`. @see radarSearchFromClicks
+ */
+export function drawsByRangeClicks(name: TacticalGraphicName): boolean {
+    return name === TacticalGraphicName.RadarSearchDoctrine;
+}
+
+/**
+ * Graphics whose whole shape is stated as **range bands**, so nothing about them is a width.
+ *
+ * The two weapon/sensor fans and 200700. Every dimension they have — how far each ring
+ * reaches, how wide the wedge opens, which way it points — is a typed number under
+ * `rangeFan`, and none of it is half of anything. MapLibre's `sizeDefaults` seeds a
+ * half-width for a graphic that files none, which put a `width` of twice the radius into
+ * every saved 200700 that OpenLayers does not write — export noise, and a divergence between
+ * two engines that are supposed to describe the same symbol identically. The generators
+ * ignore it, which is exactly why nothing caught it.
+ *
+ * Stated here rather than in the adapter because it is a fact about the symbols, and the
+ * engine that does not currently need it is the one that would drift. @see RangeFanOptions
+ */
+export function statesShapeAsRangeBands(name: TacticalGraphicName): boolean {
+    return (
+        name === TacticalGraphicName.RadarSearchDoctrine ||
+        name === TacticalGraphicName.WeaponSensorRangeFanCircular ||
+        name === TacticalGraphicName.WeaponSensorRangeFanSector
+    );
+}
 
 /** @see DRAW_CLICKS */
 export function drawClickCount(name: TacticalGraphicName): number | undefined {

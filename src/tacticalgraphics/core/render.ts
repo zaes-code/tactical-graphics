@@ -234,6 +234,34 @@ export interface TacticalGraphicProperties {
     labelGap?: number;
     /** Multi-band range fan config. Only the two range fan graphics read this. */
     rangeFan?: RangeFanConfig;
+
+    /*
+     * ── APP-06 200700's four numbers ───────────────────────────────────────
+     *
+     * The radar search doctrine states its whole shape as values rather than places:
+     * *"requires one anchor point that defines the axis of angular rotation"*, with the
+     * size and shape *"determined by additional numeric values, a search axis azimuth, a
+     * start range, a stop range, and a stop relative bearing."*
+     *
+     * **Named for the plate, not carried as range-fan bands.** 200700 rode `rangeFan` for a
+     * day because it shares that holder — two bands for the two ranges, the axis smuggled in
+     * as `rotation`, the opening as a pair of absolute band azimuths — and the saved file
+     * then described a symbol in terms of a different symbol's amplifiers, with two of the
+     * four numbers not appearing under their own names at all. A consumer reading the GeoJSON
+     * could not find the search axis azimuth or the stop relative bearing. (User's report,
+     * 2026-09-05.)
+     *
+     * A graphic saved in the old shape still reads: `RadarSearchDoctrine.frame` falls back to
+     * the bands, the rotation and the drawn size when these are absent.
+     */
+    /** Degrees clockwise from north — the axis the sector is centred on. */
+    searchAxisAzimuthDeg?: number;
+    /** Metres from the radar to the near arc. */
+    startRange?: number;
+    /** Metres from the radar to the far arc. */
+    stopRange?: number;
+    /** Degrees, an equal angle **either side** of the search axis — so half the opening. */
+    stopRelativeBearingDeg?: number;
 }
 
 /**
@@ -294,6 +322,18 @@ export interface GraphicLabels {
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;
+
+    /**
+     * 200700's four numbers, so the properties dialog can edit them.
+     *
+     * On both bags for the same reason `rangeFan` is: they are geometry inputs the operator
+     * types, so the dialog writes them and the generator reads them.
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    searchAxisAzimuthDeg?: number;
+    startRange?: number;
+    stopRange?: number;
+    stopRelativeBearingDeg?: number;
 }
 
 
@@ -479,6 +519,10 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
         labelGap: props.labelGap,
         bands: props.rangeFan?.bands,
         centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
+        searchAxisAzimuthDeg: props.searchAxisAzimuthDeg,
+        startRange: props.startRange,
+        stopRange: props.stopRange,
+        stopRelativeBearingDeg: props.stopRelativeBearingDeg,
     };
 
     // Drop undefined keys so each generator's own `opts?.x || default` still fires.

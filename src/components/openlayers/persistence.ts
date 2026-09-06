@@ -365,6 +365,18 @@ export function applyRestoredGeometry(
         // TurnGraphicBase` test: envelopment is a sibling of that class, not a subclass,
         // so the old check skipped it and every saved envelopment restored at the
         // default bend. @see TurnGraphicBase.setBend
+        /*
+         * **200700's four numbers, before the frame is rebuilt.**
+         *
+         * A point-anchored graphic restores through `updateGeom` rather than
+         * `setBaseFeature`, so a holder whose shape is stated as values rather than as a
+         * `radius` and a `rotation` has to be handed them here. Without it a saved radar
+         * search doctrine came back at whatever size the fallback produced — caught by
+         * `manipulateRoundTrip`, which resizes before saving. @see RangeFanGraphicBase.radar
+         */
+        const stated = handler.graphic as {adoptStatedShape?: (s: GraphicGeometryState) => void};
+        stated.adoptStatedShape?.(state);
+
         const bendable = handler.graphic as {setBend?: (value: number) => void};
         if (state.bend !== undefined) bendable.setBend?.(state.bend);
         // Arrowhead size, for the holders that carry one. Seeded from the drawing
