@@ -166,4 +166,33 @@ describe('342201: the two arrows vary independently', () => {
         const after = JSON.stringify((rendered(four).graphic.geometry as MultiLineString).coordinates);
         expect(after).toEqual(before);
     });
+
+    it('places point 3 where the cursor is, not point 2', () => {
+        /*
+         * **The mid-draw reading.** After the second click the sketch is `[p1, p2, cursor]`,
+         * and the two-point branch takes the *last* point as arm 1's inner end — so the
+         * cursor dragged point 2 around and the second arm never appeared until the third
+         * click landed. (User's report: "click 3 is still dragging on point 2 location".)
+         */
+        const cursor: Position = [1.2, 10.9];
+        const sketch = securityOperationAnchors([P1, P2, cursor])!;
+        expect(sketch).toHaveLength(4);
+        // Points 1 and 2 stay exactly where they were clicked...
+        expect(meters(sketch[0], P1)).toBeLessThan(1);
+        expect(meters(sketch[1], P2)).toBeLessThan(1);
+        // ...and point 3 is the cursor, not a point derived from it.
+        expect(meters(sketch[2], cursor)).toBeLessThan(1);
+        // Point 4 previews an arm of arm 1's length, carrying on along the gap's own axis.
+        expect(meters(sketch[2], sketch[3])).toBeCloseTo(meters(P1, P2), -2);
+        const gap = turf.bearing(turf.point(P2), turf.point(cursor));
+        expect(Math.abs(turf.bearing(turf.point(sketch[2]), turf.point(sketch[3])) - gap)).toBeLessThan(1);
+    });
+
+    it('previews the symmetric form when point 3 lands on the axis', () => {
+        // The preview convention has to agree with the shape the two-point form draws, or
+        // the symbol changes at the moment of the third click on a screen drawn straight.
+        const onAxis = securityOperationAnchors([TIP, INNER])!;
+        const asSketch = securityOperationAnchors([TIP, INNER, onAxis[2]])!;
+        onAxis.forEach((point, i) => expect(meters(asSketch[i], point)).toBeLessThan(1));
+    });
 });
