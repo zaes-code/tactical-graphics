@@ -994,7 +994,14 @@ export function parallelRailAnchors(clicks: Position[] | undefined, stored = 4):
               const toClick = turf.bearing(turf.point(two), turf.point(click));
               return reach * Math.sin(((toClick - along) * Math.PI) / 180);
           })()
-        : bar * RAIL_PREVIEW_GAP_SHARE;
+        // **Negative, so the placed bar is the lower one.** `sign` drives `along ± 90`, and a
+        // negative across turns to the *left* of travel — north for a west-to-east drag — which
+        // puts the previewed bar above the one being dragged. The Templates letter `PT 1` and
+        // `PT 2` on the bottom bar and `PT 3` on the top, so drawing left to right that way
+        // round is what the plate draws. (User's report, 2026-09-06: "when drawing left to
+        // right, line 1,2 has to be the bottom one per the template".) The third click still
+        // chooses the side outright; this is only where the preview starts.
+        : -bar * RAIL_PREVIEW_GAP_SHARE;
     if (!isFinite(across) || across === 0) return undefined;
 
     // Square across from point 2, which is where the plate's own PT 3 leader lands.

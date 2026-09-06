@@ -25,7 +25,7 @@ import {renderTacticalGraphic} from '../core/render';
 import {normalizeDrawnBase} from '../core/drawnBase';
 import {drawClickCount} from '../core/symbology';
 import {baseVertexCount, carriesSeparationInBase} from '../core/handles';
-import {parallelRailFrame} from '../core/anchors';
+import {parallelRailAnchors, parallelRailFrame} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
 
 const FAMILY = [
@@ -164,6 +164,34 @@ describe('the two-rail crossings place their separation', () => {
             expect(Math.min(...offsets)).toBeLessThan(meters(bar[0], bar[1]) / 100);
             // …and the other previews clear of it.
             expect(Math.max(...offsets)).toBeGreaterThan(meters(bar[0], bar[1]) / 10);
+        },
+    );
+
+    it.each(FAMILY.map(n => [String(n), n] as const))(
+        '%s previews its second bar above the one being drawn, left to right',
+        (_label, name) => {
+            /*
+             * The Templates letter `PT 1` and `PT 2` on the **bottom** bar and `PT 3` on the
+             * top, so a west-to-east drag should leave the bar under the cursor and preview
+             * the other above it. The default sat the other way round. (User's report,
+             * 2026-09-06.) The third click still chooses the side; this is only the start.
+             */
+            const westToEast: Position[] = [[-2, 20], [2, 20]];
+            const drawn = renderTacticalGraphic({
+                type: 'Feature',
+                properties: {tacticalGraphic: {name}},
+                geometry: {type: 'LineString', coordinates: westToEast},
+            } as Feature).graphic.geometry as MultiLineString;
+
+            // **Measured on the centreline, not on the ink.** A bridge's bars are crowbars,
+            // whose ticks stand off the rail — so its lowest ink sits below the bar it belongs
+            // to and says nothing about which side the *other* bar went. The frame's centre
+            // lies between the two, so it is above the drawn bar exactly when the second one
+            // is. @see parallelRailFrame
+            const frame = parallelRailFrame(parallelRailAnchors(westToEast, 3)!)!;
+            expect(frame.centre[0][1]).toBeGreaterThan(20);
+            expect(frame.centre[1][1]).toBeGreaterThan(20);
+            void drawn;
         },
     );
 });
