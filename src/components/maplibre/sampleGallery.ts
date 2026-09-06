@@ -13,6 +13,7 @@ import {
     acrossPointAtEnd,
     drawsAsHairpin,
     hairpinBase,
+    normalizeDrawnBase,
     carriesSeparationInBase,
     frontEdgeBase,
     isRectangular,
@@ -158,7 +159,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * it: infiltration is in this family and also needs its point 2 *off* the chord, because
      * that offset is what bends its S — a plain front edge draws it straight.
      */
-    if (carriesSeparationInBase(name) || name === TacticalGraphicName.Pursuit) {
+    if (carriesSeparationInBase(name) || drawsAsHairpin(name) || name === TacticalGraphicName.Pursuit) {
         const base: Geometry = {
             type: 'LineString',
             coordinates: storedOrder(
@@ -185,8 +186,12 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      *     the arrow's end — and with two they draw the circle and stop, letter and all;
      *   - the **escort** needs three for its bar.
      *
-     * (The demonstration used to be here too. It is dropped from one click now, so the
-     * plain `point` candidate builds it and no layout is needed. @see Demonstration)
+     * (The demonstration used to be here too, then was dropped from one click and needed no
+     * layout at all. It is three clicks again as of 2026-09-06 and takes `hairpinBase` in the
+     * branch above — which it reached only once `drawsAsHairpin` was added to that gate: the
+     * plain two-point line builds it through its legacy fallback, so nothing objected while
+     * the sheet drew a symbol whose grips sat 70% of its own span from any stored point.
+     * @see Demonstration)
      *
      * Each layout below is written in the order the standard numbers the points.
      */
@@ -223,6 +228,32 @@ const LONG_RUN_SAMPLES: Partial<Record<TacticalGraphicName, number>> = {
 
 /** @see candidateGeometries — the layouts for graphics whose points are numbered roles. */
 const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat: number) => Geometry>> = {
+    /*
+     * **152200 search area is a vee, and the sheet was handing it a line.**
+     *
+     * Its second arm is synthesised on every render — `asSearchVee` does for it what `asVee`
+     * does for fields of fire — so a two-point base *builds*, and draws the symbol correctly.
+     * What it cannot do is be edited: the generator publishes three grips and the base stores
+     * two, so the third arm's grip sits on no vertex at all and a drag cannot pick it up.
+     * That is the same defect the cane arrows had, one vertex further on.
+     *
+     * Materialised here rather than in `normalizeDrawnBase`, which is where fields of fire
+     * gets its second leg: MapLibre asks the *normalized* sketch whether a draw is finished,
+     * so completing a search area's vee there would end its draw one click early. Fields of
+     * fire wants exactly that, because a double-click is how it ends; 152200 names three
+     * anchor points and the operator places all three.
+     *
+     * The opening matches `DEFAULT_VEE_DEGREES`, so the swept symbol and a hand-drawn one
+     * that was ended early are the same picture.
+     */
+    [TacticalGraphicName.SearchArea]: (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon + HALF, lat + HALF * 0.55],
+            [lon - HALF, lat],
+            [lon + HALF, lat - HALF * 0.55],
+        ],
+    }),
     ...Object.fromEntries([
         TacticalGraphicName.ObstacleBypassEasy,
         TacticalGraphicName.ObstacleBypassDifficult,
@@ -604,6 +635,34 @@ function cellOrigin(index: number, total: number): {lon: number; lat: number} {
     };
 }
 
+/**
+ * The chosen candidate, **through the same door a draw comes in by**.
+ *
+ * `candidateGeometries` lays out a plausible base and keeps the first that builds, and a
+ * base that is merely plausible still builds: it draws a *lesser* symbol, which the sheet
+ * then shows as though it were the graphic. `normalizeDrawnBase` is what a draw and a
+ * restore both run, and it is idempotent — so a layout that is already right passes
+ * through untouched and one that is short of what its graphic needs is completed here,
+ * exactly as the operator's clicks would be.
+ *
+ * The sheet was storing a two-point fields of fire where a draw stores three, a
+ * three-point envelopment where a draw stores four, and an unsquared third point on the
+ * turns and the ambush. Every one of those builds, and every one draws the fallback the
+ * generator keeps for a half-finished sketch. (Found by comparing the sheet against the
+ * normalizer, 2026-09-06 — "make sure to update the sweep for all the graphics we've
+ * fixed".)
+ *
+ * Falls back to the raw layout if normalizing produced something that will not build,
+ * since a lesser symbol on the sheet still beats a missing one.
+ */
+function sheetBase(name: TacticalGraphicName, geometry: Geometry, properties: Omit<TacticalGraphicProperties, 'name'>): Geometry {
+    if (geometry.type !== 'LineString') return geometry;
+    const settled = normalizeDrawnBase(name, geometry.coordinates as Position[]);
+    if (settled === geometry.coordinates) return geometry;
+    const candidate: Geometry = {type: 'LineString', coordinates: settled};
+    return buildTacticalGraphic(name, candidate, properties) ? candidate : geometry;
+}
+
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
@@ -619,7 +678,7 @@ export function buildSampleGraphics(
     specs.forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index, specs.length);
         const built = candidateGeometries(name, lon, lat)
-            .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
+            .map(geometry => buildTacticalGraphic(name, sheetBase(name, geometry, properties), properties, drawingResolution))
             .find(Boolean);
 
         if (built) graphics.push(built);
@@ -645,10 +704,12 @@ export function sampleFeatureCollection(
     const specs = sampleSpecs(hostility, only);
     specs.forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index, specs.length);
-        const geometry = candidateGeometries(name, lon, lat).find(g =>
+        const chosen = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );
-        if (!geometry) return;
+        if (!chosen) return;
+        // The base a draw would have stored, not the raw layout. @see sheetBase
+        const geometry = sheetBase(name, chosen, {radius: SAMPLE_RADIUS_M, rotation: 0});
 
         features.push({
             type: 'Feature',
