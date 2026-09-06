@@ -1773,7 +1773,19 @@ class GeometryService {
         return turf.multiLineString([offsetBase, arrowHeadCoords]);
     }
 
-    getClearGraphic(base: Position[], size: number): Feature<MultiLineString> {
+    /**
+     * 340500's three arrows and the front line they reach.
+     *
+     * `size` is the **arrow spacing** — how far the outer two sit either side of the middle
+     * one. `halfHeight` is how far the front line runs either side of the axis, which APP-06
+     * states separately: points 1 and 2 give the height, and the spacing only has to "stay
+     * proportional" to it. Passing it lets the caller honour both.
+     *
+     * Omitted, the front line overhangs the outer arrows by `0.75 * size`, which is what this
+     * drew before 2026-09-06 and what a legacy two-point base still gets. 340500's own
+     * Template puts that overhang at 0.39 of the spacing, not 0.75. @see Clear
+     */
+    getClearGraphic(base: Position[], size: number, halfHeight?: number): Feature<MultiLineString> {
         let topArrow = this.getBypassArrow(base, -size);
         let bottomArrow = this.getBypassArrow(base, size);
 
