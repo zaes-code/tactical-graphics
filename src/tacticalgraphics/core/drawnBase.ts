@@ -184,9 +184,9 @@ export function normalizeDrawnBase(
  * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
  * search area are not in it and want a vee, which is a different shape and stays theirs.
  */
-export function frontEdgeBase(center: Position, half: number, points = 3, acrossAt = 0.5): Position[] {
+export function frontEdgeBase(center: Position, half: number, points = 3, acrossAt = 0.5, acrossRatio = FRONT_EDGE_ACROSS): Position[] {
     const [cx, cy] = center;
-    const across = half * 0.55;
+    const across = half * acrossRatio;
     const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
     if (points >= 4) {
         return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
@@ -246,7 +246,17 @@ export function hairpinBase(center: Position, half: number): Position[] {
  * @param half   its half-length, likewise — so this works in lon/lat and in metres alike
  * @param points how many the base stores, where the caller knows. @see baseVertexCount
  */
-export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3): Position[] | undefined {
+/**
+ * How far across the edge a synthesised third point sits, as a share of the half-run.
+ *
+ * A presentation number, not a doctrinal one — the plates give the point an anchor and say
+ * nothing about how deep it should be drawn. A caller with a tile to fill may state its own:
+ * the catalog does, because at this default the block family's stem is short enough that the
+ * symbol reads as a bar with a nub. @see frontEdgeBase
+ */
+export const FRONT_EDGE_ACROSS = 0.55;
+
+export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3, acrossRatio = FRONT_EDGE_ACROSS): Position[] | undefined {
     if (drawsAsHairpin(name)) return hairpinBase(center, half);
     // Its point 1 is an arrowhead where the rest of its family's is an edge end, so the front
     // edge's order is wrong for it however right the positions are. @see firePositionBase
@@ -260,8 +270,52 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
     // Its two arrows stand square off their own ends of the back line, on the other side.
     // @see supportByFireBase
     if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
-    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
+    // A circle with an arrow swinging out of it, sized the way its plate draws one.
+    // @see circleAndArrowBase
+    if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
+    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5, acrossRatio);
     return undefined;
+}
+
+/**
+ * The four tasks drawn as **a circle with an arrow swinging out of it**.
+ *
+ * 343000 capture, 342300 seize, 344500 evacuate and 344600 recover share one rule word for
+ * word: *"Point 1 defines the centre of the circle. Point 2 defines the radius of the circle.
+ * Point 3 defines the middle of the arc. Point 4 defines the end of the arrow."*
+ * @see circleAndArrowBase
+ */
+const CIRCLE_AND_ARROW: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Seize,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
+];
+
+/**
+ * The base a **circle-and-arrow** task expects, for anything that has to synthesise one.
+ *
+ * Four points and no layout of their own meant the generic path: four positions spread evenly
+ * along the run, which puts point 2 half a symbol from point 1 and leaves the arrow whatever
+ * is left. The result is a circle filling most of the tile with a stub hanging off it — where
+ * the plate draws a **small circle and a long arrow**, the circle about a sixth of the reach.
+ * (User's report, 2026-09-07, against a drawing of the wanted proportions.)
+ *
+ * So the circle sits at the near end at that size, the arrow's tip reaches the far end, and
+ * the arc's middle sits between them and a little off the axis — which is the swing the plate
+ * shows and what stops the arrow reading as a straight tail.
+ */
+export function circleAndArrowBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    /** The circle's radius as a share of the half-run — a sixth of the full reach. */
+    const RADIUS = 0.32;
+    const centre: Position = [cx - half * 0.68, cy];
+    return [
+        centre,
+        [centre[0] + half * RADIUS, cy],
+        [cx + half * 0.15, cy + half * 0.22],
+        [cx + half, cy - half * 0.28],
+    ];
 }
 
 /**
