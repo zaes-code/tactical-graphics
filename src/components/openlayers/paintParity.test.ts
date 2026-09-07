@@ -20,7 +20,7 @@
  */
 
 import Feature from 'ol/Feature';
-import {GeometryCollection, LineString, MultiLineString, Point, Polygon} from 'ol/geom';
+import {Circle, GeometryCollection, LineString, MultiLineString, Point, Polygon} from 'ol/geom';
 import {
     PAINTABLE_GRAPHICS,
     TACTICAL_GRAPHIC_KEY,
@@ -139,14 +139,12 @@ describe('toPaintFeature understands every geometry the generators emit', () => 
     it('refuses a Circle rather than guessing a segment count', () => {
         // Not an oversight: Circle is a live editing geometry the holders resolve to
         // a Polygon before styling, so a paint function should draw nothing for it.
-        const {Circle} = jest.requireActual('ol/geom');
         expect(fromOlGeometry(new Circle([0, 0], 100))).toBeUndefined();
     });
 });
 
 describe('asStyleFunction', () => {
     it('returns an empty list rather than throwing on an unreadable geometry', () => {
-        const {Circle} = jest.requireActual('ol/geom');
         const styled = asStyleFunction(() => [{
             geometry: {type: 'LineString', coordinates: [[0, 0], [1, 1]]},
             stroke: {color: '#000', widthPx: 2},

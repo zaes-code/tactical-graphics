@@ -591,15 +591,16 @@ describe('getHaloStroke', () => {
 });
 
 describe('the library default', () => {
-    it('is an empty config, so an unconfigured consumer gets the doctrinal colors', () => {
-        // A fresh module registry, so this reads the declared default rather than
-        // whatever the tests above last set.
-        jest.isolateModules(() => {
-            const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
-            expect(config.getDefaultLabelSize()).toBe(16);
-            expect(config.getDefaultLineWidth()).toBe(2);
-            expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
-        });
+    it('is an empty config, so an unconfigured consumer gets the doctrinal colors', async () => {
+        // A fresh module registry, so this reads the declared default rather than whatever
+        // the tests above last set. `vi.resetModules` drops the cache and the dynamic import
+        // repopulates it; there is no `isolateModules` to scope that to a callback, so the
+        // reset is the whole mechanism and this test must be the one that re-imports.
+        vi.resetModules();
+        const config = await import('@zaes/tactical-graphics');
+        expect(config.getDefaultLabelSize()).toBe(16);
+        expect(config.getDefaultLineWidth()).toBe(2);
+        expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
     });
 });
 

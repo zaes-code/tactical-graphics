@@ -67,7 +67,7 @@ describe('writeGraphicProperties', () => {
 
     it('fires a change event so OpenLayers re-renders', () => {
         const f = lineFeature();
-        const onChange = jest.fn();
+        const onChange = vi.fn();
         f.on('change', onChange);
         writeGraphicProperties([f], TacticalGraphicName.PhaseLine, {designation: 'Q'});
         expect(onChange).toHaveBeenCalled();
