@@ -112,9 +112,22 @@ describe('graphic thumbnails', () => {
     });
 
     it('keeps the amplifier stack on areas', () => {
-        // The one kind that keeps its text: an area has the room, and the stack is inset
-        // off the boundary rather than dropped. @see labelInsetViolation in the generator.
-        expect(amplifierText(TacticalGraphicName.AssemblyArea)).toEqual(expect.arrayContaining(['ALPHA', 'ZJUN26']));
+        /*
+         * The one kind that keeps its text: an area has the room, and the stack is inset off
+         * the boundary rather than dropped. @see labelInsetViolation in the generator.
+         *
+         * **Read on a graphic whose registry admits both.** This asked 150200 assembly area
+         * for a designation *and* a DTG, and its `GRAPHIC_FIELDS` entry offers only the
+         * designation — so once the generator started honouring that entry, the assertion was
+         * asking for a field the symbol does not take. 242400's does offer both, which is what
+         * makes it able to prove a *stack* survives rather than a single line.
+         * @see FIELD_FOR_AMPLIFIER in gen-catalog-svgs.js
+         */
+        expect(amplifierText(TacticalGraphicName.ArtilleryManeuverArea)).toEqual(expect.arrayContaining(['ALPHA', 'ZJUN26']));
+
+        // And an area whose entry offers no DTG keeps its designation and loses only that.
+        expect(amplifierText(TacticalGraphicName.AssemblyArea)).toEqual(expect.arrayContaining(['ALPHA']));
+        expect(amplifierText(TacticalGraphicName.AssemblyArea).join(' ')).not.toContain('ZJUN26');
     });
 
     /**

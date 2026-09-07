@@ -274,6 +274,19 @@ const SHAPE_ONLY: HandleContract = {roles: [], repeating: 'shape'};
  * `[start, end, offset]`, and the third is present only on the graphics that have
  * a width to set.
  */
+/*
+ * **343800 infiltrate is not in this family, and was.** Its Draw Rules are word for word
+ * 343700 exfiltrate's — *"point 1 defines the end of the straight line portion of the
+ * graphic. Point 2 defines the centre of the two 90 degree circular arcs. Point 3 defines
+ * the tip of the arrowhead"* — so its three points are a **path**, not a centreline and a
+ * width. Both already share the `exfiltrate` controller and an S-curve generator; only this
+ * membership disagreed, and it is what `carriesSeparationInBase` reads.
+ *
+ * The consequence was a synthesised base: laid out as a front edge, point 3 landed below the
+ * middle of the run instead of at the arrowhead, so the S-curve doubled back and its arrow
+ * pointed at the line it had just left. (User's report, 2026-09-07: "infiltrate, arrowtip is
+ * pointing to the line instead of away/forward".) @see frontEdgeBase, synthesizedBase
+ */
 const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvance,
@@ -290,7 +303,6 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FrontalAttack,
     TacticalGraphicName.AdvanceToContact,
     TacticalGraphicName.TurningMovement,
-    TacticalGraphicName.Infiltration,
     // The demolition obstacles. APP-06 271201 builds them from a centerline and a
     // width, which is this contract exactly. @see ai/app-6.md "F2"
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,

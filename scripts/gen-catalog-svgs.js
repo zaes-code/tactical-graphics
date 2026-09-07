@@ -128,6 +128,7 @@ const {
     frontEdgeBase,
     storedOrder,
     synthesizedBase,
+    FRONT_EDGE_ACROSS,
     getDisplayName,
     GRAPHIC_CATEGORIES,
     isRectangular,
@@ -320,6 +321,33 @@ const TEXT_AMPLIFIERS = [
  * The membership is the library's own `CORRIDOR_GRAPHICS`, not a copy — a list kept
  * here was already missing the safe lane.
  */
+/**
+ * `getGraphicFields`, loaded from its own module rather than the `/openlayers` barrel.
+ *
+ * The barrel pulls in `ol`, an optional peer this script has no use for; the registry itself
+ * is plain data. Absent — an old `dist/` without the OpenLayers build — the gate above is
+ * skipped rather than the run failing, because a catalog with a stray amplifier is a better
+ * outcome than no catalog. @see FIELD_FOR_AMPLIFIER
+ */
+let getGraphicFields = null;
+try {
+    ({getGraphicFields} = require(path.join(REPO, 'dist', 'ol', 'cjs', 'components', 'openlayers', 'graphicFieldRegistry.js')));
+} catch {
+    console.warn('  note: dist/ol not built — amplifiers are not gated by GRAPHIC_FIELDS');
+}
+
+/**
+ * How deep a synthesised third point sits, **per profile**.
+ *
+ * The catalog draws at a few hundred pixels beside a plate and is fitted to the symbol's
+ * bounds, so the library's default leaves a block or a clear reading as a long bar with a
+ * short nub — and the stem is the part that says which task it is. The picker is read at a
+ * few dozen pixels where the extra depth only costs the shape room, so it keeps the portable
+ * default. Same split as `THUMBNAIL_TEXT_BY_KIND`: presentation per consumer, one geometry.
+ * @see FRONT_EDGE_ACROSS
+ */
+const CATALOG_ACROSS = IS_THUMB ? FRONT_EDGE_ACROSS : 0.85;
+
 const isCorridor = name => CORRIDOR_GRAPHICS.includes(name);
 
 /**
@@ -462,7 +490,15 @@ function makeBase(name) {
      * `normalizeDrawnBase`. Converting it again reversed the base and drew the symbol from the
      * wrong end. @see synthesizedBase, storedOrder
      */
-    const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n) : undefined;
+    /*
+     * **A deeper third point than the library's default.** The tile is fitted to the symbol's
+     * bounds, so a block or a clear drawn at the portable default reads as a long bar with a
+     * short nub hanging under it — the stem is the part that says which task it is. This is
+     * the catalog choosing a comfortable symbol to draw, exactly as `RECTANGLE_WIDTH_M` does
+     * for a zone. (User's report, 2026-09-07: "need more distance between line 1,2 and point 3
+     * to make the graphic a bit bigger".) @see FRONT_EDGE_ACROSS
+     */
+    const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n, CATALOG_ACROSS) : undefined;
     if (stated) return {type: 'LineString', coordinates: stated};
 
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
@@ -614,10 +650,50 @@ const THUMBNAIL_TEXT_BY_KIND = {
     line: [],
 };
 
+/**
+ * Which field-set key admits each text amplifier.
+ *
+ * `GRAPHIC_FIELDS` is the library's own statement of what a graphic accepts — it drives the
+ * Feature Properties dialog, so it is already the answer to "may this symbol carry a
+ * designation?". The catalog was not asking: it stamped every amplifier on every graphic and
+ * left it to the paint to ignore what did not apply. Where a paint was less selective than
+ * the registry, the tile showed a field the symbol does not take — 120400's airfield zone
+ * carried a name and a DTG range inside its boundary when its entry admits `additionalInfo`
+ * alone. (User's report, 2026-09-07.)
+ *
+ * Two amplifiers have no key of their own and are gated on the altitudes they travel with:
+ * `altitudeDatum` is what both altitudes are measured from, and `eff` appears only in the air
+ * graphics' amplifier block. @see GRAPHIC_FIELDS, TEXT_AMPLIFIERS
+ */
+const FIELD_FOR_AMPLIFIER = {
+    designation: ['identifier1'],
+    secondDesignation: ['identifier2'],
+    additionalInfo: ['additionalInfo'],
+    countryCode: ['countryCodes'],
+    secondCountryCode: ['countryCodes'],
+    startDate: ['dtg1'],
+    endDate: ['dtg2'],
+    echelon: ['echelon'],
+    minAltitude: ['altitude1'],
+    maxAltitude: ['altitude2'],
+    altitudeDatum: ['altitude1', 'altitude2'],
+    eff: ['altitude1', 'altitude2'],
+    weapon: ['weapon'],
+    grid: ['grids'],
+};
+
 /** The bag this graphic is drawn with. @see the presentation overrides above. */
 function amplifiersFor(name, drop) {
     const amp = Object.assign({}, AMPLIFIERS);
     for (const field of drop || []) delete amp[field];
+    // **Only the fields this graphic accepts.** @see FIELD_FOR_AMPLIFIER
+    if (getGraphicFields) {
+        const fields = getGraphicFields(name);
+        for (const field of TEXT_AMPLIFIERS) {
+            const keys = FIELD_FOR_AMPLIFIER[field];
+            if (keys && !keys.some(k => fields[k])) delete amp[field];
+        }
+    }
     if (isCorridor(name)) for (const field of TEXT_AMPLIFIERS) delete amp[field];
     if (IS_THUMB) {
         const keep = THUMBNAIL_TEXT_BY_KIND[kindOf(name)];
