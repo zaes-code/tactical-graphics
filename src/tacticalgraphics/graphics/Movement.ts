@@ -30,16 +30,40 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
         return geometryService.trimLineEnd(base.geometry.coordinates, radius * this.tipOverhang);
     }
 
+    /**
+     * `[p0, tip, width]` — and the width grip sits on **the corner of the arrowhead's back
+     * that the plate letters `PT N`.**
+     *
+     * > 151403 main attack. Point 1 defines the tip of the arrowhead. Point N-1 defines the
+     * > rear of the symbol. **Point N defines the back of the arrowhead.**
+     *
+     * The rule names the point but not its side; the Template does. It draws `PT N`'s leader
+     * into the back corner lying to the **right of point 1 → point 2** — the direction from
+     * the tip toward the rear, which is the order the points are stored in. 151402's Template
+     * on the same page letters it identically, and every graphic in this family inherits this
+     * method, so one statement settles all of them.
+     *
+     * **That is the far side from where this was drawn**, which put the grip on the corner
+     * the plate leaves unlettered. Note the offset is negated *twice*: once for the parallel
+     * line and once for the step across the head, matching how every `generateGraphics` below
+     * builds its right-hand edge. And note the stored line is reversed on the way in for a
+     * tip-first graphic, so "right of point 1 → point 2" is the **left** of the line this
+     * method sees. @see drawOrder.ts, TIP_FIRST_GRAPHICS
+     *
+     * The tip handle is the user's own last vertex — the arrowhead points *at* it — so a
+     * vertex-editing tool can pick it up and it tracks the cursor exactly.
+     */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         let radius: number = opts?.radius || 20;
         let baseCoords = base.geometry.coordinates;
         const centerline = this.arrowCenterline(base, radius);
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(centerline, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-        // [p0, tip, width]. The tip handle is the user's own last vertex — the
-        // arrowhead points *at* it — so a vertex-editing tool can pick it up and
-        // it tracks the cursor exactly.
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftArrowHeadBase]);
+        const headSide: Position[] = geometryService.computeParallelLineString(centerline, -radius);
+        const headBackCorner: Position = geometryService.getPerpendicularPoint(
+            headSide[headSide.length - 1],
+            headSide[headSide.length - 2],
+            -radius,
+        );
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], headBackCorner]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
