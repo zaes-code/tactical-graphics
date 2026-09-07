@@ -170,8 +170,20 @@ export function normalizeDrawnBase(
  *
  * Points 1 and 2 are the ends of a straight edge; the remaining point states a distance
  * across it, and a fourth (152100's) makes that two tips rather than one. `center` is the
- * middle of the drawn figure and `half` its half-length, both in the caller's own units, so
- * this works in lon/lat and in projected metres alike.
+ * middle of the drawn figure and `half` its half-length, both in the caller's own units.
+ *
+ * **The positions are unit-free; the distance across is not.** A degree of longitude is
+ * `cos(latitude)` of a degree of latitude on the ground, so one ratio applied to a degree
+ * layout draws a different shape in every row of a sheet: measured on the MapLibre sweep,
+ * the same graphic came out 0.275 deep at the equator and 1.037 at 75°N — inverted, from a
+ * third as deep as it is long to slightly deeper.
+ *
+ * This header used to claim the whole thing worked in either unit, which is what let that
+ * sit unnoticed. It was invisible while the target was "0.55 of the half-run", because a
+ * ratio is satisfied by whatever it produces; it shows up only once the target is a distance.
+ *
+ * So a caller laying out in degrees passes `degreeLayout`, and gets the shape it asked for at
+ * whatever latitude it is drawing. A caller in metres passes nothing. @see FRONT_EDGE_ACROSS
  *
  * **Stated here because it is a fact about the base, and it was being guessed three times.**
  * The in-app sweep laid three points along a shallow V, the catalog thumbnails laid them
@@ -184,9 +196,16 @@ export function normalizeDrawnBase(
  * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
  * search area are not in it and want a vee, which is a different shape and stays theirs.
  */
-export function frontEdgeBase(center: Position, half: number, points = 3, acrossAt = 0.5, acrossRatio = FRONT_EDGE_ACROSS): Position[] {
+export function frontEdgeBase(
+    center: Position,
+    half: number,
+    points = 3,
+    acrossAt = 0.5,
+    acrossRatio = FRONT_EDGE_ACROSS,
+    degreeLayout = false,
+): Position[] {
     const [cx, cy] = center;
-    const across = half * acrossRatio;
+    const across = half * acrossRatio * (degreeLayout ? Math.cos((cy * Math.PI) / 180) : 1);
     const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
     if (points >= 4) {
         return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
@@ -247,16 +266,48 @@ export function hairpinBase(center: Position, half: number): Position[] {
  * @param points how many the base stores, where the caller knows. @see baseVertexCount
  */
 /**
- * How far across the edge a synthesised third point sits, as a share of the half-run.
+ * How far across the edge a synthesised third point sits, as a share of the half-run — of
+ * `half`, that is, and not of the whole edge, which spans twice it.
  *
- * A presentation number, not a doctrinal one — the plates give the point an anchor and say
- * nothing about how deep it should be drawn. A caller with a tile to fill may state its own:
- * the catalog does, because at this default the block family's stem is short enough that the
- * symbol reads as a bar with a nub. @see frontEdgeBase
+ * **Two, because the point stands off by the edge's own full length.** The edge spans twice
+ * `half`, so a share of 2 puts point 3 exactly that far from the line through points 1 and 2
+ * — a square figure rather than a bar with a nub on it. (User's call, 2026-09-07: "point 3
+ * distance from line 1,2 needs to be = to the length of 1,2".)
+ *
+ * Governs the twenty-two graphics `frontEdgeBase` serves. Not the fords, 152000 or 152100,
+ * which are answered earlier by layouts of their own, and not 270603 roadblock, which is
+ * dropped in one click and derives its own three points rather than drawing an edge.
+ *
+ * Still a presentation number rather than a doctrinal one — the plates give the point an
+ * anchor and say nothing about how deep to draw it — but now a *stated* one, which is the
+ * difference that matters: 0.55 was a figure nobody could check, where "as deep as it is
+ * long" is a claim a test can hold the layout to. @see FRONT_EDGE_ACROSS_RULE
+ *
+ * A caller with a tile to fill may still state its own, and the catalog does.
+ * @see frontEdgeBase
  */
-export const FRONT_EDGE_ACROSS = 0.55;
+export const FRONT_EDGE_ACROSS = 2;
 
-export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3, acrossRatio = FRONT_EDGE_ACROSS): Position[] | undefined {
+/**
+ * **Point 3 stands off the edge by the edge's own length.** That is the rule the constant
+ * above encodes, written as the ratio a reader can measure — `perpendicular(P3, P1P2)`
+ * over `|P1P2|`.
+ *
+ * Exported so a test can state the rule rather than restate the constant. Asserting the
+ * layout against `FRONT_EDGE_ACROSS` itself would pass for whatever value it happened to
+ * hold, which is how the previous 0.55 went unchecked for as long as it did.
+ * @see FRONT_EDGE_ACROSS
+ */
+export const FRONT_EDGE_ACROSS_RULE = 1;
+
+export function synthesizedBase(
+    name: TacticalGraphicName,
+    center: Position,
+    half: number,
+    points = 3,
+    acrossRatio = FRONT_EDGE_ACROSS,
+    degreeLayout = false,
+): Position[] | undefined {
     if (drawsAsHairpin(name)) return hairpinBase(center, half);
     // Its point 1 is an arrowhead where the rest of its family's is an edge end, so the front
     // edge's order is wrong for it however right the positions are. @see firePositionBase
@@ -273,7 +324,7 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
     // A circle with an arrow swinging out of it, sized the way its plate draws one.
     // @see circleAndArrowBase
     if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
-    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5, acrossRatio);
+    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5, acrossRatio, degreeLayout);
     return undefined;
 }
 

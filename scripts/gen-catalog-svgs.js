@@ -340,13 +340,19 @@ try {
  * How deep a synthesised third point sits, **per profile**.
  *
  * The catalog draws at a few hundred pixels beside a plate and is fitted to the symbol's
- * bounds, so the library's default leaves a block or a clear reading as a long bar with a
+ * bounds, so a shallow third point leaves a block or a clear reading as a long bar with a
  * short nub — and the stem is the part that says which task it is. The picker is read at a
- * few dozen pixels where the extra depth only costs the shape room, so it keeps the portable
- * default. Same split as `THUMBNAIL_TEXT_BY_KIND`: presentation per consumer, one geometry.
- * @see FRONT_EDGE_ACROSS
+ * few dozen pixels, where depth only costs the shape room. Same split as
+ * `THUMBNAIL_TEXT_BY_KIND`: presentation per consumer, one geometry.
+ *
+ * **Both profiles state their own number rather than riding `FRONT_EDGE_ACROSS`.** The picker
+ * used to take the portable default, which meant it silently followed a constant that has
+ * since been restated as a *rule* — point 3 standing off by the edge's full length, which is
+ * the sweep's shape and far deeper than a 40-pixel tile can spend. Riding a default is only
+ * safe while the default is an arbitrary number; once it says something, a consumer that
+ * wanted the old number has to say the old number. @see FRONT_EDGE_ACROSS
  */
-const CATALOG_ACROSS = IS_THUMB ? FRONT_EDGE_ACROSS : 0.85;
+const CATALOG_ACROSS = IS_THUMB ? 0.55 : 0.85;
 
 const isCorridor = name => CORRIDOR_GRAPHICS.includes(name);
 
@@ -491,18 +497,27 @@ function makeBase(name) {
      * wrong end. @see synthesizedBase, storedOrder
      */
     /*
-     * **A deeper third point than the library's default.** The tile is fitted to the symbol's
-     * bounds, so a block or a clear drawn at the portable default reads as a long bar with a
-     * short nub hanging under it — the stem is the part that says which task it is. This is
-     * the catalog choosing a comfortable symbol to draw, exactly as `RECTANGLE_WIDTH_M` does
-     * for a zone. (User's report, 2026-09-07: "need more distance between line 1,2 and point 3
-     * to make the graphic a bit bigger".) @see FRONT_EDGE_ACROSS
+     * **The catalog states its own depth for the third point.** The tile is fitted to the
+     * symbol's bounds, so a block or a clear drawn too shallow reads as a long bar with a
+     * short nub hanging under it — the stem is the part that says which task it is, and 0.85
+     * is where it reads. This is the catalog choosing a comfortable symbol to draw, exactly as
+     * `RECTANGLE_WIDTH_M` does for a zone. (User's report, 2026-09-07: "need more distance
+     * between line 1,2 and point 3 to make the graphic a bit bigger".)
+     *
+     * It sat *above* the portable default when that default was 0.55 and sits below it now
+     * that the sweep's rule has taken it to 2 — which is the reason both profiles name their
+     * own number instead of describing themselves relative to one that moves.
+     * @see CATALOG_ACROSS, FRONT_EDGE_ACROSS
      */
     const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n, CATALOG_ACROSS) : undefined;
     if (stated) return {type: 'LineString', coordinates: stated};
 
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
-        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n, acrossPointAtEnd && acrossPointAtEnd(name) ? 1 : 0.5);
+        // `CATALOG_ACROSS` here too, rather than the library default. No graphic reaches this
+        // branch today — `synthesizedBase` answers for every one that carries a separation —
+        // but leaving it on the default would hand a future arrival the sweep's depth on a
+        // tile, which is the one shape this profile exists to avoid.
+        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n, acrossPointAtEnd && acrossPointAtEnd(name) ? 1 : 0.5, CATALOG_ACROSS);
         return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};
     }
     const pts = [];
