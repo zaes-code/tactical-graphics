@@ -18,6 +18,7 @@ import {
     TacticalGraphicName,
     allowedGestures,
     applyAmplifierAliases,
+    migrateRetiredGraphic,
     type AllowedGestures,
     type EditMode,
     type GestureKind,
@@ -132,12 +133,25 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                 const props = feature.properties ?? {};
                 const stored = props[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
                 // @see applyAmplifierAliases — a snapshot may predate the 3.0.0 rename.
-                const properties = stored && applyAmplifierAliases(stored);
-                if (!properties?.name || !feature.geometry) continue;
+                let properties = stored && applyAmplifierAliases(stored);
+                let geometry = feature.geometry;
+                /*
+                 * **And it may name a graphic that no longer exists.** `FightingPosition` was
+                 * retired into `FortifiedPosition`, and the two drew from different point
+                 * models, so the record needs its geometry rewritten and not just its name.
+                 * Stated in the library so this engine and OpenLayers migrate a file the same
+                 * way. @see migrateRetiredGraphic
+                 */
+                const migrated = properties && geometry && migrateRetiredGraphic(properties, geometry);
+                if (migrated) {
+                    properties = migrated.properties;
+                    geometry = migrated.geometry;
+                }
+                if (!properties?.name || !geometry) continue;
                 // Rebuilt through the generator from the saved description rather than
                 // restored as drawn output, which is what makes a graphic saved in the
                 // other engine arrive **editable** rather than as a picture of itself.
-                const graphic = buildTacticalGraphic(properties.name, feature.geometry, properties, resolution);
+                const graphic = buildTacticalGraphic(properties.name, geometry, properties, resolution);
                 if (!graphic) continue;
 
                 /*

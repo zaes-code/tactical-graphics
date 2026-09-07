@@ -68,6 +68,7 @@ import type {Coordinate} from 'ol/coordinate';
 import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojson';
 import {
     applyAmplifierAliases,
+    migrateRetiredGraphic,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
@@ -531,7 +532,23 @@ export function restoreTacticalGraphics(
 
         // A snapshot is exactly the case the alias exists for: this bag may have been
         // written before 3.0.0 renamed `label` and `secondId`. @see applyAmplifierAliases
-        const bag = applyAmplifierAliases((props.tacticalGraphic ?? {}) as Record<string, unknown>);
+        let bag = applyAmplifierAliases((props.tacticalGraphic ?? {}) as Record<string, unknown>);
+        let source = raw;
+        /*
+         * **And this bag may name a graphic that no longer exists.** `FightingPosition` was
+         * retired into `FortifiedPosition` — the same bracket under FM's name for it — and
+         * the two drew from different point models, so the record needs its geometry
+         * rewritten and not just its name. One direction, applied here so a file written
+         * before the retirement opens rather than reporting an unknown graphic.
+         * @see migrateRetiredGraphic
+         */
+        const migrated = migrateRetiredGraphic(bag as never, raw.geometry);
+        if (migrated) {
+            bag = migrated.properties as unknown as Record<string, unknown>;
+            // Parsed from the rewritten record, not the saved one: the survivor's base is a
+            // front edge where the retired graphic filed a centre.
+            source = {...raw, geometry: migrated.geometry, properties: {...props, tacticalGraphic: bag}};
+        }
         const name = (bag.name ?? props.graphicName) as TacticalGraphicName | undefined;
         const symbolId = (props.symbolId as string) || crypto.randomUUID();
 
@@ -573,7 +590,7 @@ export function restoreTacticalGraphics(
             // Seeding first satisfies both. Writing into the holder's existing feature
             // rather than swapping in the one just parsed also keeps the flags the holder
             // put there — `role`, the deliberately-false `base`, `drawingResolution`.
-            const incoming = format.readFeature(raw, {
+            const incoming = format.readFeature(source, {
                 dataProjection: GEOJSON_PROJECTION,
                 featureProjection: MAP_PROJECTION,
             }) as Feature;

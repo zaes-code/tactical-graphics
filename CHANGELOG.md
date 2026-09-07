@@ -30,12 +30,19 @@ not be read correctly by 3.4.0.
 
 ### Removed
 
-- **`TacticalGraphicName.FightingPosition`** — a duplicate. FM 1-02.2's *fighting position*
-  and APP-06 152300's *fortified position* are the same symbol under two names, and the
-  library carried both, so the same picture answered to two enum members and one of them
-  had no entity code. `FortifiedPosition` is the survivor and is recorded as being in both
-  publications. **A consumer referencing the removed member will not compile, and saved
-  data naming it will not restore.**
+- **`TacticalGraphicName.FightingPosition`** — a duplicate. FM 1-02.2 table 5-22 and APP-06
+  291000 draw the *same* open three-sided bracket, beside the same trench line and with the
+  same note about facing the enemy, so two identical pictures with two captions were one
+  control measure. `FortifiedPosition` is the survivor — its draw model is the one 291000's
+  plate specifies — and it is displayed under **both** names and recorded as being in both
+  publications, so a user searching for "fighting position" still finds it.
+
+  **A consumer referencing the removed member will not compile.** Saved data, however, is
+  migrated: `migrateRetiredGraphic` rewrites a file naming it, and both engines apply it on
+  restore. The rename alone would not be enough — the retired graphic was dropped on a point
+  and locked at 2:1, where the survivor's base is the two front corners — so the geometry is
+  rewritten too, from the saved `radius` and `rotation`, and those two amplifiers are dropped
+  because they described a shape that no longer exists.
 
 ### Changed
 
@@ -97,14 +104,21 @@ not be read correctly by 3.4.0.
 
 ### Added
 
-- **`RoadblockCompleteExecuted` is back, as the picture 3.4.0 shipped.** It had been switched
-  off mid-branch: 271204's Draw Rules cell is empty, so the row inherits 271201's
-  centreline-and-width rule and the Template is the only statement of how three points lay
-  four strokes out — read three ways in one session, three different pictures. The
-  three-point construction stays withheld; what is restored is the point-dropped symbol that
-  shipped, so the enum member a consumer may hold keeps working while the reading is settled.
-  Its anchor is not individually draggable: the operator moves, rotates and resizes the whole
-  graphic. Its tracker row still reads `In UI = N` for shape and handles, so it is listed
+- **`RoadblockCompleteExecuted` is back, storing three points that nobody may drag.** It had
+  been switched off mid-branch: 271204's Draw Rules cell is empty, so the row inherits
+  271201's centreline-and-width rule and the Template is the only statement of how three
+  points lay four strokes out — read three ways in one session, three different pictures.
+
+  That reading is still open, so the symbol is restored with the contract that says what is
+  known without inviting an edit that would have to be redone: it **stores** the three anchor
+  points its family uses, `[start, end, side]`, and **publishes** them so the operator can
+  see where they are — but none answers a drag. Translate, rotate and resize act on the whole
+  graphic. `handlesAreInert(name)` is the new export that says so, and both engines read it:
+  OpenLayers through the handle feature's `inert` flag, MapLibre by refusing the grab.
+
+  It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
+  of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a
+  graphic publishes. Its tracker row still reads `N` for shape and handles, so it is listed
   **upcoming** rather than counted as capability. (User's call, 2026-09-07.)
 
 - **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics

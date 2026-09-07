@@ -316,8 +316,7 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
      * what stops a renderer stamping it a `width` its own third point already carries.
      * @see carriesSeparationInBase, RoadblockComplete
      */
-    // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.RoadblockCompleteExecuted,
+    TacticalGraphicName.RoadblockCompleteExecuted,
     // FlankAttack and DoubleEnvelopment are routed here by the controller registry
     // but are commented out of the enum — see ai/excluded-graphics.md. Listing them
     // would not compile, which is the enum doing its job.
@@ -1157,8 +1156,7 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 3,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 3,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 3,
-    // Excluded — see ai/excluded-graphics.md
-    // [TacticalGraphicName.RoadblockCompleteExecuted]: 3,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 3,
     [TacticalGraphicName.MineCluster]: 2,
     [TacticalGraphicName.TripWire]: 2,
     [TacticalGraphicName.RaftSite]: 2,
@@ -1670,6 +1668,34 @@ export function acceptsInsertedVertex(
     // the tooth eat more than half the obstacle, so on a route drawn barely longer than the
     // chevron the reserved stretch shrinks with it rather than swallowing the whole line.
     return along > Math.min(lead, travelled / 2);
+}
+
+/**
+ * Graphics whose handles are **shown but not individually draggable**.
+ *
+ * Every point is stored and published, so the operator can see where the symbol's anchors
+ * are and a file carries them — but none of them may be dragged on its own. The whole
+ * graphic still moves, turns and scales.
+ *
+ * 271204 is the case this exists for. Its construction is unsettled — an empty Draw Rules
+ * cell that inherits 271201's centreline-and-width rule, and a Template read three ways in
+ * one session — so offering a grip on each point would promise a shape the reading does not
+ * yet support. Storing the points and showing them inert says what is known without
+ * inviting an edit that would have to be redone. (User's call, 2026-09-07: "we always store
+ * the points and show them as inert since the user can't really modify them directly. They
+ * can only resize/rotate/move the graphic wholesomely (for now)".)
+ *
+ * Distinct from `anchorVertex`, which makes **one** vertex of an otherwise editable path
+ * inert, and from `publishesAnchorHandleOnly`, which is about how many handles a graphic
+ * publishes rather than whether they answer a drag. @see createInertHandleFeature
+ */
+const INERT_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.RoadblockCompleteExecuted,
+];
+
+/** Whether every handle this graphic publishes is inert. @see INERT_HANDLE_GRAPHICS */
+export function handlesAreInert(name: TacticalGraphicName): boolean {
+    return INERT_HANDLE_GRAPHICS.includes(name);
 }
 
 /** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
