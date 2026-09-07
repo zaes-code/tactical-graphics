@@ -20,7 +20,8 @@
  * output to whichever renderer you use.
  */
 
-import {Feature, FeatureCollection, GeoJsonProperties} from 'geojson';
+import {Feature, FeatureCollection, GeoJsonProperties, Position} from 'geojson';
+import * as turf from './turf';
 import {TacticalGraphicsRegistry} from './TacticalGraphicsRegistry';
 import {
     GraphicOptions,
@@ -378,6 +379,68 @@ export function listTacticalGraphicNames(): string[] {
  * types, and a bag carrying both keeps the current one: an old key is evidence about a
  * file's age, not an override.
  */
+/**
+ * A graphic that was retired into another, and how a file naming it is read now.
+ *
+ * The sibling of {@link RENAMED_AMPLIFIERS}, one level up: those keys changed name, this is
+ * a whole symbol that did. `FightingPosition` was FM 1-02.2's name for the same open
+ * three-sided bracket APP-06 codes 291000 *fortified position* — table 5-22 draws the
+ * identical figure beside the same trench line, in the same order, with the same note about
+ * facing the enemy. Two identical pictures with two captions are one control measure, so the
+ * survivor is displayed under **both** names and is recorded as being in both publications;
+ * a user searching for "fighting position" finds it.
+ *
+ * What does not survive on its own is the *draw model*. The retired graphic was dropped on a
+ * point and locked at 2:1 — a centre, a size and a rotation — where 291000's plate specifies
+ * the two front corners of the bracket, which is why the survivor is the one it is. So a
+ * saved file needs its geometry rewritten, not just its name, and that is the whole reason
+ * this is a function rather than a lookup table. @see migrateRetiredGraphic
+ */
+const RETIRED_GRAPHICS: Readonly<Record<string, TacticalGraphicName>> = {
+    FightingPosition: TacticalGraphicName.FortifiedPosition,
+};
+
+/**
+ * Rewrites a saved record that names a retired graphic, or returns it untouched.
+ *
+ * Applied by both renderers on restore, so the migration is stated once. One direction only:
+ * nothing writes the old name back, and a file already naming the survivor is returned as it
+ * came in.
+ *
+ * The geometry: the retired symbol filed a centre with a `radius` and a `rotation`, at a
+ * locked 2:1 — half-width `radius`, half-height `radius / 2`. Its front edge is therefore the
+ * segment of length `2 × radius` centred half a radius forward of the centre, and that edge
+ * *is* 291000's base. A record with no radius has no size to convert and is left alone rather
+ * than guessed at; it will restore as a failure the caller can report, which is better than a
+ * symbol at an invented scale.
+ */
+export function migrateRetiredGraphic(
+    properties: TacticalGraphicProperties,
+    geometry: Feature['geometry'],
+): {properties: TacticalGraphicProperties; geometry: Feature['geometry']} | undefined {
+    const survivor = RETIRED_GRAPHICS[properties.name as unknown as string];
+    if (!survivor) return undefined;
+    if (geometry?.type !== 'Point') return {properties: {...properties, name: survivor}, geometry};
+
+    const radius = properties.radius;
+    if (!(typeof radius === 'number' && radius > 0)) return undefined;
+
+    const centre = geometry.coordinates as Position;
+    const facing = properties.rotation ?? 0;
+    const forward = turf.destination(turf.point(centre), radius / 2, facing, {units: 'meters'}).geometry.coordinates as Position;
+    const corner = (side: number) =>
+        turf.destination(turf.point(forward), radius, facing + side * 90, {units: 'meters'}).geometry.coordinates as Position;
+
+    // `radius` and `rotation` described the retired box and mean nothing to the survivor,
+    // whose shape comes from the two points alone. Carrying them would leave a stale size in
+    // the file that a later width drag would appear to contradict.
+    const {radius: _radius, rotation: _rotation, ...rest} = properties;
+    return {
+        properties: {...rest, name: survivor},
+        geometry: {type: 'LineString', coordinates: [corner(-1), corner(+1)]},
+    };
+}
+
 const RENAMED_AMPLIFIERS: ReadonlyArray<readonly [legacy: string, current: keyof TacticalGraphicProperties]> = [
     ['label', 'designation'],
     ['secondId', 'secondDesignation'],

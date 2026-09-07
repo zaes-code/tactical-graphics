@@ -9,6 +9,7 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
+    createInertHandleFeature,
     defaultLineStyle,
     directionArrowStyleFunc,
     endGlyphLineStyleFunc,
@@ -44,7 +45,7 @@ import {
     tacticalFixStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert,defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -53,6 +54,14 @@ import {decorationMeters} from './decorationPx';
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphics: Feature = createFeature();
+    /**
+     * The handle set — **inert for the graphics that publish points nobody may drag.**
+     *
+     * Swapped in the constructor rather than chosen here, because a field initializer cannot
+     * see the name. `createInertHandleFeature` paints grey and sets the `inert` flag the
+     * manager reads to refuse a grab, which together are what "shown but not editable" means.
+     * @see handlesAreInert
+     */
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
     symbolId: string = '';
     graphicName: TacticalGraphicName;
@@ -73,6 +82,8 @@ export class LineGraphicBase implements LineGraphic {
     private standoffInUse: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {
+        // Points this graphic stores and shows but nobody may drag. @see handlesAreInert
+        if (handlesAreInert(name)) this.handles = <Feature<MultiPoint>>createInertHandleFeature();
         if (resolution !== undefined) {
             this.graphics.set('drawingResolution', resolution);
         }

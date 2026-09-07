@@ -904,9 +904,6 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
-    // 271204 is point-dropped and its anchor is not individually draggable: the operator
-    // moves, rotates and resizes the whole symbol. @see DROP_SIZE_PX
-    TacticalGraphicName.RoadblockCompleteExecuted,
     // **Roadblock complete left on 2026-09-05.** It refused rotation because it was
     // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
     // that had no orientation of its own. It is drawn from a centreline now, and its
@@ -1170,9 +1167,6 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // inherited rule gives it a centreline, so the draw waits for the second click rather
     // than finishing on the first. It sat here at 100 px — twice the crossed tasks', which
     // was only the number it was specified from rather than a size it landed on.
-    // Twice the crossed tasks', which was only the number these were specified from
-    // rather than the size they landed on.
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
     // The security operations are **not dropped** as of 2026-08-29: the operator draws one
     // arrow and the other is derived, so there is no one-click size to state. Removing
     // them from here is what tells a renderer to wait for the second point instead of

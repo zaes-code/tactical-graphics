@@ -718,8 +718,7 @@ function anchorsFromClicks(
         case TacticalGraphicName.ExplosivesPlannedStateOfReadiness:
         case TacticalGraphicName.ExplosivesStateOfReadiness1Safe:
         case TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable:
-        // Excluded — see ai/excluded-graphics.md
-        // case TacticalGraphicName.RoadblockCompleteExecuted:
+        case TacticalGraphicName.RoadblockCompleteExecuted:
         // 140800 states the same rule in the same words — *"points 1 and 2 define the
         // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
         // so it reads its clicks the same way. (User's call, 2026-09-05.)

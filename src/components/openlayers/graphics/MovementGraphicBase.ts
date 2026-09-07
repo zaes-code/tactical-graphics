@@ -5,6 +5,7 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
+    createInertHandleFeature,
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
     barSymbolStyleFunc,
@@ -14,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import { baseVertexCount, carriesSeparationInBase, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, baseVertexCount, carriesSeparationInBase, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -85,6 +86,14 @@ export class MovementGraphicBase implements LineGraphic {
     }
 
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
+        /*
+         * **Points this graphic shows but nobody may drag.** The inert feature paints grey and
+         * sets the flag the manager reads to refuse a grab. Assigned here rather than in the
+         * field above because a field initializer cannot see the name — and stated in
+         * `LineGraphicBase` too, because that holder implements the same interface separately
+         * rather than sharing a base. The *fact* lives in the library. @see handlesAreInert
+         */
+        if (handlesAreInert(name)) this.handles = <Feature<MultiPoint>>createInertHandleFeature();
         this.offset = offset;
         this.graphicName = name;
         this.resolution = resolution;
