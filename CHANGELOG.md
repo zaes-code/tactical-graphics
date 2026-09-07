@@ -15,63 +15,64 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-**Two graphics added, and the coverage and documentation audit that found them.** The
-registry goes 293 → 295. Nothing that was drawing before draws differently; the five
-one-anchor mission tasks change which handles they offer, and eight graphics change which
-publication they are recorded under.
+**Thirty-eight graphics were rebuilt on the anchor points their plates number, and APP-06
+line and area coverage closed.** The registry goes 293 → 317. The headline is not the new
+symbols but the old ones: a graphic whose dimension used to be a `size` or `radius`
+amplifier — a number nobody could see and nowhere to put it — now has the operator place
+the point APP-06 gives it.
 
-### Fixed
+**This is a major release for three reasons**, listed under *Removed* and *Changed* below:
+two enum members are gone, and one exported method lost a parameter. A fourth thing is not
+a breaking change but is why the major matters — **54 graphics changed how many points
+their base stores**, so this version writes a different file than 3.4.0 did. Files written
+by 3.4.0 open correctly here and that is pinned by a new suite; files written *here* will
+not be read correctly by 3.4.0.
 
-- **Eight graphics were tagged `APP-06` only and are in FM 1-02.2 as well.** The four CBRN
-  contaminated areas (`BiologicalContaminatedArea` 271700, `ChemicalContaminatedArea`
-  271800, `NuclearContaminatedArea` 271900, `RadiologicalContaminatedArea` 272000) are FM
-  table 5-28; `MinefieldDynamicDepiction` 270707, `MinedAreaFenced` 270801 and `TripWire`
-  290500 are FM table 5-20; `Demonstration` 343300 is FM table 5-15, where the plate draws
-  the same `DEM` hook this library draws.
+### Removed
 
-  Every one had been classified on a text search of the manual that came back empty, and
-  **the search was the defect.** FM tables name a symbol by its position under a heading:
-  table 5-28's rows read `biological`, `chemical`, `nuclear` and `radiological` beneath a
-  heading `Contaminated area`, so the phrase "biological contaminated area" appears nowhere
-  in the document. `getSpecifications` and `listNamesBySpecification` now return these
-  eight under FM 1-02.2 as well, which is additive — nothing that was returned before has
-  stopped being returned. The count moves from 214/8/69 to **221 both / 9 FM-only / 63
-  APP-06-only**. Pinned per graphic, by the table that carries it, in
-  `specifications.test.ts`.
+- **`TacticalGraphicName.FightingPosition`** — a duplicate. FM 1-02.2's *fighting position*
+  and APP-06 152300's *fortified position* are the same symbol under two names, and the
+  library carried both, so the same picture answered to two enum members and one of them
+  had no entity code. `FortifiedPosition` is the survivor and is recorded as being in both
+  publications. **A consumer referencing the removed member will not compile, and saved
+  data naming it will not restore.**
 
-- **`docs/graphic-field-matrix.csv` / `.md` were four releases stale** and still listed
-  `axis of attack`, removed in 3.2.0. Regenerated; `npm run check:field-matrix` is new and
-  fails when they drift again.
-
-- **The README's `prepareFeatures` note said `labels` is undefined for 104 of the 293
-  graphics.** It is 106 — the denominator was updated when the registry grew from 291 and
-  the numerator was not, and both graphics added at that point return no label feature.
-
-- **`docs/app6-field-validation.md` attributed the 3.2.0 amplifier changes to 4.0.0**, a
-  version that does not exist. That included the range-fan kilometres-to-metres change,
-  which has no migration path, so the document named the wrong release for the one thing a
-  consumer most needs the right release number for.
-
-### Added
-
-- **`MinedArea` (APP-06 270800, FM 1-02.2 table 5-20)** — a drawn area with `M` markers on
-  its boundary and the mine row inside, the unfenced sibling of `MinedAreaFenced`. The wire
-  is the whole of the difference between them, so one paint draws both and a `fenced` flag
-  picks; `minedAreaPaint` is exported alongside `minedAreaFencedPaint`.
-
-  It had been missed because Table A-32 lists 270801 *under* it, so a "parent rows are
-  headers" filter hid it — but 270800 carries its own Anchor Points block, and a header
-  does not.
-
-- **`Defeat` (APP-06 344300)** — four solid arrows converging on a `D`. Its proportions are
-  measured off the Template at 600 dpi rather than chosen: the tip stands 0.192 of the reach
-  off centre, the head is 0.222 long and 0.12 half-wide, the shaft 0.048. APP-06 only; FM
-  1-02.2 does not name the task.
-
-  Its Draw Rules cell is word for word Destroy's, so it takes Destroy's whole contract —
-  point-anchored, dropped at the crossed tasks' size, no rotation.
+- **`TacticalGraphicName.RoadblockCompleteExecuted`** — switched off, not deleted in
+  spirit: its plate reading is unsettled and drawing a guess is worse than drawing nothing.
+  The member is commented out in `core/type.ts` with the reason beside it, which is the same
+  treatment the other deliberate exclusions get. Same consumer impact as above.
 
 ### Changed
+
+- **`LineGraphicController.enableVertexDragging(minimumVertices, anchorVertex)` no longer
+  takes the second argument.** *Breaking* — the class is exported from the
+  `/openlayers` entry point, so a call passing two arguments stops compiling; drop the
+  second and nothing else changes.
+
+  Which base vertex a reshape refuses to move was stated twice: once in the portable table
+  MapLibre reads, once as a literal here. The two sets barely overlapped, so **eight
+  graphics edited differently depending on which renderer a host loaded** — 343000 capture,
+  342300 seize, 344500 evacuate, 344600 recover, 343600 escort and 272100's zone refused a
+  drag on OpenLayers that MapLibre allowed, while 341900 did the reverse. Six of those have
+  plates that say *"point 1 defines the centre"*, so the answer was right and its address
+  was wrong; they are in the portable table now. Two had an answer their plates do not
+  support and lost it: 272101 numbers no centre at all, and 343700 exfiltrate's point 1 is
+  *"the end of the straight line portion of the graphic"*, so making it inert removed the
+  only grip that sets the run it defines.
+
+- **Fifty-four graphics changed how many points their base stores.** Not breaking — a file
+  written by 3.4.0 opens here — but it changes what the library writes. The two-rail
+  crossings (271100 bridge, 271300 assault crossing, FM's gap) go to four points, the fords
+  to three; 152100 support by fire and the security operations to four; ambush, attack by
+  fire, penetrate, block, disrupt, breach, bypass, canalize, clear, the seven cane arrows,
+  mobile defence, the infiltration lane and both turns to three; both hairpins and
+  envelopment to four.
+
+  Two mechanisms carry the back-compat and both are deliberate: some bases are upgraded on
+  the way in by `normalizeDrawnBase`, the rest keep drawing through their generator's
+  short-base branch. `legacyFormatRestore.test.ts` is new and puts a 3.4.0-shaped record —
+  two points plus the amplifiers that version filed — through the public API, the MapLibre
+  build and OpenLayers' restore for all 317 names.
 
 - **Defeat, Destroy, Interdict, Neutralize and Suppress publish one handle, at the centre.**
   Each plate reads "requires one anchor point. The centre point defines the centre of the
@@ -98,6 +99,100 @@ publication they are recorded under.
   picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`
   already; nothing ran any of them, which is how the field matrix went stale unnoticed.
   `npm run gen:field-matrix` and `npm run check:field-matrix` are the two new scripts.
+
+### Added
+
+- **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics
+  join the registry: the nine bearing lines and both navigational lines, nine maritime areas
+  (the launch, defended and ship-area ellipses and rectangles, the no-attack and active
+  manoeuvre zones, the AEGIS single target), the two convoys, `SearchArea` 152200,
+  `RadarSearchDoctrine` 200700, `CuedAcquisitionDoctrine` 200600, `MinedArea` 270800 and
+  `Defeat` 344300.
+
+  Three of those had been recorded as deliberate exclusions, and **the record was wrong** —
+  "excluded on purpose" had never been a reading of the plate.
+
+- **`MinedArea` (APP-06 270800, FM 1-02.2 table 5-20)** — a drawn area with `M` markers on
+  its boundary and the mine row inside, the unfenced sibling of `MinedAreaFenced`. The wire
+  is the whole of the difference between them, so one paint draws both and a `fenced` flag
+  picks; `minedAreaPaint` is exported alongside `minedAreaFencedPaint`.
+
+  It had been missed because Table A-32 lists 270801 *under* it, so a "parent rows are
+  headers" filter hid it — but 270800 carries its own Anchor Points block, and a header
+  does not.
+
+- **`Defeat` (APP-06 344300)** — four solid arrows converging on a `D`. Its proportions are
+  measured off the Template at 600 dpi rather than chosen: the tip stands 0.192 of the reach
+  off centre, the head is 0.222 long and 0.12 half-wide, the shaft 0.048. APP-06 only; FM
+  1-02.2 does not name the task.
+
+  Its Draw Rules cell is word for word Destroy's, so it takes Destroy's whole contract —
+  point-anchored, dropped at the crossed tasks' size, no rotation.
+
+- **New readers for the rebuilt point contracts**, all exported from the root:
+  `supportByFireAnchors`, `hairpinAnchors`, `arcAndArrowAnchorsFromClicks`,
+  `squareOntoBisector`, `railCrossingBase`, `supportByFireBase`, `RAIL_PREVIEW_GAP_PX` and
+  `SUPPORT_BY_FIRE_PREVIEW_REACH`. The two-rail crossings' own reader stays internal — the
+  generators and `normalizeDrawnBase` are the supported way in. Eighty names were added to the root entry point, two to
+  `/openlayers` and three to `/maplibre`; **none were removed from any of the three.**
+
+### Fixed
+
+- **A count is not a reading, and four defects proved it** — each in a graphic that matched
+  the number of anchor points its plate states:
+
+  - the movement family's width grip sat on the corner of the arrowhead its Template leaves
+    unlettered, on all eight arrows
+  - 340700 counter-attack by fire's bracket stood 1.85 half-widths *outside* point 1, so the
+    anchor the operator placed was neither the tip of anything nor the end of the symbol
+  - 152100 support by fire drew a differently-shaped stand-in for every click before its
+    last, touching neither of the two points already placed
+  - eighteen picker thumbnails were built by a third synthesiser carrying its own copy of
+    the layout chain; nine drew a reversed base, so the cane arrows shipped as bare arches
+
+- **200600's white border is visible in the generated tiles.** It paints white because its
+  Note says so; on a white page that is an invisible symbol. Its own Note 2 reads *"Gray
+  background is used to show white border and is not part of the symbol"*, and the generator
+  now does what the plate does.
+
+- **Eight graphics were tagged `APP-06` only and are in FM 1-02.2 as well.** The four CBRN
+  contaminated areas (`BiologicalContaminatedArea` 271700, `ChemicalContaminatedArea`
+  271800, `NuclearContaminatedArea` 271900, `RadiologicalContaminatedArea` 272000) are FM
+  table 5-28; `MinefieldDynamicDepiction` 270707, `MinedAreaFenced` 270801 and `TripWire`
+  290500 are FM table 5-20; `Demonstration` 343300 is FM table 5-15, where the plate draws
+  the same `DEM` hook this library draws.
+
+  Every one had been classified on a text search of the manual that came back empty, and
+  **the search was the defect.** FM tables name a symbol by its position under a heading:
+  table 5-28's rows read `biological`, `chemical`, `nuclear` and `radiological` beneath a
+  heading `Contaminated area`, so the phrase "biological contaminated area" appears nowhere
+  in the document. `getSpecifications` and `listNamesBySpecification` now return these
+  eight under FM 1-02.2 as well, which is additive — nothing that was returned before has
+  stopped being returned. Across the release the split moves from 214 both / 69 APP-06-only
+  / 8 FM-only to **224 both / 85 APP-06-only / 8 FM-only**, and 309 graphics carry a
+  six-digit entity code. Pinned per graphic, by the table that carries it, in
+  `specifications.test.ts`.
+
+- **`docs/graphic-field-matrix.csv` / `.md` were four releases stale** and still listed
+  `axis of attack`, removed in 3.2.0. Regenerated; `npm run check:field-matrix` is new and
+  fails when they drift again.
+
+- **The README's `prepareFeatures` note** gave a stale count for the graphics that keep
+  every glyph on the graphic feature. Measured against the paint registry it is **127 of
+  317**; the denominator had been updated when the registry grew and the numerator had not.
+
+- **`docs/app6-field-validation.md` attributed the 3.2.0 amplifier changes to 4.0.0**, a
+  version that did not exist at the time. That included the range-fan kilometres-to-metres
+  change, which has no migration path, so the document named the wrong release for the one
+  thing a consumer most needs the right release number for.
+
+### Testing
+
+- **`engineRoundTrip`** takes every registered graphic out of one engine and into the other
+  and back, at two zooms, asserting the coordinates — the part a consumer reads as doctrine.
+  Nothing covered that trip before: the existing suites round-trip within one engine.
+- **`anchorVertexParity`** asserts the inert-vertex index against the library for all 317.
+- **`legacyFormatRestore`** opens a 3.4.0-shaped file on both engines, for all 317.
 
 ## [3.4.0] — 2026-09-02
 
