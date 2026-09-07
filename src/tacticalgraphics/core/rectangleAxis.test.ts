@@ -15,6 +15,7 @@ import type {Position} from 'geojson';
 import * as turf from './turf';
 import {
     RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+    rectangleDefaultHalfWidth,
     axisFromRectangleRing,
     constrainRectangleAxis,
     levelRectangleAxis,
@@ -141,6 +142,52 @@ describe('the rectangle the axis and the width build', () => {
         // At 20 px the zone came out a letterbox and the width handle sat almost on the
         // axis. Its own number, read by both engines. (User's call, 2026-08-27.)
         expect(RECTANGLE_DEFAULT_HALF_WIDTH_PX).toBeGreaterThan(20);
+    });
+
+    /**
+     * **The un-supplied width is calibrated against the drawn one, and the two used to
+     * disagree by a factor of two and a half.**
+     *
+     * `rectangleDefaultHalfWidth` is the answer where there is no zoom to spend a screen size
+     * at — a sample sheet, a raw-GeoJSON restore — and its share is meant to be what a drag
+     * produces. A drawn half-width is a screen constant, so the share a drag produces is
+     * `RECTANGLE_DEFAULT_HALF_WIDTH_PX` over the drag's length in pixels: measured in the
+     * running app, 0.229 at a 240 px drag, 0.125 at 440 and 0.069 at 800. The old twentieth
+     * was the answer for a drag of about 1,100 px, which nobody makes — so every sheet drew a
+     * sliver ten times as long as it was deep.
+     *
+     * **The rule is an aspect now, and this asserts the aspect.** The default is half as deep
+     * as it is long. (User's call, 2026-09-07: "make the vertical size 1/2 the horizontal".)
+     * That is a statement about how the symbol reads, so it is pinned directly — where the
+     * old assertion pinned a *range*, because the number was fitted to a drag length and the
+     * literal would only have restated two constants divided.
+     */
+    it('defaults to a box half as deep as it is long', () => {
+        const axis = 1_000_000;
+        expect((2 * rectangleDefaultHalfWidth(axis)) / axis).toBeCloseTo(0.5, 6);
+    });
+
+    it('stays in the same neighbourhood as a drawn width, without being fitted to one', () => {
+        /*
+         * It is a little deeper than any real drag produces — the deepest measured, a 240 px
+         * one, gives 0.229 against this 0.25 — and deliberately so: a drag places a zone
+         * against ground the operator can see, while this default draws a symbol with nothing
+         * to place it against and amplifiers stacked inside it. What would be wrong is being
+         * *far* from a drag, in either direction, so the bound below is the loose one that
+         * catches that rather than the tight one that would forbid the choice.
+         */
+        const axis = 1_000_000;
+        const share = rectangleDefaultHalfWidth(axis) / axis;
+        expect(share).toBeGreaterThan(RECTANGLE_DEFAULT_HALF_WIDTH_PX / 800);
+        expect(share).toBeLessThan((RECTANGLE_DEFAULT_HALF_WIDTH_PX / 240) * 1.25);
+    });
+
+    it('leaves the default box a shape rather than a sliver', () => {
+        const axis = 1_000_000;
+        // Length over depth. Ten to one is what the twentieth gave, and it is what the user
+        // reported; anything under six reads as a box with room for the amplifiers that
+        // stack inside it.
+        expect(axis / (2 * rectangleDefaultHalfWidth(axis))).toBeLessThan(6);
     });
 
     it('round-trips through the ring a pre-conversion file holds', () => {
