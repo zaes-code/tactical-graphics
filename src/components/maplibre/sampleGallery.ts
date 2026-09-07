@@ -9,6 +9,9 @@ import {
     getDisplayName,
     supportsHostility,
     AltitudeDatum,
+    baseVertexCount,
+    synthesizedBase,
+    normalizeDrawnBase,
     isRectangular,
     storedOrder,
     anchorsFromFrame,
@@ -39,7 +42,29 @@ const COLUMN_STEP = 9;
 const ROW_STEP = 7;
 /** Half-extent of a sample, in degrees. */
 const HALF = 2.6;
-const COLUMNS = 14;
+
+/**
+ * How many samples to a row — and it is a **legibility** setting, not a taste one.
+ *
+ * The sheet is framed by a fit, so only *relative* sizes matter: growing every sample and
+ * every cell together changes nothing, because the fit gives it straight back. What does
+ * change things is the sheet's **aspect**, because the fit is limited by whichever
+ * dimension runs out first against a landscape viewport.
+ *
+ * At 14 columns, 295 samples make 22 rows: 126 degrees wide against 147 tall, which
+ * projects to an aspect of 0.57 in a viewport of 1.7. Height is the binding constraint and
+ * every sample lands about 38 px across. **Below what a decoration needs to exist**:
+ * `decorationScale` allows an open path's repeating mark 5% of its length and drops it
+ * under `DECORATION_MIN_PX`, so a 14 px wire mark needs a 60 px run — and all nine wire
+ * obstacles, both scalloped lines and the anti-tank ditches drew as *identical plain
+ * lines*. Nine symbols whose entire meaning is the texture on the stroke.
+ *
+ * At 20 the sheet is 180 x 98, projected aspect 1.58, and width binds instead: 87 px a
+ * sample, and the marks are there. Measured, both times, not estimated.
+ *
+ * The number is a floor — `cellOrigin` widens it further rather than run past the pole.
+ */
+const COLUMNS = 20;
 
 /** Where the grid starts horizontally, so it sits over open water rather than land labels. */
 const ORIGIN_LON = -64;
@@ -74,9 +99,10 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
     // **West to east as the *graphic* files it.** Thirty-two graphics store the arrowhead as
     // point 1, so handing one a west-to-east path aims it west and the sheet fills with
     // arrows pointing back into the previous cell. @see storedOrder
+    const runHalf = HALF * (LONG_RUN_SAMPLES[name] ?? 1);
     const line: Geometry = {
         type: 'LineString',
-        coordinates: storedOrder(name, [[lon - HALF, lat], [lon + HALF, lat]]),
+        coordinates: storedOrder(name, [[lon - runHalf, lat], [lon + runHalf, lat]]),
     };
     const point: Geometry = {type: 'Point', coordinates: [lon, lat]};
     // **A rectangle gets four corners and an irregular area gets five**, so the sweep
@@ -100,7 +126,39 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * is the base a user's drawing would have produced rather than an imitation of one.
      * @see usesDrawnAnchors
      */
-    if (usesDrawnAnchors(name)) return [anchorLine(lon, lat), line, ring, point];
+    /*
+     * **Pursuit is a cane arrow and should be sampled as one.** It is in the anchor family,
+     * so it took `anchorLine`'s frame-built base while the seven graphics it shares a shape
+     * with — a straight run, a half-circle hooked off its end — took the front edge. Two
+     * layouts for one picture, and the odd one out was visibly unlike its siblings in the
+     * sheet. (User's report, 2026-09-06: "pursue should be like those other cane graphics".)
+     * Its own rule numbers the points the same way: a run, then a point stating the arc.
+     */
+    if (usesDrawnAnchors(name)) {
+        return [anchorLine(lon, lat), line, ring, point];
+    }
+
+    const roles = ROLE_SAMPLE_LAYOUTS[name];
+    if (roles) return [roles(lon, lat), line, ring, point];
+
+    /*
+     * **And the thirteen whose points are a front edge and a distance across it.** Same trap
+     * as the anchor family above and the same shape of fix: a two-point line *builds* for all
+     * of them, so "the first candidate that builds wins" took it and every one drew its legacy
+     * fallback — squat, about half its proper width. This is the sweep the app restores from,
+     * so it is what a user sees. (User's report, 2026-09-06.)
+     *
+     * `frontEdgeBase` is the library's own statement of the shape, shared with the OpenLayers
+     * sample harness and the catalog thumbnails, which were each guessing it separately.
+     *
+     * **After the table above, not before it.** A graphic with a layout written for it keeps
+     * it: infiltration is in this family and also needs its point 2 *off* the chord, because
+     * that offset is what bends its S — a plain front edge draws it straight.
+     */
+    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3);
+    if (stated) {
+        return [{type: 'LineString', coordinates: storedOrder(name, stated)}, line, ring, point];
+    }
 
     /*
      * **And another eight whose points are numbered roles rather than a path.** The rule
@@ -114,19 +172,74 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      *     the arrow's end — and with two they draw the circle and stop, letter and all;
      *   - the **escort** needs three for its bar.
      *
-     * (The demonstration used to be here too. It is dropped from one click now, so the
-     * plain `point` candidate builds it and no layout is needed. @see Demonstration)
+     * (The demonstration used to be here too, then was dropped from one click and needed no
+     * layout at all. It is three clicks again as of 2026-09-06 and takes `hairpinBase` in the
+     * branch above — which it reached only once `drawsAsHairpin` was added to that gate: the
+     * plain two-point line builds it through its legacy fallback, so nothing objected while
+     * the sheet drew a symbol whose grips sat 70% of its own span from any stored point.
+     * @see Demonstration)
      *
      * Each layout below is written in the order the standard numbers the points.
      */
-    const roles = ROLE_SAMPLE_LAYOUTS[name];
-    if (roles) return [roles(lon, lat), line, ring, point];
 
     return [line, ring, point];
 }
 
+/**
+ * Graphics drawn on a **longer run than the cell's default**, and how much longer.
+ *
+ * A symbol whose plate says it *"varies only in length"* carries every dimension except
+ * that run as a screen size — the body, the connector, the head, the trident's prongs. On a
+ * cell-width run those screen sizes take up nearly all of it, so the head sits on the tail
+ * and the shape the operator is meant to recognise has nowhere to be. `endMarkScale` keeps
+ * it from overflowing, which is why it renders as a legible symbol rather than an obvious
+ * mess — and is exactly why the sweep did not look broken.
+ *
+ * **Lengthening the base is the right fix and shrinking the decorations is not**: the
+ * decorations are the size the standard draws them at, and a sample that shrank them would
+ * be showing something other than what the app draws. The cell has room — columns are
+ * {@link COLUMN_STEP} apart against a default span of `2 x HALF`.
+ *
+ * Kept as a small table rather than a rule, because "how much run does this symbol's
+ * furniture need" is a fact about each plate. @see followTaskPaint, fixPaint
+ */
+const LONG_RUN_SAMPLES: Partial<Record<TacticalGraphicName, number>> = {
+    // Body 46 px, head 26 px and a dashed connector between them, all screen sizes.
+    [TacticalGraphicName.FollowAndAssume]: 1.6,
+    [TacticalGraphicName.FollowAndSupport]: 1.6,
+    // The trident's prongs and its vertical bar are screen sizes too.
+    [TacticalGraphicName.Fix]: 1.6,
+    [TacticalGraphicName.TacticalFix]: 1.6,
+};
+
 /** @see candidateGeometries — the layouts for graphics whose points are numbered roles. */
 const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat: number) => Geometry>> = {
+    /*
+     * **152200 search area is a vee, and the sheet was handing it a line.**
+     *
+     * Its second arm is synthesised on every render — `asSearchVee` does for it what `asVee`
+     * does for fields of fire — so a two-point base *builds*, and draws the symbol correctly.
+     * What it cannot do is be edited: the generator publishes three grips and the base stores
+     * two, so the third arm's grip sits on no vertex at all and a drag cannot pick it up.
+     * That is the same defect the cane arrows had, one vertex further on.
+     *
+     * Materialised here rather than in `normalizeDrawnBase`, which is where fields of fire
+     * gets its second leg: MapLibre asks the *normalized* sketch whether a draw is finished,
+     * so completing a search area's vee there would end its draw one click early. Fields of
+     * fire wants exactly that, because a double-click is how it ends; 152200 names three
+     * anchor points and the operator places all three.
+     *
+     * The opening matches `DEFAULT_VEE_DEGREES`, so the swept symbol and a hand-drawn one
+     * that was ended early are the same picture.
+     */
+    [TacticalGraphicName.SearchArea]: (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon + HALF, lat + HALF * 0.55],
+            [lon - HALF, lat],
+            [lon + HALF, lat - HALF * 0.55],
+        ],
+    }),
     ...Object.fromEntries([
         TacticalGraphicName.ObstacleBypassEasy,
         TacticalGraphicName.ObstacleBypassDifficult,
@@ -142,6 +255,11 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
 
     ...Object.fromEntries([
         TacticalGraphicName.Capture,
+        // **Seize is one of these and was not listed**, so it fell through to the two-point
+        // line, drew its circle and stopped — a lettered ring beside three siblings with
+        // arcs and arrows on them. Same generator (`SweptArcTask`), same four numbered
+        // points, so it takes the same layout rather than one of its own.
+        TacticalGraphicName.Seize,
         TacticalGraphicName.Evacuate,
         TacticalGraphicName.Recover,
     ].map(name => [name, (lon: number, lat: number): Geometry => ({
@@ -158,7 +276,79 @@ const ROLE_SAMPLE_LAYOUTS: Partial<Record<TacticalGraphicName, (lon: number, lat
         type: 'LineString',
         coordinates: [[lon, lat], [lon - HALF, lat], [lon + HALF, lat]],
     }),
+
+    /*
+     * **The two minimum safe distance zones draw nested rings, and both fell to a straight
+     * line.** Neither refuses a short base: 272100 returns the raw coordinates below three
+     * points and 272101 below six, so the sweep showed each as a bare segment beside the
+     * contour lines they belong with. Found by measuring the rendered extent of all 295
+     * samples and asking which had none — @see tmp/build-contact-sheets.py.
+     *
+     * 272100's rule is *"Points 1, and 2 define the radii of circles 1, and 2"* about a
+     * centre, so its three points are the centre and one point on each ring; the generator
+     * takes the distance from the centre to each and sorts them, so which is which does not
+     * matter here.
+     */
+    [TacticalGraphicName.MinimumSafeDistanceZone]: (lon, lat) => ({
+        type: 'LineString',
+        coordinates: [[lon, lat], [lon + HALF * 0.45, lat], [lon + HALF * 0.9, lat]],
+    }),
+
+    /*
+     * 272101 traces both zones: *"Points 1 through N/2 define the inner safe zone (zone 1).
+     * Points N/2 +1 though point N defines the outer zone (zone 2)"*, an even count, at
+     * least six. Twelve — two hexagons — because three points a ring is a triangle and
+     * reads as a mistake rather than as a zone.
+     *
+     * **The traced form rather than the standoff form**, deliberately. A graphic carrying a
+     * standoff derives zone 2 from zone 1 and needs only one ring; one without carries both
+     * rings end to end. The sweep files no standoff, so this is the base its own restore
+     * path produces — and it is also what the plate draws. @see MinimumSafeDistanceMultipleStrike
+     */
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: (lon, lat) => ({
+        type: 'LineString',
+        coordinates: [0.5, 0.95].flatMap(scale =>
+            Array.from({length: 6}, (_, i) => {
+                const angle = Math.PI / 2 + (i * 2 * Math.PI) / 6;
+                return [lon + HALF * scale * Math.cos(angle), lat + HALF * scale * Math.sin(angle)] as Position;
+            }),
+        ),
+    }),
+
+    /*
+     * **Exfiltrate and infiltrate need three points, and a two-point line does not fail —
+     * it draws a bare straight line.** `Exfiltrate.generateGraphics` returns the raw
+     * coordinates when it is handed fewer than three, so the sweep showed both as a plain
+     * segment with no S and no arrowhead, and nothing reported a problem.
+     *
+     * APP-06 343700 numbers them: *"Point 1 defines the end of the straight line portion of
+     * the graphic. Point 2 defines the centre of the two 90 degree circular arcs. Point 3
+     * defines the tip of the arrowhead."* So the chord is 1 → 3 and point 2 is read as a
+     * **perpendicular offset from that chord** — its distance across sets the depth and the
+     * side, its distance along sets where the S sits. @see GeometryService.createSCurve
+     *
+     * `S_CURVE_OFFSET` is that offset. It is chosen against the construction rather than by
+     * eye: `createSCurve` caps the arc radius at 0.24 of the chord, and the axis tilts by
+     * `asin(2r / chord)` to keep both ends on the chord — so a large offset makes a steep
+     * diagonal with no straight left either side of the turn, and a small one makes a bend
+     * rather than an S. At 0.35 the radius is about a sixth of the run and the two straights
+     * come out 1.7 and 1.4 units long, which is the plate's shape.
+     */
+    ...Object.fromEntries([
+        TacticalGraphicName.Exfiltrate,
+        TacticalGraphicName.Infiltration,
+    ].map(name => [name, (lon: number, lat: number): Geometry => ({
+        type: 'LineString',
+        coordinates: [
+            [lon - HALF, lat],
+            [lon, lat + HALF * S_CURVE_OFFSET],
+            [lon + HALF, lat],
+        ],
+    })])),
 };
+
+/** @see ROLE_SAMPLE_LAYOUTS, the exfiltrate entry — a fraction of the cell half-width. */
+const S_CURVE_OFFSET = 0.35;
 
 /**
  * A three-anchor base spanning the same cell the two-point line does.
@@ -431,6 +621,34 @@ function cellOrigin(index: number, total: number): {lon: number; lat: number} {
     };
 }
 
+/**
+ * The chosen candidate, **through the same door a draw comes in by**.
+ *
+ * `candidateGeometries` lays out a plausible base and keeps the first that builds, and a
+ * base that is merely plausible still builds: it draws a *lesser* symbol, which the sheet
+ * then shows as though it were the graphic. `normalizeDrawnBase` is what a draw and a
+ * restore both run, and it is idempotent — so a layout that is already right passes
+ * through untouched and one that is short of what its graphic needs is completed here,
+ * exactly as the operator's clicks would be.
+ *
+ * The sheet was storing a two-point fields of fire where a draw stores three, a
+ * three-point envelopment where a draw stores four, and an unsquared third point on the
+ * turns and the ambush. Every one of those builds, and every one draws the fallback the
+ * generator keeps for a half-finished sketch. (Found by comparing the sheet against the
+ * normalizer, 2026-09-06 — "make sure to update the sweep for all the graphics we've
+ * fixed".)
+ *
+ * Falls back to the raw layout if normalizing produced something that will not build,
+ * since a lesser symbol on the sheet still beats a missing one.
+ */
+function sheetBase(name: TacticalGraphicName, geometry: Geometry, properties: Omit<TacticalGraphicProperties, 'name'>): Geometry {
+    if (geometry.type !== 'LineString') return geometry;
+    const settled = normalizeDrawnBase(name, geometry.coordinates as Position[]);
+    if (settled === geometry.coordinates) return geometry;
+    const candidate: Geometry = {type: 'LineString', coordinates: settled};
+    return buildTacticalGraphic(name, candidate, properties) ? candidate : geometry;
+}
+
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
@@ -446,7 +664,7 @@ export function buildSampleGraphics(
     specs.forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index, specs.length);
         const built = candidateGeometries(name, lon, lat)
-            .map(geometry => buildTacticalGraphic(name, geometry, properties, drawingResolution))
+            .map(geometry => buildTacticalGraphic(name, sheetBase(name, geometry, properties), properties, drawingResolution))
             .find(Boolean);
 
         if (built) graphics.push(built);
@@ -472,10 +690,12 @@ export function sampleFeatureCollection(
     const specs = sampleSpecs(hostility, only);
     specs.forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index, specs.length);
-        const geometry = candidateGeometries(name, lon, lat).find(g =>
+        const chosen = candidateGeometries(name, lon, lat).find(g =>
             buildTacticalGraphic(name, g, {radius: SAMPLE_RADIUS_M, rotation: 0}),
         );
-        if (!geometry) return;
+        if (!chosen) return;
+        // The base a draw would have stored, not the raw layout. @see sheetBase
+        const geometry = sheetBase(name, chosen, {radius: SAMPLE_RADIUS_M, rotation: 0});
 
         features.push({
             type: 'Feature',

@@ -175,7 +175,11 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
         const paints: Paint[] = [];
         for (const member of members) {
             if (member.type === 'Polygon') {
-                const head = screenSizedArrowHead(member.coordinates[0], linePath, context.resolution);
+                // **`reach`, not the traversal.** Fix and the tactical fix draw a zigzag,
+                // which travels about twice its own run — so a share of the traversal put
+                // a full-size head on a symbol half that wide. Ferry crossing's line is
+                // straight and reads the same either way. @see screenSizedArrowHead
+                const head = screenSizedArrowHead(member.coordinates[0], linePath, context.resolution, 'reach');
                 if (head) {
                     paints.push({
                         geometry: {type: 'Polygon', coordinates: [head]},

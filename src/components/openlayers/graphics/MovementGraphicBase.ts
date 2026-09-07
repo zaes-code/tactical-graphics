@@ -5,6 +5,7 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
+    createInertHandleFeature,
     createOffsetHandleFeature,
     envelopmentGraphicStyleFunc,
     barSymbolStyleFunc,
@@ -14,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import { groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, baseVertexCount, carriesSeparationInBase, groundLength, latitudeFromMercatorY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -29,8 +30,10 @@ import {decorationMeters} from './decorationPx';
  * inherited `leftArrowHeadBase` sits.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // Handle sits on the rail itself, one radius off the center line.
-    [TacticalGraphicName.InfiltrationLane]: 1,
+    // Empty since 2026-09-05, when 140800 — its only entry — stopped deriving a width
+    // handle and started storing point 3 as a vertex. Kept because the mechanism is real:
+    // a graphic that draws its offset handle N widths out needs 1/N of the drag, and the
+    // next one to do so belongs here. @see handles.ts OFFSET_SCALE, the portable twin
 };
 
 /**
@@ -83,6 +86,14 @@ export class MovementGraphicBase implements LineGraphic {
     }
 
     constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
+        /*
+         * **Points this graphic shows but nobody may drag.** The inert feature paints grey and
+         * sets the flag the manager reads to refuse a grab. Assigned here rather than in the
+         * field above because a field initializer cannot see the name — and stated in
+         * `LineGraphicBase` too, because that holder implements the same interface separately
+         * rather than sharing a base. The *fact* lives in the library. @see handlesAreInert
+         */
+        if (handlesAreInert(name)) this.handles = <Feature<MultiPoint>>createInertHandleFeature();
         this.offset = offset;
         this.graphicName = name;
         this.resolution = resolution;
@@ -140,11 +151,31 @@ export class MovementGraphicBase implements LineGraphic {
             }
         });
     }
+    /**
+     * Whether this graphic's separation lives in its **base** rather than beside it.
+     *
+     * The movement family carries a width as an amplifier because the base is a centreline
+     * and nothing in it says how far the rails sit apart. The demolition block is not like
+     * that as of 2026-09-05: 271201 gives point 3 the job, it is a stored vertex, and the
+     * generator measures the distance. Stamping a `width` as well would be a second copy of
+     * a number the coordinates already carry — which is how the two drift.
+     * (User's call.) @see halfWidthFromSide
+     */
+    private get separationIsInTheBase(): boolean {
+        return carriesSeparationInBase(this.graphicName);
+    }
+
     setLabel = (labels: GraphicLabels) => {
         this.graphicLabels = labels;
         // Stamping fires a `change` event on each feature, which re-renders them.
         // `radius` travels with the amplifiers — a bare write would drop the offset.
-        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
+        writeGraphicProperties(
+            this.getFeatures(),
+            this.graphicName,
+            labels,
+            // As above: the base's third point states both. @see separationIsInTheBase
+            this.separationIsInTheBase ? {} : {width: this.offset * 2, mirrored: this.mirrored},
+        );
     };
 
     /**
@@ -177,16 +208,24 @@ export class MovementGraphicBase implements LineGraphic {
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
         this.graphic.setGeometry(graphic);
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, 2), pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
+        /*
+         * **As many path handles as the base has vertices**, which is two for the movement
+         * family and three for the demolition block, whose point 3 became a placed vertex
+         * on 2026-09-05. A fixed `slice(0, 2)` published the first two and left the third
+         * to the offset handle below — right while that point was derived, and wrong once
+         * it is one of the points the operator placed. @see BASE_VERTEX_COUNT
+         */
+        const pathHandles = baseVertexCount(this.graphicName) ?? 2;
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(0, pathHandles), pivotCoordinate(this.graphicName, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
 
         // A generator that emits fewer than three handle points is declaring that
         // the graphic has no width to drag — its shape follows entirely from its
         // two endpoints (MobileDefense, which emits just the far one). Leave the
         // offset handle without a geometry and drop it from getFeatures(), so it
         // neither renders nor resolves to this controller on a pointer-down.
-        this.hasOffsetHandle = handleCoords.length > 2;
+        this.hasOffsetHandle = handleCoords.length > pathHandles;
         if (this.hasOffsetHandle) {
-            this.offsetHandle.setGeometry(new Point(handleCoords[2]));
+            this.offsetHandle.setGeometry(new Point(handleCoords[pathHandles]));
         }
 
         this.labels.setGeometry(labels);
@@ -196,9 +235,19 @@ export class MovementGraphicBase implements LineGraphic {
         // drawing resolution. Published after the offset-handle test above so the write
         // covers the feature set that actually exists.
         writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
-            // Stamped as a full width; `offset` is the half-width the generator takes.
-            width: this.offset * 2,
-            mirrored: this.mirrored,
+            /*
+             * **Neither the width nor the side, where the base's third point states both.**
+             *
+             * `width` came off on 2026-09-05; `mirrored` stayed and should not have. The three
+             * point graphics — the demolition block, the infiltration lane and 152800 — all
+             * ignore it: rendering each with `mirrored` true and false gives byte-identical
+             * geometry, because which side the symbol falls on *is* where point 3 was placed.
+             * A stamped flag beside it is a second copy of the same fact, and the pair drift.
+             * (User's call, 2026-09-06.) @see separationIsInTheBase
+             */
+            ...(this.separationIsInTheBase
+                ? {}
+                : {width: this.offset * 2, mirrored: this.mirrored}),
         });
     };
     getBaseGraphicFeature = (): Feature<LineString> => {

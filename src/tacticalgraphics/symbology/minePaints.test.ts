@@ -12,6 +12,7 @@ import {resetTacticalGraphicsConfig} from '../core/config';
 import {
     MINE_GLYPH_GAP_PX,
     mineFillPaint,
+    minedAreaPaint,
     minedAreaFencedPaint,
     minefieldAreaPaint,
     mineRowMarks,
@@ -186,7 +187,7 @@ describe('APP-06 Table 8-24 — a row of any type clears itself', () => {
     });
 });
 
-describe('APP-06 270707 / 270801 — the two mine areas', () => {
+describe('APP-06 270707 / 270800 / 270801 — the three mine areas', () => {
     const areaFeature = (): PaintFeature => ({
         geometry: {type: 'Polygon', coordinates: [RING]},
         properties: {name: TacticalGraphicName.MinedAreaFenced},
@@ -216,11 +217,40 @@ describe('APP-06 270707 / 270801 — the two mine areas', () => {
         expect(fenced.some(p => p.geometry.type === 'MultiLineString')).toBe(true);
     });
 
-    it('sets the four M markers due north, east, south and west of the middle', () => {
+    /*
+     * **The three must not be the same picture.** APP-06 270800 is 270801's parent and
+     * differs from it in the wire alone, which is exactly the shape of defect that let the
+     * mined anti-tank ditch render identically to the unmined one and ship that way for
+     * months. Asserting "each draws something" would have passed then too, so this asserts
+     * what separates them. @see AntiTankDitchReinforcedWithMines
+     */
+    it('marks the mined area like the fenced one but draws no wire on it', () => {
+        const marked = minedAreaPaint()(areaFeature(), context());
+        const fenced = minedAreaFencedPaint()(areaFeature(), context());
+        const plain = minefieldAreaPaint()(areaFeature(), context());
+
+        // The letters are the fenced area's, exactly: same rule, same four bearings.
+        const lettersOf = (paints: Paint[]) => paints.filter(p => p.text).map(p => p.text!.text);
+        expect(lettersOf(marked)).toEqual(['M', 'M', 'M', 'M']);
+        expect(lettersOf(marked)).toEqual(lettersOf(fenced));
+
+        // One MultiLineString on the fenced area — the crosses. None on this one.
+        const wire = (paints: Paint[]) => paints.filter(p => p.geometry.type === 'MultiLineString').length;
+        expect(wire(fenced)).toBe(1);
+        expect(wire(marked)).toBe(0);
+
+        // And it is not the dynamic depiction either, which carries no letters at all.
+        expect(lettersOf(plain)).toEqual([]);
+    });
+
+    it.each([
+        ['mined area', minedAreaPaint],
+        ['mined area, fenced', minedAreaFencedPaint],
+    ])('sets the four M markers of %s due north, east, south and west of the middle', (_name, paint) => {
         // Spacing them along the perimeter put them wherever the drawing happened to
         // start, so the same area redrawn wore its letters somewhere else and none of them
         // landed anywhere a reader could name. (User's call, 2026-08-27.)
-        const paints = minedAreaFencedPaint()(areaFeature(), context());
+        const paints = paint()(areaFeature(), context());
         const at = paints.filter(p => p.text?.text === 'M')
             .map(p => (p.geometry as {coordinates: ProjectedPosition}).coordinates);
         expect(at).toHaveLength(4);

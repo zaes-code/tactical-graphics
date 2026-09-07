@@ -10,7 +10,9 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
-    defaultStandoffMetres,
+    carriesSeparationInBase,
+    statesShapeAsRangeBands,
+    usesStandoffWidth,
     drawnAnchorFrame,
     drawnAnchors,
     drawnSizeMeters,
@@ -144,7 +146,7 @@ export interface MapLibreTacticalGraphic {
  * Measured on a passage lane: OpenLayers' date-time group reached its 1.5x clamp two
  * zooms in and MapLibre's stayed at 1.0, which read as ink 0.58 against 1.00.
  *
- * @see NativeLayerRenderer.rebuildScreenSized, which is the only caller
+ * @see NativeLayerRenderer.rebuildScreenSized, carryPaintFlags
  */
 export function withDrawingResolution(
     graphic: MapLibreTacticalGraphic,
@@ -155,6 +157,38 @@ export function withDrawingResolution(
         graphic: {...graphic.graphic, drawingResolution: resolution},
         labels: graphic.labels ? {...graphic.labels, drawingResolution: resolution} : undefined,
     };
+}
+
+/**
+ * Everything that lives on the **paint features** rather than in the portable bag, carried
+ * from a graphic onto the one that replaces it.
+ *
+ * `buildTacticalGraphic` builds `graphic` and `labels` from `properties.tacticalGraphic`, so
+ * anything not in that bag is gone the moment a graphic is rebuilt — and MapLibre rebuilds
+ * on a zoom (`rebuildScreenSized`) and on an amplifier edit (`featurePropertiesSource.apply`).
+ *
+ * There were two such fields and only one was being carried. `drawingResolution` had its own
+ * helper and a paragraph explaining why forgetting it is silent; `hideAmplifiers` had
+ * neither, so the "name only" toggle hid the labels and the next rebuild put them straight
+ * back. Reported as *"briefly hide the labels but then they reappear"* (user, 2026-09-04).
+ *
+ * **One function for the class, rather than a second special case.** A third flag added to a
+ * paint feature and not to this is the same defect again, so the fix is a place for them to
+ * be listed rather than a fix for this one.
+ */
+export function carryPaintFlags(
+    previous: MapLibreTacticalGraphic,
+    rebuilt: MapLibreTacticalGraphic,
+): MapLibreTacticalGraphic {
+    const hideAmplifiers = previous.graphic.hideAmplifiers;
+    return withDrawingResolution(
+        {
+            ...rebuilt,
+            graphic: {...rebuilt.graphic, hideAmplifiers},
+            labels: rebuilt.labels ? {...rebuilt.labels, hideAmplifiers: previous.labels?.hideAmplifiers} : undefined,
+        },
+        previous.graphic.drawingResolution,
+    );
 }
 
 let nextId = 0;
@@ -291,16 +325,45 @@ function sizeDefaults(
     // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
     const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
 
-    // A graphic whose `width` is a standoff rather than a half-width seeds it from the
-    // library, so both engines open the same symbol with the same gap. Without this the
-    // multiple-strike zone would start at MapLibre's generic 20 px offset here and at half
-    // a screen inch on OpenLayers. @see defaultStandoffMetres
-    const standoff = defaultStandoffMetres(name, drawingResolution ?? 0);
+    /*
+     * **And a graphic whose separation is a base vertex needs no width at all.** The
+     * demolition block's point 3 sets how far apart its rails sit as of 2026-09-05, so a
+     * stamped `width` here is a second copy of a number the coordinates already carry —
+     * the same defaulting mistake the multiple-strike zone's standoff was, one field over.
+     * @see carriesSeparationInBase
+     */
+    const separationInBase = carriesSeparationInBase(name);
+
+    /*
+     * **A graphic whose `width` is a standoff gets no width from here at all.**
+     *
+     * This used to seed one — half a screen inch, matching OpenLayers — and that was the
+     * wrong place for it, because `sizeDefaults` runs on every build: a draw, a rebuild
+     * *and a restore*. For the multiple-strike zone the absence of a width is not a gap to
+     * fill, it is the legacy two-ring description saying it carries both rings itself, so
+     * filling it made the generator read those points as one traced ring and the symbol
+     * came back a self-crossing star. The seed now belongs to the draw path, which is the
+     * only caller that means "this graphic is new". @see MapLibreInteractions.graphicFrom
+     *
+     * It must fall through the generic default below as well — a standoff is not half of
+     * anything, so 20 px of half-width would be a different number meaning a different
+     * thing. @see usesStandoffWidth
+     */
+    const filesStandoff = usesStandoffWidth(name);
+
+    /*
+     * **And a graphic described entirely by range bands has no width either.** Every
+     * dimension a fan or 200700 has is a typed number, so the generic half-width was a field
+     * in the file that the generator ignores and the other engine never writes — twice the
+     * radius, on every saved 200700. @see statesShapeAsRangeBands
+     */
+    const bandsStateTheShape = statesShapeAsRangeBands(name);
 
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined && standoff !== undefined ? {width: standoff} : {}),
-        ...(supplied.width === undefined && standoff === undefined && !statesItsOwnSize ? {width: halfWidth * 2} : {}),
+        ...(supplied.width === undefined && !filesStandoff && !statesItsOwnSize && !separationInBase && !bandsStateTheShape
+            ? {width: halfWidth * 2}
+            : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),

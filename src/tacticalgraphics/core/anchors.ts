@@ -488,6 +488,165 @@ export interface ArcAndArrowFrame {
     arrowReach: number;
 }
 
+/**
+ * Point 1 set on the perpendicular bisector of points 2 and 3, keeping its reach.
+ *
+ * **The projection two of APP-06's symbols need, for one shared pair of sentences.** 141700
+ * ambush and 152000 attack by fire both say it:
+ *
+ * > The rear of the arrowhead line shall connect to the midpoint of the line between points 2
+ * > and 3. The arrowhead line shall be perpendicular to the line formed by points 2 and 3.
+ *
+ * Three freely placed points cannot satisfy both — the arrow would have to start at point 1,
+ * meet the midpoint *and* stand square, which is one condition too many. Points 2 and 3 are
+ * what the plate gives the back line's length and orientation to, so point 1 is the one that
+ * yields: it is read for the one thing the symbol can express, **how far the arrow reaches
+ * from the middle**, and its component along the back line is dropped rather than stored and
+ * ignored. Both sentences then hold by construction rather than by the operator's aim.
+ * (User's call, 2026-09-06.)
+ *
+ * The same arithmetic `sideAnchors` performs for the bracket tasks and the obstacle bypasses,
+ * about a midpoint instead of an edge's end.
+ *
+ * `undefined` when the click carries no across-component at all — it is on the back line, so
+ * there is no side to read and no arrow to draw — leaving the caller to keep what it had.
+ */
+/**
+ * How far off the bisector a point may sit and still count as on it, as a share of its reach.
+ *
+ * A thousandth: far below anything an operator can aim at, and far above the drift a geodesic
+ * round trip introduces. @see squareOntoBisector
+ */
+const ON_BISECTOR_TOLERANCE = 1e-3;
+
+export function squareOntoBisector(tip: Position, one: Position, two: Position): Position | undefined {
+    const middle = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
+    const back = turf.bearing(turf.point(one), turf.point(two));
+    const reach = turf.distance(turf.point(middle), turf.point(tip), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    const toTip = turf.bearing(turf.point(middle), turf.point(tip));
+    const across = reach * Math.sin(((toTip - back) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    /*
+     * **A point already on the bisector is left exactly where it is.**
+     *
+     * Walking out and back is not the identity on a sphere: the projection is geodesic, so
+     * re-deriving a tip that needs no correction still moves it a few parts in a thousand of
+     * the radius. That is invisible once, and it is not invisible on a base that goes back
+     * through this reader on every render — it walks. Returning the point untouched when its
+     * along-component is already negligible keeps the reading idempotent to the metre.
+     */
+    const along = reach * Math.cos(((toTip - back) * Math.PI) / 180);
+    if (Math.abs(along) < reach * ON_BISECTOR_TOLERANCE) return tip;
+
+    return turf.destination(turf.point(middle), Math.abs(across), back + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+}
+
+/**
+ * The least the arrow may reach, as a multiple of the arc's radius.
+ *
+ * **The arrowhead has to clear the arc.** The arrow runs from the chord's midpoint at `0.5r`
+ * out to `reach * r`, and its head is `0.25r` long at 30 degrees — so the barbs sit
+ * `0.25r * cos(30) = 0.217r` back from the tip. For them to fall outside the arc at all the
+ * tip must reach past `1.217r`, and below that the head is drawn *inside* the bulge it is
+ * supposed to be leaving. A little over that, so the head clears rather than grazes.
+ *
+ * Enforced in the reading rather than in the drawing, which is what makes it hold for an edit
+ * as well as a draw: both engines drag a base vertex straight to the pointer, and every
+ * render goes back through here. (User's call, 2026-09-06: "don't ever let the arrow tip fall
+ * into the arch during drawing or editing".)
+ */
+export const ARC_ARROW_MIN_REACH = 1.25;
+
+/**
+ * 141700's three anchor points from an operator's clicks — **including a half-placed set.**
+ *
+ * Two clicks are the tip and one end of the curved back, which leave a family of symbols
+ * rather than one: every choice of axis satisfies both of the plate's constraints. The shape
+ * is held at the arc's own 120 degrees and the dropped form's reach, so the click sets only
+ * the size — a preview convention, replaced the moment the third click lands.
+ *
+ * Three clicks place all three. Points 2 and 3 are the arc's own endpoints, so the chord they
+ * make fixes the radius; point 1 is squared onto their bisector and then **held out past the
+ * arc**, so the arrowhead can never be drawn inside the bulge.
+ * @see squareOntoBisector, ARC_ARROW_MIN_REACH
+ *
+ * Fewer than two points draws nothing. It lives here rather than in the draw path alone
+ * because the *generator* needs it too: `normalizeDrawnBase` runs at draw end, so mid-draw
+ * the generator saw a raw sketch, failed to read a frame from it and fell through to the
+ * dropped form — a default-sized symbol parked on the first click.
+ */
+export function arcAndArrowAnchorsFromClicks(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+
+    if (clicks.length >= 3) {
+        /*
+         * **The tip is not squared onto a bisector here, deliberately.**
+         *
+         * 152000 attack by fire needs that, because its back line is straight and its arrow
+         * has to stand at a right angle to it. 141700's back is an *arc*, and
+         * `arcAndArrowFromAnchors` already solves for the centre by walking the geodesic from
+         * the chord's midpoint through the tip — so that line *is* the symmetry axis whatever
+         * the tip's aim, and "the rear of the arrowhead line shall connect to the midpoint"
+         * holds by construction.
+         *
+         * Squaring it as well was measured moving a correctly built ambush by 2.6% of its
+         * radius: the projection is planar and the construction is geodesic, which is the same
+         * mismatch that function's own comment warns about. A reading that moves a symbol it
+         * was handed correct is a reading that walks it, since it runs on every render.
+         */
+        const frame = arcAndArrowFromAnchors(clicks.slice(0, 3));
+        if (!frame) return undefined;
+
+        /*
+         * **The points come back off the frame, not out of the clicks.**
+         *
+         * A 120 degree arc symmetric about the arrow's axis has exactly two ends, and where
+         * they are is settled once the centre, the radius and the aim are — so points 2 and 3
+         * are not independent of each other however freely they are placed. Handing back the
+         * raw clicks let the *stored* pair drift away from the pair the generator draws: a
+         * drag of point 3 tilted the axis, the drawn arc moved to stay symmetric about it, and
+         * the grip stayed behind on a coordinate that was no longer on the symbol. (User's
+         * report, 2026-09-06: "point 3 handle falls out of the graphic during editing".)
+         *
+         * Re-deriving them is what makes the base and the drawing one description. It is also
+         * idempotent by construction — frame to points to frame is the identity — so a base
+         * that is already consistent passes through untouched, which a reading that runs on
+         * every render has to be.
+         */
+        const reach = Math.max(frame.arrowReach, ARC_ARROW_MIN_REACH);
+        return anchorsForArcAndArrow(frame.center, frame.radius, (frame.angle * 180) / Math.PI, reach);
+    }
+
+    const [tip, click] = clicks;
+    const reach = ARC_ARROW_DEFAULT_REACH;
+    const span = meters(tip, click);
+    if (!isFinite(span) || span <= 0) return undefined;
+
+    // Law of cosines on tip-centre-end, with the arc's half-span fixed at 60 degrees.
+    const radius = span / Math.sqrt(reach * reach + 1 - 2 * reach * Math.cos((ARC_HALF_SPAN_DEG * Math.PI) / 180));
+    if (!(radius > 0)) return undefined;
+    const offset =
+        (Math.asin(Math.min(1, (radius * Math.sin((ARC_HALF_SPAN_DEG * Math.PI) / 180)) / span)) * 180) / Math.PI;
+
+    const toClick = turf.bearing(turf.point(tip), turf.point(click));
+    const candidate = (sign: number): Position[] => {
+        const centre = turf.destination(turf.point(tip), reach * radius, toClick + sign * offset, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        const aim = turf.bearing(turf.point(centre), turf.point(tip));
+        return anchorsForArcAndArrow(centre, radius, 90 - aim, reach);
+    };
+    // The click is point 2, so the centre's side is chosen by which candidate puts index 1
+    // nearest the cursor — measuring index 1 alone is what makes the click mean one thing.
+    const [plus, minus] = [candidate(1), candidate(-1)];
+    return meters(plus[1], click) <= meters(minus[1], click) ? plus : minus;
+}
+
 /** The arc's half-span. @see ArcAndArrowFrame */
 const ARC_HALF_SPAN_DEG = 60;
 /** Where the dropped form put the tip: two radii out along the axis. */
@@ -608,6 +767,374 @@ export function anchorsForParallelLegs(
     };
     const opening = 2 * size * openingShare;
     return [tip, at(size, 0), at(size, opening), at(0, opening)];
+}
+
+/**
+ * # The hairpin's fourth point, which is not placed — 343300 and 341900
+ *
+ * Both plates number four anchor points and both draw the same figure: two straights joined
+ * by a half turn, with points 1 and 4 the free ends and points 2 and 3 the two ends of the
+ * turn's chord.
+ *
+ * **The operator places three and this derives the fourth**, so the two straights are
+ * parallel and the same length *by construction* rather than by a rule applied afterwards.
+ * Point 4 is point 3 displaced by the vector point 2 → point 1: the second straight is the
+ * first one translated across the chord.
+ *
+ * ## What this costs, said plainly
+ *
+ * The plates grant four free points — "points 3 and 4 determine the length of the second
+ * straight line" reads as a length of its own — so a literal reading lets the second
+ * straight differ from the first in both length and direction. This derivation gives that
+ * up. Every figure either Template *draws* is still reachable, because both draw the
+ * straights parallel and equal; what is no longer reachable is a splayed or lopsided
+ * hairpin, which is the shape the freehand version drifted into and which neither plate
+ * shows. (User's call, 2026-09-06: "the lines MUST be parallel to each other".)
+ *
+ * Geodesically, not by adding degrees: the displacement is taken as a distance and a bearing
+ * off point 2 and replayed from point 3, so the second straight is the same length as the
+ * first at any latitude. Adding the coordinate difference instead stretches it by
+ * `1 / cos(latitude)` — the same trap `anchorsForParallelLegs` documents for chained hops.
+ */
+export function hairpinFourthPoint(p1: Position, p2: Position, p3: Position): Position {
+    const reach = turf.distance(turf.point(p2), turf.point(p1), {units: 'meters'});
+    if (!(reach > 0)) return p3;
+    const bearing = turf.bearing(turf.point(p2), turf.point(p1));
+    return turf.destination(turf.point(p3), reach, bearing, {units: 'meters'}).geometry.coordinates as Position;
+}
+
+/**
+ * How far a half-drawn 152100 previews its arrows, as a share of the back line it has.
+ *
+ * A preview convention and nothing else: the plate gives the arrow tips their own anchor
+ * points, so the third and fourth clicks state this outright and nothing here survives them.
+ * Two thirds keeps the figure recognisably the plate's — arrows a little shorter than the
+ * bar they rise from — without the preview claiming a reach the operator has not chosen.
+ * @see supportByFireAnchors
+ */
+export const SUPPORT_BY_FIRE_PREVIEW_REACH = 2 / 3;
+
+/**
+ * 152100 support by fire's four points, from however many clicks have been placed.
+ *
+ * > This symbol requires four anchor points. **Points 1 and 2 define the endpoints of the
+ * > straight line on the back side of the symbol. Points 3 and 4 define the tips of the
+ * > arrowheads.** […] The rear of the arrows should connect to points 1 and 2.
+ *
+ * So the operator places the firing position's back line and then each limit of coverage, and
+ * a preview between those clicks has to be **the symbol they are drawing** rather than a
+ * differently-shaped stand-in. It was the stand-in: below four points the generator fell back
+ * to the pre-2026-09-06 description — a shaft with the bar derived as a ratio of it — which
+ * reads the placed points as something else entirely, so the half-drawn figure neither
+ * matched the clicks nor followed the cursor. (User's report, 2026-09-06: "the drawing
+ * preview needs to follow the correct points/handles".)
+ *
+ * What each count means:
+ *
+ * - **Four or more** — every point is placed; the first four are returned untouched, so the
+ *   reader is idempotent and an edit cannot walk the symbol.
+ * - **Three** — the back line and one tip. The fourth is derived by giving point 2 the same
+ *   reach and bearing off itself that point 3 has off point 1, so the two arrows stay a pair
+ *   while the operator is still choosing the first one. The fourth click replaces it.
+ * - **Two** — the back line alone. Both tips are previewed square off their own ends, on the
+ *   side the Template draws them: **left of point 1 → point 2**, which is where its arrows
+ *   rise from a bar lettered `PT 1` on the left and `PT 2` on the right. Nothing in the Draw
+ *   Rules fixes that side — *"orientation is determined by the anchor points"* — so it is the
+ *   Template's default and the third click is what actually decides.
+ * - **Fewer** — `undefined`. One point is a draw that has only just started; it has no back
+ *   line yet, and a symbol built on a zero-length one is a degenerate shape, not a preview.
+ *
+ * Geodesic throughout, like `hairpinFourthPoint`: displacements travel as a distance and a
+ * bearing rather than as a coordinate difference, which would stretch by `1 / cos(latitude)`.
+ */
+export function supportByFireAnchors(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    if (clicks.length >= 4) return clicks.slice(0, 4);
+
+    const [one, two] = clicks;
+    const back = meters(one, two);
+    if (!(back > 0)) return undefined;
+
+    if (clicks.length === 3) {
+        const three = clicks[2];
+        return [one, two, three, hairpinFourthPoint(three, one, two)];
+    }
+
+    // Square off each end, to the left of point 1 → point 2 — the Template's own side.
+    const across = turf.bearing(turf.point(one), turf.point(two)) - 90;
+    const reach = back * SUPPORT_BY_FIRE_PREVIEW_REACH;
+    const out = (from: Position) =>
+        turf.destination(turf.point(from), reach, across, {units: 'meters'}).geometry.coordinates as Position;
+    return [one, two, out(one), out(two)];
+}
+
+/**
+ * The hairpin's four canonical points from the three that carry a decision.
+ *
+ * Two readings happen here, and both are the reading the generator was going to perform
+ * anyway — this stores the points where the drawing already puts them:
+ *
+ * 1. **Point 3 is squared.** Its component *along* the first leg is dropped and only its
+ *    distance across, and the side it fell on, survive. The turn is a half circle tangent to
+ *    both straights, so its diameter has to leave point 2 at a right angle; an oblique chord
+ *    draws an arc that meets each leg in a kink. This is `mobileDefenceAnchors`' arithmetic
+ *    exactly, for 152800's exact reason — *"the 180 degree circular arc is always
+ *    perpendicular to the line"* — and 152800 is the graphic these two are built to match.
+ * 2. **Point 4 is derived** from the squared point 3. @see hairpinFourthPoint
+ *
+ * So a drag of point 1 sets both legs' length and their shared aim, a drag of point 2 moves
+ * the join, and a drag of point 3 sizes the turn and picks its side — which is the whole of
+ * what either plate's Size/Shape cell describes, and no drag of any of them can splay the
+ * legs or open the turn obliquely.
+ *
+ * Returns `undefined` below three points, so a half-finished draw shows what it has rather
+ * than a guess. A point 3 that lands exactly on the leg's own axis is kept as it is: there
+ * is no side to read from it, and inventing one would jump the symbol under the cursor.
+ */
+export function hairpinAnchors(points: Position[]): Position[] | undefined {
+    if (points.length < 3) return undefined;
+    const [p1, p2, click] = points;
+
+    const axis = turf.bearing(turf.point(p2), turf.point(p1));
+    const reach = turf.distance(turf.point(p2), turf.point(click), {units: 'meters'});
+    if (!(reach > 0)) return undefined;
+
+    const toClick = turf.bearing(turf.point(p2), turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    const p3 = isFinite(across) && across !== 0
+        ? (turf.destination(turf.point(p2), Math.abs(across), axis + Math.sign(across) * 90, {units: 'meters'})
+              .geometry.coordinates as Position)
+        : click;
+
+    return [p1, p2, p3, hairpinFourthPoint(p1, p2, p3)];
+}
+
+/**
+ * Which way `createSemicircle` must bulge so the turn closes the hairpin.
+ *
+ * **The side is not a convention, it is read off the shape.** Both 343300 and 341900 close
+ * two parallel legs with a half turn, and the turn has to bulge *past* the bends, away from
+ * the arrowheads — bulging back between the legs draws a flattened Z, not a U. Both
+ * generators passed a hardcoded `true`, which is right for exactly one handedness: point 3
+ * on one side of the first leg. Drag it across to the other side and the same flag puts the
+ * arc on the inside, which is the shape the user reported on 2026-09-06 ("demonstration is
+ * turning the arch inwards when dragged across").
+ *
+ * `createSemicircle` offsets to `chord - 90` by default and `chord + 90` when flipped, so
+ * the question is which of those two points along the legs. The chord is perpendicular to
+ * the legs by construction (@see hairpinAnchors), so one of them is the leg direction and
+ * the other is its reverse; comparing against the tip → bend heading picks the right one at
+ * any rotation and on either side.
+ *
+ * @param tip   point 1, the arrowhead — the end the turn must bulge *away* from
+ * @param bend  point 2, where the first leg ends and the turn begins
+ * @param far   point 3, the other end of the turn's diameter
+ */
+export function turnBulgesLeft(tip: Position, bend: Position, far: Position): boolean {
+    const leg = turf.bearing(turf.point(tip), turf.point(bend));
+    const chord = turf.bearing(turf.point(bend), turf.point(far));
+    // Positive quarter-turn from the chord to the leg means the leg lies at `chord + 90`,
+    // which is the flipped side. Normalized to (-180, 180] so it works across due north.
+    return (((leg - chord + 540) % 360) - 180) > 0;
+}
+
+/**
+ * The hook a half-drawn pursuit shows, as a share of the run it hangs off.
+ *
+ * A preview default and nothing more — 344000 states no size for the arc, and click 3 sets
+ * it. A quarter keeps the semicircle clearly subordinate to the straight portion, which is
+ * the proportion the plate's own Template draws. @see hookAnchorsFromClicks
+ */
+export const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
+
+/**
+ * 344000's three points from an operator's clicks — **including a half-placed set.**
+ *
+ * Two readings, and the second is why this lives here rather than in the draw path alone:
+ *
+ * 1. **Two clicks already describe a pursuit, so one is drawn.** The run is stated the
+ *    moment the cursor leaves the first click, and the third point is constructed at a
+ *    share of it until the operator states it. That is a **preview convention and not a
+ *    reading of the plate** — 344000 gives the hook no default size — and click 3 replaces
+ *    it with the measured value.
+ * 2. **Three clicks: the third is pulled onto the perpendicular at point 2.** The click is
+ *    read for how far it is across the run, which is the arc's diameter, and which side it
+ *    fell on. Its component *along* the run is discarded — that is the freedom the standard
+ *    does not give this symbol, and honouring it bent the hook off square.
+ *
+ * **Fewer than two points draws nothing**, which is the whole reason this moved out of the
+ * draw path. `normalizeDrawnBase` runs at draw *end*, so mid-draw the generator saw the raw
+ * sketch, failed to read a hook from one point, and fell through to the *dropped* form — a
+ * default-sized symbol parked on click 1, appearing whole the instant the map was clicked.
+ * The seven cane arrows show nothing there, because their fallback is driven by the line the
+ * operator drew rather than by a size. (User's report, 2026-09-06: "can we stop adding the
+ * previous full graphic on click 1? Do the same we do for other cane graphics".)
+ */
+export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    const [start, join] = clicks;
+    const runBearing = turf.bearing(turf.point(start), turf.point(join));
+
+    if (clicks.length === 2) {
+        const run = turf.distance(turf.point(start), turf.point(join), {units: 'meters'});
+        if (!isFinite(run) || run <= 0) return undefined;
+        const tip = turf.destination(turf.point(join), run * PURSUIT_PREVIEW_HOOK_SHARE, runBearing + 90, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        return [start, join, tip];
+    }
+
+    const click = clicks[2];
+    const toClick = turf.bearing(turf.point(join), turf.point(click));
+    const reach = turf.distance(turf.point(join), turf.point(click), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    // The component across the run, signed: its magnitude is the diameter and its sign is
+    // the flank the hook turns to.
+    const across = reach * Math.sin(((toClick - runBearing) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const tip = turf.destination(turf.point(join), Math.abs(across), runBearing + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [start, join, tip];
+}
+
+/**
+ * The gap a half-drawn crossing shows, **in screen pixels**.
+ *
+ * A preview convention and nothing else: none of these plates states a default separation,
+ * and the third click sets it. A *screen* size rather than a share of the bar, because the
+ * preview's job is to be legible while it is being dragged — a share grows with the bar, so
+ * a long crossing previewed as a wide corridor and a short one as a hairline, and neither
+ * told the operator anything about the symbol. (User's call, 2026-09-06: "while drawing can
+ * we lock the parallel line to a distance of 50px between click 1 and 2".)
+ *
+ * The caller supplies it as metres, because only a renderer knows what a pixel is worth
+ * here. @see parallelRailAnchors
+ */
+export const RAIL_PREVIEW_GAP_PX = 50;
+
+/**
+ * What a half-drawn crossing falls back to when nobody says what a pixel is worth.
+ *
+ * A raw-GeoJSON reader has no resolution to offer, and a preview still has to be drawn.
+ * @see RAIL_PREVIEW_GAP_PX
+ */
+const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
+
+/**
+ * The anchor points of a **two-rail crossing**, from the clicks that place them.
+ *
+ * APP-06 271500 ford easy and 271600 ford difficult letter `PT 1` and `PT 2` at the ends of
+ * one bar and `PT 3` on the other; 271100 bridge and 271300 assault crossing say it in words —
+ * *"Points 1 and 2 define one side of the gap and points 3 and 4 define the opposite side"* —
+ * and number four, the fourth being wherever "the opposite side" puts it.
+ *
+ * So one rail is placed end to end, and the third click states only **how far across the
+ * other rail sits, and on which side**. Its component along the rail is discarded, the way
+ * `sideAnchors` discards the same thing for the bracket tasks: two parallel rails of one
+ * length have no way to draw an along-rail offset, so storing it would keep a number the
+ * symbol cannot show and leave the grip off the bar it belongs to. (User's call, 2026-09-06:
+ * "points 1, 2 for length and point 3 to determine the parallel line […] put point 3 right
+ * across from point 2".)
+ *
+ * @param stored how many points the graphic's base holds — four for the two that number a
+ * fourth, three for the fords, whose plate letters only three. The fourth is `p3` displaced
+ * by `p1 → p2`, so the rails run the same way and are the same length by construction. This
+ * is `hairpinFourthPoint`'s mirror image: a hairpin's legs *oppose*, and these are parallel.
+ */
+export function parallelRailAnchors(
+    clicks: Position[] | undefined,
+    stored = 4,
+    /**
+     * The preview gap in **metres**, for a caller that knows the zoom. Omitted, the preview
+     * falls back to a share of the bar. Ignored once the third point is placed, which is the
+     * moment the operator states the gap themselves. @see RAIL_PREVIEW_GAP_PX
+     */
+    previewGapMetres?: number,
+): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    const [one, two] = clicks;
+
+    const along = turf.bearing(turf.point(one), turf.point(two));
+    const bar = meters(one, two);
+    if (!isFinite(bar) || bar <= 0) return undefined;
+
+    /*
+     * **Two clicks are one bar, and the far one previews beside it.**
+     *
+     * This is what the operator has between the second and third clicks, and points 1 and 2
+     * are *"one side of the gap"* — so the bar is drawn on the line they are dragging along.
+     * Read as a centreline instead, the two bars straddled the cursor and the symbol was
+     * drawn through a line that is not part of it. (User's report, 2026-09-06: "when drawing
+     * it, it seems we're actually drawing via the invisible middle line. The drawing cursor
+     * should be along points 1, 2".)
+     *
+     * The gap is a **preview default and nothing more** — no plate here states one, and the
+     * third click replaces it with a measured value.
+     */
+    const across = clicks.length >= 3
+        ? (() => {
+              const click = clicks[2];
+              const reach = meters(two, click);
+              if (!isFinite(reach) || reach <= 0) return 0;
+              const toClick = turf.bearing(turf.point(two), turf.point(click));
+              return reach * Math.sin(((toClick - along) * Math.PI) / 180);
+          })()
+        // **Negative, so the placed bar is the lower one.** `sign` drives `along ± 90`, and a
+        // negative across turns to the *left* of travel — north for a west-to-east drag — which
+        // puts the previewed bar above the one being dragged. The Templates letter `PT 1` and
+        // `PT 2` on the bottom bar and `PT 3` on the top, so drawing left to right that way
+        // round is what the plate draws. (User's report, 2026-09-06: "when drawing left to
+        // right, line 1,2 has to be the bottom one per the template".) The third click still
+        // chooses the side outright; this is only where the preview starts.
+        : -(previewGapMetres !== undefined && previewGapMetres > 0
+              ? previewGapMetres
+              : bar * RAIL_PREVIEW_GAP_SHARE);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    // Square across from point 2, which is where the plate's own PT 3 leader lands.
+    const three = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    if (stored < 4) return [one, two, three];
+
+    const rail = meters(one, two);
+    const four = turf.destination(turf.point(three), rail, along + 180, {units: 'meters'}).geometry
+        .coordinates as Position;
+    return [one, two, three, four];
+}
+
+/**
+ * A two-rail crossing read back as the centreline and half-separation its generators draw.
+ *
+ * Those were built from a drawn centreline and a `radius` amplifier, which is the separation
+ * stated twice — once as a number nobody could see and once nowhere at all. The points carry
+ * it now, and this is the one place that converts between the two so the drawing code did not
+ * have to change. @see parallelRailAnchors
+ */
+export function parallelRailFrame(
+    coords: Position[] | undefined,
+): {centre: Position[]; half: number} | undefined {
+    if (!coords || coords.length < 3) return undefined;
+    const [one, two, three] = coords;
+
+    const along = turf.bearing(turf.point(one), turf.point(two));
+    const reach = meters(two, three);
+    if (!isFinite(reach) || !(reach > 0)) return undefined;
+
+    const toThree = turf.bearing(turf.point(two), turf.point(three));
+    const across = reach * Math.sin(((toThree - along) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    // The centreline runs half way between the rails, which is what the generators offset
+    // from in both directions.
+    const half = Math.abs(across) / 2;
+    const side = along + Math.sign(across) * 90;
+    const shift = (from: Position): Position =>
+        turf.destination(turf.point(from), half, side, {units: 'meters'}).geometry.coordinates as Position;
+    return {centre: [shift(one), shift(two)], half};
 }
 
 /** Half the demonstration's opening, as a share of one leg. @see anchorsForParallelLegs */
@@ -805,11 +1332,16 @@ export function constrainRectangleAxis(previous: Position[] | undefined, next: P
 /**
  * A rectangle drawn with two clicks, squared up.
  *
- * **The first drawing is always straight**, running due east or due west from point 1 at
- * the length the operator dragged. A zone clicked out a few pixels off level came out
- * visibly askew, and nothing about a fire-support area is diagonal by default — so it is
- * levelled on the draw and turned afterwards, by the gesture whose job that is.
- * (User's call, 2026-08-27.)
+ * **Nothing calls this any more, and that is the point of saying so here.** Both renderers
+ * used it on the draw, so a zone clicked out at an angle came out level and had to be turned
+ * by a separate gesture (user's call, 2026-08-27) — while the rectangular target, whose drag
+ * sets `rotation` directly, never behaved that way. One family of rectangles took its
+ * orientation from the draw and the other nineteen refused to. **Reversed on 2026-09-04**:
+ * the drawn axis is the rectangle's axis, on both engines and for all twenty.
+ *
+ * Kept exported because it is a correct, tested utility and removing an export is a breaking
+ * change — but wiring it back into a draw path would undo a decision, not fix a bug.
+ * `rectangleDrawParity.test.ts` asserts the axis survives the draw.
  *
  * The direction is kept: drag east and point 2 lands east.
  */

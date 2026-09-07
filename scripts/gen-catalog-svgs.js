@@ -123,7 +123,12 @@ const {
     isPaintable,
     baseGeometryFor,
     baseVertexCount,
+    acrossPointAtEnd,
+    carriesSeparationInBase,
+    frontEdgeBase,
     storedOrder,
+    synthesizedBase,
+    FRONT_EDGE_ACROSS,
     getDisplayName,
     GRAPHIC_CATEGORIES,
     isRectangular,
@@ -316,6 +321,33 @@ const TEXT_AMPLIFIERS = [
  * The membership is the library's own `CORRIDOR_GRAPHICS`, not a copy — a list kept
  * here was already missing the safe lane.
  */
+/**
+ * `getGraphicFields`, loaded from its own module rather than the `/openlayers` barrel.
+ *
+ * The barrel pulls in `ol`, an optional peer this script has no use for; the registry itself
+ * is plain data. Absent — an old `dist/` without the OpenLayers build — the gate above is
+ * skipped rather than the run failing, because a catalog with a stray amplifier is a better
+ * outcome than no catalog. @see FIELD_FOR_AMPLIFIER
+ */
+let getGraphicFields = null;
+try {
+    ({getGraphicFields} = require(path.join(REPO, 'dist', 'ol', 'cjs', 'components', 'openlayers', 'graphicFieldRegistry.js')));
+} catch {
+    console.warn('  note: dist/ol not built — amplifiers are not gated by GRAPHIC_FIELDS');
+}
+
+/**
+ * How deep a synthesised third point sits, **per profile**.
+ *
+ * The catalog draws at a few hundred pixels beside a plate and is fitted to the symbol's
+ * bounds, so the library's default leaves a block or a clear reading as a long bar with a
+ * short nub — and the stem is the part that says which task it is. The picker is read at a
+ * few dozen pixels where the extra depth only costs the shape room, so it keeps the portable
+ * default. Same split as `THUMBNAIL_TEXT_BY_KIND`: presentation per consumer, one geometry.
+ * @see FRONT_EDGE_ACROSS
+ */
+const CATALOG_ACROSS = IS_THUMB ? FRONT_EDGE_ACROSS : 0.85;
+
 const isCorridor = name => CORRIDOR_GRAPHICS.includes(name);
 
 /**
@@ -413,16 +445,66 @@ function makeBase(name) {
     const shaped = IS_THUMB && SWEPT_ARC_TASKS.includes(name) ? sweptArcBase : SHAPED_BASES[name];
     if (shaped) return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, shaped()) : shaped()};
     if (type === 'Point') return {type: 'Point', coordinates: [LON, LAT]};
-    if (type === 'Polygon') {
-        if (IS_THUMB) return {type: 'Polygon', coordinates: [beanRing()]};
-        const w = D * 1.35;
-        const h = D * 0.9;
-        return {
-            type: 'Polygon',
-            coordinates: [[[LON - w, LAT - h], [LON + w, LAT - h], [LON + w, LAT + h], [LON - w, LAT + h], [LON - w, LAT - h]]],
-        };
-    }
+    // **Both profiles.** A traced area is a blob, and drawing every one as a rectangle made
+    // ninety-four free-form areas look like the seventeen the standard actually defines as
+    // rectangular. That is as misleading beside a plate as it is in a picker — arguably
+    // more so, since the catalog exists to be compared against one. @see beanRing
+    if (type === 'Polygon') return {type: 'Polygon', coordinates: [beanRing()]};
     const n = Math.max(2, (baseVertexCount && baseVertexCount(name)) || 2);
+    /*
+     * **A front edge and a point across it, where that is what the points mean.**
+     *
+     * Thirteen graphics moved onto their plates' anchor points on 2026-09-05/06, and for all
+     * of them points 1 and 2 are the ends of a *straight* edge with the last point stating a
+     * distance across it. The arc below hands those points 1 and 2 as its left and middle
+     * samples and the last point as its right end, so the symbol is thumbnailed on half its
+     * width at the wrong aspect — the same defect the in-app sample sweep had, found by a user
+     * on 2026-09-06 and fixed in `sampleGallery.ts` the same way.
+     *
+     * `carriesSeparationInBase` is the library's own statement of which graphics mean this.
+     * Fields of fire and the search area are not in it and keep the arc, which is right: their
+     * points really do describe a vee.
+     */
+    /*
+     * **The library's own layout, where it states one.** `synthesizedBase` is the single
+     * answer both sample sheets ask; this file used to carry a *third* copy of the chain of
+     * predicates behind it, which is how a clause added to one synthesiser goes missing from
+     * another — §19's defect, and the reason pursuit stayed a shallow V on one sheet after
+     * the other was fixed.
+     *
+     * Ten graphics have a dedicated layout this file could not express at all: the five
+     * two-rail crossings, whose bars it drew on the mirror side; 152000 attack by fire, whose
+     * point 1 is an arrowhead tip and was being drawn as an edge end, collapsing the symbol;
+     * and 152100 support by fire, whose arrows it splayed inward and put on the wrong side.
+     *
+     * **The tip-first graphics were the ones that gave it away.** For them this file's own
+     * chain and the library's produce the *same three positions in the opposite order*, and
+     * the resulting pictures are different symbols: 344100 delay came out as a bare arch with
+     * an arrowhead stuck on its end, where a cane arrow is a straight run with a half circle
+     * hooked off it. 344000 pursuit, which is not tip-first, took the library's layout and drew
+     * correctly — the two sat side by side in the same picker, one right and one wrong, and the
+     * only difference between them was which builder answered.
+     *
+     * So `storedOrder` is not owed here: `synthesizedBase` already returns each layout in the
+     * order the graphic stores its points, which is what the sample sheets feed straight to
+     * `normalizeDrawnBase`. Converting it again reversed the base and drew the symbol from the
+     * wrong end. @see synthesizedBase, storedOrder
+     */
+    /*
+     * **A deeper third point than the library's default.** The tile is fitted to the symbol's
+     * bounds, so a block or a clear drawn at the portable default reads as a long bar with a
+     * short nub hanging under it — the stem is the part that says which task it is. This is
+     * the catalog choosing a comfortable symbol to draw, exactly as `RECTANGLE_WIDTH_M` does
+     * for a zone. (User's report, 2026-09-07: "need more distance between line 1,2 and point 3
+     * to make the graphic a bit bigger".) @see FRONT_EDGE_ACROSS
+     */
+    const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n, CATALOG_ACROSS) : undefined;
+    if (stated) return {type: 'LineString', coordinates: stated};
+
+    if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
+        const anchors = frontEdgeBase([LON, LAT], D * 1.4, n, acrossPointAtEnd && acrossPointAtEnd(name) ? 1 : 0.5);
+        return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};
+    }
     const pts = [];
     // A gentle arc rather than a straight run — it shows that the arrows and
     // corridors actually bend, which a straight line hides.
@@ -455,6 +537,18 @@ const AMPLIFIERS = {
     radius: 900,
     rotation: 0,
     width: 500,
+    /**
+     * **The one geometry input the bag forgot.** Five graphics build their whole shape from
+     * a length and a width about one anchor point -- 240802, 200600 and the three maritime
+     * ellipses -- and with no `length` here each fell back to the generator's own default,
+     * so `AM1` had nothing to print and the ellipses drew at a proportion nobody chose.
+     * Caught by reading the generated sheet: the caption said "AM / AM1 / AN below" and the
+     * picture had two lines. @see axisAndWidth
+     *
+     * Twice the width, so the box and the ellipse come out near the plates' own 0.536 ratio
+     * of minor axis to major.
+     */
+    length: 1000,
     decorationSize: undefined,
 
     // Text amplifiers.
@@ -556,10 +650,50 @@ const THUMBNAIL_TEXT_BY_KIND = {
     line: [],
 };
 
+/**
+ * Which field-set key admits each text amplifier.
+ *
+ * `GRAPHIC_FIELDS` is the library's own statement of what a graphic accepts — it drives the
+ * Feature Properties dialog, so it is already the answer to "may this symbol carry a
+ * designation?". The catalog was not asking: it stamped every amplifier on every graphic and
+ * left it to the paint to ignore what did not apply. Where a paint was less selective than
+ * the registry, the tile showed a field the symbol does not take — 120400's airfield zone
+ * carried a name and a DTG range inside its boundary when its entry admits `additionalInfo`
+ * alone. (User's report, 2026-09-07.)
+ *
+ * Two amplifiers have no key of their own and are gated on the altitudes they travel with:
+ * `altitudeDatum` is what both altitudes are measured from, and `eff` appears only in the air
+ * graphics' amplifier block. @see GRAPHIC_FIELDS, TEXT_AMPLIFIERS
+ */
+const FIELD_FOR_AMPLIFIER = {
+    designation: ['identifier1'],
+    secondDesignation: ['identifier2'],
+    additionalInfo: ['additionalInfo'],
+    countryCode: ['countryCodes'],
+    secondCountryCode: ['countryCodes'],
+    startDate: ['dtg1'],
+    endDate: ['dtg2'],
+    echelon: ['echelon'],
+    minAltitude: ['altitude1'],
+    maxAltitude: ['altitude2'],
+    altitudeDatum: ['altitude1', 'altitude2'],
+    eff: ['altitude1', 'altitude2'],
+    weapon: ['weapon'],
+    grid: ['grids'],
+};
+
 /** The bag this graphic is drawn with. @see the presentation overrides above. */
 function amplifiersFor(name, drop) {
     const amp = Object.assign({}, AMPLIFIERS);
     for (const field of drop || []) delete amp[field];
+    // **Only the fields this graphic accepts.** @see FIELD_FOR_AMPLIFIER
+    if (getGraphicFields) {
+        const fields = getGraphicFields(name);
+        for (const field of TEXT_AMPLIFIERS) {
+            const keys = FIELD_FOR_AMPLIFIER[field];
+            if (keys && !keys.some(k => fields[k])) delete amp[field];
+        }
+    }
     if (isCorridor(name)) for (const field of TEXT_AMPLIFIERS) delete amp[field];
     if (IS_THUMB) {
         const keep = THUMBNAIL_TEXT_BY_KIND[kindOf(name)];
@@ -1054,7 +1188,10 @@ function buildAt(name, zoom, drop) {
     // Measured in the pre-wrap px space, alongside the overlap check and for the same
     // reason: the wrap below is a uniform scale, so it moves the label and the boundary
     // together and cannot turn a clearance into an intrusion.
-    const inset = IS_THUMB && kindOf(name) === 'area' ? labelInsetViolation(second.ring && second.ring.map(toPx), textBoxes) : 0;
+    // Both profiles: an amplifier stack crossing its own boundary is wrong beside a plate
+    // for the same reason it is wrong in a picker. It only became reachable for the catalog
+    // when its areas stopped being rectangles — a bean is narrower at the ends.
+    const inset = kindOf(name) === 'area' ? labelInsetViolation(second.ring && second.ring.map(toPx), textBoxes) : 0;
 
     // Fit the *emitted* extent — labels and dots included — into the tile.
     // Everything is already in px, so this is one wrapping transform rather
@@ -1078,11 +1215,36 @@ function buildAt(name, zoom, drop) {
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TILE_W} ${TILE_H}" width="${TILE_W}" height="${TILE_H}" role="img" aria-label="${esc(title)}">` +
         `<title>${esc(title)}</title>` +
         (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
+        backdropFor(name, TILE_W, TILE_H) +
         wrapOpen +
         body.join('') +
         wrapClose +
         `</svg>\n`;
     return {svg, overlap: textOverlap(textBoxes), inset};
+}
+
+/**
+ * Graphics that need a panel behind them to be seen at all, and the panel their plate uses.
+ *
+ * **200600 cued acquisition doctrine paints a white border**, which its Note states outright
+ * — `RGB: 255,255,255` — and which this library draws as stated rather than substituting a
+ * colour that happens to show. On a white page that is an invisible symbol: the tile came out
+ * a bare grey rectangle with no rim, which is precisely the failure a catalog exists to catch.
+ *
+ * The plate answers it itself. Its Note 2 reads *"Gray background is used to show white border
+ * and is not part of the symbol"*, so the standard's own page puts a grey panel behind this
+ * symbol for the same reason, and saying so in the tile's `aria-label` keeps the panel from
+ * being read as part of the drawing. A host with a dark basemap needs none of this.
+ * @see CUED_ACQUISITION_COLOR
+ */
+const PLATE_PANEL = {
+    CuedAcquisitionDoctrine: '#6b7780',
+};
+
+/** The plate's panel for this graphic, or nothing. @see PLATE_PANEL */
+function backdropFor(name, width, height) {
+    const colour = PLATE_PANEL[name];
+    return colour ? `<rect x="0" y="0" width="${width}" height="${height}" fill="${colour}"/>` : '';
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -1258,9 +1420,7 @@ console.log(`skipped   : ${skipped.length}`);
 for (const s of skipped.slice(0, 30)) console.log(`   - ${s[0]} => ${s[1]}`);
 console.log(`labels still touching : ${collided.length}`);
 for (const n of collided) console.log(`   - ${n}`);
-if (IS_THUMB) {
-    console.log(`labels still crossing a boundary : ${intruded.length}`);
-    for (const n of intruded) console.log(`   - ${n}`);
-}
+console.log(`labels still crossing a boundary : ${intruded.length}`);
+for (const n of intruded) console.log(`   - ${n}`);
 
 if (CHECK && stale) process.exit(1);

@@ -24,6 +24,17 @@ const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecificatio
  * NATO defines these and FM 1-02.2 does not — the mirror image of `FM_ONLY`, and the
  * reason this axis is worth having at all. Searched for by name in the manual's text
  * before being added; none of them appears.
+ *
+ * **Searching by name is not sufficient, and eight entries were wrong because of it.**
+ * FM 1-02.2 tables name a symbol by its position under a heading, not by the phrase this
+ * library uses. Table 5-28's four contaminated areas are rows reading `biological`,
+ * `chemical`, `nuclear` and `radiological` beneath a heading `Contaminated area` — so no
+ * search for "biological contaminated area" can find them, and all four sat here until
+ * 2026-09-03. Table 5-20 does the same to the minefield family (`dynamic depiction
+ * minefield`, `mined area, fenced`) and table 5-15 to `demonstration`.
+ *
+ * So: **read the manual's table, not a grep of its text**, before putting a graphic here.
+ * `specifications.test.ts` pins the eight that were corrected, by table.
  */
 const APP6_ONLY = [TacticalGraphicSpecification.APP6] as const;
 const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
@@ -38,7 +49,7 @@ const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust.
  *
- * **291 graphics: 214 in both catalogs, 8 FM 1-02.2 only, 69 APP-06 only.** The axis
+ * **293 graphics: 221 in both catalogs, 9 FM 1-02.2 only, 63 APP-06 only.** The axis
  * runs both ways, which it did not when it was first added -- every graphic was then
  * in FM 1-02.2, so filtering by that specification hid nothing. Count it, don't trust
  * it. See `ai/app-6.md` for the source document and how the mapping was derived.
@@ -94,10 +105,10 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ZoneOfFire]: APP6_ONLY, // APP-06 242600 Zone of Fire
     [TacticalGraphicName.RestrictedTerrain]: APP6_ONLY, // APP-06 152400 Restricted Terrain
     [TacticalGraphicName.SeverelyRestrictedTerrain]: APP6_ONLY, // APP-06 152500 Severely Restricted Terrain
-    [TacticalGraphicName.BiologicalContaminatedArea]: APP6_ONLY, // APP-06 271700 Biological Contaminated Area
-    [TacticalGraphicName.ChemicalContaminatedArea]: APP6_ONLY, // APP-06 271800 Chemical Contaminated Area
-    [TacticalGraphicName.NuclearContaminatedArea]: APP6_ONLY, // APP-06 271900 Nuclear Contaminated Area
-    [TacticalGraphicName.RadiologicalContaminatedArea]: APP6_ONLY, // APP-06 272000 Radiological Contaminated Area
+    [TacticalGraphicName.BiologicalContaminatedArea]: BOTH, // APP-06 271700 Biological Contaminated Area -- FM table 5-28 "biological"
+    [TacticalGraphicName.ChemicalContaminatedArea]: BOTH, // APP-06 271800 Chemical Contaminated Area -- FM table 5-28 "chemical"
+    [TacticalGraphicName.NuclearContaminatedArea]: BOTH, // APP-06 271900 Nuclear Contaminated Area -- FM table 5-28 "nuclear"
+    [TacticalGraphicName.RadiologicalContaminatedArea]: BOTH, // APP-06 272000 Radiological Contaminated Area -- FM table 5-28 "radiological"
     [TacticalGraphicName.ArtilleryManeuverArea]: APP6_ONLY, // APP-06 242400 Artillery Manoeuvre Area (AMA)
     [TacticalGraphicName.ArtilleryReservedArea]: APP6_ONLY, // APP-06 242500 Artillery Reserved Area (ARA)
     [TacticalGraphicName.AssemblyArea]:                                 BOTH,      // APP-06 150200 Assembly Area (AA)
@@ -134,8 +145,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.Retain]:                                       BOTH,      // APP-06 151205 Retain
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
     [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
-    [TacticalGraphicName.MinefieldDynamicDepiction]: APP6_ONLY, // APP-06 270707 Minefield, Dynamic Depiction
-    [TacticalGraphicName.MinedAreaFenced]: APP6_ONLY, // APP-06 270801 Mined Area, Fenced
+    [TacticalGraphicName.MinefieldDynamicDepiction]: BOTH, // APP-06 270707 Minefield, Dynamic Depiction -- FM table 5-20 "dynamic depiction minefield"
+    [TacticalGraphicName.MinedArea]: BOTH, // APP-06 270800 Mined Area -- FM table 5-20 "mined area"
+    [TacticalGraphicName.MinedAreaFenced]: BOTH, // APP-06 270801 Mined Area, Fenced -- FM table 5-20 "mined area, fenced"
     [TacticalGraphicName.PsyOpsZoneIrregular]: APP6_ONLY, // APP-06 242701 PsyOps Zone, Irregular
     [TacticalGraphicName.PsyOpsZoneRectangular]: APP6_ONLY, // APP-06 242702 PsyOps Zone, Rectangular
     [TacticalGraphicName.PsyOpsZoneCircular]: APP6_ONLY, // APP-06 242703 PsyOps Zone, Circular
@@ -212,6 +224,12 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.FireSupportAreaCircular]:                      BOTH,      // APP-06 241003 Circular
     [TacticalGraphicName.TargetAreaIrregular]:                          BOTH,      // APP-06 240801 Area Target
     [TacticalGraphicName.TargetAreaRectangular]:                        BOTH,      // APP-06 240802 Rectangular Target
+    // AEGIS is naval fire support, and the FM has no counterpart. `aegis`, `NSFS` and
+    // `naval surface fire` return zero hits; `naval gunfire` returns four, and none of them
+    // is this symbol -- it is an FM *section heading*, and what sits under it is the fire
+    // support area (irregular / rectangular / circular) plus the fire support station, all
+    // of which this library already covers under their own codes. A heading is not a plate.
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:                  APP6_ONLY, // APP-06 240804 Rectangular Target - Single Target (AEGIS only)
     [TacticalGraphicName.TargetAreaCircular]:                           BOTH,      // APP-06 240803 Circular Target
     [TacticalGraphicName.HighDensityAirspaceControlZone]:               BOTH,      // APP-06 170900 High-Density Airspace Control Zone
     [TacticalGraphicName.RestrictedOperationsZone]:                     BOTH,      // APP-06 171000 Restricted Operations Zone (ROZ)
@@ -252,6 +270,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:            BOTH,      // APP-06 271201 Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:              BOTH,      // APP-06 271202 Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]:  BOTH,      // APP-06 271203 Explosives, State of Readiness 2 (Armed but Passable)
+    // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]:                    BOTH,      // APP-06 271204 Roadblock Complete (Executed)
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:               BOTH,      // APP-06 290201 Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                       BOTH,      // APP-06 290202 Antitank Ditch Completed
@@ -272,7 +291,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.FollowAndAssume]:                              BOTH,      // APP-06 341200 Follow and Assume
     [TacticalGraphicName.FollowAndSupport]:                             BOTH,      // APP-06 341300 Follow and Support
     [TacticalGraphicName.Escort]:                                       APP6_ONLY, // APP-06 343600 Escort
-    [TacticalGraphicName.Demonstration]:                                APP6_ONLY, // APP-06 343300 Demonstration/Demonstrate
+    [TacticalGraphicName.Demonstration]:                                BOTH,      // APP-06 343300 Demonstration/Demonstrate -- FM table 5-15, labelled DEM
     [TacticalGraphicName.Evacuate]:                                     APP6_ONLY, // APP-06 344500 Evacuate
     [TacticalGraphicName.Recover]:                                      APP6_ONLY, // APP-06 344600 Recover
     [TacticalGraphicName.DecisionLine]:                                 APP6_ONLY, // APP-06 110500 Decision Line
@@ -286,9 +305,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ObstacleBypassImpossible]:                     APP6_ONLY, // APP-06 270603 Obstacle Bypass Impossible
     [TacticalGraphicName.Mineline]:                                     APP6_ONLY, // APP-06 290101 Mineline
     [TacticalGraphicName.MineCluster]:                                  APP6_ONLY, // APP-06 290400 Mine Cluster
-    [TacticalGraphicName.TripWire]:                                     APP6_ONLY, // APP-06 290500 Trip Wire
+    [TacticalGraphicName.TripWire]:                                     BOTH,      // APP-06 290500 Trip Wire -- FM table 5-20 "tripwire"
     [TacticalGraphicName.RaftSite]:                                     APP6_ONLY, // APP-06 290800 Raft Site
-    [TacticalGraphicName.FortifiedPosition]:                            APP6_ONLY, // APP-06 291000 Fortified Position
+    [TacticalGraphicName.FortifiedPosition]:                            BOTH,      // APP-06 291000 Fortified Position
     [TacticalGraphicName.TacticalFix]:                                  BOTH,      // APP-06 341100 Fix
     [TacticalGraphicName.TacticalTurn]:                                 BOTH,      // APP-06 344700 Turn
     [TacticalGraphicName.Block]:                                        BOTH,      // APP-06 270501 Block
@@ -322,13 +341,59 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                   BOTH,      // APP-06 242200 Weapon/Sensor Range Fan, Sector
     [TacticalGraphicName.LineOfContact]:                                BOTH,      // APP-06 141100 Line of Departure/Line of Contact
     [TacticalGraphicName.AttackByFire]:                                 BOTH,      // APP-06 152000 Attack by Fire
+    [TacticalGraphicName.Defeat]:                                       APP6_ONLY, // APP-06 344300 Defeat
     [TacticalGraphicName.Destroy]:                                      BOTH,      // APP-06 340900 Destroy
     [TacticalGraphicName.Exfiltrate]:                                   BOTH,      // APP-06 343700 Exfiltrate
     [TacticalGraphicName.Interdict]:                                    BOTH,      // APP-06 341400 Interdict
     [TacticalGraphicName.Neutralize]:                                   BOTH,      // APP-06 341600 Neutralize
     [TacticalGraphicName.SupportByFire]:                                BOTH,      // APP-06 152100 Support by Fire
     [TacticalGraphicName.Suppress]:                                     BOTH,      // APP-06 342800 Suppress
-    [TacticalGraphicName.FightingPosition]:                             FM_ONLY,
+    [TacticalGraphicName.BearingLine]: APP6_ONLY, // APP-06 220100 Bearing Line
+    [TacticalGraphicName.BearingLineElectronic]: APP6_ONLY, // APP-06 220101 Bearing Line, Electronic
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: APP6_ONLY, // APP-06 220102 Bearing Line, Electromagnetic Warfare (EW)
+    [TacticalGraphicName.BearingLineAcoustic]: APP6_ONLY, // APP-06 220103 Bearing Line, Acoustic
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: APP6_ONLY, // APP-06 220104 Bearing Line, Acoustic (Ambiguous)
+    [TacticalGraphicName.BearingLineTorpedo]: APP6_ONLY, // APP-06 220105 Bearing Line, Torpedo
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: APP6_ONLY, // APP-06 220106 Bearing Line, Electro-Optical Intercept
+    [TacticalGraphicName.BearingLineJammer]: APP6_ONLY, // APP-06 220107 Bearing Line, Jammer
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: APP6_ONLY, // APP-06 220108 Bearing Line, Radio Direction Finder (RDF)
+    [TacticalGraphicName.NavigationalRhumbLine]: APP6_ONLY, // APP-06 220109 Navigational Rhumb Line
+    /*
+     * APP-06 §8.10 Table 8-12, the maritime control areas.
+     *
+     * **APP-06 only, and the FM search is recorded rather than asserted.** FM 1-02.2 is a
+     * land manual with no maritime chapter: `launch area`, `defended area`, `no attack`,
+     * `NOTACK`, `ship area` and `cued acquisition` return nothing at all. `radar search`
+     * returns four hits and every one of them is the *prose* definition of an artillery
+     * target intelligence zone or a call for fire zone -- "a weapons locating radar search
+     * area in enemy territory" -- which are two graphics this library already carries under
+     * their own codes. A definition is not a plate, and the words overlapping is the same
+     * trap `mine cluster` set. @see specifications.test.ts
+     */
+    [TacticalGraphicName.LaunchAreaEllipse]: APP6_ONLY, // APP-06 200101 Launch Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaEllipse]: APP6_ONLY, // APP-06 200201 Defended Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaRectangle]: APP6_ONLY, // APP-06 200202 Defended Area, Rectangle
+    [TacticalGraphicName.NoAttackZone]: APP6_ONLY, // APP-06 200300 No Attack (NOTACK) Zone
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: APP6_ONLY, // APP-06 200401 Ship Area of Interest, Ellipse/Circle
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: APP6_ONLY, // APP-06 200402 Ship Area of Interest, Rectangle
+    [TacticalGraphicName.ActiveManeuverArea]: APP6_ONLY, // APP-06 200500 Active Manoeuvre Area
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: APP6_ONLY, // APP-06 200600 Cued Acquisition Doctrine
+    [TacticalGraphicName.RadarSearchDoctrine]: APP6_ONLY, // APP-06 200700 Radar Search Doctrine
+    [TacticalGraphicName.NavigationalLine]: APP6_ONLY, // APP-06 218400 Navigational
+    /*
+     * APP-06 152200. `search area` appears six times in FM 1-02.2 and not once as a symbol:
+     * every hit is the glossary phrase "target acquisition search areas" or "weapons
+     * locating radar search area", and `reconnaissance area` appears nowhere. Its Table
+     * 8-10 neighbours -- 151900, 152400, 152500, 152300 -- are all APP-06 only too.
+     */
+    [TacticalGraphicName.SearchArea]: APP6_ONLY, // APP-06 152200 Search Area/Reconnaissance Area
+    /*
+     * The convoys are in **both**: FM 1-02.2 table 5-18 "Convoy symbols" lists `moving
+     * convoy` and `halted convoy` on consecutive rows, with the manual's own note "the
+     * arrow points in the direction the convoy is moving" -- word for word APP-06 330100's.
+     */
+    [TacticalGraphicName.MovingConvoy]: BOTH, // APP-06 330100 Moving Convoy -- FM table 5-18 "moving convoy"
+    [TacticalGraphicName.HaltedConvoy]: BOTH, // APP-06 330200 Halted Convoy -- FM table 5-18 "halted convoy"
     [TacticalGraphicName.LightLine]: APP6_ONLY,  // APP-06 110200 Light Line
     [TacticalGraphicName.LineGeneric]: APP6_ONLY, // APP-06 110400 Line, Generic
     [TacticalGraphicName.HandoverLine]: APP6_ONLY, // APP-06 141800 Handover Line (HOL)

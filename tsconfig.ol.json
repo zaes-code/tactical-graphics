@@ -42,9 +42,6 @@
     "src/components/openlayers/**/*.test.ts",
     // Demo-only: the sample sweep and the tracker-generated list it draws.
     "src/components/openlayers/sampleGallery.ts",
-    "src/components/openlayers/provenGraphics.ts",
-    // Disabled graphic, commented out of both registries.
-    "src/components/openlayers/graphics/SearchArea.ts",
-    "src/components/openlayers/controllers/SearchAreaController.ts"
+    "src/components/openlayers/provenGraphics.ts"
   ]
 }

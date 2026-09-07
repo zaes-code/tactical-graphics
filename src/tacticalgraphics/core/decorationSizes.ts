@@ -69,6 +69,24 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.WireSingleConcertina]: 14,
     [TacticalGraphicName.WireDoubleStrandConcertina]: 14,
     [TacticalGraphicName.WireTripleStrandConcertina]: 14,
+
+    /*
+     * **The three whose furniture must survive a vertex drag.** (User's call, 2026-09-04.)
+     *
+     * 218400's ticks and the two convoys' body widths were briefly shares of the drawn run,
+     * so lengthening the line by dragging its red handle fattened the symbol — and a line
+     * the user is lengthening is a line, not a bigger symbol. Being in this table makes each
+     * of them a `decorationSize`: fixed against a vertex drag, and scaled by the resize
+     * gesture, which multiplies it. Exactly what `Fix` above has always done, and for the
+     * same reason.
+     *
+     * The convoys' two numbers keep the plates' relationship to each other -- 50/448 against
+     * 60/483, so the halted body is about a tenth deeper than the moving one -- while both
+     * are now screen sizes rather than shares. @see convoyPaints
+     */
+    [TacticalGraphicName.NavigationalLine]: 26,
+    [TacticalGraphicName.MovingConvoy]: 13,
+    [TacticalGraphicName.HaltedConvoy]: 14,
 };
 
 /**
@@ -93,6 +111,34 @@ export const decorationMeters = (name: TacticalGraphicName, resolution: number):
  */
 export function hasBakedDecoration(name: TacticalGraphicName): boolean {
     return DECORATION_PX[name] !== undefined;
+}
+
+/**
+ * The graphics whose fixed decoration is built **on the head of the drawn base itself**,
+ * so the first stretch of the line is inside the symbol rather than beside it.
+ *
+ * Abatis is the one, and 280100 is why: the route runs *into* the chevron and out the
+ * other side, so the first `size` metres of the base are the tooth's own opening — the
+ * two legs and the gap between them. A vertex placed in there is a vertex inside the
+ * symbol. @see Abatis.path
+ *
+ * Distinct from every other entry in `DECORATION_PX`. A bridge's ticks, a wire's crosses
+ * and the convoys' body all hang *off* the line and leave it whole underneath, so a
+ * vertex anywhere along those is a bend in a road and nothing more.
+ */
+const HEAD_DECORATION_GRAPHICS: readonly TacticalGraphicName[] = [TacticalGraphicName.Abatis];
+
+/**
+ * How much of this graphic's base, from its first point, its own furniture occupies — in
+ * screen pixels at the drawing zoom — or `undefined` for a graphic that reserves nothing.
+ *
+ * Read off `DECORATION_PX` rather than restated, because it *is* the decoration's size:
+ * the chevron spans exactly the `size` the renderer hands the generator, and a second copy
+ * of 26 here would be a number that could drift from the one being drawn.
+ * @see HEAD_DECORATION_GRAPHICS, acceptsInsertedVertex
+ */
+export function reservedLeadPx(name: TacticalGraphicName): number | undefined {
+    return HEAD_DECORATION_GRAPHICS.includes(name) ? DECORATION_PX[name] : undefined;
 }
 
 /**
@@ -259,4 +305,74 @@ const MIN_FIRST_SEGMENT_PX: Partial<Record<TacticalGraphicName, number>> = {
  */
 export function minimumFirstSegmentPx(name: TacticalGraphicName): number | undefined {
     return MIN_FIRST_SEGMENT_PX[name];
+}
+
+/**
+ * # The point-anchored graphics whose shape is a **length and a width**, not a radius
+ *
+ * APP-06 240802, 200101, 200201, 200401 and 200600 all read the same way: *one* anchor
+ * point at the centre, with the two dimensions and the attitude stated as amplifiers. So a
+ * drag away from the anchor has to produce *both* numbers, and the share the width takes
+ * of the length is a fact about each plate.
+ *
+ * ## Why this is here rather than in a holder
+ *
+ * **It was in one, and the other engine drew a line.** `RectangularTargetGraphicBase`
+ * returned `{length: size * 2, radius: size * 0.66}` from a constant of its own, and
+ * MapLibre's draw stamps `radius` and nothing else — so on MapLibre the length fell back to
+ * the generator's flat 2 km default while the width came out as whatever the drag measured.
+ * A 2 km by 500 km ellipse is a vertical stroke, which is exactly what 240802 has rendered
+ * as on MapLibre since it became point-anchored in 3.2.0, and what the three maritime
+ * ellipses inherited on the day they were added.
+ *
+ * The rule "a drag of `r` means a box `2r` long and `2·k·r` wide" is symbology: it is the
+ * same answer for any renderer, and only the multiplication by a live drag belongs to one.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ *
+ * ## The ratios
+ *
+ * Each is `AM / AM1` — half-width over half-length — off its own plate:
+ *
+ * | code | source | ratio |
+ * |---|---|---|
+ * | 240802 | the Template's own box, roughly half again as wide as deep | 0.66 |
+ * | 200101 / 200201 / 200401 | the Examples state it: `AM = 60 Metres`, `AM1 = 112 Metres` | 0.536 |
+ * | 200600 | measured off the Template at 300 dpi — 353.8 px by 210.0 px on its own axes | 0.593 |
+ */
+const AXIS_WIDTH_RATIO: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TargetAreaRectangular]: 0.66,
+    [TacticalGraphicName.LaunchAreaEllipse]: 0.536,
+    [TacticalGraphicName.DefendedAreaEllipse]: 0.536,
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: 0.536,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: 0.593,
+};
+
+/**
+ * Whether this graphic's shape is a length and a width about a single anchor point.
+ *
+ * Distinct from {@link isRectangular}, which is the *two*-anchor-point family, and from
+ * the circles, which have one dimension. @see AXIS_WIDTH_RATIO
+ */
+export function hasAxisAndWidth(name: TacticalGraphicName): boolean {
+    return name in AXIS_WIDTH_RATIO;
+}
+
+/**
+ * The `length` and `width` a drag of `radius` metres produces for one of them, or
+ * `undefined` for every other graphic.
+ *
+ * **Both are full figures, in the public schema's own terms** -- `TacticalGraphicProperties`
+ * carries a full `length` and a full `width`, and it is `toGraphicOptions` that halves the
+ * width on the way to a generator's `radius`. Returning the generator's vocabulary here
+ * would be the trap it already was: a public `radius` means the graphic's *size*, so a
+ * caller stamping this bag's `radius` would have set the wrong field and changed nothing.
+ * The same pair `persistedGeometryState` files, so a restore and a fresh draw agree.
+ */
+export function axisAndWidth(
+    name: TacticalGraphicName,
+    radius: number,
+): {length: number; width: number} | undefined {
+    const ratio = AXIS_WIDTH_RATIO[name];
+    if (ratio === undefined || !(radius > 0)) return undefined;
+    return {length: radius * 2, width: radius * ratio * 2};
 }

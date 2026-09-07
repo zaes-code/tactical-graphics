@@ -30,16 +30,40 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
         return geometryService.trimLineEnd(base.geometry.coordinates, radius * this.tipOverhang);
     }
 
+    /**
+     * `[p0, tip, width]` — and the width grip sits on **the corner of the arrowhead's back
+     * that the plate letters `PT N`.**
+     *
+     * > 151403 main attack. Point 1 defines the tip of the arrowhead. Point N-1 defines the
+     * > rear of the symbol. **Point N defines the back of the arrowhead.**
+     *
+     * The rule names the point but not its side; the Template does. It draws `PT N`'s leader
+     * into the back corner lying to the **right of point 1 → point 2** — the direction from
+     * the tip toward the rear, which is the order the points are stored in. 151402's Template
+     * on the same page letters it identically, and every graphic in this family inherits this
+     * method, so one statement settles all of them.
+     *
+     * **That is the far side from where this was drawn**, which put the grip on the corner
+     * the plate leaves unlettered. Note the offset is negated *twice*: once for the parallel
+     * line and once for the step across the head, matching how every `generateGraphics` below
+     * builds its right-hand edge. And note the stored line is reversed on the way in for a
+     * tip-first graphic, so "right of point 1 → point 2" is the **left** of the line this
+     * method sees. @see drawOrder.ts, TIP_FIRST_GRAPHICS
+     *
+     * The tip handle is the user's own last vertex — the arrowhead points *at* it — so a
+     * vertex-editing tool can pick it up and it tracks the cursor exactly.
+     */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         let radius: number = opts?.radius || 20;
         let baseCoords = base.geometry.coordinates;
         const centerline = this.arrowCenterline(base, radius);
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(centerline, radius);
-        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(leftArrowBase[leftArrowBase.length - 1], leftArrowBase[leftArrowBase.length - 2], radius);
-        // [p0, tip, width]. The tip handle is the user's own last vertex — the
-        // arrowhead points *at* it — so a vertex-editing tool can pick it up and
-        // it tracks the cursor exactly.
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftArrowHeadBase]);
+        const headSide: Position[] = geometryService.computeParallelLineString(centerline, -radius);
+        const headBackCorner: Position = geometryService.getPerpendicularPoint(
+            headSide[headSide.length - 1],
+            headSide[headSide.length - 2],
+            -radius,
+        );
+        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], headBackCorner]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -426,6 +450,16 @@ export class Counterattack extends MovementGraphicBase {
 }
 
 /**
+ * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
+ * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
+ * runs about one, and the head is a third of that.
+ */
+const BY_FIRE_STANDOFF = 0.8;
+const BY_FIRE_SHAFT = 1.05;
+const BY_FIRE_BAR_HALF = 2.0;
+const BY_FIRE_HEAD = 0.3;
+
+/**
  * Counter-attack by fire (APP-06 340700) — the counterattack arrow with the *by fire*
  * bracket standing beyond its tip.
  *
@@ -441,6 +475,30 @@ export class Counterattack extends MovementGraphicBase {
  */
 export class CounterattackByFire extends Counterattack {
     name: string = TacticalGraphicName.CounterattackByFire;
+
+    /**
+     * **The bracket stands inside point 1, not beyond it.**
+     *
+     * 340700's Template letters `PT. 1` on the head of the little by-fire arrow — the
+     * rightmost mark in the symbol — where 340600's, one row above, letters it on the
+     * counterattack arrow's own `>`. The two rows share every word of their Draw Rules, so
+     * the drawing is the only place that distinction is made, and it is made clearly: the
+     * leader passes the bar and lands on the small solid head.
+     *
+     * Inheriting the counterattack's overhang put the operator's own click on the arrow's
+     * point and hung the whole bracket 1.85 half-widths off the end of it &mdash; so point 1
+     * was neither the tip of anything nor the end of the symbol, and a click placed against
+     * an enemy position drew a mark past it. Trimming the body by the bracket's own reach as
+     * well slides the figure back along its axis until the head lands on the click, which is
+     * exactly what the inherited 1.5 does for the arrow alone. (User's report, 2026-09-06,
+     * with the wanted position drawn on a screenshot; confirmed against the plate first.)
+     *
+     * **Stated as the sum, because it is the sum.** Both terms are the ones
+     * `generateGraphics` steps along the axis with, so the head cannot drift off the click
+     * if the bracket is ever redrawn. 340600 keeps the inherited value and is untouched.
+     * @see MovementGraphicBase.tipOverhang
+     */
+    protected tipOverhang: number = 1.5 + BY_FIRE_STANDOFF + BY_FIRE_SHAFT;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
@@ -474,13 +532,3 @@ export class CounterattackByFire extends Counterattack {
         ]);
     }
 }
-
-/**
- * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
- * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
- * runs about one, and the head is a third of that.
- */
-const BY_FIRE_STANDOFF = 0.8;
-const BY_FIRE_SHAFT = 1.05;
-const BY_FIRE_BAR_HALF = 2.0;
-const BY_FIRE_HEAD = 0.3;

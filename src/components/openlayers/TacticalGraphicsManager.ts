@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, allowedGestures, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -51,6 +51,14 @@ export enum InteractionType {
  * before its scale ratio means anything. @see TacticalGraphicsManager.handleResize
  */
 const MIN_RESIZE_ORIGIN_PX = 8;
+
+/**
+ * `Modify`'s own `pixelTolerance` default, restated because the interaction does not expose
+ * it and {@link TacticalGraphicsManager.insertVertexAllowed} has to decide the same
+ * question — "is the cursor on this base?" — that `Modify` decided before calling it. Pass
+ * an explicit `pixelTolerance` to the interaction and this has to move with it.
+ */
+const MODIFY_PIXEL_TOLERANCE = 10;
 
 /**
  * How far off the line, in screen pixels, a drag has to be before it counts as choosing a
@@ -930,7 +938,19 @@ export class TacticalGraphicsManager {
 
     handlePointDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        let center = this.activeController.getBaseGeometry() as number[];
+        /*
+         * **The controller's centre, not its raw base geometry.**
+         *
+         * `calculateDeltaAngle` reads `center[0]` and `center[1]` as numbers. That held
+         * while every point-anchored graphic kept a `Point` base — but the drawn-anchor
+         * family stores APP-06's anchor points in a `LineString`, so `getBaseGeometry`
+         * hands back an array *of* coordinates and both reads are arrays. The arithmetic
+         * then produces `NaN` and the rotation silently does nothing, which is what a user
+         * reported for ambush on 2026-09-05 once it started being drawn point by point.
+         * `getCenter` is the question actually being asked here and every controller
+         * answers it with a single coordinate.
+         */
+        const center = this.activeController.getCenter() as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.
@@ -1800,6 +1820,13 @@ export class TacticalGraphicsManager {
             baseFeatures = selected ? baseFeatures.filter(feature => selected.includes(feature)) : [];
         }
 
+        // **Before the early return, because it is a separate question.** A graphic whose
+        // vertex count is fixed carries `base: false` so `Modify` never gets it, and that
+        // used to take its construction line away with it — which is how bridge, the
+        // convoys and the demolition family ended up with nothing on screen saying where
+        // their anchor points went. @see showAnchorConnectors
+        this.showAnchorConnectors();
+
         // Nothing to modify — an edit mode with no selection yet. Leave the interaction
         // off rather than installing one over an empty collection.
         if (!baseFeatures.length) return;
@@ -1809,6 +1836,7 @@ export class TacticalGraphicsManager {
         this.modify = new Modify({
             source: this.renderingVectorSource,
             features: new Collection(baseFeatures),
+            insertVertexCondition: event => this.insertVertexAllowed(baseFeatures, event),
         });
         this.map.addInteraction(this.modify);
         this.modify.on('modifyend', (e: ModifyEvent) => {
@@ -1828,8 +1856,75 @@ export class TacticalGraphicsManager {
         });
     };
 
+    /**
+     * Whether `Modify` may turn this pointer position into a new base vertex.
+     *
+     * Reported as "abatis should not accept vertices within the triangle opening" (user,
+     * 2026-09-06). The rule is the library's — `acceptsInsertedVertex` — and MapLibre gates
+     * its own insertion on the same call; all this does is find which base the cursor is
+     * over and hand it screen pixels. @see acceptsInsertedVertex
+     *
+     * **Every base at once, because that is what `Modify` holds.** The condition is given a
+     * pointer event and nothing else, so the feature has to be recovered here; a base
+     * further away than `Modify`'s own reach is skipped rather than allowed to answer for a
+     * graphic the user is nowhere near.
+     *
+     * `Modify` also calls this while merely *hovering*, and drops its blue insertion dot
+     * when it answers false — so a refusal takes the affordance away with it instead of
+     * offering a vertex the click would not place.
+     */
+    private insertVertexAllowed = (bases: Feature[], event: MapBrowserEvent | null): boolean => {
+        // `Modify` passes its last pointer event, which is null until one has been seen.
+        if (!event?.pixel) return true;
+
+        for (const feature of bases) {
+            const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+            if (!name || reservedLeadPx(name) === undefined) continue;
+
+            const geometry = feature.getGeometry();
+            if (!(geometry instanceof LineString)) continue;
+
+            // Where the vertex would land, and whether the cursor is near enough for this
+            // base to be the one being edited. `MODIFY_PIXEL_TOLERANCE` mirrors the
+            // interaction's own default, which is what decides the same question inside it.
+            const landing = this.map.getPixelFromCoordinate(geometry.getClosestPoint(event.coordinate));
+            if (!landing || Math.hypot(landing[0] - event.pixel[0], landing[1] - event.pixel[1]) > MODIFY_PIXEL_TOLERANCE) continue;
+
+            const basePixels = geometry.getCoordinates().map(c => this.map.getPixelFromCoordinate(c) as [number, number]);
+            if (!acceptsInsertedVertex(name, basePixels, landing as [number, number])) return false;
+        }
+        return true;
+    };
+
+    /**
+     * Un-hides the hashed construction line on the graphics built from a centreline the
+     * symbol never draws — the corridors, the axis-of-advance family, the crossings, the
+     * convoys and the demolition bar symbols.
+     *
+     * **Keyed on `role`, not on the `base` boolean.** `base` means "has vertices `Modify`
+     * may drag", which is a different question and is false for every graphic capped at
+     * the number of points its plate gives it. Reading it for visibility is what made the
+     * mark appear on the uncapped families and on nothing else, and the user asked for the
+     * families that share their shape to look the same. (2026-09-06.)
+     * @see drawsAnchorConnector, createBaseFeature
+     */
+    private showAnchorConnectors = (): void => {
+        // Scoped to the selection in edit mode, exactly as the handles and `Modify` are;
+        // `modify` mode stays global. An edit with no selection shows nothing.
+        const selected = this.isEditing() ? (this.selectedController?.getFeatures() ?? []) : undefined;
+        for (const feature of this.renderingVectorSource.getFeatures()) {
+            if (feature.get('role') !== 'base') continue;
+            if (selected && !selected.includes(feature)) continue;
+            const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+            if (name && drawsAnchorConnector(name)) feature.set('hidden', false);
+        }
+    };
+
     removeModifyInteraction = () => {
-        let baseFeatures = this.getRenderedFeaturesByProp('base');
+        // **Every base by role**, not only the ones `Modify` was given: the construction
+        // line is un-hidden on graphics whose base carries no `base` flag at all, and
+        // hiding by that flag would leave those on the map after the mode is left.
+        let baseFeatures = this.renderingVectorSource.getFeatures().filter(feature => feature.get('role') === 'base');
         baseFeatures.forEach(feature => feature.set('hidden', true));
         if (this.modify) this.map.removeInteraction(this.modify);
         // Dropped, not just detached: a handle kept here is one this class would try to

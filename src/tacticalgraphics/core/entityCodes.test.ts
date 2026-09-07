@@ -17,7 +17,16 @@ const names = () => Object.keys(GRAPHIC_ENTITY_CODES) as TacticalGraphicName[];
 const codesFromSpecificationComments = (): Map<string, string> => {
     const source = readFileSync(join(__dirname, 'specifications.ts'), 'utf8');
     const found = new Map<string, string>();
-    const pattern = /\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ APP-06 (\d{6})/g;
+    /*
+     * **A commented-out entry is not an entry.** An excluded graphic keeps its line here,
+     * commented, so the exclusion is a switch rather than a deletion — see
+     * `ai/excluded-graphics.md`. A parser that reads the line anyway then demands a code
+     * from a registry the graphic has left, which is a failure about nothing.
+     *
+     * `^\s*` with the `m` flag is what makes "at the start of the line" the test, so a
+     * commented entry is skipped while a live one with its trailing comment still matches.
+     */
+    const pattern = /^\s*\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ APP-06 (\d{6})/gm;
     let match = pattern.exec(source);
     while (match) {
         found.set(match[1], match[2]);
@@ -47,9 +56,11 @@ describe('GRAPHIC_ENTITY_CODES', () => {
 
     it('leaves exactly the FM 1-02.2-only graphics uncoded', () => {
         const uncoded = names().filter((n) => GRAPHIC_ENTITY_CODES[n] === null);
-        // Nine since `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
-        // gap", a different symbol. @see specifications.test.ts, FM_ONLY_GRAPHICS
-        expect(uncoded).toHaveLength(9);
+        // Nine when `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
+        // gap", a different symbol. **Eight since 2026-09-05**: `FightingPosition` was
+        // retired as a duplicate of `FortifiedPosition`, which draws the same bracket and
+        // is in both publications. @see ai/excluded-graphics.md, specifications.test.ts
+        expect(uncoded).toHaveLength(8);
         for (const name of uncoded) {
             expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2]);
         }
@@ -91,7 +102,9 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 284 assignments over 283 distinct codes -- 141100 is the one shared pair.
-        expect(codes).toHaveLength(283);
+        // 310 assignments over 309 distinct codes -- 141100 is the one shared pair. It was
+        // 309 over 308 while 271204 was switched off; it is back as the picture 3.4.0
+        // shipped, its own construction still unsettled. @see ai/excluded-graphics.md
+        expect(codes).toHaveLength(309);
     });
 });

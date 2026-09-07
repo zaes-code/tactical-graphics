@@ -3,7 +3,7 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, MultiLineString, MultiPoint, Point, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import {toDegrees, toRadians} from "../core/math";
-import {allowedGestures} from "../core/symbology";
+import {publishesAnchorHandleOnly} from "../core/symbology";
 
 /**
  * Half-height ÷ half-width of the symbol box the two "wide" crossed tasks are
@@ -105,16 +105,21 @@ export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions
      * does not exist. Resize and rotate work off the symbol itself.
      */
     /**
-     * `[edge, center]` for the three that resize, and the centre alone for Destroy.
+     * **The centre, alone.** All four plates say "requires one anchor point. The centre
+     * point defines the centre of the symbol", and one anchor point is one handle.
      *
-     * Edge first, which is the order every point-anchored graphic emits and which the
-     * controllers depend on. Destroy gets no edge handle on purpose: it is pinned to a
-     * screen size, so a handle there would offer a dimension that cannot change — the
-     * drag would store a number the paint divides straight back out.
+     * They still resize — the edit-mode affordance offers it and `handleResize` performs
+     * it — so this is not a refusal, and it deliberately does not read `allowedGestures`.
+     * It used to: emitting `[edge, centre]` whenever a resize was allowed made the *edge*
+     * the live red handle and left the centre as a grey inert dot, which put the grip
+     * beside a symbol described by its middle. @see publishesAnchorHandleOnly
+     *
+     * The `[edge, centre]` branch is kept for any future member of this family whose plate
+     * gives it a second anchor point; edge first, the order the controllers depend on.
      */
     generateHandles(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiPoint> {
         const center = base.geometry.coordinates;
-        if (!allowedGestures(this.name as TacticalGraphicName).resize) {
+        if (publishesAnchorHandleOnly(this.name as TacticalGraphicName)) {
             return this.asMultiPointFeature([center]);
         }
         const edge = geometryService.translateCoordinates(center, opts.size, toRadians(opts.rotation));

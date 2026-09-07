@@ -464,15 +464,21 @@ function hostilePeak(
 }
 
 /**
- * APP-06 270801 mined area, fenced — the outline drawn as a **wire fence**, with `M`
- * markers set around it.
+ * APP-06 270800 mined area and 270801 mined area, fenced — an outline with `M` markers
+ * set around it, and on the fenced one the outline is drawn as a **wire fence**.
+ *
+ * **One function, because the plates differ in one thing.** FM 1-02.2 table 5-20 draws
+ * the two on consecutive rows and APP-06 lists 270801 as 270800's only child: the letters,
+ * the `ENY` boxes, the hostile peak and the mine row inside are identical, and the wire is
+ * the whole of the difference. Written twice, the next ruling about where an `M` sits
+ * would land on one of them. @see MinedArea, MinedAreaFenced
  *
  * The crosses are the wire obstacles' own mark walked around a closed ring rather than
  * along an open line, so the pitch is the same screen constant they use; the `M`s replace
  * a cross at four evenly spaced points, which is what makes the fence read as marked
  * rather than merely wired.
  */
-export function minedAreaFencedPaint(): MinePaint {
+function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'Polygon') return [];
@@ -525,6 +531,10 @@ export function minedAreaFencedPaint(): MinePaint {
         const clearOfLetters = (at: ProjectedPosition): boolean =>
             letters.every(l => Math.hypot(l[0] - at[0], l[1] - at[1]) > pitch * 0.9);
 
+        // The unfenced area stops here: a plain outline, its letters, and the mine row the
+        // label paint draws inside it.
+        if (!fenced) return paints;
+
         const steps = Math.floor(total / pitch);
         // A cross arm's reach along each of its own two diagonals. `size` is the arm's
         // length, so the diagonal offsets are that over root two.
@@ -564,4 +574,14 @@ export function minedAreaFencedPaint(): MinePaint {
         if (crosses.length) paints.push({geometry: {type: 'MultiLineString', coordinates: crosses}, stroke});
         return paints;
     };
+}
+
+/** APP-06 270800 mined area — the marked outline, undrawn wire. */
+export function minedAreaPaint(): MinePaint {
+    return minedAreaPaintWith({fenced: false});
+}
+
+/** APP-06 270801 mined area, fenced — the same outline, walked with barbed crosses. */
+export function minedAreaFencedPaint(): MinePaint {
+    return minedAreaPaintWith({fenced: true});
 }

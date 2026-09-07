@@ -13,7 +13,8 @@
  * would drift the symbol every time it was touched.
  */
 
-import {TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, rotationAnchor, usesDrawnAnchors} from '../index';
+import {allowedGestures,TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, rotationAnchor,
+    rotationPivot, usesDrawnAnchors} from '../index';
 
 const CENTER: [number, number] = [12, 34];
 const SIZE = 40_000;
@@ -59,7 +60,13 @@ describe('the round trip', () => {
         // Within a percent: every walk out and back is geodesic, and the readers recover
         // the centre from a chord rather than from the point it was spoked out of.
         expect(frame!.size / SIZE).toBeCloseTo(1, 1);
-        expect(frame!.rotation ?? 0).toBeCloseTo(25, 0);
+        /*
+         * **A symbol that does not turn reads back at zero, and that is the round trip.**
+         * 271204's bars lean at a fixed 45 degrees — an X turned is a different mark — so it
+         * refuses the rotation it was written with rather than carrying it. The rule looked
+         * universal while every member of this family could turn. @see allowedGestures
+         */
+        expect(frame!.rotation ?? 0).toBeCloseTo(allowedGestures(name).rotate ? 25 : 0, 0);
     });
 
     /**
@@ -100,18 +107,66 @@ describe('the point these turn about', () => {
         .filter((name): name is TacticalGraphicName => name in TacticalGraphicName)
         .filter(usesDrawnAnchors);
 
-    it.each(family)('is the centre of %s, not its first anchor', name => {
+    /*
+     * **Two doctrinal exceptions, not one.** 141700 turns about point 2 and 271204 about
+     * point 3; each is documented beside its own assertion below. Everything else in the
+     * family turns about the centre its anchors describe.
+     */
+    const PIVOTS_ELSEWHERE = [TacticalGraphicName.Ambush, TacticalGraphicName.RoadblockCompleteExecuted];
+
+    it.each(family.filter(n => !PIVOTS_ELSEWHERE.includes(n)))(
+        'is the centre of %s, not its first anchor',
+        name => {
+            const centre: [number, number] = [7, 45];
+            const anchors = drawnAnchors(name, {center: centre, size: 60_000, rotation: 15})!;
+            const geometry = {type: 'LineString', coordinates: anchors};
+
+            const pivot = rotationAnchor(geometry, name);
+            expect(pivot[0]).toBeCloseTo(centre[0], 2);
+            expect(pivot[1]).toBeCloseTo(centre[1], 2);
+
+            // And without the name it is the old rule, which is what every ordinary drawn
+            // line still gets.
+            expect(rotationAnchor(geometry)).toEqual(anchors[0]);
+        },
+    );
+
+    /**
+     * **271204 turns and scales about point 3 — the crossing.**
+     *
+     * Its points 1 and 2 are the two extremes of the symbol's own 45-degree axis, so their
+     * midpoint *is* the figure's centre — which makes the centre rule look right and be
+     * wrong. The crossing is the thing on the ground the symbol marks and the one anchor an
+     * operator places against a road; scaling about the centre would slide it off.
+     * (User's call, 2026-09-07: "resize and rotate icons can use point 3 as pivot".)
+     */
+    it('is point 3 for RoadblockCompleteExecuted, the crossing it marks', () => {
+        const anchors = drawnAnchors(TacticalGraphicName.RoadblockCompleteExecuted, {center: [7, 45], size: 60_000})!;
+        const geometry = {type: 'LineString', coordinates: anchors};
+        expect(rotationAnchor(geometry, TacticalGraphicName.RoadblockCompleteExecuted)).toEqual(anchors[2]);
+        expect(rotationPivot(geometry, TacticalGraphicName.RoadblockCompleteExecuted)).toEqual(anchors[2]);
+        // Not the centre, which is where points 1 and 2 put their midpoint — the distinction
+        // this exception exists for.
+        expect(rotationAnchor(geometry, TacticalGraphicName.RoadblockCompleteExecuted)[0]).not.toBeCloseTo(7, 2);
+    });
+
+    /**
+     * **Ambush is the exception, and it is a doctrinal one.**
+     *
+     * 141700's back "encompasses the ambush position" while "the arrowhead typically points
+     * at the target", so the thing an operator turns is the aim and the thing that must stay
+     * on the ground is the position. Point 2 is an end of that back. Turning about the
+     * frame's centre swung the ambush itself off the place it was put. (User's call,
+     * 2026-09-05.)
+     */
+    it('is point 2 for Ambush, which is where the position sits', () => {
         const centre: [number, number] = [7, 45];
-        const anchors = drawnAnchors(name, {center: centre, size: 60_000, rotation: 15})!;
+        const anchors = drawnAnchors(TacticalGraphicName.Ambush, {center: centre, size: 60_000, rotation: 15})!;
         const geometry = {type: 'LineString', coordinates: anchors};
 
-        const pivot = rotationAnchor(geometry, name);
-        expect(pivot[0]).toBeCloseTo(centre[0], 2);
-        expect(pivot[1]).toBeCloseTo(centre[1], 2);
-
-        // And without the name it is the old rule, which is what every ordinary drawn
-        // line still gets.
-        expect(rotationAnchor(geometry)).toEqual(anchors[0]);
+        expect(rotationAnchor(geometry, TacticalGraphicName.Ambush)).toEqual(anchors[1]);
+        // Not the centre, which is what the rest of the family uses.
+        expect(rotationAnchor(geometry, TacticalGraphicName.Ambush)[0]).not.toBeCloseTo(centre[0], 2);
     });
 
     it('leaves an ordinary drawn line on its first vertex', () => {

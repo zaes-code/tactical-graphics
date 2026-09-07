@@ -29,6 +29,7 @@ export {
     TacticalGraphicError,
     TACTICAL_GRAPHIC_KEY,
     toGraphicOptions,
+    migrateRetiredGraphic,
 } from './core/render';
 
 export type {GraphicLabels, TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
@@ -77,7 +78,7 @@ export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFan
  * user drag the sharpness has to clamp with the same numbers the generator
  * does, or the handle drifts off the curve at the extremes.
  */
-export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend} from './graphics/Turn';
+export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend, turnBendFrom, turnBendFromOffset} from './graphics/Turn';
 /** Envelopment's half-circle radius, exported for the same reason as Turn's bend. */
 export {
     ENVELOPMENT_DEFAULT_BEND,
@@ -199,6 +200,10 @@ export {
     allowedGestures,
     dropSizePx,
     supportsHostility,
+    publishesAnchorHandleOnly,
+    ANCHOR_CONNECTOR_DASH_PX,
+    anchorConnectorRun,
+    drawsAnchorConnector,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
     formatDistance,
@@ -344,7 +349,8 @@ export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
 export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
 export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
-export {mineFillPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbLinePaint} from './symbology/maritimeLinePaints';
 export type {MobilityGlyph} from './symbology/sectorModifierPaints';
 export {
     GLYPH_HALF_WIDTH,
@@ -371,6 +377,7 @@ export {
     crossedMissionTaskLabelPaint,
     crossedMissionTaskLabelScale,
     crossedMissionTaskPaint,
+    defeatPaint,
     movementToContactPaint,
     pursuitPaint,
 } from './symbology/missionTaskPaints';
@@ -380,6 +387,30 @@ export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
 export {formatLaneWidth, overheadWirePaint, safeLaneOrGapPaint} from './symbology/overheadWirePaints';
 export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
 export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
+export {aegisSingleTargetPaint} from './symbology/aegisTargetPaints';
+export {
+    ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_COLOR,
+    CUED_ACQUISITION_FILL,
+    RADAR_SEARCH_FILL,
+    RADAR_SEARCH_STROKE,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
+    activeManeuverAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    radarSearchLabelPaint,
+    axisAmplifierPaint,
+    maritimeFilledAreaPaint,
+    withAxisAmplifiers,
+} from './symbology/maritimeAreaPaints';
+export {convoyPaint} from './symbology/convoyPaints';
+export {searchAreaPaint} from './symbology/searchAreaPaints';
+export {SEARCH_AREA_ARM, SearchArea, asSearchVee} from './graphics/SearchArea';
+export {EllipticalArea, RadarSearchDoctrine, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, RSD_MIN_OPENING_DEG, radarSearchFromClicks, radarSectorOpening} from './graphics/MaritimeArea';
+export type {RadarSearchFrame} from './graphics/MaritimeArea';
 export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';
 export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
 export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
@@ -389,9 +420,13 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // The size a security operation is built at and files, so both engines say one thing
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
+export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
+export {SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export type {TacticalGraphicsSnapshot} from './core/snapshot';
+export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
 // turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
-export {defaultStandoffMetres, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
+export {defaultStandoffMetres, usesStandoffWidth, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
@@ -402,9 +437,9 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx} from './core/decorationSizes';
-export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, anchorVertex, baseVertexCount, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, supportsMirror} from './core/handles';
-export {normalizeDrawnBase} from './core/drawnBase';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
+export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
+export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
@@ -423,8 +458,8 @@ export type {DrawnAnchorFrame} from './core/drawnAnchors';
 export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
-export {anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
-export {carriesRectangleLength, groundMeters, rectangleAmplifiers, usesDrawnAnchors} from './core/handles';
+export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, SUPPORT_BY_FIRE_PREVIEW_REACH, supportByFireAnchors, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
+export {carriesRectangleLength, groundMeters, rectangleAmplifiers, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
 export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
