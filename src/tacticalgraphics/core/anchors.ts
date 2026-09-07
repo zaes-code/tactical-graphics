@@ -936,11 +936,25 @@ export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[
 }
 
 /**
- * The gap a half-drawn crossing shows, as a share of the bar the operator has placed.
+ * The gap a half-drawn crossing shows, **in screen pixels**.
  *
  * A preview convention and nothing else: none of these plates states a default separation,
- * and the third click sets it. A third of the bar keeps both rails legible without the
- * figure reading as a square. @see parallelRailAnchors
+ * and the third click sets it. A *screen* size rather than a share of the bar, because the
+ * preview's job is to be legible while it is being dragged — a share grows with the bar, so
+ * a long crossing previewed as a wide corridor and a short one as a hairline, and neither
+ * told the operator anything about the symbol. (User's call, 2026-09-06: "while drawing can
+ * we lock the parallel line to a distance of 50px between click 1 and 2".)
+ *
+ * The caller supplies it as metres, because only a renderer knows what a pixel is worth
+ * here. @see parallelRailAnchors
+ */
+export const RAIL_PREVIEW_GAP_PX = 50;
+
+/**
+ * What a half-drawn crossing falls back to when nobody says what a pixel is worth.
+ *
+ * A raw-GeoJSON reader has no resolution to offer, and a preview still has to be drawn.
+ * @see RAIL_PREVIEW_GAP_PX
  */
 const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
 
@@ -965,7 +979,16 @@ const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
  * by `p1 → p2`, so the rails run the same way and are the same length by construction. This
  * is `hairpinFourthPoint`'s mirror image: a hairpin's legs *oppose*, and these are parallel.
  */
-export function parallelRailAnchors(clicks: Position[] | undefined, stored = 4): Position[] | undefined {
+export function parallelRailAnchors(
+    clicks: Position[] | undefined,
+    stored = 4,
+    /**
+     * The preview gap in **metres**, for a caller that knows the zoom. Omitted, the preview
+     * falls back to a share of the bar. Ignored once the third point is placed, which is the
+     * moment the operator states the gap themselves. @see RAIL_PREVIEW_GAP_PX
+     */
+    previewGapMetres?: number,
+): Position[] | undefined {
     if (!clicks || clicks.length < 2) return undefined;
     const [one, two] = clicks;
 
@@ -1001,7 +1024,9 @@ export function parallelRailAnchors(clicks: Position[] | undefined, stored = 4):
         // round is what the plate draws. (User's report, 2026-09-06: "when drawing left to
         // right, line 1,2 has to be the bottom one per the template".) The third click still
         // chooses the side outright; this is only where the preview starts.
-        : -bar * RAIL_PREVIEW_GAP_SHARE;
+        : -(previewGapMetres !== undefined && previewGapMetres > 0
+              ? previewGapMetres
+              : bar * RAIL_PREVIEW_GAP_SHARE);
     if (!isFinite(across) || across === 0) return undefined;
 
     // Square across from point 2, which is where the plate's own PT 3 leader lands.

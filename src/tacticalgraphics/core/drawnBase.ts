@@ -27,7 +27,7 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
-import {baseVertexCount, carriesSeparationInBase} from './handles';
+import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
 import geometryService from './GeometryService';
 import {
     anchorsForBow,
@@ -37,6 +37,7 @@ import {
     arcAndArrowAnchorsFromClicks,
     hairpinAnchors,
     parallelRailAnchors,
+    RAIL_PREVIEW_GAP_PX,
     runAndArcFromAnchors,
 } from './anchors';
 import {securityOperationAnchors} from '../graphics/SecurityOperation';
@@ -156,7 +157,7 @@ export function normalizeDrawnBase(
         return storedOrder(name, asVee(generatorOrder(name, deduped)));
     }
 
-    const placed = anchorsFromClicks(name, deduped);
+    const placed = anchorsFromClicks(name, deduped, resolution);
     if (placed) return placed;
 
     return deduped;
@@ -252,8 +253,43 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
     // Its three points are a tip and an arc's two ends, which no other layout here describes.
     // @see arcAndArrowBase
     if (name === TacticalGraphicName.Ambush) return arcAndArrowBase(center, half);
+    // Its bar sits under the far one, which is the opposite side from every other graphic
+    // `frontEdgeBase` serves. @see railCrossingBase
+    if (drawsAsRailCrossing(name)) return railCrossingBase(center, half, points);
     if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
     return undefined;
+}
+
+/**
+ * The base a **two-rail crossing** expects, for anything that has to synthesise one.
+ *
+ * The same two bars `frontEdgeBase` lays out, **mirrored across the run** — because for these
+ * five the drawn bar is the *lower* one. Their Templates letter `PT 1` and `PT 2` at the ends
+ * of the bottom rail and `PT 3` on the top, so a west-to-east drag leaves the bar under the
+ * cursor and previews the other above it, and `parallelRailAnchors` reads a two-click sketch
+ * that way. `frontEdgeBase` puts its across-point south, which is right for the graphics whose
+ * point 3 is a rear or a depth and wrong here — so the sweep drew every crossing as the
+ * vertical mirror of a hand-drawn one. Invisible on the bridge and the assault crossing, whose
+ * two crowbars are the same mark twice; plain on the fords, where the grips are the only thing
+ * telling the bars apart. (User's report, 2026-09-06: "fix the ford graphics on the sweep. The
+ * handles seem flipped there".)
+ *
+ * The two that number four points get a full-width far rail rather than the inset one
+ * `frontEdgeBase` draws: the reader makes the second bar parallel **and the same length**, so
+ * an inset fourth point is one the sheet states and the normalisation immediately overrides —
+ * and a base a reader disagrees with is a symbol drawn somewhere other than where the cell put
+ * it. @see parallelRailAnchors
+ */
+export function railCrossingBase(center: Position, half: number, points = 3): Position[] {
+    const [cx, cy] = center;
+    const across = half * 0.55;
+    const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
+    if (points >= 4) {
+        return [...edge, [cx + half, cy + across], [cx - half, cy + across]];
+    }
+    // Beside point 2, which is where the reader squares it to anyway — so the synthesised base
+    // and the settled one are the same points, and the sheet is idempotent.
+    return [...edge, [cx + half, cy + across]];
 }
 
 /**
@@ -425,7 +461,16 @@ const degrees = (radians: number): number => (radians * 180) / Math.PI;
  *
  * Returns `undefined` for every other graphic, and for a sketch too short to describe one.
  */
-function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Position[] | undefined {
+function anchorsFromClicks(
+    name: TacticalGraphicName,
+    clicks: Position[],
+    /**
+     * Ground metres per screen pixel, where the caller knows it. Only a reader whose
+     * *preview* is a screen size needs it, and a settled base never reaches one.
+     * @see RAIL_PREVIEW_GAP_PX
+     */
+    resolution?: number,
+): Position[] | undefined {
     switch (name) {
         case TacticalGraphicName.Ambush:
             return ambushAnchors(clicks);
@@ -668,7 +713,16 @@ function anchorsFromClicks(name: TacticalGraphicName, clicks: Position[]): Posit
         case TacticalGraphicName.AssaultCrossing:
         case TacticalGraphicName.FordEasy:
         case TacticalGraphicName.FordDifficult:
-            return parallelRailAnchors(clicks, baseVertexCount(name) ?? 4);
+            return parallelRailAnchors(
+                clicks,
+                baseVertexCount(name) ?? 4,
+                // **The half-drawn gap, locked to a pixel count.** A caller that knows the zoom
+                // gets it; one that does not falls back to a share of the bar. This is the
+                // engine-agnostic half of the lock — MapLibre normalises its sketch on every
+                // preview move, so the gap reaches its draw through here, where OpenLayers'
+                // reaches its generator through the holder's own offset. @see RAIL_PREVIEW_GAP_PX
+                resolution === undefined ? undefined : RAIL_PREVIEW_GAP_PX * resolution,
+            );
 
         default:
             return undefined;

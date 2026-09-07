@@ -10,6 +10,17 @@ import {Position} from "geojson";
 import {parallelRailAnchors, parallelRailFrame} from "../core/anchors";
 
 /**
+ * The preview gap in metres, from the half-width the holder sized against the screen.
+ *
+ * `radius` is that half-width — the renderers set it from the resolution — so twice it is
+ * the gap, and the controllers size it so the gap comes out at `RAIL_PREVIEW_GAP_PX`. A
+ * restored graphic carries its *saved* radius here instead, which is what keeps a file
+ * written before the conversion drawing at the width it was saved at.
+ */
+const previewGap = (opts?: MovementGraphicOptions): number | undefined =>
+    opts?.radius !== undefined && opts.radius > 0 ? opts.radius * 2 : undefined;
+
+/**
  * The centreline and half-separation of a ford's two bars, from wherever they are stated.
  *
  * 271500's Template letters `PT 1` and `PT 2` at the ends of one bar and `PT 3` on the other,
@@ -25,7 +36,7 @@ function railsOf(base: Feature<LineString>, opts?: MovementGraphicOptions): {cen
      * it, which is what the raw fallback below makes of them and what put the drawing cursor
      * down the middle of a line the symbol does not have. @see parallelRailAnchors
      */
-    const drawn = parallelRailFrame(parallelRailAnchors(coords, 3) ?? coords);
+    const drawn = parallelRailFrame(parallelRailAnchors(coords, 3, previewGap(opts)) ?? coords);
     if (drawn) return drawn;
     return {centre: coords, half: opts?.radius || 20};
 }

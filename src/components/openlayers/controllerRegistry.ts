@@ -21,6 +21,7 @@ import {
 import {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
 import {MovementGraphicBase} from './graphics/MovementGraphicBase';
 import {RetrogradeTask} from './graphics/RetrogradeTask';
+import {RAIL_PREVIEW_GAP_PX} from '@zaes/tactical-graphics';
 import {pursuitStyleFunc} from './openlayerStyles';
 import {asStyleFunction} from './paintToOpenLayers';
 import {getPaintFunction} from '@zaes/tactical-graphics';
@@ -235,8 +236,14 @@ const reliefInPlace = (name: TacticalGraphicName, res: number, sizing: number) =
  * point. @see parallelRailAnchors
  */
 const crossing = (stored: number) => (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), drawClickCount(name) ?? 3, name)
-        .enableVertexDragging(stored);
+    new LineGraphicController(
+        // Half the preview gap, because the rails sit either side of the centreline — so the
+        // half-drawn symbol shows `RAIL_PREVIEW_GAP_PX` between its bars whatever the zoom.
+        // `sizing` is ground metres per pixel. @see previewGap
+        new MovementGraphicBase(name, (RAIL_PREVIEW_GAP_PX / 2) * sizing, res),
+        drawClickCount(name) ?? 3,
+        name,
+    ).enableVertexDragging(stored);
 
 const corridor = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new AirCorridor(name, sizing * 20, res));

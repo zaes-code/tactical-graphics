@@ -9,6 +9,17 @@ import {Coordinate} from "../core/type";
 import {Position} from "geojson";
 import {parallelRailAnchors, parallelRailFrame} from "../core/anchors";
 
+/**
+ * The preview gap in metres, from the half-width the holder sized against the screen.
+ *
+ * `radius` is that half-width — the renderers set it from the resolution — so twice it is
+ * the gap, and the controllers size it so the gap comes out at `RAIL_PREVIEW_GAP_PX`. A
+ * restored graphic carries its *saved* radius here instead, which is what keeps a file
+ * written before the conversion drawing at the width it was saved at.
+ */
+const previewGap = (opts?: MovementGraphicOptions): number | undefined =>
+    opts?.radius !== undefined && opts.radius > 0 ? opts.radius * 2 : undefined;
+
 export class Bridge extends TacticalGraphicsBase {
 
     name: string;
@@ -36,7 +47,7 @@ export class Bridge extends TacticalGraphicsBase {
          * cursor down the middle of a line the symbol does not have.
          * @see parallelRailAnchors
          */
-        const drawn = parallelRailFrame(parallelRailAnchors(coords, coords.length >= 4 ? 4 : 3) ?? coords);
+        const drawn = parallelRailFrame(parallelRailAnchors(coords, coords.length >= 4 ? 4 : 3, previewGap(opts)) ?? coords);
         if (drawn) return drawn;
         return {centre: coords, half: opts?.radius || 20};
     }
