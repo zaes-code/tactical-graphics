@@ -488,6 +488,17 @@ const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
  * 271100 bridge, 271300 assault crossing, 271500 ford easy, 271600 ford difficult, and FM's
  * gap, which shares the bridge's generator and its picture. @see parallelRailAnchors
  */
+/**
+ * Whether this graphic is one of the two-rail crossings. @see RAIL_CROSSING_GRAPHICS
+ *
+ * Exported because a synthesised base has to know: their points 1 and 2 belong to the bar the
+ * operator drags and their point 3 to the far one, and which side that lands on is a fact of
+ * the plate rather than of whoever is laying the sample out. @see railCrossingBase
+ */
+export function drawsAsRailCrossing(name: TacticalGraphicName): boolean {
+    return RAIL_CROSSING_GRAPHICS.includes(name);
+}
+
 const RAIL_CROSSING_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,

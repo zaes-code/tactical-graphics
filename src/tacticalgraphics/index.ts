@@ -438,7 +438,7 @@ export {baseGeometryFor} from './core/render';
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
-export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, firePositionBase, frontEdgeBase, hairpinBase, normalizeDrawnBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
+export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, firePositionBase, frontEdgeBase, hairpinBase, normalizeDrawnBase, railCrossingBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
@@ -457,7 +457,7 @@ export type {DrawnAnchorFrame} from './core/drawnAnchors';
 export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
-export {ARC_ARROW_MIN_REACH, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
+export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
 export {carriesRectangleLength, groundMeters, rectangleAmplifiers, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
