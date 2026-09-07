@@ -17,6 +17,13 @@ the npm publish dates — when a version actually became installable.
 
 ## [4.0.0] — 2026-09-07
 
+> **What shipped to npm is the `v4.0.0` tag, which is `develop` at the time of publish and
+> not the version-bump commit.** Three pull requests landed between the bump and the publish
+> — the MapLibre sample sheet, a development-dependency audit, and the three-point base depth
+> — and all three are in the tarball people install. They are described below. The tag was
+> moved to the commit whose tree is byte-identical to the published package, so a checkout of
+> `v4.0.0` is the code npm serves.
+
 **Thirty-eight graphics were rebuilt on the anchor points their plates number, and APP-06
 line and area coverage closed.** The registry goes 293 → 317. The headline is not the new
 symbols but the old ones: a graphic whose dimension used to be a `size` or `radius`
@@ -173,6 +180,42 @@ not be read correctly by 3.4.0.
   `/openlayers` and three to `/maplibre`; **none were removed from any of the three.**
 
 ### Fixed
+
+- **The MapLibre sample sheet built its own bases, and built them wrongly.** Serialize and
+  restore always carried a complete bag, so a graphic drawn on one engine and opened on the
+  other was right — the fault only showed when the sheet was drawn *from* MapLibre, which is
+  what a user sees, since the app restores from it. Measured before the fix, **53 of 318
+  graphics came out a different shape on the two sheets**:
+
+  - five plates need two dimensions from a one-number drag, and MapLibre read the pair only
+    in its *draw handler*. A sheet, a restore and an import each arrived with a radius and no
+    length, so a flat 2 km default supplied the other half: 3 km x 461 km, an aspect of 176
+    where the symbol is about 1.7 (`CuedAcquisitionDoctrine`, `DefendedAreaEllipse`,
+    `LaunchAreaEllipse`, `ShipAreaOfInterestEllipse`, and `TargetAreaRectangular` 240802)
+  - eighteen rectangular zones took their width from whatever zoom the sweep was started at
+  - `RadarSearchDoctrine` was given a one-band range fan, which describes a different symbol
+  - a double `storedOrder` in **both** sheets reversed eight tip-first graphics; because both
+    carried it, the two sheets agreed with each other and no parity check could see it
+  - the centre symbol had been unreachable for cover, guard and screen for a release and a
+    half, while the follow tasks were projected twice and placed off the world
+
+- **An unsized rectangular zone was a sliver.** Its width came from a constant whose comment
+  claimed it was "what the drawn defaults come to at an ordinary zoom"; a drawn half-width is
+  a screen constant, so the share a drag actually produces is 0.229 at 240 px, 0.125 at 440
+  and 0.069 at 800. A twentieth is the answer for an 1,100 px drag, which nobody makes. An
+  unsized zone is now stated as **half as deep as it is long**.
+
+- **A synthesised three-point base was a bar with a nub.** The twenty-two graphics whose
+  points are a front edge and a distance across it — the block family, the retrogrades, both
+  passages, the explosives set — put point 3 at 0.275 of the edge, where the stem is the part
+  that says which task it is. Point 3 now stands off by the edge's own full length.
+
+  Stating it as a distance rather than a ratio exposed a second fault underneath: the across
+  was documented as working in lon/lat and in projected metres alike, which is true of the
+  positions and false of the distance. A degree of longitude is `cos(latitude)` of a degree of
+  latitude, so the two sheets drew different shapes from one constant, and the degree sheet
+  drew a different shape in every row — 0.275 deep at the equator against 1.037 at 75 degrees
+  north. A caller laying out in degrees now says so.
 
 - **A count is not a reading, and four defects proved it** — each in a graphic that matched
   the number of anchor points its plate states:
