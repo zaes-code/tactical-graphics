@@ -1330,6 +1330,13 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      */
     [TacticalGraphicName.AttackByFire]: 3,
     /*
+     * **Named even though it equals its stored count**, which this table usually omits. The
+     * reader previews a two-click sketch as four points now, and MapLibre asks the
+     * *normalized* sketch whether a draw is finished — so without this 152100's draw ended on
+     * its second click. @see sketchIsComplete, supportByFireAnchors
+     */
+    [TacticalGraphicName.SupportByFire]: 4,
+    /*
      * **Three clicks for every two-rail crossing**, whether it stores three points or four.
      * One rail is placed end to end and the third click sets how far the other sits across
      * it; a fourth point, where the plate numbers one, is wherever "parallel and the same

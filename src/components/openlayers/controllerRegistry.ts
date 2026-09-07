@@ -137,12 +137,12 @@ const line = (maxPts = 0) => (name: TacticalGraphicName, res: number) =>
  * `minVertices` is a *visual* floor, not an editing convenience: a fields-of-fire V stops
  * reading as one the moment its two segments straighten into a line.
  */
-const vertexLine = (maxPts: number, minVertices: number, anchorVertex?: number) => (name: TacticalGraphicName, res: number) => {
+const vertexLine = (maxPts: number, minVertices: number) => (name: TacticalGraphicName, res: number) => {
     const controller = new LineGraphicController(new LineGraphicBase(name, res), maxPts || undefined, name);
     // **`editStretches` is left to the constructor**, which reads the library's rule.
     // Forcing it true here contradicted that for the one graphic that wants vertex
     // handles *and* an inert body — `Fix` — and put the two engines back out of step.
-    return controller.enableVertexDragging(minVertices, anchorVertex);
+    return controller.enableVertexDragging(minVertices);
 };
 
 const block = (name: TacticalGraphicName, res: number, sizing: number) =>
@@ -206,8 +206,18 @@ const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
 // No maxPoints: an exfiltration route bends, so the user draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
 const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
-    // Three anchor points, each meaning something. @see GeometryService.createSCurve
-    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3, 0);
+    /*
+     * Three anchor points, each meaning something — **and none of them inert.**
+     *
+     * Point 1 was declared the anchor here, which made it refuse a reshape. 343700 reads
+     * "point 1 defines the **end of the straight line portion** of the graphic", so that was
+     * the one grip that could not change the run it defines: the obstacle bypasses' defect
+     * exactly, one graphic over. The plate names no centre of the *symbol* — its point 2 is
+     * "the centre of the two 90 degree circular arcs", a construction detail rather than an
+     * origin — so nothing here is inert and the portable table says nothing about it.
+     * @see GeometryService.createSCurve, anchorVertex
+     */
+    new LineGraphicController(new Exfiltrate(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
 /*
  * **Four placed points, as 341900 names them** — the two arrowhead tips and the two arrow
@@ -698,8 +708,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // anchor points and nothing else, so their draw stops at two.
     // Four anchor points, each meaning something different, so every one is draggable.
     // Handle 0 is the circle's centre and moves the whole graphic.
-    [TacticalGraphicName.Capture]:                          vertexLine(4, 4, 0),
-    [TacticalGraphicName.Seize]:                            vertexLine(4, 4, 0),
+    [TacticalGraphicName.Capture]:                          vertexLine(4, 4),
+    [TacticalGraphicName.Seize]:                            vertexLine(4, 4),
     /*
      * **`vertexLine`, so the handle moves its vertex instead of scaling the symbol.**
      *
@@ -716,7 +726,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.FollowAndAssume]:                  vertexLine(2, 2),
     [TacticalGraphicName.FollowAndSupport]:                 vertexLine(2, 2),
     // Centre first, then the two ends -- the order the standard numbers them.
-    [TacticalGraphicName.Escort]:                           vertexLine(3, 3, 0),
+    [TacticalGraphicName.Escort]:                           vertexLine(3, 3),
     /*
      * **Four placed points, each with a grip.** 343300 names four anchor points and this was
      * a one-click drop that laid all four out from a single centre, so the operator stated
@@ -724,16 +734,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * take. (User's call, 2026-09-06.) @see Demonstration
      */
     // Three clicks; the fourth point is derived and inert. @see hairpinAnchors, ANCHOR_VERTEX
-    [TacticalGraphicName.Demonstration]:                    vertexLine(3, 3, 3),
-    [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4, 0),
-    [TacticalGraphicName.Recover]:                          vertexLine(4, 4, 0),
+    [TacticalGraphicName.Demonstration]:                    vertexLine(3, 3),
+    [TacticalGraphicName.Evacuate]:                         vertexLine(4, 4),
+    [TacticalGraphicName.Recover]:                          vertexLine(4, 4),
     [TacticalGraphicName.DecisionLine]:                     line(),
     [TacticalGraphicName.MobilityCorridor]:                 line(),
     // Centre, then the two radii. Handle 0 is the centre and moves the whole zone.
-    [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3, 0),
+    [TacticalGraphicName.MinimumSafeDistanceZone]:          vertexLine(3, 3),
     // An even number of points, half per ring, so the draw cannot be capped.
     // Six was the old pair traced end to end. Zone 1 alone is a polygon, so three.
-    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 3, 0),
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: vertexLine(0, 3),
     /*
      * **Three anchor points, and every one of them reshapes.**
      *
@@ -771,7 +781,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.TacticalFix]:                              vertexLine(2, 2),
     // The apex is vertex 0: APP-06 140500 numbers this symbol from its vertex, and the
     // base follows the standard now. It was 1 while the legs were drawn first. @see anchorVertex
-    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3, 0),
+    [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>
@@ -915,7 +925,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * its own origin. The holder and controller it used before 2026-09-04 are gone with the
      * SVG badge they drove. @see anchorVertex
      */
-    [TacticalGraphicName.SearchArea]:                       vertexLine(3, 3, 0),
+    [TacticalGraphicName.SearchArea]:                       vertexLine(3, 3),
 
     // ── Forms of maneuver (movement arrows) ────────────────────────────────
     [TacticalGraphicName.MovementToContact]:  missionTask,

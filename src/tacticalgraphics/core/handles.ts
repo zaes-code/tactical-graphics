@@ -1291,6 +1291,33 @@ const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
      */
     [TacticalGraphicName.Demonstration]: 3,
     [TacticalGraphicName.ReliefInPlace]: 3,
+    /*
+     * **Six graphics whose point 1 is the centre their figure is built about.**
+     *
+     * Their plates say so outright — 343000 capture, 342300 seize, 344500 evacuate and
+     * 344600 recover all read *"Point 1 defines the centre of the circle. Point 2 defines
+     * the radius of the circle"*; 343600 escort, *"Point 1 defines the centre of the
+     * graphic"*; and 272100's, *"the centre point defines the centre of the symbol. Points
+     * 1 and 2 define the radii"*. A reshape that dragged the origin would bend the symbol
+     * about the point the operator thinks of as its middle, which is `FieldsOfFire`'s
+     * reason exactly.
+     *
+     * **They were stated in the OpenLayers registry instead**, as a third argument to
+     * `vertexLine`, and this table has never listed them — so MapLibre, which reads nothing
+     * else, let all six drag their centre while OpenLayers refused. Same shape of defect as
+     * the obstacle bypasses on 2026-09-06, opposite direction.
+     *
+     * 272101's multiple-strike zone declared one there too and is deliberately absent here:
+     * its rule numbers no centre at all — *"add as many pairs of points as needed […] points
+     * 1 through N/2 define"* one polygon — so its point 1 is a ring vertex like any other.
+     * @see anchorVertex, ai/conventions.md "A symbology fact never lives in a holder"
+     */
+    [TacticalGraphicName.Capture]: 0,
+    [TacticalGraphicName.Seize]: 0,
+    [TacticalGraphicName.Evacuate]: 0,
+    [TacticalGraphicName.Recover]: 0,
+    [TacticalGraphicName.Escort]: 0,
+    [TacticalGraphicName.MinimumSafeDistanceZone]: 0,
 };
 
 /**
