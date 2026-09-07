@@ -26,6 +26,9 @@ import type {Feature, MultiPoint, Position} from 'geojson';
 import {
     anchorVertex,
     baseVertexCount,
+    drawnAnchors,
+    dropSizePx,
+    usesDrawnAnchors,
     handlesAreInert,
     listTacticalGraphicNames,
     normalizeDrawnBase,
@@ -47,7 +50,7 @@ describe('a graphic whose handles are inert', () => {
         expect(inert).toEqual([NAME]);
     });
 
-    it('stores the three points its family uses', () => {
+    it('stores three points', () => {
         expect(baseVertexCount(NAME)).toBe(3);
         expect(normalizeDrawnBase(NAME, CLICKS, RES)).toHaveLength(3);
     });
@@ -77,16 +80,20 @@ describe('a graphic whose handles are inert', () => {
         expect((drawn as {coordinates: Position[][]}).coordinates).toHaveLength(4);
     });
 
+    it('is dropped on one click and expands to its three points', () => {
+        // Same picture 3.4.0 shipped, dropped whole at a default size. What changed is the
+        // base it writes: the three anchor points its plate names, not the dropped centre.
+        expect(dropSizePx(NAME)).toBe(100);
+        expect(usesDrawnAnchors(NAME)).toBe(true);
+        const anchors = drawnAnchors(NAME, {center: [12, 41], size: 80_000})!;
+        expect(anchors).toHaveLength(3);
+    });
+
     it('does not enable vertex dragging on OpenLayers', () => {
-        /*
-         * The engine-side half. `dragsVertices` is what routes a pointer-down to the Modify
-         * interaction; without it the base is not modifiable and the handle feature is the
-         * inert one, which paints grey and sets the flag the manager reads to refuse a grab.
-         * @see LineGraphicBase, createInertHandleFeature
-         */
-        const controller = getController(NAME, RES) as unknown as {dragsVertices?: boolean; graphic: {handles: {get(k: string): unknown}}};
+        // `dragsVertices` is what routes a pointer-down to the Modify interaction. A dropped
+        // graphic never turns it on, so the base is not modifiable to begin with.
+        const controller = getController(NAME, RES) as unknown as {dragsVertices?: boolean};
         expect(controller.dragsVertices).toBeFalsy();
-        expect(controller.graphic.handles.get('inert')).toBe(true);
     });
 
     it('is not the same thing as a single inert vertex', () => {

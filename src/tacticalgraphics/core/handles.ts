@@ -176,6 +176,9 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
  * restore shim and a test all ask the same question.
  */
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    // 271204 is dropped on one click and stores the three points its plate names, derived
+    // from the drop's centre and size. @see roadblockAnchors, drawnAnchors
+    TacticalGraphicName.RoadblockCompleteExecuted,
     /*
      * **141700 left on 2026-09-06**, the way 344000 pursuit did. This list routes the centre /
      * size / rotation machinery a graphic needs when its points are read back as a *frame*,
@@ -796,6 +799,13 @@ export function rotationAnchor(
      * itself off the ground it was placed on.
      */
     if (name === TacticalGraphicName.Ambush && positions.length >= 2) return positions[1];
+    /*
+     * **271204 scales about point 3** — the crossing, which is the thing on the ground the
+     * symbol marks. Its points 1 and 2 are the extremes of its own axis, so their midpoint is
+     * the figure's centre, and scaling about that would slide the crossing off the road it was
+     * placed against. The same point its rotation pivots on. @see rotationPivot
+     */
+    if (name === TacticalGraphicName.RoadblockCompleteExecuted && positions.length >= 3) return positions[2];
 
     /*
      * **Cover, guard and screen turn and scale about their middle.**
@@ -896,6 +906,19 @@ export function rotationPivot(
     name?: TacticalGraphicName,
 ): [number, number] {
     if (name === TacticalGraphicName.Turn || name === TacticalGraphicName.TacticalTurn) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 3) return positions[2];
+    }
+    /*
+     * **271204 turns and scales about point 3**, the crossing.
+     *
+     * Its points 1 and 2 are the two extremes of the symbol's own axis, so their midpoint is
+     * the figure's centre — but the crossing is the thing on the ground the symbol marks, and
+     * it is the one anchor an operator would place against a road. Scaling about the centre
+     * would slide the crossing off it. (User's call, 2026-09-07: "resize and rotate icons can
+     * use point 3 as pivot".) @see roadblockAnchors
+     */
+    if (name === TacticalGraphicName.RoadblockCompleteExecuted) {
         const positions = flattenPositions(geometry.coordinates);
         if (positions.length >= 3) return positions[2];
     }
