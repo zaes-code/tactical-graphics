@@ -15,6 +15,7 @@ import type {Position} from 'geojson';
 import * as turf from './turf';
 import {
     RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+    rectangleDefaultHalfWidth,
     axisFromRectangleRing,
     constrainRectangleAxis,
     levelRectangleAxis,
@@ -141,6 +142,37 @@ describe('the rectangle the axis and the width build', () => {
         // At 20 px the zone came out a letterbox and the width handle sat almost on the
         // axis. Its own number, read by both engines. (User's call, 2026-08-27.)
         expect(RECTANGLE_DEFAULT_HALF_WIDTH_PX).toBeGreaterThan(20);
+    });
+
+    /**
+     * **The un-supplied width is calibrated against the drawn one, and the two used to
+     * disagree by a factor of two and a half.**
+     *
+     * `rectangleDefaultHalfWidth` is the answer where there is no zoom to spend a screen size
+     * at — a sample sheet, a raw-GeoJSON restore — and its share is meant to be what a drag
+     * produces. A drawn half-width is a screen constant, so the share a drag produces is
+     * `RECTANGLE_DEFAULT_HALF_WIDTH_PX` over the drag's length in pixels: measured in the
+     * running app, 0.229 at a 240 px drag, 0.125 at 440 and 0.069 at 800. The old twentieth
+     * was the answer for a drag of about 1,100 px, which nobody makes — so every sheet drew a
+     * sliver ten times as long as it was deep.
+     *
+     * Asserted as the *range a real drag spans* rather than as the literal, because the
+     * literal is two constants divided and pinning it here would only restate the source.
+     */
+    it('defaults to a width a drag could actually have produced', () => {
+        const axis = 1_000_000;
+        const share = rectangleDefaultHalfWidth(axis) / axis;
+        // The span between an 800 px drag and a 240 px one — every drag anyone makes.
+        expect(share).toBeGreaterThan(RECTANGLE_DEFAULT_HALF_WIDTH_PX / 800);
+        expect(share).toBeLessThan(RECTANGLE_DEFAULT_HALF_WIDTH_PX / 240);
+    });
+
+    it('leaves the default box a shape rather than a sliver', () => {
+        const axis = 1_000_000;
+        // Length over depth. Ten to one is what the twentieth gave, and it is what the user
+        // reported; anything under six reads as a box with room for the amplifiers that
+        // stack inside it.
+        expect(axis / (2 * rectangleDefaultHalfWidth(axis))).toBeLessThan(6);
     });
 
     it('round-trips through the ring a pre-conversion file holds', () => {
