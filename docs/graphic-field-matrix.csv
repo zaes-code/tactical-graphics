@@ -257,6 +257,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "restrictive fire line",RestrictiveFireLine,"FM 1-02.2 + APP-06",260500,Y,,Y,,Y,Y,Y,Y,,,,,,,,,,,,,
 "retain",Retain,"FM 1-02.2 + APP-06",151205,,,,,,,,,,,,,,,,,,Y,,,
 "retirement",Retirement,"FM 1-02.2 + APP-06",342000,,,,,Y,,,,,,,,,,,,,,,,
+"Roadblock Complete (Executed)",RoadblockCompleteExecuted,"FM 1-02.2 + APP-06",271204,,,,,Y,,,,,,,,,,,,,,,,
 "route",Route,"FM 1-02.2 + APP-06",330500,Y,,,,Y,Y,,,,Y,,,,,,,,,,,
 "safe lane",SafeLane,"FM 1-02.2 + APP-06",170400,Y,,,,Y,,Y,Y,,,,,,Y,Y,Y,,,,,
 "safe lane or gap",SafeLaneOrGap,"APP-06",290600,Y,,,,Y,,Y,Y,,,,,,,,Y,,,,,

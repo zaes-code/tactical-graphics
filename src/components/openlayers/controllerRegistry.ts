@@ -848,7 +848,19 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * @see RoadblockComplete for how the three points are read.
      */
     // Excluded — see ai/excluded-graphics.md
-    // [TacticalGraphicName.RoadblockCompleteExecuted]: demolition,
+    /*
+     * **Point-dropped, as 3.4.0 shipped it.** 271204's own construction is unsettled — its
+     * Draw Rules cell is empty and inherits 271201's centreline-and-width rule, so the
+     * Template is the only statement of how three points lay four strokes out, and it was
+     * read three ways in one session. The three-point form stays withheld; this is the
+     * picture that shipped, restored so consumers keep the enum member.
+     * (User's call, 2026-09-07: "we can re-add it as it was on 3.4.0".)
+     *
+     * Point-dropped means the anchor is not individually draggable: the operator moves,
+     * rotates and resizes the whole symbol, which is the contract asked for.
+     * @see ai/excluded-graphics.md
+     */
+    [TacticalGraphicName.RoadblockCompleteExecuted]: pointDrop,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),

@@ -642,7 +642,7 @@ const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
     // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.RoadblockCompleteExecuted,
+    TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
 /**

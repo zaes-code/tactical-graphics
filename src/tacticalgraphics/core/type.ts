@@ -1073,7 +1073,7 @@ export enum TacticalGraphicName {
     // points lay four strokes out — and three readings of it produced three different
     // pictures. Switched off until the construction is settled rather than shipping a
     // symbol we are guessing at. (User's call, 2026-09-05.)
-    // RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
+    RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
     AntiTankDitchUnderConstruction = 'AntiTankDitchUnderConstruction',
     AntiTankDitchCompleted = 'AntiTankDitchCompleted',
     AntiTankDitchReinforcedWithMines = 'AntiTankDitchReinforcedWithMines',
@@ -1375,7 +1375,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
     // Excluded — see ai/excluded-graphics.md
-    // [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 'Explosives, State of Readiness 2 (Armed but Passable)',

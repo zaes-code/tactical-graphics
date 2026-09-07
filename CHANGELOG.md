@@ -21,8 +21,8 @@ symbols but the old ones: a graphic whose dimension used to be a `size` or `radi
 amplifier — a number nobody could see and nowhere to put it — now has the operator place
 the point APP-06 gives it.
 
-**This is a major release for three reasons**, listed under *Removed* and *Changed* below:
-two enum members are gone, and one exported method lost a parameter. A fourth thing is not
+**This is a major release for two reasons**, listed under *Removed* and *Changed* below:
+one enum member is gone, and one exported method lost a parameter. A fourth thing is not
 a breaking change but is why the major matters — **54 graphics changed how many points
 their base stores**, so this version writes a different file than 3.4.0 did. Files written
 by 3.4.0 open correctly here and that is pinned by a new suite; files written *here* will
@@ -36,11 +36,6 @@ not be read correctly by 3.4.0.
   had no entity code. `FortifiedPosition` is the survivor and is recorded as being in both
   publications. **A consumer referencing the removed member will not compile, and saved
   data naming it will not restore.**
-
-- **`TacticalGraphicName.RoadblockCompleteExecuted`** — switched off, not deleted in
-  spirit: its plate reading is unsettled and drawing a guess is worse than drawing nothing.
-  The member is commented out in `core/type.ts` with the reason beside it, which is the same
-  treatment the other deliberate exclusions get. Same consumer impact as above.
 
 ### Changed
 
@@ -101,6 +96,16 @@ not be read correctly by 3.4.0.
   `npm run gen:field-matrix` and `npm run check:field-matrix` are the two new scripts.
 
 ### Added
+
+- **`RoadblockCompleteExecuted` is back, as the picture 3.4.0 shipped.** It had been switched
+  off mid-branch: 271204's Draw Rules cell is empty, so the row inherits 271201's
+  centreline-and-width rule and the Template is the only statement of how three points lay
+  four strokes out — read three ways in one session, three different pictures. The
+  three-point construction stays withheld; what is restored is the point-dropped symbol that
+  shipped, so the enum member a consumer may hold keeps working while the reading is settled.
+  Its anchor is not individually draggable: the operator moves, rotates and resizes the whole
+  graphic. Its tracker row still reads `In UI = N` for shape and handles, so it is listed
+  **upcoming** rather than counted as capability. (User's call, 2026-09-07.)
 
 - **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics
   join the registry: the nine bearing lines and both navigational lines, nine maritime areas
