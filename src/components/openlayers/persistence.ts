@@ -65,14 +65,21 @@ import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import {LineString, Point, Polygon} from 'ol/geom';
 import type {Coordinate} from 'ol/coordinate';
-import type {Feature as GeoJSONFeature, FeatureCollection} from 'geojson';
+import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojson';
 import {
     applyAmplifierAliases,
+    migrateRetiredGraphic,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
     TacticalGraphicName,
     usesDrawnAnchors,
+    baseGeometryFor,
+    drawnAnchors,
+    toSnapshot,
+    SNAPSHOT_VERSION,
+    snapshotVersionOf,
+    type TacticalGraphicsSnapshot,
 } from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
@@ -91,17 +98,26 @@ import {
     writeGraphicProperties,
 } from './graphicProperties';
 
-/** Bumped when the snapshot shape changes in a way a reader must notice. */
-export const SNAPSHOT_VERSION = 1;
+/*
+ * **The file format moved to the library**, so MapLibre can stamp the same version without
+ * importing across the renderer boundary. Re-exported here because this module's public
+ * surface has carried it since 1.3.0 and consumers import it from the `/openlayers` entry.
+ * @see core/snapshot.ts
+ */
+export {SNAPSHOT_VERSION};
 
 /** Map projection the OL features live in. Snapshots are written in 4326. */
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
 
-/** A GeoJSON FeatureCollection plus the version of the layout its properties use. */
-export interface TacticalGraphicsSnapshot extends FeatureCollection {
-    tacticalGraphicsVersion: number;
-}
+/*
+ * The snapshot type is the library's too, and **its version field is optional** — which is
+ * the honest shape for a value a *reader* takes. Files written before the stamp was shared
+ * between the engines carry no version, and refusing them would refuse collections that are
+ * structurally identical to ones this library wrote. `snapshotVersionOf` supplies the
+ * default. @see core/snapshot.ts
+ */
+export type {TacticalGraphicsSnapshot};
 
 /** One graphic that could not be restored, and why. */
 export interface RestoreFailure {
@@ -113,6 +129,16 @@ export interface RestoreFailure {
 export interface RestoreReport {
     restored: number;
     failed: RestoreFailure[];
+    /**
+     * The version the file declared, or {@link SNAPSHOT_VERSION} where it declared none.
+     *
+     * **A missing version is not an invalid file.** Every MapLibre export up to 2026-09-04
+     * carried none — the stamp lived in this module, which MapLibre cannot import — and a
+     * host assembling a collection by hand from the documented property carries none
+     * either. Both are structurally identical to what this engine writes, so they are read,
+     * and the report says what was assumed rather than leaving the caller to guess.
+     */
+    version: number;
 }
 
 export interface SerializeOptions {
@@ -128,7 +154,33 @@ export interface SerializeOptions {
 const format = new GeoJSON();
 
 /** Keys `writeGraphicProperties` merges in that are not amplifiers. */
-const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'bend', 'mirrored'] as const;
+export const GEOMETRY_KEYS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'bend', 'mirrored'] as const;
+
+/**
+ * The geometry inputs out of a stamped bag — **every key `GEOMETRY_KEYS` writes**.
+ *
+ * A function rather than an object literal at the call site, and exported, because the
+ * literal it replaces quietly omitted `length` and nothing could see it: `GraphicGeometryState`
+ * is a `Pick` of optional fields, so a missing key is a valid value of the type and the
+ * compiler has no opinion. The restore then always fell through to `radius`, which is fine
+ * for a file OpenLayers wrote — that engine stamps both — and wrong for one MapLibre wrote,
+ * which stamps `length` and no `radius`. A rectangular target came back at the *view
+ * resolution* instead of its own size. @see restoreTacticalGraphics
+ *
+ * `persistence.test.ts` walks `GEOMETRY_KEYS` against this, so the next key added to the
+ * write side cannot be dropped from the read side.
+ */
+export function readGeometryState(bag: Record<string, unknown>): GraphicGeometryState {
+    return {
+        radius: bag.radius as number | undefined,
+        decorationSize: bag.decorationSize as number | undefined,
+        width: bag.width as number | undefined,
+        length: bag.length as number | undefined,
+        rotation: bag.rotation as number | undefined,
+        bend: bag.bend as number | undefined,
+        mirrored: bag.mirrored as boolean | undefined,
+    };
+}
 
 /**
  * Splits a stamped bag back into the amplifiers a `setLabel` expects. `name` and the
@@ -237,7 +289,7 @@ export function serializeTacticalGraphics(
         }
     }
 
-    return {type: 'FeatureCollection', features, tacticalGraphicsVersion: SNAPSHOT_VERSION};
+    return toSnapshot(features);
 }
 
 /**
@@ -270,6 +322,36 @@ export function applyRestoredGeometry(
         if (axis) {
             base = new Feature(new LineString([fromLonLat(axis.p1 as Coordinate), fromLonLat(axis.p2 as Coordinate)]));
             if (state.width === undefined) state = {...state, width: Math.round(axis.halfWidth * 2)};
+        }
+    }
+
+    /*
+     * **A graphic that used to be dropped, saved as the single point it was dropped on.**
+     *
+     * The shim below does this for the frame-editing holders, and it is keyed on
+     * `MissionTaskController` — so a graphic that leaves that family takes its own legacy
+     * files with it. 344000 pursuit did exactly that on 2026-09-06, when it was made to edit
+     * as the cane arrow it draws: every pursuit saved before then is a `Point` plus a radius
+     * and a rotation, and it silently stopped upgrading.
+     *
+     * Done here instead, before any controller branch, because the question is about the
+     * *base* and not about who holds it: a graphic whose base is a `LineString` now, handed a
+     * `Point`, is a file from before its conversion. `drawnAnchors` is the library's own
+     * layout for each of them, which is the same function the holders wrote their points with
+     * — so the upgraded symbol is the one that was saved, not an approximation of it.
+     * @see drawnAnchors, baseGeometryFor
+     */
+    const restoredGeometry = base.getGeometry();
+    if (restoredName && restoredGeometry instanceof Point && baseGeometryFor(restoredName) === 'LineString') {
+        const anchors = drawnAnchors(restoredName, {
+            center: toLonLat(restoredGeometry.getCoordinates() as Coordinate) as Position,
+            size: state.radius ?? 0,
+            rotation: state.rotation ?? 0,
+            bend: state.bend,
+            mirrored: state.mirrored,
+        });
+        if (anchors?.length) {
+            base = new Feature(new LineString(anchors.map((c: Position) => fromLonLat(c as Coordinate))));
         }
     }
 
@@ -316,6 +398,18 @@ export function applyRestoredGeometry(
         // TurnGraphicBase` test: envelopment is a sibling of that class, not a subclass,
         // so the old check skipped it and every saved envelopment restored at the
         // default bend. @see TurnGraphicBase.setBend
+        /*
+         * **200700's four numbers, before the frame is rebuilt.**
+         *
+         * A point-anchored graphic restores through `updateGeom` rather than
+         * `setBaseFeature`, so a holder whose shape is stated as values rather than as a
+         * `radius` and a `rotation` has to be handed them here. Without it a saved radar
+         * search doctrine came back at whatever size the fallback produced — caught by
+         * `manipulateRoundTrip`, which resizes before saving. @see RangeFanGraphicBase.radar
+         */
+        const stated = handler.graphic as {adoptStatedShape?: (s: GraphicGeometryState) => void};
+        stated.adoptStatedShape?.(state);
+
         const bendable = handler.graphic as {setBend?: (value: number) => void};
         if (state.bend !== undefined) bendable.setBend?.(state.bend);
         // Arrowhead size, for the holders that carry one. Seeded from the drawing
@@ -425,7 +519,7 @@ export function restoreTacticalGraphics(
     manager: TacticalGraphicsManager,
     snapshot: FeatureCollection,
 ): RestoreReport {
-    const report: RestoreReport = {restored: 0, failed: []};
+    const report: RestoreReport = {restored: 0, failed: [], version: snapshotVersionOf(snapshot)};
     if (!snapshot || !Array.isArray(snapshot.features)) {
         report.failed.push({error: 'not a GeoJSON FeatureCollection'});
         return report;
@@ -438,7 +532,23 @@ export function restoreTacticalGraphics(
 
         // A snapshot is exactly the case the alias exists for: this bag may have been
         // written before 3.0.0 renamed `label` and `secondId`. @see applyAmplifierAliases
-        const bag = applyAmplifierAliases((props.tacticalGraphic ?? {}) as Record<string, unknown>);
+        let bag = applyAmplifierAliases((props.tacticalGraphic ?? {}) as Record<string, unknown>);
+        let source = raw;
+        /*
+         * **And this bag may name a graphic that no longer exists.** `FightingPosition` was
+         * retired into `FortifiedPosition` — the same bracket under FM's name for it — and
+         * the two drew from different point models, so the record needs its geometry
+         * rewritten and not just its name. One direction, applied here so a file written
+         * before the retirement opens rather than reporting an unknown graphic.
+         * @see migrateRetiredGraphic
+         */
+        const migrated = migrateRetiredGraphic(bag as never, raw.geometry);
+        if (migrated) {
+            bag = migrated.properties as unknown as Record<string, unknown>;
+            // Parsed from the rewritten record, not the saved one: the survivor's base is a
+            // front edge where the retired graphic filed a centre.
+            source = {...raw, geometry: migrated.geometry, properties: {...props, tacticalGraphic: bag}};
+        }
         const name = (bag.name ?? props.graphicName) as TacticalGraphicName | undefined;
         const symbolId = (props.symbolId as string) || crypto.randomUUID();
 
@@ -465,14 +575,7 @@ export function restoreTacticalGraphics(
                 f.set('symbolId', symbolId);
             });
 
-            const state: GraphicGeometryState = {
-                radius: bag.radius as number | undefined,
-                decorationSize: bag.decorationSize as number | undefined,
-                width: bag.width as number | undefined,
-                rotation: bag.rotation as number | undefined,
-                bend: bag.bend as number | undefined,
-                mirrored: bag.mirrored as boolean | undefined,
-            };
+            const state = readGeometryState(bag);
 
             // Seed the base geometry onto the holder's *own* base feature before anything
             // else. Two reasons, and they pull in opposite directions:
@@ -487,7 +590,7 @@ export function restoreTacticalGraphics(
             // Seeding first satisfies both. Writing into the holder's existing feature
             // rather than swapping in the one just parsed also keeps the flags the holder
             // put there — `role`, the deliberately-false `base`, `drawingResolution`.
-            const incoming = format.readFeature(raw, {
+            const incoming = format.readFeature(source, {
                 dataProjection: GEOJSON_PROJECTION,
                 featureProjection: MAP_PROJECTION,
             }) as Feature;

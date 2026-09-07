@@ -64,7 +64,11 @@ describe('the rule behind the answer', () => {
         TacticalGraphicName.Block,
         TacticalGraphicName.Withdraw,
         TacticalGraphicName.LinearTarget,
-        TacticalGraphicName.Abatis,
+        // **Abatis left this list on 2026-09-05**, when it was uncapped to match 280100's
+        // "additional points can be defined to extend the line". A free-form route has
+        // vertices to grab, so it takes the same answer as every other obstacle line in
+        // its table — the wire obstacles and both anti-tank ditches — rather than the
+        // fixed-vertex rule. @see BASE_VERTEX_COUNT
     ])('%s stretches because it has a vertex count', name => {
         expect(baseVertexCount(name)).toBeDefined();
         expect(editStretches(name)).toBe(true);

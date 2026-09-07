@@ -45,7 +45,28 @@ type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[]
 const LABEL_OFFSET_PX = 8;
 /** Screen-pixel clearance between a mineline's end and the letter beyond it. */
 const MINELINE_LABEL_GAP_PX = 10;
-/** Screen-pixel clearance between a mine cluster's dome and the ring around it. */
+/**
+ * How far a mine cluster's planned ring stands off its dome, as a multiple of the dome's
+ * own radius.
+ *
+ * **A ratio, because the symbol is one.** The dome is half the chord and nothing about it
+ * is a screen size, so a ring held a fixed number of pixels away comes apart from it the
+ * moment the graphic is resized: the same symbol drawn four times as large wore a
+ * standoff a quarter as deep, and at the sizes an operator actually draws one the ring
+ * grazed the arc. Measured off 290400's own Planned Example — a fit of the black ring
+ * against the green dome gives 1.16 — so the standard states the proportion too, in the
+ * only place it can.
+ */
+const MINE_CLUSTER_RING_RATIO = 1.15;
+
+/**
+ * The least clearance between a mine cluster's dome and its ring, in screen pixels.
+ *
+ * A floor, not the rule: below about a 67-pixel dome the proportional standoff closes to
+ * less than this, and two dash patterns that near each other read as one ragged arc.
+ * The same shape of rule as a repeating decoration's minimum — the proportion governs,
+ * and legibility puts a floor under it.
+ */
 const MINE_CLUSTER_RING_GAP_PX = 10;
 
 /** The path a line graphic was drawn along. */
@@ -217,6 +238,47 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
 }
 
 /**
+ * A planned mine cluster's ring: the dome itself, pushed outward from the chord's midpoint
+ * and closed by its own reflection in the chord.
+ *
+ * **Not a circle, because the dome is not one.** The dome is generated geodesically — real
+ * distances on the ground, which is what the symbol means — and Mercator does not carry a
+ * geodesic circle to a circle. It is within a tenth of a percent for a cluster a few tens
+ * of kilometres across and out by 9% at 38°N once the chord runs to a thousand miles, at
+ * which point a perfect ring drawn around a squashed dome reads as two symbols. Scaling
+ * the dome's own points takes the distortion with it, so the standoff is even at every
+ * latitude and size, and where the projection *does* make the dome a circle — which is
+ * every size anyone draws one at — this is the same circle as before, to the pixel.
+ *
+ * The push is one factor for the whole curve: the ratio, or whatever larger factor the
+ * floor demands at the dome's tightest point. @see MINE_CLUSTER_RING_RATIO
+ */
+function domeRing(chord: ProjectedPosition[], dome: ProjectedPosition[], resolution: number): ProjectedPosition[] | undefined {
+    const [c0, c1] = chord;
+    const mid: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
+    const radii = dome.map(p => Math.hypot(p[0] - mid[0], p[1] - mid[1]));
+    const tightest = Math.min(...radii);
+    if (!(tightest > 0)) return undefined;
+
+    const push = Math.max(MINE_CLUSTER_RING_RATIO, 1 + (MINE_CLUSTER_RING_GAP_PX * resolution) / tightest);
+    const out = dome.map(p => [mid[0] + (p[0] - mid[0]) * push, mid[1] + (p[1] - mid[1]) * push] as ProjectedPosition);
+
+    // The far half is the near half reflected in the chord — the axis a ring centred on the
+    // chord's midpoint is symmetric about, whatever the projection did to the dome.
+    const len = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) || 1;
+    const u: ProjectedPosition = [(c1[0] - c0[0]) / len, (c1[1] - c0[1]) / len];
+    const mirrored = out.map(p => {
+        const dx = p[0] - mid[0];
+        const dy = p[1] - mid[1];
+        const along = dx * u[0] + dy * u[1];
+        const across = dx * -u[1] + dy * u[0];
+        return [mid[0] + along * u[0] + across * u[1], mid[1] + along * u[1] - across * u[0]] as ProjectedPosition;
+    }).reverse();
+
+    return [...out, ...mirrored.slice(1)];
+}
+
+/**
  * APP-06 290400 mine cluster: the dome and its chord, both broken.
  *
  * **Always dashed, whatever the status.** The row's own note settles it — *"the dashed
@@ -228,12 +290,14 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
  * own dashes spent, a planned mine cluster has nothing left to say it with, so it says it
  * by wearing a dash-dot ring. @see plannedStatusRing
  *
- * **The ring is concentric with the dome, standing ten pixels off it.** Centre on the
- * chord's midpoint, radius the dome's radius plus {@link MINE_CLUSTER_RING_GAP_PX} — so
- * the two cannot come apart under a rotate or a resize, because both are read from points
- * 1 and 2. The generic bounding-box ring left a wide gap above the apex and a wider one
- * below the chord, which read as two symbols rather than one; drawn exactly on the dome
- * the two dash patterns interleave into a ragged arc. (User's call, 2026-08-27.)
+ * **The ring is the dome itself, pushed outward from the chord's midpoint.** It stands off
+ * by {@link MINE_CLUSTER_RING_RATIO} of the dome's own radius, so the two cannot come apart
+ * under a rotate, a resize, a zoom *or* a change of latitude — every term is read from the
+ * line work the generator produced. @see domeRing for why it is not drawn as a circle
+ *
+ * The generic bounding-box ring left a wide gap above the apex and a wider one below the
+ * chord, which read as two symbols rather than one; drawn exactly on the dome the two dash
+ * patterns interleave into a ragged arc. (User's call, 2026-08-27.)
  */
 export function mineClusterPaint(): ProtectionPaint {
     return (feature, context) => {
@@ -244,17 +308,14 @@ export function mineClusterPaint(): ProtectionPaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
         }];
 
-        // Part 0 is the chord — points 1 and 2 as drawn. @see MineCluster
-        const chord = geometry.coordinates[0];
-        const circle = chord && chord.length >= 2
-            ? {
-                center: [(chord[0][0] + chord[1][0]) / 2, (chord[0][1] + chord[1][1]) / 2] as ProjectedPosition,
-                radius: Math.hypot(chord[1][0] - chord[0][0], chord[1][1] - chord[0][1]) / 2
-                    + MINE_CLUSTER_RING_GAP_PX * context.resolution,
-            }
+        // Part 0 is the chord — points 1 and 2 as drawn — and part 1 the dome on it.
+        // @see MineCluster
+        const [chord, dome] = geometry.coordinates;
+        const path = chord?.length >= 2 && dome?.length >= 2
+            ? domeRing(chord, dome, context.resolution)
             : undefined;
 
-        const ring = plannedStatusRing(paints, feature, context, circle);
+        const ring = plannedStatusRing(paints, feature, context, path);
         if (ring) paints.push(ring);
         return paints;
     };

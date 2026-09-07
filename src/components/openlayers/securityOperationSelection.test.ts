@@ -75,14 +75,22 @@ describe.each(OPERATIONS)('%s', name => {
         expect(new Set(ids)).toEqual(new Set(['sym-1']));
     });
 
-    it('draws no handles — there is nothing to drag', () => {
-        // Every point but the two the operator drew is derived, and dragging one of those
-        // alone would break the symmetry the symbol is built on. Move and resize only.
+    it('draws a handle on each of its four anchor points', () => {
+        /*
+         * **The reversal.** It published none until 2026-09-06, because the second arm was
+         * mirrored from the first and dragging any one point alone would have broken the
+         * symmetry the symbol was built on — move and resize only.
+         *
+         * 342201's Size/Shape cell asks for the opposite: *"The length and orientation of
+         * the arrows can vary independently."* A mirrored pair cannot vary independently, so
+         * all four anchor points are placed now and each is grabbable.
+         * @see securityOperationAnchors
+         */
         const handler = build(name);
         const handlePoints = handler.getFeatures()
             .filter(f => f.get('role') === 'handle')
             .flatMap(f => (f.getGeometry() as unknown as {getCoordinates(): number[][]})?.getCoordinates?.() ?? []);
-        expect(handlePoints).toHaveLength(0);
+        expect(handlePoints).toHaveLength(4);
     });
 
     it('carries the graphic"s amplifiers on the feature that draws the symbol', () => {

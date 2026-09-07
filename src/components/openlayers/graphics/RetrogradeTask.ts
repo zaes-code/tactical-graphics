@@ -1,13 +1,15 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {getLabel, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getLabel, getPaintFunction, TacticalGraphicName} from '@zaes/tactical-graphics';
 import Feature from 'ol/Feature';
 import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
-    createOffsetHandleFeature, retroGradeTaskStyleFunc
+    retroGradeTaskStyleFunc
 } from '../openlayerStyles';
-import {MultiPoint, Point} from "ol/geom";
+import {MultiPoint} from "ol/geom";
+import type {StyleFunction} from 'ol/style/Style';
+import {asStyleFunction} from '../paintToOpenLayers';
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
 import {assignRole, readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
@@ -36,21 +38,58 @@ export class RetrogradeTask implements LineGraphic {
     graphic: Feature = createFeature();
     labels: Feature = assignRole(new Feature<MultiPoint>(), 'label');
     handles: Feature = <Feature<MultiPoint>>createHandleFeature();
-    offsetHandle: Feature = <Feature<Point>>createOffsetHandleFeature();
 
     features: Feature[] = [];
     symbolId: string = '';
     /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
     hidesStartHandle?: boolean;
 
-    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number) {
+    /**
+     * @param style the paint to attach, for a graphic that draws this shape with its own.
+     *
+     * **344000 pursuit is why this is a parameter.** It is a cane arrow — a straight run with
+     * a half circle hooked off its end — and it edits like one: three placed points, every
+     * one a plain vertex. The only thing it does not share is the paint, since its arrowhead
+     * carries a crossbar the seven retrograde tasks have none of. Copying this holder to
+     * change one line would have made the *editing* a fact stated twice, which is the drift
+     * that had pursuit behaving unlike its siblings in the first place.
+     * (User's report, 2026-09-06.) @see pursuitStyleFunc
+     */
+    constructor(name: TacticalGraphicName, size: number, drawingResolution?: number, style?: StyleFunction) {
         this.name = name;
         this.size = size;
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
         }
         this.setSymbolId('');
-        this.graphic.setStyle(retroGradeTaskStyleFunc(getLabel(name)));
+        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));
+        /*
+         * **A separate label paint, for the graphics whose letter is not in their line work.**
+         *
+         * The seven retrograde arrows draw their own letter inside the graphic paint, so this
+         * holder never had a label feature worth styling and did not style one. 344000 pursuit
+         * does not: its paint cuts the gap for the "P" and something else has to put the
+         * letter in it. Moved onto this holder without that, it drew a run with a hole in the
+         * middle and no label at all. (User's report, 2026-09-06.)
+         *
+         * `getPaintFunction(name).label` is the library's own statement of which graphics have
+         * one — the same field MapLibre's `paintTacticalGraphic` reads to decide the identical
+         * question, which is why the letter was never missing on that engine. Asked rather
+         * than listed, so a graphic that grows a label paint later needs no edit here.
+         * @see paintTacticalGraphic, pursuitPaint
+         */
+        /*
+         * **Styled either way, because an unstyled feature is not an invisible one.** An
+         * OpenLayers feature with no style falls back to the library default — a 5 px circle,
+         * white at 40% inside a #3399CC stroke — and it draws that at every coordinate of
+         * whatever geometry it holds. This feature held none until 2026-09-06, so the missing
+         * style cost nothing; giving it the generator's label points put a small hollow blue
+         * dot on the arc of all seven cane arrows, outside edit mode and in every screenshot.
+         * (User's report, 2026-09-06.) An explicit empty style says "draws nothing" and means
+         * it.
+         */
+        const labelPaint = getPaintFunction(name)?.label;
+        this.labels.setStyle(labelPaint ? asStyleFunction(labelPaint, name) : () => []);
     }
 
     updateGeometry = () => {
@@ -66,8 +105,19 @@ export class RetrogradeTask implements LineGraphic {
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
 
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
-        this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        /*
+         * **Every published grip, because every one is a point the operator placed.**
+         *
+         * This used to peel `handleCoords[0]` off into `offsetHandle` - the mirror handle,
+         * whose only job was turning the symbol over - and publish the rest. Point 3 states
+         * which side the arc falls on as of 2026-09-06, so there is nothing left to flip and
+         * all three anchor points are ordinary shape grips. A legacy two-point base publishes
+         * the two it has. @see RetrogradeTask.generateHandles
+         */
+        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords, pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
+        // Only meaningful for a graphic that has a label paint; harmless for the rest, whose
+        // label feature carries no style and so draws nothing whatever geometry it holds.
+        this.labels.setGeometry(labels);
         // Persist the *effective* meter value, not the viewport factor it came from.
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a
@@ -77,16 +127,6 @@ export class RetrogradeTask implements LineGraphic {
         this.publish();
     };
 
-
-    /**
-     * `handles` is `handleCoords.slice(1)`: `handleCoords[0]` goes to `offsetHandle`.
-     *
-     * The generator's contract calls index 0 the `mirror` handle, so without this the
-     * manager read the arrow tip — contract index 1 — as the mirror and claimed its drag
-     * as a flip, which is why that handle appeared to do nothing.
-     * @see TacticalGraphicHandler.handleIndexOffset
-     */
-    handleIndexOffset = 1;
 
     getBaseGraphicFeature = (): Feature<LineString> => {
         return this.base;
@@ -115,14 +155,36 @@ export class RetrogradeTask implements LineGraphic {
 
     /** Republishes the amplifiers with the geometry state beside them. */
     private publish() {
-        writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
+        /*
+         * **`mirrored` only while the base cannot say it itself.**
+         *
+         * A three-point base states the arc's side by where point 3 is, so stamping the flag
+         * beside it would be a second copy of the same fact and the two would drift. A base
+         * saved before 2026-09-06 has two points and nothing else that carries the side, so
+         * it keeps the flag until an edit grows its third point.
+         *
+         * `decorationSize` stays either way: it sizes the arrowhead, which is a screen
+         * distance with nothing in the anchor points to recover it from.
+         */
+        const statesItsOwnSide = (this.base.getGeometry()?.getCoordinates()?.length ?? 0) >= 3;
+        /*
+         * **Dropped from the bag, not merely left out of the write.** `readGraphicLabels`
+         * returns everything stamped on the feature, geometry inputs included, so a `mirrored`
+         * written during the two-point half of the draw comes straight back in on the next
+         * publish and re-stamps itself forever. Omitting it from the second argument is not
+         * enough; it has to be taken out of the first. (Measured: every cane arrow still saved
+         * `mirrored` after a clean three-click draw.)
+         */
+        const stamped = {...readGraphicLabels(this.graphic)};
+        if (statesItsOwnSide) delete (stamped as {mirrored?: boolean}).mirrored;
+        writeGraphicProperties(this.getFeatures(), this.name, stamped, {
             decorationSize: this.size,
-            mirrored: this.mirrored,
+            ...(statesItsOwnSide ? {} : {mirrored: this.mirrored}),
         });
     }
 
     getFeatures(): Feature[] {
-        return [this.graphic, this.handles, this.labels, this.base, this.offsetHandle];
+        return [this.graphic, this.handles, this.labels, this.base];
     }
 
 }

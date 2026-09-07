@@ -38,9 +38,11 @@ import {
     ratioLockedLabelScale as ratioLockedLabelScaleOf,
 } from '@zaes/tactical-graphics';
 import {
+    ANCHOR_CONNECTOR_DASH_PX,
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
     LINE_WIDTH,
+    anchorConnectorRun,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
@@ -136,7 +138,22 @@ import {
     crossedMissionTaskLabelPaint,
     missionTaskLabelPaint,
     crossedMissionTaskLabelScale,
+    aegisSingleTargetPaint,
+    bearingLinePaint,
+    navigationalLinePaint,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
+    activeManeuverAreaPaint,
+    maritimeFilledAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    convoyPaint,
+    searchAreaPaint,
     crossedMissionTaskPaint,
+    defeatPaint,
+    rhumbLinePaint,
     blockPaint,
     breachPaint,
     clearPaint,
@@ -192,6 +209,7 @@ import {
     PSYOPS_ZONES,
     psyOpsZonePaint,
     mineFillPaint,
+    minedAreaPaint,
     minedAreaFencedPaint,
     minefieldAreaPaint,
     cbrnContaminatedAreaPaint,
@@ -495,13 +513,20 @@ export const createMap = (target: HTMLElement) => {
     });
 };
 
-export const modifyStyle = (color: string) => {
+/**
+ * The hashed construction line drawn along a graphic's base.
+ *
+ * `geometry` overrides which run it follows, for the demolition family whose stored base
+ * ends in a width point rather than in an anchor. @see anchorConnectorRun
+ */
+export const modifyStyle = (color: string, geometry?: LineString) => {
     return new Style({
         fill: undefined,
+        geometry,
         stroke: new Stroke({
             color: color,
             width: LINE_WIDTH(),
-            lineDash: [4, 4],
+            lineDash: [...ANCHOR_CONNECTOR_DASH_PX],
         }),
     });
 };
@@ -514,14 +539,39 @@ function setOpacity(rgba: string, opacity: number): string {
     });
 }
 
-// used as the underlying geometry for each tactical graphic. Users can update this with the Modify interaction.
+/**
+ * The underlying geometry for each tactical graphic — what the user drew, and what the
+ * `Modify` interaction edits.
+ *
+ * **It is a construction line, and it draws in the inert-handle color.** On the families
+ * built from a centreline the symbol never draws — the corridors, the axes, the crossings,
+ * the convoys, the demolition bar symbols — it is the only thing on screen saying where the
+ * anchor points went, which makes it the same class of chrome as a handle dot or the radius
+ * read-out. So it must stay legible *as* chrome: it took the hostility color at 35% opacity
+ * until 2026-09-06, and a hostile graphic then drew a pale red construction line straight
+ * along its own red casing. FM 1-02.2's color rule reddens a control measure's *lines*;
+ * this is not one of them. (User's call.) @see drawsAnchorConnector, getInertHandleColor
+ *
+ * The mark follows `anchorConnectorRun`, so the demolition family hashes its centreline
+ * rather than running a spur out to the width point stored beyond it.
+ */
 export const createBaseFeature = () => {
     let feature = new Feature();
     feature.setStyle((feature) => {
         let isHidden = feature.get('hidden');
 
         if (isHidden) return new Style({});
-        return modifyStyle(setOpacity(readHostilityColor(feature), .35));
+
+        const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+        const geometry = feature.getGeometry();
+        // Only a LineString has a run to trim; a polygon or a point base draws whole.
+        const run = name && geometry instanceof LineString
+            ? anchorConnectorRun(name, geometry.getCoordinates())
+            : undefined;
+        return modifyStyle(
+            getInertHandleColor(),
+            run && run.length !== (geometry as LineString).getCoordinates().length ? new LineString(run) : undefined,
+        );
     });
 
     feature.set('base', true);
@@ -1752,17 +1802,6 @@ export function movementToContactStyleFunc(): StyleFunction {
 }
 
 /**
- * FightingPosition: stroke-only render of the 3-sided rectangle (left, top,
- * right walls — open at the bottom). The graphic feature's geometry is a
- * LineString of 4 points produced by `FightingPosition.generateGraphics`,
- * so a single Stroke is enough — no fill, no per-point label.
- */
-/** **Ported.** @see paintFunctions.ts, `plainOutlinePaint`. */
-export function fightingPositionStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return asStyleFunction(plainOutlinePaint(), name);
-}
-
-/**
  * Abatis: a drawn route carrying one fixed-size chevron. The whole symbol is in the
  * geometry, so a plain stroke draws it.
  *
@@ -2214,6 +2253,29 @@ const PAINT_LAYER_AREA_LABELS: readonly TacticalGraphicName[] = [
     // engine fell through to the legacy switch and drew a designation the graphic no longer
     // offers. Registering a paint takes two edits — the registry, and this list.
     TacticalGraphicName.AirheadLine,
+    /*
+     * The maritime areas. Their label blocks exist only in the paint layer, and each of the
+     * three arrangements is one this engine's switch cannot express: `LA - T` joins with a
+     * hyphen where `getFullLabel` joins with a space, `AOI` is a bare literal *under* the
+     * shape with no designation at all, and 200300 stacks a fixed `N` over `W - W1`.
+     * Falling through would have drawn `LA 1`, `AOI 1` and a bare date on this engine and
+     * the plates' own text on the other. @see areaLabelPainterFor
+     */
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
+    TacticalGraphicName.NoAttackZone,
+    /*
+     * **240802, and the sixth time this list has been the missing half.** Its Example prints
+     * `AM = 60 Metres`, `AM1 = 112 Metres`, `AN = 1200 mils` under the box, which only the
+     * paint layer draws; without this line the block appeared on MapLibre, in the thumbnail
+     * and in the catalog, while the app drew a bare designation. Every generated picture was
+     * right and the running renderer was wrong, which is exactly the shape this trap has.
+     * @see axisAmplifierPaint
+     */
+    TacticalGraphicName.TargetAreaRectangular,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
     TacticalGraphicName.PsyOpsZoneCircular,
@@ -2269,8 +2331,15 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
             return airspaceCoordinationAreaStyle(name);
         case TacticalGraphicName.AirfieldZone:
             return getAirfieldStyle(name);
+        // **The second of the two edits.** Registering `aegisSingleTargetPaint` in
+        // `symbology/registry.ts` gets MapLibre, the thumbnails and the catalog; without
+        // this arm OpenLayers falls through to the ordinary area label and draws 240804 as
+        // 240802 -- two symbols, one picture. @see paintParity.test.ts
+        case TacticalGraphicName.TargetAreaSingleTargetAegis:
+            return asStyleFunction(aegisSingleTargetPaint(), name);
         // The row of mines rides the label feature, like the loudspeaker below it.
         case TacticalGraphicName.MinefieldDynamicDepiction:
+        case TacticalGraphicName.MinedArea:
         case TacticalGraphicName.MinedAreaFenced:
             return asStyleFunction(mineFillPaint(), name);
         // The loudspeaker rides the label feature; the outline belongs to the polygon.
@@ -2357,9 +2426,11 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.BlueKillBoxCircular:
         case TacticalGraphicName.PurpleKillBoxRectangular:
         case TacticalGraphicName.PurpleKillBoxCircular:
-            // Prefix over name, centered; the two DTGs outside the bounding box's
-            // upper-left. A rectangle's corner is a real vertex and a circle has none,
-            // so the box is the right anchor for both.
+            // Prefix over name, centered; the two DTGs on one line outside the shape's
+            // upper-left corner. Which corner that is depends on the shape rather than on
+            // the variant — a rectangle keeps the angle it was drawn on, so its bounding
+            // box's top edge is the highest corner's height and not its top-left one's.
+            // @see outsideCornerAnchor
             return asStyleFunction(zoneLabelPaint(name, false), name);
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.CriticalFriendlyZoneIrregular:
@@ -2372,8 +2443,8 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.DeadSpaceAreaIrregular:
         case TacticalGraphicName.BlueKillBoxIrregular:
         case TacticalGraphicName.PurpleKillBoxIrregular:
-            // Same layout, but the DTGs anchor on the real upper-left *vertex*: a
-            // bounding-box corner can sit far outside an irregular shape.
+            // Same layout; the anchor lands on the real upper-left *vertex* here, since a
+            // bounding-box corner can sit far outside an irregular shape. @see outsideCornerAnchor
             return asStyleFunction(zoneLabelPaint(name, true), name);
         case TacticalGraphicName.GroupOrSeriesOfTargets:
             return asStyleFunction(groupOrSeriesOfTargetsLabelPaint(name), name);
@@ -2556,6 +2627,64 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  *
  * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
  */
+/**
+ * **Ported.** @see missionTaskPaints.ts, `defeatPaint`.
+ *
+ * Registering the paint in `symbology/registry.ts` is only half of it: MapLibre reads that
+ * registry and OpenLayers reads this dispatch, so a paint wired in one place draws on one
+ * engine and falls through to the default on the other. Defeat shipped that way for the
+ * length of one review — its arrows came out as outlines here and filled on MapLibre and in
+ * the picker thumbnail, which is generated through the registry.
+ */
+export function defeatStyleFunc(): StyleFunction {
+    return asStyleFunction(defeatPaint(), TacticalGraphicName.Defeat);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `activeManeuverAreaPaint`. */
+export function activeManeuverAreaStyleFunc(): StyleFunction {
+    return asStyleFunction(activeManeuverAreaPaint(), TacticalGraphicName.ActiveManeuverArea);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `maritimeFilledAreaPaint`. */
+export function maritimeFilledAreaStyleFunc(name: TacticalGraphicName, color: string, fill: string): StyleFunction {
+    return asStyleFunction(maritimeFilledAreaPaint(color, fill), name);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `cuedAcquisitionDoctrinePaint`. */
+export function cuedAcquisitionDoctrineStyleFunc(): StyleFunction {
+    return asStyleFunction(cuedAcquisitionDoctrinePaint(), TacticalGraphicName.CuedAcquisitionDoctrine);
+}
+
+/** **Ported.** @see maritimeAreaPaints.ts, `radarSearchDoctrinePaint`. */
+export function radarSearchDoctrineStyleFunc(): StyleFunction {
+    return asStyleFunction(radarSearchDoctrinePaint(), TacticalGraphicName.RadarSearchDoctrine);
+}
+
+/** **Ported.** @see convoyPaints.ts, `convoyPaint`. */
+export function convoyStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(convoyPaint(name), name);
+}
+
+/** **Ported.** @see searchAreaPaints.ts, `searchAreaPaint`. */
+export function searchAreaStyleFunc(): StyleFunction {
+    return asStyleFunction(searchAreaPaint(), TacticalGraphicName.SearchArea);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `bearingLinePaint`. */
+export function bearingLineStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(bearingLinePaint(name), name);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `navigationalLinePaint`. */
+export function navigationalLineStyleFunc(): StyleFunction {
+    return asStyleFunction(navigationalLinePaint(), TacticalGraphicName.NavigationalLine);
+}
+
+/** **Ported.** @see maritimeLinePaints.ts, `rhumbLinePaint`. */
+export function rhumbLineStyleFunc(): StyleFunction {
+    return asStyleFunction(rhumbLinePaint(), TacticalGraphicName.NavigationalRhumbLine);
+}
+
 /** **Ported.** @see missionTaskPaints.ts, `crossedMissionTaskPaint`. */
 export function crossedMissionTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(crossedMissionTaskPaint(name), name);
@@ -3137,8 +3266,37 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     if (name === TacticalGraphicName.MinefieldDynamicDepiction) {
         return asStyleFunction(minefieldAreaPaint(), name)(feature, resolution);
     }
+    if (name === TacticalGraphicName.MinedArea) {
+        return asStyleFunction(minedAreaPaint(), name)(feature, resolution);
+    }
     if (name === TacticalGraphicName.MinedAreaFenced) {
         return asStyleFunction(minedAreaFencedPaint(), name)(feature, resolution);
+    }
+    /*
+     * The three maritime areas whose plate names a colour. **The second of the two edits:**
+     * registered in `symbology/registry.ts` they draw on MapLibre, in the thumbnails and in
+     * the catalog, and fall through to the plain affiliation outline here -- so 200500
+     * would be an ordinary black circle on this engine and amber on the other, which is a
+     * parity defect that looks like a rendering bug. @see paintParity.test.ts
+     */
+    if (name === TacticalGraphicName.ActiveManeuverArea) {
+        return asStyleFunction(activeManeuverAreaPaint(), name)(feature, resolution);
+    }
+    /*
+     * 200101 in orange, 200201 and 200202 in grey -- the "may be depicted as" colours, drawn
+     * since 2026-09-04. **The second of the two edits, caught by `paintParity` for the sixth
+     * time:** registered in `symbology/registry.ts` they fill on MapLibre, in the thumbnails
+     * and in the catalog, and fall through to the plain affiliation outline here. The guard
+     * names the graphic and which side is wrong, which is why this took one run to find.
+     */
+    if (name === TacticalGraphicName.LaunchAreaEllipse) {
+        return asStyleFunction(maritimeFilledAreaPaint(LAUNCH_AREA_COLOR, LAUNCH_AREA_FILL), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.DefendedAreaEllipse || name === TacticalGraphicName.DefendedAreaRectangle) {
+        return asStyleFunction(maritimeFilledAreaPaint(DEFENDED_AREA_COLOR, DEFENDED_AREA_FILL), name)(feature, resolution);
+    }
+    if (name === TacticalGraphicName.CuedAcquisitionDoctrine) {
+        return asStyleFunction(cuedAcquisitionDoctrinePaint(), name)(feature, resolution);
     }
     if (PSYOPS_ZONES.includes(name)) {
         return asStyleFunction(psyOpsZonePaint(), name)(feature, resolution);

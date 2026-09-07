@@ -1,15 +1,17 @@
 import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
-import type {TacticalGraphicName} from '@zaes/tactical-graphics';
-import {allowedGestures, groundLength, latitudeFromMercatorY, screenMeters} from '@zaes/tactical-graphics';
+import type {RadarSearchFrame, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, normalizeDrawnBase, projectedLength, radarSearchFromClicks, rotationPivot, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {StyleFunction} from 'ol/style/Style';
 import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
-import {drawMarkerStyle} from "../openlayerStyles";
+import {defaultDrawStyleFunc, drawMarkerStyle} from "../openlayerStyles";
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     name: TacticalGraphicName;
@@ -210,10 +212,38 @@ export class MissionTaskController implements TacticalGraphicHandler {
             // Armed here, immediately before the size lands: arming at drawstart alone
             // is not enough, because the holder has no size yet at that point.
             this.graphic.showMeasure?.(true, this.currentMouseCoord);
-            this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+            this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
 
         });
     };
+
+    /**
+     * What the drag describes, which is not always a centre and a radius.
+     *
+     * Nearly every graphic on this controller is drawn centre-to-edge, and for those this
+     * is the identity. Contain is not: its plate marks the two clicks as the ends of the
+     * semicircle's opening, so the frame's centre is half way along the drag and its size
+     * is half the reach. **The rule is the library's**, so MapLibre draws the same symbol
+     * from the same two clicks. @see frameFromDrag
+     *
+     * The centre is walked in projected metres, which is the space this controller already
+     * works in. It differs from the geodesic midpoint the anchor reader recovers by a few
+     * metres at any drawable scale, and the reader is what the rebuild uses — so the
+     * committed shape is the reader's either way, and this only has to put the preview in
+     * the right place.
+     */
+    private drawnFrame(radius: number, rotationDeg: number): {size: number; center: Coordinate; rotation: number} {
+        const frame = frameFromDrag(this.graphic.name, radius, rotationDeg);
+        if (!frame.reach) return {size: frame.size, center: this.center, rotation: frame.rotation};
+        const bearing = (frame.bearingDeg * Math.PI) / 180;
+        // Back to projected metres from the ground distance `drawnRadius` reported.
+        const projected = projectedLength(frame.reach, latitudeFromMercatorY(this.center[1]));
+        return {
+            size: frame.size,
+            center: [this.center[0] + projected * Math.cos(bearing), this.center[1] + projected * Math.sin(bearing)],
+            rotation: frame.rotation,
+        };
+    }
 
     onDrawEndFunc = (e: DrawEvent) => {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
@@ -221,7 +251,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
 
         // Still the draw: the floor has to reach the size that is *committed*, or a short
         // drag would be held legible right up until the click that ends it.
-        this.graphic.updateGeom({size: radius, center: this.center, rotation: this.rotationAngleDeg});
+        this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
         this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };
@@ -303,6 +333,13 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     handleRotate(deltaAngle: number): void {
+        // A holder may own more than `rotation` when it turns — 200700 also has a typed axis
+        // to stand down. @see RangeFanGraphicBase.handleRotate
+        const turns = this.graphic as {handleRotate?: (delta: number) => void};
+        if (turns.handleRotate) {
+            turns.handleRotate(deltaAngle);
+            return;
+        }
         let rotation = this.graphic.rotation + deltaAngle;
         this.graphic.updateGeom({rotation});
     }
@@ -344,6 +381,296 @@ export class MissionTaskController implements TacticalGraphicHandler {
  * dispatch all keep working unchanged. Only the draw geometry and the two
  * gestures that no longer mean anything are overridden.
  */
+/**
+ * The anchor graphics an operator places **point by point**.
+ *
+ * APP-06 describes these by numbered points and the base has always stored those points;
+ * what it did not do was let anyone place them. The draw was a `Circle` — a centre and a
+ * rim — and every anchor was derived from that frame, which is why a user following the
+ * Draw Rules got a symbol other than the one they aimed at. Contain moved off that model
+ * on 2026-09-04 and the other four followed on 2026-09-05. (User's call.)
+ *
+ * **Only the draw changes.** Everything after it — translate, rotate, resize, the
+ * per-handle drags, the gesture refusals — is `MissionTaskController`'s and is inherited
+ * untouched, because none of it was ever about how the symbol was first placed.
+ *
+ * The two ends of the pipe already existed and this joins them: OpenLayers builds its
+ * `Draw` from `type` and `maxPoints` on the handler, and `MissionTaskGraphicBase`'s
+ * `setBaseFeature` already routes a `LineString` base through `adoptAnchors` — which is
+ * how a restore has always reached these holders. In between,
+ * `TacticalGraphicsManager.normalizeDrawnGeometry` runs `anchorsFromClicks`, so the clicks
+ * become the plate's anchors, with the points that carry no decision constructed rather
+ * than demanded. @see anchorsFromClicks, drawsByAnchorClicks
+ *
+ * `clicks` is what the operator places, which is not always what is stored: ambush spends
+ * two clicks on a three-point symbol and envelopment three on a four-point one.
+ */
+export class AnchorClickController extends MissionTaskController {
+    type: TacticalGraphicShape = 'LineString';
+    /**
+     * **Only the draw is a line.** `type` builds the `Draw` interaction; `geomHandleType`
+     * routes the *edit* drags, and these are still point-anchored symbols — handles of
+     * `[edge, centre]`, a rotate and a resize measured about a centre.
+     *
+     * Setting this to `LineString` sent them down `handleLineStringDrag`, which hands
+     * `handleRotate` an angle in **radians** because a line controller rotates geometry;
+     * a mission-task holder keeps `rotation` in **degrees**, so a half-radian drag turned
+     * the symbol half a degree and the gesture looked dead. (User's report, 2026-09-05.)
+     */
+    geomHandleType: TacticalGraphicShape = 'Circle';
+    maxPoints: number;
+
+    constructor(graphic: MissionTaskGraphic, clicks: number) {
+        super(graphic);
+        this.maxPoints = clicks;
+    }
+
+    /**
+     * **The shared draw style, not the circle's.** `MissionTaskController` suppresses
+     * OpenLayers' own circle and paints a marker instead; a line draw wants what every
+     * other line being drawn gets, or the sketch is invisible until the last click.
+     */
+    drawStyleFunc: StyleFunction = defaultDrawStyleFunc();
+
+    /**
+     * Starts the draw, and **shows the symbol while it is being drawn**.
+     *
+     * The circle draw updated the holder on every geometry change, so the graphic grew
+     * under the cursor; a line draw that only spoke at the end left the operator placing
+     * points against an empty map and finding out what they had made afterwards.
+     * (User's report, 2026-09-05.)
+     *
+     * The sketch carries a floating vertex at the cursor, so what arrives here after the
+     * first click is already the two points ambush needs and, after the second, the three
+     * a turn needs — the preview is the real symbol rather than an approximation of it,
+     * because it comes through `normalizeDrawnBase` and the holder exactly as the finished
+     * one will. A sketch too short to describe anything is skipped rather than guessed at.
+     */
+    onDrawStartFunc = (e: DrawEvent) => {
+        /*
+         * **The legibility floor is not armed here, and that is the point.**
+         *
+         * It was, to match the circle draw — but a click-placed draw previews on every
+         * pointer move, so flooring the preview pins `size` at the floor while the cursor
+         * keeps going: measured on a turn, the symbol stood still at 478 km through the
+         * first 120 px of drag while the cursor slid from 0.70 to 1.14 of its own bounding
+         * box, then lurched into tracking once the chord outgrew the floor. "The cursor
+         * seems to be in the middle of the graphic making it seem jumpy and not smooth."
+         * (User's report, 2026-09-05.)
+         *
+         * MapLibre applies no floor on this path — `legibleRadius` sits on the
+         * centre-to-edge frame, which the anchor-click family left — and its preview tracks
+         * the cursor exactly, which is the behaviour the user signed off on for ambush. So
+         * the floor moves to `onDrawEndFunc`, where the circle draw already has it and where
+         * this graphic's own doc says it belongs: *committed* at a readable size.
+         * @see minimumDrawnRadiusPx, onDrawEndFunc
+         */
+        /*
+         * **And so does the read-out.** The circle draw armed it in its own `onDrawStartFunc`,
+         * so every graphic that moved to a click-placed draw silently lost the distance label
+         * it used to show while being drawn — the operator was placing points with no measure
+         * of what they were making. (User's report, 2026-09-05.)
+         *
+         * Armed for the whole family rather than per graphic: `showMeasure` already asks
+         * `showsSizeReadout(name)`, which is the library's own table of which symbols report a
+         * distance, so arming one that does not is a no-op. @see refreshMeasure
+         */
+        this.graphic.showMeasure?.(true);
+        this.sketch = e.feature as Feature<LineString> | undefined;
+    };
+
+    /**
+     * The sketch being drawn, held so the preview can read it as the cursor moves.
+     *
+     * **Read on `pointermove`, not from a `change` listener on the geometry.** The
+     * obvious hook is the one `LineGraphicController` uses — subscribe to the sketch
+     * geometry and redraw whenever it changes — and it never fired once here. The manager
+     * already forwards every pointer move to the controller, which is the event the sketch
+     * is updated from in the first place, so this reads it at the source. Measured: with
+     * the `change` listener the holder was still holding its initial `Point` base after a
+     * click and a 170-pixel drag. (2026-09-05.)
+     */
+    protected sketch?: Feature<LineString>;
+
+    onPointerMove = (_evt: unknown) => {
+        /*
+         * **Only while a draw is running.** `sketch` is cleared on `drawend`, and this is
+         * what that clearing is for: the manager forwards *every* pointer move to the active
+         * controller, including the ones in edit mode long after the draw finished. A
+         * controller still holding its finished sketch replays it on each move and stamps the
+         * drawn values back over whatever the user has just edited — which is exactly what a
+         * dragged 200700 grip did, snapping back on the next mouse move. (User's report,
+         * 2026-09-05.) @see RangeClickController.onDrawEndFunc
+         */
+        const geometry = this.sketch?.getGeometry();
+        if (!(geometry instanceof LineString)) return;
+        const coords = geometry.getCoordinates();
+        this.preview(coords);
+        // The read-out is drawn from the centre towards wherever the gesture is, and on a
+        // click-placed draw that is the floating vertex under the cursor. Set after the
+        // preview, so the line measures the symbol the last move just produced.
+        if (coords.length) this.graphic.showMeasure?.(true, coords[coords.length - 1]);
+    };
+
+    /**
+     * Draws what the clicks so far describe, without touching the sketch.
+     *
+     * **Normalised into a feature of its own.** The holder wants the plate's anchors, not
+     * the raw clicks — a two-point ambush sketch means nothing to `arcAndArrowFromAnchors`
+     * until point 3 is constructed — so the clicks go through the same
+     * `normalizeDrawnBase` the finished draw uses. Writing the result back onto the sketch
+     * instead would fight the `Draw` interaction for the geometry it is still editing,
+     * which is why the manager only does that on `drawend`.
+     * @see TacticalGraphicsManager.normalizeDrawnGeometry
+     */
+    protected preview(projected: Coordinate[]): void {
+        if (projected.length < 2) return;
+        const name = this.graphic.name;
+        if (!name) return;
+        // A cursor still sitting on the click describes nothing yet, and the normalizer
+        // says so by handing back fewer points than the symbol needs.
+        const anchors = normalizeDrawnBase(name, projected.map(c => toLonLat(c)) as Position[]);
+        if (anchors.length < 2) return;
+        this.graphic.setBaseFeature?.(
+            new Feature(new LineString(anchors.map(c => fromLonLat(c as Coordinate)))) as Feature<LineString>,
+        );
+    }
+
+    /**
+     * Turns the symbol about the point the **library** says it turns about.
+     *
+     * `MissionTaskController` adds the delta to `rotation` and lets the holder regenerate
+     * about its own centre, which is right for a symbol whose centre is what it is pinned
+     * by. Ambush is not one: 141700's back "encompasses the ambush position" and its arrow
+     * "typically points at the target", so what turns is the aim and what stays put is the
+     * position — point 2. Turning about the frame's centre swung the ambush off the ground
+     * it was placed on. (User's call, 2026-09-05.)
+     *
+     * Done by compensating rather than by re-deriving: rotate, see how far the pivot moved,
+     * and translate it back. `rotationAnchor` picks which point that is, so MapLibre — whose
+     * rotate transforms the geometry about that same point directly — cannot disagree.
+     */
+    handleRotate(deltaAngle: number): void {
+        const before = this.pivot();
+        super.handleRotate(deltaAngle);
+        const after = this.pivot();
+        if (!before || !after) return;
+        const dx = before[0] - after[0];
+        const dy = before[1] - after[1];
+        if (dx === 0 && dy === 0) return;
+        this.handleTranslate(dx, dy);
+    }
+
+    /**
+     * Where the library says this symbol **turns**, in projected metres.
+     *
+     * `rotationPivot`, not `rotationAnchor`: the second is the symbol's frame origin, which
+     * a resize scales from and which `setBend` and `setReach` measure against, so it is not
+     * free to say where a rotate turns. Turn is the graphic where the two part company.
+     * @see rotationPivot
+     */
+    private pivot(): Coordinate | undefined {
+        const geometry = this.graphic.base?.getGeometry?.();
+        if (!(geometry instanceof LineString)) return undefined;
+        const anchors = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
+        if (anchors.length < 2) return undefined;
+        return fromLonLat(
+            rotationPivot({type: 'LineString', coordinates: anchors}, this.graphic.name) as Coordinate,
+        );
+    }
+
+    /**
+     * Hands the drawn anchors straight to the holder.
+     *
+     * The manager has already normalised them, so what arrives is the plate's full point
+     * list — three for a turn, four for an envelopment — and `setBaseFeature` reads the
+     * frame back out of it rather than being told a centre and a size.
+     */
+    onDrawEndFunc = (e: DrawEvent) => {
+        this.graphic.showMeasure?.(false);
+        this.sketch = undefined;
+        const feature = e.feature as Feature<LineString> | undefined;
+        if (!(feature?.getGeometry() instanceof LineString)) return;
+
+        /*
+         * **And it is not armed here either, which leaves the committed geometry exactly as
+         * it was.** The flag used to be cleared on the line above this one, so on this path
+         * the floor already reached nothing that gets stored — it distorted every pointer
+         * move of the draw and then stood down for the one call that decides the symbol.
+         * Arming it now would *change* the finished shape of a barely-dragged curve, and the
+         * user's report is explicit that "the end drawing is perfect".
+         *
+         * So `minimumDrawnRadiusPx` is currently unreachable for this family on **both**
+         * engines — MapLibre's `legibleRadius` sits on the centre-to-edge frame, which these
+         * graphics left when they became click-placed. That is a deliberate hold, not an
+         * oversight: re-arming it belongs on both engines at once and is a change to what the
+         * gesture produces, so it is someone's call rather than a side effect of this fix.
+         */
+        this.graphic.sizingFromDraw = false;
+        this.graphic.setBaseFeature?.(feature);
+    };
+}
+
+/**
+ * **200700's three clicks**, which state numbers rather than anchor points.
+ *
+ * The radar search doctrine stores one anchor point and four values — that is what its
+ * plate asks for and it is not in question here. What its plate does *not* say is how those
+ * values are first given, and the answer the user asked for is three clicks: the radar, then
+ * each arc, with a bare arc on the map between the second click and the third and the sector
+ * closing on the third. It had exactly that until the storage moved to a single point on
+ * 2026-09-05 and took the gesture with it. (User's report, 2026-09-05.)
+ *
+ * So it inherits `AnchorClickController`'s draw — a `LineString` sketch, a click cap, a live
+ * preview off `pointermove` — and replaces only what is done with the clicks: they go
+ * through `radarSearchFromClicks` into an azimuth and one or two ranges, and land on the
+ * holder, whose base stays a `Point`. Handing the sketch to `setBaseFeature` instead, as the
+ * parent does, would put a three-vertex line on a holder that reads its centre off a point.
+ *
+ * Everything after the draw is the parent's and untouched: the rim handles, the band editor,
+ * translate, rotate and resize about the centre. @see radarSearchFromClicks, drawsByRangeClicks
+ */
+export class RangeClickController extends AnchorClickController {
+    /**
+     * The clicks so far, as ranges and a bearing — never as a base geometry.
+     *
+     * Overridden rather than extended: the parent's body is the one thing that does not
+     * apply, and calling it first would set a `LineString` base the holder then has to
+     * unpick.
+     */
+    protected preview(projected: Coordinate[]): void {
+        this.applyClicks(projected);
+    }
+
+    onDrawEndFunc = (e: DrawEvent) => {
+        this.graphic.sizingFromDraw = false;
+        this.graphic.showMeasure?.(false);
+        /*
+         * **Clearing the sketch is not bookkeeping, it is the off switch.** This overrides
+         * the parent's `onDrawEndFunc` as a class field, so the parent's body — including its
+         * `this.sketch = undefined` — never runs, and the controller went on previewing the
+         * finished draw on every pointer move for the life of the graphic. Each edit was
+         * applied and then overwritten by the original three clicks a few milliseconds later.
+         */
+        this.sketch = undefined;
+        const geometry = e.feature?.getGeometry();
+        if (geometry instanceof LineString) this.applyClicks(geometry.getCoordinates());
+    };
+
+    /**
+     * Reads the clicks and hands the result to the holder.
+     *
+     * The reading is the library's — both engines call the same function, so the third
+     * click means the same thing on each. A sketch that states nothing yet (a cursor still
+     * on the first click) comes back `undefined` and nothing is drawn.
+     */
+    private applyClicks(projected: Coordinate[]): void {
+        const frame = radarSearchFromClicks(projected.map(c => toLonLat(c)) as Position[]);
+        if (!frame) return;
+        (this.graphic as {applyRadarSearchFrame?: (f: RadarSearchFrame) => void}).applyRadarSearchFrame?.(frame);
+    }
+}
+
 export class PointDropController extends MissionTaskController {
     /** What the Draw interaction builds — a single click, then `drawend`. */
     type: TacticalGraphicShape = 'Point';

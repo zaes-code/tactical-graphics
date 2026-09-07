@@ -17,6 +17,10 @@ import {
 } from '@zaes/tactical-graphics';
 import type {TacticalGraphicProperties} from '@zaes/tactical-graphics';
 
+import {LineString, MultiPoint} from 'ol/geom';
+import {toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
+import {baseVertexCount, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {PROVEN_GRAPHICS} from './provenGraphics';
@@ -25,7 +29,6 @@ import {supportsHostility} from './graphicFieldRegistry';
 import {readGraphicLabels, writeGraphicProperties} from './graphicProperties';
 import {HALF, LINE_HALF, LINE_SCALE, applyBaseGeometry, applyHostility, groupByCategory, measureSample} from './sampleGallery';
 import {buildSampleGraphics, sampleFeatureCollection} from '../maplibre/sampleGallery';
-import {isRectangular} from '@zaes/tactical-graphics';
 
 /**
  * The doctrinal colors below are the light-mode ones, and the palette has had a
@@ -190,6 +193,107 @@ describe('hostile line work is red, inner detail included', () => {
     it.each(FIXED)('%s is still black with no hostility', name => {
         const colors = strokeColors(sample(name));
         expect(colors).not.toContain(normalize(HOSTILE_RED));
+    });
+});
+
+/**
+ * # The sweep draws what a hand draws
+ *
+ * Fifteen graphics moved onto their plates' anchor points over 2026-09-05/06, and **every
+ * one of the defects a user reported afterwards was in the sample sweep rather than in the
+ * symbol.** Drawn by hand they were right; swept they were squat, or handed out two grips
+ * where a hand-drawn one had three, or published a grip half a symbol away from any point
+ * the base actually stored — so it could not be dragged. ("The cane graphics still show 2
+ * handles on the sweep but 3 if I draw them by hand"; "the sweep ones can't be dragged from
+ * point 3"; "I think the sweep is still drawing an older format".)
+ *
+ * The cause was the same each time: the sweep synthesises a base, and a synthesised base
+ * that is merely *plausible* still builds. Nothing objected, because nothing compared it to
+ * the base a draw produces. These two assertions do, for every graphic rather than the ones
+ * someone thought to list:
+ *
+ *  1. **The stored base is already normalized.** `normalizeDrawnBase` is the door every draw
+ *     and every restore comes in by, and it is idempotent — so if running it over a swept
+ *     base *moves* anything, the sweep stored a shape no draw can produce.
+ *  2. **Every published grip sits on a stored point.** A handle that is not on a vertex is a
+ *     handle a vertex drag cannot pick up, which is exactly what "can't be dragged from
+ *     point 3" was.
+ */
+describe('the sweep stores the base a draw would', () => {
+    /** The sweep's own base, in degrees — the units the library states its rules in. */
+    const sweptBase = (name: TacticalGraphicName): Position[] | null => {
+        const handler = getController(name, RESOLUTION);
+        handler.setSymbolId(`id-${name}`);
+        handler.getFeatures().forEach(f => f.set('graphicName', name));
+        applyBaseGeometry(handler, name, 500_000, 2_000_000, `id-${name}`);
+        const geometry = handler.graphic.base.getGeometry();
+        if (!(geometry instanceof LineString)) return null;
+        return geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
+    };
+
+    /** Metres between two positions, near enough for a "same point" test. */
+    const apart = (a: Position, b: Position) =>
+        Math.hypot((b[0] - a[0]) * Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180), b[1] - a[1]) * 111_320;
+
+    const lineGraphics = PROVEN_GRAPHICS.filter(n => getController(n, RESOLUTION) instanceof LineGraphicController);
+
+    it('hands every line graphic a base its own normalizer leaves alone', () => {
+        const moved: string[] = [];
+        for (const name of lineGraphics) {
+            const base = sweptBase(name);
+            if (!base) continue;
+            const settled = normalizeDrawnBase(name, base);
+            // Vertex count first: a base short of what the graphic needs sends the generator
+            // down whatever fallback it keeps for a half-drawn sketch, which is a different
+            // picture from the one the plate describes.
+            /*
+             * **A percent of the symbol's own span, not an exact match.** The sweep lays its
+             * points out in projected metres, where a horizontal edge is a parallel of
+             * latitude — a rhumb line. The normalizer squares the third point onto the
+             * *geodesic* perpendicular, and the two disagree by 0.4% of the span at the
+             * sweep's own size. That is the projection, not the shape; a base the sweep got
+             * wrong moves by a third of the symbol or changes its vertex count outright.
+             */
+            const span = Math.max(...base.map(p => apart(base[0], p)), 1);
+            const worst = settled.length === base.length ? Math.max(...settled.map((p, i) => apart(p, base[i]))) : Infinity;
+            if (settled.length !== base.length || worst / span > 0.01) {
+                moved.push(`${name} (${base.length} -> ${settled.length}, ${(100 * worst / span).toFixed(1)}%)`);
+            }
+        }
+        expect(moved).toEqual([]);
+    });
+
+    it('publishes every grip on a point the base actually stores', () => {
+        /*
+         * Only where the grips *are* the base's vertices. A graphic whose handles are a
+         * derived frame — an edge and a centre, a rim point — states that through
+         * `usesDrawnAnchors`, and its grips are not vertices by design.
+         */
+        const stray: string[] = [];
+        for (const name of lineGraphics) {
+            if (usesDrawnAnchors(name) || isRectangular(name) || baseVertexCount(name) === undefined) continue;
+            const base = sweptBase(name);
+            if (!base) continue;
+            const handler = getController(name, RESOLUTION);
+            handler.setSymbolId(`id-${name}`);
+            handler.getFeatures().forEach(f => f.set('graphicName', name));
+            applyBaseGeometry(handler, name, 500_000, 2_000_000, `id-${name}`);
+            const handles = handler.getFeatures().find(f => f.get('role') === 'handle')?.getGeometry();
+            if (!(handles instanceof MultiPoint)) continue;
+            const contract = handleContract(name);
+            handles.getCoordinates().forEach((handle, index) => {
+                // Only the grips the library says are vertices: an `offset` or `mirror` grip
+                // is a derived mark, and the block family's width handle sits three sizes off
+                // the base on purpose. @see handleContract
+                const role = contract.roles[index] ?? contract.repeating;
+                if (role !== 'shape') return;
+                const nearest = Math.min(...base.map(b => apart(toLonLat(handle) as Position, b)));
+                // A tenth of the sample's own span: a grip nudged off a vertex by rounding
+                // is fine, one sitting mid-run is the defect.
+                if (nearest > LINE_HALF / 10) stray.push(`${name} ${Math.round(nearest)}m`);
+            });
+        }
+        expect(stray).toEqual([]);
     });
 });
 

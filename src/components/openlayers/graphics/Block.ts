@@ -66,6 +66,18 @@ export class Block implements LineGraphic {
     /** @see LineGraphic.offsetScale — read off the controller by the manager. */
     offsetScale?: number;
     private ratioLock: number | undefined;
+
+    /**
+     * Whether this graphic's base holds the anchor points its plate names, rather than a
+     * two-point axis plus a size derived beside it.
+     *
+     * True for the four bracket mission tasks once drawn, and false for one of them restored
+     * from a snapshot written before 2026-09-06 — which is the point of asking the geometry
+     * rather than the registry. @see updateGeometry
+     */
+    private get anchorsAreInTheBase(): boolean {
+        return (this.base.getGeometry()?.getCoordinates()?.length ?? 0) >= 3;
+    }
     /**
      * Suspends the `MIN_BASE_PX` floor below while a snapshot is rebuilt.
      *
@@ -136,8 +148,25 @@ export class Block implements LineGraphic {
 
         this.graphic.setGeometry(graphic);
         let handleCoords = (handles as MultiPoint).getCoordinates();
-        this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
-        this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        /*
+         * **A base that carries its own anchor points publishes every one of them.**
+         *
+         * The block family's generators put a derived *offset* grip first and the segment's
+         * ends after it, which is why the rest is `slice(1)`. The four bracket mission tasks
+         * stopped being that on 2026-09-06: their bases hold the three points APP-06 names,
+         * there is no offset to peel off, and slicing one away would drop point 1 and then
+         * treat it as a width handle. @see frontEdgeFrame, handleContract
+         *
+         * Read off the base's own vertex count rather than the registry's, so a graphic saved
+         * before the conversion — two points, and a generator still returning the old
+         * `[offset, p0, p1]` — keeps the contract it was written with.
+         */
+        if (this.anchorsAreInTheBase) {
+            this.handles.setGeometry(new MultiPoint(handleCoords));
+        } else {
+            this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords.slice(1), pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
+            this.offsetHandle.setGeometry(new Point(handleCoords[0]));
+        }
 
         // Persist the *effective* meter value rather than the viewport factor behind it.
         // A ratio-locked name re-derives `size` from the base length on restore and
@@ -196,8 +225,10 @@ export class Block implements LineGraphic {
     }
 
     getFeatures(): Feature[] {
-        if (this.ratioLock !== undefined) {
-            // Drop the offset handle entirely so it never renders or accepts drags.
+        // A ratio-locked graphic has no width to drag, and one whose base carries its own
+        // anchor points has no *derived* handle at all — in both cases the offset handle is
+        // dropped entirely so it never renders or accepts a drag.
+        if (this.ratioLock !== undefined || this.anchorsAreInTheBase) {
             return [this.graphic, this.handles, this.labels, this.base];
         }
         return [this.graphic, this.handles, this.labels, this.base, this.offsetHandle];

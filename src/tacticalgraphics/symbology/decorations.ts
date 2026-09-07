@@ -817,6 +817,19 @@ export function wavePath(
 
 /** Screen size of a generator-emitted solid arrowhead, tip to base. */
 export const SOLID_ARROWHEAD_PX = 15;
+
+/**
+ * Half the angle between the barbs of that arrowhead, in degrees.
+ *
+ * **Not chosen here — derived from the head the generators already build.**
+ * `GeometryService.createArrowHeadPolygon` sets its base one `arrowSize` back from the tip
+ * and half an `arrowSize` to either side, so the half-angle is `atan(0.5)` and every solid
+ * head in this library that goes through it — Fix, tactical fix, ferry crossing — is that
+ * shape. A paint that builds its own head with `solidArrowHead` has to be told the number,
+ * and the number is this one: a head at some other angle reads as a different family of
+ * symbol, which is what the search area's first version did at 46 degrees.
+ */
+export const SOLID_ARROWHEAD_HALF_ANGLE_DEG = 26.565;
 /** Ceiling on that head as a share of the path it terminates. */
 export const ARROWHEAD_MAX_SHARE = 0.25;
 
@@ -838,6 +851,7 @@ export function screenSizedArrowHead(
     ring: ProjectedPosition[],
     path: ProjectedPosition[],
     resolution: number,
+    measure: 'traversed' | 'reach' = 'traversed',
 ): ProjectedPosition[] | null {
     if (!ring || ring.length < 3) return null;
     const [tip, left, right] = ring;
@@ -845,7 +859,23 @@ export function screenSizedArrowHead(
     const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
     if (currentLength === 0) return null;
 
-    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
+    /*
+     * **Which length the head is allowed a share of.**
+     *
+     * `traversed` is how far the pen travels — right for a route, where the drawn path is
+     * the symbol and a long winding one really does have room for a full-size head.
+     *
+     * `reach` is end to end, and it is what a symbol wants when its line is a *texture*
+     * rather than a route. Fix's zigzag traverses roughly twice its own run, so a share of
+     * the traversal let its head reach the 15 px ceiling on a symbol only 50 px across —
+     * a triangle a third the width of the graphic, which is what the sweep showed. Ferry
+     * crossing was always right and looks unchanged here, because its line is straight and
+     * the two measures are the same number for it. (User's call, 2026-09-03.)
+     */
+    const span = measure === 'reach' && path.length >= 2
+        ? Math.hypot(path[path.length - 1][0] - path[0][0], path[path.length - 1][1] - path[0][1])
+        : pathLength(path);
+    const availablePx = path.length >= 2 ? span / resolution : Infinity;
     const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
     if (wantedPx < DECORATION_MIN_PX) return null;
 

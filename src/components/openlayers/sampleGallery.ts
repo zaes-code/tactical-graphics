@@ -31,6 +31,8 @@
 import {Feature} from 'ol';
 import {LineString, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {Extent, createEmpty, extend, isEmpty} from 'ol/extent';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import {
@@ -40,6 +42,8 @@ import {
     TacticalGraphicCategory,
     TacticalGraphicHostility,
     TacticalGraphicName,
+    synthesizedBase,
+    normalizeDrawnBase,
     getDisplayName,
     groundLength,
     isRectangular,
@@ -747,8 +751,41 @@ export function applyBaseGeometry(
         // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
         // line handed to one of those puts its head on the *west* end — a sheet of arrows
         // pointing back the way the standard's own plates draw them coming. @see storedOrder
-        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow)) as Coordinate[];
-        handler.setBaseFeature(lineFeature(path, symbolId, name));
+        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow, name)) as Coordinate[];
+        /*
+         * **The base a draw would have produced, not a hand-laid imitation of one.**
+         *
+         * A graphic whose clicks are read into anchor points stores something other than the
+         * clicks — 343300 and 341900 place three and store four, with the fourth derived so
+         * their two straights stay parallel. Handed the raw path, the sample stored a
+         * fourth point the generator then ignored, so a save-and-restore *normalised* it and
+         * the base moved once. `normalizeDrawnBase` is the same function the manager runs on
+         * `drawend`, so this is that base rather than one that merely resembles it.
+         */
+        /*
+         * **Through 4326 and back, because the library speaks degrees.** `normalizeDrawnBase`
+         * is turf all the way down and these are projected metres; handed metres its distance
+         * and bearing guards fail and it returns the path untouched, which looks exactly like
+         * a graphic that needed no normalising. The manager's own `normalizeDrawnGeometry`
+         * converts for the same reason. @see ai/conventions.md, "no turf on projected coords"
+         */
+        /*
+         * **Every base, not only the anchor-click ones.** `normalizeDrawnBase` is the door
+         * every draw and every restore comes in by and it is idempotent, so a layout that is
+         * already right passes through untouched — while one that is short of what its
+         * graphic needs is completed here, exactly as an operator's clicks would be.
+         *
+         * It was gated on `drawsByAnchorClicks`, which is a different question: 152000 spends
+         * two clicks on a three-point symbol, so the harness laid out two points and stored
+         * them, and the graphic drew its *legacy* form with a derived width handle while a
+         * restore of the same file — which does normalize — came back with three points and
+         * no such handle. The sweep and the restore disagreed about the same symbol.
+         * @see sheetBase, which is this rule on the MapLibre side.
+         */
+        const stored = normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(
+            c => fromLonLat(c as Coordinate),
+        ) as Coordinate[];
+        handler.setBaseFeature(lineFeature(stored, symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }
@@ -767,12 +804,43 @@ const BYPASS_POINTS = new Set<TacticalGraphicName>([
  * Line vertices centered on (cx, cy): 2 points → 1 segment; 3+ → a shallow
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
-function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF): Coordinate[] {
+function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?: TacticalGraphicName): Coordinate[] {
     if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
+    /*
+     * **Whatever the library says this graphic's points are**, rather than a chain of `if`s
+     * over its predicates — which is what stood here, and what drifted from the MapLibre
+     * sweep's own copy of the same chain until pursuit was a cane arrow on one sheet and a
+     * shallow V on the other. @see synthesizedBase
+     *
+     * The V below is the answer for a graphic whose points really do describe one — fields
+     * of fire and the search area — and for nothing else.
+     */
+    const stated = name && synthesizedBase(name, [cx, cy], half, pts);
+    if (stated) return stated as Coordinate[];
+    if (pts === 3) {
+        return [
+            [cx - half, cy + half * 0.2],
+            [cx, cy - half * 0.2],
+            [cx + half, cy + half * 0.2],
+        ];
+    }
+    /*
+     * **Four or more get four**, not the three-point V truncated.
+     *
+     * This returned the V whatever it was asked for, so a graphic the library says takes four
+     * base points was sampled — and thumbnailed, and round-tripped in `persistence.test.ts` —
+     * with three, which put every four-point symbol through whatever fallback its generator
+     * keeps for a short base rather than through the shape it actually draws. 341900 found it:
+     * its four-point reading was never exercised by any sample. (2026-09-06.)
+     *
+     * A shallow open quadrilateral, so the two halves of a hairpin symbol read as two
+     * distinguishable sides rather than folding onto one line.
+     */
     return [
-        [cx - half, cy + half * 0.2],
-        [cx, cy - half * 0.2],
-        [cx + half, cy + half * 0.2],
+        [cx - half, cy + half * 0.45],
+        [cx - half * 0.2, cy - half * 0.35],
+        [cx + half * 0.2, cy - half * 0.35],
+        [cx + half, cy + half * 0.45],
     ];
 }
 

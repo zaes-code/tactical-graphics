@@ -28,7 +28,6 @@ import {
     getColorByHostility,
     resetTacticalGraphicsConfig,
     supportsHostility,
-    usesDrawnAnchors,
 } from '@zaes/tactical-graphics';
 import {buildTacticalGraphic, paintTacticalGraphic, projectGeometry} from './maplibreAdapter';
 
@@ -478,7 +477,13 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             };
             // Same hook, longer line.
             expect(lineOf(1.8, 0.25)).toBeGreaterThan(lineOf(0.9, 0.25) * 1.9);
-            expect(hookOf(1.8, 0.25)).toBeCloseTo(hookOf(0.9, 0.25), 0);
+            // **As a ratio, not a metre count.** Point 3 is projected onto the
+            // perpendicular at point 2 as of 2026-09-05, and a projection on a sphere
+            // leaves a residual that scales with the symbol — 5 m on a 27 km hook here.
+            // The claim is that the hook does not follow the line, and a half-metre
+            // absolute tolerance was only ever measuring the old exact construction.
+            // @see pursuitAnchors
+            expect(hookOf(1.8, 0.25) / hookOf(0.9, 0.25)).toBeCloseTo(1, 3);
             // Same line, bigger hook — the proportion the dropped form fixed at 2.4.
             expect(hookOf(0.9, 0.5)).toBeGreaterThan(hookOf(0.9, 0.25) * 1.9);
         });
@@ -507,9 +512,15 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             }
         });
 
-        it('offers the arrowhead tip and the line start as handles', () => {
+        it('offers a grip on each of its three anchor points', () => {
+            /*
+             * `[tip, join, start]`. Point 2 — "the end of the straight line portion" — had no
+             * grip: the list was `[tip, start]`, so the join an operator reaches for to move
+             * where the hook begins was the one place on the symbol that could not be grabbed,
+             * and pursuit was the only cane arrow of eight publishing two. (2026-09-06.)
+             */
             expect(buildTacticalGraphic(TacticalGraphicName.Pursuit, drawn(0.9, 0.25), {}, RESOLUTION)!.handles)
-                .toHaveLength(2);
+                .toHaveLength(3);
         });
     });
 
@@ -542,8 +553,19 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
         });
 
         it('declares each of them as taking a drawn base', () => {
+            /*
+             * **A LineString base is the claim; `usesDrawnAnchors` is not.** That list routes
+             * the centre / size / rotation machinery a graphic needs when its points are read
+             * back as a *frame*, and a graphic can outgrow it — 344000 pursuit and 141700
+             * ambush both left on 2026-09-06, so that their points would be dragged as
+             * vertices rather than decomposed into scalars and laid back out. Each still takes
+             * a drawn base exactly as before; neither decomposes one.
+             *
+             * So the membership is not asserted per name any more. What every converted
+             * graphic owes is the base *shape*, and that is what this checks.
+             * @see DRAWN_ANCHOR_GRAPHICS, squareOntoBisector
+             */
             for (const [name] of CONVERTED) {
-                expect(usesDrawnAnchors(name)).toBe(true);
                 expect(baseGeometryFor(name)).toBe('LineString');
             }
         });
@@ -573,25 +595,44 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
             expect(paintTacticalGraphic(built!, context).length).toBeGreaterThan(0);
         });
 
-        it('reads point 1 and point 2, and rewrites points 3 and 4 from them', () => {
-            // Drawn freehand: the second leg splayed away and the opening is wrong. The
-            // canonical layout is written back over it, and the two points that carry the
-            // description are the two left alone.
-            const drifted = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
+        it('squares a splayed base back to parallel legs, on this engine too', () => {
+            /*
+             * **The constraint has to hold on both engines, because neither drag knows this
+             * shape.** MapLibre and OpenLayers both move a base vertex straight to the pointer,
+             * so a shape whose legs must stay parallel and equal can only be held by re-deriving
+             * the base on every render — which is where this asserts it. An earlier pass read all
+             * four points freehand and the legs splayed under exactly this drag.
+             * (User's call, 2026-09-06: "dragging point 2 or 3 breaks parallely of those
+             * points".) @see hairpinAnchors
+             */
+            const placed = [[-0.6, 51.5], [0.2, 51.5], [0.5, 51.9], [-0.9, 51.8]];
             const built = buildTacticalGraphic(
                 TacticalGraphicName.Demonstration,
-                {type: 'LineString', coordinates: drifted},
+                {type: 'LineString', coordinates: placed},
                 {},
                 RESOLUTION,
             )!;
             const anchors = (built.base.geometry as {coordinates: number[][]}).coordinates;
-            expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
-            expect(anchors[1][0]).toBeCloseTo(0.2, 4);
-            expect(anchors[2]).not.toEqual(drifted[2]);
-            expect(anchors[3]).not.toEqual(drifted[3]);
-            // …and the description follows the points, as it does for the rest of the
-            // family: the leg length is what the base says, not what a caller stamped.
-            expect(built.base.properties?.tacticalGraphic?.radius).toBeGreaterThan(0);
+            expect(anchors).toHaveLength(4);
+            // Points 1 and 2 are the operator's; 3 is squared and 4 follows from the three.
+            placed.slice(0, 2).forEach((point, i) => {
+                expect(anchors[i][0]).toBeCloseTo(point[0], 4);
+                expect(anchors[i][1]).toBeCloseTo(point[1], 4);
+            });
+            // **On the ground, not in degrees.** A degree of longitude is shorter at the far
+            // leg's higher latitude, so two legs of one length measure 0.9% apart under a
+            // plain `hypot` — enough to fail an assertion that the geometry satisfies.
+            const ground = (a: number[], b: number[]) => {
+                const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+                return Math.hypot((b[0] - a[0]) * scale, b[1] - a[1]);
+            };
+            const bearing = (a: number[], b: number[]) => {
+                const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+                return Math.atan2((b[0] - a[0]) * scale, b[1] - a[1]);
+            };
+            expect(Math.abs(bearing(anchors[0], anchors[1]) - bearing(anchors[3], anchors[2]))).toBeLessThan(0.02);
+            expect(ground(anchors[2], anchors[3]) / ground(anchors[0], anchors[1])).toBeCloseTo(1, 2);
+            expect(paintTacticalGraphic(built, context).length).toBeGreaterThan(0);
         });
     });
 

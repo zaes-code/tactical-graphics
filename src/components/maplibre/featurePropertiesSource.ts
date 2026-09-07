@@ -23,7 +23,7 @@ import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactica
 import {setAmplifiersHidden} from '../amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
-import {buildTacticalGraphic} from './maplibreAdapter';
+import {buildTacticalGraphic, carryPaintFlags} from './maplibreAdapter';
 import type {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {resolutionOf} from './projection';
 
@@ -117,7 +117,11 @@ export function createMapLibrePropertiesSource(
             // A rebuild can fail the same way the first build could — a generator that
             // refuses the new amplifiers. Leaving the old graphic up is better than
             // removing it, since the user has just been told the edit applied.
-            if (rebuilt) renderer.replace(selection.id, {...rebuilt, id: selection.id});
+            // **Through `carryPaintFlags`.** A rebuild reads the portable bag, so anything
+            // living on the paint features — `hideAmplifiers`, the label's drawing
+            // resolution — is dropped unless it is carried. Pressing OK after switching
+            // "name only" on put every amplifier straight back.
+            if (rebuilt) renderer.replace(selection.id, carryPaintFlags(graphic, {...rebuilt, id: selection.id}));
         },
 
         setAmplifiersHidden(selection, hidden) {

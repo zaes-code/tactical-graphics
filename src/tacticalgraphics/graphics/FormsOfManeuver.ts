@@ -3,8 +3,9 @@ import {MovementGraphicBase} from "./Movement";
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {MovementGraphicOptions, PointGraphicOptions, TacticalGraphicName, TurnOptions} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
-import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, HookFrame, hookFromAnchors, runAndArcFromAnchors} from "../core/anchors";
+import {anchorsForHook, ARC_ARROW_DEFAULT_REACH, arcAndArrowAnchorsFromClicks, arcAndArrowFromAnchors, hairpinAnchors, hookAnchorsFromClicks, HookFrame, hookFromAnchors, runAndArcFromAnchors, turnBulgesLeft} from "../core/anchors";
 import geometryService from "../core/GeometryService";
+import {halfWidthFromSide, sidePoint} from "./ExplosivesReadiness";
 import {toRadians} from "../core/math";
 
 // ─── Solid movement arrow variants ───────────────────────────────────────────
@@ -407,10 +408,27 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      */
     private frame(base: Feature<any>, opts?: PointGraphicOptions): HookFrame | undefined {
         const coords = base.geometry?.coordinates;
-        const drawn = Array.isArray(coords?.[0]) ? hookFromAnchors(coords as Position[]) : undefined;
-        if (drawn) return drawn;
 
-        const center = (Array.isArray(coords?.[0]) ? coords[0] : coords) as Position | undefined;
+        /*
+         * **A drawn path is read, never replaced.** One click is a draw in progress, and this
+         * used to fall through to the dropped form on it — so a whole default-sized pursuit
+         * appeared the instant the map was clicked and then jumped when the run was stated.
+         * Its seven sibling cane arrows show nothing there, because their fallback is driven
+         * by the line the operator drew rather than by a `size`. Two clicks give a preview
+         * hook off the drawn run, three give the measured one, and one gives nothing.
+         * (User's report, 2026-09-06.) @see hookAnchorsFromClicks
+         */
+        if (Array.isArray(coords?.[0])) {
+            const anchors = hookAnchorsFromClicks(coords as Position[]);
+            return anchors ? hookFromAnchors(anchors) : undefined;
+        }
+
+        /*
+         * **A `Point` base is the dropped form**, which is a file written before 2026-09-05
+         * or hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so
+         * this is the reader of last resort rather than the ordinary path.
+         */
+        const center = coords as Position | undefined;
         if (!center) return undefined;
         const radius = Math.max(opts?.size ?? 1, 1);
         const side = opts?.mirrored ? -1 : 1;
@@ -460,10 +478,28 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      * The mission-task convention's center handle stays deliberately absent. It rendered
      * in the middle of the empty space inside the hook, and it is not load-bearing.
      */
+    /**
+     * `[start, join, tip]` — a grip on each of 344000's three anchor points, **in the order
+     * the base stores them**.
+     *
+     * Two changes, both about being the same symbol as its siblings:
+     *
+     * Point 2, *"the end of the straight line portion"*, had no grip at all — the list was
+     * `[tip, start]`, so the join an operator reaches for to move where the hook begins was
+     * the one place on the symbol that could not be grabbed.
+     *
+     * And the order was reversed. With the tip at index 0 it took `MIRROR_HANDLE_AT_0`, so
+     * the grip on the arc's end **flipped the hook** rather than moving the point, while the
+     * same grip on any of the seven cane arrows drags point 3. Point 3 states which side the
+     * arc falls on, so dragging it across the line already *is* the flip; the mirror grip had
+     * nothing left to do. Index N is base point N now, which is what every sibling publishes
+     * and what a vertex drag on either engine assumes.
+     * (User's report, 2026-09-06.) @see carriesSeparationInBase, MIRROR_HANDLE_GRAPHICS
+     */
     generateHandles(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiPoint> {
         const frame = this.frame(base, opts);
         if (!frame) return this.asMultiPointFeature([]);
-        return this.asMultiPointFeature([frame.tip, frame.start]);
+        return this.asMultiPointFeature([frame.start, frame.join, frame.tip]);
     }
 
     /**
@@ -495,6 +531,22 @@ export const ENVELOPMENT_MIN_BEND = 0.12;
 export const ENVELOPMENT_MAX_BEND = 1.2;
 /** Arrowhead length as a fraction of `size`, when `headSize` is not supplied. */
 const ENVELOPMENT_HEAD_RATIO = 0.3;
+
+/**
+ * The most of the arc's own radius 343500's arrowhead may take up.
+ *
+ * `headSize` is a **screen** size converted to metres at the zoom the graphic was drawn at,
+ * while the arc is a drawn distance the operator set with point 3 — so the two are not tied
+ * to one another, and a small envelopment asks for a head bigger than the hook it sits on.
+ * The result reads as an arrowhead with a curve stuck to it. (User's report, 2026-09-06:
+ * "the arrow tip is sometimes bigger than the arch which looks wrong".)
+ *
+ * A legibility cap rather than a plate reading — the standard dimensions neither — so it is
+ * a ceiling and not a size: an ordinary envelopment is unaffected and only the ones that
+ * would look wrong are pulled back. Four fifths keeps the head clearly subordinate to the
+ * curve while still reading as an arrowhead at the smallest sizes the sweep draws.
+ */
+const ENVELOPMENT_HEAD_MAX_OF_RADIUS = 0.8;
 /** Arc sampling density — enough that the half circle reads smooth at any zoom. */
 const ENVELOPMENT_ARC_STEPS = 48;
 /** Segments in Pursue's semicircle. Matches the arc the dropped form drew. */
@@ -517,16 +569,22 @@ export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
  * The bend an arrow-tip drag asks for, from the cursor's position about the graphic's
  * own frame.
  *
- * **The perpendicular offset, as a turn's bend handle uses.** This used to read the
- * distance *along* the approach instead, and it had to: the handle sat on the arrow tip,
- * on the axis, where the perpendicular carries no radius at all. Moving the handle to the
- * arc's apex — one radius off the axis — makes its own offset the radius and its own sign
- * the flank, so dragging it across the run flips the hook, which is what the handle
- * looks like it should do and previously did not.
+ * **The distance along the axis carries the radius; the offset across it carries only the
+ * flank.** Point 3 is the arrowhead's tip and sits *on* the axis, at `size + 2 * radius` from
+ * the frame origin — so the radius is half of however far past the run's end the cursor is,
+ * and the perpendicular carries no radius at all.
  *
- * `along` is no longer read. It stays in the signature because both engines call this
- * through `applyHandleRole` and a shrinking argument list is a worse change than an
- * unused one; the parameter documents what the frame offers.
+ * This read the perpendicular for the magnitude between 2026-09-05 and 2026-09-06, on the
+ * belief that the grip had been moved off the axis to the arc's apex. It never was, and the
+ * pairing failed both ways: dragging *along* the run changed nothing (measured — eight 15 px
+ * steps moved the handle 0 px and left `bend` at 0.12), while the first pixel *across* it took
+ * the perpendicular from 0 to a full radius and snapped the hook open. Moving the grip to
+ * match was the wrong half to change: point 3 is a placed anchor point and the plate puts it
+ * on the axis. (User's report, 2026-09-06.)
+ *
+ * The flank still comes from the perpendicular, past a threshold, so dragging the tip across
+ * the run turns the hook over — and a grip resting on the axis cannot flip on jitter alone.
+ * @see ENVELOPMENT_FLIP_THRESHOLD, anchorsForRunAndArc
  *
  * All planar, in projected meters — the frame both renderers edit in.
  */
@@ -536,14 +594,14 @@ export function envelopmentBendFrom(
     size: number,
     currentBend: number,
 ): number {
-    void along;
     if (!(size > 0)) return clampEnvelopmentBend(currentBend);
 
-    const radius = Math.abs(perpendicular);
+    // `along` is measured from the frame origin and the tip sits at `size + 2 * radius`,
+    // so the radius is half the reach past the run's end. Never negative: dragging the tip
+    // back through the run's end collapses the arc rather than turning it inside out.
+    const radius = Math.max(0, (along - size) / 2);
     const current = Math.sign(currentBend) || 1;
-    // A handle resting on the axis must not flip on jitter alone; below the threshold it
-    // keeps the flank it had. @see ENVELOPMENT_FLIP_THRESHOLD
-    const side = radius > size * ENVELOPMENT_FLIP_THRESHOLD * 0.1 ? Math.sign(perpendicular) : current;
+    const side = Math.abs(perpendicular) > size * ENVELOPMENT_FLIP_THRESHOLD ? Math.sign(perpendicular) : current;
     return clampEnvelopmentBend((side || 1) * (radius / size));
 }
 
@@ -661,7 +719,10 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
         const size = opts?.size ?? 1;
         const [start, end] = this.axis(base, opts);
         const arc = this.arc(base, opts);
-        const headSize = opts?.headSize ?? size * ENVELOPMENT_HEAD_RATIO;
+        // Never larger than the arc it sits on. @see ENVELOPMENT_HEAD_MAX_OF_RADIUS
+        const {radius} = this.frame(base, opts);
+        const asked = opts?.headSize ?? size * ENVELOPMENT_HEAD_RATIO;
+        const headSize = radius > 0 ? Math.min(asked, radius * ENVELOPMENT_HEAD_MAX_OF_RADIUS) : asked;
         const arrowHead = geometryService.computeArrowheadPoints(arc[arc.length - 2], arc[arc.length - 1], headSize, 45);
         return this.asMultiLineStringFeature([[start, end], arc, arrowHead]);
     }
@@ -707,12 +768,33 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * back from the centre along the approach — so it carries no grip of its own; the centre
      * is the move affordance. (User's call, 2026-08-27.)
      */
+    /**
+     * `[arcTip, lineEnd, point1]` — one grip per thing an operator can change.
+     *
+     * The third used to be the frame's centre, which `publishHandles` demotes to the grey
+     * inert dot: a mark in the middle of the run that cannot be dragged, while **point 1 —
+     * "the beginning of the straight line" — had no grip at all**. The dot is gone and point
+     * 1 has it instead, so all three marks do something. (User's call, 2026-09-05.)
+     *
+     * Translate is unaffected: it reads `centerCoordinate()`, which is holder state, not the
+     * dot that used to sit on it.
+     */
     generateHandles(base: Feature<LineString>, opts?: TurnOptions): Feature<MultiPoint> {
-        const {center, angle, size, radius} = this.frame(base, opts);
+        const {center, angle, size, radius, side} = this.frame(base, opts);
         return this.asMultiPointFeature([
+            /*
+             * **Point 3 — the arrowhead's tip**, which is where `anchorsForRunAndArc` puts it:
+             * `at(size + 2 * radius, 0)`, on the axis. It is a point the operator placed, so it
+             * gets the grip; point 4, the apex, is derived and gets none.
+             *
+             * The tip was briefly moved off the axis to the frame's own perpendicular, on a
+             * misreading of `envelopmentBendFrom`'s comment — which left a grip floating above
+             * the run touching nothing, and point 3 with no grip at all. (User's report,
+             * 2026-09-06.) The reader was the half that was wrong, and it is fixed there.
+             */
             this.at(center, angle, size + 2 * radius, 0),
             this.at(center, angle, size, 0),
-            center,
+            this.at(center, angle, -size, 0),
         ]);
     }
 
@@ -752,202 +834,353 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
 // The body is a full ellipse with its major axis along p0→p1; an arrow extends
 // past p1; two triangles sit on the top curve and two on the bottom curve,
 // each pointing outward (away from the ellipse center).
+/**
+ * Barb base as a share of the arc's radius — the symbol's own cross-dimension.
+ *
+ * Measured off 152800's Template at 600 dpi: the arc's radius is 210 px and each barb's
+ * base spans 110, so 0.52. Sized against the *radius* rather than against the straight
+ * line, because the line's length is free and the barbs must not grow with it: a long,
+ * shallow mobile defence would otherwise sprout teeth taller than the figure is wide.
+ */
+const MD_BARB_BASE_OF_RADIUS = 0.52;
+
+/** Height of an equilateral triangle, as a share of its base. */
+const MD_EQUILATERAL_HEIGHT = Math.sqrt(3) / 2;
+
+/**
+ * Where the four barbs sit: a fraction along each straight line, measured from its free
+ * end, and a fraction along the arc from each end.
+ *
+ * From the Template — the near line runs 630 px from point 1 to point 2 and its barb is
+ * centred 172 px along, which is 0.27. The two arc barbs sit just past where the straights
+ * meet the curve.
+ */
+const MD_BARB_ALONG_LINE = 0.27;
+const MD_BARB_ALONG_ARC = 0.15;
+
+/** Vertices in the half circle. 36 is one every five degrees. */
+const MD_ARC_STEPS = 36;
+
+/**
+ * How far out the "MD" sits from the arc's diameter, as a share of the radius.
+ *
+ * The Template centres the letters 0.7 of a radius past the diameter, just inside the
+ * arc's apex, so they read inside the bend rather than on top of it.
+ */
+const MD_LABEL_REACH_OF_RADIUS = 0.7;
+
+/**
+ * The diameter a **legacy** two-point mobile defence is redrawn at, as a share of its
+ * length. Only reached by a graphic saved before 2026-09-06. @see MobileDefense.frame
+ */
+const MD_LEGACY_DIAMETER_SHARE = 0.5;
+
+/**
+ * Mobile defence — APP-06 152800.
+ *
+ * ## What the standard says
+ *
+ * > **Anchor Points:** This symbol requires three anchor points. Point 1 defines the tip of
+ * > the arrowhead. Point 2 defines the end of the straight line portion of the symbol.
+ * > Point 3 defines the diameter and orientation of the 180 degree circular arc.
+ * >
+ * > **Size/Shape:** Points 1 and 2 determine the length of the straight line portion of the
+ * > symbol. Point 3 defines which side of the line the arc is on and the diameter of the
+ * > arc. The number of barbs shall remain proportional as the area enlarges.
+ * >
+ * > **Orientation.** Not applicable. **Static/Dynamic:** D
+ *
+ * ## What the Template draws
+ *
+ * A **hairpin**: two parallel straight lines of equal length joined by a 180 degree arc,
+ * with an open arrowhead on the free end of the near line and filled barbs hanging outward.
+ * Measured off the plate at 600 dpi: the two lines sit 420 px apart and the arc's rightmost
+ * point is 210 px beyond them, so the arc's radius is exactly half the separation and it is
+ * tangent to both lines — which is what makes the figure close smoothly.
+ *
+ * So point 2 and point 3 are **the two ends of the arc's diameter**, that diameter is
+ * perpendicular to the straight line, and the arc bulges away from point 1.
+ *
+ * ## What is read, and what is interpretation
+ *
+ * Stated by the plate: three points; point 1 the arrowhead tip; points 1-2 the straight
+ * length; point 3 the arc's diameter and which side it falls on; barbs proportional.
+ *
+ * **Interpretation, recorded rather than left to be re-derived:**
+ *
+ * - *The return line.* The rule names one "straight line portion" and the Template draws
+ *   two. The second is taken to mirror the first — same length, parallel, running back from
+ *   point 3 — because that is the figure the Template draws and nothing else closes it.
+ * - *Point 3's along-axis component is discarded.* Only its distance across the line and
+ *   which side it fell on are read. The arc is tangent to both straights, so its diameter
+ *   **must** be perpendicular; a point off that perpendicular describes a figure the plate
+ *   does not draw. The same discipline pursuit's third click is read with, and the reason
+ *   `generateHandles` republishes the grip on the perpendicular rather than where it was
+ *   dropped — a grip whose position and whose reader disagree is the "very jumpy handle"
+ *   this repository has already paid for once. @see pursuitAnchors
+ * - *Barb count.* "The number of barbs shall remain proportional as the area enlarges" is
+ *   read as scale-invariance — four barbs at fixed fractions, so the picture is the same at
+ *   every size, which is the property the sentence protects. It is **not** read as "add
+ *   more barbs as it grows", which would make the symbol's appearance depend on its size.
+ *
+ * It was a two-point **ellipse** with a gap and an arrow leaving one arc until 2026-09-06,
+ * which is not a shape the plate draws at all; `mirrored` was its only asymmetry. Point 3
+ * states the side now, so the flip is a placed point rather than a hidden amplifier.
+ * (User's call.)
+ */
 export class MobileDefense extends MovementGraphicBase {
     name: string = TacticalGraphicName.MobileDefense;
 
-    /** The ellipse is defined by its two endpoints; nothing is drawn past p1. */
+    /** Nothing is drawn past the arrowhead. */
     protected tipOverhang: number = 0;
 
-    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const p0 = baseCoords[0];
-        const p1 = baseCoords[baseCoords.length - 1];
+    /**
+     * The hairpin's own frame.
+     *
+     * **Coordinates arrive tip-first-reversed**, so the last is point 1 (the arrowhead) and
+     * the first is point 3. 152800 is in `TIP_FIRST_GRAPHICS` because its rule numbers the
+     * arrowhead first; `TacticalGraphicsBase.generate` hands every generator the rear-to-tip
+     * copy. @see drawOrder.ts
+     */
+    private frame(base: Feature<LineString>, opts?: MovementGraphicOptions) {
+        const coords = base.geometry.coordinates;
+        const tip = coords[coords.length - 1];
+        const join = coords.length >= 2 ? coords[coords.length - 2] : tip;
 
-        const center = geometryService.getMidpoint(p0, p1);
-        const majorR = turf.distance(p0, p1, {units: 'meters'}) / 2;
-        const minorR = majorR * 0.4;
-        const axisBearing = turf.bearing(p0, p1);
+        const length = Math.max(turf.distance(turf.point(join), turf.point(tip), {units: 'meters'}), 1);
+        // Points at the arrowhead, which is the direction the near line runs.
+        const axis = turf.bearing(turf.point(join), turf.point(tip));
 
-        // Build a half-ellipse that leaves gaps on BOTH vertices: a small gap on
-        // the p0 (MD-label) side and a larger gap on the p1 (arrow) side.
-        // `perpSign` selects top (+1) or bottom (-1) (perp+ = left of p0→p1).
-        const labelGap = 0.45; // radians of arc omitted on the p0 side
-        const arrowGap = 0.90;  // radians of arc omitted on the p1 side
-        const halfEllipse = (perpSign: 1 | -1, steps: number): Position[] => {
-            const pts: Position[] = [];
-            const startTheta = Math.PI - labelGap; // near p0
-            const endTheta = 0 + arrowGap;         // near p1
-            for (let i = 0; i <= steps; i++) {
-                const theta = startTheta + (i / steps) * (endTheta - startTheta);
-                const along = majorR * Math.cos(theta);
-                const perp = perpSign * minorR * Math.sin(theta);
-                const dist = Math.hypot(along, perp);
-                if (dist === 0) {
-                    pts.push([center[0], center[1]]);
-                    continue;
-                }
-                const thetaDeg = Math.atan2(perp, along) * 180 / Math.PI;
-                const bearing = axisBearing - thetaDeg;
-                pts.push(turf.destination(center, dist, bearing, {units: 'meters'}).geometry.coordinates as Position);
-            }
-            return pts;
-        };
+        let diameter: number;
+        let side: number;
+        if (coords.length >= 3) {
+            /*
+             * Point 3, read for the two things the plate gives it and nothing else: how far
+             * across the line it is, and which side of the line that is. Its component
+             * *along* the line is the freedom 152800 does not have.
+             */
+            const reach = turf.distance(turf.point(join), turf.point(coords[0]), {units: 'meters'});
+            const toward = turf.bearing(turf.point(join), turf.point(coords[0]));
+            const across = reach * Math.sin(((toward - axis) * Math.PI) / 180);
+            diameter = Math.max(Math.abs(across), 1);
+            side = Math.sign(across) || 1;
+        } else {
+            // A graphic saved before 2026-09-06 carries two points and, at most, a
+            // `mirrored` flag — which is the only thing its old shape said about the side.
+            diameter = Math.max(length * MD_LEGACY_DIAMETER_SHARE, 1);
+            side = opts?.mirrored ? -1 : 1;
+        }
 
-        const topArc = halfEllipse(1, 48);
-        const bottomArc = halfEllipse(-1, 48);
+        const radius = diameter / 2;
+        // Square to the line, on the side point 3 fell.
+        const acrossBearing = axis + side * 90;
+        const far = turf.destination(turf.point(join), diameter, acrossBearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+        const center = turf.destination(turf.point(join), radius, acrossBearing, {units: 'meters'}).geometry
+            .coordinates as Position;
 
-        // Arrow head sits exactly where the p1-side gap begins, pointing along that arc's
-        // tangent. No shaft.
-        //
-        // The ellipse itself is symmetric about its major axis, so *this* is the graphic's
-        // asymmetry: which arc the arrow leaves from. Mirroring swaps it to the other one,
-        // which is the whole flip — nothing else needs reflecting.
-        const arrowArc = opts?.mirrored ? bottomArc : topArc;
-        const arrowTip = arrowArc[arrowArc.length - 1];
-        const arrowPrev = arrowArc[arrowArc.length - 2];
-        const arrowHead: Position[] = geometryService.computeArrowheadPoints(arrowPrev, arrowTip, radius, 45);
-
-        // Outward-facing triangles with both base vertices lying on the arc, and apex
-        // perpendicular to the base (not radial). Placed at 33%/67% along each arc.
-        //
-        // **The height follows the base, so the triangle stays equilateral.** It used to
-        // be `min(radius * 0.9, minorR * 1.1)` — a height that stops growing once the
-        // arrowhead size caps it, while the base is a chord of the arc and keeps widening
-        // with the ellipse. The triangles therefore flattened as the graphic was resized,
-        // which is the one thing a symbol built from equilateral teeth must not do.
-        //
-        // Geodesic, like every other length in this generator: the base is measured on
-        // the same sphere the apex is projected from, so the three sides agree.
-        const triangleFractions = [0.33, 0.67];
-        /** Height of an equilateral triangle, as a share of its base. */
-        const EQUILATERAL_HEIGHT = Math.sqrt(3) / 2;
-        const triBaseHalfSpan = 0.05; // fraction of arc length between base vertices (×2)
-        const triangles: Position[][] = [];
-        const addTriangles = (arc: Position[], perpSign: 1 | -1) => {
-            const last = arc.length - 1;
-            for (const t of triangleFractions) {
-                const i1 = Math.max(0, Math.round((t - triBaseHalfSpan) * last));
-                const i2 = Math.min(last, Math.round((t + triBaseHalfSpan) * last));
-                const b1 = arc[i1];
-                const b2 = arc[i2];
-                const mid: Position = [(b1[0] + b2[0]) / 2, (b1[1] + b2[1]) / 2];
-                const baseBearing = turf.bearing(b1, b2);
-                // Top arc walks p0→p1 with outward on the left (base − 90);
-                // bottom arc has outward on the right (base + 90).
-                const outBearing = perpSign === 1 ? baseBearing - 90 : baseBearing + 90;
-                const base = turf.distance(b1, b2, {units: 'meters'});
-                const apex = turf.destination(mid, base * EQUILATERAL_HEIGHT, outBearing, {units: 'meters'}).geometry.coordinates as Position;
-                triangles.push([b1, apex, b2, b1]);
-            }
-        };
-        addTriangles(topArc, 1);
-        addTriangles(bottomArc, -1);
-
-        return this.asMultiLineStringFeature([topArc, bottomArc, arrowHead, ...triangles]);
+        return {tip, join, far, center, radius, axis, length, side};
     }
 
     /**
-     * `[p1]` — the far end of the ellipse's major axis, and nothing else.
+     * The half circle, from point 2 round to point 3, bulging **away from the arrowhead**.
      *
-     * p1 lands on the center-line in the gap between the arrowhead and the end
-     * of the bottom arc, across the shape from the "MD" label. The p0 dot is
-     * deliberately omitted: it would sit underneath that label, so it read as
-     * clutter rather than as something grabbable.
-     *
-     * One point is enough. Nothing indexes into the handle set — the manager
-     * only needs a feature under the cursor to start a drag, and
-     * `LineGraphicController` rotates/resizes/translates the whole base
-     * feature, anchored on `getCenter()` (= p0), never on a handle coordinate.
-     *
-     * The inherited `MovementGraphicBase` version is wrong for this graphic: it
-     * returns an arrow tip extended *past* p1 (outside the ellipse) plus a
-     * perpendicular width handle. MobileDefense has no width to drag — the
-     * ellipse is derived entirely from p0 and p1, with `minorR = majorR × 0.4` —
-     * so emitting fewer than three points tells the OpenLayers holder there is
-     * no offset handle to show.
+     * Walked as a bearing from the centre: it leaves at `axis - side * 90` (which is point 2)
+     * and turns through `axis + 180` (the apex, furthest from the tip) to `axis + side * 90`
+     * (point 3). Sweeping the other way would put the bend over the straight lines.
      */
+    private arc(center: Position, radius: number, axis: number, side: number): Position[] {
+        const startBearing = axis - side * 90;
+        const points: Position[] = [];
+        for (let i = 0; i <= MD_ARC_STEPS; i++) {
+            const bearing = startBearing - side * 180 * (i / MD_ARC_STEPS);
+            points.push(turf.destination(turf.point(center), radius, bearing, {units: 'meters'}).geometry
+                .coordinates as Position);
+        }
+        return points;
+    }
+
     /**
-     * `[end, mirror]`.
+     * One barb: an equilateral triangle sitting on the path with its apex pointing outward.
      *
-     * The second is new, and it is what makes the flip reachable. This graphic's only
-     * asymmetry is which half of the ellipse the arrow leaves from, so a user had no way
-     * to swap it: the single end handle rotates and resizes, and there was no dot on the
-     * side that moves. It sits at the top of the current arc — perpendicular from the
-     * midpoint by the ellipse's own minor radius — so dragging it across the major axis
-     * is the gesture, and it moves with the graphic when the flip lands.
+     * Returned closed, with four vertices, because that is what `mobileDefenseGraphicPaint`
+     * fills — an open ring of the same points would be stroked as a line instead.
+     * @see TRIANGLE_RING_LENGTH
+     */
+    private barb(at: Position, alongBearing: number, outBearing: number, base: number): Position[] {
+        const half = base / 2;
+        const b1 = turf.destination(turf.point(at), half, alongBearing + 180, {units: 'meters'}).geometry
+            .coordinates as Position;
+        const b2 = turf.destination(turf.point(at), half, alongBearing, {units: 'meters'}).geometry
+            .coordinates as Position;
+        const apex = turf.destination(turf.point(at), base * MD_EQUILATERAL_HEIGHT, outBearing, {units: 'meters'})
+            .geometry.coordinates as Position;
+        return [b1, apex, b2, b1];
+    }
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        const coords = base.geometry.coordinates;
+        // Mid-draw the interaction hands over a one-point sketch on every pointer move.
+        if (coords.length < 2) return this.asMultiLineStringFeature([]);
+
+        const {tip, join, far, center, radius, axis, length, side} = this.frame(base, opts);
+
+        const arc = this.arc(center, radius, axis, side);
+        // The return line mirrors the near one: same length, parallel, from point 3 out.
+        const farEnd = turf.destination(turf.point(far), length, axis, {units: 'meters'}).geometry
+            .coordinates as Position;
+
+        const nearLine: Position[] = [join, tip];
+        const farLine: Position[] = [far, farEnd];
+
+        /*
+         * The arrowhead, on the free end of the near line only — the Template leaves the
+         * return line's end plain. Sized against the radius so it stays in proportion with
+         * the bend rather than with the run's length.
+         */
+        const headSize = Math.max(radius * MD_BARB_BASE_OF_RADIUS, 1);
+        const arrowHead = geometryService.computeArrowheadPoints(join, tip, headSize, 45);
+
+        /*
+         * Four barbs, pointing **outward** — away from the ground the hairpin encloses. The
+         * near line's outward side is the one point 3 did *not* fall on; the return line's
+         * is the other; on the arc it is radially out from the centre.
+         */
+        const barbBase = Math.max(radius * MD_BARB_BASE_OF_RADIUS, 1);
+        const alongNear = turf.destination(turf.point(tip), length * MD_BARB_ALONG_LINE, axis + 180, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        const alongFar = turf.destination(turf.point(farEnd), length * MD_BARB_ALONG_LINE, axis + 180, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+
+        const arcBarb = (t: number): Position[] => {
+            const bearing = (axis - side * 90) - side * 180 * t;
+            const at = turf.destination(turf.point(center), radius, bearing, {units: 'meters'}).geometry
+                .coordinates as Position;
+            // On a circle the tangent is a quarter turn from the radius, and outward is the
+            // radius itself — so the barb sits on the curve and points away from the middle.
+            return this.barb(at, bearing - side * 90, bearing, barbBase);
+        };
+
+        const barbs: Position[][] = [
+            this.barb(alongNear, axis, axis - side * 90, barbBase),
+            this.barb(alongFar, axis, axis + side * 90, barbBase),
+            arcBarb(MD_BARB_ALONG_ARC),
+            arcBarb(1 - MD_BARB_ALONG_ARC),
+        ];
+
+        return this.asMultiLineStringFeature([nearLine, arc, farLine, arrowHead, ...barbs]);
+    }
+
+    /**
+     * `[point 3, point 2, point 1]` — a grip on each anchor the plate names, in the order
+     * the generator sees them.
+     *
+     * **Point 3's grip is republished on the perpendicular**, not where the vertex happens
+     * to sit. Only its across-the-line component is read, so a grip left at a freely dragged
+     * position would sit off the symbol and its own reader would disagree with it — which is
+     * exactly what made envelopment's bend handle jump. `nearestBaseVertexIndex` still maps
+     * the grab back to base vertex 0, because that vertex is the nearest one to it.
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const baseCoords = base.geometry.coordinates;
-        const p0 = baseCoords[0];
-        const p1 = baseCoords[baseCoords.length - 1];
-
-        const center = geometryService.getMidpoint(p0, p1);
-        const minorR = (turf.distance(p0, p1, {units: 'meters'}) / 2) * 0.4;
-        // `perp+` is left of p0→p1, which is the arc an unmirrored graphic uses.
-        const bearing = turf.bearing(p0, p1) - (opts?.mirrored ? -90 : 90);
-        const mirror = turf.destination(center, minorR, bearing, {units: 'meters'}).geometry.coordinates as Position;
-
-        return this.asMultiPointFeature([p1, mirror]);
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature(coords);
+        const {tip, join, far} = this.frame(base, opts);
+        return this.asMultiPointFeature([far, join, tip]);
     }
 
+    /**
+     * Where "MD" goes: inside the bend, just short of the arc's apex.
+     *
+     * The Template sets the letters 0.7 of a radius past the diameter, so they read within
+     * the curve rather than across it. `mobileDefenseLabelPaint` draws them upright and
+     * centred at `coords[0]`; the second point is kept so anything reading a span still has
+     * one. @see mobileDefenseLabelPaint
+     */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        // coords[0] = p0 vertex anchor for the "MD" label (rendered horizontally).
-        // coords[1] = p1, included so downstream style code that expects two points
-        // still gets them; rotation is ignored by the MobileDefense style.
-        const baseCoords = base.geometry.coordinates;
-        const p0 = baseCoords[0];
-        const p1 = baseCoords[baseCoords.length - 1];
-        return this.asMultiPointFeature([p0, p1]);
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature(coords);
+        const {tip, center, radius, axis} = this.frame(base, opts);
+        const at = turf.destination(turf.point(center), radius * MD_LABEL_REACH_OF_RADIUS, axis + 180, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+        return this.asMultiPointFeature([at, tip]);
     }
 }
 
 // ─── InfiltrationLane — two parallel rails with a right-aligned name label ────
 
+/**
+ * 140800 — two parallel rails, **built from three placed points like the demolition block.**
+ *
+ * APP-06 states the same contract 271201 states for the readiness states, word for word:
+ *
+ * > This symbol requires three anchor points. Points 1 and 2 define the endpoints of the
+ * > infiltration lane and point 3 defines one side of the lane.
+ *
+ * So it is the same construction, and it shares the block's helpers rather than restating
+ * them: `halfWidthFromSide` measures the separation off point 3 and `sidePoint` puts the
+ * grip back on the rail. (User's call, 2026-09-05.)
+ *
+ * **What changed.** It was a two-point centreline carrying its separation beside it as a
+ * `width` amplifier, dragged by a *derived* offset handle riding the end of the left rail —
+ * so the number the plate puts in a coordinate lived in two places at once, and the draw
+ * ended on the second click with the width never asked for. Point 3 is a stored vertex now:
+ * the rails separate and contract live as the third click is aimed, and there is no second
+ * copy of the width to drift. @see ExplosivesReadiness, carriesSeparationInBase
+ *
+ * **Only points 1 and 2 make the centreline.** The rails used to be offset from the whole
+ * base, which was right while every vertex was centreline and is wrong now that the last
+ * one is the side — offsetting from all three would bend both rails towards point 3.
+ */
 export class InfiltrationLane extends MovementGraphicBase {
     name: string = TacticalGraphicName.InfiltrationLane;
 
     /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
     protected tipOverhang: number = 0;
 
+    /** The centreline the plate names: points 1 and 2, never point 3. */
+    private centreline(base: Feature<LineString>): Position[] {
+        const coords = base.geometry.coordinates;
+        return [coords[0], coords[1]];
+    }
+
     /**
-     * `[p0, p1, railEnd]` — the width handle sits on the end of the left rail,
-     * i.e. on the graphic, rather than the inherited point a further `radius`
-     * out into empty space.
+     * `[start, end, side]` — the three points the plate names, all of them placed.
      *
-     * The handle is now one radius off the center line instead of two, so the
-     * renderer has to halve its drag sensitivity to compensate — see
-     * `OFFSET_SCALE` in the OpenLayers `MovementGraphicBase`.
+     * The third is derived back onto the centreline's perpendicular rather than published
+     * where it was clicked, so the grip stays on the rail it sets while the ends are dragged
+     * around it. @see sidePoint
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const leftRail = geometryService.computeParallelLineString(baseCoords, radius);
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], leftRail[leftRail.length - 1]]);
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature(coords);
+        return this.asMultiPointFeature([coords[0], coords[1], sidePoint(coords, opts)]);
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        const radius: number = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const leftRail: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightRail: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const coords = base.geometry.coordinates;
+        // Mid-draw the interaction hands us a one-point sketch on every pointer move.
+        if (coords.length < 2) return this.asMultiLineStringFeature([]);
+        const ends = this.centreline(base);
+        const half = halfWidthFromSide(coords, opts);
+        const leftRail = geometryService.computeParallelLineString(ends, half) as Position[];
+        const rightRail = geometryService.computeParallelLineString(ends, -half) as Position[];
         return this.asMultiLineStringFeature([leftRail, rightRail]);
     }
 
     /**
-     * Label span centered on the middle of the center-most segment. The style
-     * function uses the span for rotation + scale and anchors the text at the
-     * midpoint with textAlign:'center'.
+     * Label span across the middle of the centreline. The style function uses the span for
+     * rotation and scale and anchors the text at the midpoint with `textAlign: 'center'`.
      */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const baseCoords = base.geometry.coordinates;
-        const numSegments = baseCoords.length - 1;
-        if (numSegments < 1) return this.asMultiPointFeature([baseCoords[0], baseCoords[0]]);
-        const centerIdx = Math.floor((numSegments - 1) / 2);
-        const segStart = baseCoords[centerIdx];
-        const segEnd = baseCoords[centerIdx + 1];
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(segStart, segEnd, 0.5, radius));
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature([coords[0], coords[0]]);
+        const [segStart, segEnd] = this.centreline(base);
+        return this.asMultiPointFeature(
+            geometryService.labelCoordsAtFraction(segStart, segEnd, 0.5, halfWidthFromSide(coords, opts)),
+        );
     }
 }
 
@@ -983,14 +1216,29 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
      */
     private static readonly ARROWHEAD_LINE_HASH = 4;
 
-    /** The circle behind the arc, read off the drawn points or from the options. */
-    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} {
+    /**
+     * The circle behind the arc, read off the drawn points or from the options.
+     *
+     * **A drawn path is read, never replaced.** One click is a draw in progress; two are a
+     * half-placed symbol and preview through the same reader the third click will use. It
+     * fell through to the *dropped* form on both — a default-sized ambush parked on click 1,
+     * which then jumped when the points were stated. (User's report, 2026-09-06: "the preview
+     * while drawing is wrong, unlike before".) @see arcAndArrowAnchorsFromClicks
+     */
+    private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} | undefined {
         const coords = base.geometry?.coordinates;
         const anchored = Array.isArray(coords?.[0]);
-        const drawn = anchored ? arcAndArrowFromAnchors(coords as Position[]) : undefined;
-        if (drawn) {
+        if (anchored) {
+            const anchors = arcAndArrowAnchorsFromClicks(coords as Position[]);
+            const drawn = anchors ? arcAndArrowFromAnchors(anchors) : undefined;
+            if (!drawn) return undefined;
             return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI, radius: drawn.radius, reach: drawn.arrowReach};
         }
+        /*
+         * **A `Point` base is the dropped form** — a file written before 2026-09-05, or
+         * hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so this
+         * is the reader of last resort rather than the ordinary path.
+         */
         return {
             center: (anchored ? coords[0] : coords) as Position,
             rotation: opts.rotation ?? 0,
@@ -1000,7 +1248,11 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
     }
 
     generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const {center, rotation, radius: r, reach} = this.frame(base, opts);
+        const read = this.frame(base, opts);
+        // One click is a draw that has only just started, and draws nothing rather than a
+        // default-sized symbol parked where the cursor happened to be.
+        if (!read) return this.asMultiLineStringFeature([]);
+        const {center, rotation, radius: r, reach} = read;
 
         // Point at polar (distance, planar angle) from center, with `rotation` applied.
         const polar = (dist: number, planarDeg: number): Position => {
@@ -1060,69 +1312,199 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
         // point, never against the handle the user grabbed.
-        const {center, rotation, radius: r, reach} = this.frame(base, opts);
+        /*
+         * **A grip on each of the three points, read the way the drawing reads them.**
+         *
+         * 141700 became a three-click graphic on 2026-09-06 — points 2 and 3 are the curved
+         * back's own endpoints — so the lower arc end is a point the operator put down and
+         * needs a grip like the other two.
+         *
+         * **Through the reader, not off the raw base.** A rotate writes turned coordinates
+         * straight onto the base without passing them through `normalizeDrawnBase`, and a
+         * turn computed in projected metres does not leave a geodesic 120 degree arc exactly
+         * consistent. The drawing re-reads and settles them; publishing the raw pair meant the
+         * grips were placed from one description and the arc from another, so point 3's dot
+         * sat off the symbol after a rotation. (User's report, 2026-09-06.)
+         * @see arcAndArrowAnchorsFromClicks
+         */
+        const coords = base.geometry?.coordinates;
+        if (Array.isArray(coords?.[0]) && coords.length >= 3) {
+            const settled = arcAndArrowAnchorsFromClicks(coords as Position[]);
+            if (settled) return this.asMultiPointFeature(settled);
+        }
+
+        const read = this.frame(base, opts);
+        if (!read) return this.asMultiPointFeature(Array.isArray(coords?.[0]) ? (coords as Position[]).slice(0, 1) : []);
+        const {center, rotation, radius: r, reach} = read;
         const arcEnd = geometryService.createCircularArc(center, rotation, r, 60, 61, 1)[0];
         const arrowTip = geometryService.createCircularArc(center, rotation, reach * r, 0, 1, 1)[0];
         return this.asMultiPointFeature([arcEnd, arrowTip]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<any> {
-        return this.asPointFeature(this.frame(base, opts).center);
+        return this.asPointFeature(this.frame(base, opts)?.center ?? [0, 0]);
     }
 }
 
-// ─── ReliefInPlace — sideways U with a single arrowhead ──────────────────────
-// Base: 2-point line (p0 = RIP-label end, p1 = curve end). The U's two parallel
-// legs run between p0–p1 (top) and p1b–p0b (bottom, offset perpendicular by the
-// U height); a semicircle at the p1 end connects them, and a single arrowhead
-// sits at p0b pointing outward. Output order is [top, curve, bottom, arrow] —
-// the style function relies on this order.
+/**
+ * An arrowhead's length as a share of the arrow it ends, for 341900.
+ *
+ * The plate draws heads clearly subordinate to their shafts; a fifth reads that way at every
+ * size and keeps both heads proportional when the two arrows differ in length, which the
+ * rule allows. @see ReliefInPlace
+ */
+const ARROWHEAD_LEG_SHARE = 0.2;
+
+/**
+ * # Relief in place — APP-06 341900
+ *
+ * > **Anchor Points.** This symbol requires four anchor points. Point 1 defines the tip of
+ * > the first arrowhead. Point 2 defines the end of the straight line portion of the first
+ * > arrow. Point 3 defines the tip of the second arrowhead. Point 4 defines the end of the
+ * > second arrow.
+ * >
+ * > **Size/Shape.** Points 1 and 2 and points 3 and 4 determine the length of each arrow.
+ * > Points 2 and 3 shall be connected by a smooth, curved line.
+ * >
+ * > **Orientation.** Determined by the anchor points. The unit being relieved is typically
+ * > located at the base of the curve and the unit performing the relief is typically located
+ * > at the end of the symbol. The arrowhead typically points to the location the relieved
+ * > unit should move to.
+ *
+ * So the figure is a hairpin of **two arrows pointing opposite ways**: arrow 1 runs
+ * `P2 → P1` with its head at the free end, arrow 2 runs `P4 → P3` with its head *at the
+ * curve*, and the curve joins P2 to P3. That the two heads sit at opposite ends of the
+ * hairpin is the whole point of the symbol — one unit leaving, one arriving.
+ *
+ * ## What this replaced
+ *
+ * A two-point base plus a `size` amplifier. The U's height was `size * 3` and its second leg
+ * was the first one offset perpendicular, so the two arrows were forced parallel and
+ * equal-length and points 3 and 4 existed nowhere. The rule says "the length of **each**
+ * arrow", which is two lengths, and says nothing about the legs being parallel.
+ * (User's call, 2026-09-06.)
+ *
+ * ## The one interpretation
+ *
+ * **The curve's shape.** The rule asks for "a smooth, curved line" from P2 to P3 and says no
+ * more, so a semicircle on the P2–P3 chord is a choice — the same one `Demonstration` makes
+ * for the same words, bulging away from the legs so the figure reads as a hairpin rather
+ * than a flattened Z. Kept identical to 343300's on purpose: two rules phrased alike should
+ * not produce two different curves.
+ *
+ * Output order is `[labelled leg, curve, other leg, head at P1, head at P3]` and
+ * `reliefInPlacePaint` relies on it — index 0 is the leg the `RIP` break is cut into, which
+ * per the Orientation note is the one running to the curve from the relieving unit's end.
+ * @see reliefInPlacePaint
+ */
 export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.ReliefInPlace;
     type: string = 'LineString';
 
-    private computeU(base: Feature<LineString>, opts: PointGraphicOptions) {
-        const baseCoords = base.geometry.coordinates;
-        const p0 = baseCoords[0];
-        const p1 = baseCoords[baseCoords.length - 1];
-        const size = Math.max(opts?.size ?? 20, 1);
-        const uHeight = size * 3;
+    /** How many points the joining curve is drawn with. Matches 343300's. */
+    private static readonly CURVE_STEPS = 32;
 
-        const axisBearing = turf.bearing(p0, p1);
-        const perpBearing = axisBearing + 90;
+    /**
+     * The four points APP-06 341900 names — **three placed, the fourth constructed**, on the
+     * same rule 343300 gets and through the same reader.
+     *
+     * Point 1 is the upper arrowhead's tip, point 2 the upper straight's curve end, point 3
+     * the lower straight's curve end — the one carrying the second arrowhead, pointing back
+     * into the turn — and point 4 the lower straight's free end. The two arrows oppose each
+     * other: one formation leaving, one arriving, which is what the symbol says.
+     *
+     * Point 4 is therefore point 3 displaced by point 2 → point 1, and point 3 is read only
+     * for its distance across the first leg and its side. @see hairpinAnchors
+     *
+     * A base of two points is one written before 2026-09-06 — two points and a `size` — and
+     * resolves through the old parallel-leg layout so nothing saved stops rendering.
+     * `size * 3` was the U's height then and is kept exactly, or a restored symbol would come
+     * back a different shape from the one that was saved.
+     */
+    private points(base: Feature<LineString>, opts?: PointGraphicOptions): Position[] {
+        const coords = base.geometry.coordinates;
+        /*
+         * **Re-derived on every render, never read past point 3** — the same statement
+         * 343300 makes, from the same function, so the two cannot drift apart.
+         * @see Demonstration.points
+         */
+        const anchors = hairpinAnchors(coords);
+        if (anchors) return anchors;
+        if (coords.length >= 4) return coords.slice(0, 4);
 
-        const p0b = turf.destination(p0, uHeight, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const p1b = turf.destination(p1, uHeight, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const curveCenter = turf.destination(p1, uHeight / 2, perpBearing, {units: 'meters'}).geometry.coordinates as Position;
-        const curveCoords = turf.lineArc(
-            turf.point(curveCenter),
-            uHeight / 2,
-            axisBearing - 90,
-            axisBearing + 90,
-            {units: 'meters'},
-        ).geometry.coordinates as Position[];
-
-        return {p0, p1, p0b, p1b, size, curveCoords};
+        /*
+         * **Two points are a half-drawn symbol, and they read forward.**
+         *
+         * This is what the operator sees between click 1 and click 2, so the arrows have to
+         * point the way the finished graphic will — the first stored point is the tip, which
+         * is the plate's own numbering. It read the pair *end-for-end* until 2026-09-06,
+         * because 341900 was in `TIP_FIRST_GRAPHICS` and its two-point saves were stored
+         * reversed; leaving that flip here made the preview draw backwards and snap round on
+         * click 3, which is exactly what a user reported ("the graphic appears wrong direction
+         * after click 1 and then correct/flips after click 2"). A one-day-old two-point save
+         * comes back mirrored as a result, and that is the right trade: a wrong preview is on
+         * every draw, and 341900 stores four points now.
+         *
+         * The third point is a **preview default and nothing more** — click 3 sets the turn's
+         * depth and picks its side, the way 344000's hook works before its own third click.
+         * `size * 3` was the U's height under the old layout and is kept, so a symbol restored
+         * from two points comes back the depth it was saved at. @see PURSUIT_PREVIEW_HOOK_SHARE
+         */
+        const [p1, p2] = [coords[0], coords[coords.length - 1]];
+        const height = Math.max(opts?.size ?? 20, 1) * 3;
+        const across = turf.bearing(turf.point(p1), turf.point(p2)) + 90;
+        const preview = turf.destination(turf.point(p2), height, across, {units: 'meters'}).geometry.coordinates as Position;
+        // Through the same reader the finished symbol uses, so the preview cannot be a
+        // different shape from the thing it is previewing. @see hairpinAnchors
+        return hairpinAnchors([p1, p2, preview]) ?? [p1, p2, preview, p1];
     }
 
-    generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
-        const {p0, p1, p0b, p1b, size, curveCoords} = this.computeU(base, opts);
-        const topLine: Position[] = [p0, p1];
-        const bottomLine: Position[] = [p1b, p0b];
-        const bottomArrow = geometryService.computeArrowheadPoints(p1b, p0b, size, 45);
-        // Second arrow on the RIP line, tip at p1 pointing into the curve.
-        const topArrow = geometryService.computeArrowheadPoints(p0, p1, size, 45);
-        return this.asMultiLineStringFeature([topLine, curveCoords, bottomLine, bottomArrow, topArrow]);
+    generateGraphics(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiLineString> {
+        const [p1, p2, p3, p4] = this.points(base, opts);
+
+        const chord = turf.bearing(turf.point(p2), turf.point(p3));
+        const span = turf.distance(turf.point(p2), turf.point(p3), {units: 'meters'});
+        const curve = geometryService.createSemicircle(
+            p2,
+            p3,
+            chord,
+            span / 2,
+            ReliefInPlace.CURVE_STEPS,
+            // Away from the arrowheads, whichever side point 3 was dragged to. A hardcoded
+            // flag here drew the turn back between the legs on one of the two handednesses.
+            // @see turnBulgesLeft
+            turnBulgesLeft(p1, p2, p3),
+        ) as Position[];
+
+        /*
+         * The arrowheads are sized off the legs they sit on rather than off a filed number,
+         * so each is proportional to its own arrow — which is what "points 1 and 2 and points
+         * 3 and 4 determine the length of each arrow" leaves them free to be.
+         */
+        const head = (from: Position, tip: Position): Position[] => {
+            const reach = turf.distance(turf.point(from), turf.point(tip), {units: 'meters'});
+            return geometryService.computeArrowheadPoints(from, tip, reach * ARROWHEAD_LEG_SHARE, 45) as Position[];
+        };
+
+        return this.asMultiLineStringFeature([
+            [p4, p3],
+            curve,
+            [p2, p1],
+            head(p2, p1),
+            head(p4, p3),
+        ]);
     }
 
-    generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        // [0] = offset (U-height) handle; [1..] = base endpoint handles.
-        const {p0, p1, p1b} = this.computeU(base, opts);
-        return this.asMultiPointFeature([p1b, p0, p1]);
+    /**
+     * A grip on each of the three placed points; point 4 is derived and gets none.
+     * @see Demonstration.generateHandles, hairpinFourthPoint
+     */
+    generateHandles(base: Feature<LineString>, opts?: PointGraphicOptions): Feature<MultiPoint> {
+        return this.asMultiPointFeature(this.points(base, opts).slice(0, 3));
     }
 
     generateLabels(base: Feature<LineString>, _opts: PointGraphicOptions): Feature<any> {
-        // Style function draws "RIP" itself in a gap along the top line; this
+        // `reliefInPlacePaint` draws "RIP" itself in a gap along the labelled leg; this
         // geometry is unused but kept for the standard handler contract.
         return this.asPointFeature(base.geometry.coordinates[0]);
     }
