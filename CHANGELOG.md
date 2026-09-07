@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.0.0] — 2026-09-07
+
 **Thirty-eight graphics were rebuilt on the anchor points their plates number, and APP-06
 line and area coverage closed.** The registry goes 293 → 317. The headline is not the new
 symbols but the old ones: a graphic whose dimension used to be a `size` or `radius`
@@ -1174,7 +1176,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...develop
+[4.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...v4.0.0
 [3.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.1.0...v3.2.0
