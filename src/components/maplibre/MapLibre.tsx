@@ -23,7 +23,6 @@ import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {createMapLibrePropertiesSource} from './featurePropertiesSource';
-import {MapLibreInteractions} from './interaction/MapLibreInteractions';
 import {createTacticalGraphics} from './createTacticalGraphics';
 import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 
@@ -113,7 +112,10 @@ export type SpikeRenderMode = 'canvas' | 'native';
  *
  * @see scripts/copy-maplibre-worker.js — which puts the file in `public/`
  */
-setWorkerUrl(`${process.env.PUBLIC_URL ?? ''}/maplibre-gl-worker.mjs`);
+// `import.meta.env.BASE_URL` is Vite's equivalent of CRA's `PUBLIC_URL`, and already
+// carries a trailing slash. Demo-only file: the published MapLibre entry point is
+// built from .ts sources and never sees this one, so a Vite-ism is safe here.
+setWorkerUrl(`${import.meta.env.BASE_URL}maplibre-gl-worker.mjs`);
 
 /**
  * Native layers, unless `?mlb=canvas` asks for the overlay.
@@ -227,7 +229,6 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         // Set by the cleanup below, and read by anything asynchronous that might
         // outlive this effect — `map.on('load')` above all.
         let disposed = false;
-        let interactions: MapLibreInteractions | null = null;
         let engine: TacticalGraphicsEngine | undefined;
         let canvas: CanvasOverlayRenderer | null = null;
         let native: NativeLayerRenderer | null = null;
@@ -378,10 +379,12 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
                 get overlay() { return canvas; },
                 get native() { return native; },
                 get mode() { return mode; },
-                // The interaction layer, so a driving script can set an edit mode and
-                // drag without going through the panel — the OpenLayers hook publishes
-                // its manager for the same reason.
-                get interactions() { return interactions; },
+                // No `interactions` accessor. One stood here offering "the interaction
+                // layer, so a driving script can set an edit mode and drag without going
+                // through the panel", backed by a local that was declared `null` and never
+                // assigned — so it returned null to every caller. The live interaction
+                // layer belongs to `createTacticalGraphics`, which builds and destroys its
+                // own; no driver reads this, they reach for `.native` and `.map`.
                 setMode: (next: SpikeRenderMode) => {
                     canvas?.clear();
                     native?.clear();
@@ -398,7 +401,6 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             cancelAnimationFrame(firstFrame);
             document.removeEventListener('visibilitychange', revive);
             window.removeEventListener('pageshow', revive);
-            interactions?.destroy();
             setPropertiesSource(null);
             onReady(null);
             canvas?.destroy();

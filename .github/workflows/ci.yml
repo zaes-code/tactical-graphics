@@ -32,8 +32,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # `vitest run` is already single-shot; the old `-- --watchAll=false` was a Jest flag
+      # that Vitest rejects.
       - name: Test
-        run: npm test -- --watchAll=false
+        run: npm test
         env:
           CI: true
 
