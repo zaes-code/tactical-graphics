@@ -548,12 +548,12 @@ graphics.destroy();
 
 ```ts
 import 'maplibre-gl/dist/maplibre-gl.css';
-import maplibregl from 'maplibre-gl';
+import {Map as MapLibreMap} from 'maplibre-gl';
 
 import {TacticalGraphicName, configureTacticalGraphics} from '@zaes/tactical-graphics';
 import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
 
-const map = new maplibregl.Map({
+const map = new MapLibreMap({
     container: 'map',
     style: 'https://your-style-server/style.json',   // must serve glyphs — see below
     center: [-77.04, 38.89],

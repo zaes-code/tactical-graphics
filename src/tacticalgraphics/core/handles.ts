@@ -1112,11 +1112,9 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      * derived from `size`. @see Disrupt, disruptAnchors
      */
     [TacticalGraphicName.TacticalDisrupt]: 3,
-    [TacticalGraphicName.Penetration]: 2,
     [TacticalGraphicName.Exploitation]: 2,
     [TacticalGraphicName.Block]: 3,
     [TacticalGraphicName.Disrupt]: 3,
-    [TacticalGraphicName.AttackByFire]: 2,
     /*
      * **Four, which is what 152100 asks for**: "Points 1 and 2 define the endpoints of the
      * straight line on the back side of the symbol. Points 3 and 4 define the tips of the
@@ -1156,15 +1154,15 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      */
     [TacticalGraphicName.Demonstration]: 4,
 
-    // Two anchor points, the symbol built between them. These were capped in the
-    // OpenLayers registry and nowhere else until 2026-08-15, which is the exact failure
-    // this table's header describes: MapLibre had no limit, so its draw waited for a
-    // double-click a fixed-vertex graphic never sends.
-    [TacticalGraphicName.AssaultCrossing]: 2,
-    [TacticalGraphicName.Bridge]: 2,
-    [TacticalGraphicName.Gap]: 2,
-    [TacticalGraphicName.FordEasy]: 2,
-    [TacticalGraphicName.FordDifficult]: 2,
+    // The five two-rail crossings were capped at 2 here until 2026-09-07, under a note
+    // about the 2026-08-15 fix that first gave MapLibre a limit at all. Each was then
+    // restated further down at the count its own plate letters, and a duplicate key in an
+    // object literal is not an error in JavaScript — the later one simply wins. So the
+    // behaviour was already right and these five said otherwise, which is the worse kind
+    // of wrong: a reader checking the cap found the obsolete answer first.
+    //
+    // TypeScript reported it as TS1117 the day the repo moved off TypeScript 4.9, having
+    // said nothing for three weeks. @see DRAW_CLICKS below for the live counts.
     /*
      * **The demolition block places all three of its points, from 2026-09-05.** 271201
      * states them and 271204 inherits the rule: *"Points 1 and 2 define the endpoints of

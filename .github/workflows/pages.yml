@@ -45,13 +45,13 @@ jobs:
         env:
           # This is a project site, served from /tactical-graphics/, so the
           # bundle's asset URLs need that prefix. Deliberately NOT set via
-          # package.json's `homepage` field: CRA would read it, but npm uses the
-          # same field for the package's homepage link on npmjs.com, and one
-          # value cannot be correct for both.
+          # package.json's `homepage` field: npm uses that field for the package's
+          # homepage link on npmjs.com, and one value cannot be correct for both.
+          #
+          # Vite calls this `base` and wants a trailing slash; `vite.config.mts`
+          # reads PUBLIC_URL and adds one, so this stays the value it always was
+          # and the deploy did not have to change with the bundler.
           PUBLIC_URL: /tactical-graphics
-          # CRA turns warnings into errors when CI is set, which would fail the
-          # build on lint noise that `npm run lint` only warns about.
-          CI: ''
         run: npm run build:demo
 
       - uses: actions/upload-pages-artifact@v3
