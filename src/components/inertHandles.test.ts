@@ -24,7 +24,11 @@
  */
 import type {Feature, MultiPoint, Position} from 'geojson';
 import {
+    allowedGestures,
     anchorVertex,
+    drawnAnchorFrame,
+    rotationAnchor,
+    rotationPivot,
     baseVertexCount,
     drawnAnchors,
     dropSizePx,
@@ -94,6 +98,27 @@ describe('a graphic whose handles are inert', () => {
         // graphic never turns it on, so the base is not modifiable to begin with.
         const controller = getController(NAME, RES) as unknown as {dragsVertices?: boolean};
         expect(controller.dragsVertices).toBeFalsy();
+    });
+
+    it('offers all three gestures, and turns about point 3', () => {
+        /*
+         * **Inert points are not a fixed symbol.** The graphic still moves, turns and scales
+         * as a whole — that is the other half of the contract, and the rotate affordance has
+         * to be there for it. It was briefly resize-only, which is what 3.4.0 shipped, and
+         * that hid the icon. (User's report, 2026-09-07: "you didn't add the rotate icon".)
+         *
+         * The turn is real, not just an affordance: the bars lean off the symbol's own axis
+         * rather than off north, so enabling the gesture without that would have shown a
+         * control that did nothing.
+         */
+        expect(allowedGestures(NAME)).toEqual({translate: true, rotate: true, resize: true, modify: true});
+
+        const anchors = drawnAnchors(NAME, {center: [12, 41], size: 80_000, rotation: 30})!;
+        expect(drawnAnchorFrame(NAME, anchors)!.rotation).toBeCloseTo(30, 3);
+        // And both gestures pivot on the crossing, not on the centre points 1 and 2 straddle.
+        const geometry = {type: 'LineString', coordinates: anchors};
+        expect(rotationPivot(geometry, NAME)).toEqual(anchors[2]);
+        expect(rotationAnchor(geometry, NAME)).toEqual(anchors[2]);
     });
 
     it('is not the same thing as a single inert vertex', () => {

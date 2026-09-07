@@ -14,7 +14,7 @@ import * as turf from '../core/turf';
  */
 export const ROADBLOCK_SEPARATION_RATIO = 0.2;
 
-/** The bars lean at 45 degrees, and the symbol does not rotate. */
+/** The bars lean at 45 degrees off the symbol's own axis. */
 const BAR_BEARING = 45;
 
 /**
@@ -33,12 +33,13 @@ const BAR_BEARING = 45;
  * a crossing 48.5 px off the PT1–PT2 midpoint on the 460×460 raster* — since that offset is
  * exactly the half-separation. @see ai/excluded-graphics.md
  */
-export function roadblockAnchors(center: Position, span: number): Position[] {
+export function roadblockAnchors(center: Position, span: number, rotation = 0): Position[] {
     const half = span / 2;
     const gap = (span * ROADBLOCK_SEPARATION_RATIO) / 2;
     const at = (metres: number, bearing: number): Position =>
-        turf.destination(turf.point(center), metres, bearing, {units: 'meters'}).geometry.coordinates as Position;
-    // 270 is due west: the crossings sit level with each other, as the bars require.
+        turf.destination(turf.point(center), metres, bearing + rotation, {units: 'meters'}).geometry.coordinates as Position;
+    // 270 is due west of the symbol's own axis: the crossings sit level with each other, as
+    // the bars require, and turn with it.
     return [at(half, BAR_BEARING + 180), at(half, BAR_BEARING), at(gap, 270)];
 }
 
@@ -50,18 +51,35 @@ export function roadblockAnchors(center: Position, span: number): Position[] {
  */
 export function roadblockFrame(coords: Position[] | undefined): {center: Position; size: number; rotation: number} | undefined {
     const frame = coords && frameOf(coords);
-    // Never rotates: an X turned is a different mark. @see BAR_BEARING
-    return frame && {center: frame.center, size: frame.span, rotation: 0};
+    return frame && {center: frame.center, size: frame.span, rotation: frame.rotation};
 }
 
 /** The centre, span and half-separation a stored base describes. @see roadblockAnchors */
-function frameOf(coords: Position[]): {center: Position; span: number; gap: number} | undefined {
+function frameOf(coords: Position[]): {center: Position; span: number; gap: number; rotation: number} | undefined {
     if (coords.length < 3) return undefined;
     const [one, two, three] = coords;
     const center = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
-    const span = turf.distance(turf.point(one), turf.point(two), {units: 'meters'});
+    /*
+     * **Measured from the centre, because that is where the anchors were measured from.**
+     *
+     * Both readings below are the exact inverse of `roadblockAnchors`, which spokes each
+     * point out of the centre — and on a sphere that is not the same as reading point 1 to
+     * point 2. A great circle's bearing changes along its length, so an *unturned* symbol
+     * read end-to-end came back at −0.2 degrees and a span a hair short, and the picture
+     * drifted a little further on every pass: this graphic is rebuilt from its own base on
+     * each render, so a reader that is only nearly an inverse walks the symbol.
+     */
+    const rotation = turf.bearing(turf.point(center), turf.point(two)) - BAR_BEARING;
+    const span =
+        turf.distance(turf.point(center), turf.point(one), {units: 'meters'}) +
+        turf.distance(turf.point(center), turf.point(two), {units: 'meters'});
     if (!(span > 0)) return undefined;
-    return {center, span, gap: turf.distance(turf.point(center), turf.point(three), {units: 'meters'})};
+    return {
+        center,
+        span,
+        rotation,
+        gap: turf.distance(turf.point(center), turf.point(three), {units: 'meters'}),
+    };
 }
 
 /**
@@ -70,7 +88,7 @@ function frameOf(coords: Position[]): {center: Position; span: number; gap: numb
  * Two overlapping crosses: four bars, a leaning pair each way, displaced east and west so
  * the crosses sit side by side and share their middle. It is the explosives readiness pair
  * plus its mirror, drawn all solid, and it follows the same rules — dropped whole on one
- * click at a default size, resizable afterwards, never rotated, affiliation only.
+ * click at a default size, resizable and turnable afterwards, affiliation only.
  *
  * **The picture is 3.4.0's exactly; what changed is what gets stored.** It used to file the
  * dropped point alone and derive everything from a `size` amplifier. It stores the three
@@ -103,11 +121,14 @@ export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptio
         const gap = frame?.gap ?? (span * ROADBLOCK_SEPARATION_RATIO) / 2;
         const half = span / 2;
 
+        // Every bearing is relative to the symbol's own axis, so the whole figure turns
+        // together — the crossings stay level with each other and the leans stay square.
+        const turn = frame?.rotation ?? 0;
         const bar = (bearingToAnchor: number, lean: number): Position[] => {
-            const anchor = turf.destination(turf.point(center), gap, bearingToAnchor, {units: 'meters'});
+            const anchor = turf.destination(turf.point(center), gap, bearingToAnchor + turn, {units: 'meters'});
             return [
-                turf.destination(anchor, half, lean + 180, {units: 'meters'}).geometry.coordinates as Position,
-                turf.destination(anchor, half, lean, {units: 'meters'}).geometry.coordinates as Position,
+                turf.destination(anchor, half, lean + turn + 180, {units: 'meters'}).geometry.coordinates as Position,
+                turf.destination(anchor, half, lean + turn, {units: 'meters'}).geometry.coordinates as Position,
             ];
         };
         return [bar(270, BAR_BEARING), bar(90, BAR_BEARING), bar(270, -BAR_BEARING), bar(90, -BAR_BEARING)];
@@ -129,7 +150,7 @@ export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptio
         if (coords.length >= 3) return this.asMultiPointFeature(coords.slice(0, 3));
         const frame = frameOf(coords);
         const span = frame?.span ?? Math.max(opts?.radius ?? opts?.size ?? 1, 1);
-        return this.asMultiPointFeature(roadblockAnchors(coords[0] ?? [0, 0], span));
+        return this.asMultiPointFeature(roadblockAnchors(coords[0] ?? [0, 0], span, frame?.rotation ?? 0));
     }
 
     /** No amplifiers: affiliation and nothing else. */

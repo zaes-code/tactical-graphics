@@ -121,9 +121,15 @@ not be read correctly by 3.4.0.
 
   **None of the three answers a drag.** `handlesAreInert(name)` is the new export that says
   so, and both engines read it: OpenLayers routes the whole set to the inert handle feature,
-  MapLibre refuses the grab. Translate, rotate and resize act on the whole graphic, and they
-  pivot on **point 3** — the crossing is what the symbol marks on the ground, so scaling
-  about the centre would slide it off the road it was placed against.
+  MapLibre refuses the grab.
+
+  **Inert points are not a fixed symbol**, though: it moves, turns and scales as a whole, and
+  it turns for real — the bars lean off the symbol's own axis rather than off north, and the
+  rotation is read back out of the anchor points rather than carried beside them. Both
+  gestures pivot on **point 3**: the crossing is what the symbol marks on the ground, so
+  scaling about the centre points 1 and 2 straddle would slide it off the road it was placed
+  against. 3.4.0 shipped this graphic as resize-only, and unturned it draws exactly what that
+  version drew.
 
   It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
   of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a

@@ -904,9 +904,6 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
-    // 271204 never rotates — an X turned is a different mark — and its points do not answer
-    // a drag, so scaling the whole symbol is the only shaping gesture it has.
-    TacticalGraphicName.RoadblockCompleteExecuted,
     // **Roadblock complete left on 2026-09-05.** It refused rotation because it was
     // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
     // that had no orientation of its own. It is drawn from a centreline now, and its
