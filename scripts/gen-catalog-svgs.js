@@ -1139,11 +1139,36 @@ function buildAt(name, zoom, drop) {
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TILE_W} ${TILE_H}" width="${TILE_W}" height="${TILE_H}" role="img" aria-label="${esc(title)}">` +
         `<title>${esc(title)}</title>` +
         (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
+        backdropFor(name, TILE_W, TILE_H) +
         wrapOpen +
         body.join('') +
         wrapClose +
         `</svg>\n`;
     return {svg, overlap: textOverlap(textBoxes), inset};
+}
+
+/**
+ * Graphics that need a panel behind them to be seen at all, and the panel their plate uses.
+ *
+ * **200600 cued acquisition doctrine paints a white border**, which its Note states outright
+ * — `RGB: 255,255,255` — and which this library draws as stated rather than substituting a
+ * colour that happens to show. On a white page that is an invisible symbol: the tile came out
+ * a bare grey rectangle with no rim, which is precisely the failure a catalog exists to catch.
+ *
+ * The plate answers it itself. Its Note 2 reads *"Gray background is used to show white border
+ * and is not part of the symbol"*, so the standard's own page puts a grey panel behind this
+ * symbol for the same reason, and saying so in the tile's `aria-label` keeps the panel from
+ * being read as part of the drawing. A host with a dark basemap needs none of this.
+ * @see CUED_ACQUISITION_COLOR
+ */
+const PLATE_PANEL = {
+    CuedAcquisitionDoctrine: '#6b7780',
+};
+
+/** The plate's panel for this graphic, or nothing. @see PLATE_PANEL */
+function backdropFor(name, width, height) {
+    const colour = PLATE_PANEL[name];
+    return colour ? `<rect x="0" y="0" width="${width}" height="${height}" fill="${colour}"/>` : '';
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────

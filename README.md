@@ -412,8 +412,8 @@ getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard
-gives it.** `getSpecifications(name)` answers with one or both — 214 graphics are in both
-FM 1-02.2 and APP-06, 69 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
+gives it.** `getSpecifications(name)` answers with one or both — 224 graphics are in both
+FM 1-02.2 and APP-06, 85 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
 returns APP-06's six-digit entity code **as a string**, or `undefined` for those 8, since
 FM 1-02.2 publishes no identifiers of its own. `getNameByEntityCode('140300')` goes the
 other way, for reading a symbol out of a feed that addresses graphics by code — it takes
@@ -753,7 +753,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 121 of the 319 graphics — the ones that keep every glyph
+// `labels` is undefined for 127 of the 317 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);
