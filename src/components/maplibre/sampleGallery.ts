@@ -13,7 +13,10 @@ import {
     synthesizedBase,
     normalizeDrawnBase,
     isRectangular,
+    rectangleDefaultHalfWidth,
     storedOrder,
+    RSD_DEFAULT_RELATIVE_BEARING_DEG,
+    RSD_DEFAULT_START_SHARE,
     anchorsFromFrame,
     usesDrawnAnchors,
     type TacticalGraphicProperties,
@@ -155,9 +158,27 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * it: infiltration is in this family and also needs its point 2 *off* the chord, because
      * that offset is what bends its S — a plain front edge draws it straight.
      */
-    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3);
+    /*
+     * **Used exactly as it comes back, converted with nothing.** `synthesizedBase` already
+     * returns each layout in the order the graphic *stores* its points, so putting it
+     * through `storedOrder` reverses the eight tip-first members of the family and draws
+     * them from the wrong end — the cane arrows came out as a bare arch with an arrowhead
+     * on it rather than a straight run with a half circle hooked off it. The catalog
+     * generator carried the identical wrap and it was removed there on 2026-09-06 for the
+     * same reason. The convention's "build it rear-to-tip and put it through `storedOrder`"
+     * is for a base you laid out yourself, not for one the library handed you.
+     */
+    /*
+     * **This sheet lays out in degrees, and says so.** The across distance is the one part of
+     * the layout that is not unit-free: a degree of longitude is `cos(latitude)` of a degree
+     * of latitude on the ground, so without the flag the same graphic is drawn a different
+     * shape in every row — 0.275 deep at the equator against 1.037 at 75°N, measured on this
+     * sheet. The OpenLayers sheet is already in projected metres and passes nothing.
+     * @see frontEdgeBase
+     */
+    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3, undefined, true);
     if (stated) {
-        return [{type: 'LineString', coordinates: storedOrder(name, stated)}, line, ring, point];
+        return [{type: 'LineString', coordinates: stated}, line, ring, point];
     }
 
     /*
@@ -444,6 +465,61 @@ const SAMPLE_AMPLIFIERS = {
  */
 const SAMPLE_RADIUS_M = 180_000;
 
+/**
+ * Properties for the graphics that **describe themselves with their own plate's values**
+ * rather than with the shared amplifier bag above.
+ *
+ * 200700 is the only one so far, and it is here because {@link SAMPLE_AMPLIFIERS} hands
+ * every sample a one-band `rangeFan` — which for this symbol is not a spare field it can
+ * ignore, it is the legacy description of a *different* symbol. `frame` reads one band as
+ * "only one of the two ranges has been decided", which is the state between the second click
+ * and the third, and `generateGraphics` then draws the bare preview arc. So the sweep showed
+ * a single stroke of a curve where the plate has a two-arc sector, and the sheet built from
+ * OpenLayers — which files no bands at all — showed the sector. (User's report, 2026-09-07.)
+ *
+ * The four values are the ones 200700's plate names and the ones its draw files, so this is
+ * the symbol a user would have drawn rather than an imitation of it.
+ * @see RadarSearchDoctrine.frame, MapLibreInteractions.rangeClickDraw
+ */
+const SAMPLE_PROPERTY_OVERRIDES: Partial<Record<TacticalGraphicName, Omit<TacticalGraphicProperties, 'name'>>> = {
+    [TacticalGraphicName.RadarSearchDoctrine]: {
+        // East, so the sector opens across the cell the way every line sample runs.
+        searchAxisAzimuthDeg: 90,
+        startRange: SAMPLE_RADIUS_M * RSD_DEFAULT_START_SHARE,
+        stopRange: SAMPLE_RADIUS_M,
+        stopRelativeBearingDeg: RSD_DEFAULT_RELATIVE_BEARING_DEG,
+    },
+};
+
+/**
+ * The sizes a sample's own base implies, for the graphics whose missing dimension would
+ * otherwise be invented from the **view**.
+ *
+ * `sizeDefaults` seeds a rectangular zone's un-typed width from the drawing resolution,
+ * which is right on the draw path — it is what the OpenLayers holder seeds too — and wrong
+ * here, because a sheet's base was never dragged at that zoom. The measured cost was a sweep
+ * whose eighteen rectangles changed shape with wherever the map happened to be sitting when
+ * the button was pressed: 580 x 110 km at one zoom and 585 x 441 km two levels out, against
+ * OpenLayers' fixed 10:1.
+ *
+ * `rectangleDefaultHalfWidth` is the library's answer to the same question measured against
+ * the axis, and it is exactly what the OpenLayers sheet stamps — so stamping it here is what
+ * makes the two sheets the same picture. @see applyBaseGeometry
+ */
+function sheetSizes(
+    name: TacticalGraphicName,
+    geometry: Geometry,
+    properties: Omit<TacticalGraphicProperties, 'name'>,
+): Omit<TacticalGraphicProperties, 'name'> {
+    if (!isRectangular(name) || properties.width !== undefined) return properties;
+    if (geometry.type !== 'LineString' || geometry.coordinates.length < 2) return properties;
+
+    const axis = geometry.coordinates as Position[];
+    const metres = metersBetween(axis[0], axis[axis.length - 1]);
+    if (!(metres > 0)) return properties;
+    return {...properties, width: rectangleDefaultHalfWidth(metres) * 2};
+}
+
 export interface MapLibreSampleReport {
     drawn: number;
     /** Graphics the registry claims to paint but which produced nothing. */
@@ -575,6 +651,9 @@ function sampleSpecs(hostility?: TacticalGraphicHostility, only?: readonly Tacti
             // were missing until this was passed.
             rotation: 0,
             ...hostilityFor(name, hostility),
+            // Last, so a graphic that states its own shape in its plate's terms is not
+            // overruled by the blanket bag. @see SAMPLE_PROPERTY_OVERRIDES
+            ...SAMPLE_PROPERTY_OVERRIDES[name],
         },
     }));
 
@@ -664,7 +743,12 @@ export function buildSampleGraphics(
     specs.forEach(({name, index, properties}) => {
         const {lon, lat} = cellOrigin(index, specs.length);
         const built = candidateGeometries(name, lon, lat)
-            .map(geometry => buildTacticalGraphic(name, sheetBase(name, geometry, properties), properties, drawingResolution))
+            .map(geometry => {
+                // The base first, then the sizes it implies: a width measured against the
+                // axis needs the settled base rather than the raw layout. @see sheetSizes
+                const base = sheetBase(name, geometry, properties);
+                return buildTacticalGraphic(name, base, sheetSizes(name, base, properties), drawingResolution);
+            })
             .find(Boolean);
 
         if (built) graphics.push(built);
@@ -705,7 +789,11 @@ export function sampleFeatureCollection(
                 // Unique per cell, not per graphic: the fans appear twice.
                 symbolId: `sample-${name}-${index}`,
                 graphicName: name,
-                [TACTICAL_GRAPHIC_KEY]: {name, ...properties},
+                // **The same bag `buildSampleGraphics` builds from.** The two entry points
+                // have to describe one sheet, or comparing the engines is comparing two
+                // different pictures — which is the argument `SampleSpec` already makes
+                // about the layout, one field over. @see sheetSizes
+                [TACTICAL_GRAPHIC_KEY]: {name, ...sheetSizes(name, geometry, properties)},
             },
         });
     });
