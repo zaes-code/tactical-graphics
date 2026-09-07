@@ -19,7 +19,14 @@
 import VectorSource from 'ol/source/Vector';
 import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojson';
 import {migrateRetiredGraphic, TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import * as turf from '../tacticalgraphics/core/turf';
+// Straight from the `@turf/*` packages, the way everything else under `src/components`
+// takes them. A relative hop into `src/tacticalgraphics/core/turf` reaches past the
+// barrel, which is what the sample app is not allowed to do — and unlike the
+// map-agnostic guard beside it, that CI check does not exempt test files.
+import {point as turfPoint} from '@turf/helpers';
+import {distance as turfDistance} from '@turf/distance';
+import {bearing as turfBearing} from '@turf/bearing';
+import {midpoint as turfMidpoint} from '@turf/midpoint';
 import type {TacticalGraphicHandler} from './openlayers/openlayersAdapter';
 import type {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
 import {restoreTacticalGraphics} from './openlayers/persistence';
@@ -66,10 +73,10 @@ describe('a saved FightingPosition', () => {
         const [left, right] = (out.geometry as {coordinates: Position[]}).coordinates;
         // The front edge spans twice the radius — the retired symbol's own width, since it
         // locked half-width to `radius` and half-height to half of it.
-        expect(turf.distance(turf.point(left), turf.point(right), {units: 'meters'})).toBeCloseTo(RADIUS * 2, -2);
+        expect(turfDistance(turfPoint(left), turfPoint(right), {units: 'meters'})).toBeCloseTo(RADIUS * 2, -2);
         // …and sits half a radius forward of where the centre was.
-        const middle = turf.midpoint(turf.point(left), turf.point(right)).geometry.coordinates as Position;
-        expect(turf.distance(turf.point(CENTRE), turf.point(middle), {units: 'meters'})).toBeCloseTo(RADIUS / 2, -2);
+        const middle = turfMidpoint(turfPoint(left), turfPoint(right)).geometry.coordinates as Position;
+        expect(turfDistance(turfPoint(CENTRE), turfPoint(middle), {units: 'meters'})).toBeCloseTo(RADIUS / 2, -2);
     });
 
     it('turns the edge with the saved rotation', () => {
@@ -78,12 +85,12 @@ describe('a saved FightingPosition', () => {
         const north = migrateRetiredGraphic(bagOf(0), {type: 'Point', coordinates: CENTRE})!;
         const east = migrateRetiredGraphic(bagOf(90), {type: 'Point', coordinates: CENTRE})!;
         const mid = (out: typeof north) =>
-            turf.midpoint(
-                turf.point((out.geometry as {coordinates: Position[]}).coordinates[0]),
-                turf.point((out.geometry as {coordinates: Position[]}).coordinates[1]),
+            turfMidpoint(
+                turfPoint((out.geometry as {coordinates: Position[]}).coordinates[0]),
+                turfPoint((out.geometry as {coordinates: Position[]}).coordinates[1]),
             ).geometry.coordinates as Position;
-        expect(turf.bearing(turf.point(CENTRE), turf.point(mid(north)))).toBeCloseTo(0, 0);
-        expect(turf.bearing(turf.point(CENTRE), turf.point(mid(east)))).toBeCloseTo(90, 0);
+        expect(turfBearing(turfPoint(CENTRE), turfPoint(mid(north)))).toBeCloseTo(0, 0);
+        expect(turfBearing(turfPoint(CENTRE), turfPoint(mid(east)))).toBeCloseTo(90, 0);
     });
 
     it('drops the amplifiers that described the retired box, and keeps the rest', () => {

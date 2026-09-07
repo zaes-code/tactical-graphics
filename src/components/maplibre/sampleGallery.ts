@@ -168,7 +168,15 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * same reason. The convention's "build it rear-to-tip and put it through `storedOrder`"
      * is for a base you laid out yourself, not for one the library handed you.
      */
-    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3);
+    /*
+     * **This sheet lays out in degrees, and says so.** The across distance is the one part of
+     * the layout that is not unit-free: a degree of longitude is `cos(latitude)` of a degree
+     * of latitude on the ground, so without the flag the same graphic is drawn a different
+     * shape in every row — 0.275 deep at the equator against 1.037 at 75°N, measured on this
+     * sheet. The OpenLayers sheet is already in projected metres and passes nothing.
+     * @see frontEdgeBase
+     */
+    const stated = synthesizedBase(name, [lon, lat], runHalf, baseVertexCount(name) ?? 3, undefined, true);
     if (stated) {
         return [{type: 'LineString', coordinates: stated}, line, ring, point];
     }
