@@ -156,15 +156,30 @@ describe('the rectangle the axis and the width build', () => {
      * was the answer for a drag of about 1,100 px, which nobody makes — so every sheet drew a
      * sliver ten times as long as it was deep.
      *
-     * Asserted as the *range a real drag spans* rather than as the literal, because the
-     * literal is two constants divided and pinning it here would only restate the source.
+     * **The rule is an aspect now, and this asserts the aspect.** The default is half as deep
+     * as it is long. (User's call, 2026-09-07: "make the vertical size 1/2 the horizontal".)
+     * That is a statement about how the symbol reads, so it is pinned directly — where the
+     * old assertion pinned a *range*, because the number was fitted to a drag length and the
+     * literal would only have restated two constants divided.
      */
-    it('defaults to a width a drag could actually have produced', () => {
+    it('defaults to a box half as deep as it is long', () => {
+        const axis = 1_000_000;
+        expect((2 * rectangleDefaultHalfWidth(axis)) / axis).toBeCloseTo(0.5, 6);
+    });
+
+    it('stays in the same neighbourhood as a drawn width, without being fitted to one', () => {
+        /*
+         * It is a little deeper than any real drag produces — the deepest measured, a 240 px
+         * one, gives 0.229 against this 0.25 — and deliberately so: a drag places a zone
+         * against ground the operator can see, while this default draws a symbol with nothing
+         * to place it against and amplifiers stacked inside it. What would be wrong is being
+         * *far* from a drag, in either direction, so the bound below is the loose one that
+         * catches that rather than the tight one that would forbid the choice.
+         */
         const axis = 1_000_000;
         const share = rectangleDefaultHalfWidth(axis) / axis;
-        // The span between an 800 px drag and a 240 px one — every drag anyone makes.
         expect(share).toBeGreaterThan(RECTANGLE_DEFAULT_HALF_WIDTH_PX / 800);
-        expect(share).toBeLessThan(RECTANGLE_DEFAULT_HALF_WIDTH_PX / 240);
+        expect(share).toBeLessThan((RECTANGLE_DEFAULT_HALF_WIDTH_PX / 240) * 1.25);
     });
 
     it('leaves the default box a shape rather than a sliver', () => {

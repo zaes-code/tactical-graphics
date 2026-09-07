@@ -1283,10 +1283,18 @@ export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
  * crushed into a slot a tenth the height of the text. (User's report, 2026-09-07: "on the
  * sweep, don't make the rectangle so small.")
  *
- * So it is stated as the drawn rule against a representative drag rather than as a free
- * number, and the representative drag is a quarter of a 1600 px viewport — the middle of the
- * three measured above, and about the length someone actually drags a zone. That comes to an
- * eighth, and a box four times as long as it is deep.
+ * **The share is now stated as an aspect, not derived from a drag.** An unsized zone is
+ * half as deep as it is long. (User's call, 2026-09-07: "make the vertical size 1/2 the
+ * horizontal".)
+ *
+ * A quarter of the axis is a little *deeper* than any real drag produces — the deepest
+ * measured, a 240 px one, gives 0.229 — and that is deliberate rather than an oversight. The
+ * drawn width answers a different question: an operator dragging a zone is placing it
+ * against ground they can see, where this default is drawing a symbol with nothing to place
+ * it against and amplifiers stacked inside it that have to be legible. The measurement above
+ * is kept because it is what disproved the twentieth and it says how far from a drag this
+ * sits: near it, not fitted to it. A stated ratio also survives a change of viewport, where
+ * a figure pinned to 440 px does not.
  *
  * **Fixed here rather than in the sheets**, deliberately. Every caller is the same case —
  * the two sample sheets and a restore of a rectangle that carries no width and no zoom — and
@@ -1296,12 +1304,14 @@ export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
  * comparable. @see rectangleDefaultHalfWidth
  */
 /**
- * The drag this default is calibrated against, in screen pixels — a quarter of a 1600 px
- * viewport. @see RECTANGLE_DEFAULT_WIDTH_FRACTION
+ * How deep an unsized zone is, as a share of its length: **half**.
+ *
+ * Half the depth of a 2:1 box is a quarter of the axis, which is the half-width this default
+ * hands out. @see RECTANGLE_DEFAULT_WIDTH_FRACTION
  */
-const REPRESENTATIVE_DRAG_PX = 440;
+const RECTANGLE_DEFAULT_DEPTH_RATIO = 1 / 2;
 
-const RECTANGLE_DEFAULT_WIDTH_FRACTION = RECTANGLE_DEFAULT_HALF_WIDTH_PX / REPRESENTATIVE_DRAG_PX;
+const RECTANGLE_DEFAULT_WIDTH_FRACTION = RECTANGLE_DEFAULT_DEPTH_RATIO / 2;
 
 /** Shortest axis a rectangle may be dragged to, in metres — below this it has no shape. */
 const RECTANGLE_MIN_LENGTH = 1;
